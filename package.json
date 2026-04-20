@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.6.9",
+  "version": "0.6.10",
   "description": "MCP server for web search, extraction, crawling, and research — powered by Novada's 100M+ proxy IPs across 195 countries. Works with Claude, Cursor, VS Code, and any MCP client.",
   "mcpName": "io.github.goldentrii/novada-mcp",
   "type": "module",
@@ -10,7 +10,8 @@
   },
   "files": [
     "build",
-    "server.json"
+    "server.json",
+    "skills"
   ],
   "scripts": {
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js','755');require('fs').chmodSync('build/cli.js','755')\"",

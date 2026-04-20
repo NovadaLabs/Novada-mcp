@@ -60,6 +60,13 @@
       "description": "Decision tree and workflow patterns for choosing between novada_search, extract, crawl, map, and research"
     }
   ],
+  "skills": [
+    {
+      "name": "novada-agent",
+      "description": "Tool selection guide for 5 Novada MCP tools — decision tree, key parameters, common workflows (research+extract, competitive analysis, full site docs, fresh news), and when NOT to use each tool.",
+      "path": "skills/novada-agent/SKILL.md"
+    }
+  ],
   "categories": ["web-search", "web-scraping", "research", "data-extraction"],
   "topics": ["search", "extract", "crawl", "map", "research", "proxy", "anti-bot", "geo-targeting", "rag", "ai-agents"],
   "packages": [
