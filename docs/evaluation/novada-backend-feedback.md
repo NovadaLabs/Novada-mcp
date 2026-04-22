@@ -122,6 +122,38 @@ We've benchmarked Novada MCP against Tavily MCP and Firecrawl MCP. Novada's comp
 
 ---
 
+## Question 4 (HIGH): Scraper Library — Which Scrapers Are Actually Functional?
+
+### The Concern
+
+The Novada dashboard shows a large scraper library (Google, Bing, DDG, Yandex, Amazon, YouTube, LinkedIn, TikTok, GitHub, eBay, Walmart, IKEA, etc.). However, we have no way to verify which scrapers actually produce results vs which only accept requests.
+
+**What we can verify today:**
+
+| Category | Observation | What This Proves |
+|----------|------------|-----------------|
+| Google/Bing/DDG/Yandex return `task_id` | API accepts the request | Does NOT prove the scraper completes or returns data |
+| Yahoo returns `11006 Scraper error` | API rejects the request | Could be wrong scraper_id OR genuinely non-functional |
+| Amazon/YouTube/LinkedIn/etc. return `11006` | API rejects | We guessed scraper_ids — could be wrong params OR non-functional |
+
+**What we cannot verify:**
+- Whether tasks that return `task_id` actually complete with real search results
+- Whether the `11006` errors are due to wrong parameters or genuinely broken scrapers
+- Which scrapers in the library are production-ready vs experimental/planned
+
+### Why This Matters
+
+If we expose scrapers as MCP tools and agents discover they don't return data, agents will lose trust in the entire Novada MCP — not just the broken scraper. This is the same problem we identified with the 5-engine search: advertising capabilities that don't work in practice damages credibility more than having fewer features that all work.
+
+### What We Need
+
+1. **A status matrix:** which scrapers in the library are production-ready, beta, or planned?
+2. **Correct scraper_id + required params** for each production-ready scraper
+3. **Expected task completion time** per scraper type (seconds? minutes?)
+4. If possible: a **health check endpoint** (`GET /scrapers/status`) so the MCP can dynamically know which scrapers are available
+
+---
+
 ## Summary of What We Need
 
 | # | Question | Priority | Impact |
@@ -129,8 +161,9 @@ We've benchmarked Novada MCP against Tavily MCP and Firecrawl MCP. Novada's comp
 | 1 | Scraper API result retrieval endpoint | **CRITICAL** | Unlocks 4 search engines for all AI agents |
 | 2 | Complete scraper_id list for search engines | HIGH | Correct integration params |
 | 3 | scraperapi.novada.com deprecation status | MEDIUM | Architecture decision |
+| 4 | Scraper library functional status matrix | HIGH | Know which scrapers to expose vs hide from agents |
 
-The Novada product infrastructure is strong. These answers will let us complete the MCP integration and make Novada the most capable web data MCP for AI agents.
+The Novada product infrastructure has strong potential. These answers will let us complete the MCP integration with confidence — exposing only what works, and planning the roadmap for what's coming.
 
 ---
 
