@@ -13,7 +13,7 @@
   <a href="#nova--命令行工具"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/代理IP-1亿+-red?style=for-the-badge" alt="1亿+ 代理 IP"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/国家覆盖-195-cyan?style=for-the-badge" alt="195 个国家"></a>
-  <img src="https://img.shields.io/badge/测试用例-117-green?style=for-the-badge" alt="117 个测试">
+  <img src="https://img.shields.io/badge/测试用例-124-green?style=for-the-badge" alt="124 个测试">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/许可证-MIT-yellow?style=for-the-badge" alt="MIT 许可证"></a>
 </p>
 
@@ -29,7 +29,22 @@
 
 ---
 
-**快速跳转：** [快速开始](#快速开始) · [工具](#工具) · [Prompts 工作流](#prompts-预置工作流) · [Resources 只读数据](#resources-只读数据) · [真实示例](#真实输出示例) · [用例](#用例) · [为什么选择 Novada](#为什么选择-novada)
+**快速跳转：** [快速开始](#快速开始) · [工具](#工具) · [v0.7.0 更新](#v070-更新内容) · [真实示例](#真实输出示例) · [用例](#用例) · [为什么选择 Novada](#为什么选择-novada)
+
+---
+
+## v0.7.0 更新内容
+
+**Agent 智能层** — v0.7.0 在原始 API 和 Agent 之间增加了智能层，确保每次响应都是有用的，而不仅仅是"返回了数据"。
+
+- **搜索自动降级**：请求的引擎失败时，自动切换到可用引擎并告知 Agent 发生了什么
+- **研究查询锚定**：子查询保持主题一致 —— "production AI agents"不再偏移到制造业/建筑业结果
+- **研究相关性过滤**：自动移除偏题来源，元数据显示过滤了多少条
+- **内容质量检测**：提取时在元数据头部警告 Agent 内容过短、语言错误（地域重定向）、CAPTCHA 拦截页
+- **动态 Agent Hints**：每次响应末尾的引导基于实际返回结果，不再是固定模板
+- **Web Unblocker 集成**：通过 Novada Web Unblocker 绕过反爬保护
+- **30,000 字符内容上限**：从 8,000 提升，支持完整文档和长文提取
+- **124 个测试**，全部通过
 
 ---
 
@@ -218,7 +233,7 @@ nova extract https://docs.example.com/webhooks/events https://docs.example.com/w
 
 ### `novada_search` — 网络搜索
 
-通过 Google、Bing 或其他 3 个引擎搜索网络，返回包含标题、URL 和摘要的结构化结果。
+通过 Google、Bing、DuckDuckGo、Yahoo 或 Yandex 搜索网络。自动降级：请求的引擎失败时自动切换到可用引擎并告知原因。
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
@@ -235,7 +250,7 @@ nova extract https://docs.example.com/webhooks/events https://docs.example.com/w
 
 ### `novada_extract` — 内容提取
 
-提取任意 URL 的主体内容，支持最多 10 个 URL 并行批量提取，返回标题、描述、正文和同域名链接。
+提取任意 URL 的主体内容，支持最多 10 个 URL 并行批量提取。内容质量检测自动警告内容过短、语言错误和 CAPTCHA 拦截页。
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
@@ -270,7 +285,7 @@ nova extract https://docs.example.com/webhooks/events https://docs.example.com/w
 
 ### `novada_research` — 深度研究
 
-多步骤网络研究：并行生成 3–10 个搜索查询，对来源去重，返回带引用的综合报告。
+多步骤网络研究：使用主题锚定查询和相关性过滤。并行生成 3–10 个搜索查询，去重去噪，自动移除偏题来源，返回带引用的综合报告。
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
@@ -325,18 +340,20 @@ Agent 可以在选择工具之前通过 `novada://` URI 访问的参考数据。
 | 功能特性 | Novada | Tavily | Firecrawl | Brave Search |
 |---------|--------|--------|-----------|-------------|
 | 搜索引擎数量 | **5 个** | 1 个 | 1 个 | 1 个 |
+| 搜索自动降级 | **支持** | 无 | 无 | 无 |
 | URL 内容提取 | 支持 | 支持 | 支持 | 不支持 |
 | 批量提取 | **支持（最多 10 个 URL）** | 不支持 | 支持 | 不支持 |
+| 内容质量检测 | **支持** | 无 | 无 | 无 |
 | 网站爬取 | BFS/DFS | 支持 | 支持（异步） | 不支持 |
 | URL 发现映射 | 支持 | 支持 | 支持 | 不支持 |
-| 多源深度研究 | 支持 | 支持 | 不支持 | 不支持 |
+| 多源深度研究 | **相关性过滤** | 支持 | 不支持 | 不支持 |
 | MCP Prompts | **3 个** | 无 | 无 | 无 |
 | MCP Resources | **3 个** | 无 | 无 | 无 |
 | 地理定向 | **195 个国家** | 国家参数 | 无 | 国家参数 |
 | 域名过滤 | **include/exclude 双向** | 无 | 无 | 无 |
-| 反机器人绕过 | 代理（1亿+ IP）+ Web Unblocker | 无 | 无头浏览器 | 无 |
+| 反机器人绕过 | **代理 + Web Unblocker** | 无 | 无头浏览器 | 无 |
 | 命令行工具 | **`nova` 命令** | 无 | 无 | 无 |
-| Agent 操作提示 | **每次响应都有** | 无 | 无 | 无 |
+| Agent 引导提示 | **动态、基于每次响应** | 无 | 无 | 无 |
 
 ---
 

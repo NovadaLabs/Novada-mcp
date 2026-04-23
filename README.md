@@ -13,7 +13,7 @@
   <a href="#nova--cli"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/proxy_IPs-100M+-red?style=for-the-badge" alt="100M+ proxy IPs"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/countries-195-cyan?style=for-the-badge" alt="195 countries"></a>
-  <img src="https://img.shields.io/badge/tests-117-green?style=for-the-badge" alt="117 tests">
+  <img src="https://img.shields.io/badge/tests-124-green?style=for-the-badge" alt="124 tests">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge" alt="MIT License"></a>
 </p>
 
@@ -29,7 +29,22 @@
 
 ---
 
-**Jump to:** [Quick Start](#quick-start) · [Tools](#tools) · [Prompts](#prompts) · [Resources](#resources) · [Examples](#real-output-examples) · [Use Cases](#use-cases) · [Comparison](#why-novada)
+**Jump to:** [Quick Start](#quick-start) · [Tools](#tools) · [What's New](#whats-new-in-v070) · [Examples](#real-output-examples) · [Use Cases](#use-cases) · [Comparison](#why-novada)
+
+---
+
+## What's New in v0.7.0
+
+**Agent Intelligence Layer** — v0.7.0 adds an intelligence layer between the raw API and the agent, so every response is useful, not just "data returned."
+
+- **Search auto-fallback**: if the requested engine fails, automatically retries with a working engine and tells the agent what happened
+- **Research query anchoring**: sub-queries stay topically grounded — "production AI agents" no longer drifts to manufacturing/construction results
+- **Research relevance filtering**: off-topic sources automatically removed, with metadata showing how many were dropped
+- **Content quality detection**: extracts warn agents about thin content, wrong-language pages (geo-redirects), and CAPTCHA/block pages — in the metadata header, before the agent reads the content
+- **Dynamic Agent Hints**: every response ends with context-specific guidance based on what actually happened, not generic boilerplate
+- **Web Unblocker integration**: anti-bot bypass for protected sites via Novada Web Unblocker
+- **30,000-char content limit**: up from 8,000 — full-page extraction for documentation and long-form content
+- **124 tests**, all passing
 
 ---
 
@@ -177,34 +192,22 @@ snippet: Sukiyabashi Jiro, Narisawa, Den — the definitive list for 2025...
 ```
 ## Research Report
 question: "How do AI agents use web scraping?"
-depth:deep (auto-selected) | searches:6 | results:28 | unique_sources:15
+depth:deep (auto-selected) | searches:6 | results:28 | unique_sources:12 | filtered:12/15 (3 off-topic removed)
 
 ---
-
-## Search Queries Used
-1. How do AI agents use web scraping?
-2. ai agents web scraping overview explained
-3. ai agents web scraping vs alternatives comparison
-4. ai agents web scraping best practices real world
-5. ai agents web scraping challenges limitations
-6. "ai" "agents" site:reddit.com OR site:news.ycombinator.com
 
 ## Key Findings
 1. **How AI Agents Are Changing the Future of Web Scraping**
    https://medium.com/@davidfagb/...
    These agents can think, understand, and adjust to changes in web structure...
 
-## Sources
-1. [How AI Agents Are Changing Web Scraping](https://medium.com/...)
-...
-
 ---
 ## Agent Hints
-- 15 sources found. Extract the most relevant with: `novada_extract` with url=[url1, url2]
+- 12 relevant sources found (3 off-topic removed). Extract with: `novada_extract` with url=[url1, url2]
 - For more coverage: use depth='comprehensive' (8-10 searches).
 ```
 
-### Map → Batch Extract Workflow
+### Map + Batch Extract Workflow
 
 ```bash
 # Step 1: Discover all pages on a doc site
@@ -220,7 +223,7 @@ nova extract https://docs.example.com/webhooks/events https://docs.example.com/w
 
 ### `novada_search`
 
-Search the web via Google, Bing, or 3 other engines. Returns structured results with titles, URLs, and snippets.
+Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Auto-fallback: if the requested engine fails, retries with a working engine and tells you what happened.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -237,7 +240,7 @@ Search the web via Google, Bing, or 3 other engines. Returns structured results 
 
 ### `novada_extract`
 
-Extract the main content from any URL. Supports batch extraction of up to 10 URLs in parallel. Returns title, description, body text, and same-domain links.
+Extract main content from any URL. Batch mode: up to 10 URLs in parallel. Content quality detection warns about thin pages, wrong-language content, and CAPTCHA blocks.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -247,7 +250,7 @@ Extract the main content from any URL. Supports batch extraction of up to 10 URL
 
 ### `novada_crawl`
 
-Crawl a website BFS or DFS and extract content from multiple pages concurrently (up to 20 pages). Path filters and natural-language instructions supported.
+Crawl a website BFS or DFS and extract content from multiple pages (up to 20). Per-page truncation metadata tells you exactly how much content was cut.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -260,7 +263,7 @@ Crawl a website BFS or DFS and extract content from multiple pages concurrently 
 
 ### `novada_map`
 
-Discover all URLs on a website without extracting content. Much faster than crawl for pure URL discovery.
+Discover all URLs on a website without extracting content. Path-diverse queuing ensures broad coverage, not just one deep section. SPA detection included.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -272,7 +275,7 @@ Discover all URLs on a website without extracting content. Much faster than craw
 
 ### `novada_research`
 
-Multi-step web research. Generates 3–10 parallel search queries, deduplicates sources, returns a cited report with key findings.
+Multi-step web research with topic-anchored queries and relevance filtering. Generates 3–10 parallel searches, deduplicates sources, drops off-topic results, returns a cited report.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -311,7 +314,7 @@ Read-only data agents can access via `novada://` URIs before deciding which tool
 | Use Case | Tools | How It Works |
 |----------|-------|-------------|
 | **RAG pipeline** | `search` + `extract` | Search → batch-extract full text → vector DB |
-| **Agentic research** | `research` | One call → multi-source cited report |
+| **Agentic research** | `research` | One call → multi-source cited report with relevance filtering |
 | **Real-time grounding** | `search` | Facts beyond model training cutoff |
 | **Competitive intelligence** | `crawl` | Crawl competitor sites → extract changes |
 | **Lead generation** | `search` | Structured company/product lists |
@@ -327,18 +330,20 @@ Read-only data agents can access via `novada://` URIs before deciding which tool
 | Feature | Novada | Tavily | Firecrawl | Brave Search |
 |---------|--------|--------|-----------|-------------|
 | Web search | **5 engines** | 1 engine | 1 engine | 1 engine |
+| Search auto-fallback | **Yes** | No | No | No |
 | URL extraction | Yes | Yes | Yes | No |
 | Batch extraction | **Yes (10 URLs)** | No | Yes | No |
+| Content quality detection | **Yes** | No | No | No |
 | Website crawling | BFS/DFS | Yes | Yes (async) | No |
 | URL mapping | Yes | Yes | Yes | No |
-| Multi-source research | Yes | Yes | No | No |
+| Multi-source research | **Relevance-filtered** | Yes | No | No |
 | MCP Prompts | **3** | No | No | No |
 | MCP Resources | **3** | No | No | No |
 | Geo-targeting | **195 countries** | Country param | No | Country param |
 | Domain filtering | **include/exclude** | No | No | No |
-| Anti-bot bypass | Proxy (100M+ IPs) + Web Unblocker | No | Headless Chrome | No |
+| Anti-bot bypass | **Proxy + Web Unblocker** | No | Headless Chrome | No |
 | CLI | **`nova` command** | No | No | No |
-| Agent Hints | **Every response** | No | No | No |
+| Agent Hints | **Dynamic, per-response** | No | No | No |
 
 ---
 
