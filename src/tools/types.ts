@@ -2,8 +2,8 @@ import { z } from "zod";
 
 // ─── URL Safety ─────────────────────────────────────────────────────────────
 
-/** Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs (IPv4 + IPv6) */
-const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[fc[0-9a-f]{2}:.*\]|\[fd[0-9a-f]{2}:.*\]|\[fe80:.*\])$/i;
+/** Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs */
+const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1\])$/i;
 
 const safeUrl = z.string()
   .url("A valid URL is required")
@@ -47,6 +47,10 @@ export const ExtractParamsSchema = z.object({
   format: z.enum(["text", "markdown", "html"]).default("markdown"),
   query: z.string().optional()
     .describe("Optional query for relevance context. Helps the calling agent focus on relevant sections."),
+  render: z.enum(["auto", "static", "render", "browser"]).default("auto")
+    .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'render': force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS)."),
+  fields: z.array(z.string().min(1)).max(20).optional()
+    .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching."),
 });
 
 export const CrawlParamsSchema = z.object({
@@ -59,6 +63,8 @@ export const CrawlParamsSchema = z.object({
     .describe("Regex patterns to restrict crawled URL paths. E.g. ['/docs/.*', '/api/.*']."),
   exclude_paths: z.array(z.string()).optional()
     .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
+  render: z.enum(["auto", "static", "render"]).default("auto")
+    .describe("Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (slower, handles JS sites)."),
 });
 
 export const ResearchParamsSchema = z.object({
@@ -78,6 +84,11 @@ export const MapParamsSchema = z.object({
     .describe("Link-hops from root to follow. Default 2. Higher = more pages found but slower."),
 });
 
+export const VerifyParamsSchema = z.object({
+  claim: z.string().min(10).describe("The factual claim to verify (min 10 chars)"),
+  context: z.string().optional().describe("Optional context to narrow the search (e.g. 'as of 2024', 'in the US')"),
+});
+
 // ─── Inferred Types ─────────────────────────────────────────────────────────
 
 export type SearchParams = z.infer<typeof SearchParamsSchema>;
@@ -85,6 +96,7 @@ export type ExtractParams = z.infer<typeof ExtractParamsSchema>;
 export type CrawlParams = z.infer<typeof CrawlParamsSchema>;
 export type ResearchParams = z.infer<typeof ResearchParamsSchema>;
 export type MapParams = z.infer<typeof MapParamsSchema>;
+export type VerifyParams = z.infer<typeof VerifyParamsSchema>;
 
 // ─── Validation Functions ───────────────────────────────────────────────────
 
@@ -106,6 +118,10 @@ export function validateResearchParams(args: Record<string, unknown> | undefined
 
 export function validateMapParams(args: Record<string, unknown> | undefined): MapParams {
   return MapParamsSchema.parse(args ?? {});
+}
+
+export function validateVerifyParams(args: Record<string, unknown> | undefined): VerifyParams {
+  return VerifyParamsSchema.parse(args ?? {});
 }
 
 // ─── API Response Types ─────────────────────────────────────────────────────
@@ -154,78 +170,134 @@ function sanitizeMessage(msg: string): string {
     .replace(/https?:\/\/scraperapi\.novada\.com[^\s"')]+/gi, "[novada-api-url]");
 }
 
-/** Map known search engine failure patterns to actionable messages */
-export function getSearchEngineError(engine: string, errorMsg: string): string | null {
-  const msg = errorMsg.toLowerCase();
+// ─── Proxy Params ────────────────────────────────────────────────────────────
 
-  // Yahoo: URL builder drops q param → 410
-  if (engine === "yahoo" && (msg.includes("410") || msg.includes("empty query"))) {
-    return (
-      `Yahoo search failed (backend drops the query parameter — known bug).\n` +
-      `→ Switch engine: use engine='google' for the same query.\n` +
-      `→ For research questions, novada_research is more reliable than novada_search.`
-    );
-  }
+export const ProxyParamsSchema = z.object({
+  type: z.enum(["residential", "mobile", "isp", "datacenter"]).default("residential")
+    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost."),
+  country: z.string().length(2).optional()
+    .describe("ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country."),
+  city: z.string().optional()
+    .describe("City name for city-level targeting. Requires country to be set."),
+  session_id: z.string().optional()
+    .describe("Session ID for sticky routing — same session_id returns same IP across requests."),
+  format: z.enum(["url", "env", "curl"]).default("url")
+    .describe("Output format. 'url': proxy URL string. 'env': shell export commands. 'curl': curl --proxy flag."),
+});
 
-  // Yandex: no API key provisioned
-  if (engine === "yandex" && (msg.includes("invalid_api_key") || msg.includes("api_key"))) {
-    return (
-      `Yandex search unavailable (no Yandex Search API key provisioned).\n` +
-      `→ Switch engine: use engine='google' or engine='bing'.\n` +
-      `→ Google is the most reliable engine for this API.`
-    );
-  }
+export type ProxyParams = z.infer<typeof ProxyParamsSchema>;
 
-  // Bing: query string silently dropped
-  if (engine === "bing" && msg.includes("no results")) {
-    return (
-      `Bing search returned no results (known issue: query string may be dropped by backend).\n` +
-      `→ Switch engine: use engine='google' for the same query.\n` +
-      `→ Or use novada_research which uses Google internally and is more reliable.`
-    );
-  }
-
-  // DuckDuckGo: workers down
-  if (engine === "duckduckgo" && (msg.includes("api_down") || msg.includes("down"))) {
-    return (
-      `DuckDuckGo unavailable (workers down at Novada backend).\n` +
-      `→ Switch engine: use engine='google' for the same query.\n` +
-      `→ novada_research is a better choice for research questions.`
-    );
-  }
-
-  // Google: WorkerPool 413 from parallel calls
-  if (engine === "google" && (msg.includes("413") || msg.includes("workerpool"))) {
-    return (
-      `Google search temporarily unavailable (WorkerPool 413 — parallel call overload).\n` +
-      `→ Retry this call once — sequential calls succeed.\n` +
-      `→ Or use novada_research which runs Google searches sequentially and avoids this limit.`
-    );
-  }
-
-  return null;
+export function validateProxyParams(args: Record<string, unknown> | undefined): ProxyParams {
+  return ProxyParamsSchema.parse(args ?? {});
 }
 
-export function classifyError(error: unknown, engine?: string): NovadaError {
+// ─── Scrape Params ────────────────────────────────────────────────────────────
+
+const scrapeBase = {
+  platform: z.string().min(1)
+    .describe("Platform domain to scrape. E.g. 'amazon.com', 'reddit.com', 'tiktok.com', 'linkedin.com', 'google.com'."),
+  operation: z.string().min(1)
+    .describe("Scraping operation ID. E.g. 'amazon_product_by-keywords', 'reddit_posts_by-keywords', 'google_shopping_by-keywords'. See Novada docs for the full list."),
+  params: z.record(z.string(), z.unknown()).default({})
+    .describe("Operation-specific parameters. E.g. { keyword: 'iphone 16', num: 5 } for keyword search, { url: 'https://...' } for URL-based ops, { asin: 'B09...' } for ASIN lookup."),
+  limit: z.number().int().min(1).max(100).default(20)
+    .describe("Max records to return. Default 20, max 100."),
+};
+
+/** MCP tool schema — agent-optimized formats only */
+export const ScrapeParamsSchema = z.object({
+  ...scrapeBase,
+  format: z.enum(["markdown", "json"]).default("markdown")
+    .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': raw records array for programmatic processing."),
+});
+
+/** CLI/SDK schema — all output formats */
+export const ScrapeParamsFullSchema = z.object({
+  ...scrapeBase,
+  format: z.enum(["markdown", "json", "csv", "html", "xlsx"]).default("markdown")
+    .describe("Output format. 'markdown'/'json' for agents/code. 'csv'/'html'/'xlsx' for human download."),
+});
+
+export type ScrapeParams = z.infer<typeof ScrapeParamsFullSchema>;
+
+export function validateScrapeParams(args: Record<string, unknown> | undefined): ScrapeParams {
+  return ScrapeParamsSchema.parse(args ?? {});
+}
+
+export function validateScrapeParamsFull(args: Record<string, unknown> | undefined): ScrapeParams {
+  return ScrapeParamsFullSchema.parse(args ?? {});
+}
+
+// ─── Unblock Params ──────────────────────────────────────────────────────────
+
+export const UnblockParamsSchema = z.object({
+  url: safeUrl,
+  method: z.enum(["render", "browser"]).default("render")
+    .describe("'render': Web Unblocker with JS execution (faster, cheaper). 'browser': full Browser API via CDP (slower, handles complex SPAs)."),
+  country: z.string().length(2).optional()
+    .describe("ISO 2-letter country code for geo-targeted rendering."),
+  wait_for: z.string().optional()
+    .describe("CSS selector to wait for before capturing HTML. E.g. '.price', '#product-title'."),
+  timeout: z.number().int().min(5000).max(120000).default(30000)
+    .describe("Timeout in ms. Default 30000, max 120000."),
+});
+
+export type UnblockParams = z.infer<typeof UnblockParamsSchema>;
+
+export function validateUnblockParams(args: Record<string, unknown> | undefined): UnblockParams {
+  return UnblockParamsSchema.parse(args ?? {});
+}
+
+// ─── Browser Params ──────────────────────────────────────────────────────────
+
+const BrowserActionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("navigate"),
+    url: safeUrl,
+    wait_until: z.enum(["load", "domcontentloaded", "networkidle"]).default("domcontentloaded"),
+  }),
+  z.object({ action: z.literal("click"), selector: z.string().min(1) }),
+  z.object({ action: z.literal("type"), selector: z.string().min(1), text: z.string() }),
+  z.object({ action: z.literal("screenshot") }),
+  z.object({ action: z.literal("snapshot") }),
+  z.object({ action: z.literal("evaluate"), script: z.string().min(1) }),
+  z.object({
+    action: z.literal("wait"),
+    selector: z.string().optional(),
+    timeout: z.number().int().min(100).max(30000).default(5000),
+  }),
+  z.object({
+    action: z.literal("scroll"),
+    direction: z.enum(["down", "up", "bottom", "top"]).default("down"),
+  }),
+]);
+
+export type BrowserAction = z.infer<typeof BrowserActionSchema>;
+
+export const BrowserParamsSchema = z.object({
+  actions: z.array(BrowserActionSchema).min(1).max(20)
+    .describe("Array of browser actions to execute sequentially. Max 20 per call."),
+  country: z.string().length(2).optional()
+    .describe("ISO 2-letter country code for geo-targeted browsing."),
+  timeout: z.number().int().min(5000).max(120000).default(60000)
+    .describe("Total timeout for all actions in ms. Default 60000."),
+});
+
+export type BrowserParams = z.infer<typeof BrowserParamsSchema>;
+
+export function validateBrowserParams(args: Record<string, unknown> | undefined): BrowserParams {
+  return BrowserParamsSchema.parse(args ?? {});
+}
+
+// ─── Error Classification ────────────────────────────────────────────────────
+
+export function classifyError(error: unknown): NovadaError {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
-
-    // Search engine-specific errors — return actionable message if matched
-    if (engine) {
-      const engineError = getSearchEngineError(engine, error.message);
-      if (engineError) {
-        return {
-          code: NovadaErrorCode.UNKNOWN,
-          message: engineError,
-          retryable: false,
-        };
-      }
-    }
-
     if (msg.includes("401") || msg.includes("api_key") || msg.includes("unauthorized")) {
       return {
         code: NovadaErrorCode.INVALID_API_KEY,
-        message: `Invalid or missing API key. Get one at ${DOCS_BASE}\n→ Set NOVADA_API_KEY in your MCP config.`,
+        message: `Invalid or missing API key. Get one at ${DOCS_BASE}`,
         retryable: false,
         docsUrl: DOCS_BASE,
       };
@@ -233,7 +305,7 @@ export function classifyError(error: unknown, engine?: string): NovadaError {
     if (msg.includes("429") || msg.includes("rate") || msg.includes("limit")) {
       return {
         code: NovadaErrorCode.RATE_LIMITED,
-        message: "Rate limit exceeded.\n→ Wait 5–10 seconds and retry.\n→ For search, use novada_research which is more conservative with API calls.",
+        message: "Rate limit exceeded. Wait and retry.",
         retryable: true,
         docsUrl: DOCS_BASE,
       };
@@ -241,14 +313,14 @@ export function classifyError(error: unknown, engine?: string): NovadaError {
     if (msg.includes("timeout") || msg.includes("econnrefused") || msg.includes("enotfound")) {
       return {
         code: NovadaErrorCode.URL_UNREACHABLE,
-        message: `URL unreachable: ${sanitizeMessage(error.message)}\n→ Check the URL is valid and publicly accessible.\n→ If this is a bot-protected site, NOVADA_UNBLOCKER_KEY enables AI CAPTCHA bypass.`,
+        message: `URL unreachable: ${sanitizeMessage(error.message)}`,
         retryable: true,
       };
     }
     if (msg.includes("503") || msg.includes("502")) {
       return {
         code: NovadaErrorCode.API_DOWN,
-        message: "Novada API is temporarily unavailable.\n→ Retry in 10–30 seconds.\n→ If the issue persists, check https://www.novada.com for status.",
+        message: "Novada API is temporarily unavailable. Retry in a moment.",
         retryable: true,
       };
     }

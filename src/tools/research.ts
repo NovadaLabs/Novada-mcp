@@ -1,6 +1,7 @@
 import { fetchWithRetry, USER_AGENT, normalizeUrl } from "../utils/index.js";
 import { SCRAPER_API_BASE } from "../config.js";
 import type { ResearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
+import { novadaExtract } from "./extract.js";
 
 export async function novadaResearch(params: ResearchParams, apiKey: string): Promise<string> {
   // Resolve depth — 'auto' picks based on question complexity heuristic
@@ -64,34 +65,63 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     }
   }
 
-  // --- Relevance filtering: score each source against the question keywords ---
-  const questionWords = params.question.toLowerCase().split(/\s+/);
-  const questionKeywords = questionWords.filter(w => !STOP_WORDS.has(w) && w.length > 2);
+  const sources = [...uniqueSources.values()].slice(0, 15);
 
-  const allSources = [...uniqueSources.values()];
-  const scored = allSources.map(s => ({
-    ...s,
-    relevance: scoreRelevance(s, questionKeywords),
-  }));
+  // Phase 2: Extract top 3 source URLs for full content
+  const topSources = sources.slice(0, 3);
+  const extractedContents: { title: string; url: string; content: string }[] = [];
 
-  // Sort by relevance, keep sources above 20% keyword match (at least 1 keyword)
-  scored.sort((a, b) => b.relevance - a.relevance);
-  const relevant = scored.filter(s => s.relevance >= 0.2);
-  const dropped = scored.length - relevant.length;
-  const sources = relevant.slice(0, 15);
+  if (topSources.length > 0) {
+    const extractResults = await Promise.allSettled(
+      topSources.map(async (source) => {
+        try {
+          const content = await novadaExtract(
+            { url: source.url, format: "markdown", query: params.question, render: "auto" },
+            apiKey
+          );
+          // Strip Agent Hints section from extracted content — too noisy in research output
+          const cleanContent = content.split("## Agent Hints")[0].trim();
+          return { title: source.title, url: source.url, content: cleanContent };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    for (const result of extractResults) {
+      if (result.status === "fulfilled" && result.value) {
+        extractedContents.push(result.value);
+      }
+    }
+  }
+
+  // All searches failed — SERP endpoint is unavailable for this account
+  if (failedCount === queries.length) {
+    return [
+      `## Research: Search Unavailable`,
+      `question: "${params.question}"`,
+      ``,
+      `The Novada SERP endpoint is not available for this API key. All ${queries.length} search queries failed.`,
+      ``,
+      `**To research this question manually:**`,
+      `1. Use \`novada_extract\` with specific URLs you already know`,
+      `2. Use \`novada_map\` on a relevant site, then \`novada_extract\` on discovered pages`,
+      `3. Contact support@novada.com to enable SERP access for your account`,
+      ``,
+      `**Suggested starting URLs for "${params.question.slice(0, 60)}":**`,
+      `- \`novada_extract\` with a Wikipedia, official docs, or news URL on this topic`,
+      `- \`novada_map\` on a domain you know covers this topic`,
+    ].join("\n");
+  }
 
   const depthLabel = params.depth === "auto"
     ? `${resolvedDepth} (auto-selected)`
     : resolvedDepth;
 
-  const relevanceNote = dropped > 0
-    ? ` | filtered:${sources.length}/${scored.length} (${dropped} off-topic sources removed)`
-    : "";
-
   const lines: string[] = [
     `## Research Report`,
     `question: "${params.question}"`,
-    `depth:${depthLabel} | searches:${queries.length}${failedCount > 0 ? ` (${failedCount} failed)` : ""} | results:${totalResults} | unique_sources:${sources.length}${relevanceNote}`,
+    `depth:${depthLabel} | searches:${queries.length}${failedCount > 0 ? ` (${failedCount} failed)` : ""} | unique_sources:${sources.length} | extracted:${extractedContents.length}`,
     params.focus ? `focus: ${params.focus}` : "",
     ``,
     `---`,
@@ -105,38 +135,43 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     ...sources.map((s, i) =>
       `${i + 1}. **${s.title}**\n   ${s.url}\n   ${s.snippet}\n`
     ),
+    // Key Sources (Extracted) section
+    ...(extractedContents.length > 0 ? [
+      ``,
+      `## Key Sources (Extracted)`,
+      ``,
+      ...extractedContents.flatMap((s, i) => [
+        `### [${i + 1}] ${s.title}`,
+        `url: ${s.url}`,
+        ``,
+        s.content,
+        ``,
+        `---`,
+        ``,
+      ]),
+    ] : []),
     `## Sources`,
     ``,
     ...sources.map((s, i) => `${i + 1}. [${s.title}](${s.url})`),
     ``,
     `---`,
     `## Agent Hints`,
-    `- ${sources.length} relevant sources found${dropped > 0 ? ` (${dropped} off-topic removed)` : ""}. Extract the most relevant with: \`novada_extract\` with url=[url1, url2]`,
-  ];
+    `- ${extractedContents.length > 0 ? `${extractedContents.length} sources extracted in full above.` : "No sources extracted."} For more: use novada_extract with url=[url1, url2, ...].`,
+    `- For narrower research: add \`focus\` param to guide sub-query generation.`,
+    `- For more coverage: use depth='comprehensive' (8-10 searches).`,
+  ].filter(l => l !== "");
 
-  if (sources.length < 5 && questionKeywords.length > 0) {
-    lines.push(`- Few relevant sources found. Try adding \`focus\` param (e.g. focus="${questionKeywords.slice(0, 3).join(" ")}") to improve precision.`);
-  }
-  if (resolvedDepth === "quick") {
-    lines.push(`- For more coverage: use depth='deep' (5-6 searches) or depth='comprehensive' (8-10 searches).`);
-  }
-  if (failedCount > 0) {
-    lines.push(`- ${failedCount} search(es) failed. Results may be incomplete — retry or increase depth.`);
-  }
-
-  return lines.filter(l => l !== "").join("\n");
+  return lines.join("\n");
 }
 
-type ResolvedDepth = "quick" | "deep" | "comprehensive";
-
-/** Resolve 'auto' depth to a concrete strategy based on question complexity */
-function resolveDepth(depth: ResearchParams["depth"], question: string): ResolvedDepth {
+/** Resolve 'auto' and 'comprehensive' depth to the actual search strategy */
+function resolveDepth(depth: string, question: string): string {
   if (depth === "auto") {
     const isComplex = question.length > 80
       || /\b(compare|versus|vs|why|how does|best|worst|difference between|trade-off|pros and cons|review)\b/i.test(question);
     return isComplex ? "deep" : "quick";
   }
-  return depth as ResolvedDepth; // quick, deep, comprehensive pass through
+  return depth; // quick, deep, comprehensive pass through
 }
 
 const STOP_WORDS = new Set([
@@ -145,14 +180,7 @@ const STOP_WORDS = new Set([
   "and", "or", "but", "can", "will", "should", "would", "could",
 ]);
 
-/**
- * Generate diverse search queries anchored to the original question.
- *
- * Key design: every sub-query starts with `anchor` (first ~5 meaningful words
- * of the original question) so that domain-ambiguous terms like "production"
- * or "building" stay in context. Previous version extracted isolated keywords
- * which caused "production AI agents" → construction results.
- */
+/** Generate diverse search queries for broader research coverage */
 function generateSearchQueries(
   question: string,
   deep: boolean,
@@ -160,48 +188,44 @@ function generateSearchQueries(
   focus?: string
 ): string[] {
   const queries: string[] = [question];
+  const words = question.toLowerCase().split(/\s+/);
   const topic = question.replace(/[?!.]+$/, "").trim();
+  const keywords = words.filter(w => !STOP_WORDS.has(w) && w.length > 2);
+  const keyPhrase = keywords.slice(0, 4).join(" ") || topic;
 
-  // Anchor = first 5 significant words of the question, preserving word order
-  // This keeps compound terms like "AI agents" or "production deployment" intact
-  const words = topic.toLowerCase().split(/\s+/);
-  const significantWords = words.filter(w => !STOP_WORDS.has(w) && w.length > 2);
-  const anchor = significantWords.slice(0, 5).join(" ") || topic;
-
+  // Apply focus to sub-queries if provided
   const focusSuffix = focus ? ` ${focus}` : "";
 
-  // All sub-queries are anchored to the topic — never just keyword fragments
-  queries.push(`${anchor} overview guide${focusSuffix}`);
-  queries.push(`${anchor} vs alternatives comparison${focusSuffix}`);
-
-  if (deep || comprehensive) {
-    queries.push(`${anchor} best practices${focusSuffix}`);
-    queries.push(`${anchor} challenges limitations${focusSuffix}`);
-    // Use quoted anchor for community search to force topic coherence
-    const quotedAnchor = significantWords.length >= 2
-      ? `"${significantWords.slice(0, 3).join(" ")}"`
-      : `"${topic}"`;
-    queries.push(`${quotedAnchor} site:reddit.com OR site:news.ycombinator.com`);
-  }
-
-  if (comprehensive) {
-    queries.push(`${anchor} case study examples${focusSuffix}`);
-    const year = new Date().getFullYear();
-    queries.push(`${anchor} ${year - 1} ${year} trends${focusSuffix}`);
-    queries.push(`${anchor} expert opinion analysis${focusSuffix}`);
+  if (keywords.length > 2) {
+    queries.push(`${keyPhrase} overview explained${focusSuffix}`);
+    queries.push(`${keyPhrase} vs alternatives comparison${focusSuffix}`);
+    if (deep || comprehensive) {
+      queries.push(`${keyPhrase} best practices real world${focusSuffix}`);
+      queries.push(`${keyPhrase} challenges limitations${focusSuffix}`);
+      if (keywords.length >= 2) {
+        queries.push(`"${keywords[0]}" "${keywords[1]}" site:reddit.com OR site:news.ycombinator.com`);
+      } else {
+        queries.push(`${topic} site:reddit.com OR site:news.ycombinator.com`);
+      }
+    }
+    if (comprehensive) {
+      queries.push(`${keyPhrase} case study examples${focusSuffix}`);
+      queries.push(`${keyPhrase} 2024 2025 trends${focusSuffix}`);
+      queries.push(`${keyPhrase} expert opinion${focusSuffix}`);
+    }
+  } else {
+    queries.push(`"${topic}" explained overview${focusSuffix}`);
+    queries.push(`${topic} vs alternatives${focusSuffix}`);
+    if (deep || comprehensive) {
+      queries.push(`${topic} examples use cases${focusSuffix}`);
+      queries.push(`${topic} review experience${focusSuffix}`);
+      queries.push(`${topic} site:reddit.com OR site:news.ycombinator.com`);
+    }
+    if (comprehensive) {
+      queries.push(`${topic} best practices 2025${focusSuffix}`);
+      queries.push(`${topic} tutorial guide${focusSuffix}`);
+    }
   }
 
   return queries;
-}
-
-/**
- * Score how relevant a source is to the original question.
- * Returns 0.0–1.0 based on keyword overlap between the source title+snippet
- * and the question's significant words.
- */
-function scoreRelevance(source: { title: string; snippet: string }, questionKeywords: string[]): number {
-  if (questionKeywords.length === 0) return 1;
-  const text = `${source.title} ${source.snippet}`.toLowerCase();
-  const matches = questionKeywords.filter(kw => text.includes(kw));
-  return matches.length / questionKeywords.length;
 }

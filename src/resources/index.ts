@@ -39,7 +39,7 @@ export const RESOURCES: Resource[] = [
   {
     uri: "novada://guide",
     name: "Agent Tool Selection Guide",
-    description: "Decision tree and workflow patterns for choosing between novada_search, extract, crawl, map, and research",
+    description: "Decision tree and workflow patterns for choosing between all 7 novada tools: search, extract, crawl, map, research, proxy, scrape",
     mimeType: "text/plain",
   },
 ];
@@ -120,31 +120,36 @@ Total: 195 countries supported.`,
 
 ## Quick Decision Tree
 
-You have a URL you need to read?
-  → novada_extract (or array of URLs for batch)
+You have a question or topic but no URL?
+  → Simple fact lookup: novada_search
+  → Complex multi-source question: novada_research (depth='auto')
 
-You need to find URLs on a site?
+You have a URL and need its content?
+  → novada_extract (pass url as array for batch — up to 10 pages in one call)
+
+You need to know what URLs exist on a site?
   → novada_map → then novada_extract on chosen URLs
 
-You have a question needing web data?
-  → Complex/multi-angle: novada_research (depth='auto')
-  → Simple factual lookup: novada_search
+You need content from multiple pages and don't have the URLs yet?
+  → novada_crawl (with select_paths regex to target relevant sections)
 
-You need content from multiple pages of a site?
-  → novada_crawl (with select_paths or instructions to target relevant pages)
+You need structured data from a known platform (Amazon, Reddit, TikTok…)?
+  → novada_scrape
 
-You have 5 search result URLs to read?
-  → novada_extract with url=[url1, url2, url3, url4, url5] — batch in ONE call
+You need to route your own HTTP requests through a residential IP?
+  → novada_proxy
 
 ## Tool Comparison
 
-| Tool           | Input              | Output              | Token cost |
-|----------------|--------------------|---------------------|------------|
-| novada_search  | query string       | URL list + snippets | Low        |
-| novada_extract | url or [urls]      | Full page content   | Medium-High|
-| novada_map     | root url           | URL list only       | Low        |
-| novada_crawl   | root url           | Content of N pages  | High       |
-| novada_research| question string    | Cited report        | Medium     |
+| Tool            | Use when you have…          | Output              | Token cost |
+|-----------------|-----------------------------|---------------------|------------|
+| novada_search   | a question, no URL          | URL list + snippets | Low        |
+| novada_extract  | a URL (or list of URLs)     | Full page content   | Medium-High|
+| novada_map      | a domain, need URL list     | URL list only       | Low        |
+| novada_crawl    | a domain, need N pages      | Content of N pages  | High       |
+| novada_research | a complex question          | Cited report        | Medium     |
+| novada_scrape   | a supported platform        | Structured records  | Medium     |
+| novada_proxy    | need residential IP routing | Proxy config        | Minimal    |
 
 ## Efficient Workflow Patterns
 
@@ -157,19 +162,23 @@ novada_map competitor.com → novada_crawl with select_paths=['/pricing','/featu
 ### Current Events
 novada_search with time_range='week' → novada_extract on top results
 
-### Documentation Scraping
-novada_map docs.example.com → novada_crawl with instructions='only API reference pages'
+### Documentation Ingestion
+novada_map docs.example.com → novada_crawl with select_paths=['/docs/api/.*']
 
 ### Research Report
-novada_research with depth='deep' → novada_extract on 2-3 most relevant sources
+novada_research with depth='deep' → novada_extract on 2–3 most relevant sources
+
+### E-commerce Data
+novada_scrape with platform='amazon.com', operation='amazon_product_by-keywords'
 
 ## Common Mistakes to Avoid
 
-- Using novada_extract for URL discovery (use novada_map first)
+- Using novada_extract for URL discovery (use novada_map first — much faster)
 - Using novada_crawl when you only need 1 page (use novada_extract)
-- Not using batch extract: calling novada_extract 5 times instead of once with array
+- Calling novada_extract 5 times instead of once with url=[...] array
 - Setting max_pages too high in crawl (large token cost, often unnecessary)
-- Not adding time_range for queries about recent events`,
+- Not adding time_range for queries about recent events
+- Using novada_scrape for domains not in the supported platform list (use novada_extract instead)`,
         }],
       };
 

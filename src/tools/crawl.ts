@@ -1,4 +1,4 @@
-import { fetchViaProxy, extractMainContent, extractTitle, extractLinks, normalizeUrl, isContentLink } from "../utils/index.js";
+import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractLinks, normalizeUrl, isContentLink, detectJsHeavyContent } from "../utils/index.js";
 import type { CrawlParams } from "./types.js";
 
 const CRAWL_CONCURRENCY = 3;
@@ -9,15 +9,19 @@ interface CrawlResult {
   text: string;
   depth: number;
   wordCount: number;
-  fullChars: number;
-  truncated: boolean;
 }
 
-async function fetchPage(url: string, apiKey?: string): Promise<{ html: string; url: string } | null> {
+async function fetchPage(
+  url: string,
+  apiKey?: string,
+  useRender = false
+): Promise<{ html: string; url: string } | null> {
   try {
-    const response = await fetchViaProxy(url, apiKey, { timeout: 15000, maxRedirects: 3 });
+    const response = useRender
+      ? await fetchWithRender(url, apiKey, { timeout: 60000, maxRedirects: 3 })
+      : await fetchViaProxy(url, apiKey, { timeout: 15000, maxRedirects: 3 });
     if (typeof response.data !== "string") return null;
-    return { html: response.data, url };
+    return { html: String(response.data), url };
   } catch {
     return null;
   }
@@ -49,11 +53,8 @@ function shouldCrawlUrl(
 
 export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise<string> {
   const maxPages = Math.min(params.max_pages || 5, 20);
-
-  // Warn early for large crawl requests — avoids surprise timeouts
-  const largeCrawlWarning = maxPages > 10
-    ? `WARNING: Large crawl (${maxPages} pages requested). This may take 60–90s.\n   For time-sensitive use, consider: novada_map → select specific URLs → novada_extract (batch).\n\n`
-    : "";
+  const renderMode = params.render ?? "auto";
+  let renderDetected = false;
   const visited = new Set<string>();
   const queue: { url: string; depth: number }[] = [{ url: params.url, depth: 0 }];
   const results: CrawlResult[] = [];
@@ -75,24 +76,34 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
     if (batch.length === 0) break;
 
-    const pages = await Promise.all(batch.map((item) => fetchPage(item.url, apiKey)));
+    const useRender = renderMode === "render" || (renderMode === "auto" && renderDetected);
+    const pages = await Promise.all(batch.map((item) => fetchPage(item.url, apiKey, useRender)));
+
+    // Auto-detect JS-heavy: if first batch static results show JS-heavy, switch to render
+    if (renderMode === "auto" && !renderDetected) {
+      const jsHeavyFound = pages.some(p => p !== null && detectJsHeavyContent(p.html));
+      if (jsHeavyFound) {
+        renderDetected = true;
+        // Re-fetch the JS-heavy pages with render
+        for (let i = 0; i < pages.length; i++) {
+          if (pages[i] !== null && detectJsHeavyContent(pages[i]!.html)) {
+            pages[i] = await fetchPage(batch[i].url, apiKey, true);
+          }
+        }
+      }
+    }
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
       if (!page) { failedCount++; continue; }
 
       const title = extractTitle(page.html);
-      const fullContent = extractMainContent(page.html);
-      const text = fullContent.slice(0, 3000);
+      const text = extractMainContent(page.html, batch[i].url, 3000);
       const wordCount = text.split(/\s+/).filter(Boolean).length;
-      const wasTruncated = fullContent.length > 3000;
 
       if (wordCount < 20) continue;
 
-      results.push({
-        url: batch[i].url, title, text, depth: batch[i].depth, wordCount,
-        fullChars: fullContent.length, truncated: wasTruncated,
-      });
+      results.push({ url: batch[i].url, title, text, depth: batch[i].depth, wordCount });
 
       // Discover links, applying path filters before queuing
       const links = extractLinks(page.html, batch[i].url);
@@ -114,7 +125,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   }
 
   if (results.length === 0) {
-    return `${largeCrawlWarning}Failed to crawl ${params.url}. The site may be unreachable or blocking automated access.`;
+    return `Failed to crawl ${params.url}. The site may be unreachable or blocking automated access.`;
   }
 
   const totalWords = results.reduce((sum, r) => sum + r.wordCount, 0);
@@ -130,7 +141,6 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
     : "";
 
   const lines: string[] = [
-    largeCrawlWarning ? largeCrawlWarning.trimEnd() : "",
     `## Crawl Results`,
     `root: ${params.url}`,
     `pages:${results.length} | strategy:${params.strategy || "bfs"} | total_words:${totalWords} | failed:${failedCount}${instructionsNote}`,
@@ -140,12 +150,10 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
     ``,
   ].filter(l => l !== "");
 
-  const truncatedPages = results.filter(r => r.truncated).length;
-
   results.forEach((r, idx) => {
     lines.push(`### [${idx + 1}/${results.length}] ${r.url}`);
     lines.push(`title: ${r.title}`);
-    lines.push(`depth:${r.depth} | words:${r.wordCount}${r.truncated ? ` | truncated (full page: ${r.fullChars} chars)` : ""}`);
+    lines.push(`depth:${r.depth} | words:${r.wordCount}`);
     lines.push(``);
     lines.push(r.text);
     lines.push(``);
@@ -155,9 +163,6 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
   lines.push(`## Agent Hints`);
   lines.push(`- ${results.length} pages crawled. For targeted extraction, use novada_map first then novada_extract on chosen pages.`);
-  if (truncatedPages > 0) {
-    lines.push(`- ${truncatedPages} page(s) were truncated at 3,000 chars. Use \`novada_extract\` on specific URLs for full content (up to 30,000 chars).`);
-  }
   if (selectPatterns.length > 0 || excludePatterns.length > 0) {
     lines.push(`- Path filters were active. Remove them to crawl the full site.`);
   }

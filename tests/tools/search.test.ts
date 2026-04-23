@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { novadaSearch } from "../../src/tools/search.js";
 
 vi.mock("axios");
@@ -41,13 +41,14 @@ describe("novadaSearch", () => {
     expect(result).toBe("No results found for this query.");
   });
 
-  it("returns no results when API returns non-200 code", async () => {
+  it("throws on non-200 API code", async () => {
     mockedAxios.get.mockResolvedValue({
       data: { code: 402, msg: "Insufficient credits" },
     });
 
-    const result = await novadaSearch({ query: "test", engine: "google", num: 10, country: "", language: "" }, API_KEY);
-    expect(result).toContain("No results found");
+    await expect(
+      novadaSearch({ query: "test", engine: "google", num: 10, country: "", language: "" }, API_KEY)
+    ).rejects.toThrow("Novada API error (code 402)");
   });
 
   it("handles flat organic_results (no data wrapper)", async () => {
@@ -65,6 +66,18 @@ describe("novadaSearch", () => {
     expect(result).toContain("A snippet");
   });
 
+  it("returns actionable SERP unavailable message on 404", async () => {
+    const err = new AxiosError("Not Found", "ERR_BAD_RESPONSE");
+    Object.defineProperty(err, "response", { value: { status: 404, data: "404 page not found" } });
+    mockedAxios.get.mockRejectedValue(err);
+
+    const result = await novadaSearch({ query: "test", engine: "google", num: 10, country: "", language: "" }, API_KEY);
+    expect(result).toContain("Search Unavailable");
+    expect(result).toContain("novada_extract");
+    expect(result).toContain("novada_research");
+    expect(result).not.toContain("Error [UNKNOWN]");
+  });
+
   it("passes country/language params to API", async () => {
     mockedAxios.get.mockResolvedValue({
       data: { data: { organic_results: [{ title: "T", url: "https://t.com", description: "D" }] } },
@@ -74,36 +87,5 @@ describe("novadaSearch", () => {
     const calledUrl = mockedAxios.get.mock.calls[0][0] as string;
     expect(calledUrl).toContain("country=de");
     expect(calledUrl).toContain("language=de");
-  });
-
-  it("auto-fallbacks to Google when non-Google engine returns no results", async () => {
-    let callCount = 0;
-    mockedAxios.get.mockImplementation(async (url: string) => {
-      callCount++;
-      if (callCount === 1) {
-        // Yahoo returns error code
-        return { data: { code: 410, msg: "empty query built" } };
-      }
-      // Google fallback returns results
-      return {
-        data: { data: { organic_results: [{ title: "Fallback Result", url: "https://fallback.com", description: "From Google" }] } },
-      };
-    });
-
-    const result = await novadaSearch({ query: "test", engine: "yahoo", num: 10, country: "", language: "" }, API_KEY);
-    expect(result).toContain("Fallback Result");
-    expect(result).toContain("fell back to google");
-    expect(callCount).toBe(2);
-  });
-
-  it("includes engine-specific error context in fallback note", async () => {
-    mockedAxios.get.mockImplementation(async () => {
-      return { data: { code: 410, msg: "Build url error: empty query built" } };
-    });
-
-    const result = await novadaSearch({ query: "test", engine: "yahoo", num: 10, country: "", language: "" }, API_KEY);
-    // Both yahoo and google fallback return no results
-    expect(result).toContain("No results found");
-    expect(result).toContain("yahoo");
   });
 });

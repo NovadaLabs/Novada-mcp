@@ -16,11 +16,21 @@ import {
   novadaCrawl,
   novadaResearch,
   novadaMap,
+  novadaProxy,
+  novadaScrape,
+  novadaVerify,
+  novadaUnblock,
+  novadaBrowser,
   validateSearchParams,
   validateExtractParams,
   validateCrawlParams,
   validateResearchParams,
   validateMapParams,
+  validateProxyParams,
+  validateScrapeParams,
+  validateVerifyParams,
+  validateUnblockParams,
+  validateBrowserParams,
   classifyError,
 } from "./tools/index.js";
 import { ZodError } from "zod";
@@ -30,6 +40,11 @@ import {
   CrawlParamsSchema,
   ResearchParamsSchema,
   MapParamsSchema,
+  ProxyParamsSchema,
+  ScrapeParamsSchema,
+  VerifyParamsSchema,
+  UnblockParamsSchema,
+  BrowserParamsSchema,
 } from "./tools/types.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -56,53 +71,107 @@ function zodToMcpSchema(schema: any): Record<string, unknown> {
 const TOOLS = [
   {
     name: "novada_search",
-    description: `Search the web via 5 engines (Google, Bing, DuckDuckGo, Yahoo, Yandex) with 195-country geo-targeting and anti-bot proxy bypass. Returns titles, URLs, and snippets.
+    description: `Use when you have a question or topic but no URL. Searches the web via 5 engines (Google, Bing, DuckDuckGo, Yahoo, Yandex) and returns titles, URLs, and snippets — reranked by relevance to your query.
 
-**Best for:** Current facts, news, finding specific pages. Add time_range for recent results. Add include_domains to restrict to trusted sources.
-**Not for:** Reading a URL (use novada_extract), multi-source research (use novada_research), site URL discovery (use novada_map).
-**Tip:** Use novada_extract with the returned URLs to read full content.`,
+**Best for:** Current events, finding relevant pages, fact lookup, competitive research. Add time_range="week" for recent results. Add include_domains to restrict sources.
+**Not for:** Reading a URL you already have (use novada_extract), full multi-source report (use novada_research).
+**Next step:** Call novada_extract with the returned URLs to read full content.`,
     inputSchema: zodToMcpSchema(SearchParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
   {
     name: "novada_extract",
-    description: `Extract main content from any URL or batch of URLs (max 10). Returns title, description, body text, and same-domain links. Proxy-routed for anti-bot bypass.
+    description: `Use when you have a URL and need its content. Extracts main text, title, and links. Supports batch extraction — pass url as an array to fetch up to 10 pages in parallel. Auto-escalates from static fetch → JS render → Browser CDP on anti-bot pages.
 
-**Best for:** Reading specific pages. Pass url as an array to batch-extract multiple pages in one call (e.g. after novada_search).
-**Not for:** JavaScript SPAs (content won't render), site URL discovery (use novada_map).
-**Tip:** If content is incomplete, run novada_map first to find the correct subpage URL.`,
+**Best for:** Reading specific pages, batch-reading search results, extracting docs.
+**Not for:** Discovering which URLs exist on a site (use novada_map first), crawling many pages (use novada_crawl).
+**Tip:** If content looks incomplete or JS-heavy, set render="render" or render="browser".`,
     inputSchema: zodToMcpSchema(ExtractParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
   {
     name: "novada_crawl",
-    description: `Crawl a website and extract content from multiple pages (BFS or DFS, up to 20 pages). Use select_paths or exclude_paths regex to target specific sections. Use instructions for natural language page guidance.
+    description: `Use when you need content from multiple pages of a site and don't have the URLs yet. Crawls BFS or DFS up to 20 pages, extracts content from each. Use select_paths regex to target specific sections (e.g. "/docs/api/.*").
 
-**Best for:** Extracting content from a doc site, competitive analysis, building knowledge bases.
-**Not for:** Single pages (use novada_extract), URL discovery without content (use novada_map — faster).
-**Tip:** novada_map → pick relevant URLs → novada_extract is more token-efficient than crawl for selective extraction.`,
+**Best for:** Doc site ingestion, competitive content analysis, building knowledge bases from a domain.
+**Not for:** A single page (use novada_extract), URL discovery without content extraction (use novada_map — much faster).`,
     inputSchema: zodToMcpSchema(CrawlParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: true },
   },
   {
     name: "novada_research",
-    description: `Multi-step web research: generates 3-10 diverse search queries in parallel, deduplicates sources, returns a cited report. Use depth='auto' (default) to let the server choose based on question complexity.
+    description: `Use when you have a complex question needing multiple sources. Generates 3–10 diverse search queries in parallel, deduplicates results, extracts full content from top sources, returns a cited multi-source report.
 
-**Best for:** Complex questions needing multiple perspectives, competitive analysis, topic overviews. One call replaces 3-10 manual searches.
-**Not for:** Simple lookups (use novada_search), reading a specific URL (use novada_extract).
-**Tip:** Follow up with novada_extract on the most relevant source URLs for full content.`,
+**Best for:** Comparative analysis, topic overviews, questions needing multiple perspectives. One call replaces 3–10 manual searches.
+**Not for:** Simple single-fact lookup (use novada_search), reading a specific URL (use novada_extract).
+**Depth options:** "quick" (3 queries), "deep" (5–6), "comprehensive" (8–10), "auto" (default — inferred from question).`,
     inputSchema: zodToMcpSchema(ResearchParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
   {
     name: "novada_map",
-    description: `Discover all URLs on a website without extracting content — much faster than crawl for URL discovery. Use search param to filter by keyword. Use max_depth to control traversal depth.
+    description: `Use when you need to know what URLs exist on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl. Returns URL list only — no content.
 
-**Best for:** Understanding site structure, finding specific subpages before extracting, recovering when novada_extract returns incomplete content.
-**Not for:** When you already have the URL (use novada_extract directly).
-**Warning:** Returns limited results on JavaScript SPAs — will include a hint if this is detected.`,
+**Best for:** Site structure discovery, finding the correct subpage URL when you extracted the wrong page.
+**Not for:** Reading page content (follow with novada_extract or novada_crawl).
+**Note:** Limited results on JavaScript SPAs — will flag this in output.`,
     inputSchema: zodToMcpSchema(MapParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  {
+    name: "novada_scrape",
+    description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 129 platforms: Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more.
+
+**Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
+**Not for:** General web pages (use novada_extract), unknown domains not in the platform list (use novada_crawl).
+**Output formats:** "markdown" (default, agent-optimized table), "json" (structured, for programmatic use).
+**Example:** platform="amazon.com", operation="amazon_product_by-keywords", params={keyword:"iphone 16", num:5}
+**Docs:** https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api`,
+    inputSchema: zodToMcpSchema(ScrapeParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: true },
+  },
+  {
+    name: "novada_proxy",
+    description: `Use when you need to route your own HTTP requests through residential or mobile IPs — for geo-targeting, IP rotation, or bypassing IP-based rate limits. Returns proxy URL, shell export commands, or curl --proxy flag.
+
+**Best for:** When you need a specific country/city IP, sticky sessions for multi-step workflows, or testing geo-restricted content.
+**Not for:** Web page extraction (use novada_extract — proxy is automatic), web search (use novada_search).
+**Formats:** "url" for Node.js/Python, "env" for shell variables, "curl" for CLI requests.
+**Note:** Requires NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+    inputSchema: zodToMcpSchema(ProxyParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "novada_verify",
+    description: `Use when you have a factual claim and need to check if it's supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data.
+
+**Best for:** Checking claims before citing them, cross-validating research findings, detecting misinformation.
+**Not for:** Open-ended questions (use novada_research), reading a specific URL (use novada_extract).
+**Note:** Verdict is signal-based (search balance), not a definitive ruling. Confidence 0–100 indicates certainty.`,
+    inputSchema: zodToMcpSchema(VerifyParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  {
+    name: "novada_unblock",
+    description: `Use when you need the raw rendered HTML of a blocked or JS-heavy page. Forces JS rendering via Web Unblocker or Browser API. Returns raw HTML, not cleaned text.
+
+**Best for:** When novada_extract reports JS-heavy content, parsing specific DOM elements, inspecting page structure, extracting data from SPAs like TikTok or Instagram.
+**Not for:** Reading cleaned text (use novada_extract with render="render"), structured platform data (use novada_scrape).
+**Methods:** "render" (Web Unblocker, faster/cheaper), "browser" (full Chromium CDP, handles complex SPAs).
+**Tip:** Use wait_for to specify a CSS selector to wait for before capturing HTML.`,
+    inputSchema: zodToMcpSchema(UnblockParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  {
+    name: "novada_browser",
+    description: `Use when you need to interact with a web page — click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Chain multiple actions in one call for efficiency.
+
+**Best for:** Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions.
+**Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_unblock).
+**Actions:** navigate, click, type, screenshot, snapshot, evaluate, wait, scroll — up to 20 per call.
+**Note:** Each call creates a fresh browser context. No state persists between calls. Requires NOVADA_BROWSER_WS env var.`,
+    inputSchema: zodToMcpSchema(BrowserParamsSchema),
+    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
   },
 ];
 
@@ -185,11 +254,26 @@ class NovadaMCPServer {
           case "novada_map":
             result = await novadaMap(validateMapParams(args as Record<string, unknown>), API_KEY);
             break;
+          case "novada_proxy":
+            result = await novadaProxy(validateProxyParams(args as Record<string, unknown>));
+            break;
+          case "novada_scrape":
+            result = await novadaScrape(validateScrapeParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_verify":
+            result = await novadaVerify(validateVerifyParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_unblock":
+            result = await novadaUnblock(validateUnblockParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_browser":
+            result = await novadaBrowser(validateBrowserParams(args as Record<string, unknown>));
+            break;
           default:
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_verify, novada_unblock, novada_browser`,
               }],
               isError: true,
             };
@@ -225,7 +309,7 @@ class NovadaMCPServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error(`Novada MCP server v${VERSION} running on stdio`);
+    console.error(`Novada MCP server v${VERSION} running on stdio — 10 tools loaded`);
   }
 }
 
@@ -250,18 +334,25 @@ Usage:
   npx novada-mcp --help       Show this help
 
 Environment:
-  NOVADA_API_KEY  Your Novada API key (required)
-                  Get one at https://www.novada.com
+  NOVADA_API_KEY              Your Novada API key (required)
+  NOVADA_WEB_UNBLOCKER_KEY    Web Unblocker key (enables JS rendering)
+  NOVADA_BROWSER_WS           Browser API WebSocket (enables browser automation)
+  NOVADA_PROXY_USER/PASS/ENDPOINT  Proxy credentials (enables novada_proxy)
 
 Connect to Claude Code:
   claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 
-Tools:
+Tools (10):
   novada_search    Search the web via Google, Bing, and 3 more engines
-  novada_extract   Extract content from any URL (via proxy)
+  novada_extract   Extract content from any URL (smart auto-routing)
   novada_crawl     Crawl a website (BFS/DFS, up to 20 pages)
   novada_research  Multi-step web research with synthesis
   novada_map       Discover all URLs on a website (fast)
+  novada_scrape    Structured data from 129 platforms (Amazon, TikTok, etc.)
+  novada_proxy     Get residential proxy credentials
+  novada_verify    Verify a factual claim against web sources
+  novada_unblock   Force JS rendering on blocked/SPA pages
+  novada_browser   Interactive browser automation (navigate, click, type, screenshot)
 `);
   process.exit(0);
 }

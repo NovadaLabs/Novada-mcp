@@ -1,9 +1,20 @@
 {
   "name": "novada-mcp",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "MCP server for web search, extraction, crawling, and research — powered by Novada's 100M+ proxy IPs across 195 countries. Works with Claude, Cursor, VS Code, and any MCP client.",
   "mcpName": "io.github.goldentrii/novada-mcp",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./sdk": {
+      "types": "./build/sdk/index.d.ts",
+      "default": "./build/sdk/index.js"
+    }
+  },
+  "types": "./build/index.d.ts",
   "bin": {
     "novada-mcp": "build/index.js",
     "nova": "build/cli.js"
@@ -22,7 +33,7 @@
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "if [ -f .env ]; then echo 'ERROR: .env file present — delete test credentials before publishing'; exit 1; fi && npm run build"
   },
   "keywords": [
     "mcp",
@@ -70,6 +81,8 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "axios": "^1.15.0",
     "cheerio": "^1.2.0",
+    "playwright-core": "^1.59.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -1,20 +1,86 @@
-import { AxiosError } from "axios";
-import { fetchWithRetry, USER_AGENT, cleanParams } from "../utils/index.js";
+import axios, { AxiosError } from "axios";
+import { fetchWithRetry, USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
 import { SCRAPER_API_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
-import { getSearchEngineError } from "./types.js";
+
+const SERP_UNAVAILABLE = `## Search Unavailable
+
+The Novada SERP endpoint is not yet configured for this API key.
+
+**Alternatives while SERP is unavailable:**
+- \`novada_extract\` with a direct URL — e.g. \`https://www.google.com/search?q=your+query\`
+- \`novada_research\` — multi-source research without a dedicated search API
+- \`novada_map\` + \`novada_extract\` — discover and read pages from a known site
+
+Contact support@novada.com to enable SERP access for your account.`;
 
 export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
-  const requestedEngine = params.engine || "google";
+  const engine = params.engine || "google";
 
-  // Try the requested engine; if it fails and isn't Google, auto-fallback to Google
-  const { results, engine: actualEngine, fallbackNote } = await executeSearchWithFallback(
-    params, requestedEngine, apiKey
-  );
+  const rawParams: Record<string, string> = {
+    q: params.query,
+    api_key: apiKey,
+    engine,
+    num: String(params.num || 10),
+    country: params.country || "",
+    language: params.language || "",
+  };
 
-  if (results.length === 0) {
-    return `No results found for this query${fallbackNote ? ` (${fallbackNote})` : ""}.`;
+  // Bing: set locale-specific params
+  if (engine === "bing") {
+    if (!rawParams.country) rawParams.country = "us";
+    if (!rawParams.language) rawParams.language = "en";
+    rawParams.mkt = `${rawParams.language}-${rawParams.country.toUpperCase()}`;
   }
+
+  // Time filtering
+  if (params.time_range) rawParams.time_range = params.time_range;
+  if (params.start_date) rawParams.start_date = params.start_date;
+  if (params.end_date) rawParams.end_date = params.end_date;
+
+  // Domain filtering
+  if (params.include_domains?.length) {
+    rawParams.include_domains = params.include_domains.slice(0, 10).join(",");
+  }
+  if (params.exclude_domains?.length) {
+    rawParams.exclude_domains = params.exclude_domains.slice(0, 10).join(",");
+  }
+
+  const cleaned = cleanParams(rawParams) as Record<string, string>;
+  const searchParams = new URLSearchParams(cleaned);
+
+  let response;
+  try {
+    response = await fetchWithRetry(
+      `${SCRAPER_API_BASE}/search?${searchParams.toString()}`,
+      {
+        headers: {
+          "User-Agent": USER_AGENT,
+          Origin: "https://www.novada.com",
+          Referer: "https://www.novada.com/",
+        },
+      }
+    );
+  } catch (error) {
+    if (error instanceof AxiosError && error.response?.status === 404) {
+      return SERP_UNAVAILABLE;
+    }
+    throw error;
+  }
+
+  const data: NovadaApiResponse = response.data;
+
+  if (data.code && data.code !== 200 && data.code !== 0) {
+    throw new Error(`Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`);
+  }
+
+  const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
+  if (results.length === 0) {
+    return "No results found for this query.";
+  }
+
+  // Rerank by relevance to query
+  const reranked = rerankResults(results, params.query);
 
   // Active filters summary for agent metadata
   const activeFilters: string[] = [];
@@ -30,14 +96,14 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   const lines: string[] = [
     `## Search Results`,
-    `results:${results.length} | engine:${actualEngine}${fallbackNote ? ` (${fallbackNote})` : ""}${filterStr}`,
+    `results:${reranked.length} | engine:${engine} | reranked:true${filterStr}`,
     ``,
     `---`,
     ``,
   ];
 
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
+  for (let i = 0; i < reranked.length; i++) {
+    const r = reranked[i];
     let url = r.url || r.link || "N/A";
     url = unwrapBingUrl(url);
 
@@ -58,119 +124,12 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   lines.push(`---`);
   lines.push(`## Agent Hints`);
+  lines.push(`- Results are reranked by relevance to your query (title + snippet keyword scoring)`);
   lines.push(`- To read any result in full: \`novada_extract\` with its url`);
   lines.push(`- To batch-read multiple results: \`novada_extract\` with \`url=[url1, url2, ...]\``);
   lines.push(`- For deeper multi-source research: \`novada_research\``);
-  if (fallbackNote) {
-    lines.push(`- Requested engine '${requestedEngine}' was unavailable — results from Google.`);
-  }
-  if (results.length < 3) {
-    lines.push(`- Few results returned. Broaden the query or increase \`num\` for more coverage.`);
-  }
 
   return lines.join("\n");
-}
-
-/** Execute search with auto-fallback: if requested engine fails, retry with Google */
-async function executeSearchWithFallback(
-  params: SearchParams,
-  engine: string,
-  apiKey: string
-): Promise<{ results: NovadaSearchResult[]; engine: string; fallbackNote: string }> {
-  const result = await executeSearch(params, engine, apiKey);
-
-  if (result.results.length > 0) {
-    return { results: result.results, engine, fallbackNote: "" };
-  }
-
-  // Surface engine-specific error context in the fallback note
-  const engineError = result.error ? getSearchEngineError(engine, result.error) : null;
-  const errorContext = engineError
-    ? engineError.split("\n")[0]
-    : result.error || "no results";
-
-  // If already Google, nothing to fall back to
-  if (engine === "google") {
-    return { results: [], engine, fallbackNote: "" };
-  }
-
-  // Auto-fallback: try Google
-  const fallback = await executeSearch(params, "google", apiKey);
-  if (fallback.results.length > 0) {
-    return {
-      results: fallback.results,
-      engine: "google",
-      fallbackNote: `${engine}: ${errorContext} — fell back to google`,
-    };
-  }
-
-  return { results: [], engine, fallbackNote: `${engine}: ${errorContext}; google also returned no results` };
-}
-
-/** Execute a single search call against one engine */
-async function executeSearch(
-  params: SearchParams,
-  engine: string,
-  apiKey: string
-): Promise<{ results: NovadaSearchResult[]; error?: string }> {
-  const rawParams: Record<string, string> = {
-    q: params.query,
-    api_key: apiKey,
-    engine,
-    num: String(params.num || 10),
-    country: params.country || "",
-    language: params.language || "",
-  };
-
-  if (engine === "bing") {
-    if (!rawParams.country) rawParams.country = "us";
-    if (!rawParams.language) rawParams.language = "en";
-    rawParams.mkt = `${rawParams.language}-${rawParams.country.toUpperCase()}`;
-  }
-
-  if (params.time_range) rawParams.time_range = params.time_range;
-  if (params.start_date) rawParams.start_date = params.start_date;
-  if (params.end_date) rawParams.end_date = params.end_date;
-  if (params.include_domains?.length) rawParams.include_domains = params.include_domains.slice(0, 10).join(",");
-  if (params.exclude_domains?.length) rawParams.exclude_domains = params.exclude_domains.slice(0, 10).join(",");
-
-  const cleaned = cleanParams(rawParams) as Record<string, string>;
-  const searchParams = new URLSearchParams(cleaned);
-
-  try {
-    const response = await fetchWithRetry(
-      `${SCRAPER_API_BASE}/search?${searchParams.toString()}`,
-      {
-        headers: {
-          "User-Agent": USER_AGENT,
-          Origin: "https://www.novada.com",
-          Referer: "https://www.novada.com/",
-        },
-      }
-    );
-
-    const data: NovadaApiResponse = response.data;
-    if (data.code && data.code !== 200 && data.code !== 0) {
-      return { results: [], error: `code ${data.code}: ${data.msg}` };
-    }
-
-    return { results: data.data?.organic_results || data.organic_results || [] };
-  } catch (err) {
-    // Re-throw auth and rate-limit errors — don't mask them with a silent fallback
-    if (err instanceof AxiosError &&
-        (err.response?.status === 401 || err.response?.status === 403 || err.response?.status === 429)) {
-      throw err;
-    }
-    return { results: [], error: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-/** Validate that a decoded URL is a valid HTTP(S) URL */
-function isValidHttpUrl(s: string): boolean {
-  try {
-    const u = new URL(s);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch { return false; }
 }
 
 /** Unwrap Bing redirect/base64 encoded URLs */
@@ -183,17 +142,16 @@ function unwrapBingUrl(url: string): string {
         const cleaned = realUrl.replace(/^a1/, "");
         try {
           const decoded = Buffer.from(cleaned, "base64").toString("utf8");
-          if (isValidHttpUrl(decoded)) return decoded;
+          if (decoded.startsWith("http")) return decoded;
         } catch { /* not base64 */ }
-        const decodedUri = decodeURIComponent(cleaned);
-        if (isValidHttpUrl(decodedUri)) return decodedUri;
+        return decodeURIComponent(cleaned);
       }
     } catch { /* keep original */ }
   }
   if (!url.startsWith("http") && /^[A-Za-z0-9+/=]+$/.test(url) && url.length > 20) {
     try {
       const decoded = Buffer.from(url, "base64").toString("utf8");
-      if (isValidHttpUrl(decoded)) return decoded;
+      if (decoded.startsWith("http")) return decoded;
     } catch { /* keep original */ }
   }
   return url;

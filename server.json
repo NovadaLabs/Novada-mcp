@@ -27,6 +27,10 @@
     {
       "name": "novada_research",
       "description": "Multi-step research: generates 3-10 parallel search queries, deduplicates up to 15 unique sources, returns cited report. depth=auto|quick|deep|comprehensive. Optional focus param narrows sub-query generation."
+    },
+    {
+      "name": "novada_proxy",
+      "description": "Get Novada residential proxy configuration for use in HTTP clients, curl, or shell scripts. Returns proxy URL, shell export commands, or curl --proxy flag. Requires NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars."
     }
   ],
   "prompts": [
@@ -63,7 +67,7 @@
   "skills": [
     {
       "name": "novada-agent",
-      "description": "Tool selection guide for 5 Novada MCP tools — decision tree, key parameters, common workflows (research+extract, competitive analysis, full site docs, fresh news), and when NOT to use each tool.",
+      "description": "Tool selection guide for 6 Novada MCP tools — decision tree, key parameters, common workflows (research+extract, competitive analysis, full site docs, fresh news, proxy setup), and when NOT to use each tool.",
       "path": "skills/novada-agent/SKILL.md"
     }
   ],

@@ -87,3 +87,34 @@ describe("novadaResearch", () => {
     expect(sourceMatches!.length).toBeLessThanOrEqual(3);
   });
 });
+
+describe("novadaResearch source extraction", () => {
+  it("extracts top source URLs and includes content in output", async () => {
+    const searchResponse = {
+      data: {
+        code: 200,
+        data: {
+          organic_results: [
+            { title: "Deep Article", url: "https://example.com/article", description: "Covers the topic" },
+          ],
+        },
+      },
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    };
+    const extractResponse = {
+      data: "<html><body><h1>Deep Article</h1><p>" + "detailed content ".repeat(30) + "</p></body></html>",
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    };
+
+    // quick depth = 3 search queries, then 1 extraction call for the top source
+    mockedAxios.get
+      .mockResolvedValueOnce(searchResponse)  // query 1
+      .mockResolvedValueOnce(searchResponse)  // query 2
+      .mockResolvedValueOnce(searchResponse)  // query 3
+      .mockResolvedValueOnce(extractResponse); // extraction: article URL
+
+    const result = await novadaResearch({ question: "What is quantum computing?", depth: "quick" }, "test-key");
+    expect(result).toContain("Key Sources");
+    expect(result).toContain("extracted:");
+  });
+});

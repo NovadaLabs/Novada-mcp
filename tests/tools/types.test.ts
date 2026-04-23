@@ -6,8 +6,9 @@ import {
   validateCrawlParams,
   validateResearchParams,
   validateMapParams,
+  validateUnblockParams,
+  validateBrowserParams,
   classifyError,
-  getSearchEngineError,
   NovadaErrorCode,
 } from "../../src/tools/types.js";
 
@@ -222,35 +223,86 @@ describe("classifyError", () => {
   });
 });
 
-describe("getSearchEngineError", () => {
-  it("returns actionable message for Yahoo 410", () => {
-    const msg = getSearchEngineError("yahoo", "code 410: empty query built");
-    expect(msg).not.toBeNull();
-    expect(msg).toContain("Yahoo");
-    expect(msg).toContain("google");
+// ─── Unblock Params ────────────────────────────────────────────────────────
+
+describe("validateUnblockParams", () => {
+  it("accepts valid URL with defaults", () => {
+    const result = validateUnblockParams({ url: "https://example.com" });
+    expect(result.url).toBe("https://example.com");
+    expect(result.method).toBe("render");
+    expect(result.timeout).toBe(30000);
   });
 
-  it("returns actionable message for DuckDuckGo down", () => {
-    const msg = getSearchEngineError("duckduckgo", "API_DOWN service unavailable");
-    expect(msg).not.toBeNull();
-    expect(msg).toContain("DuckDuckGo");
+  it("accepts browser method", () => {
+    const result = validateUnblockParams({ url: "https://example.com", method: "browser" });
+    expect(result.method).toBe("browser");
   });
 
-  it("returns actionable message for Google 413 WorkerPool", () => {
-    const msg = getSearchEngineError("google", "413 WorkerPool not initialized");
-    expect(msg).not.toBeNull();
-    expect(msg).toContain("413");
-    expect(msg).toContain("novada_research");
+  it("accepts wait_for selector", () => {
+    const result = validateUnblockParams({ url: "https://example.com", wait_for: ".price" });
+    expect(result.wait_for).toBe(".price");
   });
 
-  it("returns null for unknown errors", () => {
-    const msg = getSearchEngineError("google", "some random error");
-    expect(msg).toBeNull();
+  it("rejects missing URL", () => {
+    expect(() => validateUnblockParams({})).toThrow(ZodError);
   });
 
-  it("returns actionable message for Yandex key issue", () => {
-    const msg = getSearchEngineError("yandex", "INVALID_API_KEY no key");
-    expect(msg).not.toBeNull();
-    expect(msg).toContain("Yandex");
+  it("rejects private IPs", () => {
+    expect(() => validateUnblockParams({ url: "http://127.0.0.1/admin" })).toThrow(ZodError);
+  });
+});
+
+// ─── Browser Params ────────────────────────────────────────────────────────
+
+describe("validateBrowserParams", () => {
+  it("accepts single navigate action", () => {
+    const result = validateBrowserParams({
+      actions: [{ action: "navigate", url: "https://example.com" }],
+    });
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0].action).toBe("navigate");
+    expect(result.timeout).toBe(60000);
+  });
+
+  it("accepts multiple chained actions", () => {
+    const result = validateBrowserParams({
+      actions: [
+        { action: "navigate", url: "https://example.com" },
+        { action: "click", selector: "#btn" },
+        { action: "type", selector: "#input", text: "hello" },
+        { action: "screenshot" },
+      ],
+    });
+    expect(result.actions).toHaveLength(4);
+  });
+
+  it("rejects empty actions array", () => {
+    expect(() => validateBrowserParams({ actions: [] })).toThrow(ZodError);
+  });
+
+  it("rejects more than 20 actions", () => {
+    const actions = Array.from({ length: 21 }, () => ({ action: "screenshot" as const }));
+    expect(() => validateBrowserParams({ actions })).toThrow(ZodError);
+  });
+
+  it("accepts scroll action with direction", () => {
+    const result = validateBrowserParams({
+      actions: [{ action: "scroll", direction: "bottom" }],
+    });
+    expect(result.actions[0].action).toBe("scroll");
+  });
+
+  it("accepts evaluate action", () => {
+    const result = validateBrowserParams({
+      actions: [{ action: "evaluate", script: "document.title" }],
+    });
+    expect(result.actions[0].action).toBe("evaluate");
+  });
+
+  it("accepts wait action with selector", () => {
+    const result = validateBrowserParams({
+      actions: [{ action: "wait", selector: ".loaded", timeout: 10000 }],
+    });
+    expect(result.actions[0].action).toBe("wait");
   });
 });
