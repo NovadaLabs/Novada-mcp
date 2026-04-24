@@ -6,3 +6,5 @@ coverage/
 *.tgz
 .DS_Store
 .worktrees/
+COMPETITIVE_INTELLIGENCE.md
+ROADMAP.md
