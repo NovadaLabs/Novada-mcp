@@ -8,3 +8,7 @@ coverage/
 .worktrees/
 COMPETITIVE_INTELLIGENCE.md
 ROADMAP.md
+WORK_LOG.md
+docs/TOKEN_EFFICIENCY.md
+claude-plugin.json
+BACKEND_ISSUES.md

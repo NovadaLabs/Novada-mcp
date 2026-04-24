@@ -39,6 +39,20 @@
 
 ---
 
+## Quick Install
+
+**Claude Code:**
+```bash
+claude mcp add novada -- npx -y novada-mcp
+```
+Then add your API key to Claude's MCP config:
+```json
+{ "env": { "NOVADA_API_KEY": "your_key" } }
+```
+Get your key at [dashboard.novada.com](https://dashboard.novada.com).
+
+---
+
 ### API Keys & Environment Variables
 
 Different capabilities require different credentials. Here is what you need and where to get each one.

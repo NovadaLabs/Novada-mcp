@@ -274,6 +274,8 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
     action: z.literal("scroll"),
     direction: z.enum(["down", "up", "bottom", "top"]).default("down"),
   }),
+  z.object({ action: z.literal("close_session") }),
+  z.object({ action: z.literal("list_sessions") }),
 ]);
 
 export type BrowserAction = z.infer<typeof BrowserActionSchema>;
@@ -285,6 +287,8 @@ export const BrowserParamsSchema = z.object({
     .describe("ISO 2-letter country code for geo-targeted browsing."),
   timeout: z.number().int().min(5000).max(120000).default(60000)
     .describe("Total timeout for all actions in ms. Default 60000."),
+  session_id: z.string().optional()
+    .describe("Optional session ID for persistent browser state across calls. Reuses the same browser page (cookies, localStorage, login state). Sessions expire after 10 minutes of inactivity."),
 });
 
 export type BrowserParams = z.infer<typeof BrowserParamsSchema>;

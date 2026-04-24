@@ -1,5 +1,6 @@
 import { fetchViaProxy, fetchWithRender, detectJsHeavyContent, detectBotChallenge } from "./http.js";
 import { fetchViaBrowser, isBrowserConfigured } from "./browser.js";
+import { isPdfResponse, extractPdf } from "./pdf.js";
 
 /**
  * Normalize axios response data to a string.
@@ -71,17 +72,54 @@ export async function routeFetch(
   // Force render mode (Web Unblocker)
   if (renderMode === "render") {
     const response = await fetchWithRender(url, options.apiKey, { country });
+    const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
+    if (isPdfResponse(url, contentType)) {
+      const pdfBuffer = Buffer.isBuffer(response.data)
+        ? response.data
+        : Buffer.from(response.data as string, "binary");
+      const pdf = await extractPdf(pdfBuffer);
+      return {
+        html: `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`,
+        mode: "render" as UsedMode,
+        cost: "medium" as CostTier,
+      };
+    }
     return { html: normalizeToString(response.data), mode: "render", cost: "medium" };
   }
 
   // Static mode — no escalation
   if (renderMode === "static") {
     const response = await fetchViaProxy(url, options.apiKey);
+    const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
+    if (isPdfResponse(url, contentType)) {
+      const pdfBuffer = Buffer.isBuffer(response.data)
+        ? response.data
+        : Buffer.from(response.data as string, "binary");
+      const pdf = await extractPdf(pdfBuffer);
+      return {
+        html: `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`,
+        mode: "static" as UsedMode,
+        cost: "low" as CostTier,
+      };
+    }
     return { html: normalizeToString(response.data), mode: "static", cost: "low" };
   }
 
   // Auto mode: static -> render -> browser
   const response = await fetchViaProxy(url, options.apiKey);
+  // Check for PDF before attempting HTML processing
+  const autoContentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
+  if (isPdfResponse(url, autoContentType)) {
+    const pdfBuffer = Buffer.isBuffer(response.data)
+      ? response.data
+      : Buffer.from(response.data as string, "binary");
+    const pdf = await extractPdf(pdfBuffer);
+    return {
+      html: `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`,
+      mode: "static" as UsedMode,
+      cost: "low" as CostTier,
+    };
+  }
   let html = normalizeToString(response.data);
 
   if (!detectJsHeavyContent(html) && !detectBotChallenge(html)) {

@@ -1,4 +1,4 @@
-import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, lookupDomain, extractFields } from "../utils/index.js";
+import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, lookupDomain, extractFields, isPdfResponse, extractPdf } from "../utils/index.js";
 import type { FieldResult } from "../utils/index.js";
 import type { ExtractParams } from "./types.js";
 
@@ -68,20 +68,39 @@ async function extractSingle(
     usedMode = "browser";
   } else if (effectiveMode === "render") {
     const response = await fetchWithRender(params.url, apiKey);
-    if (typeof response.data !== "string") {
-      throw new Error("Response is not HTML. The URL may return JSON or binary data.");
+    const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
+    if (isPdfResponse(params.url, contentType)) {
+      const pdfBuffer = Buffer.isBuffer(response.data)
+        ? response.data
+        : Buffer.from(response.data as string, "binary");
+      const pdf = await extractPdf(pdfBuffer);
+      html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
+    } else {
+      if (typeof response.data !== "string") {
+        throw new Error("Response is not HTML. The URL may return JSON or binary data.");
+      }
+      html = response.data;
     }
-    html = response.data;
     usedMode = "render";
   } else {
     // Auto or static: start with static fetch
     const response = await fetchViaProxy(params.url, apiKey);
-    if (typeof response.data !== "string") {
-      throw new Error("Response is not HTML. The URL may return JSON or binary data.");
+    const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
+    if (isPdfResponse(params.url, contentType)) {
+      const pdfBuffer = Buffer.isBuffer(response.data)
+        ? response.data
+        : Buffer.from(response.data as string, "binary");
+      const pdf = await extractPdf(pdfBuffer);
+      html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
+    } else {
+      if (typeof response.data !== "string") {
+        throw new Error("Response is not HTML. The URL may return JSON or binary data.");
+      }
+      html = response.data;
     }
-    html = response.data;
 
-    if (renderMode === "auto" && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
+    // Skip JS detection if we already have PDF content (no escalation needed)
+    if (renderMode === "auto" && !html.startsWith("pdf_pages:") && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
       // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
       try {
         const renderResponse = await fetchWithRender(params.url, apiKey);
@@ -121,7 +140,20 @@ async function extractSingle(
     }
   }
 
-  const title = extractTitle(html);
+  // Detect PDF output from router (prefixed with pdf_pages:N)
+  const pdfPageMatch = html.match(/^pdf_pages:(\d+)\n/);
+  let pdfPages: number | null = null;
+  let pdfTitle: string | undefined;
+  if (pdfPageMatch) {
+    pdfPages = parseInt(pdfPageMatch[1], 10);
+    // Extract optional title line before stripping prefix
+    const titleLine = html.match(/^pdf_pages:\d+\ntitle: ([^\n]+)\n/);
+    pdfTitle = titleLine?.[1];
+    // Strip the pdf_pages prefix (and optional title line)
+    html = html.replace(/^pdf_pages:\d+\n(?:title: [^\n]+\n)?/, "");
+  }
+
+  const title = pdfPages !== null ? (pdfTitle ?? params.url) : extractTitle(html);
   const description = extractDescription(html);
   const stillJsHeavy = renderMode === "auto" && (usedMode === "static" || usedMode === "render-failed") && detectJsHeavyContent(html);
 
@@ -133,9 +165,12 @@ async function extractSingle(
       "\n<!-- Content truncated at 10,000 characters -->";
   }
 
-  const mainContent = extractMainContent(html, params.url);
+  // For PDF content, use the text directly (no HTML parsing needed)
+  const mainContent = pdfPages !== null
+    ? html.slice(0, 25000)
+    : extractMainContent(html, params.url);
 
-  const allLinks = extractLinks(html, params.url);
+  const allLinks = pdfPages !== null ? [] : extractLinks(html, params.url);
   let baseDomain: string;
   try {
     baseDomain = new URL(params.url).hostname.replace(/^www\./, "");
@@ -164,8 +199,8 @@ async function extractSingle(
   const contentLen = mainContent.length;
   const isTruncated = contentLen > 25000;
 
-  // Quality scoring
-  const structuredData = extractStructuredData(html);
+  // Quality scoring (skip structured data extraction for PDFs — no HTML schema)
+  const structuredData = pdfPages !== null ? null : extractStructuredData(html);
   const hasStructuredData = structuredData !== null;
   const quality = scoreExtraction(html, mainContent, usedMode, hasStructuredData);
 
@@ -180,7 +215,7 @@ async function extractSingle(
     `url: ${params.url}`,
     `title: ${title}`,
     ...(description ? [`description: ${description}`] : []),
-    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (may be truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score}`,
+    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (may be truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}`,
     ``,
     `---`,
     ``,
@@ -218,6 +253,11 @@ async function extractSingle(
   }
 
   lines.push(``, `---`, `## Agent Hints`);
+  if (pdfPages !== null) {
+    lines.push(`- PDF extracted automatically: ${pdfPages} page(s). pdf_pages:${pdfPages} in metadata above.`);
+    lines.push(`- PDF URLs are extracted automatically — use novada_extract the same way as HTML.`);
+    lines.push(`- For large PDFs (>10MB), try a more specific page URL.`);
+  }
   if (usedMode === "browser") {
     lines.push(`- Content fetched via Browser API (CDP). Cost: ~$3/GB — use only when static/render modes fail.`);
   }

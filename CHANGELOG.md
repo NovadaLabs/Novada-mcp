@@ -4,6 +4,31 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.8.2] — 2026-04-24
+
+### Added
+- **PDF extraction**: `novada_extract` now handles PDF URLs transparently — detects `Content-Type: application/pdf` and `.pdf` extension, extracts plain text + page count via pdf-parse. No new tool needed; works the same as HTML extraction.
+- **Persistent browser sessions**: `novada_browser` now accepts a `session_id` parameter — reuse the same browser page (cookies, localStorage, login state) across multiple calls.
+- **New browser actions**: `close_session` (explicitly release a named session) and `list_sessions` (see all active session IDs).
+- **Session TTL**: Browser sessions expire after 10 minutes of inactivity with automatic cleanup on next access.
+- **Claude plugin manifest**: `claude-plugin.json` created (local only, in .gitignore).
+- **Token efficiency documentation**: `docs/TOKEN_EFFICIENCY.md` with benchmark table vs Bright Data (local only).
+- **Quick Install section**: README.md now includes a Quick Install section for Claude Code.
+- **PDF size cap**: PDFs larger than 10 MB are rejected with a helpful error message.
+
+### Fixed
+- **PDF detection in all fetch modes**: `extractSingle` previously only detected PDFs via `routeFetch`. Now also detects PDFs directly when `render="render"` or `render="static"` modes call `fetchWithRender`/`fetchViaProxy` directly.
+- **PDF escalation guard**: Added `!html.startsWith("pdf_pages:")` guard to prevent unnecessary JS rendering escalation when PDF content is already extracted.
+- **Browser mock missing `close` method**: `tests/tools/browser.test.ts` mock page now includes `close: vi.fn()` required by session cleanup.
+
+### Tests
+- 351 passing (was 326 in v0.8.1, +25 new tests)
+- New: `tests/utils/pdf.test.ts` (13 tests — `isPdfResponse`, `extractPdf` size guard, mock-based text/metadata extraction)
+- New: 8 session management tests in `tests/utils/browser.test.ts`
+- New: 4 session tool tests in `tests/tools/browser.test.ts`
+
+---
+
 ## [0.8.0] 2026-04-23
 
 **10-tool MCP — full capability release.** Upgrades v0.6.7 (5 tools) to v0.8.0 (10 tools + smart routing + quality extraction).

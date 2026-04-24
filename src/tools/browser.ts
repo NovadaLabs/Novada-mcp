@@ -1,5 +1,6 @@
 import type { BrowserParams, BrowserAction } from "./types.js";
 import { getBrowserWs } from "../utils/credentials.js";
+import { getSession, storeSession, closeSession, listSessions } from "../utils/browser.js";
 
 interface ActionResult {
   action: string;
@@ -11,9 +12,41 @@ interface ActionResult {
 /**
  * Interactive browser automation via Novada Browser API (CDP WebSocket).
  * Chain multiple actions in a single call: navigate → click → type → screenshot.
- * Each call creates a fresh browser context — no state persists between calls.
+ *
+ * When session_id is provided, the browser page is reused across calls —
+ * maintaining cookies, localStorage, and login state. Sessions expire after
+ * 10 minutes of inactivity.
+ *
+ * Special actions:
+ * - close_session: explicitly close a named session and release resources
+ * - list_sessions: list all currently active session IDs
  */
 export async function novadaBrowser(params: BrowserParams): Promise<string> {
+  const { actions, timeout, session_id: sessionId } = params;
+
+  // Handle session management actions that don't need a browser connection
+  if (actions.length === 1) {
+    const action = actions[0];
+    if (action.action === "close_session") {
+      if (!sessionId) {
+        return "Error: close_session requires a session_id parameter.";
+      }
+      const closed = await closeSession(sessionId);
+      return closed
+        ? `## Session Closed\nsession_id: ${sessionId}\nstatus: closed`
+        : `## Session Not Found\nsession_id: ${sessionId}\nstatus: not_found`;
+    }
+    if (action.action === "list_sessions") {
+      const ids = listSessions();
+      return [
+        `## Active Browser Sessions`,
+        `count: ${ids.length}`,
+        ``,
+        ids.length > 0 ? ids.map(id => `- ${id}`).join("\n") : "No active sessions.",
+      ].join("\n");
+    }
+  }
+
   const wsEndpoint = getBrowserWs();
   if (!wsEndpoint) {
     return [
@@ -45,42 +78,79 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
     ].join("\n");
   }
 
-  const { actions, timeout } = params;
   const results: ActionResult[] = [];
   const startTime = Date.now();
 
-  let browser;
-  try {
-    browser = await chromium.connectOverCDP(wsEndpoint);
-    const context = await browser.newContext({
-      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    });
-    const page = await context.newPage();
-    page.setDefaultTimeout(timeout);
+  // Try to reuse existing session page
+  const existingPage = sessionId ? getSession(sessionId) : null;
 
-    for (const action of actions) {
-      const elapsed = Date.now() - startTime;
-      if (elapsed > timeout) {
-        results.push({ action: action.action, status: "error", error: `Timeout: ${timeout}ms exceeded` });
-        break;
+  if (existingPage) {
+    // Reuse existing session — execute all actions on the same page
+    try {
+      existingPage.setDefaultTimeout(timeout);
+      for (const action of actions) {
+        const elapsed = Date.now() - startTime;
+        if (elapsed > timeout) {
+          results.push({ action: action.action, status: "error", error: `Timeout: ${timeout}ms exceeded` });
+          break;
+        }
+        try {
+          const result = await executeAction(existingPage, action);
+          results.push(result);
+        } catch (err) {
+          results.push({
+            action: action.action,
+            status: "error",
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
-
-      try {
-        const result = await executeAction(page, action);
-        results.push(result);
-      } catch (err) {
-        results.push({
-          action: action.action,
-          status: "error",
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+    } catch (err) {
+      results.push({ action: "session_reuse", status: "error", error: err instanceof Error ? err.message : String(err) });
     }
+  } else {
+    // No existing session — create new browser connection
+    let browser;
+    let newPage;
+    try {
+      browser = await chromium.connectOverCDP(wsEndpoint);
+      const context = await browser.newContext({
+        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      });
+      newPage = await context.newPage();
+      newPage.setDefaultTimeout(timeout);
 
-    await context.close();
-  } finally {
-    if (browser) {
-      await browser.close();
+      // Store page in session if session_id provided
+      if (sessionId) {
+        storeSession(sessionId, newPage);
+      }
+
+      for (const action of actions) {
+        const elapsed = Date.now() - startTime;
+        if (elapsed > timeout) {
+          results.push({ action: action.action, status: "error", error: `Timeout: ${timeout}ms exceeded` });
+          break;
+        }
+        try {
+          const result = await executeAction(newPage, action);
+          results.push(result);
+        } catch (err) {
+          results.push({
+            action: action.action,
+            status: "error",
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      // Only close context/browser if NOT in a named session (session pages stay open)
+      if (!sessionId) {
+        await context.close();
+      }
+    } finally {
+      if (browser && !sessionId) {
+        await browser.close();
+      }
     }
   }
 
@@ -90,7 +160,7 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
 
   const lines: string[] = [
     `## Browser Session Results`,
-    `actions: ${results.length} | succeeded: ${succeeded} | failed: ${failed} | time: ${elapsed}ms`,
+    `actions: ${results.length} | succeeded: ${succeeded} | failed: ${failed} | time: ${elapsed}ms${sessionId ? ` | session_id: ${sessionId} | session_active: true` : ""}`,
     ``,
     `---`,
     ``,
@@ -110,8 +180,15 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
   }
 
   lines.push(`---`, `## Agent Hints`);
-  lines.push(`- Each browser call starts fresh — no cookies or state from prior calls.`);
+  if (sessionId) {
+    lines.push(`- Session active: session_id="${sessionId}" — reuse this ID in subsequent calls to maintain state.`);
+    lines.push(`- Sessions expire after 10 minutes of inactivity — use close_session when done.`);
+  } else {
+    lines.push(`- Each browser call starts fresh — no cookies or state from prior calls.`);
+    lines.push(`- Use session_id to maintain state (login, cookies) across multiple browser calls.`);
+  }
   lines.push(`- Chain actions to complete multi-step flows in one call.`);
+  lines.push(`- list_sessions shows all currently active session IDs.`);
   if (failed > 0) {
     lines.push(`- ${failed} action(s) failed. Check selectors and page state.`);
   }
@@ -180,6 +257,11 @@ async function executeAction(page: any, action: BrowserAction): Promise<ActionRe
       await page.evaluate(scrollScript);
       return { action: "scroll", status: "ok", data: `Scrolled ${dir}` };
     }
+
+    case "close_session":
+    case "list_sessions":
+      // These are handled before reaching executeAction
+      return { action: action.action, status: "error", error: "Session management actions must be the only action in the call." };
 
     default:
       return { action: "unknown", status: "error", error: `Unknown action: ${(action as { action: string }).action}` };
