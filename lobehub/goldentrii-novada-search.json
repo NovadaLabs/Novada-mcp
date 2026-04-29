@@ -1,8 +1,8 @@
 {
   "author": "Goldentrii",
   "homepage": "https://github.com/Goldentrii/novada-mcp",
-  "identifier": "goldentrii-novada-mcp",
-  "manifest": "https://registry.npmjs.org/novada-mcp/latest",
+  "identifier": "goldentrii-novada-search",
+  "manifest": "https://registry.npmjs.org/novada-search/latest",
   "meta": {
     "avatar": "🌐",
     "tags": [

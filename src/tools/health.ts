@@ -1,5 +1,5 @@
-import { getBrowserWs, getProxyCredentials } from "../utils/credentials.js";
-import { SCRAPER_API_BASE } from "../config.js";
+import { getBrowserWs, getProxyCredentials, getWebUnblockerKey } from "../utils/credentials.js";
+import { SCRAPER_API_BASE, SCRAPERAPI_BASE, WEB_UNBLOCKER_BASE } from "../config.js";
 
 const PROBE_TIMEOUT_MS = 8000;
 
@@ -26,57 +26,95 @@ async function probeHttp(url: string): Promise<{ ok: boolean; status: number; bo
 }
 
 async function probeSearch(apiKey: string): Promise<ProbeResult> {
-  const url = `${SCRAPER_API_BASE}/search?q=test&engine=google&num=1&api_key=${apiKey}`;
+  // Correct endpoint: POST scraperapi.novada.com/search with { serpapi_query: { ... } }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  const start = Date.now();
   try {
-    const { ok, latency } = await probeHttp(url);
-    return ok
-      ? { status: "active", label: "Search API", latency }
-      : { status: "not_activated", label: "Search API", latency, note: "visit dashboard.novada.com/overview/search/" };
+    const res = await fetch(`${SCRAPERAPI_BASE}/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serpapi_query: { q: "test", engine: "google", num: "1", api_key: apiKey } }),
+      signal: controller.signal,
+    });
+    const latency = Date.now() - start;
+    let body: Record<string, unknown> | null = null;
+    try { body = await res.json() as Record<string, unknown>; } catch { /* ignore */ }
+    const code = body?.code as number | undefined;
+    if (code === 0) return { status: "active", label: "Search API", latency };
+    // 402 = key lacks SERP quota; 400 = API key not found in body
+    if (code === 402 || code === 400) {
+      return { status: "not_activated", label: "Search API", latency, note: "visit dashboard.novada.com/overview/scraper/ — request SERP access" };
+    }
+    return { status: "not_activated", label: "Search API", latency, note: `code=${code ?? res.status}` };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { status: "error", label: "Search API", latency: null, note: msg.slice(0, 80) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-async function probeExtract(apiKey: string): Promise<ProbeResult> {
-  const url = `${SCRAPER_API_BASE}/extract?url=https://example.com&api_key=${apiKey}`;
+async function probeExtract(_apiKey: string): Promise<ProbeResult> {
+  // Extract uses Web Unblocker: POST webunlocker.novada.com/request
+  const unblockerKey = getWebUnblockerKey();
+  if (!unblockerKey) {
+    return { status: "not_configured", label: "Web Unblocker / Extract", latency: null, note: "set NOVADA_WEB_UNBLOCKER_KEY env var" };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  const start = Date.now();
   try {
-    const { ok, latency } = await probeHttp(url);
-    return ok
-      ? { status: "active", label: "Web Unblocker / Extract", latency }
-      : { status: "not_activated", label: "Web Unblocker / Extract", latency, note: "visit dashboard.novada.com/overview/extract/" };
+    const res = await fetch(`${WEB_UNBLOCKER_BASE}/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${unblockerKey}` },
+      body: JSON.stringify({ target_url: "https://example.com", response_format: "html", js_render: false, country: "" }),
+      signal: controller.signal,
+    });
+    const latency = Date.now() - start;
+    let body: Record<string, unknown> | null = null;
+    try { body = await res.json() as Record<string, unknown>; } catch { /* ignore */ }
+    const code = body?.code as number | undefined;
+    if (code === 0) return { status: "active", label: "Web Unblocker / Extract", latency };
+    return { status: "not_activated", label: "Web Unblocker / Extract", latency, note: `code=${code ?? res.status}` };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { status: "error", label: "Web Unblocker / Extract", latency: null, note: msg.slice(0, 80) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 async function probeScraper(apiKey: string): Promise<ProbeResult> {
-  const url = `${SCRAPER_API_BASE}/scrape?platform=google.com&operation=google_shopping_by-keywords&keyword=test&num=1&api_key=${apiKey}`;
+  // Correct endpoint: POST scraper.novada.com/request with scraper_name/scraper_id body
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  const start = Date.now();
   try {
-    const { ok, status, body, latency } = await probeHttp(url);
-    if (ok) {
-      return { status: "active", label: "Scraper API (65+ platforms)", latency };
+    const res = await fetch(`${SCRAPER_API_BASE}/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({ scraper_name: "google.com", scraper_id: "google_search_by-keywords", keyword: "test", num: 1 }),
+      signal: controller.signal,
+    });
+    const latency = Date.now() - start;
+    let body: Record<string, unknown> | null = null;
+    try { body = await res.json() as Record<string, unknown>; } catch { /* ignore */ }
+    const code = body?.code as number | undefined;
+    if (code === 0) return { status: "active", label: "Scraper API (129 platforms)", latency };
+    // 11006 = product not activated; 11000 = invalid key
+    if (code === 11006) {
+      return { status: "not_activated", label: "Scraper API (129 platforms)", latency, note: "visit dashboard.novada.com/overview/scraper/ — contact support to enable Bearer token access" };
     }
-    // Error code 11006 = product not activated (key is valid)
-    const bodyCode = (body as Record<string, unknown> | null)?.code;
-    if (status === 400 || bodyCode === 11006) {
-      return {
-        status: "not_activated",
-        label: "Scraper API (65+ platforms)",
-        latency,
-        note: "visit dashboard.novada.com/overview/scraper/",
-      };
+    if (code === 11000) {
+      return { status: "error", label: "Scraper API (129 platforms)", latency, note: "Invalid API key (11000)" };
     }
-    return {
-      status: "not_activated",
-      label: "Scraper API (65+ platforms)",
-      latency,
-      note: "visit dashboard.novada.com/overview/scraper/",
-    };
+    return { status: "not_activated", label: "Scraper API (129 platforms)", latency, note: `code=${code ?? res.status}` };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return { status: "error", label: "Scraper API (65+ platforms)", latency: null, note: msg.slice(0, 80) };
+    return { status: "error", label: "Scraper API (129 platforms)", latency: null, note: msg.slice(0, 80) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -129,7 +167,7 @@ export async function novadaHealth(apiKey: string): Promise<string> {
   // Run HTTP probes in parallel; env checks are synchronous
   const [searchSettled, extractSettled, scraperSettled] = await Promise.allSettled([
     probeSearch(apiKey),
-    probeExtract(apiKey),
+    probeExtract(apiKey),   // reads NOVADA_WEB_UNBLOCKER_KEY internally
     probeScraper(apiKey),
   ]);
 

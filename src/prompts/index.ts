@@ -54,6 +54,24 @@ export const PROMPTS: Prompt[] = [
       { name: "sections", description: "Which sections to prioritize, e.g. 'pricing, docs, api'", required: false },
     ],
   },
+  {
+    name: "scrape_platform_data",
+    description: "Scrape structured data from a specific platform (Amazon, Reddit, TikTok, LinkedIn, etc.) using the Novada Scraper API",
+    arguments: [
+      { name: "platform", description: "Platform name, e.g. 'amazon.com', 'reddit.com', 'tiktok.com'", required: true },
+      { name: "data_type", description: "What data to get, e.g. 'product listings', 'user posts', 'job listings', 'reviews'", required: true },
+      { name: "query", description: "Search keyword, username, URL, or other search term depending on data type", required: true },
+    ],
+  },
+  {
+    name: "browser_stateful_workflow",
+    description: "Automate a multi-step browser workflow with persistent session state (login, form submission, paginated scraping)",
+    arguments: [
+      { name: "url", description: "Starting URL for the workflow", required: true },
+      { name: "workflow", description: "What to do step-by-step, e.g. 'log in as admin, navigate to reports, download CSV'", required: true },
+      { name: "session_id", description: "Session ID to reuse across calls (optional — creates new session if not provided)", required: false },
+    ],
+  },
 ];
 
 export function listPrompts(): ListPromptsResult {
@@ -119,6 +137,60 @@ export function getPrompt(name: string, args: Record<string, string>): GetPrompt
       ];
       return {
         description: `Audit: ${args.url}`,
+        messages: [{
+          role: "user",
+          content: { type: "text", text: lines.filter(Boolean).join("\n") },
+        }],
+      };
+    }
+
+    case "scrape_platform_data": {
+      const lines = [
+        `Please scrape structured data from ${args.platform}.`,
+        `Data type: ${args.data_type}`,
+        `Query: ${args.query}`,
+        ``,
+        `Workflow:`,
+        `1. Read the \`novada://scraper-platforms\` resource to find the correct operation ID for ${args.platform} and ${args.data_type}.`,
+        `2. Call novada_scrape with:`,
+        `   - platform: "${args.platform}"`,
+        `   - operation: <the operation ID from the resource>`,
+        `   - params: { keyword: "${args.query}", num: 10 }  // key name varies by operation — check novada://scraper-platforms`,
+        `   - format: "markdown" for human-readable output, "json" for programmatic use`,
+        `3. If novada_scrape returns Error 11006 (Scraper API not activated), use novada_extract as fallback.`,
+        `4. Present the structured data clearly.`,
+      ];
+      return {
+        description: `Scrape ${args.data_type} from ${args.platform}`,
+        messages: [{
+          role: "user",
+          content: { type: "text", text: lines.filter(Boolean).join("\n") },
+        }],
+      };
+    }
+
+    case "browser_stateful_workflow": {
+      const hasSession = args.session_id && args.session_id.trim() !== "";
+      const sessionNote = hasSession
+        ? `Use session_id="${args.session_id}" to maintain state from a prior call.`
+        : `No session_id provided — a new browser session will be created. Save the session_id from the response to reuse it in follow-up calls.`;
+      const lines = [
+        `Please automate the following browser workflow:`,
+        `URL: ${args.url}`,
+        `Workflow: ${args.workflow}`,
+        ``,
+        sessionNote,
+        ``,
+        `Execution approach:`,
+        `1. Use aria_snapshot after navigate to see the page structure (role-based semantic tree, easier than raw HTML).`,
+        `2. Chain all actions in a single novada_browser call where possible (up to 20 actions per call).`,
+        `3. Use session_id to maintain login state across multiple calls if the workflow spans multiple pages.`,
+        `4. Use wait (with selector) before click if elements may not be loaded yet.`,
+        `5. Use screenshot at key checkpoints to verify workflow progress.`,
+        hasSession ? `6. Reuse session_id="${args.session_id}" in follow-up calls.` : `6. Save the session_id from the first response to continue the workflow.`,
+      ];
+      return {
+        description: `Browser workflow: ${args.workflow.slice(0, 50)}${args.workflow.length > 50 ? "..." : ""}`,
         messages: [{
           role: "user",
           content: { type: "text", text: lines.filter(Boolean).join("\n") },

@@ -58,7 +58,7 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
       `  claude mcp add novada \\`,
       `    -e NOVADA_API_KEY=your_key \\`,
       `    -e NOVADA_BROWSER_WS=wss://user:pass@upg-scbr2.novada.com \\`,
-      `    -- npx -y novada-mcp`,
+      `    -- npx -y novada-search`,
       ``,
       `Get credentials at: https://dashboard.novada.com/overview/browser/`,
     ].join("\n");
@@ -198,6 +198,7 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
   return lines.join("\n");
 }
 
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function executeAction(page: any, action: BrowserAction): Promise<ActionResult> {
   switch (action.action) {
@@ -230,7 +231,18 @@ async function executeAction(page: any, action: BrowserAction): Promise<ActionRe
     case "snapshot": {
       const html = await page.content();
       const truncated = html.length > 30000 ? html.slice(0, 30000) + "\n<!-- truncated -->" : html;
-      return { action: "snapshot", status: "ok", data: truncated };
+      return { action: "snapshot", status: "ok", data: `${truncated}\n\n<!-- Tip: Use aria_snapshot for a semantic accessibility tree (~70% smaller, easier to parse) -->` };
+    }
+
+    case "aria_snapshot": {
+      // Use Playwright's ariaSnapshot() — returns YAML accessibility tree (v1.46+)
+      // Semantic stable refs by role+name, ~70% smaller than raw HTML
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const yaml = await (page as any).ariaSnapshot();
+      if (!yaml) {
+        return { action: "aria_snapshot", status: "ok", data: "(no accessible content found on this page)" };
+      }
+      return { action: "aria_snapshot", status: "ok", data: yaml };
     }
 
     case "evaluate": {

@@ -30,7 +30,7 @@ function mockResults(n: number, prefix = "Result") {
 describe("novadaVerify", () => {
   it("returns supported verdict when most results are from supporting query", async () => {
     // Query 1 (supporting): 5 results, Query 2 (skeptical): 1 result, Query 3 (neutral): 2 results
-    mockedAxios.get
+    mockedAxios.post
       .mockResolvedValueOnce(mockResults(5, "Support"))   // query 1
       .mockResolvedValueOnce(mockResults(1, "Contra"))    // query 2
       .mockResolvedValueOnce(mockResults(2, "Neutral"));  // query 3
@@ -49,7 +49,7 @@ describe("novadaVerify", () => {
 
   it("returns unsupported verdict when most results are contradicting", async () => {
     // Query 1 (supporting): 1 result, Query 2 (skeptical): 5 results
-    mockedAxios.get
+    mockedAxios.post
       .mockResolvedValueOnce(mockResults(1, "Support"))
       .mockResolvedValueOnce(mockResults(5, "Contra"))
       .mockResolvedValueOnce(mockResults(2, "Neutral"));
@@ -64,7 +64,7 @@ describe("novadaVerify", () => {
 
   it("returns contested when results are evenly split", async () => {
     // Query 1 (supporting): 3 results, Query 2 (skeptical): 3 results
-    mockedAxios.get
+    mockedAxios.post
       .mockResolvedValueOnce(mockResults(3, "Support"))
       .mockResolvedValueOnce(mockResults(3, "Contra"))
       .mockResolvedValueOnce(mockResults(1, "Neutral"));
@@ -78,7 +78,7 @@ describe("novadaVerify", () => {
   });
 
   it("returns insufficient_data when all queries return 0 results", async () => {
-    mockedAxios.get
+    mockedAxios.post
       .mockResolvedValueOnce({ data: { code: 200, data: { organic_results: [] } } })
       .mockResolvedValueOnce({ data: { code: 200, data: { organic_results: [] } } })
       .mockResolvedValueOnce({ data: { code: 200, data: { organic_results: [] } } });
@@ -95,7 +95,7 @@ describe("novadaVerify", () => {
   it("handles SERP unavailable (404) gracefully", async () => {
     const err = new AxiosError("Not Found", "ERR_BAD_RESPONSE");
     Object.defineProperty(err, "response", { value: { status: 404, data: "404 page not found" } });
-    mockedAxios.get.mockRejectedValue(err);
+    mockedAxios.post.mockRejectedValue(err);
 
     const result = await novadaVerify(
       { claim: "The Eiffel Tower is in Paris, France" },
@@ -109,7 +109,7 @@ describe("novadaVerify", () => {
 
   it("caps confidence at 60 when a key query fails (partial failure)", async () => {
     // Query 1 (supporting) fails with network error — only skeptical returns 5 results
-    mockedAxios.get
+    mockedAxios.post
       .mockRejectedValueOnce(new Error("network error"))   // query 1 fails
       .mockResolvedValueOnce(mockResults(5, "Contra"))     // query 2 returns 5
       .mockResolvedValueOnce(mockResults(2, "Neutral"));   // query 3 ok
@@ -128,8 +128,8 @@ describe("novadaVerify", () => {
     expect(result).toContain("one search query failed");
   });
 
-  it("runs all 3 queries in parallel (axios.get called 3 times)", async () => {
-    mockedAxios.get
+  it("runs all 3 queries in parallel (axios.post called 3 times)", async () => {
+    mockedAxios.post
       .mockResolvedValueOnce(mockResults(3, "Support"))
       .mockResolvedValueOnce(mockResults(1, "Contra"))
       .mockResolvedValueOnce(mockResults(2, "Neutral"));
@@ -139,22 +139,23 @@ describe("novadaVerify", () => {
       API_KEY
     );
 
-    expect(mockedAxios.get).toHaveBeenCalledTimes(3);
+    expect(mockedAxios.post).toHaveBeenCalledTimes(3);
 
-    // Verify the 3 queries are strategically different
-    // URLs use URLSearchParams encoding (+ for spaces, %22 for quotes)
-    const calls = mockedAxios.get.mock.calls.map(c => c[0] as string);
-    // Supporting: contains the claim text but NOT "false/debunked" and NOT "fact+check"
-    const hasSupporting = calls.some(url =>
-      (url.includes("Great%2BWall") || url.includes("Great+Wall") || url.includes("Great Wall")) &&
-      !url.includes("false") && !url.includes("fact+check") && !url.includes("debunked")
+    // Verify the 3 queries are strategically different — check the serpapi_query.q body field
+    type CallBody = { serpapi_query: { q: string } };
+    const queries = mockedAxios.post.mock.calls.map(c => (c[1] as CallBody).serpapi_query.q);
+
+    // Supporting: contains the claim text but NOT debunking terms
+    const hasSupporting = queries.some(q =>
+      (q.includes("Great Wall") || q.includes("visible from space")) &&
+      !q.includes("false") && !q.includes("debunked") && !q.includes("fact check")
     );
     // Skeptical: contains "false" or "debunked" or "incorrect"
-    const hasSkeptical = calls.some(url =>
-      url.includes("false") || url.includes("debunked") || url.includes("incorrect")
+    const hasSkeptical = queries.some(q =>
+      q.includes("false") || q.includes("debunked") || q.includes("incorrect")
     );
-    // Neutral: contains "fact+check" or "fact%2Bcheck"
-    const hasFactCheck = calls.some(url => url.includes("fact+check") || url.includes("fact%20check"));
+    // Neutral: contains "fact check"
+    const hasFactCheck = queries.some(q => q.includes("fact check"));
 
     expect(hasSupporting).toBe(true);
     expect(hasSkeptical).toBe(true);

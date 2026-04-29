@@ -1,5 +1,5 @@
 /**
- * novada-mcp Professional Testing Playbook
+ * novada-search Professional Testing Playbook
  * Rounds 3–7 — specific test cases per playbook specification
  */
 import { describe, it, expect } from "vitest";

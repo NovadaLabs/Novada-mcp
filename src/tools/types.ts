@@ -209,7 +209,7 @@ const scrapeBase = {
   platform: z.string().min(1)
     .describe("Platform domain to scrape. E.g. 'amazon.com', 'reddit.com', 'tiktok.com', 'linkedin.com', 'google.com'."),
   operation: z.string().min(1)
-    .describe("Scraping operation ID. E.g. 'amazon_product_by-keywords', 'reddit_posts_by-keywords', 'google_shopping_by-keywords'. See Novada docs for the full list."),
+    .describe("Scraping operation ID. Examples: 'amazon_product_by-keywords', 'amazon_product_by-asin', 'reddit_posts_by-keywords', 'tiktok_user_videos', 'linkedin_job_listings', 'github_repository_details', 'glassdoor_jobs_by-keywords', 'zillow_listings'. Read novada://scraper-platforms resource for the complete list with required params."),
   params: z.record(z.string(), z.unknown()).default({})
     .describe("Operation-specific parameters. E.g. { keyword: 'iphone 16', num: 5 } for keyword search, { url: 'https://...' } for URL-based ops, { asin: 'B09...' } for ASIN lookup."),
   limit: z.number().int().min(1).max(100).default(20)
@@ -273,6 +273,7 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("type"), selector: z.string().min(1), text: z.string() }),
   z.object({ action: z.literal("screenshot") }),
   z.object({ action: z.literal("snapshot") }),
+  z.object({ action: z.literal("aria_snapshot") }),
   z.object({ action: z.literal("evaluate"), script: z.string().min(1) }),
   z.object({
     action: z.literal("wait"),

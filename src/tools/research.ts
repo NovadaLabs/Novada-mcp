@@ -1,5 +1,6 @@
-import { fetchWithRetry, USER_AGENT, normalizeUrl } from "../utils/index.js";
-import { SCRAPER_API_BASE } from "../config.js";
+import axios from "axios";
+import { USER_AGENT, normalizeUrl } from "../utils/index.js";
+import { SCRAPERAPI_BASE } from "../config.js";
 import type { ResearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 
@@ -15,25 +16,15 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
   const allResults = await Promise.all(
     queries.map(async (query): Promise<{ query: string; results: NovadaSearchResult[]; failed?: boolean }> => {
       try {
-        const searchParams = new URLSearchParams({
-          q: query,
-          api_key: apiKey,
-          engine: "google",
-          num: "5",
-        });
-
-        const response = await fetchWithRetry(
-          `${SCRAPER_API_BASE}/search?${searchParams.toString()}`,
-          {
-            headers: {
-              "User-Agent": USER_AGENT,
-              Origin: "https://www.novada.com",
-              Referer: "https://www.novada.com/",
-            },
-          }
+        const response = await axios.post(
+          `${SCRAPERAPI_BASE}/search`,
+          { serpapi_query: { q: query, api_key: apiKey, engine: "google", num: "5" } },
+          { headers: { "Content-Type": "application/json", "User-Agent": USER_AGENT }, timeout: 30000 }
         );
 
         const data: NovadaApiResponse = response.data;
+        // code 402 = no SERP quota
+        if (data.code === 402 || data.code === 400) return { query, results: [], failed: true };
         const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
         return { query, results };
       } catch {

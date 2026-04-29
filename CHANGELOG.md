@@ -4,6 +4,30 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.8.4] — 2026-04-25 (pending review)
+
+### Added
+- **`novada://scraper-platforms` MCP resource**: Full catalog of 129 supported scraper platforms with operation IDs and required params. Agents can now discover which platform/operation to use without reading external docs. Covers 10 categories: e-commerce, search engines, social media, jobs, real estate, finance, reviews, tech, travel, news.
+- **Browser action `aria_snapshot`**: Returns Playwright's accessibility tree as YAML — semantic role+name refs, ~70% smaller than raw HTML, stable selectors. Uses `page.ariaSnapshot()` (Playwright v1.46+ API). Better than `snapshot` for element discovery.
+- **MCP Prompt `scrape_platform_data`**: Slash command guiding agents through platform/operation discovery → novada_scrape call → Error 11006 fallback workflow.
+- **MCP Prompt `browser_stateful_workflow`**: Slash command guiding agents through aria_snapshot-first browser automation with session_id state management.
+
+### Improved
+- **`novada_browser` description**: Removed stale "no state persists" text (wrong since v0.8.2 added sessions). Now documents `session_id` usage, session TTL, and all available actions.
+- **`novada_scrape` description**: References `novada://scraper-platforms` resource instead of external docs URL.
+- **`novada_unblock` description**: Clarified distinction from `novada_extract(render="render")` — unblock returns raw HTML, extract returns cleaned text.
+- **`novada://guide` resource**: Added Failure Recovery Patterns (4 scenarios with exact next steps) and Token Efficiency Tips (5 patterns for reducing token usage).
+- **`operation` field in ScrapeParamsSchema**: Expanded from 3 to 8 example operation IDs, references `novada://scraper-platforms` resource.
+- **`snapshot` action**: Added tip comment pointing to `aria_snapshot` as the preferred alternative.
+
+### Tests
+- 439 passing (was 366 in v0.8.3, +73 new tests)
+- New: 2 aria_snapshot tests (`tests/tools/browser.test.ts`)
+- New: 40 prompt tests (`tests/prompts/index.test.ts`) — all 5 prompts, optional args, error handling
+- New: 31 resource tests (`tests/resources/index.test.ts`) — all 4 resources, content verification
+
+---
+
 ## [0.8.3] — 2026-04-24
 
 ### Added
@@ -171,7 +195,7 @@ Merged `feature/full-capability-sdk`. Upgraded from v0.7.0 (5 tools) to v1.0.0 (
 - **`novada_proxy` tool** (6th tool): returns proxy credentials in `url`, `env`, or `curl` format for use in HTTP clients
 - **Browser API** via `playwright-core`: set `NOVADA_BROWSER_WS=wss://...` to enable full CDP-controlled browser rendering
 - **Research source extraction**: `novada_research` now fetches top 3 sources in full — not just snippets
-- **TypeScript SDK**: `NovadaClient` class exported from `novada-mcp/sdk` with typed methods
+- **TypeScript SDK**: `NovadaClient` class exported from `novada-search/sdk` with typed methods
 - **`render` param** on `novada_extract` and `novada_crawl`: `auto` (default), `static`, `render`, `browser`
 - **Multi-credential support**: `NOVADA_BROWSER_WS`, `NOVADA_PROXY_USER/PASS/ENDPOINT` env vars
 - **nova CLI**: `proxy` subcommand + `--render` flag on extract/crawl

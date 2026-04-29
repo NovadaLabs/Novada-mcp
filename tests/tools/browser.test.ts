@@ -25,6 +25,7 @@ function createMockPage() {
     focus: vi.fn().mockResolvedValue(undefined),
     keyboard: { press: vi.fn().mockResolvedValue(undefined) },
     selectOption: vi.fn().mockResolvedValue(undefined),
+    ariaSnapshot: vi.fn().mockResolvedValue("- document:\n  - button \"Submit\""),
   };
 }
 
@@ -266,5 +267,33 @@ describe("new browser actions", () => {
     expect(result).toContain("select [ok]");
     expect(result).toContain("us");
     expect(result).toContain("#country-dropdown");
+  });
+
+  it("aria_snapshot: calls page.ariaSnapshot() and returns YAML accessibility tree", async () => {
+    const mockPage = setupBrowserMock();
+    const ariaYaml = `- document:\n  - button "Submit" [focused]\n  - textbox "Email"`;
+    mockPage.ariaSnapshot.mockResolvedValue(ariaYaml);
+
+    const result = await novadaBrowser({
+      actions: [{ action: "aria_snapshot" }],
+      timeout: 60000,
+    });
+
+    expect(mockPage.ariaSnapshot).toHaveBeenCalled();
+    expect(result).toContain("aria_snapshot [ok]");
+    expect(result).toContain("button");
+  });
+
+  it("aria_snapshot: returns graceful message when ariaSnapshot returns null", async () => {
+    const mockPage = setupBrowserMock();
+    mockPage.ariaSnapshot.mockResolvedValue(null);
+
+    const result = await novadaBrowser({
+      actions: [{ action: "aria_snapshot" }],
+      timeout: 60000,
+    });
+
+    expect(result).toContain("aria_snapshot [ok]");
+    expect(result).toContain("no accessible content");
   });
 });

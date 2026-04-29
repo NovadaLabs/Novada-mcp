@@ -129,7 +129,7 @@ const TOOLS = [
 **Not for:** General web pages (use novada_extract), unknown domains not in the platform list (use novada_crawl).
 **Output formats:** "markdown" (default, agent-optimized table), "json" (structured, for programmatic use).
 **Example:** platform="amazon.com", operation="amazon_product_by-keywords", params={keyword:"iphone 16", num:5}
-**Docs:** https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api`,
+**Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.`,
     inputSchema: zodToMcpSchema(ScrapeParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: true },
   },
@@ -158,10 +158,11 @@ const TOOLS = [
     name: "novada_unblock",
     description: `Use when you need the raw rendered HTML of a blocked or JS-heavy page. Forces JS rendering via Web Unblocker or Browser API. Returns raw HTML, not cleaned text.
 
-**Best for:** When novada_extract reports JS-heavy content, parsing specific DOM elements, inspecting page structure, extracting data from SPAs like TikTok or Instagram.
+**Best for:** When you need raw HTML (not cleaned text) for custom DOM parsing. When novada_extract with render="render" still fails. Returns the full JS-rendered HTML source.
+**Tip:** For most anti-bot pages, try novada_extract with render="render" first — it returns clean text. Use novada_unblock when you specifically need the raw HTML source.
 **Not for:** Reading cleaned text (use novada_extract with render="render"), structured platform data (use novada_scrape).
 **Methods:** "render" (Web Unblocker, faster/cheaper), "browser" (full Chromium CDP, handles complex SPAs).
-**Tip:** Use wait_for to specify a CSS selector to wait for before capturing HTML.`,
+**Wait hint:** Use wait_for to specify a CSS selector to wait for before capturing HTML.`,
     inputSchema: zodToMcpSchema(UnblockParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
@@ -171,8 +172,10 @@ const TOOLS = [
 
 **Best for:** Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions.
 **Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_unblock).
-**Actions:** navigate, click, type, screenshot, snapshot, evaluate, wait, scroll — up to 20 per call.
-**Note:** Each call creates a fresh browser context. No state persists between calls. Requires NOVADA_BROWSER_WS env var.`,
+**Actions:** navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call.
+**Sessions:** Pass session_id to maintain state (cookies, login) across multiple calls. Sessions expire after 10 min of inactivity. Use close_session to release early.
+**Requires:** NOVADA_BROWSER_WS environment variable.
+**Platform note:** TikTok is geo-restricted in some regions — pass country="us" in actions that support it. Use wait with domcontentloaded (never networkidle) for SPAs.`,
     inputSchema: zodToMcpSchema(BrowserParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
   },
@@ -194,7 +197,7 @@ class NovadaMCPServer {
 
   constructor() {
     this.server = new Server(
-      { name: "novada-mcp", version: VERSION },
+      { name: "novada-search", version: VERSION },
       { capabilities: { tools: {}, prompts: {}, resources: {} } }
     );
     this.setupHandlers();
@@ -203,7 +206,7 @@ class NovadaMCPServer {
 
   private setupErrorHandling(): void {
     this.server.onerror = (error: unknown) => {
-      console.error("[novada-mcp]", error);
+      console.error("[novada-search]", error);
     };
 
     process.on("SIGINT", async () => {
@@ -241,7 +244,7 @@ class NovadaMCPServer {
         return {
           content: [{
             type: "text" as const,
-            text: "Error: NOVADA_API_KEY is not set. Get your API key at https://www.novada.com and set it as an environment variable.\n\nSetup: claude mcp add novada -e NOVADA_API_KEY=your-key -- npx -y novada-mcp",
+            text: "Error: NOVADA_API_KEY is not set. Get your API key at https://www.novada.com and set it as an environment variable.\n\nSetup: claude mcp add novada -e NOVADA_API_KEY=your-key -- npx -y novada-search",
           }],
           isError: true,
         };
@@ -342,12 +345,12 @@ if (cliArgs.includes("--list-tools")) {
 }
 
 if (cliArgs.includes("--help") || cliArgs.includes("-h")) {
-  console.log(`novada-mcp v${VERSION} — MCP Server for Novada web data API
+  console.log(`novada-search v${VERSION} — MCP Server for Novada web data API
 
 Usage:
-  npx novada-mcp              Start the MCP server (stdio transport)
-  npx novada-mcp --list-tools Show available tools
-  npx novada-mcp --help       Show this help
+  npx novada-search              Start the MCP server (stdio transport)
+  npx novada-search --list-tools Show available tools
+  npx novada-search --help       Show this help
 
 Environment:
   NOVADA_API_KEY              Your Novada API key (required)
@@ -356,7 +359,7 @@ Environment:
   NOVADA_PROXY_USER/PASS/ENDPOINT  Proxy credentials (enables novada_proxy)
 
 Connect to Claude Code:
-  claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
+  claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-search
 
 Tools (11):
   novada_search    Search the web via Google, Bing, and 3 more engines

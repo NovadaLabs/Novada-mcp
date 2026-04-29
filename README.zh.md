@@ -6,9 +6,9 @@
 
 <p align="center">
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/novada.com-获取密钥-ff6b35?style=for-the-badge" alt="novada.com"></a>
-  <a href="https://www.npmjs.com/package/novada-mcp"><img src="https://img.shields.io/npm/v/novada-mcp?style=for-the-badge&label=MCP&color=blue" alt="npm 版本"></a>
-  <a href="https://lobehub.com/mcp/goldentrii-novada-mcp"><img src="https://lobehub.com/badge/mcp/goldentrii-novada-mcp" alt="MCP 徽章"></a>
-  <a href="https://smithery.ai/server/novada-mcp"><img src="https://img.shields.io/badge/Smithery-一键安装-8B5CF6?style=for-the-badge" alt="Smithery"></a>
+  <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/v/novada-search?style=for-the-badge&label=MCP&color=blue" alt="npm 版本"></a>
+  <a href="https://lobehub.com/mcp/goldentrii-novada-search"><img src="https://lobehub.com/badge/mcp/goldentrii-novada-search" alt="MCP 徽章"></a>
+  <a href="https://smithery.ai/server/novada-search"><img src="https://img.shields.io/badge/Smithery-一键安装-8B5CF6?style=for-the-badge" alt="Smithery"></a>
   <a href="#工具"><img src="https://img.shields.io/badge/工具数-5-brightgreen?style=for-the-badge" alt="5 个工具"></a>
   <a href="#nova--命令行工具"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/代理IP-1亿+-red?style=for-the-badge" alt="1亿+ 代理 IP"></a>
@@ -18,8 +18,8 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/novada-mcp"><img src="https://img.shields.io/npm/dt/novada-mcp" alt="下载量"></a>
-  <a href="https://github.com/NovadaLabs/novada-mcp"><img src="https://img.shields.io/github/stars/NovadaLabs/novada-mcp?style=social" alt="收藏量"></a>
+  <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/dt/novada-search" alt="下载量"></a>
+  <a href="https://github.com/NovadaLabs/novada-search"><img src="https://img.shields.io/github/stars/NovadaLabs/novada-search?style=social" alt="收藏量"></a>
 </p>
 
 <p align="center">
@@ -51,7 +51,7 @@
 ## `nova` — 命令行工具
 
 ```bash
-npm install -g novada-mcp
+npm install -g novada-search
 export NOVADA_API_KEY=你的密钥    # 在 novada.com 免费获取
 ```
 
@@ -71,20 +71,20 @@ nova research "AI 代理如何使用网络抓取？" --depth deep --focus "生�
 ### Claude Code（一条命令）
 
 ```bash
-claude mcp add novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-search
 ```
 
 所有项目生效（`--scope user`）：
 ```bash
-claude mcp add --scope user novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
+claude mcp add --scope user novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-search
 ```
 
 ### Smithery（一键安装）
 
-通过 [Smithery](https://smithery.ai/server/novada-mcp) 安装，支持 Claude Desktop、Cursor、VS Code、Windsurf 等客户端。
+通过 [Smithery](https://smithery.ai/server/novada-search) 安装，支持 Claude Desktop、Cursor、VS Code、Windsurf 等客户端。
 
 ```bash
-npx -y @smithery/cli install novada-mcp --client claude
+npx -y @smithery/cli install novada-search --client claude
 ```
 
 <details>
@@ -96,7 +96,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": { "NOVADA_API_KEY": "你的密钥" }
     }
   }
@@ -109,7 +109,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "servers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": { "NOVADA_API_KEY": "你的密钥" }
     }
   }
@@ -122,7 +122,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": { "NOVADA_API_KEY": "你的密钥" }
     }
   }
@@ -135,7 +135,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": { "NOVADA_API_KEY": "你的密钥" }
     }
   }

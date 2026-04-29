@@ -13,7 +13,7 @@ beforeEach(() => {
 
 describe("novadaResearch", () => {
   it("produces a research report with multiple queries", async () => {
-    mockedAxios.get.mockResolvedValue({
+    mockedAxios.post.mockResolvedValue({
       data: {
         data: {
           organic_results: [
@@ -30,12 +30,12 @@ describe("novadaResearch", () => {
     expect(result).toContain("## Search Queries Used");
     expect(result).toContain("## Key Findings");
     expect(result).toContain("## Sources");
-    expect(mockedAxios.get.mock.calls.length).toBeGreaterThanOrEqual(3); // quick = 3 queries
+    expect(mockedAxios.post.mock.calls.length).toBeGreaterThanOrEqual(3); // quick = 3 queries
   });
 
   it("reports failed searches in output", async () => {
     let callCount = 0;
-    mockedAxios.get.mockImplementation(async () => {
+    mockedAxios.post.mockImplementation(async () => {
       callCount++;
       if (callCount <= 2) throw new Error("Network error");
       return {
@@ -54,7 +54,7 @@ describe("novadaResearch", () => {
   });
 
   it("deep mode generates more queries", async () => {
-    mockedAxios.get.mockResolvedValue({
+    mockedAxios.post.mockResolvedValue({
       data: {
         data: {
           organic_results: [
@@ -66,11 +66,11 @@ describe("novadaResearch", () => {
 
     const result = await novadaResearch({ question: "Complex topic with many aspects", depth: "deep" }, API_KEY);
     expect(result).toContain("deep");
-    expect(mockedAxios.get.mock.calls.length).toBeGreaterThanOrEqual(5); // deep = 5-6 queries
+    expect(mockedAxios.post.mock.calls.length).toBeGreaterThanOrEqual(5); // deep = 5-6 queries
   });
 
   it("deduplicates sources across queries", async () => {
-    mockedAxios.get.mockResolvedValue({
+    mockedAxios.post.mockResolvedValue({
       data: {
         data: {
           organic_results: [
@@ -106,11 +106,12 @@ describe("novadaResearch source extraction", () => {
       status: 200, headers: {}, config: {} as never, statusText: "OK",
     };
 
-    // quick depth = 3 search queries, then 1 extraction call for the top source
-    mockedAxios.get
+    // quick depth = 3 search queries (POST), then 1 extraction call (GET via fetchViaProxy)
+    mockedAxios.post
       .mockResolvedValueOnce(searchResponse)  // query 1
       .mockResolvedValueOnce(searchResponse)  // query 2
-      .mockResolvedValueOnce(searchResponse)  // query 3
+      .mockResolvedValueOnce(searchResponse); // query 3
+    mockedAxios.get
       .mockResolvedValueOnce(extractResponse); // extraction: article URL
 
     const result = await novadaResearch({ question: "What is quantum computing?", depth: "quick" }, "test-key");

@@ -6,9 +6,9 @@
 
 <p align="center">
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/novada.com-API_Key-ff6b35?style=for-the-badge" alt="novada.com"></a>
-  <a href="https://www.npmjs.com/package/novada-mcp"><img src="https://img.shields.io/npm/v/novada-mcp?style=for-the-badge&label=MCP&color=blue" alt="npm version"></a>
-  <a href="https://lobehub.com/mcp/goldentrii-novada-mcp"><img src="https://lobehub.com/badge/mcp/goldentrii-novada-mcp" alt="MCP Badge"></a>
-  <a href="https://smithery.ai/server/novada-mcp"><img src="https://img.shields.io/badge/Smithery-install-8B5CF6?style=for-the-badge" alt="Smithery"></a>
+  <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/v/novada-search?style=for-the-badge&label=MCP&color=blue" alt="npm version"></a>
+  <a href="https://lobehub.com/mcp/goldentrii-novada-search"><img src="https://lobehub.com/badge/mcp/goldentrii-novada-search" alt="MCP Badge"></a>
+  <a href="https://smithery.ai/server/novada-search"><img src="https://img.shields.io/badge/Smithery-install-8B5CF6?style=for-the-badge" alt="Smithery"></a>
   <a href="#tools"><img src="https://img.shields.io/badge/tools-10-brightgreen?style=for-the-badge" alt="10 tools"></a>
   <a href="#novada_search"><img src="https://img.shields.io/badge/engines-5-orange?style=for-the-badge" alt="5 engines"></a>
   <a href="#nova--cli"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
@@ -19,8 +19,8 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/novada-mcp"><img src="https://img.shields.io/npm/dt/novada-mcp" alt="downloads"></a>
-  <a href="https://github.com/Goldentrii/novada-mcp"><img src="https://img.shields.io/github/stars/Goldentrii/novada-mcp?style=social" alt="stars"></a>
+  <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/dt/novada-search" alt="downloads"></a>
+  <a href="https://github.com/Goldentrii/novada-search"><img src="https://img.shields.io/github/stars/Goldentrii/novada-search?style=social" alt="stars"></a>
 </p>
 
 
@@ -43,7 +43,7 @@
 
 **Claude Code:**
 ```bash
-claude mcp add novada -- npx -y novada-mcp
+claude mcp add novada -- npx -y novada-search
 ```
 Then add your API key to Claude's MCP config:
 ```json
@@ -93,7 +93,7 @@ export NOVADA_BROWSER_WS=wss://user:pass@upg-scbr2.novada.com  # For browser aut
 ### `nova` — CLI
 
 ```bash
-npm install -g novada-mcp
+npm install -g novada-search
 export NOVADA_API_KEY=your-key    # Free at novada.com
 ```
 
@@ -189,12 +189,12 @@ nova extract https://docs.example.com/webhooks/events https://docs.example.com/w
 #### Claude Code (1 command)
 
 ```bash
-claude mcp add novada -e NOVADA_API_KEY=your-key -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=your-key -- npx -y novada-search
 ```
 
 `--scope user` for all projects:
 ```bash
-claude mcp add --scope user novada -e NOVADA_API_KEY=your-key -- npx -y novada-mcp
+claude mcp add --scope user novada -e NOVADA_API_KEY=your-key -- npx -y novada-search
 ```
 
 With JS rendering + browser automation:
@@ -203,15 +203,15 @@ claude mcp add --scope user novada \
   -e NOVADA_API_KEY=your-key \
   -e NOVADA_WEB_UNBLOCKER_KEY=your-unblocker-key \
   -e NOVADA_BROWSER_WS=wss://user:pass@upg-scbr2.novada.com \
-  -- npx -y novada-mcp
+  -- npx -y novada-search
 ```
 
 #### Smithery (1 click)
 
-Install via [Smithery](https://smithery.ai/server/novada-mcp) — supports Claude Desktop, Cursor, VS Code, and more.
+Install via [Smithery](https://smithery.ai/server/novada-search) — supports Claude Desktop, Cursor, VS Code, and more.
 
 ```bash
-npx -y @smithery/cli install novada-mcp --client claude
+npx -y @smithery/cli install novada-search --client claude
 ```
 
 <details>
@@ -223,7 +223,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": {
         "NOVADA_API_KEY": "your-key",
         "NOVADA_WEB_UNBLOCKER_KEY": "your-unblocker-key"
@@ -239,7 +239,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "servers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": {
         "NOVADA_API_KEY": "your-key",
         "NOVADA_WEB_UNBLOCKER_KEY": "your-unblocker-key"
@@ -255,7 +255,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": {
         "NOVADA_API_KEY": "your-key"
       }
@@ -270,7 +270,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": {
         "NOVADA_API_KEY": "your-key"
       }
@@ -640,7 +640,7 @@ export NOVADA_BROWSER_WS=wss://用户:密码@upg-scbr2.novada.com  # 用于浏�
 ### 快速开始
 
 ```bash
-npm install -g novada-mcp
+npm install -g novada-search
 export NOVADA_API_KEY=你的密钥    # 在 novada.com 免费获取
 ```
 
@@ -661,23 +661,23 @@ nova verify "The Eiffel Tower is 330 meters tall" --context "as of 2024"
 
 ```bash
 # 最小配置
-claude mcp add novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-search
 
 # 所有项目生效
-claude mcp add --scope user novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
+claude mcp add --scope user novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-search
 
 # 完整配置（含 JS 渲染 + 浏览器自动化）
 claude mcp add --scope user novada \
   -e NOVADA_API_KEY=你的密钥 \
   -e NOVADA_WEB_UNBLOCKER_KEY=你的解锁密钥 \
   -e NOVADA_BROWSER_WS=wss://用户:密码@upg-scbr2.novada.com \
-  -- npx -y novada-mcp
+  -- npx -y novada-search
 ```
 
 #### 通过 Smithery 一键安装
 
 ```bash
-npx -y @smithery/cli install novada-mcp --client claude
+npx -y @smithery/cli install novada-search --client claude
 ```
 
 <details>
@@ -689,7 +689,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": {
         "NOVADA_API_KEY": "你的密钥",
         "NOVADA_WEB_UNBLOCKER_KEY": "你的解锁密钥"
@@ -705,7 +705,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "servers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": {
         "NOVADA_API_KEY": "你的密钥"
       }
@@ -720,7 +720,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": {
         "NOVADA_API_KEY": "你的密钥"
       }
@@ -735,7 +735,7 @@ npx -y @smithery/cli install novada-mcp --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp@latest"],
+      "args": ["-y", "novada-search@latest"],
       "env": {
         "NOVADA_API_KEY": "你的密钥"
       }

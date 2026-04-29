@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
-import { fetchWithRetry, USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
-import { SCRAPER_API_BASE } from "../config.js";
+import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
+import { SCRAPERAPI_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 
 const SERP_UNAVAILABLE = `## Search Unavailable
@@ -48,24 +48,25 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   }
 
   const cleaned = cleanParams(rawParams) as Record<string, string>;
-  const searchParams = new URLSearchParams(cleaned);
 
   let response;
   try {
-    response = await fetchWithRetry(
-      `${SCRAPER_API_BASE}/search?${searchParams.toString()}`,
+    // SERP endpoint uses POST with JSON body { serpapi_query: { ... } }
+    // Domain: scraperapi.novada.com (not scraper.novada.com)
+    response = await axios.post(
+      `${SCRAPERAPI_BASE}/search`,
+      { serpapi_query: cleaned },
       {
         headers: {
+          "Content-Type": "application/json",
           "User-Agent": USER_AGENT,
-          Origin: "https://www.novada.com",
-          Referer: "https://www.novada.com/",
         },
+        timeout: 30000,
       }
     );
   } catch (error) {
     if (error instanceof AxiosError) {
       const status = error.response?.status;
-      // 404 = endpoint not deployed yet; 402 = key lacks SERP quota (separate from Scraper/Unblocker plans)
       if (status === 404 || status === 402) {
         return SERP_UNAVAILABLE;
       }
@@ -74,6 +75,11 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   }
 
   const data: NovadaApiResponse = response.data;
+
+  // code 402 = key lacks SERP quota; code 400 = API key missing (should not happen)
+  if (data.code === 402 || data.code === 400) {
+    return SERP_UNAVAILABLE;
+  }
 
   if (data.code && data.code !== 200 && data.code !== 0) {
     throw new Error(`Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`);

@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
-import { fetchWithRetry, USER_AGENT } from "../utils/index.js";
-import { SCRAPER_API_BASE } from "../config.js";
+import { USER_AGENT } from "../utils/index.js";
+import { SCRAPERAPI_BASE } from "../config.js";
 import type { VerifyParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 
 const SERP_UNAVAILABLE = `## Verify: Search Unavailable
@@ -20,29 +20,25 @@ interface QueryResult {
 }
 
 async function runSearchQuery(query: string, apiKey: string): Promise<QueryResult> {
-  const searchParams = new URLSearchParams({
-    q: query,
-    api_key: apiKey,
-    engine: "google",
-    num: "5",
-  });
-
   try {
-    const response = await fetchWithRetry(
-      `${SCRAPER_API_BASE}/search?${searchParams.toString()}`,
+    // SERP endpoint: POST scraperapi.novada.com/search with { serpapi_query: { ... } }
+    const response = await axios.post(
+      `${SCRAPERAPI_BASE}/search`,
+      { serpapi_query: { q: query, api_key: apiKey, engine: "google", num: "5" } },
       {
-        headers: {
-          "User-Agent": USER_AGENT,
-          Origin: "https://www.novada.com",
-          Referer: "https://www.novada.com/",
-        },
+        headers: { "Content-Type": "application/json", "User-Agent": USER_AGENT },
+        timeout: 30000,
       }
     );
     const data: NovadaApiResponse = response.data;
+    // code 402 = no SERP quota; code 400 = key missing
+    if (data.code === 402 || data.code === 400) {
+      return { results: [], failed: true, unavailable: true };
+    }
     const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
     return { results, failed: false, unavailable: false };
   } catch (error) {
-    if (error instanceof AxiosError && error.response?.status === 404) {
+    if (error instanceof AxiosError && (error.response?.status === 404 || error.response?.status === 402)) {
       return { results: [], failed: true, unavailable: true };
     }
     return { results: [], failed: true, unavailable: false };
@@ -160,7 +156,16 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   lines.push(`---`);
   lines.push(`## Agent Hints`);
   lines.push(`- Verdict is based on search result balance, not deep reasoning. Treat as a signal, not a definitive answer.`);
-  lines.push(`- For "contested" or "insufficient_data": use novada_extract on the most relevant source URLs above for full context.`);
+  lines.push(`- For "contested": use novada_extract on the most relevant source URLs above for full context.`);
+  if (verdict === "insufficient_data") {
+    lines.push(`- No strong signal from search. Use novada_research for a deeper multi-source investigation.`);
+  }
+  if (verdict === "contested") {
+    lines.push(`- Sources disagree. Use novada_extract on both supporting and contradicting URLs above to read the full arguments.`);
+  }
+  if (confidence < 40) {
+    lines.push(`- Low confidence (${confidence}/100). More specific claim wording may improve accuracy.`);
+  }
 
   // Top URLs from query 1 (supporting)
   const supportUrls = supportingResult.results

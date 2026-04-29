@@ -9,8 +9,8 @@ import type {
 /**
  * NovadaClient — TypeScript SDK for Novada web intelligence APIs.
  *
- * Install: npm install novada-mcp
- * Import:  import { NovadaClient } from 'novada-mcp/sdk'
+ * Install: npm install novada-search
+ * Import:  import { NovadaClient } from 'novada-search/sdk'
  */
 export class NovadaClient {
   private config: NovadaClientConfig;
