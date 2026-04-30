@@ -14,7 +14,7 @@
   <a href="#nova--cli"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/proxy_IPs-100M+-red?style=for-the-badge" alt="100M+ proxy IPs"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/countries-195-cyan?style=for-the-badge" alt="195 countries"></a>
-  <img src="https://img.shields.io/badge/tests-444-green?style=for-the-badge" alt="443 tests">
+  <img src="https://img.shields.io/badge/tests-460-green?style=for-the-badge" alt="460 tests">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge" alt="MIT License"></a>
 </p>
 
@@ -58,7 +58,7 @@ Different capabilities require different credentials. Here is what you need and 
 | `NOVADA_API_KEY` | **All tools** — search, extract, crawl, map, research, proxy, verify | [novada.com](https://www.novada.com/) — free tier available |
 | `NOVADA_WEB_UNBLOCKER_KEY` | `render="render"` mode — JS-heavy sites, anti-bot bypass | Upgrade at [novada.com](https://www.novada.com/) |
 | `NOVADA_BROWSER_WS` | `render="browser"` mode — full CDP (Playwright) for fingerprint-protected sites | Contact [novada.com](https://www.novada.com/) for Browser API access |
-| `NOVADA_PROXY_USER` / `NOVADA_PROXY_PASS` / `NOVADA_PROXY_ENDPOINT` | `novada_proxy` custom endpoint (optional) | Defaults derived from `NOVADA_API_KEY` |
+| `NOVADA_PROXY_USER` / `NOVADA_PROXY_PASS` / `NOVADA_PROXY_ENDPOINT` | `novada_proxy` — required for proxy credential generation | Get from [dashboard.novada.com](https://dashboard.novada.com) → Residential Proxies → Endpoint Generator |
 
 **Which tools work with just `NOVADA_API_KEY`:**
 - `novada_search`, `novada_extract` (static mode), `novada_crawl`, `novada_map`, `novada_research`, `novada_proxy`, `novada_verify`
@@ -353,6 +353,9 @@ Search the web via Google, Bing, or 3 other engines. Returns structured results 
 | `end_date` | string | No | — | End date `YYYY-MM-DD` |
 | `include_domains` | string[] | No | — | Only return results from these domains |
 | `exclude_domains` | string[] | No | — | Exclude results from these domains |
+| `extract_options` | object | No | — | When set, auto-extracts content from top N results in a single call. Fields: `top_n` (default 3), `format`, `fields`, `max_chars`. |
+
+> **Inline extraction:** Pass `extract_options: { top_n: 3, format: "markdown" }` to automatically extract content from the top N search results in a single call.
 
 #### `novada_extract`
 
@@ -361,10 +364,12 @@ Extract the main content from any URL. Supports batch extraction (up to 10 URLs 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `url` | string \| string[] | Yes | — | URL or array of URLs (max 10 for batch) |
+| `urls` | string[] | No | — | Array of URLs to extract in parallel (max 10); alias for `url`. Preferred for batch workflows. |
 | `format` | string | No | `"markdown"` | `markdown` `text` `html` |
 | `render` | string | No | `"auto"` | `auto` (escalates if JS-heavy) · `static` (fast, no JS) · `render` (Web Unblocker) · `browser` (full CDP) |
 | `query` | string | No | — | Query context hint for agent-side filtering |
 | `fields` | string[] | No | — | Specific fields to extract: `["price", "author", "rating", "date"]` (max 20). Sources: JSON-LD → regex → scan |
+| `max_chars` | number | No | `25000` | Max characters to return (default 25000, max 100000). Don't default to 100000 — use only when large content is needed. |
 
 **`fields` example output:**
 ```
@@ -413,7 +418,9 @@ Multi-step web research. Runs 3-10 parallel searches, deduplicates, returns a ci
 
 #### `novada_proxy`
 
-Generate ready-to-use proxy credentials (residential, mobile, ISP, datacenter). No separate credentials needed — derives from `NOVADA_API_KEY`.
+Generate ready-to-use proxy credentials (residential, mobile, ISP, datacenter).
+
+> **Requires:** `NOVADA_PROXY_USER`, `NOVADA_PROXY_PASS`, and `NOVADA_PROXY_ENDPOINT` environment variables. Get these from [dashboard.novada.com](https://dashboard.novada.com) → Residential Proxies → Endpoint Generator.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -435,7 +442,7 @@ Structured data from 129 platforms (Amazon, Reddit, TikTok, LinkedIn, Google Sho
 | `operation` | string | Yes | — | Operation ID (e.g. `amazon_product_by-keywords`, `reddit_posts_by-keywords`) |
 | `params` | object | No | `{}` | Operation-specific params (e.g. `{ keyword: "iphone 16", num: 5 }`) |
 | `limit` | number | No | `20` | Max records (1-100) |
-| `format` | string | No | `"markdown"` | `markdown` · `json` (agent use) · `csv` · `html` · `xlsx` (human download) |
+| `format` | string | No | `"markdown"` | `markdown` (default, agent-optimized table) · `json` (structured records for programmatic use). Note: `csv`/`html`/`xlsx` are available via the `nova` CLI only. |
 
 **Example operations:**
 
@@ -476,7 +483,7 @@ Force JS render or unblock a specific URL using Web Unblocker or Browser API CDP
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `url` | string | Yes | — | URL to unblock |
-| `render` | string | No | `"render"` | `render` (Web Unblocker) · `browser` (full CDP) |
+| `method` | string | No | `"render"` | `render` (Web Unblocker) · `browser` (full CDP) |
 
 #### `novada_browser`
 
@@ -514,6 +521,8 @@ MCP prompts are pre-built workflow templates visible in supported clients (Claud
 | `research_topic` | Deep multi-source research with optional country and focus | `topic` (required), `country`, `focus` |
 | `extract_and_summarize` | Extract one or more URLs and summarize | `urls` (required), `focus` |
 | `site_audit` | Map site structure then extract key sections | `url` (required), `sections` |
+| `scrape_platform_data` | Scrape structured data from a specific platform (Amazon, Reddit, TikTok, etc.) | `platform` (required), `data_type` (required), `query` (required) |
+| `browser_stateful_workflow` | Automate a multi-step browser workflow with persistent session state | `url` (required), `workflow` (required), `session_id` |
 
 ---
 
@@ -565,7 +574,7 @@ Read-only data agents can access before deciding which tool to call.
 | **Platform scrapers** | **129 platforms** | No | No |
 | **Proxy tool** | **Residential/mobile/ISP** | No | No |
 | **Browser automation** | **Yes (CDP, 20 actions)** | No | No |
-| MCP Prompts | **3** | No | No |
+| MCP Prompts | **5** | No | No |
 | MCP Resources | **4** | No | No |
 | Geo-targeting | **195 countries** | Country param | No |
 | Domain filtering | **include/exclude** | No | No |
@@ -900,7 +909,7 @@ depth:deep (auto-selected) | searches:6 | results:28 | unique_sources:15
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | `url` | string | 是 | — | 要解锁的 URL |
-| `render` | string | 否 | `"render"` | `render`（Web Unblocker）· `browser`（完整 CDP） |
+| `method` | string | 否 | `"render"` | `render`（Web Unblocker）· `browser`（完整 CDP） |
 
 #### `novada_browser` — 浏览器自动化
 
@@ -919,6 +928,8 @@ MCP Prompts 是预置工作流模板，在支持的客户端（Claude Desktop、
 | `research_topic` | 对任意主题进行深度多源研究 | `topic`（必填）, `country`, `focus` |
 | `extract_and_summarize` | 提取一个或多个 URL 的内容并生成摘要 | `urls`（必填）, `focus` |
 | `site_audit` | 映射网站结构，然后提取并汇总关键部分 | `url`（必填）, `sections` |
+| `scrape_platform_data` | 从指定平台（Amazon、Reddit、TikTok 等）抓取结构化数据 | `platform`（必填）, `data_type`（必填）, `query`（必填） |
+| `browser_stateful_workflow` | 在持久会话中执行多步骤浏览器自动化工作流 | `url`（必填）, `workflow`（必填）, `session_id` |
 
 ---
 
@@ -931,6 +942,7 @@ Agent 在选择工具之前可以读取的参考数据。
 | `novada://engines` | 5 个搜索引擎的特性和推荐使用场景 |
 | `novada://countries` | 195 个国家代码（地理定向搜索） |
 | `novada://guide` | 工具选择决策树和工作流模式 |
+| `novada://scraper-platforms` | 129 个平台的有效 operation ID 列表 |
 
 ---
 

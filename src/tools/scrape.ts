@@ -149,6 +149,7 @@ function extractRecords(data: unknown): Record<string, unknown>[] {
 export async function novadaScrape(params: ScrapeParams, apiKey: string): Promise<string> {
   const { platform, operation, params: opParams, format, limit } = params;
 
+  try {
   // Step 1: Submit task
   let taskId: string;
   try {
@@ -266,5 +267,36 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
         `- For structured scraping of other platforms, change platform and operation.`,
         `- Discover all 129 supported platforms and their operations: read novada://scraper-platforms resource.`,
       ].join("\n");
+  }
+  } catch (err: unknown) {
+    const code = (typeof err === 'object' && err !== null && 'code' in err)
+      ? (err as { code: unknown }).code
+      : null;
+    const message = err instanceof Error ? err.message : String(err);
+
+    // Check for 11006 (not activated) specifically — require specific pattern to avoid false positives
+    const is11006 = code === 11006 ||
+      message.includes('code 11006') ||
+      message.includes('(code: 11006)') ||
+      message.includes('error 11006');
+
+    return JSON.stringify({
+      status: "unavailable",
+      code: is11006 ? 11006 : (code ?? "unknown"),
+      reason: is11006
+        ? "Scraper API not yet activated on this account."
+        : message,
+      agent_instruction: is11006
+        ? "Activate Scraper API at dashboard.novada.com/overview/scraper/ before retrying. Do not retry this call automatically — this is a plan-tier gate, not a transient error."
+        : message.includes("11008") || message.includes("invalid") || message.includes("not found")
+          ? "This is a parameter error — do not retry. Check scraper_name and scraper_id are valid. Use the novada://scraper-platforms resource to find supported platforms."
+          : "Transient error — retry once after a short delay. If the error persists, contact support.",
+      alternatives: [
+        "Use novada_extract for general web page content extraction.",
+        "Use novada_unblock for bot-protected pages that require anti-bot bypass.",
+        "Use novada_crawl for multi-page site traversal.",
+      ],
+      next_steps: ["Activate at: https://dashboard.novada.com/overview/scraper/"],
+    }, null, 2);
   }
 }

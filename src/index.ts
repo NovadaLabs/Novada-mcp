@@ -79,9 +79,10 @@ const TOOLS = [
 
 **Best for:** Current events, finding relevant pages, fact lookup, competitive research. Add time_range="week" for recent results. Add include_domains to restrict sources.
 **Not for:** Reading a URL you already have (use novada_extract), full multi-source report (use novada_research).
-**Next step:** Call novada_extract with the returned URLs to read full content.`,
+**Next step:** Call novada_extract with the returned URLs to read full content.
+**Performance hint:** If engine='google' is slow or rate-limited, try engine='duckduckgo' — DDG responses average 329ms vs 1,092ms for Google in benchmarks. DDG is suitable for most factual and recent-news queries.`,
     inputSchema: zodToMcpSchema(SearchParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_extract",
@@ -89,18 +90,46 @@ const TOOLS = [
 
 **Best for:** Reading specific pages, batch-reading search results, extracting docs.
 **Not for:** Discovering which URLs exist on a site (use novada_map first), crawling many pages (use novada_crawl).
-**Tip:** If content looks incomplete or JS-heavy, set render="render" or render="browser".`,
+**Tip:** If content looks incomplete or JS-heavy, set render="render" or render="browser".
+
+Common mistakes:
+- Do NOT set render='render' for all pages. auto mode is 15x-113x faster for static sites. Only use render='render' for JavaScript-heavy SPAs (LinkedIn, Glassdoor, React SPAs, Next.js apps).
+- Do NOT call novada_extract on a URL just to check if it exists — use novada_map for URL discovery.
+- If fields extraction returns annotated values, prefer structured pages (product pages, GitHub repos) over generic homepages.
+
+When to use:
+- You need clean markdown, text, or HTML from a single URL or batch of URLs.
+- You need specific structured fields (price, author, date) extracted from a page.
+- You need render-mode bypass for bot-protected or JS-rendered pages.
+
+Not for:
+- Discovering what URLs exist on a site — use novada_map.
+- Multi-page site traversal — use novada_crawl.
+- Raw DOM access for CSS selector parsing — use novada_unblock.`,
     inputSchema: zodToMcpSchema(ExtractParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_crawl",
     description: `Use when you need content from multiple pages of a site and don't have the URLs yet. Crawls BFS or DFS up to 20 pages, extracts content from each. Use select_paths regex to target specific sections (e.g. "/docs/api/.*").
 
 **Best for:** Doc site ingestion, competitive content analysis, building knowledge bases from a domain.
-**Not for:** A single page (use novada_extract), URL discovery without content extraction (use novada_map — much faster).`,
+**Not for:** A single page (use novada_extract), URL discovery without content extraction (use novada_map — much faster).
+
+Common mistakes:
+- Do NOT set max_pages > 10 for large sites — crawl time scales linearly (~1.4s/page). At max_pages=20, expect 28s minimum.
+- Do NOT use novada_crawl to fetch one page — use novada_extract which is faster and simpler.
+- Use select_paths to restrict to relevant URL patterns before setting max_pages high.
+
+When to use:
+- You need content from multiple pages on one domain (e.g., all /docs/* pages).
+- You need BFS discovery of related content under a path prefix.
+
+Not for:
+- Single-URL extraction — use novada_extract.
+- Finding all URLs on a site without downloading content — use novada_map.`,
     inputSchema: zodToMcpSchema(CrawlParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: true },
+    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_research",
@@ -110,7 +139,7 @@ const TOOLS = [
 **Not for:** Simple single-fact lookup (use novada_search), reading a specific URL (use novada_extract).
 **Depth options:** "quick" (3 queries), "deep" (5–6), "comprehensive" (8–10), "auto" (default — inferred from question).`,
     inputSchema: zodToMcpSchema(ResearchParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_map",
@@ -120,7 +149,7 @@ const TOOLS = [
 **Not for:** Reading page content (follow with novada_extract or novada_crawl).
 **Note:** Limited results on JavaScript SPAs — will flag this in output.`,
     inputSchema: zodToMcpSchema(MapParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_scrape",
@@ -132,7 +161,7 @@ const TOOLS = [
 **Example:** platform="amazon.com", operation="amazon_product_by-keywords", params={keyword:"iphone 16", num:5}
 **Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.`,
     inputSchema: zodToMcpSchema(ScrapeParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: true },
+    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_proxy",
@@ -143,7 +172,7 @@ const TOOLS = [
 **Formats:** "url" for Node.js/Python, "env" for shell variables, "curl" for CLI requests.
 **Note:** Requires NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
     inputSchema: zodToMcpSchema(ProxyParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "novada_verify",
@@ -153,7 +182,7 @@ const TOOLS = [
 **Not for:** Open-ended questions (use novada_research), reading a specific URL (use novada_extract).
 **Note:** Verdict is signal-based (search balance), not a definitive ruling. Confidence 0–100 indicates certainty.`,
     inputSchema: zodToMcpSchema(VerifyParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_unblock",
@@ -163,9 +192,22 @@ const TOOLS = [
 **Tip:** For most anti-bot pages, try novada_extract with render="render" first — it returns clean text. Use novada_unblock when you specifically need the raw HTML source.
 **Not for:** Reading cleaned text (use novada_extract with render="render"), structured platform data (use novada_scrape).
 **Methods:** "render" (Web Unblocker, faster/cheaper), "browser" (full Chromium CDP, handles complex SPAs).
-**Wait hint:** Use wait_for to specify a CSS selector to wait for before capturing HTML.`,
+**Wait hint:** Use wait_for to specify a CSS selector to wait for before capturing HTML.
+
+Common mistakes:
+- This tool returns RAW HTML, not parsed/cleaned text. Passing the output directly to an LLM expecting markdown will produce garbled, token-heavy responses.
+- For extracted content from bot-protected pages, use novada_extract (it calls the unblocker internally with render='render').
+- Do not use novada_unblock for simple static pages — it adds 9-16 seconds of latency vs 112ms for novada_extract.
+
+When to use:
+- You need the original DOM structure for CSS selector parsing in a processing pipeline.
+- You are feeding the HTML into a downstream parser, not directly to an LLM.
+- You need raw access to a page's complete HTML before novada_extract's content selection.
+
+Not for:
+- Getting readable content from protected pages — use novada_extract with render='render'.`,
     inputSchema: zodToMcpSchema(UnblockParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_browser",
@@ -178,7 +220,7 @@ const TOOLS = [
 **Requires:** NOVADA_BROWSER_WS environment variable.
 **Platform note:** TikTok is geo-restricted in some regions — pass country="us" in actions that support it. Use wait with domcontentloaded (never networkidle) for SPAs.`,
     inputSchema: zodToMcpSchema(BrowserParamsSchema),
-    annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_health",
@@ -187,7 +229,7 @@ const TOOLS = [
 **Best for:** First-time setup, diagnosing why a tool is failing, confirming your account has the right products activated.
 **Returns:** Status table for Search, Extract, Scraper API, Proxy, and Browser API — with activation links for anything not yet enabled.`,
     inputSchema: zodToMcpSchema(HealthParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
 ];
 

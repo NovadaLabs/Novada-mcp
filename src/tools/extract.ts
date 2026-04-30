@@ -3,9 +3,21 @@ import type { FieldResult } from "../utils/index.js";
 import type { ExtractParams } from "./types.js";
 
 export async function novadaExtract(params: ExtractParams, apiKey?: string): Promise<string> {
-  // Batch mode: array of URLs
-  if (Array.isArray(params.url)) {
-    const urls = params.url;
+  // P1-6: Normalize url/urls into a list
+  const urlList: string[] = params.urls
+    ? params.urls
+    : Array.isArray(params.url)
+      ? params.url
+      : [params.url as string];
+  if (urlList.length > 10) {
+    throw new Error(`Batch extract accepts at most 10 URLs per call. Received ${urlList.length}. Split into multiple calls.`);
+  }
+
+  const isBatch = urlList.length > 1 || params.urls !== undefined;
+
+  // Batch mode: array of URLs (via urls param or url array)
+  if (isBatch) {
+    const urls = urlList;
     const results = await Promise.all(
       urls.map((url, i) =>
         extractSingle({ ...params, url }, apiKey)
@@ -46,12 +58,12 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
 
   // Single URL mode
   try {
-    return await extractSingle(params as ExtractParams & { url: string }, apiKey);
+    return await extractSingle({ ...params, url: urlList[0] }, apiKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return [
       `## Extract Failed`,
-      `url: ${String(params.url)}`,
+      `url: ${urlList[0]}`,
       ``,
       `Error: ${message}`,
       ``,
@@ -200,37 +212,67 @@ async function extractSingle(
     })
     .slice(0, 15);
 
+  // P0-5: max_chars truncation — applies to ALL formats (text, markdown, html handled separately)
+  const MAX_CHARS_DEFAULT = 25000;
+  const maxChars = params.max_chars ?? MAX_CHARS_DEFAULT;
+
   if (params.format === "text") {
-    const plainContent = mainContent
+    let plainContent = mainContent
       .replace(/^#{1,6}\s+/gm, "")
       .replace(/^\- /gm, "  * ")
       .replace(/\*\*([^*]+)\*\*/g, "$1");
+    const totalCharsText = plainContent.length;
+    if (plainContent.length > maxChars) {
+      const suggestedHigher = Math.min(maxChars * 2, 100000);
+      plainContent = plainContent.slice(0, maxChars) +
+        `\n\n[Content may be truncated — showing first ${maxChars} of ${totalCharsText} total characters. Pass max_chars=${suggestedHigher} to get more.]`;
+    }
     const linksText = sameDomainLinks.length > 0
       ? `\nSame-domain links:\n${sameDomainLinks.map(l => `  ${l}`).join("\n")}`
       : "";
     return `${title}\n${description ? description + "\n" : ""}\n${plainContent}${linksText}`;
   }
 
-  const contentLen = mainContent.length;
-  const isTruncated = contentLen > 25000;
-
   // Quality scoring (skip structured data extraction for PDFs — no HTML schema)
   const structuredData = pdfPages !== null ? null : extractStructuredData(html);
   const hasStructuredData = structuredData !== null;
   const quality = scoreExtraction(html, mainContent, usedMode, hasStructuredData);
 
+  // P0-1: Quality floor — never return quality:0 for non-empty content
+  if (mainContent && mainContent.length > 0 && quality.score === 0) {
+    quality.score = 1;
+  }
+
+  // max_chars truncation for markdown format
+  const totalChars = mainContent.length;
+  let displayContent = mainContent;
+  let contentTruncated = false;
+  if (displayContent.length > maxChars) {
+    displayContent = displayContent.slice(0, maxChars);
+    const suggestedHigher = Math.min(maxChars * 2, 100000);
+    displayContent += `\n\n[Content may be truncated — showing first ${maxChars} of ${totalChars} total characters. Pass max_chars=${suggestedHigher} to get more.]`;
+    contentTruncated = true;
+  }
+
+  const contentLen = totalChars;
+  const isTruncated = contentTruncated;
+
   // Field extraction
   let fieldResults: FieldResult[] | null = null;
   if (params.fields && params.fields.length > 0) {
-    fieldResults = extractFields(params.fields, structuredData, mainContent);
+    fieldResults = extractFields(params.fields, structuredData, displayContent);
   }
+
+  const metaExtra = contentTruncated
+    ? ` | content_truncated:true | total_chars:${totalChars}`
+    : "";
 
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
     `title: ${title}`,
     ...(description ? [`description: ${description}`] : []),
-    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (may be truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}`,
+    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
     ``,
     `---`,
     ``,
@@ -241,9 +283,15 @@ async function extractSingle(
     lines.push(`## Requested Fields`);
     for (const r of fieldResults) {
       const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : " *(pattern)*";
-      lines.push(r.source === "not_found"
-        ? `${r.field}: —`
-        : `${r.field}: ${r.value}${sourceTag}`);
+      if (r.source === "not_found") {
+        lines.push(`${r.field}: —`);
+      } else {
+        // P0-3: Strip *(pattern)* annotation from the field value itself
+        const cleanValue = typeof r.value === "string"
+          ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
+          : r.value;
+        lines.push(`${r.field}: ${cleanValue}${sourceTag}`);
+      }
     }
     lines.push(``, `---`, ``);
   }
@@ -258,7 +306,7 @@ async function extractSingle(
     lines.push(``, `---`, ``);
   }
 
-  lines.push(mainContent);
+  lines.push(displayContent);
 
   if (sameDomainLinks.length > 0) {
     lines.push(``, `---`, `## Same-Domain Links (${sameDomainLinks.length} of ${allLinks.length})`);
@@ -298,7 +346,7 @@ async function extractSingle(
     }
   }
   if (isTruncated) {
-    lines.push(`- Content may be truncated. Use novada_map to find specific subpages.`);
+    lines.push(`- Content was truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more, or use novada_map to find specific subpages.`);
   }
   try {
     lines.push(`- To discover more pages: novada_map with url="${new URL(params.url).origin}"`);

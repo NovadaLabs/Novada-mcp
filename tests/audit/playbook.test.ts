@@ -215,12 +215,12 @@ describe("Round 4: Credential isolation — AsyncLocalStorage", () => {
       "batchExtract limit is 10 URLs per call. Received 11."
     );
 
-    // 10 URLs should NOT throw
+    // 10 URLs should NOT throw the limit error (network failures are acceptable)
     const tenUrls = urls.slice(0, 10);
-    // Just verify it doesn't throw immediately (it will fail on network, but that's expected)
-    const callPromise = client.batchExtract(tenUrls);
-    // We only care it doesn't throw the limit error — network errors are acceptable
-    await expect(callPromise).rejects.not.toThrow("batchExtract limit is 10 URLs per call");
+    await expect(Promise.race([
+      client.batchExtract(tenUrls),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("network timeout — expected")), 500)),
+    ])).rejects.not.toThrow("batchExtract limit is 10 URLs per call");
   });
 });
 

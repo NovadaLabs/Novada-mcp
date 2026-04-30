@@ -67,10 +67,14 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 **Key parameters:**
 - `url` — single URL string, or array of up to 10 URLs for parallel batch
+- `urls` — alias for `url` when passing multiple URLs; preferred for batch workflows
 - `format` — `markdown` (default), `text`, `html`
+- `render` — `auto` (default), `static`, `render` (Web Unblocker), `browser` (full CDP)
 - `query` — optional: focuses the content summary on a specific aspect
+- `fields` — optional: specific fields to extract, e.g. `["price", "author", "rating"]` (max 20)
+- `max_chars` — optional: max characters to return (default 25000, max 100000). Do NOT set to 100000 by default.
 
-**Batch mode:** Pass `url: ["url1", "url2"]` to extract multiple pages in one call — faster than calling extract once per URL.
+**Batch mode:** Pass `url: ["url1", "url2"]` or `urls: ["url1", "url2"]` to extract multiple pages in one call — faster than calling extract once per URL.
 
 **When NOT to use:** You don't have URLs yet — use `novada_search` or `novada_map` first.
 
@@ -197,7 +201,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 - `operation` — operation ID, e.g. `amazon_product_by-keywords`, `reddit_posts_by-keywords`
 - `params` — operation-specific params, e.g. `{ "keyword": "iphone 16", "num": 5 }`
 - `limit` — max records (1-100, default 20)
-- `format` — `markdown` (default, agent-optimized), `json` (programmatic), `csv`, `html`, `xlsx`
+- `format` — `markdown` (default, agent-optimized), `json` (programmatic)
 
 **Discover platforms:** Read the `novada://scraper-platforms` MCP resource for the complete list with operation IDs and required params.
 
@@ -240,7 +244,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 **Key parameters:**
 - `url` — URL to unblock
-- `render` — `render` (Web Unblocker, faster/cheaper) or `browser` (full Chromium CDP, handles complex SPAs)
+- `method` — `render` (Web Unblocker, faster/cheaper) or `browser` (full Chromium CDP, handles complex SPAs)
 
 **Requires:** `NOVADA_WEB_UNBLOCKER_KEY` or `NOVADA_BROWSER_WS`
 
@@ -248,7 +252,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 **Example:**
 ```json
-{ "url": "https://example.com/protected", "render": "render" }
+{ "url": "https://example.com/protected", "method": "render" }
 ```
 
 ---
@@ -271,11 +275,11 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 ```json
 {
   "actions": [
-    { "type": "navigate", "url": "https://example.com/login" },
-    { "type": "type", "selector": "#email", "text": "user@example.com" },
-    { "type": "type", "selector": "#password", "text": "pass" },
-    { "type": "click", "selector": "button[type=submit]" },
-    { "type": "aria_snapshot" }
+    { "action": "navigate", "url": "https://example.com/login" },
+    { "action": "type", "selector": "#email", "text": "user@example.com" },
+    { "action": "type", "selector": "#password", "text": "pass" },
+    { "action": "click", "selector": "button[type=submit]" },
+    { "action": "aria_snapshot" }
   ]
 }
 ```

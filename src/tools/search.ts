@@ -2,6 +2,7 @@ import axios, { AxiosError } from "axios";
 import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
 import { SCRAPERAPI_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
+import { novadaExtract } from "./extract.js";
 
 const SERP_UNAVAILABLE = `## Search Unavailable
 
@@ -93,6 +94,43 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   // Rerank by relevance to query
   const reranked = rerankResults(results, params.query);
 
+  // P1-7: Auto-extract content from top N results when extract_options is provided
+  if (params.extract_options) {
+    const opts = params.extract_options;
+    const topN = opts.top_n ?? 3;
+    const urlsToExtract = reranked.slice(0, topN)
+      .map(r => r.url || r.link)
+      .filter((u): u is string => Boolean(u));
+
+    const extractResults = await Promise.all(
+      urlsToExtract.map(async (url) => {
+        try {
+          const content = await novadaExtract({
+            url,
+            format: opts.format ?? "markdown",
+            render: "auto" as const,
+            fields: opts.fields,
+            max_chars: opts.max_chars,
+          }, apiKey);
+          return { url, content, ok: true };
+        } catch (err) {
+          return { url, content: null, extract_error: String(err), ok: false };
+        }
+      })
+    );
+
+    for (const er of extractResults) {
+      const result = reranked.find(r => (r.url || r.link) === er.url);
+      if (result) {
+        if (er.ok) {
+          (result as NovadaSearchResult & { extracted_content?: string | null }).extracted_content = er.content;
+        } else {
+          (result as NovadaSearchResult & { extract_error?: string }).extract_error = er.extract_error;
+        }
+      }
+    }
+  }
+
   // Active filters summary for agent metadata
   const activeFilters: string[] = [];
   if (params.country) activeFilters.push(`country:${params.country}`);
@@ -131,6 +169,14 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     lines.push(`url: ${url}`);
     lines.push(`snippet: ${cleanSnippet}`);
     if (r.published || r.date) lines.push(`published: ${r.published || r.date}`);
+    const rExt = r as NovadaSearchResult & { extracted_content?: string | null; extract_error?: string };
+    if (rExt.extracted_content != null) {
+      lines.push(`extracted_content:`);
+      lines.push(rExt.extracted_content);
+    }
+    if (rExt.extract_error) {
+      lines.push(`extract_error: ${rExt.extract_error}`);
+    }
     lines.push("");
   }
 

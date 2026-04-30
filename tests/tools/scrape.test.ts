@@ -217,25 +217,41 @@ describe("novadaScrape — flattenRecord edge cases", () => {
 });
 
 describe("novadaScrape — error handling", () => {
-  it("throws with actionable message for code 11006 (account permissions)", async () => {
+  it("returns structured error string for code 11006 (account permissions)", async () => {
     mockApiError(11006, "Scraper error");
-    await expect(
-      novadaScrape({ platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 }, "test-key")
-    ).rejects.toThrow("Scraper API not yet activated");
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      "test-key"
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe("unavailable");
+    expect(parsed.code).toBe(11006);
+    expect(parsed.reason).toContain("not yet activated");
+    expect(parsed.agent_instruction).toContain("Activate Scraper API");
+    expect(parsed.alternatives).toBeInstanceOf(Array);
+    expect(parsed.alternatives.length).toBeGreaterThan(0);
   });
 
-  it("throws with actionable message for code 11008 (bad platform name)", async () => {
+  it("returns structured error string for code 11008 (bad platform name)", async () => {
     mockApiError(11008, "Scraper name error");
-    await expect(
-      novadaScrape({ platform: "bad-platform", operation: "something", params: {}, format: "markdown", limit: 20 }, "test-key")
-    ).rejects.toThrow("Unknown platform");
+    const result = await novadaScrape(
+      { platform: "bad-platform", operation: "something", params: {}, format: "markdown", limit: 20 },
+      "test-key"
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe("unavailable");
+    expect(parsed.reason).toContain("Unknown platform");
   });
 
-  it("throws for code 11000 (invalid API key)", async () => {
+  it("returns structured error string for code 11000 (invalid API key)", async () => {
     mockApiError(11000, "Invalid ApiKey");
-    await expect(
-      novadaScrape({ platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 }, "test-key")
-    ).rejects.toThrow("Invalid API key");
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      "test-key"
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe("unavailable");
+    expect(parsed.reason).toContain("Invalid API key");
   });
 
   it("returns no-data message when API returns empty array", async () => {
@@ -247,10 +263,44 @@ describe("novadaScrape — error handling", () => {
     expect(result).toContain("No records returned");
   });
 
-  it("throws when task fails with error in download result", async () => {
+  it("returns structured error string when task fails with error in download result", async () => {
     mockTaskError("500 Internal Server Error", 500);
-    await expect(
-      novadaScrape({ platform: "google.com", operation: "google_search", params: {}, format: "markdown", limit: 20 }, "test-key")
-    ).rejects.toThrow("Scraper task failed");
+    const result = await novadaScrape(
+      { platform: "google.com", operation: "google_search", params: {}, format: "markdown", limit: 20 },
+      "test-key"
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe("unavailable");
+    expect(parsed.reason).toContain("Scraper task failed");
+  });
+
+  it("returns structured error string on API-not-activated exception (code 11006)", async () => {
+    // Arrange: mock the API call to throw an Error with "11006" in the message
+    mockedAxios.post.mockRejectedValue(new Error("Scraper error (code 11006): Scraper API not yet activated on this account."));
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      "test-key"
+    );
+    // Assert: handler does NOT throw; returns string containing status and agent_instruction
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe("unavailable");
+    expect(parsed.code).toBe(11006);
+    expect(parsed.agent_instruction).toBeDefined();
+    expect(typeof result).toBe("string");
+  });
+
+  it("does not throw when API call throws — returns structured string", async () => {
+    // Arrange: mock to throw a generic network error
+    mockedAxios.post.mockRejectedValue(new Error("ECONNREFUSED network error"));
+    // Assert: the handler does NOT throw; it returns a string containing "status" and "agent_instruction"
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      "test-key"
+    );
+    expect(typeof result).toBe("string");
+    expect(result).toContain("status");
+    expect(result).toContain("agent_instruction");
+    const parsed = JSON.parse(result);
+    expect(parsed.agent_instruction).toBeDefined();
   });
 });

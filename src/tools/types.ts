@@ -42,13 +42,32 @@ export const SearchParamsSchema = z.object({
     .describe("Only return results from these domains. E.g. ['github.com', 'arxiv.org']. Max 10."),
   exclude_domains: z.array(z.string()).optional()
     .describe("Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10."),
+  extract_options: z.object({
+    format: z.enum(["text", "markdown", "html"]).optional().default("markdown"),
+    fields: z.array(z.string()).optional(),
+    max_chars: z.number().int().min(1000).max(100000).optional(),
+    top_n: z.number().int().min(1).max(10).optional().default(3)
+      .describe("Number of top search results to auto-extract. Default: 3. Max: 10."),
+  }).optional()
+    .describe(
+      "When provided, automatically extracts content from the top top_n search result URLs " +
+      "and appends it to each result. Eliminates a separate novada_extract call. " +
+      "Note: adds latency proportional to top_n * extract_latency. Use top_n=1-3 for most queries."
+    ),
 });
 
 export const ExtractParamsSchema = z.object({
   url: z.union([
     safeUrl,
     z.array(safeUrl).min(1).max(10),
-  ]).describe("URL or array of URLs (max 10) to extract. Batch mode processes in parallel."),
+  ]).describe("URL or array of URLs (max 10) to extract. Batch mode processes in parallel. For multiple URLs, use the urls array param instead."),
+  urls: z.array(safeUrl).min(1).max(10).optional()
+    .describe(
+      "Array of URLs to extract in parallel (max 10). " +
+      "Alias for url when passing multiple URLs. " +
+      "Use for batch research workflows extracting from several pages in one call. " +
+      "Returns a structured markdown document with one labeled section per URL (### [1/N] url). Single url param still returns a single markdown document."
+    ),
   format: z.enum(["text", "markdown", "html"]).default("markdown"),
   query: z.string().optional()
     .describe("Optional query for relevance context. Helps the calling agent focus on relevant sections."),
@@ -56,6 +75,12 @@ export const ExtractParamsSchema = z.object({
     .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'render': force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS)."),
   fields: z.array(z.string().min(1)).max(20).optional()
     .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching."),
+  max_chars: z.number().int().min(1000).max(100000).optional()
+    .describe(
+      "Maximum characters to return (default: 25000, max: 100000). " +
+      "When content exceeds this limit, it is truncated and a notice is appended. " +
+      "Common mistake: do not set max_chars=100000 by default — use 25000 for most pages."
+    ),
 });
 
 export const CrawlParamsSchema = z.object({
