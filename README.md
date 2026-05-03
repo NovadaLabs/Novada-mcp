@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">Novada MCP Server</h1>
+  <h1 align="center">Novada Search MCP</h1>
   <p align="center"><strong>Search, extract, crawl, map, and research the web — from any AI agent or terminal.</strong></p>
   <p align="center">Powered by <a href="https://www.novada.com">novada.com</a> — 100M+ proxy IPs across 195 countries.</p>
 </p>
