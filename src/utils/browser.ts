@@ -111,7 +111,12 @@ export async function fetchViaBrowser(
     browser = await Promise.race([
       chromium.connectOverCDP(wsEndpoint),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Browser API connection timeout after ${TIMEOUTS.BROWSER_CONNECT}ms`)), TIMEOUTS.BROWSER_CONNECT)
+        setTimeout(() => reject(new Error(
+          `Browser API connection failed. ` +
+          `agent_instruction: Credentials may be expired or a previous session is blocking new connections (Novada allows one active session per account). ` +
+          `Refresh credentials at dashboard.novada.com/overview/browser/ and update NOVADA_BROWSER_WS env var. ` +
+          `Alternatively, use render="render" mode in novada_extract for JS rendering without browser automation.`
+        )), TIMEOUTS.BROWSER_CONNECT)
       ),
     ]);
     const context = await browser.newContext({

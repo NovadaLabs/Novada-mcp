@@ -153,8 +153,12 @@ export async function routeFetch(
     // If render returned a bot challenge page, escalate to browser or fail
     if (detectBotChallenge(renderHtml)) {
       if (isBrowserConfigured()) {
-        const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
-        return { html: browserHtml, mode: "browser", cost: "high" };
+        try {
+          const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
+          return { html: browserHtml, mode: "browser", cost: "high" };
+        } catch {
+          // Browser unavailable — fall through to render-failed
+        }
       }
       return { html, mode: "render-failed", cost: "low" };
     }
@@ -164,17 +168,25 @@ export async function routeFetch(
 
     // Render also JS-heavy — try browser if configured
     if (isBrowserConfigured()) {
-      const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
-      return { html: browserHtml, mode: "browser", cost: "high" };
+      try {
+        const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
+        return { html: browserHtml, mode: "browser", cost: "high" };
+      } catch {
+        // Browser unavailable — fall through to render result
+      }
     }
 
-    // No browser — return render result (better than static)
+    // No browser or browser failed — return render result (better than static)
     return { html: renderHtml, mode: "render", cost: "medium" };
   } catch {
     // Render failed — try browser as last resort
     if (isBrowserConfigured()) {
-      const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
-      return { html: browserHtml, mode: "browser", cost: "high" };
+      try {
+        const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
+        return { html: browserHtml, mode: "browser", cost: "high" };
+      } catch {
+        // Browser also unavailable — fall back to static
+      }
     }
 
     // Nothing worked — return the static HTML with a flag

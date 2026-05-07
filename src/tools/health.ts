@@ -91,10 +91,15 @@ async function probeScraper(apiKey: string): Promise<ProbeResult> {
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   const start = Date.now();
   try {
+    const form = new URLSearchParams();
+    form.append("scraper_name", "google.com");
+    form.append("scraper_id", "google_search");
+    form.append("q", "test");
+    form.append("num", "1");
     const res = await fetch(`${SCRAPER_API_BASE}/request`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ scraper_name: "google.com", scraper_id: "google_search_by-keywords", keyword: "test", num: 1 }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "Authorization": `Bearer ${apiKey}` },
+      body: form.toString(),
       signal: controller.signal,
     });
     const latency = Date.now() - start;

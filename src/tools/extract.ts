@@ -267,12 +267,14 @@ async function extractSingle(
     ? ` | content_truncated:true | total_chars:${totalChars}`
     : "";
 
+  const contentOk = mainContent.length > 100 && usedMode !== "render-failed" && !stillJsHeavy && quality.score >= 10;
+
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
     `title: ${title}`,
     ...(description ? [`description: ${description}`] : []),
-    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
+    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score} | content_ok:${contentOk}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
     ``,
     `---`,
     ``,

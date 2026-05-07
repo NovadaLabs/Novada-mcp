@@ -52,7 +52,7 @@ async function submitScrapeTask(
     const errorMessages: Record<number, string> = {
       10001: "Missing required parameters. Check platform and operation fields.",
       11000: "Invalid API key.",
-      11006: "Scraper API not yet activated on this account. Go to dashboard.novada.com/overview/scraper/ to activate instantly — no email needed.",
+      11006: "Scraper API Bearer token access not activated on this account. Note: the dashboard UI works via cookie auth — this is a different access tier. Contact your Novada account manager to enable direct API access (Bearer token).",
       11008: `Unknown platform '${scraper_name}'. Use the exact domain (e.g. 'amazon.com', 'reddit.com').\nTo find valid operation IDs: read the novada://scraper-platforms resource — operation names are exact and cannot be guessed.`,
     };
     const msg = errorMessages[body.code] ?? body.msg ?? "Unknown scraper error";

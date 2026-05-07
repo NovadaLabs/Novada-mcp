@@ -176,7 +176,9 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
   }).each((_: number, el: any) => {
     const $el = $(el);
     const tag = (el.tagName || "").toLowerCase();
-    const text = $el.text().replace(/\s+/g, " ").trim();
+    const text = tag === "pre"
+      ? $el.text()
+      : $el.text().replace(/\s+/g, " ").trim();
     if (!text) return;
 
     if (tag.match(/^h[1-6]$/)) {
@@ -194,18 +196,34 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
     }
   });
 
-  // Handle tables — only top-level (skip nested tables to avoid duplication)
-  // Data tables (have <th>) → markdown table
-  // Layout tables (no <th>) → flat text list
+  // Handle tables — render top-level tables and data tables nested in layout wrappers.
+  // Rules:
+  //   layout-in-layout  → skip (parent cell extraction handles it via inlineMarkdown)
+  //   data-in-data      → skip (parent data table already renders it)
+  //   data-in-layout    → RENDER (e.g. Wikipedia infobox inside page layout wrapper)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   $content.find("table").each((_: number, table: any) => {
     const $table = $(table);
-    // Skip tables nested inside another table
-    if ($table.parents("table").length > 0) return;
 
-    // Check direct th children only (not from nested tables)
+    // Check for <th> in thead, direct tr children, or tbody rows (covers Wikipedia infoboxes
+    // and other tables that use <th scope="row"> inside <tbody> instead of <thead>)
     const hasHeaders = $table.children("thead").children("tr").children("th").length > 0
-      || $table.children("tr").children("th").length > 0;
+      || $table.children("tr").children("th").length > 0
+      || $table.children("tbody").children("tr").children("th").length > 0;
+
+    if ($table.parents("table").length > 0) {
+      if (!hasHeaders) return; // nested layout table — skip, handled by cell extraction
+      // Nested data table: only render if every ancestor table is a layout table
+      // (i.e. no ancestor has <th> direct children). If an ancestor is itself a data
+      // table this table is already captured, so skip to avoid duplication.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nestedInDataTable = $table.parents("table").filter((__: number, t: any) =>
+        $(t).children("thead").children("tr").children("th").length > 0 ||
+        $(t).children("tr").children("th").length > 0
+      ).length > 0;
+      if (nestedInDataTable) return;
+      // Fall through: data table inside layout wrapper — render it
+    }
 
     const rows: string[][] = [];
     // Use only direct-child rows (add both <tbody>/<thead> wrappers and bare <tr>s)
@@ -213,10 +231,28 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
       .add($table.children("tr"));
     $directRows.each((__, tr) => {
       const cells: string[] = [];
-      // Direct cell children only — avoids traversing into nested tables
+      // Direct cell children only — avoids traversing into nested tables.
+      // Exception: if a cell contains a nested table (e.g. HN's story list inside
+      // a layout wrapper), extract each nested row as a separate paragraph so that
+      // individual list items don't collapse into a single wall of text.
       $(tr).children("th, td").each((___, cell) => {
-        const text = $(cell).text().replace(/\s+/g, " ").trim();
-        if (text) cells.push(text);
+        const $cell = $(cell);
+        const $nestedTable = $cell.children("table").first();
+        if ($nestedTable.length > 0) {
+          const nestedLines: string[] = [];
+          $nestedTable.find("tr").each((__, nestedTr) => {
+            const rowText = $(nestedTr).children("td, th")
+              .map((_: number, td: unknown) => inlineMarkdown($(td as never), baseUrl).trim())
+              .get()
+              .filter((t: string) => t.length > 0)
+              .join(" ");
+            if (rowText) nestedLines.push(rowText);
+          });
+          if (nestedLines.length > 0) cells.push(nestedLines.join("\n\n"));
+        } else {
+          const text = $cell.text().replace(/\s+/g, " ").trim();
+          if (text) cells.push(text);
+        }
       });
       if (cells.length) rows.push(cells);
     });
@@ -235,7 +271,7 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
         .map(cells => cells.join(" — "))
         .filter(t => t.length > 0);
       if (textLines.length > 0) {
-        lines.push(`\n${textLines.join("\n")}\n`);
+        lines.push(`\n${textLines.join("\n\n")}\n`);
       }
     }
   });

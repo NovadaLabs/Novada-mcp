@@ -195,6 +195,10 @@ export async function fetchWithRender(
       if (resp.data?.code === 0 && resp.data?.data?.html) {
         return { ...resp, data: resp.data.data.html };
       }
+      // Inner code check — outer code=0 but inner data.code indicates an error (200-always pattern)
+      if (resp.data?.data?.code && resp.data.data.code !== 200) {
+        throw new Error(`Web Unblocker error (${resp.data.data.code}): ${resp.data.data.msg ?? "unknown"}`);
+      }
       if (resp.data?.code !== 0) {
         throw new Error(`Web Unblocker error: ${resp.data?.msg ?? "unknown"}`);
       }
