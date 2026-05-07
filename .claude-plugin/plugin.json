@@ -1,0 +1,9 @@
+{
+  "name": "novada-search",
+  "description": "Web intelligence for AI agents — search 5 engines, extract content with smart anti-bot routing, crawl sites, scrape 129 platforms, and verify claims. Powered by 100M+ residential IPs across 195 countries.",
+  "version": "0.8.6",
+  "author": {
+    "name": "NovadaLabs",
+    "url": "https://novada.com"
+  }
+}
