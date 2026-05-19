@@ -51,7 +51,7 @@ Examples:
   novadaresearch "How do AI agents use web scraping?" --depth deep --focus "production use cases"
   novadaproxy --type residential --country us --format env
   novadascrape --platform amazon.com --operation amazon_product_keywords --keyword "iphone 16" --num 5 --format csv
-  novadascrape --platform reddit.com --operation reddit_posts_by-keywords --keyword "AI agents" --num 10
+  novadascrape --platform github.com --operation github_repository_repo-url --url "https://github.com/anthropics/anthropic-sdk-python"
   novadaverify "The Eiffel Tower is 330 meters tall" --context "as of 2024"
 `;
 

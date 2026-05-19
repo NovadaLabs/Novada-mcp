@@ -226,7 +226,7 @@ const scrapeBase = {
   platform: z.string().min(1)
     .describe("Platform domain to scrape. E.g. 'amazon.com', 'reddit.com', 'tiktok.com', 'linkedin.com', 'google.com'."),
   operation: z.string().min(1)
-    .describe("Scraping operation ID. Examples: 'amazon_product_keywords', 'amazon_product_asin', 'reddit_posts_by-keywords', 'tiktok_user_videos', 'linkedin_company_information_url', 'github_repository_details', 'glassdoor_jobs_by-keywords', 'zillow_listings'. Read novada://scraper-platforms resource for the complete list with required params."),
+    .describe("Scraping operation ID. Examples: 'amazon_product_keywords', 'amazon_product_asin', 'tiktok_posts_url', 'linkedin_company_information_url', 'github_repository_repo-url', 'twitter_profile_username', 'youtube_video_search_label'. Read novada://scraper-platforms resource for the complete list with required params."),
   params: z.record(z.string(), z.unknown()).default({})
     .describe("Operation-specific parameters. E.g. { keyword: 'iphone 16', num: 5 } for keyword search, { url: 'https://...' } for URL-based ops, { asin: 'B09...' } for ASIN lookup."),
   limit: z.number().int().min(1).max(100).default(20)

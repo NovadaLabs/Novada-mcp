@@ -26,7 +26,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** Submit a scraper task and return the task_id */
-async function submitScrapeTask(
+export async function submitScrapeTask(
   apiKey: string,
   scraper_name: string,
   scraper_id: string,
