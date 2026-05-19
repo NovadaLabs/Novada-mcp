@@ -1,6 +1,10 @@
 import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, lookupDomain, extractFields, isPdfResponse, extractPdf } from "../utils/index.js";
 import type { FieldResult } from "../utils/index.js";
+import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import type { ExtractParams } from "./types.js";
+import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+
+export { detectJsHeavyContent } from "../utils/index.js";
 
 export async function novadaExtract(params: ExtractParams, apiKey?: string): Promise<string> {
   // P1-6: Normalize url/urls into a list
@@ -10,10 +14,14 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
       ? params.url
       : [params.url as string];
   if (urlList.length > 10) {
-    throw new Error(`Batch extract accepts at most 10 URLs per call. Received ${urlList.length}. Split into multiple calls.`);
+    throw makeNovadaError(
+      NovadaErrorCode.INVALID_PARAMS,
+      `Batch extract accepts at most 10 URLs per call. Received ${urlList.length}. Split into multiple calls.`,
+      `url_count:${urlList.length} exceeds max:10`
+    );
   }
 
-  const isBatch = urlList.length > 1 || params.urls !== undefined;
+  const isBatch = urlList.length > 1;
 
   // Batch mode: array of URLs (via urls param or url array)
   if (isBatch) {
@@ -104,7 +112,11 @@ async function extractSingle(
       html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
     } else {
       if (typeof response.data !== "string") {
-        throw new Error("Response is not HTML. The URL may return JSON or binary data.");
+        throw makeNovadaError(
+          NovadaErrorCode.INVALID_PARAMS,
+          "Response is not HTML. The URL may return JSON or binary data.",
+          `url:${params.url} returned non-string content-type`
+        );
       }
       html = response.data;
     }
@@ -121,7 +133,11 @@ async function extractSingle(
       html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
     } else {
       if (typeof response.data !== "string") {
-        throw new Error("Response is not HTML. The URL may return JSON or binary data.");
+        throw makeNovadaError(
+          NovadaErrorCode.INVALID_PARAMS,
+          "Response is not HTML. The URL may return JSON or binary data.",
+          `url:${params.url} returned non-string content-type`
+        );
       }
       html = response.data;
     }
@@ -180,9 +196,9 @@ async function extractSingle(
     html = html.replace(/^pdf_pages:\d+\n(?:title: [^\n]+\n)?/, "");
   }
 
-  const title = pdfPages !== null ? (pdfTitle ?? params.url) : extractTitle(html);
-  const description = extractDescription(html);
-  const stillJsHeavy = renderMode === "auto" && (usedMode === "static" || usedMode === "render-failed") && detectJsHeavyContent(html);
+  let title = pdfPages !== null ? (pdfTitle ?? params.url) : extractTitle(html);
+  let description = extractDescription(html);
+  let stillJsHeavy = renderMode === "auto" && (usedMode === "static" || usedMode === "render-failed") && detectJsHeavyContent(html);
 
   if (params.format === "html") {
     if (html.length <= 10000) return html;
@@ -193,18 +209,18 @@ async function extractSingle(
   }
 
   // For PDF content, use the text directly (no HTML parsing needed)
-  const mainContent = pdfPages !== null
+  let mainContent = pdfPages !== null
     ? html.slice(0, 25000)
     : extractMainContent(html, params.url);
 
-  const allLinks = pdfPages !== null ? [] : extractLinks(html, params.url);
+  let allLinks = pdfPages !== null ? [] : extractLinks(html, params.url);
   let baseDomain: string;
   try {
     baseDomain = new URL(params.url).hostname.replace(/^www\./, "");
   } catch {
     baseDomain = "";
   }
-  const sameDomainLinks = allLinks
+  let sameDomainLinks = allLinks
     .filter(link => {
       try {
         return new URL(link).hostname.replace(/^www\./, "") === baseDomain;
@@ -234,13 +250,47 @@ async function extractSingle(
   }
 
   // Quality scoring (skip structured data extraction for PDFs — no HTML schema)
-  const structuredData = pdfPages !== null ? null : extractStructuredData(html);
-  const hasStructuredData = structuredData !== null;
-  const quality = scoreExtraction(html, mainContent, usedMode, hasStructuredData);
+  let structuredData = pdfPages !== null ? null : extractStructuredData(html);
+  let hasStructuredData = structuredData !== null;
+  let quality = scoreExtraction(html, mainContent, usedMode, hasStructuredData);
 
   // P0-1: Quality floor — never return quality:0 for non-empty content
   if (mainContent && mainContent.length > 0 && quality.score === 0) {
     quality.score = 1;
+  }
+
+  // BUG-E1: Auto-escalation — retry with render when static quality is too low
+  let autoEscalated = false;
+  if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !html.startsWith("pdf_pages:")) {
+    try {
+      const renderResponse = await fetchWithRender(params.url, apiKey);
+      if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
+        const renderHtml = renderResponse.data;
+        const renderMain = extractMainContent(renderHtml, params.url);
+        const renderSD = extractStructuredData(renderHtml);
+        const renderQuality = scoreExtraction(renderHtml, renderMain, "render", renderSD !== null);
+        if (renderQuality.score > quality.score) {
+          html = renderHtml;
+          usedMode = "render";
+          mainContent = renderMain;
+          allLinks = extractLinks(renderHtml, params.url);
+          sameDomainLinks = allLinks
+            .filter(link => {
+              try { return new URL(link).hostname.replace(/^www\./, "") === baseDomain; }
+              catch { return false; }
+            })
+            .slice(0, 15);
+          structuredData = renderSD;
+          hasStructuredData = renderSD !== null;
+          quality = renderQuality;
+          if (quality.score === 0 && mainContent.length > 0) quality.score = 1;
+          title = extractTitle(renderHtml);
+          description = extractDescription(renderHtml);
+          stillJsHeavy = false;
+          autoEscalated = true;
+        }
+      }
+    } catch { /* keep static result */ }
   }
 
   // max_chars truncation for markdown format
@@ -269,12 +319,30 @@ async function extractSingle(
 
   const contentOk = mainContent.length > 100 && usedMode !== "render-failed" && !stillJsHeavy && quality.score >= 40;
 
+  // Compute extraction_quality label
+  let extractionQuality: "high" | "partial" | "low" | "none" | "n/a" = "n/a";
+  if (fieldResults && fieldResults.length > 0) {
+    const matched = fieldResults.filter(r => r.source !== "not_found").length;
+    const total = fieldResults.length;
+    if (matched === total) {
+      extractionQuality = "high";
+    } else if (matched === 0) {
+      extractionQuality = "none";
+    } else if (matched === 1) {
+      extractionQuality = "low";
+    } else {
+      extractionQuality = "partial";
+    }
+  }
+
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
+    `mode: ${usedMode}`,
+    `extraction_quality: ${extractionQuality}`,
     `title: ${title}`,
     ...(description ? [`description: ${description}`] : []),
-    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score} | content_ok:${contentOk}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
+    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score} | content_ok:${contentOk}${autoEscalated ? " | auto_escalated:true" : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
     ``,
     `---`,
     ``,
@@ -284,7 +352,7 @@ async function extractSingle(
   if (fieldResults && fieldResults.length > 0) {
     lines.push(`## Requested Fields`);
     for (const r of fieldResults) {
-      const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : " *(pattern)*";
+      const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : r.source === "heading" ? " *(from heading)*" : " *(pattern)*";
       if (r.source === "not_found") {
         lines.push(`${r.field}: —`);
       } else {
@@ -317,7 +385,32 @@ async function extractSingle(
     }
   }
 
+  // Extraction Diagnostics — emit only when fields were requested and at least one is null
+  let hasNoHeadingMatchField = false;
+  if (fieldResults && fieldResults.some(r => r.source === "not_found")) {
+    lines.push(``, `---`, `## Extraction Diagnostics`);
+    for (const r of fieldResults) {
+      if (r.source !== "not_found") {
+        const method = r.source === "heading" ? "heading-match" : r.source === "structured_data" ? "meta-tag" : "pattern-match";
+        lines.push(`- ${r.field}: matched ✓ (via ${method})`);
+      } else {
+        const headingResult = matchHeadingSectionWithReason(displayContent, r.field);
+        const reasonText = headingResult.reason === "section_empty"
+          ? "heading found but content was empty/fenced"
+          : `no "## ${r.field}" heading found in page`;
+        if (headingResult.reason === "no_heading_match") hasNoHeadingMatchField = true;
+        lines.push(`- ${r.field}: null — reason: ${headingResult.reason} (${reasonText})`);
+      }
+    }
+  }
+
   lines.push(``, `---`, `## Agent Hints`);
+  if (autoEscalated) {
+    lines.push(`- Auto-escalated to render mode (static quality score was < 40). Content above was fetched with JS rendering enabled.`);
+  }
+  if (hasNoHeadingMatchField) {
+    lines.push(`- Some fields were not found via heading-match. For list or aggregated pages (bestseller lists, search results, news feeds), data is embedded as inline list items — parse the body markdown directly. Field extraction works best on single-entity pages (product detail pages, GitHub repos, articles).`);
+  }
   if (pdfPages !== null) {
     lines.push(`- PDF extracted automatically: ${pdfPages} page(s). pdf_pages:${pdfPages} in metadata above.`);
     lines.push(`- PDF URLs are extracted automatically — use novada_extract the same way as HTML.`);
@@ -339,7 +432,7 @@ async function extractSingle(
         lines.push(`- Also verify NOVADA_WEB_UNBLOCKER_KEY is set correctly.`);
         lines.push(`- Note: Browser API costs ~$3/GB — use sparingly.`);
       }
-    } else {
+    } else if (usedMode === "static") {
       lines.push(`- [WARNING] Page appears JavaScript-rendered. Content above may be incomplete.`);
       lines.push(`- Retry with render="render" to use Novada Web Unblocker (JS rendering).`);
       if (!isBrowserConfigured()) {

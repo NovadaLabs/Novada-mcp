@@ -7,6 +7,8 @@ import { getBrowserWs } from "./credentials.js";
 
 interface SessionEntry {
   page: Page;
+  browser?: import("playwright-core").Browser;
+  context?: import("playwright-core").BrowserContext;
   createdAt: number;
   lastUsed: number;
 }
@@ -27,25 +29,34 @@ export function getSession(sessionId: string): Page | null {
   const now = Date.now();
   if (now - entry.lastUsed > SESSION_TTL_MS) {
     // TTL expired — clean up
-    entry.page.close().catch(() => {});
     activeSessions.delete(sessionId);
+    entry.page.close().catch(() => {});
+    if (entry.context) entry.context.close().catch(() => {});
+    if (entry.browser) entry.browser.close().catch(() => {});
     return null;
   }
   entry.lastUsed = now;
   return entry.page;
 }
 
-/** Store a page under a session ID */
-export function storeSession(sessionId: string, page: Page): void {
-  activeSessions.set(sessionId, { page, createdAt: Date.now(), lastUsed: Date.now() });
+/** Store a page (and optionally its browser + context) under a session ID */
+export function storeSession(
+  sessionId: string,
+  page: Page,
+  browser?: import("playwright-core").Browser,
+  context?: import("playwright-core").BrowserContext
+): void {
+  activeSessions.set(sessionId, { page, browser, context, createdAt: Date.now(), lastUsed: Date.now() });
 }
 
-/** Close and remove a session */
+/** Close and remove a session, tearing down page, context, and browser */
 export async function closeSession(sessionId: string): Promise<boolean> {
   const entry = activeSessions.get(sessionId);
   if (!entry) return false;
-  await entry.page.close().catch(() => {});
   activeSessions.delete(sessionId);
+  await entry.page.close().catch(() => {});
+  if (entry.context) await entry.context.close().catch(() => {});
+  if (entry.browser) await entry.browser.close().catch(() => {});
   return true;
 }
 
@@ -57,8 +68,10 @@ export function listSessions(): string[] {
     if (now - entry.lastUsed <= SESSION_TTL_MS) {
       active.push(id);
     } else {
-      entry.page.close().catch(() => {});
       activeSessions.delete(id);
+      entry.page.close().catch(() => {});
+      if (entry.context) entry.context.close().catch(() => {});
+      if (entry.browser) entry.browser.close().catch(() => {});
     }
   }
   return active;
@@ -127,7 +140,7 @@ export async function fetchViaBrowser(
 
     // Store in session map if session ID provided
     if (options.sessionId) {
-      storeSession(options.sessionId, page);
+      storeSession(options.sessionId, page, browser, context);
     }
 
     await page.goto(url, {

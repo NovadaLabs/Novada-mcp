@@ -3,15 +3,24 @@ import { getProxyCredentials } from "../utils/credentials.js";
 
 /**
  * Build Novada proxy username with targeting options.
- * Novada format: baseUser-country-us-city-london-session-abc123
+ * Novada format: baseUser-zone-res-country-us-city-london-session-abc123
  */
+const ZONE_MAP: Record<string, string> = {
+  residential: "zone-res",
+  isp: "zone-isp",
+  mobile: "zone-mobile",
+  datacenter: "zone-datacenter",
+  static: "zone-static",
+  dedicated: "zone-dedicated",
+};
+
 function buildProxyUsername(user: string, params: ProxyParams): string {
   const parts: string[] = [user];
-
+  const zone = ZONE_MAP[params.type];
+  if (zone) parts.push(zone);
   if (params.country) parts.push(`country-${params.country.toLowerCase()}`);
   if (params.city) parts.push(`city-${params.city.toLowerCase().replace(/\s+/g, "")}`);
   if (params.session_id) parts.push(`session-${params.session_id}`);
-
   return parts.join("-");
 }
 
@@ -63,11 +72,11 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
 
   const username = buildProxyUsername(proxyUser, params);
   const encodedUser = encodeURIComponent(username);
-  const encodedPass = encodeURIComponent(proxyPass);
-  const proxyUrl = `http://${encodedUser}:${encodedPass}@${proxyEndpoint}`;
   const typeLabel = TYPE_LABELS[params.type] ?? params.type;
 
   const maskedUrl = `http://${encodedUser}:***@${proxyEndpoint}`;
+  // Shell-safe URL: uses ${NOVADA_PROXY_PASS} literal so credentials are never in tool output
+  const proxyUrlShell = `http://${encodedUser}:\${NOVADA_PROXY_PASS}@${proxyEndpoint}`;
   const endpointParts = proxyEndpoint.split(":");
   const proxyHost = endpointParts[0];
   const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
@@ -80,11 +89,11 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
       params.session_id ? `session: ${params.session_id} (sticky IP)` : "",
       `proxy_url: ${maskedUrl}`,
       ``,
-      `# Copy these lines to your shell (contains credentials):`,
-      `export HTTP_PROXY="${proxyUrl}"`,
-      `export HTTPS_PROXY="${proxyUrl}"`,
-      `export http_proxy="${proxyUrl}"`,
-      `export https_proxy="${proxyUrl}"`,
+      `# Set NOVADA_PROXY_PASS in your environment first, then copy these lines:`,
+      `export HTTP_PROXY="${proxyUrlShell}"`,
+      `export HTTPS_PROXY="${proxyUrlShell}"`,
+      `export http_proxy="${proxyUrlShell}"`,
+      `export https_proxy="${proxyUrlShell}"`,
       ``,
       `## Agent Hints`,
       `- Set these env vars before running HTTP requests to route through the proxy.`,
@@ -98,8 +107,8 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
       `type: ${typeLabel}`,
       `proxy_url: ${maskedUrl}`,
       ``,
-      `# Full command (contains credentials):`,
-      `curl --proxy "${proxyUrl}" <your-url>`,
+      `# Set NOVADA_PROXY_PASS in your environment first:`,
+      `curl --proxy "${proxyUrlShell}" <your-url>`,
       ``,
       `## Agent Hints`,
       `- Add this flag to any curl command to route through the proxy.`,

@@ -1,6 +1,7 @@
 import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractLinks, normalizeUrl, isContentLink, detectJsHeavyContent } from "../utils/index.js";
 import type { CrawlParams } from "./types.js";
 import { TIMEOUTS } from "../config.js";
+import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 const CRAWL_CONCURRENCY = 3;
 
@@ -28,12 +29,25 @@ async function fetchPage(
   }
 }
 
-/** Compile path filter regexes, ignore invalid patterns */
+/** Compile path filter regexes, ignore invalid or dangerous patterns.
+ * Rejects patterns with nested quantifiers that cause catastrophic backtracking (ReDoS). */
 function compilePatterns(patterns: string[] | undefined): RegExp[] {
   if (!patterns?.length) return [];
   return patterns.flatMap(p => {
-    try { return [new RegExp(p)]; }
-    catch { return []; }
+    // Length guard
+    if (p.length > 200) return [];
+    // Static guard: reject obvious nested quantifier forms e.g. (a+)+ or ([a-z]*)*
+    if (/\([^)]*[+*][^)]*\)[+*?{]/.test(p)) return [];
+    try {
+      const re = new RegExp(p);
+      // Runtime probe: test against a pathological input to catch remaining ReDoS patterns.
+      // A legitimate path pattern (<200 chars) should match in <5ms against a 50-char string.
+      const probe = "/api/" + "a".repeat(45) + "!";
+      const start = Date.now();
+      re.test(probe);
+      if (Date.now() - start > 50) return []; // >50ms = catastrophic backtracking
+      return [re];
+    } catch { return []; }
   });
 }
 
@@ -61,8 +75,20 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   const visited = new Set<string>();
   const queue: { url: string; depth: number }[] = [{ url: params.url, depth: 0 }];
   const results: CrawlResult[] = [];
-  const baseHostname = new URL(params.url).hostname.replace(/^www\./, "");
+
+  let baseHostname: string;
+  try {
+    baseHostname = new URL(params.url).hostname.replace(/^www\./, "");
+  } catch {
+    throw makeNovadaError(
+      NovadaErrorCode.INVALID_PARAMS,
+      `Invalid URL: "${params.url}". URL must start with http:// or https://.`,
+      `url:${params.url} failed URL parsing`
+    );
+  }
+
   let failedCount = 0;
+  let seedExcluded = false;
 
   const selectPatterns = compilePatterns(params.select_paths);
   const excludePatterns = compilePatterns(params.exclude_paths);
@@ -74,6 +100,11 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
       const normalizedUrl = normalizeUrl(item.url);
       if (visited.has(normalizedUrl)) continue;
       visited.add(normalizedUrl);
+      // Apply path filters to every URL, including the seed
+      if (!shouldCrawlUrl(item.url, selectPatterns, excludePatterns)) {
+        if (item.depth === 0) seedExcluded = true;
+        continue;
+      }
       batch.push(item);
     }
 
@@ -128,14 +159,18 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   }
 
   if (results.length === 0) {
-    return `Failed to crawl ${params.url}. The site may be unreachable or blocking automated access.`;
+    throw makeNovadaError(
+      NovadaErrorCode.URL_UNREACHABLE,
+      `Failed to crawl ${params.url}. The site may be unreachable or blocking automated access.`
+    );
   }
 
   const totalWords = results.reduce((sum, r) => sum + r.wordCount, 0);
   const stoppedEarly = results.length < maxPages;
+  const exhaustedLinks = stoppedEarly && queue.length === 0;
   const stopReason = stoppedEarly
-    ? queue.length === 0
-      ? "No more same-domain links to follow."
+    ? exhaustedLinks
+      ? "No more same-domain links to follow. Site may be a JavaScript SPA (React/Vue/Angular) or Swagger/Redoc API docs — these generate routes dynamically and static link extraction misses most pages."
       : "Remaining links were filtered by path rules or already visited."
     : "";
 
@@ -147,6 +182,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
     `## Crawl Results`,
     `root: ${params.url}`,
     `pages:${results.length} | strategy:${strategy} | total_words:${totalWords} | failed:${failedCount}${instructionsNote}`,
+    seedExcluded ? `Note: seed URL excluded by select_paths filter` : "",
     stoppedEarly && stopReason ? `note: Stopped early — ${stopReason}` : "",
     ``,
     `---`,
@@ -166,6 +202,10 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
   lines.push(`## Agent Hints`);
   lines.push(`- ${results.length} pages crawled. For targeted extraction, use novada_map first then novada_extract on chosen pages.`);
+  if (exhaustedLinks) {
+    lines.push(`- Crawl exhausted all static links before reaching max_pages. The site may be a JavaScript SPA (React/Vue/Next.js) that renders links dynamically.`);
+    lines.push(`- Recovery: use novada_crawl with render="render" for JS-rendered sites, or novada_map to discover URLs first.`);
+  }
   if (selectPatterns.length > 0 || excludePatterns.length > 0) {
     lines.push(`- Path filters were active. Remove them to crawl the full site.`);
   }

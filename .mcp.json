@@ -1,10 +1,15 @@
 {
   "mcpServers": {
     "novada-search": {
-      "command": "npx",
-      "args": ["-y", "novada-search@latest"],
+      "command": "node",
+      "args": ["/Users/tongwu/Projects/novada-mcp/build/index.js"],
       "env": {
-        "NOVADA_API_KEY": ""
+        "NOVADA_API_KEY": "1f35b477c9e1802778ec64aee2a6adfa",
+        "NOVADA_PROXY_USER": "tongwu_TRDI7X",
+        "NOVADA_PROXY_PASS": "_Asd1644asd_",
+        "NOVADA_PROXY_ENDPOINT": "1b9b0a2b9011e022.vtv.na.novada.pro:7777",
+        "NOVADA_WEB_UNBLOCKER_KEY": "b27ad6e6834dd36407b00f4e502e055e",
+        "NOVADA_BROWSER_WS": "wss://novada529MUW_2Q8WuZ-zone-browser:Dz0vkMW4Wkil@upg-scbr2.novada.com"
       }
     }
   }

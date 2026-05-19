@@ -3,6 +3,7 @@ import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
 import { SCRAPERAPI_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
+import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 const SERP_UNAVAILABLE = `## Search Unavailable
 
@@ -83,7 +84,29 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   }
 
   if (data.code && data.code !== 200 && data.code !== 0) {
-    throw new Error(`Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`);
+    // Map known Novada error codes to structured NovadaErrors with agent_instruction
+    if (data.code === 401 || data.code === 403) {
+      throw makeNovadaError(
+        NovadaErrorCode.INVALID_API_KEY,
+        `Novada API authentication failed (code ${data.code}): ${data.msg || "Invalid or missing API key"}`
+      );
+    }
+    if (data.code === 429) {
+      throw makeNovadaError(
+        NovadaErrorCode.RATE_LIMITED,
+        `Novada API rate limit exceeded (code ${data.code}): ${data.msg || "Too many requests"}`
+      );
+    }
+    if (data.code === 503 || data.code === 502 || data.code === 500) {
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
+        `Novada API is temporarily unavailable (code ${data.code}): ${data.msg || "Server error"}`
+      );
+    }
+    throw makeNovadaError(
+      NovadaErrorCode.API_DOWN,
+      `Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`
+    );
   }
 
   const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];

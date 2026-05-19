@@ -1,6 +1,7 @@
 import { fetchViaProxy, extractLinks, normalizeUrl, isContentLink } from "../utils/index.js";
 import type { MapParams } from "./types.js";
 import { TIMEOUTS } from "../config.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 /**
  * Map a website to discover all URLs on the site.
@@ -10,9 +11,63 @@ import { TIMEOUTS } from "../config.js";
  */
 export async function novadaMap(params: MapParams, apiKey?: string): Promise<string> {
   const maxUrls = Math.min(params.limit || 50, 100);
-  const baseHostname = new URL(params.url).hostname.replace(/^www\./, "");
-  const origin = new URL(params.url).origin;
 
+  let baseHostname: string;
+  let origin: string;
+  try {
+    const parsed = new URL(params.url);
+    baseHostname = parsed.hostname.replace(/^www\./, "");
+    origin = parsed.origin;
+  } catch {
+    throw makeNovadaError(
+      NovadaErrorCode.INVALID_PARAMS,
+      `Invalid URL: "${params.url}". URL must start with http:// or https://.`,
+      `url:${params.url} failed URL parsing`
+    );
+  }
+
+  try {
+    return await novadaMapInner(params, apiKey, maxUrls, baseHostname, origin);
+  } catch (err) {
+    // SPA_NO_URLS_FOUND is surfaced as a friendly agent message (not an error block)
+    // so the tool always returns a successful string response.
+    if (err instanceof NovadaError && err.code === NovadaErrorCode.SPA_NO_URLS_FOUND) {
+      const hostname = new URL(params.url).hostname;
+      const lines = [
+        `## Site Map`,
+        `root: ${params.url}`,
+        `urls:0`,
+        ``,
+        `---`,
+        ``,
+        `⚠ ${err.message}`,
+        `Static crawling cannot discover JavaScript SPA links.`,
+        ``,
+        `## Agent Hints`,
+        `- Try \`novada_extract\` on ${params.url} to get the page content directly.`,
+        `- Use \`novada_crawl\` with render="render" to crawl JS-rendered pages.`,
+        `- Use \`novada_unblock\` with method="render" to fetch rendered HTML directly.`,
+        `- Use \`novada_search\` with \`site:${hostname}\` to find indexed subpages.`,
+        ``,
+        `## Agent Notice — Under-delivery`,
+        `requested: ${maxUrls} | returned: 0 | shortfall: ${maxUrls}`,
+        `reason: Site is a JavaScript SPA — static crawling found no discoverable URLs.`,
+        `next_steps: Use novada_crawl with render="render" to crawl JS-rendered pages.`,
+      ];
+      return lines.join("\n");
+    }
+    throw err;
+  }
+}
+
+/** Inner implementation — throws SPA_NO_URLS_FOUND on SPA detection. */
+async function novadaMapInner(
+  params: MapParams,
+  apiKey: string | undefined,
+  maxUrls: number,
+  baseHostname: string,
+  origin: string,
+): Promise<string> {
   // --- Phase 1: Try sitemap discovery ---
   const sitemapUrls = await discoverViaSitemap(origin, apiKey, maxUrls);
 
@@ -31,6 +86,18 @@ export async function novadaMap(params: MapParams, apiKey?: string): Promise<str
     discovered = await parallelBfsCrawl(params, apiKey, maxUrls, baseHostname);
   }
 
+  // SPA detection — check BEFORE search filter (search should not hide SPA failures)
+  const isSpaLikely = discovered.length <= 1 &&
+    (discovered.length === 0 || discovered[0] === normalizeUrl(params.url));
+  if (isSpaLikely) {
+    // Throw a machine-readable SPA_NO_URLS_FOUND error; catch block below formats
+    // it as a friendly agent message so the tool always returns a string (not an error block).
+    throw makeNovadaError(
+      NovadaErrorCode.SPA_NO_URLS_FOUND,
+      `Only ${discovered.length === 0 ? "0 URLs" : "the root URL"} found on ${params.url} — likely a JavaScript SPA.`,
+    );
+  }
+
   // Filter by search term if provided
   let filtered = discovered;
   if (params.search) {
@@ -38,30 +105,21 @@ export async function novadaMap(params: MapParams, apiKey?: string): Promise<str
     filtered = discovered.filter(u => u.toLowerCase().includes(searchLower));
   }
 
-  // SPA detection
-  if (filtered.length <= 1 && !params.search) {
-    const isSpaLikely = filtered.length === 0 || (filtered.length === 1 && filtered[0] === normalizeUrl(params.url));
-    if (isSpaLikely) {
-      return [
-        `## Site Map`,
-        `root: ${params.url}`,
-        `urls:${filtered.length}`,
-        ``,
-        `---`,
-        ``,
-        `⚠ Only ${filtered.length === 0 ? "0 URLs" : "the root URL"} found. This site is likely a JavaScript SPA.`,
-        `Static crawling cannot discover JS-rendered links.`,
-        ``,
-        `## Agent Hints`,
-        `- Try \`novada_extract\` on ${params.url} to get the page content directly.`,
-        `- If content is dynamically loaded, the extract may also be limited.`,
-        `- Use \`novada_search\` with \`site:${new URL(params.url).hostname}\` to find indexed subpages.`,
-      ].join("\n");
-    }
-  }
-
   if (filtered.length === 0) {
-    return `No URLs found on ${params.url}${params.search ? ` matching "${params.search}"` : ""}.`;
+    return [
+      `## Site Map`,
+      `root: ${params.url}`,
+      `urls:0`,
+      ``,
+      `---`,
+      ``,
+      `No URLs found matching "${params.search ?? ""}" on ${params.url}.`,
+      ``,
+      `## Agent Hints`,
+      `- Remove the 'search' filter to see all ${discovered.length} discovered URLs.`,
+      `- Try a broader search term or check the URL spelling.`,
+      `- Use \`novada_search\` with \`site:${new URL(params.url).hostname} ${params.search ?? ""}\` to find indexed pages.`,
+    ].join("\n");
   }
 
   const discoveryMethod = sitemapUrls.length > 0 ? "sitemap" : "crawl";
@@ -85,6 +143,13 @@ export async function novadaMap(params: MapParams, apiKey?: string): Promise<str
 
   if (params.search) {
     lines.push(`- Remove 'search' param to see all ${discovered.length} discovered URLs.`);
+  }
+
+  if (filtered.length < maxUrls) {
+    lines.push(``, `## Agent Notice — Under-delivery`);
+    lines.push(`requested: ${maxUrls} | returned: ${filtered.length} | shortfall: ${maxUrls - filtered.length}`);
+    lines.push(`reason: Site has fewer crawlable links${params.search ? ` matching "${params.search}"` : ""} than requested.`);
+    lines.push(`next_steps: ${params.search ? `Remove 'search' filter to see all ${discovered.length} URLs, or t` : "T"}ry max_depth=3 or increase limit.`);
   }
 
   return lines.join("\n");

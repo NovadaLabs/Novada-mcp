@@ -92,73 +92,134 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     }
   }
 
+  const topic = params.question ?? "";
+  const queryValue = params.query ?? params.question ?? "";
+  const depthValue = resolvedDepth;
+
   // All searches failed — SERP endpoint is unavailable for this account
   if (failedCount === queries.length) {
-    return [
-      `## Research: Search Unavailable`,
-      `question: "${params.question}"`,
-      ``,
-      `The Novada SERP endpoint is not available for this API key. All ${queries.length} search queries failed.`,
-      ``,
-      `**To research this question manually:**`,
-      `1. Use \`novada_extract\` with specific URLs you already know`,
-      `2. Use \`novada_map\` on a relevant site, then \`novada_extract\` on discovered pages`,
-      `3. Contact support@novada.com to enable SERP access for your account`,
-      ``,
-      `**Suggested starting URLs for "${(params.question ?? "").slice(0, 60)}":**`,
-      `- \`novada_extract\` with a Wikipedia, official docs, or news URL on this topic`,
-      `- \`novada_map\` on a domain you know covers this topic`,
-    ].join("\n");
+    return formatResearchOutput({
+      topic,
+      query: queryValue,
+      depth: depthValue,
+      sourcesFetchedCount: 0,
+      summaryText: "",
+      findingBullets: [],
+      sourceLines: [],
+      agentHints: [
+        `- Use \`novada_extract\` with specific URLs you already know to research this topic.`,
+        `- Use \`novada_map\` on a relevant site, then \`novada_extract\` on discovered pages.`,
+        `- Contact support@novada.com to enable SERP access for your account (all ${queries.length} search queries failed).`,
+      ],
+    });
   }
 
-  const depthLabel = params.depth === "auto"
-    ? `${resolvedDepth} (auto-selected)`
-    : resolvedDepth;
+  // Build synthesis summary from extracted contents or snippet snippets
+  let summaryText: string;
+  if (extractedContents.length > 0) {
+    // Use the first extracted source's opening content as summary basis
+    const firstContent = extractedContents[0].content;
+    // Take up to first 4 sentences / 600 chars as summary
+    const trimmed = firstContent.replace(/^#+.*$/gm, "").replace(/\n{2,}/g, " ").trim();
+    const sentences = trimmed.match(/[^.!?]+[.!?]+/g) ?? [];
+    summaryText = sentences.slice(0, 4).join(" ").trim() || trimmed.slice(0, 600).trim();
+    if (!summaryText) summaryText = "Synthesis unavailable — see raw findings below.";
+  } else if (sources.length > 0) {
+    // Derive a brief summary from top-3 snippets
+    const snippets = sources.slice(0, 3).map(s => s.snippet).filter(Boolean);
+    summaryText = snippets.join(" ").slice(0, 600).trim() || "Synthesis unavailable — see raw findings below.";
+  } else {
+    summaryText = "Synthesis unavailable — see raw findings below.";
+  }
 
-  const lines: string[] = [
-    `## Research Report`,
-    `question: "${params.question}"`,
-    `depth:${depthLabel} | searches:${queries.length}${failedCount > 0 ? ` (${failedCount} failed)` : ""} | unique_sources:${sources.length} | extracted:${extractedContents.length}`,
-    params.focus ? `focus: ${params.focus}` : "",
-    ``,
-    `---`,
-    ``,
-    `## Search Queries Used`,
-    ``,
-    ...queries.map((q, i) => `${i + 1}. ${q}`),
-    ``,
-    `## Key Findings`,
-    ``,
-    ...sources.map((s, i) =>
-      `${i + 1}. **${s.title}**\n   ${s.url}\n   ${s.snippet}\n`
-    ),
-    // Key Sources (Extracted) section
-    ...(extractedContents.length > 0 ? [
-      ``,
-      `## Key Sources (Extracted)`,
-      ``,
-      ...extractedContents.flatMap((s, i) => [
-        `### [${i + 1}] ${s.title}`,
-        `url: ${s.url}`,
-        ``,
-        s.content,
-        ``,
-        `---`,
-        ``,
-      ]),
-    ] : []),
-    `## Sources`,
-    ``,
-    ...sources.map((s, i) => `${i + 1}. [${s.title}](${s.url})`),
-    ``,
-    `---`,
-    `## Agent Hints`,
-    `- ${extractedContents.length > 0 ? `${extractedContents.length} sources extracted in full above.` : "No sources extracted."} For more: use novada_extract with url=[url1, url2, ...].`,
+  // Build Key Findings bullets from sources with snippets
+  const findingBullets: string[] = sources.length > 0
+    ? sources.map(s => `- **${s.title}** (${s.url})${s.snippet ? ` — ${s.snippet}` : ""}`)
+    : [`- No structured findings extracted.`];
+
+  // Build Sources list from successfully fetched sources
+  const sourceLines: string[] = extractedContents.length > 0
+    ? extractedContents.map(s => `- ${s.url} — ${sourceLabel(s.title, s.url)}`)
+    : [`- No sources fetched.`];
+
+  // Agent hints
+  const agentHints: string[] = [
+    `- Use \`novada_extract\` with specific source URLs to get full content: ${sources.slice(0, 3).map(s => s.url).join(", ") || "none available"}.`,
     `- For narrower research: add \`focus\` param to guide sub-query generation.`,
     `- For more coverage: use depth='comprehensive' (8-10 searches).`,
-  ].filter(l => l !== "");
+  ];
+  if (failedCount > 0) {
+    agentHints.push(`- ${failedCount} of ${queries.length} search queries failed; results may be incomplete.`);
+  }
+
+  return formatResearchOutput({
+    topic,
+    query: queryValue,
+    depth: depthValue,
+    sourcesFetchedCount: extractedContents.length,
+    summaryText,
+    findingBullets,
+    sourceLines,
+    agentHints,
+  });
+}
+
+function formatResearchOutput(args: {
+  topic: string;
+  query: string;
+  depth: string;
+  sourcesFetchedCount: number;
+  summaryText: string;
+  findingBullets: string[];
+  sourceLines: string[];
+  agentHints: string[];
+}): string {
+  const fallbackSummary = "Synthesis unavailable — see raw findings below.";
+  const timestamp = new Date().toISOString();
+  const summaryText = args.summaryText.trim();
+  const hasSynthesis = summaryText.length > 0 && summaryText !== fallbackSummary;
+  const synthesisStatus = hasSynthesis ? "ok" : "failed";
+  const summary = hasSynthesis ? summaryText : fallbackSummary;
+  const findingBullets = args.findingBullets.length > 0 ? args.findingBullets : [`- No structured findings extracted.`];
+  const sourceLines = args.sourceLines.length > 0 ? args.sourceLines : [`- No sources fetched.`];
+  const agentHints = args.agentHints.length > 0 ? args.agentHints : [`- Try a narrower query or provide known source URLs to inspect directly.`];
+
+  const lines: string[] = [
+    `## Research: ${args.topic}`,
+    ``,
+    `**Query**: ${args.query}`,
+    `**depth**: ${args.depth}`,
+    `**sources_searched**: ${args.sourcesFetchedCount}`,
+    `**timestamp**: ${timestamp}`,
+    ``,
+    `---`,
+    ``,
+    `## Summary`,
+    summary,
+    ``,
+    `## Key Findings`,
+    ...findingBullets,
+    ``,
+    `## Sources`,
+    ...sourceLines,
+    ``,
+    `## Agent Hints`,
+    ...agentHints,
+    ``,
+    `## Agent Notice — Coverage`,
+    `requested_depth: ${args.depth} | sources_found: ${args.sourcesFetchedCount} | synthesis: ${synthesisStatus}`,
+  ];
 
   return lines.join("\n");
+}
+
+function sourceLabel(title: string, url: string): string {
+  if (title && title !== "Untitled") return title;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return title || url;
+  }
 }
 
 /** Resolve 'auto' and 'comprehensive' depth to the actual search strategy */

@@ -16,6 +16,17 @@ export NOVADA_API_KEY=your_api_key_here
 
 Get your API key at [novada.com](https://www.novada.com).
 
+## Auto-Setup (懒人启动)
+
+Let an AI agent configure everything for you — it opens your Chrome, reads
+your Novada dashboard, extracts credentials, and writes the config.
+
+**Requirements:** Claude Code + Chrome DevTools MCP + Chrome logged into
+[dashboard.novada.com](https://dashboard.novada.com)
+
+See [`prompts/lazy-start/setup-agent.md`](prompts/lazy-start/setup-agent.md)
+for the full agent prompt (English + 中文).
+
 ## Claude Desktop Config
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:

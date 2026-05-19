@@ -1,3 +1,4 @@
+import type { Page } from "playwright-core";
 import type { BrowserParams, BrowserAction } from "./types.js";
 import { getBrowserWs } from "../utils/credentials.js";
 import { getSession, storeSession, closeSession, listSessions } from "../utils/browser.js";
@@ -32,9 +33,15 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
         return "Error: close_session requires a session_id parameter.";
       }
       const closed = await closeSession(sessionId);
-      return closed
-        ? `## Session Closed\nsession_id: ${sessionId}\nstatus: closed`
-        : `## Session Not Found\nsession_id: ${sessionId}\nstatus: not_found`;
+      return [
+        `## Session Closed`,
+        `session_id: ${sessionId}`,
+        `status: ${closed ? "closed" : "not_found"}`,
+        ``,
+        `## Agent Hints`,
+        `- Session resources released. Next call with this session_id will start a fresh cold connection (~8s).`,
+        `- Reuse active sessions across calls to avoid the cold-start cost (~1.5s warm vs ~8s cold).`,
+      ].join("\n");
     }
     if (action.action === "list_sessions") {
       const ids = listSessions();
@@ -43,6 +50,11 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
         `count: ${ids.length}`,
         ``,
         ids.length > 0 ? ids.map(id => `- ${id}`).join("\n") : "No active sessions.",
+        ``,
+        `## Agent Hints`,
+        `- Reuse sessions with session_id to avoid cold-start latency (~8s new session vs ~1.5s warm reuse).`,
+        `- Sessions expire after 10 min of inactivity — use close_session to release early.`,
+        `- Pass session_id across multiple browser calls to maintain login state (cookies, localStorage).`,
       ].join("\n");
     }
   }
@@ -58,7 +70,7 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
       `  claude mcp add novada \\`,
       `    -e NOVADA_API_KEY=your_key \\`,
       `    -e NOVADA_BROWSER_WS=wss://user:pass@upg-scbr2.novada.com \\`,
-      `    -- npx -y novada-search`,
+      `    -- npx -y novada`,
       ``,
       `Get credentials at: https://dashboard.novada.com/overview/browser/`,
     ].join("\n");
@@ -98,14 +110,27 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
           const result = await executeAction(existingPage, action);
           results.push(result);
         } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          // Dead page: evict session so the next call gets a fresh connection
+          const isPageDead = /closed|crashed|detached|Target closed/i.test(errMsg);
+          if (isPageDead && sessionId) {
+            await closeSession(sessionId).catch(() => {});
+            results.push({
+              action: action.action,
+              status: "error",
+              error: `${errMsg} — session "${sessionId}" evicted. Call novada_browser again to start a fresh session.`,
+            });
+            break; // no point continuing on a dead page
+          }
           results.push({
             action: action.action,
             status: "error",
-            error: err instanceof Error ? err.message : String(err),
+            error: errMsg,
           });
         }
       }
     } catch (err) {
+      // Only reaches here if setDefaultTimeout() itself throws (rare)
       results.push({ action: "session_reuse", status: "error", error: err instanceof Error ? err.message : String(err) });
     }
   } else {
@@ -122,7 +147,7 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
 
       // Store page in session if session_id provided
       if (sessionId) {
-        storeSession(sessionId, newPage);
+        storeSession(sessionId, newPage, browser, context);
       }
 
       for (const action of actions) {
@@ -135,11 +160,18 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
           const result = await executeAction(newPage, action);
           results.push(result);
         } catch (err) {
-          results.push({
-            action: action.action,
-            status: "error",
-            error: err instanceof Error ? err.message : String(err),
-          });
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const isPageDead = /closed|crashed|detached|Target closed/i.test(errMsg);
+          if (isPageDead && sessionId) {
+            await closeSession(sessionId).catch(() => {});
+            results.push({
+              action: action.action,
+              status: "error",
+              error: `${errMsg} — session "${sessionId}" evicted. Call novada_browser again to start a fresh session.`,
+            });
+            break;
+          }
+          results.push({ action: action.action, status: "error", error: errMsg });
         }
       }
 
@@ -181,26 +213,28 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
 
   lines.push(`---`, `## Agent Hints`);
   if (sessionId) {
-    lines.push(`- Session active: session_id="${sessionId}" — reuse this ID in subsequent calls to maintain state.`);
+    lines.push(`- Session active: session_id="${sessionId}" — reuse this ID in subsequent calls to maintain state (~1.5s warm vs ~8s cold start).`);
     lines.push(`- Sessions expire after 10 minutes of inactivity — use close_session when done.`);
   } else {
-    lines.push(`- Each browser call starts fresh — no cookies or state from prior calls.`);
-    lines.push(`- Use session_id to maintain state (login, cookies) across multiple browser calls.`);
+    lines.push(`- Each browser call starts fresh (~8s cold start) — no cookies or state from prior calls.`);
+    lines.push(`- Use session_id to maintain state (login, cookies) across calls and get ~5x faster warm reuse (~1.5s).`);
   }
   lines.push(`- Chain actions to complete multi-step flows in one call.`);
   lines.push(`- list_sessions shows all currently active session IDs.`);
   lines.push(`- Geo-restrictions: TikTok is banned in India — always pass country="us" for TikTok and other geo-restricted platforms.`);
   lines.push(`- SPA navigation: use wait_until="domcontentloaded" (default) for X/Twitter, TikTok, React apps. Never use "networkidle" for SPAs — they never reach networkidle and will timeout.`);
   if (failed > 0) {
-    lines.push(`- ${failed} action(s) failed. Check selectors and page state.`);
+    lines.push(`- Action failed. Recovery options:`);
+    lines.push(`  1. Use aria_snapshot action to see the current accessibility tree and find correct selectors.`);
+    lines.push(`  2. Use snapshot action to inspect the current HTML structure.`);
+    lines.push(`  3. Use evaluate action with script="document.querySelector('<selector>')" to test if element exists.`);
   }
 
   return lines.join("\n");
 }
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeAction(page: any, action: BrowserAction): Promise<ActionResult> {
+async function executeAction(page: Page, action: BrowserAction): Promise<ActionResult> {
   switch (action.action) {
     case "navigate": {
       await page.goto(action.url, {
@@ -237,8 +271,7 @@ async function executeAction(page: any, action: BrowserAction): Promise<ActionRe
     case "aria_snapshot": {
       // Use Playwright's ariaSnapshot() — returns YAML accessibility tree (v1.46+)
       // Semantic stable refs by role+name, ~70% smaller than raw HTML
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const yaml = await (page as any).ariaSnapshot();
+      const yaml = await page.ariaSnapshot();
       if (!yaml) {
         return { action: "aria_snapshot", status: "ok", data: "(no accessible content found on this page)" };
       }
@@ -252,12 +285,13 @@ async function executeAction(page: any, action: BrowserAction): Promise<ActionRe
     }
 
     case "wait": {
+      const waitMs = action.ms ?? action.timeout ?? 5000;
       if (action.selector) {
-        await page.waitForSelector(action.selector, { timeout: action.timeout ?? 5000 });
+        await page.waitForSelector(action.selector, { timeout: waitMs });
         return { action: "wait", status: "ok", data: `Selector found: ${action.selector}` };
       }
-      await page.waitForTimeout(action.timeout ?? 5000);
-      return { action: "wait", status: "ok", data: `Waited ${action.timeout ?? 5000}ms` };
+      await page.waitForTimeout(waitMs);
+      return { action: "wait", status: "ok", data: `Waited ${waitMs}ms` };
     }
 
     case "scroll": {

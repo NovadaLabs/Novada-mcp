@@ -120,7 +120,7 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   ];
 
   // Sources Mentioning the Claim section
-  lines.push(`## Sources Mentioning the Claim (${supportingEvidence.length} found)`);
+  lines.push(`## Supporting Evidence (${supportingEvidence.length} sources)`);
   lines.push(``);
   if (supportingEvidence.length === 0) {
     lines.push(`_No supporting sources found._`);

@@ -1,9 +1,11 @@
-import { z, ZodError } from "zod";
+import { z } from "zod";
 
 // ─── URL Safety ─────────────────────────────────────────────────────────────
 
-/** Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs */
-const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[::ffff:[^\]]+\]|\[fe80:[^\]]*\]|\[0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,1}1\])$/i;
+/** Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs.
+ * Matches bare IPv6 addresses (no brackets). The safeUrl refine strips brackets
+ * before testing because Node.js new URL("[::1]").hostname returns "[::1]" with brackets. */
+const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|::1|::ffff:.+|fe80:.*|0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0*1)$/i;
 
 const safeUrl = z.string()
   .url("A valid URL is required")
@@ -13,7 +15,15 @@ const safeUrl = z.string()
   )
   .refine(
     (url) => {
-      try { return !BLOCKED_HOSTS.test(new URL(url).hostname); }
+      try {
+        let host = new URL(url).hostname;
+        // Node.js wraps IPv6 in brackets (e.g. "[::1]") — strip before regex test
+        if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
+        // Block decimal IP notation (e.g. http://2130706433/ = http://127.0.0.1/)
+        // and hex notation (e.g. http://0x7f000001/) — legitimate URLs never use these
+        if (/^\d+$/.test(host) || /^0x[0-9a-f]+$/i.test(host)) return false;
+        return !BLOCKED_HOSTS.test(host);
+      }
       catch { return false; }
     },
     "URLs pointing to localhost or private network ranges are not allowed"
@@ -189,33 +199,6 @@ export interface NovadaApiResponse {
   organic_results?: NovadaSearchResult[];
 }
 
-// ─── Structured Error Types ─────────────────────────────────────────────────
-
-export enum NovadaErrorCode {
-  INVALID_API_KEY = "INVALID_API_KEY",
-  RATE_LIMITED = "RATE_LIMITED",
-  URL_UNREACHABLE = "URL_UNREACHABLE",
-  API_DOWN = "API_DOWN",
-  INVALID_PARAMS = "INVALID_PARAMS",
-  UNKNOWN = "UNKNOWN",
-}
-
-export interface NovadaError {
-  code: NovadaErrorCode;
-  message: string;
-  retryable: boolean;
-  docsUrl?: string;
-}
-
-const DOCS_BASE = "https://www.novada.com";
-
-/** Strip API keys and sensitive URL params from any string */
-function sanitizeMessage(msg: string): string {
-  return msg
-    .replace(/api_key=[^&\s"')]+/gi, "api_key=***")
-    .replace(/https?:\/\/scraperapi\.novada\.com[^\s"')]+/gi, "[novada-api-url]");
-}
-
 // ─── Proxy Params ────────────────────────────────────────────────────────────
 
 export const ProxyParamsSchema = z.object({
@@ -223,9 +206,9 @@ export const ProxyParamsSchema = z.object({
     .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost."),
   country: z.string().length(2).optional()
     .describe("ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country."),
-  city: z.string().optional()
+  city: z.string().max(50).regex(/^[a-zA-Z\s\-]+$/, "city must contain only letters, spaces, or hyphens").optional()
     .describe("City name for city-level targeting. Requires country to be set."),
-  session_id: z.string().optional()
+  session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
     .describe("Session ID for sticky routing — same session_id returns same IP across requests."),
   format: z.enum(["url", "env", "curl"]).default("url")
     .describe("Output format. 'url': proxy URL string. 'env': shell export commands. 'curl': curl --proxy flag."),
@@ -253,24 +236,28 @@ const scrapeBase = {
 /** MCP tool schema — agent-optimized formats only */
 export const ScrapeParamsSchema = z.object({
   ...scrapeBase,
-  format: z.enum(["markdown", "json"]).default("markdown")
-    .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': raw records array for programmatic processing."),
+  format: z.enum(["markdown", "json", "toon"]).default("markdown")
+    .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': raw records array for programmatic processing. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
 });
 
 /** CLI/SDK schema — all output formats */
 export const ScrapeParamsFullSchema = z.object({
   ...scrapeBase,
-  format: z.enum(["markdown", "json", "csv", "html", "xlsx"]).default("markdown")
-    .describe("Output format. 'markdown'/'json' for agents/code. 'csv'/'html'/'xlsx' for human download."),
+  format: z.enum(["markdown", "json", "toon", "csv", "html", "xlsx"]).default("markdown")
+    .describe("Output format. 'markdown'/'json'/'toon' for agents/code. 'csv'/'html'/'xlsx' for human download."),
 });
 
-export type ScrapeParams = z.infer<typeof ScrapeParamsFullSchema>;
+/** MCP-restricted type: only markdown/json/toon formats (matches ScrapeParamsSchema) */
+export type ScrapeParams = z.infer<typeof ScrapeParamsSchema>;
+
+/** Full type including CLI/SDK formats: csv/html/xlsx */
+export type ScrapeParamsFullType = z.infer<typeof ScrapeParamsFullSchema>;
 
 export function validateScrapeParams(args: Record<string, unknown> | undefined): ScrapeParams {
   return ScrapeParamsSchema.parse(args ?? {});
 }
 
-export function validateScrapeParamsFull(args: Record<string, unknown> | undefined): ScrapeParams {
+export function validateScrapeParamsFull(args: Record<string, unknown> | undefined): ScrapeParamsFullType {
   return ScrapeParamsFullSchema.parse(args ?? {});
 }
 
@@ -284,8 +271,20 @@ export const UnblockParamsSchema = z.object({
     .describe("ISO 2-letter country code for geo-targeted rendering."),
   wait_for: z.string().optional()
     .describe("CSS selector to wait for before capturing HTML. E.g. '.price', '#product-title'."),
+  wait_ms: z.number().int().min(0).max(100000).optional()
+    .describe("Max time in ms to wait for page to fully load before capture. Use when wait_for selector is unavailable. Max 100000ms."),
+  block_resources: z.boolean().optional()
+    .describe("Block images, CSS, and video loading for faster captures. Reduces bandwidth and latency on image-heavy pages."),
+  auto_runs: z.number().int().min(1).max(10).optional()
+    .describe("Number of retry attempts if the page load fails or returns incomplete content. Default 2, max 10."),
   timeout: z.number().int().min(5000).max(120000).default(30000)
     .describe("Timeout in ms. Default 30000, max 120000."),
+  max_chars: z.number().int().min(1000).max(500000).optional()
+    .describe(
+      "Maximum characters of raw HTML to return (default: 100000, max: 500000). " +
+      "When content exceeds this limit, it is truncated and a notice is appended. " +
+      "Raw HTML is typically much larger than extracted text — increase this if you need the full DOM."
+    ),
 });
 
 export type UnblockParams = z.infer<typeof UnblockParamsSchema>;
@@ -308,11 +307,34 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("screenshot") }),
   z.object({ action: z.literal("snapshot") }),
   z.object({ action: z.literal("aria_snapshot") }),
-  z.object({ action: z.literal("evaluate"), script: z.string().min(1) }),
+  z.object({
+    action: z.literal("evaluate"),
+    script: z.string().min(1).max(2000)
+      // ASCII-only: blocks Unicode homoglyph substitution (e.g. Cyrillic е → "fetch" bypass)
+      .refine(
+        s => /^[\x20-\x7E\n\r\t]*$/.test(s),
+        "evaluate script must contain only ASCII printable characters"
+      )
+      // Block network-access and dynamic-code-execution APIs (literal names)
+      .refine(
+        s => !/fetch|XMLHttpRequest|WebSocket|sendBeacon|EventSource|eval\s*\(|new\s+Function/i.test(s),
+        "evaluate script must not make network requests or execute dynamic code (no fetch, XMLHttpRequest, WebSocket, sendBeacon, EventSource, eval, Function constructor)"
+      )
+      // Block bracket-property access on global objects (string-concat bypass: window["fe"+"tch"])
+      .refine(
+        s => !/\b(window|self|globalThis|frames|parent|top)\s*\[/.test(s),
+        "evaluate script must not use bracket-property access on global objects"
+      )
+      .describe("JavaScript expression to evaluate in the page context. Max 2000 chars. ASCII only. Must not make network requests."),
+  }),
   z.object({
     action: z.literal("wait"),
-    selector: z.string().optional(),
-    timeout: z.number().int().min(100).max(30000).default(5000),
+    selector: z.string().optional()
+      .describe("CSS selector to wait for (e.g. '#results'). If omitted, waits for ms milliseconds."),
+    ms: z.number().int().min(100).max(30000).optional()
+      .describe("Milliseconds to wait (100–30000). Example: {action: \"wait\", ms: 2000}"),
+    timeout: z.number().int().min(100).max(30000).optional()
+      .describe("Alias for ms — prefer ms for clarity. Example: {action: \"wait\", timeout: 2000}"),
   }),
   z.object({
     action: z.literal("scroll"),
@@ -340,13 +362,24 @@ export type BrowserAction = z.infer<typeof BrowserActionSchema>;
 
 export const BrowserParamsSchema = z.object({
   actions: z.array(BrowserActionSchema).min(1).max(20)
-    .describe("Array of browser actions to execute sequentially. Max 20 per call."),
+    .describe(
+      "Array of browser actions to execute sequentially. Max 20 per call. " +
+      "Each action MUST use the discriminated union format: {action: \"<type>\", ...fields}. " +
+      "Examples: " +
+      "{action: \"navigate\", url: \"https://example.com\"} | " +
+      "{action: \"click\", selector: \"#btn\"} | " +
+      "{action: \"type\", selector: \"#input\", text: \"hello\"} | " +
+      "{action: \"wait\", ms: 2000} | " +
+      "{action: \"screenshot\"} | " +
+      "{action: \"aria_snapshot\"}. " +
+      "Do NOT use string format (\"navigate\") or object-key format ({navigate: \"url\"}) — both are invalid."
+    ),
   country: z.string().length(2).optional()
     .describe("ISO 2-letter country code for browser exit node (e.g. 'us', 'gb'). Required for platforms with geo-restrictions (TikTok is banned in India — use country='us'). Omit for no targeting."),
   timeout: z.number().int().min(5000).max(120000).default(60000)
     .describe("Total timeout for all actions in ms. Default 60000."),
-  session_id: z.string().optional()
-    .describe("Optional session ID for persistent browser state across calls. Reuses the same browser page (cookies, localStorage, login state). Sessions expire after 10 minutes of inactivity."),
+  session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
+    .describe("Optional session ID for persistent browser state across calls. Reuses the same browser page (cookies, localStorage, login state). Warm reuse is ~5x faster (~1.5s vs ~8s cold start). Sessions expire after 10 minutes of inactivity."),
 });
 
 export type BrowserParams = z.infer<typeof BrowserParamsSchema>;
@@ -355,53 +388,3 @@ export function validateBrowserParams(args: Record<string, unknown> | undefined)
   return BrowserParamsSchema.parse(args ?? {});
 }
 
-// ─── Error Classification ────────────────────────────────────────────────────
-
-export function classifyError(error: unknown): NovadaError {
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase();
-    if (msg.includes("401") || msg.includes("api_key") || msg.includes("unauthorized")) {
-      return {
-        code: NovadaErrorCode.INVALID_API_KEY,
-        message: `Invalid or missing API key. Get one at ${DOCS_BASE}`,
-        retryable: false,
-        docsUrl: DOCS_BASE,
-      };
-    }
-    if (msg.includes("429") || msg.includes("rate") || msg.includes("limit")) {
-      return {
-        code: NovadaErrorCode.RATE_LIMITED,
-        message: "Rate limit exceeded. Wait and retry.",
-        retryable: true,
-        docsUrl: DOCS_BASE,
-      };
-    }
-    if (msg.includes("timeout") || msg.includes("econnrefused") || msg.includes("enotfound")) {
-      return {
-        code: NovadaErrorCode.URL_UNREACHABLE,
-        message: `URL unreachable: ${sanitizeMessage(error.message)}`,
-        retryable: true,
-      };
-    }
-    if (msg.includes("503") || msg.includes("502")) {
-      return {
-        code: NovadaErrorCode.API_DOWN,
-        message: "Novada API is temporarily unavailable. Retry in a moment.",
-        retryable: true,
-      };
-    }
-  }
-  if (error instanceof ZodError) {
-    return {
-      code: NovadaErrorCode.INVALID_PARAMS,
-      message: error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; "),
-      retryable: false,
-    };
-  }
-  const rawMsg = error instanceof Error ? error.message : String(error);
-  return {
-    code: NovadaErrorCode.UNKNOWN,
-    message: sanitizeMessage(rawMsg),
-    retryable: false,
-  };
-}

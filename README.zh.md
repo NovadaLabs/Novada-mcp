@@ -29,7 +29,19 @@
 
 ---
 
-**快速跳转：** [快速开始](#快速开始) · [工具](#工具) · [真实示例](#真实输出示例) · [用例](#用例) · [为什么选择 Novada](#为什么选择-novada)
+**快速跳转：** [懒人启动](#懒人启动--auto-setup) · [快速开始](#快速开始) · [工具](#工具) · [真实示例](#真实输出示例) · [用例](#用例) · [为什么选择 Novada](#为什么选择-novada)
+
+---
+
+## 懒人启动 — Auto-Setup
+
+让 AI 助手帮你完成全部配置：自动打开你的 Chrome、读取 Novada 控制台、提取凭证、写入 MCP 配置。
+
+**前提条件：** Claude Code + Chrome DevTools MCP + Chrome 已登录
+[dashboard.novada.com](https://dashboard.novada.com)
+
+完整提示词（中英双语）见
+[`prompts/lazy-start/setup-agent.md`](prompts/lazy-start/setup-agent.md)。
 
 ---
 

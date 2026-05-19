@@ -1,7 +1,8 @@
 import axios, { AxiosError } from "axios";
-import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, EXCEL_MAX_SHEET_NAME } from "../config.js";
-import { formatAsMarkdown, formatAsCsv, formatAsHtml, formatAsXlsx } from "../utils/format.js";
-import type { ScrapeParams } from "./types.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
+import { formatAsMarkdown } from "../utils/format.js";
+import { NovadaError, NovadaErrorCode, makeNovadaError } from "../_core/errors.js";
+import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 
@@ -34,8 +35,35 @@ async function submitScrapeTask(
   const form = new URLSearchParams();
   form.append("scraper_name", scraper_name);
   form.append("scraper_id", scraper_id);
+  form.append("scraper_errors", "true");
+  form.append("is_auto_push", "false");
+
+  // Two param formats exist in the Novada Scraper API:
+  //   A) Search engines (google, bing, duckduckgo, yandex) — flat form fields + json=1
+  //   B) All other platforms — scraper_params=[{...}] JSON array
+  // Verified from dashboard playground 2026-05-18.
+  const SEARCH_ENGINES = new Set(["google.com", "bing.com", "duckduckgo.com", "yandex.com"]);
+  const RESERVED = new Set(["scraper_name", "scraper_id", "apikey", "api_key", "authorization",
+    "scraper_errors", "is_auto_push"]);
+
+  const opParams: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null) form.append(k, String(v));
+    if (v !== undefined && v !== null && !RESERVED.has(k.toLowerCase())) {
+      opParams[k] = v;
+    }
+  }
+
+  if (SEARCH_ENGINES.has(scraper_name)) {
+    // Format A: flat form fields for search engines
+    if (!("json" in opParams)) opParams["json"] = 1; // request JSON output format
+    for (const [k, v] of Object.entries(opParams)) {
+      form.append(k, String(v));
+    }
+  } else {
+    // Format B: scraper_params array for all other platforms
+    if (Object.keys(opParams).length > 0) {
+      form.append("scraper_params", JSON.stringify([opParams]));
+    }
   }
 
   const resp = await axios.post(SCRAPE_ENDPOINT, form, {
@@ -49,19 +77,35 @@ async function submitScrapeTask(
   const body = resp.data as SubmitApiResponse;
 
   if (body.code !== 0) {
+    // H5: throw typed NovadaError for 11006/11008 — no brittle string matching needed at catch site
+    if (body.code === 11006) {
+      throw makeNovadaError(
+        NovadaErrorCode.PRODUCT_UNAVAILABLE,
+        "Scraper API Bearer token access not activated on this account. Note: the dashboard UI works via cookie auth — this is a different access tier. Contact your Novada account manager to enable direct API access (Bearer token).",
+        "code 11006",
+      );
+    }
+    if (body.code === 11008) {
+      throw makeNovadaError(
+        NovadaErrorCode.INVALID_PARAMS,
+        `Unknown platform '${scraper_name}'. Use the exact domain (e.g. 'amazon.com', 'reddit.com'). To find valid operation IDs: read the novada://scraper-platforms resource — operation names are exact and cannot be guessed.`,
+        "code 11008",
+      );
+    }
     const errorMessages: Record<number, string> = {
       10001: "Missing required parameters. Check platform and operation fields.",
       11000: "Invalid API key.",
-      11006: "Scraper API Bearer token access not activated on this account. Note: the dashboard UI works via cookie auth — this is a different access tier. Contact your Novada account manager to enable direct API access (Bearer token).",
-      11008: `Unknown platform '${scraper_name}'. Use the exact domain (e.g. 'amazon.com', 'reddit.com').\nTo find valid operation IDs: read the novada://scraper-platforms resource — operation names are exact and cannot be guessed.`,
     };
     const msg = errorMessages[body.code] ?? body.msg ?? "Unknown scraper error";
     throw new Error(`Scraper error (code ${body.code}): ${msg}`);
   }
 
-  // Response nesting: { code:0, data: { code:200, data: { task_id: "..." } } }
+  // Accept both flat { code:0, data: { task_id: "..." } } and nested { code:0, data: { data: { task_id: "..." } } }
   const inner = body.data as Record<string, unknown> | null;
-  const taskId = (inner?.data as Record<string, unknown> | undefined)?.task_id as string | undefined;
+  const taskId = (
+    (inner?.task_id as string | undefined) ??
+    ((inner?.data as Record<string, unknown> | undefined)?.task_id as string | undefined)
+  );
   if (!taskId) {
     throw new Error(`Scraper submit succeeded but no task_id in response: ${JSON.stringify(body)}`);
   }
@@ -72,6 +116,8 @@ async function submitScrapeTask(
 /** Poll the download endpoint until the task completes or times out */
 async function pollForResult(apiKey: string, taskId: string): Promise<DownloadResultItem[]> {
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
+  // H3: safe version of URL for error messages — strips the apikey value to prevent key exposure
+  const safeUrl = url.replace(/apikey=[^&]+/, "apikey=***");
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
@@ -94,10 +140,30 @@ async function pollForResult(apiKey: string, taskId: string): Promise<DownloadRe
       return body as DownloadResultItem[];
     }
 
+    // Known error codes from the download endpoint
+    if (
+      body !== null &&
+      typeof body === "object" &&
+      !Array.isArray(body)
+    ) {
+      const bErr = body as Record<string, unknown>;
+      const errCode = bErr.code as number | undefined;
+      const errMsg = (bErr.msg as string | undefined) ?? "";
+      if (errCode === 10001) {
+        throw new Error(`Scraper download error 10001 (Invalid file type): The server could not return results as JSON for this scraper. Try a different operation, or check that the platform and operation names are correct. Use novada://scraper-platforms to find valid operations.`);
+      }
+      if (errCode === 10002 || errCode === 10003) {
+        throw new Error(`Scraper task error (code ${errCode}): ${errMsg || "Task failed on the server side."} Retry with different parameters.`);
+      }
+      if (errCode === 27203) {
+        throw new Error(`Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`);
+      }
+      throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${errMsg || JSON.stringify(bErr).slice(0, 150)}`);
+    }
     throw new Error(`Unexpected download response: ${JSON.stringify(body).slice(0, 200)}`);
   }
 
-  throw new Error(`Scraper task ${taskId} did not complete within ${POLL_TIMEOUT_MS / 1000}s. Check dashboard for status.`);
+  throw new Error(`Scraper task ${taskId} timed out after ${POLL_TIMEOUT_MS / 1000}s. task_id="${taskId}" — the task may still be running. This is a transient error; retry the same call.`);
 }
 
 /** Flatten a potentially nested object for tabular display */
@@ -146,7 +212,7 @@ function extractRecords(data: unknown): Record<string, unknown>[] {
   return [];
 }
 
-export async function novadaScrape(params: ScrapeParams, apiKey: string): Promise<string> {
+export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, apiKey: string): Promise<string> {
   const { platform, operation, params: opParams, format, limit } = params;
 
   try {
@@ -177,19 +243,34 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
     throw error;
   }
 
-  // Step 3: Check for task-level errors
+  // Step 3: Extract records — handle two response formats from the download endpoint:
+  //   Format A (flat): array of direct record objects, e.g. [{title:"...", error:null, success:true}, ...]
+  //   Format B (wrapped): [{spider_code:200, rest:{...}}, ...] or [{error:"msg", error_code:N}]
   const firstItem = resultItems[0];
   if (!firstItem) {
     return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
   }
 
-  if ("error" in firstItem) {
-    const { error: errMsg, error_code: errCode } = firstItem as { error: string; error_code?: number };
-    throw new Error(`Scraper task failed (${errCode ?? "unknown"}): ${errMsg}`);
-  }
+  const firstAsRecord = firstItem as Record<string, unknown>;
+  let rawRecords: Record<string, unknown>[];
 
-  const successItem = firstItem as { spider_code: 200; rest: Record<string, unknown> };
-  const rawRecords = extractRecords(successItem.rest);
+  if ("spider_code" in firstAsRecord || "rest" in firstAsRecord) {
+    // Format B: wrapped envelope
+    const itemError = firstAsRecord.error;
+    if (typeof itemError === "string" && itemError.length > 0) {
+      const errCode = (firstAsRecord.error_code as number | undefined);
+      throw new Error(`Scraper task failed (${errCode ?? "unknown"}): ${itemError}`);
+    }
+    rawRecords = extractRecords((firstAsRecord as { rest: Record<string, unknown> }).rest);
+  } else {
+    // Format A: flat array — filter out genuinely failed items (error is a non-empty string)
+    rawRecords = resultItems
+      .filter(item => {
+        const err = (item as Record<string, unknown>).error;
+        return typeof err !== "string" || err.length === 0;
+      })
+      .map(item => item as unknown as Record<string, unknown>);
+  }
   const records = rawRecords.slice(0, limit).map(r => flattenRecord(r)) as Record<string, unknown>[];
 
   if (records.length === 0) {
@@ -215,38 +296,27 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
         `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
       ].join("\n");
 
-    case "csv":
+    case "toon": {
+      // TOON: headers declared once, then pipe-separated rows — 40-65% token savings vs JSON/markdown
+      // Union all keys across records to avoid dropping columns from heterogeneous rows
+      const headerSet = new Set<string>();
+      for (const r of records) Object.keys(r).forEach(k => headerSet.add(k));
+      const headers = Array.from(headerSet);
+      const toonRows = [
+        `HEADERS: ${headers.join(" | ")}`,
+        ...records.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
+      ];
       return [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: ${records.length}`,
+        `platform: ${platform} | operation: ${operation} | records: ${records.length} | format: toon`,
         ``,
-        "```csv",
-        formatAsCsv(records),
-        "```",
+        toonRows.join("\n"),
         ``,
         `---`,
         `## Agent Hints`,
-        `- First row is headers. Parse as CSV for downstream processing.`,
+        `- TOON format: first line starts with "HEADERS:" listing columns, subsequent lines are pipe-separated values.`,
+        `- Use format='json' for downstream code processing, format='markdown' for human-readable output.`,
         `- Increase limit (max 100) to retrieve more records.`,
-        `- For structured JSON output: use format='json' instead.`,
-      ].join("\n");
-
-    case "html":
-      return formatAsHtml(records, title);
-
-    case "xlsx": {
-      const buf = await formatAsXlsx(records, operation.slice(0, EXCEL_MAX_SHEET_NAME));
-      const b64 = buf.toString("base64");
-      return [
-        `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: ${records.length}`,
-        ``,
-        `Excel data (base64-encoded xlsx):`,
-        "```",
-        b64,
-        "```",
-        ``,
-        `_Save the base64 content to a .xlsx file to open in Excel._`,
       ].join("\n");
     }
 
@@ -269,34 +339,33 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
       ].join("\n");
   }
   } catch (err: unknown) {
-    const code = (typeof err === 'object' && err !== null && 'code' in err)
-      ? (err as { code: unknown }).code
-      : null;
-    const message = err instanceof Error ? err.message : String(err);
+    // H5: use typed NovadaError.code instead of brittle string matching
+    if (err instanceof NovadaError && err.code === NovadaErrorCode.PRODUCT_UNAVAILABLE) {
+      return JSON.stringify({
+        status: "unavailable",
+        code: 11006,
+        reason: "Scraper API not yet activated on this account.",
+        agent_instruction: "Activate Scraper API at dashboard.novada.com/overview/scraper/ before retrying. Do not retry this call automatically — this is a plan-tier gate, not a transient error.",
+        alternatives: [
+          "Use novada_extract for general web page content extraction.",
+          "Use novada_unblock for bot-protected pages.",
+          "Use novada_crawl for multi-page site traversal.",
+        ],
+        next_steps: ["Activate at: https://dashboard.novada.com/overview/scraper/"],
+      }, null, 2);
+    }
 
-    // Check for 11006 (not activated) specifically — require specific pattern to avoid false positives
-    const is11006 = code === 11006 ||
-      message.includes('code 11006') ||
-      message.includes('(code: 11006)') ||
-      message.includes('error 11006');
+    if (err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_PARAMS && err.detail === "code 11008") {
+      return JSON.stringify({
+        status: "error",
+        code: 11008,
+        reason: err.message,
+        agent_instruction: "This is a parameter error — do not retry. Check scraper_name and scraper_id are valid. Use the novada://scraper-platforms resource to find supported platforms.",
+      }, null, 2);
+    }
 
-    return JSON.stringify({
-      status: "unavailable",
-      code: is11006 ? 11006 : (code ?? "unknown"),
-      reason: is11006
-        ? "Scraper API not yet activated on this account."
-        : message,
-      agent_instruction: is11006
-        ? "Activate Scraper API at dashboard.novada.com/overview/scraper/ before retrying. Do not retry this call automatically — this is a plan-tier gate, not a transient error."
-        : message.includes("11008") || message.includes("invalid") || message.includes("not found")
-          ? "This is a parameter error — do not retry. Check scraper_name and scraper_id are valid. Use the novada://scraper-platforms resource to find supported platforms."
-          : "Transient error — retry once after a short delay. If the error persists, contact support.",
-      alternatives: [
-        "Use novada_extract for general web page content extraction.",
-        "Use novada_unblock for bot-protected pages that require anti-bot bypass.",
-        "Use novada_crawl for multi-page site traversal.",
-      ],
-      next_steps: ["Activate at: https://dashboard.novada.com/overview/scraper/"],
-    }, null, 2);
+    // All other errors (network, timeout, poll failure, missing task_id): re-throw
+    // index.ts will handle them via classifyError and return isError: true
+    throw err;
   }
 }

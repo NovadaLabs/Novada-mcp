@@ -22,6 +22,12 @@ import {
   novadaUnblock,
   novadaBrowser,
   novadaHealth,
+  novadaHealthAll,
+  novadaDiscover,
+  novadaScraperSubmit,
+  novadaScraperStatus,
+  novadaScraperResult,
+  novadaBrowserFlow,
   validateSearchParams,
   validateExtractParams,
   validateCrawlParams,
@@ -33,9 +39,14 @@ import {
   validateUnblockParams,
   validateBrowserParams,
   validateHealthParams,
-  classifyError,
-  NovadaErrorCode,
+  validateHealthAllParams,
+  validateDiscoverParams,
+  validateScraperSubmitParams,
+  validateScraperStatusParams,
+  validateScraperResultParams,
+  validateBrowserFlowParams,
 } from "./tools/index.js";
+import { classifyError, NovadaErrorCode } from "./_core/errors.js";
 import { ZodError } from "zod";
 import {
   SearchParamsSchema,
@@ -50,6 +61,32 @@ import {
   BrowserParamsSchema,
   HealthParamsSchema,
 } from "./tools/types.js";
+import { HealthAllParamsSchema } from "./tools/health_all.js";
+import { DiscoverParamsSchema } from "./tools/discover.js";
+import { ScraperSubmitParamsSchema } from "./tools/scraper_submit.js";
+import { ScraperStatusParamsSchema } from "./tools/scraper_status.js";
+import { ScraperResultParamsSchema } from "./tools/scraper_result.js";
+import { BrowserFlowParamsSchema } from "./tools/browser_flow.js";
+import {
+  novadaProxyResidential,
+  validateProxyResidentialParams,
+  ProxyResidentialParamsSchema,
+  novadaProxyIsp,
+  validateProxyIspParams,
+  ProxyIspParamsSchema,
+  novadaProxyDatacenter,
+  validateProxyDatacenterParams,
+  ProxyDatacenterParamsSchema,
+  novadaProxyMobile,
+  validateProxyMobileParams,
+  ProxyMobileParamsSchema,
+  novadaProxyStatic,
+  validateProxyStaticParams,
+  ProxyStaticParamsSchema,
+  novadaProxyDedicated,
+  validateProxyDedicatedParams,
+  ProxyDedicatedParamsSchema,
+} from "./tools/index.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -57,7 +94,7 @@ import { VERSION } from "./config.js";
 import { listPrompts, getPrompt } from "./prompts/index.js";
 import { listResources, readResource } from "./resources/index.js";
 
-const API_KEY = process.env.NOVADA_API_KEY;
+const API_KEY = process.env.NOVADA_API_KEY?.trim();
 
 /** Convert a Zod v4 schema to MCP-compatible JSON Schema.
  * Uses Zod's native .toJSONSchema() — zod-to-json-schema v3 does not support Zod v4.
@@ -170,8 +207,87 @@ Not for:
 **Best for:** When you need a specific country/city IP, sticky sessions for multi-step workflows, or testing geo-restricted content.
 **Not for:** Web page extraction (use novada_extract — proxy is automatic), web search (use novada_search).
 **Formats:** "url" for Node.js/Python, "env" for shell variables, "curl" for CLI requests.
-**Note:** Requires NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+**Note:** Requires NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.
+**Specialized tools:** For specific proxy types, use novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, or novada_proxy_dedicated.`,
     inputSchema: zodToMcpSchema(ProxyParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_proxy_residential",
+    description: `Route requests through residential IPs — real home ISP addresses from a 100M+ IP pool. Best anti-bot bypass for geo-restricted or protected pages.
+
+**Best for:** Anti-bot protected pages, geo-restricted content, platforms that block datacenter IPs.
+**Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
+**Params:** url (optional), country (ISO 2-letter), city (optional, requires country), session_id (optional for sticky IP).
+**Formats:** "url", "env", "curl".
+**agent_instruction:** Best for geo-restricted content. Use country param for targeting. Strongest anti-bot bypass — escalate here from isp/datacenter when blocked.
+**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+    inputSchema: zodToMcpSchema(ProxyResidentialParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_proxy_isp",
+    description: `Route requests through ISP-assigned IPs that look like real home users — ideal for social media and ecommerce platforms.
+
+**Best for:** Social media scraping, ecommerce platforms, any site distinguishing home users from datacenter IPs.
+**Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
+**Params:** url (optional), country (ISO 2-letter, optional), session_id (optional for sticky IP).
+**Formats:** "url", "env", "curl".
+**agent_instruction:** ISP proxies look like real home users. Best for social/ecommerce. Escalate to novada_proxy_residential for stronger anti-bot.
+**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+    inputSchema: zodToMcpSchema(ProxyIspParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_proxy_datacenter",
+    description: `Route requests through datacenter IPs — fastest and most cost-effective option for high-volume scraping of targets without aggressive anti-bot.
+
+**Best for:** APIs, public data feeds, high-volume scraping of non-protected targets.
+**Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
+**Params:** url (optional), country (ISO 2-letter, optional), session_id (optional for sticky IP).
+**Formats:** "url", "env", "curl".
+**agent_instruction:** Fastest proxies. Best for high-volume, non-anti-bot targets. Escalate to isp → residential if blocked.
+**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+    inputSchema: zodToMcpSchema(ProxyDatacenterParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_proxy_mobile",
+    description: `Route requests through 4G/5G mobile IPs — real mobile device IPs ideal for mobile-targeted content and apps.
+
+**Best for:** Mobile-targeted content, app APIs, platforms serving different content to mobile vs desktop.
+**Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
+**Params:** url (optional), country (ISO 2-letter, optional), carrier (optional, e.g. 'verizon'), session_id (optional for sticky IP).
+**Formats:** "url", "env", "curl".
+**agent_instruction:** Mobile IPs. Best for mobile-targeted content and apps. Pair with mobile User-Agent for full simulation.
+**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+    inputSchema: zodToMcpSchema(ProxyMobileParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_proxy_static",
+    description: `Route requests through a dedicated static ISP IP that never changes — same IP every request for a given session_id + country.
+
+**Best for:** Account management, login-dependent workflows, platforms that flag IP changes as suspicious.
+**Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
+**Params:** url (optional), country (ISO 2-letter, REQUIRED), session_id (REQUIRED — determines your dedicated IP).
+**Formats:** "url", "env", "curl".
+**agent_instruction:** Same IP every request. Best for accounts requiring consistent identity. Keep the same session_id for the entire account lifecycle.
+**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+    inputSchema: zodToMcpSchema(ProxyStaticParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_proxy_dedicated",
+    description: `Route requests through an exclusive datacenter IP not shared with any other user — clean reputation, zero contamination risk.
+
+**Best for:** High-trust platforms, workflows needing a pristine IP with no negative history.
+**Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
+**Params:** url (optional), session_id (REQUIRED — maps to your exclusive dedicated IP).
+**Formats:** "url", "env", "curl".
+**agent_instruction:** Exclusive datacenter IP. Best for high-trust platforms. No other user shares this IP. For human-like IP appearance, use novada_proxy_residential instead.
+**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+    inputSchema: zodToMcpSchema(ProxyDedicatedParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
@@ -193,6 +309,7 @@ Not for:
 **Not for:** Reading cleaned text (use novada_extract with render="render"), structured platform data (use novada_scrape).
 **Methods:** "render" (Web Unblocker, faster/cheaper), "browser" (full Chromium CDP, handles complex SPAs).
 **Wait hint:** Use wait_for to specify a CSS selector to wait for before capturing HTML.
+**Note:** wait_ms, block_resources, auto_runs are accepted but not yet implemented — they have no effect in the current version.
 
 Common mistakes:
 - This tool returns RAW HTML, not parsed/cleaned text. Passing the output directly to an LLM expecting markdown will produce garbled, token-heavy responses.
@@ -218,7 +335,8 @@ Not for:
 **Actions:** navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call.
 **Sessions:** Pass session_id to maintain state (cookies, login) across multiple calls. Sessions expire after 10 min of inactivity. Use close_session to release early.
 **Requires:** NOVADA_BROWSER_WS environment variable.
-**Platform note:** TikTok is geo-restricted in some regions — pass country="us" in actions that support it. Use wait with domcontentloaded (never networkidle) for SPAs.`,
+**Platform note:** TikTok is geo-restricted in some regions — pass country="us" in actions that support it. Use wait with domcontentloaded (never networkidle) for SPAs.
+**Constraint:** close_session and list_sessions must be the only action in the call — they cannot be combined with other actions.`,
     inputSchema: zodToMcpSchema(BrowserParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
@@ -231,7 +349,136 @@ Not for:
     inputSchema: zodToMcpSchema(HealthParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
+  {
+    name: "novada_health_all",
+    description: `Extended health check that tests ALL Novada product endpoints in parallel and returns detailed per-product status.
+
+**agent_instruction:** Call this when novada_health shows an issue and you need per-product details, or when setting up Novada for the first time and want to confirm every product is reachable.
+**Returns:** Per-product table — product | status | latency | notes — covering Search, Extract, Scraper, Proxy, Browser, and Unblock APIs.
+**Degraded mode:** If one product probe fails, all others still return — never hard-fails.
+**Activation links:** Any PRODUCT_UNAVAILABLE result includes a direct link to activate that product on your dashboard.
+**Difference from novada_health:** This tool tests 6 products (vs 5), includes the Unblock API probe, and provides richer notes per product.`,
+    inputSchema: zodToMcpSchema(HealthAllParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_discover",
+    description: `List all available Novada tools with name, description, category, and status (active/todo).
+
+**agent_instruction:** Call this first to see all available Novada tools and capabilities — especially useful when starting a new task and you need to find the right tool.
+**Returns:** Markdown table grouped by category — Content Retrieval, Scraping & Verification, Proxy, Browser & Rendering, Health & Discovery, Auth.
+**Filter:** Pass category to narrow to a specific group (e.g. category="Proxy" to see all proxy tools).
+**Status legend:** active = available now; todo = planned but not yet implemented.`,
+    inputSchema: zodToMcpSchema(DiscoverParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_scraper_submit",
+    description: `Submit an async scraping task for any URL. Returns a task_id — use novada_scraper_status to poll progress, then novada_scraper_result to retrieve data.
+
+**Best for:** Scraping URLs that require async processing (JS-heavy pages, rate-limited targets, long-running extractions).
+**Workflow:** submit → poll status → retrieve result. Three separate calls.
+**Required:** url (the page to scrape). Optional: scraper_type (default 'universal'), country (2-letter ISO code).
+**Next step:** After calling this tool, use novada_scraper_status with the returned task_id to check progress.
+**Note:** If the endpoint returns a placeholder task_id, contact Novada support at support@novada.com to confirm scraper_type availability.
+**Alternative:** For 129 supported platforms (Amazon, Reddit, TikTok), use novada_scrape instead — it's synchronous and returns results directly.`,
+    inputSchema: zodToMcpSchema(ScraperSubmitParamsSchema),
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
+  },
+  {
+    name: "novada_scraper_status",
+    description: `Check the status of an async scraping task by task_id. Returns: pending, running, complete, or failed.
+
+**Required:** task_id (from novada_scraper_submit).
+**Pending/running:** Retry in 5–10 seconds. Use exponential backoff (5s → 10s → 20s → 40s).
+**Complete:** Call novada_scraper_result with the same task_id to retrieve formatted data.
+**Failed:** Re-submit with novada_scraper_submit, or use novada_extract / novada_unblock as alternatives.
+**agent_instruction:** Each response includes the next action to take — always follow it.`,
+    inputSchema: zodToMcpSchema(ScraperStatusParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_scraper_result",
+    description: `Retrieve the completed result of an async scraping task by task_id.
+
+**Required:** task_id (from novada_scraper_submit). Confirm status='complete' with novada_scraper_status first.
+**Formats:** 'markdown' (default — human-readable table), 'json' (structured array for programmatic use), 'raw' (unprocessed API response).
+**agent_instruction:** Call novada_scraper_status first to confirm task is complete before calling this tool. Calling this on a pending task returns a not_ready response.
+**Note:** If result is unavailable, check novada_scraper_status and contact Novada support at support@novada.com with the task_id if the endpoint is returning errors.`,
+    inputSchema: zodToMcpSchema(ScraperResultParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_browser_flow",
+    description: `Execute multi-step browser automation with Novada's cloud browser. Use for JS-heavy sites, login flows, or multi-page sequences.
+
+**Best for:** Automating sequences of clicks, form fills, scrolls, and screenshots on a single page or across a multi-step flow. Maintains session state across calls when session_id is provided.
+**Actions:** click, scroll, wait, type, screenshot — up to 20 per call.
+**Sessions:** Pass session_id to reuse the same browser instance across calls (preserves cookies, login state). Sessions expire after 10 minutes of inactivity.
+**Fallback:** If this tool fails, use novada_browser — it uses CDP directly and supports more action types (navigate, aria_snapshot, evaluate, hover, press_key, select).
+**Not for:** Single URL reading without interaction (use novada_extract or novada_unblock), structured platform data (use novada_scrape).`,
+    inputSchema: zodToMcpSchema(BrowserFlowParamsSchema),
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
+  },
 ];
+
+// ─── Group Filtering ─────────────────────────────────────────────────────────
+
+const GROUP_MAP: Record<string, string> = {
+  search:      "novada_search",
+  extract:     "novada_extract",
+  crawl:       "novada_crawl",
+  map:         "novada_map",
+  research:    "novada_research",
+  scrape:      "novada_scrape",
+  proxy:       "novada_proxy",
+  verify:      "novada_verify",
+  unblock:     "novada_unblock",
+  browser:     "novada_browser",
+  health:               "novada_health",
+  health_all:           "novada_health_all",
+  discover:             "novada_discover",
+  scraper_submit:       "novada_scraper_submit",
+  scraper_status:       "novada_scraper_status",
+  scraper_result:       "novada_scraper_result",
+  proxy_residential:    "novada_proxy_residential",
+  proxy_isp:            "novada_proxy_isp",
+  proxy_datacenter:     "novada_proxy_datacenter",
+  proxy_mobile:         "novada_proxy_mobile",
+  proxy_static:         "novada_proxy_static",
+  proxy_dedicated:      "novada_proxy_dedicated",
+  browser_flow:         "novada_browser_flow",
+};
+
+function applyGroupFilter(tools: typeof TOOLS): typeof TOOLS {
+  const groupsEnv = process.env.NOVADA_GROUPS;
+  if (!groupsEnv) return tools;
+
+  const requested = groupsEnv
+    .split(",")
+    .map(g => g.trim().toLowerCase())
+    .filter(Boolean);
+
+  // Accept both short names ("extract") and full names ("novada_extract")
+  const allowed = new Set(
+    requested.map(g => GROUP_MAP[g] ?? g)
+  );
+
+  // Always include health so agents can diagnose issues
+  allowed.add("novada_health");
+
+  const filtered = tools.filter(t => allowed.has(t.name));
+
+  // Warn if all requested groups were unrecognized (would produce health-only set)
+  const recognized = requested.filter(g => GROUP_MAP[g] || tools.some(t => t.name === g));
+  if (recognized.length === 0) {
+    console.error(`[novada] Warning: NOVADA_GROUPS="${groupsEnv}" matched no known tools. Valid names: ${Object.keys(GROUP_MAP).join(", ")}`);
+  }
+
+  return filtered;
+}
+
+const ACTIVE_TOOLS = applyGroupFilter(TOOLS);
 
 // ─── MCP Server ──────────────────────────────────────────────────────────────
 
@@ -240,7 +487,7 @@ class NovadaMCPServer {
 
   constructor() {
     this.server = new Server(
-      { name: "novada-search", version: VERSION },
+      { name: "novada", version: VERSION },
       { capabilities: { tools: {}, prompts: {}, resources: {} } }
     );
     this.setupHandlers();
@@ -249,7 +496,8 @@ class NovadaMCPServer {
 
   private setupErrorHandling(): void {
     this.server.onerror = (error: unknown) => {
-      console.error("[novada-search]", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[novada]", msg);
     };
 
     process.on("SIGINT", async () => {
@@ -260,7 +508,7 @@ class NovadaMCPServer {
 
   private setupHandlers(): void {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: TOOLS,
+      tools: ACTIVE_TOOLS,
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -287,7 +535,18 @@ class NovadaMCPServer {
         return {
           content: [{
             type: "text" as const,
-            text: "Error: NOVADA_API_KEY is not set. Get your API key at https://www.novada.com and set it as an environment variable.\n\nSetup: claude mcp add novada -e NOVADA_API_KEY=your-key -- npx -y novada-search",
+            text: "Error: NOVADA_API_KEY is not set. Get your API key at https://www.novada.com and set it as an environment variable.\n\nSetup: claude mcp add novada -e NOVADA_API_KEY=your-key -- npx -y novada",
+          }],
+          isError: true,
+        };
+      }
+
+      // Enforce GROUPS filter at execution time (not just at list time)
+      if (process.env.NOVADA_GROUPS && !ACTIVE_TOOLS.find(t => t.name === name)) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Tool '${name}' is not available in the active groups (NOVADA_GROUPS=${process.env.NOVADA_GROUPS}). Available tools: ${ACTIVE_TOOLS.map(t => t.name).join(", ")}`,
           }],
           isError: true,
         };
@@ -331,11 +590,48 @@ class NovadaMCPServer {
             validateHealthParams(args as Record<string, unknown>);
             result = await novadaHealth(API_KEY);
             break;
+          case "novada_health_all":
+            validateHealthAllParams(args as Record<string, unknown>);
+            result = await novadaHealthAll(API_KEY);
+            break;
+          case "novada_discover":
+            result = await novadaDiscover(validateDiscoverParams(args as Record<string, unknown>));
+            break;
+          case "novada_scraper_submit":
+            result = await novadaScraperSubmit(validateScraperSubmitParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_scraper_status":
+            result = await novadaScraperStatus(validateScraperStatusParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_scraper_result":
+            result = await novadaScraperResult(validateScraperResultParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_browser_flow":
+            result = await novadaBrowserFlow(validateBrowserFlowParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_proxy_residential":
+            result = await novadaProxyResidential(validateProxyResidentialParams(args as Record<string, unknown>));
+            break;
+          case "novada_proxy_isp":
+            result = await novadaProxyIsp(validateProxyIspParams(args as Record<string, unknown>));
+            break;
+          case "novada_proxy_datacenter":
+            result = await novadaProxyDatacenter(validateProxyDatacenterParams(args as Record<string, unknown>));
+            break;
+          case "novada_proxy_mobile":
+            result = await novadaProxyMobile(validateProxyMobileParams(args as Record<string, unknown>));
+            break;
+          case "novada_proxy_static":
+            result = await novadaProxyStatic(validateProxyStaticParams(args as Record<string, unknown>));
+            break;
+          case "novada_proxy_dedicated":
+            result = await novadaProxyDedicated(validateProxyDedicatedParams(args as Record<string, unknown>));
+            break;
           default:
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_verify, novada_unblock, novada_browser, novada_health`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow`,
               }],
               isError: true,
             };
@@ -361,22 +657,12 @@ class NovadaMCPServer {
           };
         }
 
-        // Classified API/network errors with retry guidance
+        // Classified API/network errors with agent_instruction guidance
         const classified = classifyError(error);
-        let nextStep = "";
-        if (classified.code === NovadaErrorCode.RATE_LIMITED) {
-          nextStep = "\nNext step: Wait 30 seconds before retrying.";
-        } else if (classified.code === NovadaErrorCode.URL_UNREACHABLE) {
-          nextStep = "\nNext step: Check the URL is correct, or try with render='render' for JS-heavy sites.";
-        } else if (classified.code === NovadaErrorCode.INVALID_PARAMS) {
-          nextStep = "\nNext step: Check parameter names and values — see tool description for valid options.";
-        } else if (classified.code === NovadaErrorCode.INVALID_API_KEY) {
-          nextStep = "\nNext step: Check NOVADA_API_KEY is set correctly. Run novada_health to verify API key status.";
-        }
         return {
           content: [{
             type: "text" as const,
-            text: `Error [${classified.code}]: ${classified.message}${classified.retryable ? "\n(This error is retryable)" : ""}${classified.docsUrl ? `\nDocs: ${classified.docsUrl}` : ""}${nextStep}`,
+            text: classified.toAgentString(),
           }],
           isError: true,
         };
@@ -387,7 +673,7 @@ class NovadaMCPServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error(`Novada MCP server v${VERSION} running on stdio — 11 tools loaded`);
+    console.error(`Novada MCP server v${VERSION} running on stdio — ${ACTIVE_TOOLS.length} tools loaded${process.env.NOVADA_GROUPS ? ` (groups: ${process.env.NOVADA_GROUPS})` : ""}`);
   }
 }
 
@@ -396,7 +682,7 @@ class NovadaMCPServer {
 const cliArgs = process.argv.slice(2);
 
 if (cliArgs.includes("--list-tools")) {
-  for (const tool of TOOLS) {
+  for (const tool of ACTIVE_TOOLS) {
     const firstLine = tool.description.trim().split("\n")[0];
     console.log(`  ${tool.name} — ${firstLine}`);
   }
@@ -404,12 +690,12 @@ if (cliArgs.includes("--list-tools")) {
 }
 
 if (cliArgs.includes("--help") || cliArgs.includes("-h")) {
-  console.log(`novada-search v${VERSION} — MCP Server for Novada web data API
+  console.log(`novada v${VERSION} — MCP Server for Novada web data API
 
 Usage:
-  npx novada-search              Start the MCP server (stdio transport)
-  npx novada-search --list-tools Show available tools
-  npx novada-search --help       Show this help
+  npx novada              Start the MCP server (stdio transport)
+  npx novada --list-tools Show available tools
+  npx novada --help       Show this help
 
 Environment:
   NOVADA_API_KEY              Your Novada API key (required)
@@ -418,26 +704,39 @@ Environment:
   NOVADA_PROXY_USER/PASS/ENDPOINT  Proxy credentials (enables novada_proxy)
 
 Connect to Claude Code:
-  claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-search
+  claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada
 
-Tools (11):
-  novada_search    Search the web via Google, Bing, and 3 more engines
-  novada_extract   Extract content from any URL (smart auto-routing)
-  novada_crawl     Crawl a website (BFS/DFS, up to 20 pages)
-  novada_research  Multi-step web research with synthesis
-  novada_map       Discover all URLs on a website (fast)
-  novada_scrape    Structured data from 129 platforms (Amazon, TikTok, etc.)
-  novada_proxy     Get residential proxy credentials
-  novada_verify    Verify a factual claim against web sources
-  novada_unblock   Force JS rendering on blocked/SPA pages
-  novada_browser   Interactive browser automation (navigate, click, type, screenshot)
-  novada_health    Check which Novada products are active on your API key
+Tools (${TOOLS.length}):
+  novada_search              Search the web via Google, Bing, and 3 more engines
+  novada_extract             Extract content from any URL (smart auto-routing)
+  novada_crawl               Crawl a website (BFS/DFS, up to 20 pages)
+  novada_research            Multi-step web research with synthesis
+  novada_map                 Discover all URLs on a website (fast)
+  novada_scrape              Structured data from 129 platforms (Amazon, TikTok, etc.)
+  novada_proxy               Get residential proxy credentials (legacy)
+  novada_verify              Verify a factual claim against web sources
+  novada_unblock             Force JS rendering on blocked/SPA pages
+  novada_browser             Interactive browser automation (navigate, click, type, screenshot)
+  novada_health              Check which Novada products are active on your API key
+  novada_health_all          Extended health check with activation links for all products
+  novada_discover            List all available Novada tools with categories and status
+  novada_proxy_residential   Residential proxy (100M+ IPs, geo-targeting, anti-bot)
+  novada_proxy_isp           ISP proxy (rotating ISP-assigned IPs)
+  novada_proxy_datacenter    Datacenter proxy (fast, cost-effective rotation)
+  novada_proxy_mobile        Mobile carrier proxy (3G/4G/5G IPs)
+  novada_proxy_static        Static ISP proxy (dedicated IP, same IP per session_id)
+  novada_proxy_dedicated     Dedicated datacenter proxy (exclusive IP, no sharing)
+  novada_scraper_submit      Submit async scraping task, returns task_id
+  novada_scraper_status      Poll async scraping task status by task_id
+  novada_scraper_result      Retrieve completed scraping results by task_id
+  novada_browser_flow        Cloud browser automation via action sequence API
 `);
   process.exit(0);
 }
 
 const server = new NovadaMCPServer();
 server.run().catch((error) => {
-  console.error("Fatal error:", error);
+  const msg = error instanceof Error ? error.message : String(error);
+  console.error("Fatal error:", msg);
   process.exit(1);
 });
