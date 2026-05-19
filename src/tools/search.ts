@@ -324,7 +324,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 
   const engineLabel = usedScraperFallback
-    ? `${engine} (via scraper-api fallback)`
+    ? `${engine} (via scraper-api)`
     : engine;
 
   const lines: string[] = [

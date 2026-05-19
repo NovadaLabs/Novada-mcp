@@ -44,7 +44,7 @@ async function probeSearch(apiKey: string): Promise<ProbeResult> {
     if (code === 0) return { status: "active", label: "Search API", latency };
     // 402 = key lacks SERP quota; 400 = API key not found in body
     if (code === 402 || code === 400) {
-      return { status: "not_activated", label: "Search API", latency, note: "dashboard.novada.com/overview/scraper/ — request SERP access" };
+      return { status: "not_activated", label: "Search API (SERP)", latency, note: "SERP quota not active — novada_search still works via Scraper API" };
     }
     return { status: "not_activated", label: "Search API", latency, note: `code=${code ?? res.status}` };
   } catch (err) {
