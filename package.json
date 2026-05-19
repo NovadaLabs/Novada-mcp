@@ -17,7 +17,7 @@
   "types": "./build/index.d.ts",
   "bin": {
     "novada-mcp": "build/index.js",
-    "nova": "build/cli.js"
+    "novada": "build/cli.js"
   },
   "files": [
     "build",

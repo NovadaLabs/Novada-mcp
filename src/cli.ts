@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * nova CLI — Direct command-line access to Novada web data tools.
+ * novadaCLI — Direct command-line access to Novada web data tools.
  *
  * Usage:
- *   nova search "best AI frameworks 2025"
- *   nova extract https://example.com
- *   nova crawl https://docs.example.com --pages 10
- *   nova map https://example.com --search "api"
- *   nova research "How do AI agents use web scraping?"
+ *   novadasearch "best AI frameworks 2025"
+ *   novadaextract https://example.com
+ *   novadacrawl https://docs.example.com --pages 10
+ *   novadamap https://example.com --search "api"
+ *   novadaresearch "How do AI agents use web scraping?"
  */
 
 import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaProxy, novadaScrape, novadaVerify, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParamsFull, validateVerifyParams } from "./tools/index.js";
@@ -16,21 +16,21 @@ import { VERSION } from "./config.js";
 
 const API_KEY = process.env.NOVADA_API_KEY;
 
-const HELP = `nova v${VERSION} — Novada web data CLI
+const HELP = `novadav${VERSION} — Novada web data CLI
 
 Usage:
-  nova search <query> [--engine google] [--num 10] [--country us] [--time day|week|month|year]
+  novadasearch <query> [--engine google] [--num 10] [--country us] [--time day|week|month|year]
               [--include domain1,domain2] [--exclude domain1,domain2]
-  nova extract <url> [--format markdown|text|html] [--render auto|static|render|browser]
-  nova crawl <url> [--max-pages 5] [--strategy bfs|dfs] [--render auto|static|render]
+  novadaextract <url> [--format markdown|text|html] [--render auto|static|render|browser]
+  novadacrawl <url> [--max-pages 5] [--strategy bfs|dfs] [--render auto|static|render]
               [--select "/docs/.*,/api/.*"] [--exclude-paths "/blog/.*"]
               [--instructions "only API reference pages"]
-  nova map <url> [--search <term>] [--limit 50] [--max-depth 2]
-  nova research <question> [--depth auto|quick|deep|comprehensive] [--focus "technical"]
-  nova proxy [--type residential|mobile|isp|datacenter] [--country us] [--format url|env|curl]
-  nova scrape --platform amazon.com --operation amazon_product_by-keywords --keyword "iphone 16"
+  novadamap <url> [--search <term>] [--limit 50] [--max-depth 2]
+  novadaresearch <question> [--depth auto|quick|deep|comprehensive] [--focus "technical"]
+  novadaproxy [--type residential|mobile|isp|datacenter] [--country us] [--format url|env|curl]
+  novadascrape --platform amazon.com --operation amazon_product_by-keywords --keyword "iphone 16"
               [--num 10] [--format markdown|json|csv|html|xlsx] [--limit 20]
-  nova verify "<claim>" [--context "as of 2024"]
+  novadaverify "<claim>" [--context "as of 2024"]
 
 Environment:
   NOVADA_API_KEY          Required. Scraper API key.
@@ -40,18 +40,18 @@ Environment:
   NOVADA_PROXY_ENDPOINT   Optional. Proxy host:port
 
 Examples:
-  nova search "GPT-5 release" --time week --country us
-  nova search "best AI tools" --include "github.com,arxiv.org"
-  nova extract https://example.com --format markdown
-  nova extract https://example.com --render browser
-  nova crawl https://docs.example.com --max-pages 10 --select "/api/.*"
-  nova crawl https://docs.example.com --instructions "only quickstart pages"
-  nova map https://example.com --search "pricing" --max-depth 3
-  nova research "How do AI agents use web scraping?" --depth deep --focus "production use cases"
-  nova proxy --type residential --country us --format env
-  nova scrape --platform amazon.com --operation amazon_product_by-keywords --keyword "iphone 16" --num 5 --format csv
-  nova scrape --platform reddit.com --operation reddit_posts_by-keywords --keyword "AI agents" --num 10
-  nova verify "The Eiffel Tower is 330 meters tall" --context "as of 2024"
+  novadasearch "GPT-5 release" --time week --country us
+  novadasearch "best AI tools" --include "github.com,arxiv.org"
+  novadaextract https://example.com --format markdown
+  novadaextract https://example.com --render browser
+  novadacrawl https://docs.example.com --max-pages 10 --select "/api/.*"
+  novadacrawl https://docs.example.com --instructions "only quickstart pages"
+  novadamap https://example.com --search "pricing" --max-depth 3
+  novadaresearch "How do AI agents use web scraping?" --depth deep --focus "production use cases"
+  novadaproxy --type residential --country us --format env
+  novadascrape --platform amazon.com --operation amazon_product_by-keywords --keyword "iphone 16" --num 5 --format csv
+  novadascrape --platform reddit.com --operation reddit_posts_by-keywords --keyword "AI agents" --num 10
+  novadaverify "The Eiffel Tower is 330 meters tall" --context "as of 2024"
 `;
 
 function parseArgs(args: string[]): { positional: string; flags: Record<string, string> } {
@@ -88,7 +88,7 @@ async function main() {
   }
 
   if (command === "--version" || command === "-v") {
-    console.log(`nova v${VERSION}`);
+    console.log(`novadav${VERSION}`);
     process.exit(0);
   }
 
@@ -101,7 +101,7 @@ async function main() {
 
   const noPositionalCommands = new Set(["proxy", "scrape"]);
   if (!positional && !noPositionalCommands.has(command)) {
-    console.error(`Error: ${command} requires an argument. Run 'nova --help' for usage.`);
+    console.error(`Error: ${command} requires an argument. Run 'novada--help' for usage.`);
     process.exit(1);
   }
 
@@ -224,7 +224,7 @@ async function main() {
         break;
 
       default:
-        console.error(`Unknown command: ${command}. Run 'nova --help' for usage.`);
+        console.error(`Unknown command: ${command}. Run 'novada--help' for usage.`);
         process.exit(1);
     }
 

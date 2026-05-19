@@ -9,7 +9,7 @@
   <a href="https://www.npmjs.com/package/novada"><img src="https://img.shields.io/npm/v/novada?style=for-the-badge&label=MCP&color=blue" alt="npm 版本"></a>
   <a href="https://smithery.ai/server/novada"><img src="https://img.shields.io/badge/Smithery-一键安装-8B5CF6?style=for-the-badge" alt="Smithery"></a>
   <a href="#工具"><img src="https://img.shields.io/badge/工具数-11-brightgreen?style=for-the-badge" alt="11 个工具"></a>
-  <a href="#nova--命令行工具"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
+  <a href="#nova--命令行工具"><img src="https://img.shields.io/badge/CLI-novada-blueviolet?style=for-the-badge" alt="CLI nova"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/代理IP-1亿+-red?style=for-the-badge" alt="1亿+ 代理 IP"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/国家覆盖-195-cyan?style=for-the-badge" alt="195 个国家"></a>
   <img src="https://img.shields.io/badge/测试用例-460-green?style=for-the-badge" alt="460 个测试">
@@ -44,7 +44,7 @@
 
 ---
 
-## `nova` — 命令行工具
+## `novada` — 命令行工具
 
 ```bash
 npm install -g novada-mcp
@@ -52,12 +52,12 @@ export NOVADA_API_KEY=你的密钥    # 在 novada.com 免费获取
 ```
 
 ```bash
-nova search "东京最好的餐厅" --country jp
-nova search "AI 融资新闻" --time week --include "techcrunch.com,wired.com"
-nova extract https://example.com
-nova crawl https://docs.example.com --max-pages 10 --select "/api/.*"
-nova map https://docs.example.com --search "webhook" --max-depth 3
-nova research "AI 代理如何使用网络抓取？" --depth deep --focus "生产环境用例"
+novada search "东京最好的餐厅" --country jp
+novada search "AI 融资新闻" --time week --include "techcrunch.com,wired.com"
+novada extract https://example.com
+novada crawl https://docs.example.com --max-pages 10 --select "/api/.*"
+novada map https://docs.example.com --search "webhook" --max-depth 3
+novada research "AI 代理如何使用网络抓取？" --depth deep --focus "生产环境用例"
 ```
 
 ---
@@ -147,7 +147,7 @@ npx -y @smithery/cli install novada --client claude
 import subprocess, os
 
 result = subprocess.run(
-    ["nova", "search", "AI 代理框架"],
+    ["novada", "search", "AI 代理框架"],
     capture_output=True, text=True,
     env={**os.environ, "NOVADA_API_KEY": "你的密钥"}
 )
@@ -160,7 +160,7 @@ print(result.stdout)
 
 ## 真实输出示例
 
-### `nova search "东京最好的餐厅" --country jp`
+### `novada search "东京最好的餐厅" --country jp`
 
 ```
 ## Search Results
@@ -183,7 +183,7 @@ snippet: 从顶级怀石料理到平价拉面，2025 年完整榜单...
 - 深度多源研究：使用 `novada_research`
 ```
 
-### `nova research "AI 代理如何使用网络抓取？" --depth deep`
+### `novada research "AI 代理如何使用网络抓取？" --depth deep`
 
 ```
 ## Research Report
@@ -217,10 +217,10 @@ depth:deep (auto-selected) | searches:6 | results:28 | unique_sources:15
 
 ```bash
 # 第一步：发现文档站所有页面
-nova map https://docs.example.com --search "webhook" --max-depth 3
+novada map https://docs.example.com --search "webhook" --max-depth 3
 
 # 第二步：一次调用批量提取目标页面
-nova extract https://docs.example.com/webhooks/events https://docs.example.com/webhooks/retry
+novada extract https://docs.example.com/webhooks/events https://docs.example.com/webhooks/retry
 ```
 
 ---
@@ -319,7 +319,7 @@ nova extract https://docs.example.com/webhooks/events https://docs.example.com/w
 | `operation` | string | 是 | — | 操作 ID（如 `amazon_product_by-keywords`） |
 | `params` | object | 否 | `{}` | 操作特定参数（如 `{ keyword: "iphone 16", num: 5 }`） |
 | `limit` | number | 否 | `20` | 最大记录数（1-100） |
-| `format` | string | 否 | `"markdown"` | `markdown` · `json`（结构化记录）。注意：`csv`/`html`/`xlsx` 仅在 `nova` CLI 中可用，不支持 MCP 调用。 |
+| `format` | string | 否 | `"markdown"` | `markdown` · `json`（结构化记录）。注意：`csv`/`html`/`xlsx` 仅在 `novada` CLI 中可用，不支持 MCP 调用。 |
 
 ### `novada_verify` — 事实核查
 
@@ -421,7 +421,7 @@ Agent 可以在选择工具之前通过 `novada://` URI 访问的参考数据。
 | 地理定向 | **195 个国家** | 国家参数 | 无 | 国家参数 |
 | 域名过滤 | **include/exclude 双向** | 无 | 无 | 无 |
 | 反机器人绕过 | **代理 + Web Unblocker** | 无 | 无头浏览器 | 无 |
-| 命令行工具 | **`nova` 命令** | 无 | 无 | 无 |
+| 命令行工具 | **`novada` 命令** | 无 | 无 | 无 |
 | Agent 引导提示 | **动态、基于每次响应** | 无 | 无 | 无 |
 
 ---
