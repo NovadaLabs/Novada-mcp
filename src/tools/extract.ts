@@ -110,6 +110,11 @@ async function extractSingle(
         : Buffer.from(response.data as string, "binary");
       const pdf = await extractPdf(pdfBuffer);
       html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
+    } else if (contentType.includes("application/json")) {
+      const jsonStr = typeof response.data === "string"
+        ? response.data
+        : JSON.stringify(response.data, null, 2);
+      html = `\`\`\`json\n${jsonStr}\n\`\`\``;
     } else {
       if (typeof response.data !== "string") {
         throw makeNovadaError(
@@ -131,6 +136,11 @@ async function extractSingle(
         : Buffer.from(response.data as string, "binary");
       const pdf = await extractPdf(pdfBuffer);
       html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
+    } else if (contentType.includes("application/json")) {
+      const jsonStr = typeof response.data === "string"
+        ? response.data
+        : JSON.stringify(response.data, null, 2);
+      html = `\`\`\`json\n${jsonStr}\n\`\`\``;
     } else {
       if (typeof response.data !== "string") {
         throw makeNovadaError(

@@ -24,7 +24,7 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   // Generate 3 strategically angled queries
   const queries = [
     `"${claim}" evidence study research${ctx}`,                                                       // Supporting (positive-stance terms reduce debunking noise)
-    `"${claim}" false wrong incorrect debunked${ctx}`,                                               // Skeptical
+    `"${claim}" debunked refuted disproved misinformation myth${ctx}`,                              // Skeptical (avoids "false/wrong" which match logic-exercise pages)
     `fact check "${claim.split(" ").slice(0, 10).join(" ")}"${ctx}`,                                // Neutral (10-word limit preserves key claim phrases)
   ];
 
@@ -75,10 +75,15 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   } else {
     const total = supportCount + contradictCount;
     const score = supportCount / total;
+    // Neutral query count used as tiebreaker in the contested zone
+    const neutralCount = neutralResult.results.filter(r => r.description || r.snippet).length;
 
-    if (score >= 0.7) {
+    // Narrower contested band (0.4-0.6) reduces false "contested" verdicts.
+    // In the contested zone, neutral fact-check results shift toward "supported" —
+    // fact-check pages co-occurring with the claim are more likely to confirm it.
+    if (score >= 0.6 || (score >= 0.4 && neutralCount > contradictCount)) {
       verdict = "supported";
-    } else if (score <= 0.3) {
+    } else if (score <= 0.4) {
       verdict = "unsupported";
     } else {
       verdict = "contested";
