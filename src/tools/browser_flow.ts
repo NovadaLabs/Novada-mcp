@@ -191,11 +191,20 @@ export async function novadaBrowserFlow(
 
   if (apiResponse.code !== 0) {
     const errorMessages: Record<number, string> = {
+      10000: "Authentication failure — NOVADA_API_KEY is invalid or missing. Verify the key at https://dashboard.novada.com/overview/.",
       10001: "Missing required parameters. Check that url and actions are provided.",
       11000: "Invalid API key.",
       11006:
         "Browser Flow API not activated on this account. Activate at https://dashboard.novada.com/overview/browser/ before retrying.",
     };
+
+    if (apiResponse.code === 10000) {
+      throw makeNovadaError(
+        NovadaErrorCode.INVALID_API_KEY,
+        errorMessages[10000]
+      );
+    }
+
     const msg =
       errorMessages[apiResponse.code] ??
       apiResponse.msg ??

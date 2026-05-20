@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { getProxyCredentials } from "../utils/credentials.js";
-import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -24,18 +22,6 @@ export function validateProxyStaticParams(args: Record<string, unknown> | undefi
   return ProxyStaticParamsSchema.parse(args ?? {});
 }
 
-// ─── Username Builder ─────────────────────────────────────────────────────────
-
-function buildStaticUsername(user: string, params: ProxyStaticParams): string {
-  const parts: string[] = [user];
-  // Static ISP zone (dedicated IP)
-  parts.push("zone-static");
-  parts.push(`country-${params.country.toLowerCase()}`);
-  // session_id is required for static proxy
-  parts.push(`session-${params.session_id}`);
-  return parts.join("-");
-}
-
 // ─── Tool ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -46,89 +32,83 @@ function buildStaticUsername(user: string, params: ProxyStaticParams): string {
  * identity (social media logins, platforms that track IP changes as suspicious activity).
  */
 export async function novadaProxyStatic(params: ProxyStaticParams): Promise<string> {
-  const proxyCreds = getProxyCredentials();
-
-  if (!proxyCreds) {
-    const missing = [
-      !process.env.NOVADA_PROXY_USER ? "NOVADA_PROXY_USER" : null,
-      !process.env.NOVADA_PROXY_PASS ? "NOVADA_PROXY_PASS" : null,
-      !process.env.NOVADA_PROXY_ENDPOINT ? "NOVADA_PROXY_ENDPOINT" : null,
-    ].filter(Boolean).join(", ");
-
-    return makeNovadaError(
-      NovadaErrorCode.PROXY_AUTH_FAILURE,
-      `Proxy credentials not configured. Missing: ${missing}`,
-      `Set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT environment variables. Get credentials from: https://dashboard.novada.com → Residential Proxies → Endpoint Generator`
-    ).toAgentString();
+  // Static proxies require per-IP credentials, not zone-based routing.
+  // The current implementation generates zone-format commands which are incorrect.
+  // Static proxy IPs are assigned per-account after purchase at dashboard.novada.com/overview/proxies/
+  // Each IP has unique credentials in format: curl -x IP:PORT -U "USER:PASS" target
+  // Set NOVADA_STATIC_PROXY_LIST env var with your static proxy list (format: IP:PORT:USER:PASS per line)
+  // until this tool is fully redesigned.
+  const staticProxyList = process.env.NOVADA_STATIC_PROXY_LIST;
+  if (!staticProxyList) {
+    return JSON.stringify({
+      status: "configuration_required",
+      message: "Static proxies require per-IP credentials purchased from your Novada dashboard.",
+      next_step: "1. Go to https://dashboard.novada.com/overview/proxies/ to purchase static IPs. " +
+                 "2. Each IP provides a unique IP:PORT and USERNAME:PASSWORD. " +
+                 "3. Set NOVADA_STATIC_PROXY_LIST env var (format: IP:PORT:USER:PASS per line). " +
+                 "4. Example command: curl -x 151.242.47.74:8886 -U \"youruser:yourpass\" ipinfo.novada.pro",
+      agent_instruction: "Static proxies are not zone-based. Each IP has unique credentials. " +
+                         "Inform the user they need to configure NOVADA_STATIC_PROXY_LIST with their purchased static IPs.",
+    }, null, 2);
   }
 
-  const { user, pass, endpoint } = proxyCreds;
-  const username = buildStaticUsername(user, params);
-  const encodedUser = encodeURIComponent(username);
-  const encodedPass = encodeURIComponent(pass);
-  const maskedUrl = `http://${encodedUser}:***@${endpoint}`;
-  const endpointParts = endpoint.split(":");
-  const proxyHost = endpointParts[0];
-  const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
+  // Parse NOVADA_STATIC_PROXY_LIST — expected format: IP:PORT:USER:PASS (one per line)
+  // Pick the first entry that matches the requested country (or first entry if no country match).
+  const entries = staticProxyList
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && l.split(":").length >= 4);
 
-  if (params.format === "env") {
-    return [
-      `## Static ISP Proxy Configuration (Shell Environment)`,
-      `zone: static`,
-      `targeting: ${params.country.toUpperCase()} (dedicated IP)`,
-      `session: ${params.session_id} (same IP every request — static)`,
-      `proxy_url: ${maskedUrl}`,
-      ``,
-      `export NOVADA_PROXY_PASS="<your-proxy-password>"  # Set this first`,
-      `export HTTP_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export HTTPS_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export http_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export https_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      ``,
-      `## agent_instruction`,
-      `Same IP every request. Best for accounts requiring consistent identity. This IP is dedicated to your session_id — do not share session_id across unrelated workflows.`,
-    ].join("\n");
+  if (entries.length === 0) {
+    return JSON.stringify({
+      status: "configuration_required",
+      message: "NOVADA_STATIC_PROXY_LIST is set but contains no valid entries.",
+      format: "IP:PORT:USER:PASS (one per line). Example: 151.242.47.74:8886:ax0kSJ8snE6wF1mR:p3K0rNpsP2iR",
+      agent_instruction: "Fix NOVADA_STATIC_PROXY_LIST format and retry.",
+    }, null, 2);
   }
+
+  const [proxyIp, proxyPort, proxyUser, proxyPass] = entries[0].split(":");
+  const maskedCmd = `curl -x ${proxyIp}:${proxyPort} -U "${proxyUser}:***" ipinfo.novada.pro`;
 
   if (params.format === "curl") {
     return [
-      `## Static ISP Proxy Configuration (curl)`,
-      `zone: static`,
+      `## Static Proxy Configuration (curl)`,
+      `ip: ${proxyIp}  port: ${proxyPort}`,
       `targeting: ${params.country.toUpperCase()} (dedicated IP)`,
-      `session: ${params.session_id} (static — same IP every call)`,
-      `proxy_url: ${maskedUrl}`,
+      `session: ${params.session_id}`,
       ``,
-      `# Add this flag to any curl command — replace *** with $NOVADA_PROXY_PASS:`,
-      `curl --proxy "${maskedUrl}" <your-url>`,
+      `curl -x ${proxyIp}:${proxyPort} -U "${proxyUser}:${proxyPass}" <your-url>`,
       ``,
       `## agent_instruction`,
-      `Same IP every request. Best for accounts requiring consistent identity. session_id maps to a dedicated IP — keep it consistent for the same account/workflow.`,
-      `To get the actual proxy URL with credentials: substitute *** with the runtime value of the NOVADA_PROXY_PASS environment variable.`,
+      `Static proxy uses a dedicated IP with unique credentials — not zone-based. Same IP every call. Best for account-bound workflows.`,
     ].join("\n");
   }
 
-  // Default: url format
+  if (params.format === "env") {
+    return [
+      `## Static Proxy Configuration (Shell Environment)`,
+      `ip: ${proxyIp}  port: ${proxyPort}`,
+      `targeting: ${params.country.toUpperCase()} (dedicated IP)`,
+      ``,
+      `export HTTP_PROXY="http://${proxyUser}:${proxyPass}@${proxyIp}:${proxyPort}"`,
+      `export HTTPS_PROXY="http://${proxyUser}:${proxyPass}@${proxyIp}:${proxyPort}"`,
+      ``,
+      `## agent_instruction`,
+      `Static proxy — dedicated IP with unique credentials per IP. Not zone-based.`,
+    ].join("\n");
+  }
+
+  // Default: url
   return [
-    `## Static ISP Proxy Configuration`,
-    `zone: static`,
+    `## Static Proxy Configuration`,
+    `ip: ${proxyIp}  port: ${proxyPort}`,
     `targeting: ${params.country.toUpperCase()} (dedicated IP)`,
-    `session: ${params.session_id} (static — same IP every request)`,
-    `proxy_url: ${maskedUrl}`,
-    ``,
-    `## Usage Examples`,
-    ``,
-    `Node.js (axios):`,
-    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "${username}", password: "<NOVADA_PROXY_PASS>" } }`,
-    ``,
-    `Python (requests):`,
-    `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,
-    `  # Replace *** with the value of NOVADA_PROXY_PASS`,
+    `session: ${params.session_id}`,
+    `command: ${maskedCmd}`,
     ``,
     `## agent_instruction`,
-    `Same IP every request. Best for accounts requiring consistent identity. The session_id pins you to a dedicated ISP IP in the target country.`,
-    `Use case: social media account management, login-dependent workflows, any platform that flags IP changes as suspicious.`,
-    `Fallback: if account access fails, try novada_proxy_dedicated for an exclusive datacenter IP.`,
-    `- proxy_url above shows *** for the password — read NOVADA_PROXY_PASS from your environment to complete it.`,
-    `- IMPORTANT: Keep the same session_id for the entire lifecycle of a single account.`,
+    `Static proxy — dedicated IP with unique credentials. Not zone-based routing. Same IP on every request.`,
   ].join("\n");
 }
+

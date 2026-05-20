@@ -123,12 +123,65 @@ export async function novadaScraperStatus(
       const body = err.response?.data as StatusApiResponse | undefined;
 
       if (status === 404) {
+        // Fallback: try the download endpoint (same backend scraper_result uses)
+        try {
+          const DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
+          const dlResp = await axios.get(`${DOWNLOAD_BASE}/scraper_download`, {
+            params: { task_id, file_type: "json", apikey: apiKey },
+            timeout: 15000,
+          });
+          const dlBody = dlResp.data;
+          if (
+            Array.isArray(dlBody) &&
+            dlBody.length > 0 &&
+            dlBody[0] !== null &&
+            typeof dlBody[0] === "object"
+          ) {
+            return JSON.stringify(
+              {
+                status: "complete",
+                task_id,
+                agent_instruction: `Task complete. Call novada_scraper_result with task_id="${task_id}" to retrieve formatted results.`,
+              },
+              null,
+              2
+            );
+          }
+          if (
+            typeof dlBody === "object" &&
+            dlBody !== null &&
+            (dlBody as { code?: number }).code === 27202
+          ) {
+            return JSON.stringify(
+              {
+                status: "pending",
+                task_id,
+                agent_instruction:
+                  "Task is queued. Retry novada_scraper_status in 5-10 seconds.",
+              },
+              null,
+              2
+            );
+          }
+        } catch (fallbackErr: unknown) {
+          // Surface auth failures from fallback endpoint, swallow others
+          if (fallbackErr instanceof AxiosError) {
+            const fbStatus = fallbackErr.response?.status;
+            if (fbStatus === 401 || fbStatus === 403) {
+              throw makeNovadaError(
+                NovadaErrorCode.INVALID_API_KEY,
+                "Invalid NOVADA_API_KEY or insufficient permissions for Scraper API."
+              );
+            }
+          }
+          /* other fallback failures — fall through to not_found */
+        }
         return JSON.stringify(
           {
             status: "not_found",
             task_id,
             agent_instruction:
-              "Task not found. Verify the task_id was returned from a successful novada_scraper_submit call. Tasks expire after 24 hours — re-submit if needed.",
+              "Task not found on either endpoint. Verify task_id from a successful novada_scraper_submit call. Tasks expire after 24 hours.",
           },
           null,
           2

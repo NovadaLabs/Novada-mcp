@@ -97,7 +97,12 @@ async function probeScraper(apiKey: string): Promise<ProbeResult> {
 function probeProxy(): ProbeResult {
   const creds = getProxyCredentials();
   if (creds) {
-    return { status: "active", label: "Proxy", latency: null };
+    // Validate endpoint format: must contain ":" as a host:port separator
+    const endpointValid = creds.endpoint.includes(":");
+    if (endpointValid) {
+      return { status: "active", label: "Proxy", latency: null };
+    }
+    return { status: "active", label: "Proxy", latency: null, note: "configured — connectivity unverified" };
   }
   return {
     status: "not_configured",
@@ -110,7 +115,12 @@ function probeProxy(): ProbeResult {
 function probeBrowser(): ProbeResult {
   const ws = getBrowserWs();
   if (ws) {
-    return { status: "active", label: "Browser API", latency: null };
+    // Validate WS URL format: must start with "wss://" and contain "@" (user:pass@host)
+    const wsValid = ws.startsWith("wss://") && ws.includes("@");
+    if (wsValid) {
+      return { status: "active", label: "Browser API", latency: null };
+    }
+    return { status: "active", label: "Browser API", latency: null, note: "NOVADA_BROWSER_WS format may be wrong — expected wss://user:pass@host" };
   }
   return {
     status: "not_configured",

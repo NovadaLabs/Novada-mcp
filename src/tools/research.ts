@@ -88,22 +88,24 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
   const queryValue = params.query ?? params.question ?? "";
   const depthValue = resolvedDepth;
 
-  // All searches failed — SERP endpoint is unavailable for this account
-  if (failedCount === queries.length) {
-    return formatResearchOutput({
-      topic,
-      query: queryValue,
-      depth: depthValue,
-      sourcesFetchedCount: 0,
-      summaryText: "",
-      findingBullets: [],
-      sourceLines: [],
-      agentHints: [
-        `- Use \`novada_extract\` with specific URLs you already know to research this topic.`,
-        `- Use \`novada_map\` on a relevant site, then \`novada_extract\` on discovered pages.`,
-        `- Contact support@novada.com to enable SERP access for your account (all ${queries.length} search queries failed).`,
-      ],
-    });
+  // All searches failed or returned 0 results — Scraper API not activated
+  if (failedCount === queries.length || totalResults === 0) {
+    return [
+      `## Research Unavailable`,
+      ``,
+      `All search queries returned 0 results. Scraper API (search) is not activated on this account.`,
+      ``,
+      `**Cannot complete research on:** "${topic}"`,
+      ``,
+      `**Fix:** Activate Scraper API at https://dashboard.novada.com/overview/scraper/`,
+      ``,
+      `**Alternatives while search is unavailable:**`,
+      `- Use \`novada_extract\` with specific URLs you already know`,
+      `- Use \`novada_map\` on a relevant site, then \`novada_extract\` on discovered pages`,
+      ``,
+      `## Agent Instruction`,
+      `agent_status: search_unavailable | action: activate_scraper_api | question_not_answered: true`,
+    ].join("\n");
   }
 
   // Build synthesis summary from extracted contents or snippet snippets

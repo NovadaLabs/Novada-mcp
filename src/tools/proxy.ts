@@ -8,8 +8,8 @@ import { getProxyCredentials } from "../utils/credentials.js";
 const ZONE_MAP: Record<string, string> = {
   residential: "zone-res",
   isp: "zone-isp",
-  mobile: "zone-mobile",
-  datacenter: "zone-datacenter",
+  mobile: "zone-mob",
+  datacenter: "zone-dcp",
   static: "zone-static",
   dedicated: "zone-dedicated",
 };
@@ -18,7 +18,7 @@ function buildProxyUsername(user: string, params: ProxyParams): string {
   const parts: string[] = [user];
   const zone = ZONE_MAP[params.type];
   if (zone) parts.push(zone);
-  if (params.country) parts.push(`country-${params.country.toLowerCase()}`);
+  if (params.country && params.type !== "isp") parts.push(`region-${params.country.toLowerCase()}`);
   if (params.city) parts.push(`city-${params.city.toLowerCase().replace(/\s+/g, "")}`);
   if (params.session_id) parts.push(`session-${params.session_id}`);
   return parts.join("-");

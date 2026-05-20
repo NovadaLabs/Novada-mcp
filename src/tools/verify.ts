@@ -39,6 +39,22 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
 
   const [supportingResult, skepticalResult, neutralResult] = queryResults;
 
+  // All 3 queries failed — search is unavailable, not a genuine verdict
+  if (queryResults.every(r => r.failed && r.results.length === 0)) {
+    return [
+      `## Verify Unavailable`,
+      ``,
+      `Search returned 0 results for all 3 queries. Scraper API (search) is not activated on this account.`,
+      ``,
+      `**Verdict cannot be determined** — this is a service activation issue, not genuine ambiguity about the claim.`,
+      ``,
+      `**Fix:** Activate Scraper API at https://dashboard.novada.com/overview/scraper/`,
+      ``,
+      `## Agent Instruction`,
+      `agent_status: search_unavailable | action: activate_scraper_api | do_not_interpret_as: genuine_insufficient_data`,
+    ].join("\n");
+  }
+
   // Collect evidence
   const supportingEvidence = supportingResult.results.filter(r => r.description || r.snippet);
   const contradictingEvidence = skepticalResult.results.filter(r => r.description || r.snippet);

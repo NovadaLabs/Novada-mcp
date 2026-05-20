@@ -97,8 +97,17 @@ export async function pollSearchResult(apiKey: string, taskId: string): Promise<
     }
 
     if (body !== null && typeof body === "object" && !Array.isArray(body)) {
-      const bErr = body as Record<string, unknown>;
-      throw new Error(`Scraper download error (code ${bErr.code ?? "?"}): ${bErr.msg ?? JSON.stringify(bErr).slice(0, 150)}`);
+      const bObj = body as Record<string, unknown>;
+      // Direct result object — flat format (organic_results / search_metadata at top level)
+      if ("organic_results" in bObj || "organic" in bObj || "results" in bObj || "search_metadata" in bObj) {
+        return bObj;
+      }
+      // Still pending
+      if (bObj.code === 27202) {
+        await scraperSleep(2000);
+        continue;
+      }
+      throw new Error(`Scraper download error (code ${bObj.code ?? "?"}): ${bObj.msg ?? JSON.stringify(bObj).slice(0, 150)}`);
     }
 
     throw new Error(`Unexpected scraper download response: ${JSON.stringify(body).slice(0, 200)}`);

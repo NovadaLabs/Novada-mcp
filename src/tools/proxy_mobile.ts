@@ -36,8 +36,8 @@ export function validateProxyMobileParams(args: Record<string, unknown> | undefi
 function buildMobileUsername(user: string, params: ProxyMobileParams): string {
   const parts: string[] = [user];
   // Mobile zone
-  parts.push("zone-mobile");
-  if (params.country) parts.push(`country-${params.country.toLowerCase()}`);
+  parts.push("zone-mob");
+  if (params.country) parts.push(`region-${params.country.toLowerCase()}`);
   if (params.carrier) parts.push(`carrier-${params.carrier.toLowerCase().replace(/\s+/g, "")}`);
   if (params.session_id) parts.push(`session-${params.session_id}`);
   return parts.join("-");

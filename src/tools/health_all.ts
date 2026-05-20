@@ -1,22 +1,20 @@
 import { z } from "zod";
 import {
   getBrowserWs,
-  getProxyCredentials,
   getWebUnblockerKey,
 } from "../utils/credentials.js";
 import {
   SCRAPER_API_BASE,
-  SCRAPERAPI_BASE,
   WEB_UNBLOCKER_BASE,
 } from "../config.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PROBE_TIMEOUT_MS = 8000;
+const PROBE_TIMEOUT_MS = 20000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ProbeStatus = "active" | "not_activated" | "not_configured" | "error";
+type ProbeStatus = "active" | "not_activated" | "not_configured" | "misconfigured" | "error";
 
 interface ProductProbeResult {
   product: string;
@@ -44,12 +42,19 @@ async function probeSearchAll(apiKey: string): Promise<ProductProbeResult> {
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   const start = Date.now();
   try {
-    const res = await fetch(`${SCRAPERAPI_BASE}/search`, {
+    const form = new URLSearchParams();
+    form.append("scraper_name", "google.com");
+    form.append("scraper_id", "google_search");
+    form.append("json", "1");
+    form.append("scraper_errors", "true");
+    form.append("is_auto_push", "false");
+    const res = await fetch(`${SCRAPER_API_BASE}/request`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        serpapi_query: { q: "test", engine: "google", num: "1", api_key: apiKey },
-      }),
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: form.toString(),
       signal: controller.signal,
     });
     const latency = Date.now() - start;
@@ -61,13 +66,21 @@ async function probeSearchAll(apiKey: string): Promise<ProductProbeResult> {
     if (code === 0) {
       return { product: "Search API", status: "active", latency, notes: "Google SERP probe OK" };
     }
-    if (code === 402 || code === 400) {
+    if (code === 11006) {
       return {
         product: "Search API",
         status: "not_activated",
         latency,
-        notes: `code=${code} — SERP quota not enabled`,
+        notes: "code=11006 — contact support to enable Bearer token access",
         activationLink: "https://dashboard.novada.com/overview/scraper/",
+      };
+    }
+    if (code === 11000) {
+      return {
+        product: "Search API",
+        status: "error",
+        latency,
+        notes: "code=11000 — invalid API key",
       };
     }
     return {
@@ -224,40 +237,59 @@ async function probeScraperAll(apiKey: string): Promise<ProductProbeResult> {
 }
 
 function probeProxyAll(): ProductProbeResult {
-  const creds = getProxyCredentials();
-  if (creds) {
+  const proxyUser = process.env.NOVADA_PROXY_USER;
+  const proxyEndpoint = process.env.NOVADA_PROXY_ENDPOINT;
+  if (!proxyUser) {
     return {
       product: "Proxy",
-      status: "active",
+      status: "not_configured",
       latency: null,
-      notes: "Credentials found in env",
+      notes: "Set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT",
+      activationLink: "https://dashboard.novada.com/overview/proxy/",
+    };
+  }
+  if (!proxyEndpoint || !proxyEndpoint.includes(":")) {
+    return {
+      product: "Proxy",
+      status: "misconfigured",
+      latency: null,
+      notes: "NOVADA_PROXY_ENDPOINT missing or malformed — expected format: hostname:port",
+      activationLink: "https://dashboard.novada.com/overview/proxy/",
     };
   }
   return {
     product: "Proxy",
-    status: "not_configured",
+    status: "active",
     latency: null,
-    notes: "Set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT",
-    activationLink: "https://dashboard.novada.com/overview/proxy/",
+    notes: "Credentials found in env",
   };
 }
 
 function probeBrowserAll(): ProductProbeResult {
   const ws = getBrowserWs();
-  if (ws) {
+  if (!ws) {
     return {
       product: "Browser API",
-      status: "active",
+      status: "not_configured",
       latency: null,
-      notes: "NOVADA_BROWSER_WS is set",
+      notes: "Set NOVADA_BROWSER_WS (wss://user:pass@host format)",
+      activationLink: "https://dashboard.novada.com/overview/browser/",
+    };
+  }
+  if (!ws.startsWith("wss://") || !ws.includes("@")) {
+    return {
+      product: "Browser API",
+      status: "misconfigured",
+      latency: null,
+      notes: "NOVADA_BROWSER_WS must be wss://username:password@host — get from dashboard.novada.com/overview/browser/",
+      activationLink: "https://dashboard.novada.com/overview/browser/",
     };
   }
   return {
     product: "Browser API",
-    status: "not_configured",
+    status: "active",
     latency: null,
-    notes: "Set NOVADA_BROWSER_WS (wss://user:pass@host format)",
-    activationLink: "https://dashboard.novada.com/overview/browser/",
+    notes: "NOVADA_BROWSER_WS is set",
   };
 }
 
@@ -277,10 +309,11 @@ async function probeUnblockAll(apiKey: string): Promise<ProductProbeResult> {
 
 function statusIcon(status: ProbeStatus): string {
   switch (status) {
-    case "active":       return "✅ Active";
-    case "not_activated": return "❌ Not activated";
+    case "active":         return "✅ Active";
+    case "not_activated":  return "❌ Not activated";
     case "not_configured": return "⚠️ Not configured";
-    case "error":        return "❌ Error";
+    case "misconfigured":  return "⚠️ Misconfigured";
+    case "error":          return "❌ Error";
   }
 }
 
@@ -327,10 +360,11 @@ export async function novadaHealthAll(apiKey: string): Promise<string> {
     unblockSettled.status === "fulfilled" ? unblockSettled.value : errorFallback("Unblock API"),
   ];
 
-  const activeCount      = results.filter(r => r.status === "active").length;
-  const unavailableCount = results.filter(r => r.status === "not_activated").length;
-  const unconfiguredCount = results.filter(r => r.status === "not_configured").length;
-  const errorCount       = results.filter(r => r.status === "error").length;
+  const activeCount        = results.filter(r => r.status === "active").length;
+  const unavailableCount   = results.filter(r => r.status === "not_activated").length;
+  const unconfiguredCount  = results.filter(r => r.status === "not_configured").length;
+  const misconfiguredCount = results.filter(r => r.status === "misconfigured").length;
+  const errorCount         = results.filter(r => r.status === "error").length;
 
   const lines: string[] = [
     "## Novada API — Extended Health Check",
@@ -353,10 +387,11 @@ export async function novadaHealthAll(apiKey: string): Promise<string> {
   lines.push("## Summary");
 
   const parts: string[] = [];
-  if (activeCount > 0)      parts.push(`${activeCount} active`);
-  if (unavailableCount > 0) parts.push(`${unavailableCount} not activated`);
-  if (unconfiguredCount > 0) parts.push(`${unconfiguredCount} not configured`);
-  if (errorCount > 0)       parts.push(`${errorCount} error`);
+  if (activeCount > 0)        parts.push(`${activeCount} active`);
+  if (unavailableCount > 0)   parts.push(`${unavailableCount} not activated`);
+  if (unconfiguredCount > 0)  parts.push(`${unconfiguredCount} not configured`);
+  if (misconfiguredCount > 0) parts.push(`${misconfiguredCount} misconfigured`);
+  if (errorCount > 0)         parts.push(`${errorCount} error`);
   lines.push(`- ${parts.join("  |  ")}`);
 
   const needsAction = results.filter(r => r.status !== "active");
@@ -370,12 +405,18 @@ export async function novadaHealthAll(apiKey: string): Promise<string> {
     lines.push("");
     lines.push("## Next Steps");
     for (const r of needsAction) {
-      if (r.status === "not_activated" && r.activationLink) {
+      if (r.status === "not_activated") {
+        const link = r.activationLink ?? "https://dashboard.novada.com/overview/scraper/";
         lines.push(
-          `- **${r.product}** — Not activated. Activate at: ${r.activationLink}`
+          `- **${r.product}** — Not activated. Activate at: ${link}`
         );
       } else if (r.status === "not_configured") {
         lines.push(`- **${r.product}** — Not configured. ${r.notes}`);
+        if (r.activationLink) {
+          lines.push(`  Get credentials: ${r.activationLink}`);
+        }
+      } else if (r.status === "misconfigured") {
+        lines.push(`- **${r.product}** — Misconfigured. ${r.notes}`);
         if (r.activationLink) {
           lines.push(`  Get credentials: ${r.activationLink}`);
         }

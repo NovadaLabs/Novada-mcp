@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { getProxyCredentials } from "../utils/credentials.js";
-import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -21,17 +19,6 @@ export function validateProxyDedicatedParams(args: Record<string, unknown> | und
   return ProxyDedicatedParamsSchema.parse(args ?? {});
 }
 
-// ─── Username Builder ─────────────────────────────────────────────────────────
-
-function buildDedicatedUsername(user: string, params: ProxyDedicatedParams): string {
-  const parts: string[] = [user];
-  // Dedicated datacenter zone
-  parts.push("zone-dedicated");
-  // session_id required for dedicated — maps to exclusive IP
-  parts.push(`session-${params.session_id}`);
-  return parts.join("-");
-}
-
 // ─── Tool ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -42,89 +29,82 @@ function buildDedicatedUsername(user: string, params: ProxyDedicatedParams): str
  * need a clean, exclusive IP with no risk of other users' activity affecting access.
  */
 export async function novadaProxyDedicated(params: ProxyDedicatedParams): Promise<string> {
-  const proxyCreds = getProxyCredentials();
-
-  if (!proxyCreds) {
-    const missing = [
-      !process.env.NOVADA_PROXY_USER ? "NOVADA_PROXY_USER" : null,
-      !process.env.NOVADA_PROXY_PASS ? "NOVADA_PROXY_PASS" : null,
-      !process.env.NOVADA_PROXY_ENDPOINT ? "NOVADA_PROXY_ENDPOINT" : null,
-    ].filter(Boolean).join(", ");
-
-    return makeNovadaError(
-      NovadaErrorCode.PROXY_AUTH_FAILURE,
-      `Proxy credentials not configured. Missing: ${missing}`,
-      `Set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT environment variables. Get credentials from: https://dashboard.novada.com → Residential Proxies → Endpoint Generator`
-    ).toAgentString();
+  // Dedicated proxies require per-IP credentials, not zone-based routing.
+  // The current implementation generates zone-format commands which are incorrect.
+  // Dedicated proxy IPs are assigned per-account after purchase at dashboard.novada.com/overview/proxies/
+  // Each IP has unique credentials in format: curl -x IP:PORT -U "USER:PASS" target
+  // Set NOVADA_DEDICATED_PROXY_LIST env var with your dedicated proxy list (format: IP:PORT:USER:PASS per line)
+  // until this tool is fully redesigned.
+  const dedicatedProxyList = process.env.NOVADA_DEDICATED_PROXY_LIST;
+  if (!dedicatedProxyList) {
+    return JSON.stringify({
+      status: "configuration_required",
+      message: "Dedicated proxies require per-IP credentials purchased from your Novada dashboard.",
+      next_step: "1. Go to https://dashboard.novada.com/overview/proxies/ to purchase dedicated IPs. " +
+                 "2. Each IP provides a unique IP:PORT and USERNAME:PASSWORD. " +
+                 "3. Set NOVADA_DEDICATED_PROXY_LIST env var (format: IP:PORT:USER:PASS per line). " +
+                 "4. Example command: curl -x 151.242.47.74:8886 -U \"youruser:yourpass\" ipinfo.novada.pro",
+      agent_instruction: "Dedicated proxies are not zone-based. Each IP has unique credentials. " +
+                         "Inform the user they need to configure NOVADA_DEDICATED_PROXY_LIST with their purchased dedicated IPs.",
+    }, null, 2);
   }
 
-  const { user, pass, endpoint } = proxyCreds;
-  const username = buildDedicatedUsername(user, params);
-  const encodedUser = encodeURIComponent(username);
-  const encodedPass = encodeURIComponent(pass);
-  const maskedUrl = `http://${encodedUser}:***@${endpoint}`;
-  const endpointParts = endpoint.split(":");
-  const proxyHost = endpointParts[0];
-  const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
+  // Parse NOVADA_DEDICATED_PROXY_LIST — expected format: IP:PORT:USER:PASS (one per line)
+  // Pick the first entry.
+  const entries = dedicatedProxyList
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && l.split(":").length >= 4);
 
-  if (params.format === "env") {
-    return [
-      `## Dedicated Datacenter Proxy Configuration (Shell Environment)`,
-      `zone: dedicated`,
-      `ip_type: exclusive datacenter (not shared with other users)`,
-      `session: ${params.session_id} (dedicated IP — never rotates)`,
-      `proxy_url: ${maskedUrl}`,
-      ``,
-      `export NOVADA_PROXY_PASS="<your-proxy-password>"  # Set this first`,
-      `export HTTP_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export HTTPS_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export http_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export https_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      ``,
-      `## agent_instruction`,
-      `Exclusive datacenter IP. Best for high-trust platforms. No other user shares this IP — clean reputation guaranteed. For human-like IP appearance, use novada_proxy_residential instead.`,
-    ].join("\n");
+  if (entries.length === 0) {
+    return JSON.stringify({
+      status: "configuration_required",
+      message: "NOVADA_DEDICATED_PROXY_LIST is set but contains no valid entries.",
+      format: "IP:PORT:USER:PASS (one per line). Example: 151.242.47.74:8886:ax0kSJ8snE6wF1mR:p3K0rNpsP2iR",
+      agent_instruction: "Fix NOVADA_DEDICATED_PROXY_LIST format and retry.",
+    }, null, 2);
   }
+
+  const [proxyIp, proxyPort, proxyUser, proxyPass] = entries[0].split(":");
+  const maskedCmd = `curl -x ${proxyIp}:${proxyPort} -U "${proxyUser}:***" ipinfo.novada.pro`;
 
   if (params.format === "curl") {
     return [
-      `## Dedicated Datacenter Proxy Configuration (curl)`,
-      `zone: dedicated`,
-      `ip_type: exclusive datacenter`,
-      `session: ${params.session_id} (dedicated — never rotates)`,
-      `proxy_url: ${maskedUrl}`,
+      `## Dedicated Proxy Configuration (curl)`,
+      `ip: ${proxyIp}  port: ${proxyPort}`,
+      `ip_type: exclusive datacenter (not shared with other users)`,
+      `session: ${params.session_id}`,
       ``,
-      `# Add this flag to any curl command — replace *** with $NOVADA_PROXY_PASS:`,
-      `curl --proxy "${maskedUrl}" <your-url>`,
+      `curl -x ${proxyIp}:${proxyPort} -U "${proxyUser}:${proxyPass}" <your-url>`,
       ``,
       `## agent_instruction`,
-      `Exclusive datacenter IP. Best for high-trust platforms. For human-like IP appearance, use novada_proxy_residential.`,
-      `To get the actual proxy URL with credentials: substitute *** with the runtime value of the NOVADA_PROXY_PASS environment variable.`,
+      `Dedicated proxy uses an exclusive IP with unique credentials — not zone-based. Same IP every call. No other user shares this IP.`,
     ].join("\n");
   }
 
-  // Default: url format
+  if (params.format === "env") {
+    return [
+      `## Dedicated Proxy Configuration (Shell Environment)`,
+      `ip: ${proxyIp}  port: ${proxyPort}`,
+      `ip_type: exclusive datacenter (not shared with other users)`,
+      ``,
+      `export HTTP_PROXY="http://${proxyUser}:${proxyPass}@${proxyIp}:${proxyPort}"`,
+      `export HTTPS_PROXY="http://${proxyUser}:${proxyPass}@${proxyIp}:${proxyPort}"`,
+      ``,
+      `## agent_instruction`,
+      `Dedicated proxy — exclusive datacenter IP with unique credentials per IP. Not zone-based.`,
+    ].join("\n");
+  }
+
+  // Default: url
   return [
-    `## Dedicated Datacenter Proxy Configuration`,
-    `zone: dedicated`,
+    `## Dedicated Proxy Configuration`,
+    `ip: ${proxyIp}  port: ${proxyPort}`,
     `ip_type: exclusive datacenter (not shared with other users)`,
-    `session: ${params.session_id} (dedicated IP — never rotates)`,
-    `proxy_url: ${maskedUrl}`,
-    ``,
-    `## Usage Examples`,
-    ``,
-    `Node.js (axios):`,
-    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "${username}", password: "<NOVADA_PROXY_PASS>" } }`,
-    ``,
-    `Python (requests):`,
-    `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,
-    `  # Replace *** with the value of NOVADA_PROXY_PASS`,
+    `session: ${params.session_id}`,
+    `command: ${maskedCmd}`,
     ``,
     `## agent_instruction`,
-    `Exclusive datacenter IP. Best for high-trust platforms. This IP is not shared with other users — clean reputation, no contamination risk.`,
-    `Use case: high-value API access, platforms that permanently ban shared IPs, clean-slate scraping with no prior negative history.`,
-    `Fallback: if the target blocks datacenter IPs outright, use novada_proxy_residential (looks like real home user) or novada_proxy_static (dedicated ISP IP).`,
-    `- proxy_url above shows *** for the password — read NOVADA_PROXY_PASS from your environment to complete it.`,
-    `- IMPORTANT: Keep the same session_id throughout the lifetime of work requiring this dedicated IP.`,
+    `Dedicated proxy — exclusive IP with unique credentials. Not zone-based routing. Same IP on every request. No other user shares this IP.`,
   ].join("\n");
 }

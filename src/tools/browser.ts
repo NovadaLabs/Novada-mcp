@@ -2,6 +2,7 @@ import type { Page } from "playwright-core";
 import type { BrowserParams, BrowserAction } from "./types.js";
 import { getBrowserWs } from "../utils/credentials.js";
 import { getSession, storeSession, closeSession, listSessions } from "../utils/browser.js";
+import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 interface ActionResult {
   action: string;
@@ -138,6 +139,19 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
     let browser;
     let newPage;
     try {
+      // Validate wsEndpoint format before attempting CDP connection
+      if (!wsEndpoint.startsWith("wss://")) {
+        throw makeNovadaError(
+          NovadaErrorCode.INVALID_PARAMS,
+          `NOVADA_BROWSER_WS must start with wss:// — got: ${wsEndpoint.slice(0, 30)}... Format: wss://username:password@host`,
+        );
+      }
+      if (!wsEndpoint.includes("@")) {
+        throw makeNovadaError(
+          NovadaErrorCode.INVALID_PARAMS,
+          "NOVADA_BROWSER_WS is missing credentials. Format: wss://username:password@host — get credentials from https://dashboard.novada.com/overview/browser/",
+        );
+      }
       browser = await chromium.connectOverCDP(wsEndpoint);
       const context = await browser.newContext({
         userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",

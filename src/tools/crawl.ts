@@ -91,6 +91,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
   let failedCount = 0;
   let seedExcluded = false;
+  let sparsePageCount = 0;
 
   const selectPatterns = compilePatterns(params.select_paths);
   const excludePatterns = compilePatterns(params.exclude_paths);
@@ -143,7 +144,10 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
       const jsRendered = pageRendered[i];
       const jsMissing = jsHeavy && !jsRendered;
 
-      if (wordCount < 20) continue;
+      if (wordCount < 20) {
+        sparsePageCount++;
+        continue;
+      }
 
       const jsContentMissing = jsMissing ? true : undefined;
       results.push({ url: batch[i].url, title, text, depth: batch[i].depth, wordCount, jsContentMissing });
@@ -168,9 +172,34 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   }
 
   if (results.length === 0) {
+    if (sparsePageCount > 0) {
+      // Pages were fetched but all had sparse content — try a render diagnostic before throwing
+      let renderHint = "";
+      if (renderMode !== "render") {
+        try {
+          const renderPage = await fetchPage(params.url, apiKey, true);
+          if (renderPage) {
+            const renderText = extractMainContent(renderPage.html, params.url, 3000);
+            const renderWordCount = renderText.split(/\s+/).filter(Boolean).length;
+            if (renderWordCount >= 20) {
+              renderHint = ` Re-try with render="render" parameter — rendered version has content (${renderWordCount} words detected).`;
+            }
+          }
+        } catch { /* diagnostic only — swallow errors */ }
+      }
+      throw makeNovadaError(
+        NovadaErrorCode.URL_UNREACHABLE,
+        `crawl fetched ${sparsePageCount} page(s) from ${params.url} but all had sparse content (< 20 words). ` +
+        `This usually means the site returns a bot challenge or requires JavaScript rendering. ` +
+        `Try: (1) set render="render" to force JS rendering, (2) use novada_extract on individual pages, ` +
+        `(3) use novada_unblock for heavily protected sites.${renderHint}`,
+        "sparse_content"
+      );
+    }
     throw makeNovadaError(
       NovadaErrorCode.URL_UNREACHABLE,
-      `Failed to crawl ${params.url}. The site may be unreachable or blocking automated access.`
+      `Failed to crawl ${params.url} — no pages could be fetched. Check the URL is accessible and try novada_extract on the URL directly to diagnose connectivity.`,
+      "no_pages_fetched"
     );
   }
 

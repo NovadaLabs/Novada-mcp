@@ -32,7 +32,6 @@ function buildIspUsername(user: string, params: ProxyIspParams): string {
   const parts: string[] = [user];
   // ISP rotating zone
   parts.push("zone-isp");
-  if (params.country) parts.push(`country-${params.country.toLowerCase()}`);
   if (params.session_id) parts.push(`session-${params.session_id}`);
   return parts.join("-");
 }
@@ -72,7 +71,11 @@ export async function novadaProxyIsp(params: ProxyIspParams): Promise<string> {
   const proxyHost = endpointParts[0];
   const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
 
-  const targeting = params.country ? params.country.toUpperCase() : "Any country (rotating)";
+  // ISP zone (zone-isp) does not support country targeting in the zone string.
+  // The country param is accepted by schema but has no effect on the backend.
+  const targeting = params.country
+    ? `Any (ISP zone does not support country targeting — '${params.country.toUpperCase()}' ignored; use novada_proxy_residential for geo-targeted ISP)`
+    : "Any country (rotating)";
 
   if (params.format === "env") {
     return [

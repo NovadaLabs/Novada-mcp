@@ -31,8 +31,8 @@ export function validateProxyDatacenterParams(args: Record<string, unknown> | un
 function buildDatacenterUsername(user: string, params: ProxyDatacenterParams): string {
   const parts: string[] = [user];
   // Datacenter rotating zone
-  parts.push("zone-datacenter");
-  if (params.country) parts.push(`country-${params.country.toLowerCase()}`);
+  parts.push("zone-dcp");
+  if (params.country) parts.push(`region-${params.country.toLowerCase()}`);
   if (params.session_id) parts.push(`session-${params.session_id}`);
   return parts.join("-");
 }

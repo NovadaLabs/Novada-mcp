@@ -61,9 +61,8 @@ export async function submitScrapeTask(
     }
   } else {
     // Format B: scraper_params array for all other platforms
-    if (Object.keys(opParams).length > 0) {
-      form.append("scraper_params", JSON.stringify([opParams]));
-    }
+    // Always include scraper_params even when empty — backend requires this field
+    form.append("scraper_params", JSON.stringify([opParams]));
   }
 
   const resp = await axios.post(SCRAPE_ENDPOINT, form, {

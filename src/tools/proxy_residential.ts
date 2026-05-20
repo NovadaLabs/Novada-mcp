@@ -37,7 +37,7 @@ function buildResidentialUsername(user: string, params: ProxyResidentialParams):
   const parts: string[] = [user];
   // Residential zone
   parts.push("zone-res");
-  if (params.country) parts.push(`country-${params.country.toLowerCase()}`);
+  if (params.country) parts.push(`region-${params.country.toLowerCase()}`);
   if (params.city) parts.push(`city-${params.city.toLowerCase().replace(/\s+/g, "")}`);
   if (params.session_id) parts.push(`session-${params.session_id}`);
   return parts.join("-");
