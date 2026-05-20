@@ -4,6 +4,22 @@ Every fix applied to the codebase, in reverse chronological order.
 
 ---
 
+## 2026-05-20 — Bing: `num` param breaks submit; DDG: URL at `source.link`
+**Commit:** (this session)
+**Files:** `src/tools/search.ts`
+
+**Bing fix:**
+- Root cause: Bing Scraper API returns `data.data=null` when `num` is included in the form params. The playground curl example doesn't include `num`. Adding `num` silently corrupts the request.
+- Fix: Added `supports_num: boolean` to `ScraperSearchEngine` interface. Set `bing: supports_num=false`, `yandex: supports_num=false`. Updated `submitSearchScrapeTask` to skip `num` when flag is false.
+- Verified: PASS — 10 results returned.
+
+**DDG fix:**
+- Root cause: DDG results use `result.source.link` for URL, not `result.url` or `result.link`. `parseScraperSearchResults` checked `url` and `link` only, so all DDG results had empty URLs and were skipped in rendering.
+- Fix: Added `(item.source as Record<string, unknown>)?.link` fallback to both `url` and `link` fields in the result map.
+- Verified: PASS — 10 results with URLs returned.
+
+---
+
 ## 2026-05-20 — Bing + DDG search: wrong query param
 **Commit:** (this session)
 **File:** `src/tools/search.ts`

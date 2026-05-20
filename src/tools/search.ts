@@ -11,13 +11,14 @@ interface ScraperSearchEngine {
   scraper_name: string;
   scraper_id: string;
   query_param: string;  // canonical query field name for this engine
+  supports_num: boolean; // whether this engine accepts the num parameter
 }
 
 const ENGINE_MAP: Record<string, ScraperSearchEngine> = {
-  google:     { scraper_name: "google.com",     scraper_id: "google_search", query_param: "q"       },
-  bing:       { scraper_name: "bing.com",        scraper_id: "bing_search",   query_param: "q" },
-  duckduckgo: { scraper_name: "duckduckgo.com",  scraper_id: "duckduckgo",    query_param: "q" },
-  yandex:     { scraper_name: "yandex.com",      scraper_id: "yandex",        query_param: "keyword" },
+  google:     { scraper_name: "google.com",     scraper_id: "google_search", query_param: "q",       supports_num: true  },
+  bing:       { scraper_name: "bing.com",        scraper_id: "bing_search",   query_param: "q",       supports_num: false },
+  duckduckgo: { scraper_name: "duckduckgo.com",  scraper_id: "duckduckgo",    query_param: "q",       supports_num: true  },
+  yandex:     { scraper_name: "yandex.com",      scraper_id: "yandex",        query_param: "keyword", supports_num: false },
 };
 
 function scraperSleep(ms: number): Promise<void> {
@@ -31,7 +32,8 @@ export async function submitSearchScrapeTask(
   scraperId: string,
   query: string,
   num: number,
-  queryParam = "q"
+  queryParam = "q",
+  supportsNum = true
 ): Promise<string> {
   const form = new URLSearchParams();
   form.append("scraper_name", scraperName);
@@ -39,7 +41,7 @@ export async function submitSearchScrapeTask(
   form.append("scraper_errors", "true");
   form.append("is_auto_push", "false");
   form.append(queryParam, query);
-  form.append("num", String(num));
+  if (supportsNum) form.append("num", String(num));
   form.append("json", "1");
   form.append("no_cache", "false");
   if (scraperName === "bing.com") {
@@ -129,8 +131,8 @@ export function parseScraperSearchResults(data: Record<string, unknown>): Novada
 
   return (organic as Record<string, unknown>[]).map(item => ({
     title: (item.title as string | undefined) ?? "",
-    url: (item.url as string | undefined) ?? (item.link as string | undefined) ?? "",
-    link: (item.link as string | undefined) ?? (item.url as string | undefined) ?? "",
+    url: (item.url as string | undefined) ?? (item.link as string | undefined) ?? ((item.source as Record<string, unknown> | undefined)?.link as string | undefined) ?? "",
+    link: (item.link as string | undefined) ?? (item.url as string | undefined) ?? ((item.source as Record<string, unknown> | undefined)?.link as string | undefined) ?? "",
     snippet: (item.snippet as string | undefined) ?? (item.description as string | undefined) ?? "",
     description: (item.description as string | undefined) ?? (item.snippet as string | undefined) ?? "",
     published: (item.published as string | undefined) ?? (item.date as string | undefined),
@@ -214,7 +216,8 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     engineCfg.scraper_id,
     params.query,
     params.num || 10,
-    engineCfg.query_param
+    engineCfg.query_param,
+    engineCfg.supports_num
   );
   const resultData = await pollSearchResult(apiKey, taskId);
   scraperResults = parseScraperSearchResults(resultData);
