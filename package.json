@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "One MCP for all Novada products \u2014 search, scraping, proxy, browser, and more",
   "mcpName": "novada",
   "type": "module",
@@ -34,7 +34,8 @@
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "benchmark": "tsx benchmark/run.ts",
-    "prepublishOnly": "if [ -f .env ]; then echo 'ERROR: .env file present \u2014 delete test credentials before publishing'; exit 1; fi && npm run build"
+    "test:bing-live": "node tests/live/bing-reliability.mjs",
+    "prepublishOnly": "if [ -f .env ]; then echo 'ERROR: .env file present \u2014 delete test credentials before publishing'; exit 1; fi && npm run build && npm test -- tests/tools/search.test.ts"
   },
   "keywords": [
     "mcp",

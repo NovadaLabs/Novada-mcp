@@ -7,7 +7,8 @@ import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 
 // How long to wait for a task to complete before giving up
-const POLL_TIMEOUT_MS = 90_000;
+// Amazon and similar scrapers can take 120-180s; 90s is too short
+const POLL_TIMEOUT_MS = 180_000;
 const POLL_INTERVAL_MS = 2_000;
 
 interface SubmitApiResponse {
@@ -156,6 +157,10 @@ async function pollForResult(apiKey: string, taskId: string): Promise<DownloadRe
       }
       if (errCode === 27203) {
         throw new Error(`Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`);
+      }
+      // Direct result object — Google SERP and similar formats return organic/search_metadata at top level
+      if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {
+        return [{ spider_code: 200 as const, rest: bErr }];
       }
       throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${errMsg || JSON.stringify(bErr).slice(0, 150)}`);
     }

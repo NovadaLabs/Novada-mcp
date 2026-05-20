@@ -1,4 +1,5 @@
 import axios, { AxiosError } from "axios";
+import * as cheerio from "cheerio";
 import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
@@ -23,6 +24,96 @@ const ENGINE_MAP: Record<string, ScraperSearchEngine> = {
 
 function scraperSleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Parse Bing SERP HTML (returned in sync mode with is_auto_push=false) into search results. */
+function parseBingHtml(html: string): NovadaSearchResult[] {
+  const $ = cheerio.load(html);
+  const results: NovadaSearchResult[] = [];
+
+  $("li.b_algo").each((_, el) => {
+    const titleEl = $(el).find("h2 a");
+    const title = titleEl.text().trim();
+    const rawUrl = titleEl.attr("href") ?? "";
+    const url = rawUrl.startsWith("http") ? rawUrl : "";
+
+    const snippet =
+      $(el).find(".b_caption p").first().text().trim() ||
+      $(el).find("p.b_para").first().text().trim() ||
+      $(el).find("p").first().text().trim();
+
+    if (title && url) {
+      results.push({ title, url, link: url, snippet, description: snippet });
+    }
+  });
+
+  return results;
+}
+
+/**
+ * Submit a Bing search using is_auto_push=false.
+ * Prefers the task_id path — download endpoint returns parsed organic_results,
+ * which is more reliable than cheerio HTML parsing.
+ * Retries up to 3 times because the API returns data.data.data=null ~20% of the time.
+ */
+async function submitBingSearch(apiKey: string, query: string): Promise<NovadaSearchResult[]> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await scraperSleep(2000);
+
+    const form = new URLSearchParams();
+    form.append("scraper_name", "bing.com");
+    form.append("scraper_id", "bing_search");
+    form.append("scraper_errors", "true");
+    form.append("a_auto_push", "false"); // Bing-specific param (NOT is_auto_push) — confirmed from dashboard playground
+    form.append("q", query);
+    form.append("json", "1");
+    form.append("no_cache", "false");
+    form.append("safe", "off");
+
+    const resp = await axios.post(`${SCRAPER_API_BASE}/request`, form, {
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      timeout: 60000,
+    });
+
+    const body = resp.data as { code: number; msg?: string; data: unknown };
+    if (body.code !== 0) {
+      throw new Error(`Bing search error (code ${body.code}): ${body.msg ?? "unknown"}`);
+    }
+
+    const inner = body.data as Record<string, unknown> | null;
+    const innerData = inner?.data as Record<string, unknown> | null;
+
+    // Prefer task_id path — download endpoint returns parsed organic_results
+    // task_id lives at data.data.data.task_id (not data.data.task_id)
+    const taskId = (
+      (inner?.task_id as string | undefined) ??
+      (innerData?.task_id as string | undefined)
+    );
+    if (taskId) {
+      const resultData = await pollSearchResult(apiKey, taskId);
+      const results = parseScraperSearchResults(resultData);
+      if (results.length > 0) return results;
+    }
+
+    // HTML fallback (task_id polling returned empty or task_id absent)
+    const html = innerData?.html as string | undefined;
+    if (html) {
+      const results = parseBingHtml(html);
+      if (results.length > 0) return results;
+    }
+
+    // Sync direct organic result
+    if (inner?.organic_results || inner?.organic) {
+      return parseScraperSearchResults(inner as Record<string, unknown>);
+    }
+
+    // data.data.data was null — retry
+  }
+
+  return [];
 }
 
 /** Submit a search task via the Scraper API and return the task_id. */
@@ -209,18 +300,50 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     return SERP_UNAVAILABLE;
   }
 
-  const engineCfg = ENGINE_MAP[engine];
-  const taskId = await submitSearchScrapeTask(
-    apiKey,
-    engineCfg.scraper_name,
-    engineCfg.scraper_id,
-    params.query,
-    params.num || 10,
-    engineCfg.query_param,
-    engineCfg.supports_num
-  );
-  const resultData = await pollSearchResult(apiKey, taskId);
-  scraperResults = parseScraperSearchResults(resultData);
+  // Apply domain filters as query modifiers (site: syntax works on all engines)
+  let effectiveQuery = params.query;
+  if (params.include_domains?.length) {
+    if (params.include_domains.length === 1) {
+      effectiveQuery = `${params.query} site:${params.include_domains[0]}`;
+    } else {
+      const siteFilter = params.include_domains.slice(0, 10).map(d => `site:${d}`).join(" OR ");
+      effectiveQuery = `${params.query} (${siteFilter})`;
+    }
+  }
+  if (params.exclude_domains?.length) {
+    const exclusions = params.exclude_domains.slice(0, 10).map(d => `-site:${d}`).join(" ");
+    effectiveQuery = `${effectiveQuery} ${exclusions}`;
+  }
+
+  try {
+    if (engine === "bing") {
+      // Bing uses is_auto_push=false and may return HTML synchronously or a task_id
+      scraperResults = await submitBingSearch(apiKey, effectiveQuery);
+    } else {
+      const engineCfg = ENGINE_MAP[engine];
+      const taskId = await submitSearchScrapeTask(
+        apiKey,
+        engineCfg.scraper_name,
+        engineCfg.scraper_id,
+        effectiveQuery,
+        params.num || 10,
+        engineCfg.query_param,
+        engineCfg.supports_num
+      );
+      const resultData = await pollSearchResult(apiKey, taskId);
+      scraperResults = parseScraperSearchResults(resultData);
+    }
+  } catch (err: unknown) {
+    // 4xx errors: SERP endpoint unavailable / quota exhausted / auth failure
+    if (err instanceof AxiosError) {
+      return SERP_UNAVAILABLE;
+    }
+    const msg = err instanceof Error ? err.message : "";
+    if (/code 40[0-9]|permission|quota|unauthorized|forbidden/i.test(msg)) {
+      return SERP_UNAVAILABLE;
+    }
+    throw err;
+  }
 
   const results: NovadaSearchResult[] = scraperResults;
   if (results.length === 0) {

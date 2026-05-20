@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { z } from "zod";
-import { SCRAPER_DOWNLOAD_BASE, SCRAPER_STATUS_BASE } from "../config.js";
+import { SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import { formatAsMarkdown } from "../utils/format.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
@@ -33,26 +33,11 @@ export function validateScraperResultParams(
   return ScraperResultParamsSchema.parse(args ?? {});
 }
 
-// ─── API Response Types ──────────────────────────────────────────────────────
-
-type DownloadResultItem =
-  | { spider_code: 200; rest: Record<string, unknown> }
-  | { error: string; error_code?: number };
-
-interface StatusCheckResponse {
-  code?: number;
-  status?: string;
-  result?: unknown;
-  data?: { status?: string; result?: unknown } | null;
-  msg?: string;
-}
-
 // ─── Result Endpoint ─────────────────────────────────────────────────────────
 
 // Result download: GET /scraper_download?task_id=...&file_type=json&apikey=...
-// Fallback: api-m.novada.com status endpoint (SCRAPER_STATUS_BASE from config.ts)
+// Auth: apikey query param (NOT Bearer). api-m.novada.com always 404s — no fallback.
 const RESULT_DOWNLOAD_ENDPOINT = `${SCRAPER_DOWNLOAD_BASE}/scraper_download`;
-const STATUS_BASE = SCRAPER_STATUS_BASE;
 
 /** Flatten a potentially nested object for tabular display */
 function flattenRecord(obj: unknown, prefix = ""): Record<string, string> {
@@ -125,7 +110,9 @@ export async function novadaScraperResult(
   let rawData: unknown = null;
   let fetchedFromEndpoint = "unknown";
 
-  // ── Attempt 1: Confirmed download endpoint (matches existing scrape.ts pattern) ──
+  // ── Download endpoint: GET /scraper_download?task_id=...&file_type=json&apikey=... ──
+  // Auth: apikey query param (NOT Bearer token — different from scraper.novada.com).
+  // api-m.novada.com is a dead endpoint (always 404s) — no fallback attempted.
   try {
     const resp = await axios.get(RESULT_DOWNLOAD_ENDPOINT, {
       params: { task_id, file_type: "json", apikey: apiKey },
@@ -142,6 +129,24 @@ export async function novadaScraperResult(
       !Array.isArray(body)
     ) {
       const bObj = body as Record<string, unknown>;
+      // Direct result object — Google SERP format (organic/search_metadata at top level)
+      if ("organic_results" in bObj || "organic" in bObj || "search_metadata" in bObj) {
+        rawData = body;
+        fetchedFromEndpoint = RESULT_DOWNLOAD_ENDPOINT;
+      }
+      // Task still pending — don't fall through to dead api-m endpoint
+      if (bObj.code === 27202) {
+        return JSON.stringify(
+          {
+            status: "not_ready",
+            task_id,
+            agent_instruction:
+              "Task is not yet complete. Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again.",
+          },
+          null,
+          2
+        );
+      }
       // Error codes from download endpoint
       if (bObj.code === 10002 || bObj.code === 10003) {
         return JSON.stringify(
@@ -166,78 +171,16 @@ export async function novadaScraperResult(
           "Invalid NOVADA_API_KEY or insufficient permissions for Scraper API."
         );
       }
-      // Other HTTP errors — fall through to attempt 2
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
+        `Download endpoint error (HTTP ${status ?? "network"}): ${downloadErr.message}`
+      );
     } else {
       // Non-Axios error (e.g. network failure) — re-throw via error system
       throw makeNovadaError(
         NovadaErrorCode.API_DOWN,
         downloadErr instanceof Error ? downloadErr.message : String(downloadErr)
       );
-    }
-  }
-
-  // ── Attempt 2: Fallback to api-m.novada.com status endpoint ──
-  if (rawData === null) {
-    try {
-      const statusUrl = `${STATUS_BASE}/${encodeURIComponent(task_id)}`;
-      const resp = await axios.get(statusUrl, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-        timeout: 30000,
-      });
-      const body = resp.data as StatusCheckResponse;
-
-      const status =
-        body.status ??
-        body.data?.status ??
-        (body.code === 0 ? "complete" : undefined);
-
-      if (status && !["complete", "completed", "success", "done"].includes(status.toLowerCase())) {
-        return JSON.stringify(
-          {
-            status: "not_ready",
-            task_id,
-            current_status: status,
-            agent_instruction:
-              "Task is not yet complete. Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again.",
-          },
-          null,
-          2
-        );
-      }
-
-      rawData = body.result ?? body.data?.result ?? body.data ?? null;
-      if (rawData !== null) {
-        fetchedFromEndpoint = statusUrl;
-      }
-    } catch (statusErr: unknown) {
-      if (statusErr instanceof AxiosError) {
-        const status = statusErr.response?.status;
-        if (status === 404) {
-          return JSON.stringify(
-            {
-              status: "not_found",
-              task_id,
-              agent_instruction:
-                "No task with this task_id exists. Verify the task_id was returned from a successful novada_scraper_submit call. Tasks expire after 24 hours — re-submit if needed.",
-            },
-            null,
-            2
-          );
-        }
-        if (status === 401 || status === 403) {
-          throw makeNovadaError(
-            NovadaErrorCode.INVALID_API_KEY,
-            "Invalid NOVADA_API_KEY or insufficient permissions for Scraper API."
-          );
-        }
-        // Other HTTP errors — fall through to unavailable response
-      } else {
-        // Non-Axios error — re-throw via error system
-        throw makeNovadaError(
-          NovadaErrorCode.API_DOWN,
-          statusErr instanceof Error ? statusErr.message : String(statusErr)
-        );
-      }
     }
   }
 

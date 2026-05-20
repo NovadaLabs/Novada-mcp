@@ -196,13 +196,13 @@ export async function novadaBrowserFlow(
       11000: "Invalid API key.",
       11006:
         "Browser Flow API not activated on this account. Activate at https://dashboard.novada.com/overview/browser/ before retrying.",
+      // API returns HTTP 200 but JSON code 401 for auth failures
+      401: "Browser Flow API authentication failure — the API key may lack Browser Flow permissions. Use novada_browser (CDP) as an alternative, or activate Browser Flow at https://dashboard.novada.com/overview/browser/.",
     };
 
-    if (apiResponse.code === 10000) {
-      throw makeNovadaError(
-        NovadaErrorCode.INVALID_API_KEY,
-        errorMessages[10000]
-      );
+    if (apiResponse.code === 10000 || apiResponse.code === 401) {
+      // Return formatted error (not throw) so the agent sees the fallback instructions
+      return formatApiError(url, actions, errorMessages[apiResponse.code] ?? apiResponse.msg ?? "Authentication failure", session_id);
     }
 
     const msg =

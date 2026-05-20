@@ -71,8 +71,56 @@ export async function novadaScraperStatus(
 ): Promise<string> {
   const { task_id } = params;
 
-  // The confirmed download/status pattern uses apikey query param
-  // Try the api-m.novada.com endpoint first, fall back to download base pattern
+  // Primary: use download endpoint directly (api-m.novada.com/v1/scraper returns 404)
+  // GET /scraper_download?task_id=...&file_type=json&apikey=...
+  try {
+    const dlResp = await axios.get(`https://api.novada.com/g/api/proxy/scraper_download`, {
+      params: { task_id, file_type: "json", apikey: apiKey },
+      timeout: 15000,
+    });
+    const dlBody = dlResp.data;
+
+    // Complete: array of result items
+    if (Array.isArray(dlBody) && dlBody.length > 0) {
+      return JSON.stringify({
+        status: "complete",
+        task_id,
+        agent_instruction: `Task complete. Call novada_scraper_result with task_id="${task_id}" to retrieve formatted results.`,
+      }, null, 2);
+    }
+
+    if (typeof dlBody === "object" && dlBody !== null && !Array.isArray(dlBody)) {
+      const dlObj = dlBody as Record<string, unknown>;
+
+      // Pending
+      if (dlObj.code === 27202) {
+        return JSON.stringify({
+          status: "pending",
+          task_id,
+          agent_instruction: "Task is queued. Retry novada_scraper_status in 5-10 seconds.",
+        }, null, 2);
+      }
+
+      // Complete: direct result object (Google SERP format, etc.)
+      if ("search_metadata" in dlObj || "organic" in dlObj || "organic_results" in dlObj) {
+        return JSON.stringify({
+          status: "complete",
+          task_id,
+          agent_instruction: `Task complete. Call novada_scraper_result with task_id="${task_id}" to retrieve formatted results.`,
+        }, null, 2);
+      }
+    }
+  } catch (primaryErr: unknown) {
+    if (primaryErr instanceof AxiosError) {
+      const s = primaryErr.response?.status;
+      if (s === 401 || s === 403) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "Invalid NOVADA_API_KEY or insufficient permissions for Scraper API.");
+      }
+      // Other errors — fall through to api-m fallback
+    }
+  }
+
+  // Fallback: try the api-m status endpoint
   const STATUS_ENDPOINT = `${STATUS_BASE}/${encodeURIComponent(task_id)}`;
 
   let normalStatus: TaskStatus;
