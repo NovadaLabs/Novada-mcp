@@ -16,6 +16,7 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
   const queries = generateSearchQueries(params.question ?? "", isDeep, isComprehensive, params.focus);
 
   // Execute all searches in parallel via Scraper API (google_search)
+  // Each query gets one retry with a simplified rephrasing on failure
   const allResults = await Promise.all(
     queries.map(async (query): Promise<{ query: string; results: NovadaSearchResult[]; failed?: boolean }> => {
       try {
@@ -24,12 +25,30 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
         const results = parseScraperSearchResults(data);
         return { query, results };
       } catch {
+        // One retry with simplified query (strip site: operators, quotes, extra clauses)
+        const retryQuery = query
+          .replace(/site:\S+/gi, "")
+          .replace(/["']/g, "")
+          .replace(/\s+OR\s+\S+/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (retryQuery && retryQuery !== query) {
+          try {
+            const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", retryQuery, 5, "q");
+            const data = await pollSearchResult(apiKey, taskId);
+            const results = parseScraperSearchResults(data);
+            return { query: retryQuery, results };
+          } catch {
+            return { query, results: [], failed: true };
+          }
+        }
         return { query, results: [], failed: true };
       }
     })
   );
 
   const failedCount = allResults.filter(r => r.failed).length;
+  const succeededCount = allResults.length - failedCount;
   const totalResults = allResults.reduce((sum, r) => sum + r.results.length, 0);
   const uniqueSources = new Map<string, { title: string; url: string; snippet: string }>();
 
@@ -150,6 +169,8 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     topic,
     query: queryValue,
     depth: depthValue,
+    queriesSucceeded: succeededCount,
+    queriesTotal: queries.length,
     sourcesFetchedCount: extractedContents.length,
     summaryText,
     findingBullets,
@@ -162,6 +183,8 @@ function formatResearchOutput(args: {
   topic: string;
   query: string;
   depth: string;
+  queriesSucceeded: number;
+  queriesTotal: number;
   sourcesFetchedCount: number;
   summaryText: string;
   findingBullets: string[];
@@ -183,7 +206,8 @@ function formatResearchOutput(args: {
     ``,
     `**Query**: ${args.query}`,
     `**depth**: ${args.depth}`,
-    `**sources_searched**: ${args.sourcesFetchedCount}`,
+    `**queries**: ${args.queriesSucceeded}/${args.queriesTotal} succeeded`,
+    `**sources_extracted**: ${args.sourcesFetchedCount}`,
     `**timestamp**: ${timestamp}`,
     ``,
     `---`,
@@ -201,7 +225,7 @@ function formatResearchOutput(args: {
     ...agentHints,
     ``,
     `## Agent Notice — Coverage`,
-    `requested_depth: ${args.depth} | sources_found: ${args.sourcesFetchedCount} | synthesis: ${synthesisStatus}`,
+    `requested_depth: ${args.depth} | queries: ${args.queriesSucceeded}/${args.queriesTotal} | sources_extracted: ${args.sourcesFetchedCount} | synthesis: ${synthesisStatus}`,
   ];
 
   return lines.join("\n");

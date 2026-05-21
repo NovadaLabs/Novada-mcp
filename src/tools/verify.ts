@@ -55,9 +55,16 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
     ].join("\n");
   }
 
-  // Collect evidence
+  // Dispute markers: snippets must contain genuine disagreement language to count as contradicting.
+  // This filters out academic papers that cite the claim as a TRUE example (e.g. in hallucination studies)
+  // but are returned by the skeptical query due to keyword co-occurrence.
+  const DISPUTE_MARKERS = /\b(false|incorrect|myth|debunked|refuted|disproved|misinformation|misleading|fabricated|fake|hoax|no evidence|not true|claim is wrong|contrary to)\b/i;
+
   const supportingEvidence = supportingResult.results.filter(r => r.description || r.snippet);
-  const contradictingEvidence = skepticalResult.results.filter(r => r.description || r.snippet);
+  const allContradicting = skepticalResult.results.filter(r => r.description || r.snippet);
+  const contradictingEvidence = allContradicting.filter(r =>
+    DISPUTE_MARKERS.test(r.description || r.snippet || "")
+  );
 
   const supportCount = supportingEvidence.length;
   const contradictCount = contradictingEvidence.length;
@@ -92,6 +99,10 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
     // Cap confidence at 60 when a key query failed — data is one-sided
     const rawConfidence = Math.round(Math.abs(score - 0.5) * 200);
     confidence = dataIncomplete ? Math.min(rawConfidence, 60) : rawConfidence;
+    // Floor: if verdict is clear (supported/unsupported), confidence should be at least 50
+    if ((verdict === "supported" || verdict === "unsupported") && confidence < 50) {
+      confidence = 50;
+    }
   }
 
   // Build output
