@@ -1,0 +1,12 @@
+# package.json "files" field controls what's published — this file just
+# prevents npm from falling back to .gitignore (which scans the whole tree).
+src/
+tests/
+docs/
+workspace/
+benchmark/
+*.test.ts
+*.mjs
+tsconfig.json
+.env*
+.claude/
