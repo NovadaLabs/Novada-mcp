@@ -114,7 +114,7 @@ async function extractSingle(
       const jsonStr = typeof response.data === "string"
         ? response.data
         : JSON.stringify(response.data, null, 2);
-      html = `\`\`\`json\n${jsonStr}\n\`\`\``;
+      return formatJsonExtract(params.url, "render", jsonStr, params.max_chars);
     } else {
       if (typeof response.data !== "string") {
         throw makeNovadaError(
@@ -140,7 +140,7 @@ async function extractSingle(
       const jsonStr = typeof response.data === "string"
         ? response.data
         : JSON.stringify(response.data, null, 2);
-      html = `\`\`\`json\n${jsonStr}\n\`\`\``;
+      return formatJsonExtract(params.url, "static", jsonStr, params.max_chars);
     } else {
       if (typeof response.data !== "string") {
         throw makeNovadaError(
@@ -461,4 +461,30 @@ async function extractSingle(
   }
 
   return lines.join("\n");
+}
+
+function formatJsonExtract(url: string, mode: string, jsonStr: string, maxChars?: number): string {
+  const limit = maxChars ?? 25000;
+  const truncated = jsonStr.length > limit
+    ? jsonStr.slice(0, limit) + "\n\n[truncated]"
+    : jsonStr;
+  let origin = url;
+  try { origin = new URL(url).origin; } catch { /* ignore */ }
+  return [
+    `## Extracted Content`,
+    `url: ${url}`,
+    `mode: ${mode}`,
+    `format: json (raw)`,
+    ``,
+    `---`,
+    ``,
+    "```json",
+    truncated,
+    "```",
+    ``,
+    `---`,
+    `## Agent Hints`,
+    `- This URL returned JSON, not HTML. Showing raw JSON content.`,
+    `- To discover more pages: novada_map with url="${origin}"`,
+  ].join("\n");
 }

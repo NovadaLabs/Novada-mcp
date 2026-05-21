@@ -69,21 +69,21 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   // Partial failure: one of the key queries failed — confidence is unreliable
   const dataIncomplete = supportingResult.failed || skepticalResult.failed;
 
-  if (supportCount === 0 && contradictCount === 0) {
+  // Neutral (fact-check) results count toward support — fact-check pages that
+  // co-occur with a true claim generally confirm it, not refute it.
+  const neutralCount = neutralResult.results.filter(r => r.description || r.snippet).length;
+  const adjustedSupport = supportCount + neutralCount;
+
+  if (adjustedSupport === 0 && contradictCount === 0) {
     verdict = "insufficient_data";
     confidence = 0;
   } else {
-    const total = supportCount + contradictCount;
-    const score = supportCount / total;
-    // Neutral query count used as tiebreaker in the contested zone
-    const neutralCount = neutralResult.results.filter(r => r.description || r.snippet).length;
+    const total = adjustedSupport + contradictCount;
+    const score = adjustedSupport / total;
 
-    // Narrower contested band (0.4-0.6) reduces false "contested" verdicts.
-    // In the contested zone, neutral fact-check results shift toward "supported" —
-    // fact-check pages co-occurring with the claim are more likely to confirm it.
-    if (score >= 0.6 || (score >= 0.4 && neutralCount > contradictCount)) {
+    if (score >= 0.6) {
       verdict = "supported";
-    } else if (score <= 0.4) {
+    } else if (score <= 0.3) {
       verdict = "unsupported";
     } else {
       verdict = "contested";
