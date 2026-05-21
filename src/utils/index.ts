@@ -2,7 +2,7 @@ export { fetchWithRetry, fetchViaProxy, fetchWithRender, detectJsHeavyContent, d
 export { withCredentials, getWebUnblockerKey, getBrowserWs, getProxyCredentials } from "./credentials.js";
 export type { ToolCredentials } from "./credentials.js";
 export { normalizeUrl, isContentLink } from "./url.js";
-export { extractMainContent, extractTitle, extractDescription, extractLinks, extractStructuredData, scoreExtraction } from "./html.js";
+export { extractMainContent, extractTitle, extractDescription, extractLinks, extractStructuredData, scoreExtraction, qualityLabel } from "./html.js";
 export type { StructuredData, ExtractionQuality } from "./html.js";
 export { cleanParams } from "./params.js";
 export { isBrowserConfigured, fetchViaBrowser, getSession, storeSession, closeSession, listSessions } from "./browser.js";

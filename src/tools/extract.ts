@@ -1,4 +1,4 @@
-import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, lookupDomain, extractFields, isPdfResponse, extractPdf } from "../utils/index.js";
+import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf } from "../utils/index.js";
 import type { FieldResult } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import type { ExtractParams } from "./types.js";
@@ -83,11 +83,37 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
   }
 }
 
+function rewriteRedditUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if ((host === "reddit.com" || host === "www.reddit.com") && !url.includes("old.reddit.com")) {
+      parsed.hostname = "old.reddit.com";
+      return parsed.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function extractSingle(
   params: ExtractParams & { url: string },
   apiKey?: string
 ): Promise<string> {
+  // Normalize render="js" → "render" (js is the agent-friendly alias)
+  if (params.render === "js") {
+    params = { ...params, render: "render" };
+  }
+
+  // Reddit rewrite: new reddit.com blocks all scrapers; old.reddit.com works with static fetch
+  const redditUrl = rewriteRedditUrl(params.url);
+  if (redditUrl) {
+    params = { ...params, url: redditUrl, render: "static" };
+  }
+
   const renderMode = params.render ?? "auto";
+  const fetchedAt = new Date().toISOString();
 
   // Domain registry: skip auto-detection probe for known sites
   const domainHint = renderMode === "auto" ? lookupDomain(params.url) : null;
@@ -345,14 +371,49 @@ async function extractSingle(
     }
   }
 
+  const qLabel = qualityLabel(quality.score);
+
+  // JSON structured output — return early
+  if (params.format === "json") {
+    const jsonResult: Record<string, unknown> = {
+      url: params.url,
+      title,
+      description: description || null,
+      mode: usedMode,
+      fetched_at: fetchedAt,
+      quality: { score: quality.score, label: qLabel, content_ok: contentOk },
+      content: displayContent,
+      structured_data: structuredData ?? null,
+      fields: fieldResults
+        ? Object.fromEntries(fieldResults.map(r => [r.field, r.source === "not_found" ? null : r.value]))
+        : null,
+      links: { same_domain: sameDomainLinks, total: allLinks.length },
+      hints: [] as string[],
+      ...(pdfPages !== null ? { pdf: { pages: pdfPages, title: pdfTitle ?? null } } : {}),
+      ...(autoEscalated ? { auto_escalated: true } : {}),
+    };
+    // Build hints array
+    const hints = jsonResult.hints as string[];
+    if (redditUrl) hints.push("Reddit URL rewritten to old.reddit.com — new reddit.com blocks all scrapers.");
+    try {
+      const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
+      if (extractedHost === "trends24.in") hints.push("[THIRD-PARTY DATA] trends24.in is an independent aggregator, not an official X/Twitter source.");
+    } catch { /* ignore */ }
+    if (stillJsHeavy) hints.push("Page is JavaScript-rendered. Content may be incomplete. Try render='js' or render='browser'.");
+    if (isTruncated) hints.push(`Content truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more.`);
+    try { hints.push(`Discover more pages: novada_map(url="${new URL(params.url).origin}")`); } catch { /* ignore */ }
+    return JSON.stringify(jsonResult, null, 2);
+  }
+
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
-    `mode: ${usedMode}`,
+    `mode: ${usedMode} | quality:${quality.score}/100 (${qLabel}) | content_ok:${contentOk}`,
+    `fetched_at: ${fetchedAt}`,
     `extraction_quality: ${extractionQuality}`,
     `title: ${title}`,
     ...(description ? [`description: ${description}`] : []),
-    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length} | mode:${usedMode} | quality:${quality.score} | content_ok:${contentOk}${autoEscalated ? " | auto_escalated:true" : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
+    `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? " | auto_escalated:true" : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
     ``,
     `---`,
     ``,
@@ -415,6 +476,16 @@ async function extractSingle(
   }
 
   lines.push(``, `---`, `## Agent Hints`);
+  if (redditUrl) {
+    lines.push(`- Reddit URL rewritten to old.reddit.com (static HTML) — new reddit.com blocks all scrapers.`);
+  }
+  // Warn when content is sourced from a known third-party aggregator
+  try {
+    const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
+    if (extractedHost === "trends24.in") {
+      lines.push(`- [THIRD-PARTY DATA] trends24.in is an independent aggregator, not an official X/Twitter source. Data may lag by minutes and coverage is limited to trending topics only.`);
+    }
+  } catch { /* ignore */ }
   if (autoEscalated) {
     lines.push(`- Auto-escalated to render mode (static quality score was < 40). Content above was fetched with JS rendering enabled.`);
   }

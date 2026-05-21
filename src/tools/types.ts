@@ -78,11 +78,12 @@ export const ExtractParamsSchema = z.object({
       "Use for batch research workflows extracting from several pages in one call. " +
       "Returns a structured markdown document with one labeled section per URL (### [1/N] url). Single url param still returns a single markdown document."
     ),
-  format: z.enum(["text", "markdown", "html"]).default("markdown"),
+  format: z.enum(["text", "markdown", "html", "json"]).default("markdown")
+    .describe("Output format. 'markdown' (default): structured readable output. 'text': plain text. 'html': raw HTML (truncated at 10K). 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
   query: z.string().optional()
     .describe("Optional query for relevance context. Helps the calling agent focus on relevant sections."),
-  render: z.enum(["auto", "static", "render", "browser"]).default("auto")
-    .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'render': force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS)."),
+  render: z.enum(["auto", "static", "render", "js", "browser"]).default("auto")
+    .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS)."),
   fields: z.array(z.string().min(1)).max(20).optional()
     .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching."),
   max_chars: z.number().int().min(1000).max(100000).optional()

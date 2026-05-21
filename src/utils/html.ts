@@ -542,6 +542,14 @@ export function scoreExtraction(
   return { score, signals };
 }
 
+export function qualityLabel(score: number): string {
+  if (score >= 80) return "excellent";
+  if (score >= 60) return "good";
+  if (score >= 40) return "moderate";
+  if (score >= 20) return "poor";
+  return "low";
+}
+
 /** Extract page title from HTML */
 export function extractTitle(html: string): string {
   if (!html) return "Untitled";

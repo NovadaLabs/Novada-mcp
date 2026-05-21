@@ -44,6 +44,7 @@ export const DOMAIN_REGISTRY: Record<string, DomainEntry> = {
   "wired.com":            { method: "static", note: "SSR news" },
   "reuters.com":          { method: "static", note: "SSR news" },
   "apnews.com":           { method: "static", note: "SSR news" },
+  "trends24.in":          { method: "static", note: "Third-party X/Twitter trending aggregator — not official X data; no auth required, SSR" },
 
   // === RENDER — Needs JS execution / Web Unblocker ===
   "amazon.com":           { method: "render", note: "JS prices, anti-bot" },
@@ -55,8 +56,8 @@ export const DOMAIN_REGISTRY: Record<string, DomainEntry> = {
   "amazon.it":            { method: "render", note: "JS prices, anti-bot" },
   "amazon.ca":            { method: "render", note: "JS prices, anti-bot" },
   "ebay.com":             { method: "render", note: "JS SPA" },
-  "twitter.com":          { method: "render", note: "JS SPA" },
-  "x.com":                { method: "render", note: "JS SPA" },
+  "twitter.com":          { method: "render", note: "JS SPA — Web Unblocker returns 403; use trends24.in for trending data instead" },
+  "x.com":                { method: "render", note: "JS SPA — Web Unblocker returns 403; use trends24.in for trending data instead" },
   "youtube.com":          { method: "render", note: "JS SPA" },
   "instagram.com":        { method: "render", note: "JS SPA" },
   "tiktok.com":           { method: "render", note: "JS SPA, anti-bot" },
