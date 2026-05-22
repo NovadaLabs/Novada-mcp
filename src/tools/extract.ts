@@ -433,6 +433,7 @@ async function extractSingle(
       title,
       description: description || null,
       mode: usedMode,
+      source: waybackFallback ? "wayback" : "live",
       fetched_at: fetchedAt,
       quality: { score: quality.score, label: qLabel, content_ok: contentOk },
       content: displayContent,
@@ -480,7 +481,7 @@ async function extractSingle(
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
-    `mode: ${usedMode} | quality:${quality.score}/100 (${qLabel}) | content_ok:${contentOk}`,
+    `mode: ${usedMode} | source: ${waybackFallback ? "wayback" : "live"} | quality:${quality.score}/100 (${qLabel}) | content_ok:${contentOk}`,
     `fetched_at: ${fetchedAt}`,
     `extraction_quality: ${extractionQuality}`,
     `title: ${title}`,

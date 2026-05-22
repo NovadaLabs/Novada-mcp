@@ -227,7 +227,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   const lines: string[] = [
     `## Crawl Results`,
     `root: ${params.url}`,
-    `pages:${results.length} | strategy:${strategy} | total_words:${totalWords} | failed:${failedCount}${jsMissingSummary}${instructionsNote}`,
+    `pages:${results.length} | strategy:${strategy} | source: live | total_words:${totalWords} | failed:${failedCount}${jsMissingSummary}${instructionsNote}`,
     seedExcluded ? `Note: seed URL excluded by select_paths filter` : "",
     stoppedEarly && stopReason ? `note: Stopped early — ${stopReason}` : "",
     ``,

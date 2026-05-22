@@ -17,6 +17,32 @@ export enum NovadaErrorCode {
   UNKNOWN                = "UNKNOWN",
 }
 
+// ─── Failure Classification ──────────────────────────────────────────────────
+
+export type FailureClass = "transient" | "permanent" | "auth" | "quota";
+
+const FAILURE_CLASS: Record<NovadaErrorCode, FailureClass> = {
+  [NovadaErrorCode.INVALID_API_KEY]:     "auth",
+  [NovadaErrorCode.RATE_LIMITED]:        "quota",
+  [NovadaErrorCode.URL_UNREACHABLE]:     "transient",
+  [NovadaErrorCode.SPA_NO_URLS_FOUND]:   "permanent",
+  [NovadaErrorCode.API_DOWN]:            "transient",
+  [NovadaErrorCode.INVALID_PARAMS]:      "permanent",
+  [NovadaErrorCode.PRODUCT_UNAVAILABLE]: "permanent",
+  [NovadaErrorCode.TASK_NOT_FOUND]:      "permanent",
+  [NovadaErrorCode.TASK_PENDING]:        "transient",
+  [NovadaErrorCode.SESSION_EXPIRED]:     "permanent",
+  [NovadaErrorCode.PROXY_AUTH_FAILURE]:  "auth",
+  [NovadaErrorCode.UNKNOWN]:            "permanent",
+};
+
+const RETRY_AFTER_MS: Partial<Record<NovadaErrorCode, number>> = {
+  [NovadaErrorCode.RATE_LIMITED]:    30000,
+  [NovadaErrorCode.URL_UNREACHABLE]: 10000,
+  [NovadaErrorCode.API_DOWN]:        30000,
+  [NovadaErrorCode.TASK_PENDING]:     5000,
+};
+
 // ─── Error Class ─────────────────────────────────────────────────────────────
 
 export class NovadaError extends Error {
@@ -41,13 +67,17 @@ export class NovadaError extends Error {
     this.detail = opts.detail;
   }
 
-  /** Formats the error as an agent-readable string. */
+  /** Formats the error as an agent-readable string with failure classification. */
   toAgentString(): string {
     // Sanitize: collapse newlines in message to prevent agent_instruction injection
     const safeMsg = this.message.replace(/[\r\n]+/g, " ").trim();
+    const failureClass = FAILURE_CLASS[this.code];
+    const retryAfter = RETRY_AFTER_MS[this.code];
     const lines = [
       `Error [${this.code}]: ${safeMsg}`,
-      `Retryable: ${this.retryable ? "yes" : "no"}`,
+      `failure_class: ${failureClass}`,
+      `retry_recommended: ${this.retryable}`,
+      ...(this.retryable && retryAfter ? [`retry_after_ms: ${retryAfter}`] : []),
       `agent_instruction: "${this.agent_instruction}"`,
     ];
     if (this.detail) {

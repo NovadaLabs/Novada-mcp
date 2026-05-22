@@ -418,7 +418,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   const lines: string[] = [
     `## Search Results`,
-    `results:${reranked.length} | engine:${engineLabel} | reranked:true${filterStr}`,
+    `results:${reranked.length} | engine:${engineLabel} | source: live | reranked:true${filterStr}`,
     ``,
     `---`,
     ``,

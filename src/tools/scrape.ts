@@ -294,7 +294,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
     case "json":
       return [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: ${records.length}`,
+        `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live`,
         ``,
         "```json",
         JSON.stringify(rawRecords.slice(0, limit), null, 2),
@@ -319,7 +319,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       ];
       return [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: ${records.length} | format: toon`,
+        `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live | format: toon`,
         ``,
         toonRows.join("\n"),
         ``,
@@ -335,7 +335,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
     default:
       return [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: ${records.length}${records.length >= limit ? ` (limit:${limit})` : ""}`,
+        `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live${records.length >= limit ? ` (limit:${limit})` : ""}`,
         ``,
         `---`,
         ``,
