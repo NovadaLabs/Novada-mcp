@@ -52,6 +52,8 @@ export const SearchParamsSchema = z.object({
     .describe("Only return results from these domains. E.g. ['github.com', 'arxiv.org']. Max 10."),
   exclude_domains: z.array(z.string()).optional()
     .describe("Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10."),
+  format: z.enum(["markdown", "json"]).default("markdown")
+    .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
   enrich_top: z.boolean().optional()
     .describe("Auto-extract full content from the top result. Shorthand for extract_options.top_n=1. Adds ~2-4s latency. Default: false."),
   extract_options: z.object({
@@ -108,6 +110,8 @@ export const CrawlParamsSchema = z.object({
     .describe("Regex patterns to restrict crawled URL paths. E.g. ['/docs/.*', '/api/.*']."),
   exclude_paths: z.array(z.string()).optional()
     .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
+  format: z.enum(["markdown", "json"]).default("markdown")
+    .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
   render: z.enum(["auto", "static", "render"]).default("auto")
     .describe("Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (slower, handles JS sites)."),
   limit: z.number().int().min(1).max(20).optional()

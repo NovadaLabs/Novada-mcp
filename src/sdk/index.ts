@@ -40,6 +40,7 @@ export class NovadaClient {
           num: options.num ?? 10,
           country: options.country ?? "",
           language: "",
+          format: "markdown",
           time_range: options.timeRange,
         },
         this.config.scraperApiKey
@@ -134,6 +135,7 @@ export class NovadaClient {
           url,
           max_pages: options.maxPages ?? 5,
           strategy: options.strategy ?? "bfs",
+          format: "markdown",
           render: options.render ?? "auto",
         },
         this.config.scraperApiKey

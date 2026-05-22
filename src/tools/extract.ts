@@ -446,6 +446,7 @@ async function extractSingle(
       ...(pdfPages !== null ? { pdf: { pages: pdfPages, title: pdfTitle ?? null } } : {}),
       ...(autoEscalated ? { auto_escalated: true } : {}),
       ...(waybackFallback ? { wayback_fallback: true } : {}),
+      remember: `${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`,
     };
     // Build hints array
     const hints = jsonResult.hints as string[];
@@ -547,6 +548,10 @@ async function extractSingle(
       }
     }
   }
+
+  lines.push(``);
+  lines.push(`## Agent Memory`);
+  lines.push(`remember: ${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`);
 
   lines.push(``, `---`, `## Agent Hints`);
   if (redditUrl) {

@@ -402,6 +402,36 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     }
   }
 
+  // ── JSON output mode ──────────────────────────────────────────────────────
+  const engineLabel = `${engine} (via scraper-api)`;
+
+  if (params.format === "json") {
+    const jsonResult = {
+      status: "ok",
+      query: params.query,
+      engine: engineLabel,
+      source: "live",
+      result_count: reranked.length,
+      results: reranked.map((r, i) => {
+        const url = r.url || r.link;
+        const result: Record<string, unknown> = {
+          rank: i + 1,
+          title: r.title || "Untitled",
+          url: url ? unwrapBingUrl(url) : null,
+          snippet: r.description || r.snippet || "",
+        };
+        if (r.published || r.date) result.published = r.published || r.date;
+        // Include extracted content if present (from extract_options or enrich_top)
+        const rExt = r as Record<string, unknown>;
+        if (rExt.extracted_content) result.extracted_content = rExt.extracted_content;
+        if (rExt.extract_error) result.extract_error = rExt.extract_error;
+        return result;
+      }),
+      agent_instruction: "Search complete. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.",
+    };
+    return JSON.stringify(jsonResult, null, 2);
+  }
+
   // Active filters summary for agent metadata
   const activeFilters: string[] = [];
   if (params.country) activeFilters.push(`country:${params.country}`);
@@ -413,8 +443,6 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   if (params.exclude_domains?.length) activeFilters.push(`exclude:${params.exclude_domains.join(",")}`);
 
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
-
-  const engineLabel = `${engine} (via scraper-api)`;
 
   const lines: string[] = [
     `## Search Results`,
@@ -466,6 +494,13 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   const topUrls = reranked.slice(0, 5).map((r, i) => `  [${i + 1}] ${r.url || r.link}`).join("\n");
   lines.push(`top_urls:\n${topUrls}`);
   lines.push(`agent_instruction: Search complete. Call novada_extract with any url above to read the full page. Call novada_research for deeper multi-source investigation.`);
+
+  lines.push(``);
+  lines.push(`## Agent Memory`);
+  const topResult = reranked[0];
+  const topTitle = topResult?.title || "Untitled";
+  const topUrl = topResult?.url || topResult?.link || "N/A";
+  lines.push(`remember: Top result for '${params.query}': ${topTitle} — ${topUrl}`);
 
   return lines.join("\n");
 }

@@ -219,6 +219,30 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
       : "Remaining links were filtered by path rules or already visited."
     : "";
 
+  // ── JSON output mode ──────────────────────────────────────────────────────
+  if (params.format === "json") {
+    const jsonResult = {
+      status: "ok",
+      root_url: params.url,
+      pages_crawled: results.length,
+      strategy,
+      source: "live",
+      total_words: totalWords,
+      failed: failedCount,
+      js_missing: jsMissingCount > 0 ? jsMissingCount : undefined,
+      pages: results.map(r => ({
+        url: r.url,
+        title: r.title,
+        depth: r.depth,
+        word_count: r.wordCount,
+        js_content_missing: r.jsContentMissing || false,
+        text: r.text,
+      })),
+      agent_instruction: `Crawl complete. ${results.length} pages extracted. To read a specific page use novada_extract. To discover more pages use novada_map.`,
+    };
+    return JSON.stringify(jsonResult, null, 2);
+  }
+
   const jsMissingSummary = ` | js_pages_missing_render:${jsMissingCount}`;
   const instructionsNote = params.instructions
     ? `\ninstructions: "${params.instructions}" (path filters applied; apply semantic filtering on your side)`
@@ -258,6 +282,10 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   const crawledUrls = results.slice(0, 10).map(r => `  ${r.url}`).join("\n");
   lines.push(`crawled_pages:\n${crawledUrls}`);
   lines.push(`agent_instruction: Crawl complete. ${results.length} pages extracted. To read a specific page use novada_extract. To discover more pages use novada_map with root_url.`);
+
+  lines.push(``);
+  lines.push(`## Agent Memory`);
+  lines.push(`remember: ${params.url} — ${results.length} pages crawled, ${totalWords} words total`);
 
   lines.push(``);
   lines.push(`---`);

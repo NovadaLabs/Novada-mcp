@@ -328,6 +328,9 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
         `- TOON format: first line starts with "HEADERS:" listing columns, subsequent lines are pipe-separated values.`,
         `- Use format='json' for downstream code processing, format='markdown' for human-readable output.`,
         `- Increase limit (max 100) to retrieve more records.`,
+        ``,
+        `## Agent Memory`,
+        `remember: ${platform}/${operation} — ${records.length} records retrieved`,
       ].join("\n");
     }
 
@@ -351,6 +354,9 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
         `## Chainable Output`,
         `source_url: ${platform}/${operation}`,
         `agent_instruction: Scrape complete. To read a related URL use novada_extract. To crawl multiple pages use novada_crawl. To search for related content use novada_search.`,
+        ``,
+        `## Agent Memory`,
+        `remember: ${platform}/${operation} — ${records.length} records retrieved`,
       ].join("\n");
   }
   } catch (err: unknown) {
