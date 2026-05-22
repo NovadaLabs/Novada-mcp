@@ -422,63 +422,69 @@ Not for:
   },
 ];
 
-// ─── Group Filtering ─────────────────────────────────────────────────────────
+// ─── Tool & Group Filtering ──────────────────────────────────────────────────
+// NOVADA_TOOLS="extract,search,crawl"  → only these tools (comma-separated, short or full names)
+// NOVADA_GROUPS="search,proxy"          → category bundles (see CATEGORY_MAP below)
+// Both set → union. Neither set → all tools (backward compatible).
 
-const GROUP_MAP: Record<string, string> = {
-  search:      "novada_search",
-  extract:     "novada_extract",
-  crawl:       "novada_crawl",
-  map:         "novada_map",
-  research:    "novada_research",
-  scrape:      "novada_scrape",
-  proxy:       "novada_proxy",
-  verify:      "novada_verify",
-  unblock:     "novada_unblock",
-  browser:     "novada_browser",
-  health:               "novada_health",
-  health_all:           "novada_health_all",
-  discover:             "novada_discover",
-  scraper_submit:       "novada_scraper_submit",
-  scraper_status:       "novada_scraper_status",
-  scraper_result:       "novada_scraper_result",
-  proxy_residential:    "novada_proxy_residential",
-  proxy_isp:            "novada_proxy_isp",
-  proxy_datacenter:     "novada_proxy_datacenter",
-  proxy_mobile:         "novada_proxy_mobile",
-  proxy_static:         "novada_proxy_static",
-  proxy_dedicated:      "novada_proxy_dedicated",
-  browser_flow:         "novada_browser_flow",
+/** Category bundles — each group name expands to multiple tools */
+const CATEGORY_MAP: Record<string, string[]> = {
+  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_research", "novada_verify"],
+  proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
+  browser: ["novada_browser", "novada_browser_flow"],
+  scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
+  health:  ["novada_health", "novada_health_all", "novada_discover"],
 };
 
-function applyGroupFilter(tools: typeof TOOLS): typeof TOOLS {
+/** Normalize short name → full tool name */
+function normalizeTool(name: string): string {
+  const n = name.trim().toLowerCase();
+  return n.startsWith("novada_") ? n : `novada_${n}`;
+}
+
+function applyToolFilter(tools: typeof TOOLS): typeof TOOLS {
+  const toolsEnv = process.env.NOVADA_TOOLS;
   const groupsEnv = process.env.NOVADA_GROUPS;
-  if (!groupsEnv) return tools;
 
-  const requested = groupsEnv
-    .split(",")
-    .map(g => g.trim().toLowerCase())
-    .filter(Boolean);
+  if (!toolsEnv && !groupsEnv) return tools;
 
-  // Accept both short names ("extract") and full names ("novada_extract")
-  const allowed = new Set(
-    requested.map(g => GROUP_MAP[g] ?? g)
-  );
+  const allowed = new Set<string>();
+
+  // NOVADA_TOOLS: direct tool names
+  if (toolsEnv) {
+    for (const name of toolsEnv.split(",").filter(Boolean)) {
+      allowed.add(normalizeTool(name));
+    }
+  }
+
+  // NOVADA_GROUPS: category bundles (union with NOVADA_TOOLS if both set)
+  if (groupsEnv) {
+    for (const group of groupsEnv.split(",").map(g => g.trim().toLowerCase()).filter(Boolean)) {
+      const bundle = CATEGORY_MAP[group];
+      if (bundle) {
+        for (const tool of bundle) allowed.add(tool);
+      } else {
+        // Fallback: treat as individual tool name
+        allowed.add(normalizeTool(group));
+      }
+    }
+  }
 
   // Always include health so agents can diagnose issues
   allowed.add("novada_health");
 
   const filtered = tools.filter(t => allowed.has(t.name));
 
-  // Warn if all requested groups were unrecognized (would produce health-only set)
-  const recognized = requested.filter(g => GROUP_MAP[g] || tools.some(t => t.name === g));
-  if (recognized.length === 0) {
-    console.error(`[novada] Warning: NOVADA_GROUPS="${groupsEnv}" matched no known tools. Valid names: ${Object.keys(GROUP_MAP).join(", ")}`);
+  if (filtered.length <= 1) {
+    const validGroups = Object.keys(CATEGORY_MAP).join(", ");
+    const validTools = tools.map(t => t.name.replace("novada_", "")).join(", ");
+    console.error(`[novada] Warning: NOVADA_TOOLS="${toolsEnv ?? ""}" NOVADA_GROUPS="${groupsEnv ?? ""}" matched no tools beyond health. Valid groups: ${validGroups}. Valid tools: ${validTools}`);
   }
 
   return filtered;
 }
 
-const ACTIVE_TOOLS = applyGroupFilter(TOOLS);
+const ACTIVE_TOOLS = applyToolFilter(TOOLS);
 
 // ─── MCP Server ──────────────────────────────────────────────────────────────
 
@@ -541,12 +547,12 @@ class NovadaMCPServer {
         };
       }
 
-      // Enforce GROUPS filter at execution time (not just at list time)
-      if (process.env.NOVADA_GROUPS && !ACTIVE_TOOLS.find(t => t.name === name)) {
+      // Enforce tool filter at execution time (not just at list time)
+      if ((process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS) && !ACTIVE_TOOLS.find(t => t.name === name)) {
         return {
           content: [{
             type: "text" as const,
-            text: `Tool '${name}' is not available in the active groups (NOVADA_GROUPS=${process.env.NOVADA_GROUPS}). Available tools: ${ACTIVE_TOOLS.map(t => t.name).join(", ")}`,
+            text: `Tool '${name}' is not in the active set. NOVADA_TOOLS="${process.env.NOVADA_TOOLS ?? ""}" NOVADA_GROUPS="${process.env.NOVADA_GROUPS ?? ""}". Available: ${ACTIVE_TOOLS.map(t => t.name).join(", ")}`,
           }],
           isError: true,
         };
@@ -673,7 +679,10 @@ class NovadaMCPServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error(`Novada MCP server v${VERSION} running on stdio — ${ACTIVE_TOOLS.length} tools loaded${process.env.NOVADA_GROUPS ? ` (groups: ${process.env.NOVADA_GROUPS})` : ""}`);
+    const filterInfo = process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS
+      ? ` (TOOLS=${process.env.NOVADA_TOOLS ?? ""} GROUPS=${process.env.NOVADA_GROUPS ?? ""})`
+      : "";
+    console.error(`Novada MCP server v${VERSION} running on stdio — ${ACTIVE_TOOLS.length} tools loaded${filterInfo}`);
   }
 }
 
