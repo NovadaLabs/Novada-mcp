@@ -3,6 +3,7 @@ import type { FieldResult } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import type { ExtractParams } from "./types.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { getCached, setCached } from "../_core/session-cache.js";
 
 export { detectJsHeavyContent } from "../utils/index.js";
 
@@ -104,6 +105,14 @@ async function extractSingle(
   // Normalize render="js" → "render" (js is the agent-friendly alias)
   if (params.render === "js") {
     params = { ...params, render: "render" };
+  }
+
+  // Phase 3: Session dedup cache — skip fetch if same URL+mode was extracted recently
+  const cacheRenderMode = params.render ?? "auto";
+  const cached = getCached(params.url, cacheRenderMode);
+  if (cached) {
+    // Inject source: cache into the cached result so agents know it's from cache
+    return cached.replace(/source: live/, "source: cache");
   }
 
   // Reddit rewrite: new reddit.com blocks all scrapers; old.reddit.com works with static fetch
@@ -476,7 +485,9 @@ async function extractSingle(
     }
     if (isTruncated) hints.push(`Content truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more.`);
     try { hints.push(`Discover more pages: novada_map(url="${new URL(params.url).origin}")`); } catch { /* ignore */ }
-    return JSON.stringify(jsonResult, null, 2);
+    const jsonOutput = JSON.stringify(jsonResult, null, 2);
+    setCached(params.url, cacheRenderMode, jsonOutput);
+    return jsonOutput;
   }
 
   const lines: string[] = [
@@ -629,7 +640,9 @@ async function extractSingle(
     lines.push(`- Query context: "${params.query}". Focus analysis on this topic.`);
   }
 
-  return lines.join("\n");
+  const mdOutput = lines.join("\n");
+  setCached(params.url, cacheRenderMode, mdOutput);
+  return mdOutput;
 }
 
 function formatJsonExtract(url: string, mode: string, jsonStr: string, maxChars?: number): string {
