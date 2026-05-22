@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "description": "One MCP for all Novada products — search, scraping, proxy, browser, and more",
   "mcpName": "novada",
   "type": "module",
