@@ -264,21 +264,32 @@ export function detectBotChallenge(html: string): boolean {
   let signals = 0;
 
   // --- Known challenge strings (each counts as 1 definitive signal) ---
+  // ONLY strings that unambiguously indicate a bot challenge page.
+  // Short/ambiguous patterns (ips.js, cd.js, _px, press & hold, akamaized)
+  // moved to heuristic section below to avoid false positives.
   const knownChallengeStrings = [
+    // Cloudflare
     "just a moment",
     "cf-browser-verification",
     "__cf_chl_opt",
+    "cf_chl_",
+    "__cf_bm",
     "ray id",
     "checking your browser",
+    // Akamai (specific bot-management cookies only — NOT "akamaized" which matches CDN asset URLs)
     "_abck",
     "bm_sz",
     "ak_bmsc",
-    "incap_ses",
+    // Imperva / Incapsula
+    "incap_ses_",
+    "visid_incap_",
     "_incap_",
+    // DataDome
+    "datadome",
+    // Generic (unambiguous)
     "please wait while we verify",
     "human verification",
-    // "access denied" removed — too broad: appears in legitimate AWS S3, CDN, and error pages.
-    // Rely on stronger heuristic signals below instead.
+    "human-challenge",
   ];
 
   for (const signal of knownChallengeStrings) {
@@ -289,6 +300,16 @@ export function detectBotChallenge(html: string): boolean {
   }
 
   // --- Heuristic signals (need 2+ to trigger) ---
+  // Ambiguous patterns that could appear on legitimate pages — only count as signals, not definitive.
+
+  // Kasada scripts (ips.js, cd.js can match tooltips.js etc. as substrings)
+  if (/["'/]ips\.js(\?|"|'|$)/i.test(html) || /["'/]cd\.js(\?|"|'|$)/i.test(html)) signals++;
+  // PerimeterX (_px2, _px3 etc. — not bare "_px" which matches _pxref, analytics)
+  if (/_px[2-9]\b/.test(lower)) signals++;
+  // "press & hold" — appears in UI docs, music players; only a signal when combined
+  if (lower.includes("press & hold")) signals++;
+  // "akamaized" in a script src context (not just CDN asset URLs)
+  if (/src=["'][^"']*akamaized[^"']*\.js/i.test(html)) signals++;
 
   // Body text length < 1500 chars after stripping scripts/styles
   const bodyTextLen = html
@@ -310,4 +331,47 @@ export function detectBotChallenge(html: string): boolean {
   if (divCount < 3 && pCount === 0) signals++;
 
   return signals >= 2;
+}
+
+/**
+ * Identify which anti-bot provider is active in a page's HTML.
+ * Returns a human-readable provider name, or null if none detected.
+ * Unlike detectBotChallenge (boolean gate), this pinpoints the specific provider
+ * for diagnostic output and escalation metadata.
+ */
+export function identifyAntiBot(html: string): string | null {
+  if (!html) return null;
+  const lower = html.toLowerCase();
+
+  // Cloudflare — most common, check first
+  if (lower.includes("cf_chl_") || lower.includes("cf-browser-verification") || lower.includes("__cf_chl_opt") || lower.includes("__cf_bm")) {
+    return "cloudflare";
+  }
+
+  // DataDome (datadome cookie/script is unambiguous; dd.js is too short — require path context)
+  if (lower.includes("datadome")) {
+    return "datadome";
+  }
+
+  // Kasada (require script src context to avoid matching tooltips.js etc.)
+  if (/["'/]ips\.js(\?|"|'|$)/i.test(html) || /["'/]cd\.js(\?|"|'|$)/i.test(html)) {
+    return "kasada";
+  }
+
+  // PerimeterX (require _px2/_px3 etc., not bare _px which matches analytics prefixes)
+  if (/_px[2-9]\b/.test(lower) || lower.includes("human-challenge")) {
+    return "perimeterx";
+  }
+
+  // Akamai (specific bot-management cookies — NOT "akamaized" CDN URLs)
+  if (lower.includes("_abck") || lower.includes("ak_bmsc") || lower.includes("bm_sz")) {
+    return "akamai";
+  }
+
+  // Imperva / Incapsula
+  if (lower.includes("incap_ses_") || lower.includes("visid_incap_")) {
+    return "incapsula";
+  }
+
+  return null;
 }

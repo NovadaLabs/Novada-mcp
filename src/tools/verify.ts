@@ -188,5 +188,9 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
     lines.push(`- Fact-check sources: ${neutralUrls.join(", ")}`);
   }
 
+
+  lines.push(``);
+  lines.push(`## Agent Action`);
+  lines.push(`agent_instruction: verdict=${verdict} confidence=${confidence} | next: novada_research for deeper investigation | next: novada_extract on source URLs for full context`);
   return lines.join("\n");
 }

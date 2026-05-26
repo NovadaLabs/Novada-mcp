@@ -178,6 +178,10 @@ async function novadaMapInner(
     lines.push(`next_steps: ${params.search ? `Remove 'search' filter to see all ${discovered.length} URLs, or t` : "T"}ry max_depth=3 or increase limit.`);
   }
 
+
+  lines.push(``);
+  lines.push(`## Agent Action`);
+  lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
   return lines.join("\n");
 }
 

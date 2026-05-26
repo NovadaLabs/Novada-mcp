@@ -1,8 +1,16 @@
 export type FetchMethod = "static" | "render" | "browser";
 
+/** Known anti-bot provider protecting a domain */
+export type AntiBotProvider =
+  | "cloudflare" | "datadome" | "kasada" | "perimeterx"
+  | "akamai" | "incapsula" | "meta" | "tiktok"
+  | "linkedin" | "google" | "amazon" | null;
+
 export interface DomainEntry {
   method: FetchMethod;
   note: string;
+  /** Anti-bot provider protecting this domain (null = unknown/none) */
+  provider?: AntiBotProvider;
 }
 
 /** Registry of known domains and their optimal fetch method.
@@ -29,7 +37,7 @@ export const DOMAIN_REGISTRY: Record<string, DomainEntry> = {
   "docs.github.com":      { method: "static", note: "SSR docs" },
   "python.org":           { method: "static", note: "SSR" },
   "pypi.org":             { method: "static", note: "SSR" },
-  "npmjs.com":            { method: "static", note: "SSR" },
+  "npmjs.com":            { method: "render", note: "React SPA" },
   "crates.io":            { method: "static", note: "SSR" },
   "pkg.go.dev":           { method: "static", note: "SSR" },
   "httpbin.org":          { method: "static", note: "Test utility" },
@@ -47,46 +55,52 @@ export const DOMAIN_REGISTRY: Record<string, DomainEntry> = {
   "trends24.in":          { method: "static", note: "Third-party X/Twitter trending aggregator — not official X data; no auth required, SSR" },
 
   // === RENDER — Needs JS execution / Web Unblocker ===
-  "amazon.com":           { method: "render", note: "JS prices, anti-bot" },
-  "amazon.de":            { method: "render", note: "JS prices, anti-bot" },
-  "amazon.co.uk":         { method: "render", note: "JS prices, anti-bot" },
-  "amazon.co.jp":         { method: "render", note: "JS prices, anti-bot" },
-  "amazon.fr":            { method: "render", note: "JS prices, anti-bot" },
-  "amazon.es":            { method: "render", note: "JS prices, anti-bot" },
-  "amazon.it":            { method: "render", note: "JS prices, anti-bot" },
-  "amazon.ca":            { method: "render", note: "JS prices, anti-bot" },
+  "amazon.com":           { method: "render", note: "JS prices, anti-bot", provider: "datadome" },
+  "amazon.de":            { method: "render", note: "JS prices, anti-bot", provider: "datadome" },
+  "amazon.co.uk":         { method: "render", note: "JS prices, anti-bot", provider: "datadome" },
+  "amazon.co.jp":         { method: "render", note: "JS prices, anti-bot", provider: "datadome" },
+  "amazon.fr":            { method: "render", note: "JS prices, anti-bot", provider: "datadome" },
+  "amazon.es":            { method: "render", note: "JS prices, anti-bot", provider: "datadome" },
+  "amazon.it":            { method: "render", note: "JS prices, anti-bot", provider: "datadome" },
+  "amazon.ca":            { method: "render", note: "JS prices, anti-bot", provider: "datadome" },
   "ebay.com":             { method: "render", note: "JS SPA" },
   "twitter.com":          { method: "render", note: "JS SPA — Web Unblocker returns 403; use trends24.in for trending data instead" },
   "x.com":                { method: "render", note: "JS SPA — Web Unblocker returns 403; use trends24.in for trending data instead" },
-  "youtube.com":          { method: "render", note: "JS SPA" },
-  "instagram.com":        { method: "render", note: "JS SPA" },
-  "tiktok.com":           { method: "render", note: "JS SPA, anti-bot" },
-  "linkedin.com":         { method: "render", note: "JS SPA, auth-gated" },
-  "facebook.com":         { method: "render", note: "JS SPA" },
-  "steampowered.com":     { method: "render", note: "Anti-bot, JS" },
-  "store.steampowered.com":{ method: "render", note: "Anti-bot, JS" },
-  "walmart.com":          { method: "render", note: "Anti-bot" },
-  "target.com":           { method: "render", note: "Anti-bot" },
-  "bestbuy.com":          { method: "render", note: "Anti-bot" },
+  "youtube.com":          { method: "render", note: "JS SPA", provider: "google" },
+  "instagram.com":        { method: "render", note: "JS SPA", provider: "meta" },
+  "tiktok.com":           { method: "render", note: "JS SPA, anti-bot", provider: "tiktok" },
+  "linkedin.com":         { method: "render", note: "JS SPA, auth-gated", provider: "linkedin" },
+  "facebook.com":         { method: "render", note: "JS SPA", provider: "meta" },
+  "steampowered.com":     { method: "render", note: "Anti-bot, JS", provider: "akamai" },
+  "store.steampowered.com":{ method: "render", note: "Anti-bot, JS", provider: "akamai" },
+  "walmart.com":          { method: "render", note: "Anti-bot", provider: "perimeterx" },
+  "target.com":           { method: "render", note: "Anti-bot", provider: "akamai" },
+  "bestbuy.com":          { method: "render", note: "Anti-bot", provider: "akamai" },
   "etsy.com":             { method: "render", note: "JS SPA" },
   "aliexpress.com":       { method: "render", note: "JS SPA, anti-bot" },
-  "zillow.com":           { method: "render", note: "Anti-bot" },
+  "zillow.com":           { method: "render", note: "Anti-bot", provider: "cloudflare" },
   "realtor.com":          { method: "render", note: "JS SPA" },
-  "airbnb.com":           { method: "render", note: "JS SPA" },
+  "airbnb.com":           { method: "render", note: "JS SPA", provider: "perimeterx" },
   "yelp.com":             { method: "render", note: "Anti-bot" },
-  "tripadvisor.com":      { method: "render", note: "Anti-bot" },
-  "imdb.com":             { method: "render", note: "JS SPA" },
+  "tripadvisor.com":      { method: "render", note: "Anti-bot", provider: "perimeterx" },
+  "imdb.com":             { method: "render", note: "JS SPA", provider: "amazon" },
   "spotify.com":          { method: "render", note: "JS SPA" },
-  "google.com":           { method: "render", note: "Anti-bot for search" },
-  "indeed.com":           { method: "render", note: "Anti-bot" },
+  "google.com":           { method: "render", note: "Anti-bot for search", provider: "google" },
+  "indeed.com":           { method: "render", note: "Anti-bot", provider: "cloudflare" },
   "ziprecruiter.com":     { method: "render", note: "JS SPA" },
+  "shein.com":            { method: "render", note: "Anti-bot, JS SPA", provider: "datadome" },
+  "wayfair.com":          { method: "render", note: "Anti-bot", provider: "perimeterx" },
+  "homedepot.com":        { method: "render", note: "Anti-bot", provider: "akamai" },
+  "lowes.com":            { method: "render", note: "Anti-bot", provider: "akamai" },
+  "nike.com":             { method: "render", note: "Anti-bot, JS SPA", provider: "akamai" },
 
   // === BROWSER — Full CDP required (heavy anti-bot / fingerprinting) ===
-  "booking.com":          { method: "browser", note: "JS fingerprinting challenge" },
-  "glassdoor.com":        { method: "browser", note: "Aggressive anti-bot" },
-  "ticketmaster.com":     { method: "browser", note: "Anti-bot" },
-  "stubhub.com":          { method: "browser", note: "Anti-bot" },
-  "cloudflare.com":       { method: "browser", note: "Fingerprinting" },
+  "booking.com":          { method: "browser", note: "JS fingerprinting challenge", provider: "perimeterx" },
+  "glassdoor.com":        { method: "browser", note: "Aggressive anti-bot", provider: "cloudflare" },
+  "g2.com":               { method: "browser", note: "Anti-bot, review platform", provider: "kasada" },
+  "ticketmaster.com":     { method: "browser", note: "Anti-bot", provider: "datadome" },
+  "stubhub.com":          { method: "browser", note: "Anti-bot", provider: "datadome" },
+  "cloudflare.com":       { method: "browser", note: "Fingerprinting", provider: "cloudflare" },
 };
 
 /** Look up optimal fetch method for a URL. Returns null if domain unknown. */

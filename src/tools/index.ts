@@ -34,6 +34,8 @@ export type { ScraperResultParams } from "./scraper_result.js";
 export { novadaBrowserFlow, validateBrowserFlowParams, BrowserFlowParamsSchema } from "./browser_flow.js";
 export type { BrowserFlowParams, BrowserFlowAction } from "./browser_flow.js";
 export { novadaAiMonitor } from "./ai_monitor.js";
+export { novadaMonitor, validateMonitorParams, MonitorParamsSchema } from "./monitor.js";
+export type { MonitorParams } from "./monitor.js";
 export type { SearchParams, ExtractParams, CrawlParams, ResearchParams, MapParams, ProxyParams, ScrapeParams, VerifyParams, UnblockParams, BrowserParams, BrowserAction, NovadaSearchResult, NovadaApiResponse, HealthParams } from "./types.js";
 export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
 export { classifyError, NovadaErrorCode } from "../_core/errors.js";
