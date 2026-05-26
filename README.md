@@ -1,23 +1,66 @@
-# Novada MCP
+# novada
+
+> One MCP server. All web data. Search, scrape, crawl, proxy, and AI research — in a single `npx` command.
 
 [![npm version](https://img.shields.io/npm/v/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-23-tool MCP server: web search, extraction, scraping (129 platforms), proxy, and browser automation.
+## The Problem
 
-Works with Claude, Cursor, VS Code, Windsurf, and any MCP-compatible client.
+AI agents need web data but the tools are fragmented:
 
----
+- **Tavily** does search but can't scrape or proxy
+- **Firecrawl** does scrape but can't search or proxy
+- **BrightData** does everything but ships 69 tools that bloat your context window
+- **Building it yourself** means maintaining proxies, anti-bot bypass, retry logic, and 10 different APIs
 
-## Install
+## The Fix
+
+```bash
+npx novada-mcp
+```
+
+One server. One API key. Tools that cover every web data need an AI agent has:
+
+| Need | Tool | What it does |
+|------|------|-------------|
+| Find information | `novada_search` | Web search across Google, Bing, DuckDuckGo, Yandex, Yahoo |
+| Read a page | `novada_extract` | Any URL → clean markdown, batch up to 10 in parallel |
+| Deep research | `novada_research` | One call → parallel searches → dedup → cited multi-source report |
+| Crawl a site | `novada_crawl` | BFS/DFS up to 20 pages with regex path filtering |
+| Discover URLs | `novada_map` | Sitemap + BFS discovery without reading content |
+| Platform data | `novada_scrape` | Amazon, LinkedIn, TikTok, GitHub, Zillow — 129 platforms |
+| Monitor changes | `novada_monitor` | Track price/content/availability changes between checks |
+| Verify claims | `novada_verify` | Parallel fact-checking against live web sources |
+| Raw HTML | `novada_unblock` | JS render or full browser CDP for bot-protected pages |
+| Browser automation | `novada_browser` | Navigate, click, type, fill forms, screenshot in cloud browser |
+| Browser flows | `novada_browser_flow` | Multi-step browser automation sequences |
+| Proxy credentials | `novada_proxy` | Residential, mobile, ISP, datacenter, static, dedicated — 195 countries |
+| AI brand monitoring | `novada_ai_monitor` | Check how ChatGPT, Perplexity, Grok, Claude, Gemini mention your brand |
+| Health check | `novada_health` | Check which API products are active on your key |
+| Async scraping | `novada_scraper_submit` | Submit async scraping task → poll → retrieve results |
+
+## What Makes This Different
+
+**`novada_research` is unique.** No other MCP server turns one question into a cited multi-source report. It searches across Google, Bing, and DuckDuckGo in parallel, deduplicates, extracts full content from the top 5 sources, and synthesizes with citations. One tool call replaces an entire research workflow. Depth options: quick (3 queries), deep (5-6), comprehensive (8-10).
+
+**Auto-escalation handles anti-bot automatically.** Static fetch → JS render → Browser CDP. Known hard targets (Amazon, LinkedIn, G2, Zillow, Glassdoor, Walmart, Instagram, TikTok, Shein) skip straight to the right method based on a 30+ domain registry. You never think about Cloudflare, DataDome, Kasada, or PerimeterX — the tool handles it.
+
+**Agent-first design (8.5/10 benchmark score).** Every response includes `agent_instruction` with structured next-step guidance, `source` field (live/cache/wayback), structured errors with `failure_class`, cross-tool hints suggesting better alternatives, and a `## Agent Action` block with machine-parseable status codes.
+
+## Quick Start
+
+1. Get a key at [novada.com](https://www.novada.com)
+
+2. Add to your MCP client:
 
 **Claude Code:**
 ```bash
 claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 ```
 
-**Claude Desktop / Cursor / VS Code / Windsurf** — add to your MCP config:
+**Claude Desktop / Cursor / VS Code / Windsurf:**
 ```json
 {
   "mcpServers": {
@@ -30,375 +73,175 @@ claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 }
 ```
 
-Get your key at [novada.com](https://www.novada.com).
-
----
-
-## Health Check
-
-```bash
-NOVADA_API_KEY=your_key npx novada-mcp health
+3. Try it:
+```
+novada_search({query: "Claude MCP tutorials", num: 5})
+novada_research({question: "How do MCP servers work?", depth: "deep"})
+novada_extract({url: "https://news.ycombinator.com", format: "markdown"})
+novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price", "availability"]})
 ```
 
-Or call `novada_health` from any MCP client to verify which products are active on your key.
+## Tool Reference
 
----
+### Search & Research
 
-## Tool Selection
+| Tool | Purpose | Key Params | Example |
+|------|---------|-----------|---------|
+| `novada_search` | Web search via 5 engines | `query`, `engine`, `num`, `time_range`, `include_domains` | `novada_search({query: "best API gateways 2026", engine: "google", num: 10})` |
+| `novada_research` | Multi-source parallel research | `question`, `depth`, `focus` | `novada_research({question: "Kong vs Traefik vs APISIX", depth: "comprehensive", focus: "performance benchmarks"})` |
+| `novada_verify` | Fact-check claims against web | `claim` | `novada_verify({claim: "GPT-5 was released in 2026"})` |
 
-```
-Have a question or topic, no URL → novada_search
-Have a URL to read              → novada_extract
-Read an entire site (docs, wiki) → novada_crawl
-Discover all URLs on a site     → novada_map
-Multi-source research report    → novada_research
-Structured data (Amazon, TikTok, LinkedIn, …) → novada_scrape
-Verify a factual claim          → novada_verify
-JS-heavy / bot-blocked raw HTML → novada_unblock
-Login, click, fill forms        → novada_browser
-Proxy credentials for your own requests → novada_proxy_*
-```
+### Extract & Crawl
 
----
+| Tool | Purpose | Key Params | Example |
+|------|---------|-----------|---------|
+| `novada_extract` | Extract content from URL(s) | `url` (single or array), `format`, `render`, `fields` | `novada_extract({url: "https://example.com", fields: ["price", "rating"]})` |
+| `novada_crawl` | Crawl multiple pages from a domain | `url`, `max_pages`, `strategy`, `select_paths` | `novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: "/api/.*"})` |
+| `novada_map` | Discover URLs on a site | `url`, `search`, `limit` | `novada_map({url: "https://example.com", search: "pricing"})` |
+| `novada_monitor` | Detect page changes over time | `url`, `fields` | `novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price"]})` |
 
-## Tools
+### Structured Platform Data
 
-### Search & Content
+`novada_scrape` supports 129 platforms with structured data extraction. Returns clean tabular records, not raw HTML.
 
-#### `novada_search`
-Web search via Google, Bing, DuckDuckGo, Yandex. Returns ranked titles + URLs + snippets.
+| Platform | Operation Examples | Data Returned |
+|----------|-------------------|---------------|
+| Amazon | `amazon_product_keywords`, `amazon_product_asin` | Title, price, rating, reviews, BSR, availability |
+| LinkedIn | `linkedin_company_information_url`, `linkedin_profile_url` | Company info, employee count, profile data |
+| TikTok | `tiktok_posts_url`, `tiktok_profile_url` | Video stats, engagement, profile data |
+| GitHub | `github_repository_repo-url` | Stars, forks, issues, description, languages |
+| Reddit | `reddit_subreddit_posts` | Posts, scores, comments, timestamps |
+| Zillow | `zillow_property_url` | Price, beds, baths, sqft, Zestimate |
+| Glassdoor | `glassdoor_company_reviews_url` | Reviews, ratings, salary data |
+| YouTube | `youtube_video_search_label` | Video titles, views, duration, channel |
+| Instagram | `instagram_profile_url` | Posts, followers, engagement |
+| Google Shopping | `google_shopping_search` | Products, prices, merchants |
 
-| Param | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `query` | ✓ | — | Search query |
-| `engine` | | `google` | `google` `bing` `duckduckgo` `yandex` |
-| `num` | | `10` | 1–20 results |
-| `time_range` | | — | `day` `week` `month` `year` |
-| `country` | | — | ISO country code |
-| `include_domains` | | — | Restrict to these domains (max 10) |
-| `exclude_domains` | | — | Exclude these domains (max 10) |
-| `extract_options` | | — | Auto-extract top-N URLs (saves a separate `novada_extract` call) |
+Full platform list: call `novada_discover` or read the `novada://scraper-platforms` MCP resource.
 
-```
-novada_search({query: "Claude MCP 2025", engine: "google", num: 5})
-novada_search({query: "AI news", time_range: "week", include_domains: ["techcrunch.com"]})
-```
+### Proxy Network
 
----
+Route your own HTTP requests through Novada's proxy infrastructure. 100M+ IPs across 195 countries.
 
-#### `novada_extract`
-Extract clean content from any URL. Batch up to 10 URLs. Auto-escalates static → JS render.
+| Tool | Proxy Type | Best For |
+|------|-----------|---------|
+| `novada_proxy_residential` | Real home ISP IPs | Anti-bot bypass, geo-restricted content |
+| `novada_proxy_isp` | ISP-assigned IPs | Social media, ecommerce platforms |
+| `novada_proxy_datacenter` | Datacenter IPs | High-volume, non-protected targets |
+| `novada_proxy_mobile` | 4G/5G mobile IPs | Mobile-targeted content, app APIs |
+| `novada_proxy_static` | Dedicated static ISP IP | Account management, login flows |
+| `novada_proxy_dedicated` | Exclusive datacenter IP | High-trust platforms, clean reputation |
 
-| Param | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `url` | ✓ | — | Single URL or array of up to 10 URLs |
-| `render` | | `auto` | `auto` `static` `render` `browser` |
-| `format` | | `markdown` | `markdown` `text` `html` |
-| `fields` | | — | Extract specific fields: `["price", "author", "rating"]` |
-| `max_chars` | | 25000 | Max content length (max 100000) |
-
-```
-novada_extract({url: "https://docs.example.com/api"})
-novada_extract({url: ["https://a.com", "https://b.com"], format: "markdown"})
-novada_extract({url: "https://shop.com/product", fields: ["price", "availability"]})
-```
-
----
-
-#### `novada_crawl`
-Crawl a site BFS/DFS up to 20 pages, extract content from each.
-
-| Param | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `url` | ✓ | — | Starting URL |
-| `max_pages` | | `5` | 1–20 |
-| `strategy` | | `bfs` | `bfs` (breadth-first) or `dfs` (depth-first) |
-| `select_paths` | | — | Regex patterns to include: `["/docs/.*"]` |
-| `exclude_paths` | | — | Regex patterns to skip: `["/blog/.*"]` |
-| `render` | | `auto` | `auto` `static` `render` |
-| `instructions` | | — | Natural-language hint: `"only API reference pages"` |
-
-```
-novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: ["/docs/.*"]})
-novada_crawl({url: "https://example.com", instructions: "only quickstart and API pages"})
-```
-
----
-
-#### `novada_map`
-Discover all URLs on a site (sitemap.xml + BFS fallback). Fast. Doesn't read content.
-
-| Param | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `url` | ✓ | — | Root URL |
-| `limit` | | `50` | Max URLs to return |
-| `max_depth` | | `2` | Link hops from root |
-| `search` | | — | Filter URLs matching this term |
-
-```
-novada_map({url: "https://example.com", limit: 100})
-novada_map({url: "https://docs.example.com", search: "api"})
-```
-
----
-
-#### `novada_research`
-Multi-source research: generates 3–10 parallel queries, deduplicates, extracts top sources, returns cited report.
-
-| Param | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `question` | ✓ | — | Research question (min 5 chars) |
-| `depth` | | `auto` | `quick`=3 queries, `deep`=5–6, `comprehensive`=8–10 |
-| `focus` | | — | Scope hint: `"technical implementation"` `"recent news only"` |
-
-```
-novada_research({question: "How do MCP servers work with Claude?", depth: "deep"})
-novada_research({question: "Best proxy providers 2025", focus: "pricing and reliability"})
-```
-
----
-
-#### `novada_verify`
-Verify a factual claim against live web sources. Returns verdict + confidence score.
-
-Verdicts: `supported` / `unsupported` / `contested` / `insufficient_data`
-
-| Param | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `claim` | ✓ | — | Claim to verify (min 10 chars) |
-| `context` | | — | `"as of 2024"` `"in the US"` |
-
-```
-novada_verify({claim: "OpenAI released GPT-5 in 2025"})
-novada_verify({claim: "The Eiffel Tower is 330m tall", context: "as of 2024"})
-```
-
----
-
-### Scraping (13 Active Platforms)
-
-#### `novada_scrape`
-Structured data from 13 active platforms. Synchronous — returns results immediately.
-
-| Param | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `platform` | ✓ | — | Exact domain: `amazon.com` `tiktok.com` `linkedin.com` |
-| `operation` | ✓ | — | Operation ID (see table below) |
-| `params` | ✓ | `{}` | Operation-specific params |
-| `format` | | `markdown` | `markdown` `json` `toon` |
-| `limit` | | `20` | Max records returned |
-
-**Active platforms and operations:**
-
-| Platform | Operation ID | Required Params |
-|----------|-------------|-----------------|
-| `amazon.com` | `amazon_product_keywords` | `{ keyword }` |
-| `amazon.com` | `amazon_product_asin` | `{ asin }` |
-| `amazon.com` | `amazon_product_url` | `{ url }` |
-| `amazon.com` | `amazon_comment_url` | `{ url }` |
-| `walmart.com` | `walmart_product_keywords` | `{ keyword }` |
-| `walmart.com` | `walmart_product_url` | `{ url }` |
-| `google.com` | `google_search` | `{ q }` |
-| `google.com` | `google_shopping_keywords` | `{ keyword }` |
-| `bing.com` | `bing_search` | `{ keyword }` |
-| `duckduckgo.com` | `duckduckgo` | `{ keyword }` |
-| `yandex.com` | `yandex` | `{ keyword }` |
-| `x.com` | `twitter_profile_username` | `{ username }` |
-| `x.com` | `twitter_post_posturl` | `{ url }` |
-| `tiktok.com` | `tiktok_posts_url` | `{ url }` |
-| `tiktok.com` | `tiktok_profiles_url` | `{ url }` |
-| `instagram.com` | `ins_profiles_username` | `{ username }` |
-| `instagram.com` | `ins_posts_profileurl` | `{ url }` |
-| `instagram.com` | `ins_comment_posturl` | `{ url }` |
-| `facebook.com` | `facebook_post_posts-url` | `{ url }` |
-| `facebook.com` | `facebook_profile_profiles-url` | `{ url }` |
-| `youtube.com` | `youtube_video_search_label` | `{ label }` |
-| `youtube.com` | `youtube_video-url` | `{ url }` |
-| `youtube.com` | `youtube_comment_id` | `{ video_id }` |
-| `linkedin.com` | `linkedin_company_information_url` | `{ url }` |
-| `linkedin.com` | `linkedin_job_listings_information_keyword` | `{ keyword }` |
-| `github.com` | `github_repository_repo-url` | `{ url }` |
-| `github.com` | `github_repository_search-url` | `{ url }` |
-
-> **NOT AVAILABLE** (return error 11006 — use `novada_extract` instead):
-> reddit.com, glassdoor.com, zillow.com, ebay.com, etsy.com, tripadvisor.com, and ~100 others.
-
-For the full platform+operation list: call `novada_scrape` and read the `novada://scraper-platforms` resource.
-
-```
-novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "iphone 16"}})
-novada_scrape({platform: "linkedin.com", operation: "linkedin_company_information_url", params: {url: "https://linkedin.com/company/openai"}})
-novada_scrape({platform: "github.com", operation: "github_repository_repo-url", params: {url: "https://github.com/anthropics/anthropic-sdk-python"}})
-```
-
----
-
-#### Async Scraping (`novada_scraper_submit` / `novada_scraper_status` / `novada_scraper_result`)
-
-For long-running or batch scrape jobs. Use when `novada_scrape` times out.
-
-```
-1. task_id = novada_scraper_submit({platform: "amazon.com", operation: "amazon_product_asin", params: {asin: "B09..."}})
-2. Poll: novada_scraper_status({task_id})  ← every 5–10s until status = "complete"
-3. novada_scraper_result({task_id, format: "json"})
-```
-
----
-
-#### `novada_unblock`
-Raw HTML from bot-protected or JS-heavy pages when you need the DOM.
-
-| Param | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `url` | ✓ | — | Target URL |
-| `method` | | `render` | `render` or `browser` |
-| `country` | | — | Route through this country |
-| `wait_for` | | — | CSS selector to wait for |
-
-```
-novada_unblock({url: "https://example.com/protected", method: "render"})
-```
-
----
-
-### Proxy
-
-All proxy tools return connection credentials (not proxied content). Use these in your own HTTP client.
-
-| Tool | Best for |
-|------|---------|
-| `novada_proxy_residential` | Anti-bot bypass, geo-targeting (100M+ IPs) |
-| `novada_proxy_isp` | Social media, e-commerce (looks like real home user) |
-| `novada_proxy_mobile` | Mobile-targeted content, app APIs |
-| `novada_proxy_datacenter` | High-volume scraping of unprotected targets (fastest) |
-| `novada_proxy_static` | Account management, login-dependent workflows (sticky IP) |
-| `novada_proxy_dedicated` | Clean reputation, exclusive IP |
-| `novada_proxy` | Generic (choose type via param) |
-
-Common params: `country` (ISO code), `session_id` (sticky session), `format` (`url`/`env`/`curl`).
-
-```
-novada_proxy_residential({country: "us", format: "curl"})
-novada_proxy_static({country: "de", session_id: "acct42", format: "env"})
-```
-
----
+Each proxy tool returns connection credentials in `url`, `env`, or `curl` format. Params: `country` (ISO 2-letter), `city` (optional), `session_id` (for sticky sessions).
 
 ### Browser Automation
 
-Requires `NOVADA_BROWSER_WS` env var (Browser API WebSocket).
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `novada_browser` | Full browser interaction via CDP | `novada_browser({actions: [{type: "navigate", url: "..."}, {type: "click", selector: "#btn"}]})` |
+| `novada_browser_flow` | Multi-step automation sequences | Click, scroll, wait, type, screenshot — up to 20 actions per call |
+| `novada_unblock` | Raw rendered HTML from protected pages | `novada_unblock({url: "...", method: "browser"})` |
 
-#### `novada_browser`
-Interactive cloud browser — navigate, click, type, screenshot, eval JS.
+Sessions persist across calls via `session_id`. Cookies, login state, and page context are maintained.
 
+## Use Cases
+
+### AI Agent Research & RAG Pipelines
 ```
-novada_browser({
-  actions: [
-    {action: "navigate", url: "https://example.com"},
-    {action: "click", selector: "#login"},
-    {action: "type", selector: "input[name=email]", text: "user@example.com"},
-    {action: "screenshot"}
-  ]
-})
+novada_research({question: "What are the latest developments in quantum computing?", depth: "comprehensive"})
 ```
+Returns a cited multi-source report. Feed directly into RAG vector stores or use as context for agent reasoning.
 
-#### `novada_browser_flow`
-Declarative multi-step flows with scroll, wait, and conditional steps.
+### E-Commerce Price Monitoring
+```
+novada_monitor({url: "https://amazon.com/dp/B0XXXXXX", fields: ["price", "availability"]})
+```
+First call records baseline. Call again later — returns field-level diffs with percentage change (e.g., price: $999 → $899, ↓10%).
 
----
+### Competitive Intelligence
+```
+novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "wireless earbuds"}, limit: 20})
+```
+Get structured product data (price, rating, reviews, BSR) for competitive analysis across 129 platforms.
 
-### Health & Discovery
+### Lead Generation
+```
+novada_scrape({platform: "linkedin.com", operation: "linkedin_company_information_url", params: {url: "https://linkedin.com/company/..."}, limit: 1})
+```
+Extract company info, employee count, and industry data from LinkedIn company pages.
 
-| Tool | Use when |
-|------|---------|
-| `novada_health` | A tool is failing — check which products are active on your key |
-| `novada_health_all` | Full endpoint health + latency for all services in parallel |
-| `novada_discover` | Need the full tool catalog with categories and availability |
+### Content Extraction for LLM Training
+```
+novada_crawl({url: "https://docs.example.com", max_pages: 20, select_paths: "/docs/.*"})
+```
+Crawl documentation sites and extract clean markdown for fine-tuning datasets or knowledge bases.
 
----
+### AI Brand Monitoring
+```
+novada_ai_monitor({brand: "YourProduct", models: ["chatgpt", "perplexity", "claude"]})
+```
+Check how AI models reference your brand: sentiment, claims, competitor mentions, source URLs.
 
-## Error Reference
+### Geo-Targeted Data Collection
+```
+novada_proxy_residential({country: "DE", city: "berlin", format: "curl"})
+```
+Get proxy credentials for any of 195 countries. Use with your own HTTP client for geo-specific content access.
 
-| Code | Meaning | Fix |
-|------|---------|-----|
-| `11006` | Invalid operation ID, or Scraper API not activated | Verify op ID against table above. If correct, activate at dashboard.novada.com |
-| `11008` | Unknown platform name | Use exact domain (`amazon.com`, not `amazon`) |
-| `27202` | Task still pending | Normal — poll again in 5s |
-| `27203` | Server-side task failure | Transient — retry once |
-| `10001` | Missing required params | Check `params` object for the operation |
+## Honest Comparison
 
----
+|  | Novada | Firecrawl | Tavily | BrightData |
+|---|---|---|---|---|
+| Tools | 25 | 14 | 2 | 69 |
+| Search engines | 5 | 0 | 1 | 3 |
+| Multi-source research | **Yes** | No | No | No |
+| Proxy as MCP tool | **Yes** | No | No | No |
+| Auto anti-bot escalation | **Yes** | No | N/A | No |
+| Change monitoring | **Yes** | No | No | No |
+| Platform scraping | 129 platforms | No | No | 437 platforms |
+| Browser automation | **Yes** (CDP) | No | No | Yes |
+| MCP Prompts & Resources | **Yes** (5+4) | No | No | No |
+| Hosted MCP (no install) | **No** | No | No | Yes |
+| Agent-first score | 8.5/10 | 6.0 | 6.0 | N/A |
 
-## Environment Variables
+> **What we don't have yet:** hosted HTTP endpoint (requires terminal install for now), and some Scraper API platforms need separate activation. BrightData has more structured scrapers (437 vs 129).
+
+## Anti-Bot Support
+
+Novada automatically handles these anti-bot systems via its escalation chain:
+
+| Anti-Bot System | Detection | Escalation Method |
+|----------------|-----------|-------------------|
+| Cloudflare | `cf_chl_`, `__cf_bm`, challenge pages | Auto-render via Web Unblocker |
+| DataDome | `datadome` cookie/script | Auto-render |
+| Kasada | Script path detection | Browser CDP |
+| PerimeterX | `_px` cookie variants | Auto-render |
+| Akamai | `_abck`, `ak_bmsc` cookies | Auto-render |
+| Imperva/Incapsula | `incap_ses_`, `visid_incap_` | Auto-render |
+
+30+ domains are pre-tagged in the hard target registry — these skip static fetch entirely and go straight to the right method.
+
+## Configuration
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `NOVADA_API_KEY` | **Yes** | Scraper API key (search + 129 platforms + web unblocker) |
-| `NOVADA_BROWSER_WS` | Optional | Browser API WebSocket → enables `novada_browser` tools |
-| `NOVADA_PROXY_USER` | Optional | Proxy username → enables `novada_proxy_*` tools |
-| `NOVADA_PROXY_PASS` | Optional | Proxy password |
-| `NOVADA_PROXY_ENDPOINT` | Optional | Proxy host:port |
-
----
-
-## Load Only What You Need
-
-Set `NOVADA_GROUPS` to limit which tool groups are registered (reduces token overhead in tool-heavy contexts):
-
-```json
-{ "NOVADA_GROUPS": "search,extract,research" }
-```
-
-Valid groups: `search` `extract` `crawl` `map` `research` `scrape` `proxy` `verify` `unblock` `browser` `health` `discover` `scraper_submit` `scraper_status` `scraper_result` `proxy_residential` `proxy_isp` `proxy_datacenter` `proxy_mobile` `proxy_static` `proxy_dedicated` `browser_flow`
-
----
-
-## Common Workflows
-
-**Find and read pages on a topic:**
-```
-novada_search({query: "..."}) → novada_extract({url: [top URLs]})
-```
-
-**Deep research on a question:**
-```
-novada_research({question: "...", depth: "deep"})
-```
-
-**Scrape Amazon products then read reviews:**
-```
-novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "..."}})
-→ novada_scrape({platform: "amazon.com", operation: "amazon_comment_url", params: {url: product_url}})
-```
-
-**Crawl a docs site:**
-```
-novada_map({url: "https://docs.example.com"})   ← find URLs
-→ novada_crawl({url: "...", select_paths: ["/docs/.*"], max_pages: 20})
-```
-
-**Get LinkedIn company info + job listings:**
-```
-novada_scrape({platform: "linkedin.com", operation: "linkedin_company_information_url", params: {url: "..."}})
-novada_scrape({platform: "linkedin.com", operation: "linkedin_job_listings_information_keyword", params: {keyword: "..."}})
-```
-
----
-
-## CLI
-
-```bash
-NOVADA_API_KEY=your_key npx novada-mcp search "GPT-5 release" --engine google --num 5
-NOVADA_API_KEY=your_key npx novada-mcp extract https://example.com --format markdown
-NOVADA_API_KEY=your_key npx novada-mcp research "AI agent frameworks 2025" --depth deep
-NOVADA_API_KEY=your_key npx novada-mcp scrape --platform amazon.com --operation amazon_product_keywords --keyword "iphone 16"
-NOVADA_API_KEY=your_key npx novada-mcp health
-```
-
----
+| `NOVADA_API_KEY` | **Yes** | API key — covers search, extract, crawl, scrape, research, verify, monitor |
+| `NOVADA_BROWSER_WS` | No | Browser API WebSocket URL for `novada_browser` and `novada_browser_flow` |
+| `NOVADA_PROXY_USER` | No | Proxy username for `novada_proxy_*` tools |
+| `NOVADA_PROXY_PASS` | No | Proxy password |
+| `NOVADA_PROXY_ENDPOINT` | No | Proxy host:port endpoint |
+| `NOVADA_WEB_UNBLOCKER_KEY` | No | Separate key for Web Unblocker (if different from main API key) |
+| `NOVADA_TOOLS` | No | Load specific tools only: `"extract,search,research,monitor"` |
+| `NOVADA_GROUPS` | No | Load tool groups: `"search,proxy,browser"` — groups: search, proxy, browser, scraper, health |
 
 ## Links
 
-- API key + docs: [novada.com](https://www.novada.com)
+- Docs + API key: [novada.com](https://www.novada.com)
+- npm: [npmjs.com/package/novada-mcp](https://www.npmjs.com/package/novada-mcp)
+- GitHub: [github.com/NovadaLabs/novada-mcp](https://github.com/NovadaLabs/novada-mcp)
 - Issues: [github.com/NovadaLabs/novada-mcp/issues](https://github.com/NovadaLabs/novada-mcp/issues)
-- Enterprise: [sales@novada.com](mailto:sales@novada.com)
+- Tool details: call `novada_discover` or `novada_health` from any MCP client
+
+## License
+
+MIT

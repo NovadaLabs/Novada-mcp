@@ -1,4 +1,4 @@
-import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
+import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
 import type { FieldResult } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import type { ExtractParams } from "./types.js";
@@ -124,13 +124,22 @@ async function extractSingle(
   const renderMode = params.render ?? "auto";
   const fetchedAt = new Date().toISOString();
 
+  let html: string;
+  let usedMode: "static" | "render" | "browser" | "render-failed" = "static";
+  let renderError: string | null = null;
+  /** Anti-bot provider detected during fetch (null = none detected) */
+  let detectedAntiBot: string | null = null;
+  /** Whether anti-bot was resolved via escalation */
+  let antiBotResolved = false;
+
   // Domain registry: skip auto-detection probe for known sites
   const domainHint = renderMode === "auto" ? lookupDomain(params.url) : null;
   const effectiveMode = domainHint ? domainHint.method : renderMode;
 
-  let html: string;
-  let usedMode: "static" | "render" | "browser" | "render-failed" = "static";
-  let renderError: string | null = null;
+  // Pre-populate anti-bot provider from domain registry if known
+  if (domainHint?.provider) {
+    detectedAntiBot = domainHint.provider;
+  }
 
   // Force modes (or registry-resolved modes) skip escalation logic
   if (effectiveMode === "browser") {
@@ -211,15 +220,21 @@ async function extractSingle(
 
     // Skip JS detection if we already have PDF content (no escalation needed)
     if (renderMode === "auto" && !html.startsWith("pdf_pages:") && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
+      // Identify anti-bot provider from the static HTML before escalation
+      detectedAntiBot = identifyAntiBot(html);
+
       // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
       try {
         const renderResponse = await fetchWithRender(params.url, apiKey);
         const renderHtml = String(renderResponse.data);
         if (detectBotChallenge(renderHtml)) {
+          // Re-check anti-bot on render result (may differ from static)
+          detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
           // Render returned a bot challenge page — escalate to browser if available
           if (isBrowserConfigured()) {
             html = await fetchViaBrowser(params.url);
             usedMode = "browser";
+            antiBotResolved = true;
           } else {
             // No browser available — keep static html, mark as failed
             usedMode = "render-failed";
@@ -228,10 +243,12 @@ async function extractSingle(
         } else if (!detectJsHeavyContent(renderHtml)) {
           html = renderHtml;
           usedMode = "render";
+          antiBotResolved = detectedAntiBot !== null;
         } else if (isBrowserConfigured()) {
           // render also JS-heavy — try full browser
           html = await fetchViaBrowser(params.url);
           usedMode = "browser";
+          antiBotResolved = true;
         } else {
           // render worked but still JS-heavy, use it (better than static)
           html = renderHtml;
@@ -243,6 +260,7 @@ async function extractSingle(
         if (isBrowserConfigured()) {
           html = await fetchViaBrowser(params.url);
           usedMode = "browser";
+          antiBotResolved = true;
         } else {
           usedMode = "render-failed";
         }
@@ -328,6 +346,7 @@ async function extractSingle(
 
   // BUG-E1: Auto-escalation — retry with render when static quality is too low
   let autoEscalated = false;
+  let autoEscalatedTo: "render" | "browser" | null = null;
   if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !html.startsWith("pdf_pages:")) {
     try {
       const renderResponse = await fetchWithRender(params.url, apiKey);
@@ -355,9 +374,45 @@ async function extractSingle(
           description = extractDescription(renderHtml);
           stillJsHeavy = false;
           autoEscalated = true;
+          autoEscalatedTo = "render";
+          detectedAntiBot = detectedAntiBot ?? identifyAntiBot(html);
+          antiBotResolved = detectedAntiBot !== null;
         }
       }
     } catch { /* keep static result */ }
+
+    // If render escalation didn't improve quality enough, try browser as final fallback
+    if (quality.score < 40 && isBrowserConfigured()) {
+      try {
+        const browserHtml = await fetchViaBrowser(params.url);
+        const browserMain = extractMainContent(browserHtml, params.url);
+        const browserSD = extractStructuredData(browserHtml);
+        const browserQuality = scoreExtraction(browserHtml, browserMain, "browser", browserSD !== null);
+        if (browserQuality.score > quality.score) {
+          html = browserHtml;
+          usedMode = "browser";
+          mainContent = browserMain;
+          allLinks = extractLinks(browserHtml, params.url);
+          sameDomainLinks = allLinks
+            .filter(link => {
+              try { return new URL(link).hostname.replace(/^www\./, "") === baseDomain; }
+              catch { return false; }
+            })
+            .slice(0, 15);
+          structuredData = browserSD;
+          hasStructuredData = browserSD !== null;
+          quality = browserQuality;
+          if (quality.score === 0 && mainContent.length > 0) quality.score = 1;
+          title = extractTitle(browserHtml);
+          description = extractDescription(browserHtml);
+          stillJsHeavy = false;
+          autoEscalated = true;
+          autoEscalatedTo = "browser";
+          detectedAntiBot = detectedAntiBot ?? identifyAntiBot(browserHtml);
+          antiBotResolved = true;
+        }
+      } catch { /* keep previous result */ }
+    }
   }
 
   // P2-1: Wayback Machine auto-fallback — when content is very poor, try archive.org
@@ -453,7 +508,8 @@ async function extractSingle(
       links: { same_domain: sameDomainLinks, total: allLinks.length },
       hints: [] as string[],
       ...(pdfPages !== null ? { pdf: { pages: pdfPages, title: pdfTitle ?? null } } : {}),
-      ...(autoEscalated ? { auto_escalated: true } : {}),
+      ...(autoEscalated ? { auto_escalated: true, ...(autoEscalatedTo ? { escalated_to: autoEscalatedTo } : {}) } : {}),
+      ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
       ...(waybackFallback ? { wayback_fallback: true } : {}),
       remember: `${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`,
     };
@@ -498,7 +554,7 @@ async function extractSingle(
     `extraction_quality: ${extractionQuality}`,
     `title: ${title}`,
     ...(description ? [`description: ${description}`] : []),
-    `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? " | auto_escalated:true" : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
+    `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? ` | auto_escalated:true${autoEscalatedTo ? ` | escalated_to:${autoEscalatedTo}` : ""}` : ""}${detectedAntiBot ? ` | anti_bot:${detectedAntiBot} | resolved:${antiBotResolved}` : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
     ``,
     `---`,
     ``,
@@ -640,6 +696,21 @@ async function extractSingle(
     lines.push(`- Query context: "${params.query}". Focus analysis on this topic.`);
   }
 
+
+  // Agent Action block — structured next steps for every extraction
+  const nextActions: string[] = [];
+  if (contentOk) {
+    nextActions.push(`status:success quality:${quality.score}/100`);
+    nextActions.push(`next: novada_map for related pages`);
+    nextActions.push(`next: novada_research for multi-source analysis`);
+  } else {
+    nextActions.push(`status:low_quality quality:${quality.score}/100`);
+    if (usedMode === "static") nextActions.push(`fix: retry with render="render"`);
+    nextActions.push(`alt: novada_scrape for platform data`);
+  }
+  lines.push(``);
+  lines.push(`## Agent Action`);
+  lines.push(`agent_instruction: ${nextActions.join(" | ")}`);
   const mdOutput = lines.join("\n");
   setCached(params.url, cacheRenderMode, mdOutput);
   return mdOutput;

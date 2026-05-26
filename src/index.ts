@@ -29,6 +29,8 @@ import {
   novadaScraperResult,
   novadaBrowserFlow,
   novadaAiMonitor,
+  novadaMonitor,
+  validateMonitorParams,
   validateSearchParams,
   validateExtractParams,
   validateCrawlParams,
@@ -70,6 +72,7 @@ import { ScraperSubmitParamsSchema } from "./tools/scraper_submit.js";
 import { ScraperStatusParamsSchema } from "./tools/scraper_status.js";
 import { ScraperResultParamsSchema } from "./tools/scraper_result.js";
 import { BrowserFlowParamsSchema } from "./tools/browser_flow.js";
+import { MonitorParamsSchema } from "./tools/monitor.js";
 import {
   novadaProxyResidential,
   validateProxyResidentialParams,
@@ -115,37 +118,21 @@ function zodToMcpSchema(schema: any): Record<string, unknown> {
 const TOOLS = [
   {
     name: "novada_search",
-    description: `Use when you have a question or topic but no URL. Searches the web via 5 engines (Google, Bing, DuckDuckGo, Yahoo, Yandex) and returns titles, URLs, and snippets — reranked by relevance to your query.
+    description: `Search the web via 5 engines (Google, Bing, DuckDuckGo, Yahoo, Yandex). Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
 
-**Best for:** Current events, finding relevant pages, fact lookup, competitive research. Add time_range="week" for recent results. Add include_domains to restrict sources.
-**Not for:** Reading a URL you already have (use novada_extract), full multi-source report (use novada_research).
-**Next step:** Call novada_extract with the returned URLs to read full content.
-**Performance hint:** If engine='google' is slow or rate-limited, try engine='duckduckgo' — DDG responses average 329ms vs 1,092ms for Google in benchmarks. DDG is suitable for most factual and recent-news queries.`,
+**Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.
+**Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).
+**Tip:** engine='duckduckgo' is 3x faster than Google and works for most queries.`,
     inputSchema: zodToMcpSchema(SearchParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_extract",
-    description: `Use when you have a URL and need its content. Extracts main text, title, and links. Supports batch extraction — pass url as an array to fetch up to 10 pages in parallel. Auto-escalates from static fetch → JS render → Browser CDP on anti-bot pages.
+    description: `Extract clean content from any URL. Handles Cloudflare, DataDome, Kasada automatically via auto-escalation (static → JS render → Browser CDP). Batch mode: pass url as array for up to 10 pages in parallel.
 
-**Best for:** Reading specific pages, batch-reading search results, extracting docs.
-**Not for:** Discovering which URLs exist on a site (use novada_map first), crawling many pages (use novada_crawl).
-**Tip:** If content looks incomplete or JS-heavy, set render="render" or render="browser".
-
-Common mistakes:
-- Do NOT set render='render' for all pages. auto mode is 15x-113x faster for static sites. Only use render='render' for JavaScript-heavy SPAs (LinkedIn, Glassdoor, React SPAs, Next.js apps).
-- Do NOT call novada_extract on a URL just to check if it exists — use novada_map for URL discovery.
-- If fields extraction returns annotated values, prefer structured pages (product pages, GitHub repos) over generic homepages.
-
-When to use:
-- You need clean markdown, text, or HTML from a single URL or batch of URLs.
-- You need specific structured fields (price, author, date) extracted from a page.
-- You need render-mode bypass for bot-protected or JS-rendered pages.
-
-Not for:
-- Discovering what URLs exist on a site — use novada_map.
-- Multi-page site traversal — use novada_crawl.
-- Raw DOM access for CSS selector parsing — use novada_unblock.`,
+**Use for:** Reading pages, batch-extracting search results, pulling structured fields (price, author, date). Works on anti-bot pages automatically.
+**Not for:** URL discovery (novada_map), multi-page crawl (novada_crawl), platform data like Amazon/LinkedIn (novada_scrape is richer).
+**Key rule:** Leave render="auto" (default). Only set render="render" for known JS-heavy SPAs. Auto mode is 15-100x faster on static sites.`,
     inputSchema: zodToMcpSchema(ExtractParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
@@ -173,11 +160,12 @@ Not for:
   },
   {
     name: "novada_research",
-    description: `Use when you have a complex question needing multiple sources. Generates 3–10 diverse search queries in parallel, deduplicates results, extracts full content from top sources, returns a cited multi-source report.
+    description: `The most powerful research tool in any MCP server. One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extract full content from top 5 sources → synthesized cited report. No other MCP server can do this.
 
-**Best for:** Comparative analysis, topic overviews, questions needing multiple perspectives. One call replaces 3–10 manual searches.
-**Not for:** Simple single-fact lookup (use novada_search), reading a specific URL (use novada_extract).
-**Depth options:** "quick" (3 queries), "deep" (5–6), "comprehensive" (8–10), "auto" (default — inferred from question).`,
+**Use for:** Any complex question needing multiple sources. Comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.
+**Not for:** Single fact lookup (novada_search) or reading one URL (novada_extract).
+**Depth:** "quick" (3 queries), "deep" (5-6), "comprehensive" (8-10), "auto" (default).
+**Key advantage:** Agents call this ONCE instead of orchestrating search→extract→synthesize manually. Saves tokens, time, and complexity.`,
     inputSchema: zodToMcpSchema(ResearchParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
@@ -434,6 +422,17 @@ Not for:
     inputSchema: zodToMcpSchema(AiMonitorParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
+  {
+    name: "novada_monitor",
+    description: `Detect changes on a web page over time. Extracts content, computes a hash, compares with previous check. Returns changed/unchanged + field-level diffs.
+
+**Use for:** E-commerce price monitoring, stock availability tracking, content change detection, competitive pricing alerts.
+**How:** First call = baseline. Subsequent calls compare against baseline and report changes. Pass fields=["price","availability"] for field-level diffs with % change.
+**Session-scoped:** State lives in memory for the MCP session duration. Not persisted across restarts.
+**Not for:** One-time extraction (novada_extract), full crawl (novada_crawl).`,
+    inputSchema: zodToMcpSchema(MonitorParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+  },
 ];
 
 // ─── Tool & Group Filtering ──────────────────────────────────────────────────
@@ -443,7 +442,7 @@ Not for:
 
 /** Category bundles — each group name expands to multiple tools */
 const CATEGORY_MAP: Record<string, string[]> = {
-  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_research", "novada_verify", "novada_ai_monitor"],
+  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor"],
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
   browser: ["novada_browser", "novada_browser_flow"],
   scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
@@ -649,6 +648,9 @@ class NovadaMCPServer {
             break;
           case "novada_ai_monitor":
             result = await novadaAiMonitor(validateAiMonitorParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_monitor":
+            result = await novadaMonitor(validateMonitorParams(args as Record<string, unknown>), API_KEY);
             break;
           default:
             return {

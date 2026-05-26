@@ -1,4 +1,4 @@
-export { fetchWithRetry, fetchViaProxy, fetchWithRender, detectJsHeavyContent, detectBotChallenge, USER_AGENT } from "./http.js";
+export { fetchWithRetry, fetchViaProxy, fetchWithRender, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, USER_AGENT } from "./http.js";
 export { withCredentials, getWebUnblockerKey, getBrowserWs, getProxyCredentials } from "./credentials.js";
 export type { ToolCredentials } from "./credentials.js";
 export { normalizeUrl, isContentLink } from "./url.js";
@@ -15,6 +15,6 @@ export type { RankedResult } from "./rerank.js";
 export { routeFetch, getModeCost } from "./router.js";
 export type { RenderMode, UsedMode, CostTier, RouteResult } from "./router.js";
 export { lookupDomain, DOMAIN_REGISTRY } from "./domains.js";
-export type { FetchMethod, DomainEntry } from "./domains.js";
+export type { FetchMethod, DomainEntry, AntiBotProvider } from "./domains.js";
 export { extractPdf, isPdfResponse } from "./pdf.js";
 export type { PdfExtractResult } from "./pdf.js";
