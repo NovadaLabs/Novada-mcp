@@ -92,6 +92,9 @@ import {
   novadaProxyDedicated,
   validateProxyDedicatedParams,
   ProxyDedicatedParamsSchema,
+  novadaSetup,
+  validateSetupParams,
+  SetupParamsSchema,
 } from "./tools/index.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -433,6 +436,16 @@ Not for:
     inputSchema: zodToMcpSchema(MonitorParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
+  {
+    name: "novada_setup",
+    description: `Check environment configuration and get step-by-step setup instructions. Safe to call before NOVADA_API_KEY is configured.
+
+**Use for:** First-time setup, diagnosing missing credentials, getting exact config snippets for Claude Code / Claude Desktop / Cursor / VS Code / Windsurf.
+**Output:** Status of all env vars (NOVADA_API_KEY, NOVADA_BROWSER_WS, NOVADA_PROXY_*), setup commands for all MCP clients, and which tools are currently active.
+**No auth required:** This tool works even when NOVADA_API_KEY is not set.`,
+    inputSchema: zodToMcpSchema(SetupParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
 ];
 
 // ─── Tool & Group Filtering ──────────────────────────────────────────────────
@@ -446,7 +459,7 @@ const CATEGORY_MAP: Record<string, string[]> = {
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
   browser: ["novada_browser", "novada_browser_flow"],
   scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
-  health:  ["novada_health", "novada_health_all", "novada_discover"],
+  health:  ["novada_health", "novada_health_all", "novada_discover", "novada_setup"],
 };
 
 /** Normalize short name → full tool name */
@@ -483,8 +496,9 @@ function applyToolFilter(tools: typeof TOOLS): typeof TOOLS {
     }
   }
 
-  // Always include health so agents can diagnose issues
+  // Always include health + setup so agents can diagnose issues regardless of filter
   allowed.add("novada_health");
+  allowed.add("novada_setup");
 
   const filtered = tools.filter(t => allowed.has(t.name));
 
@@ -550,11 +564,26 @@ class NovadaMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
+      // novada_setup is auth-free — handle it before the API_KEY gate
+      if (name === "novada_setup") {
+        try {
+          const result = novadaSetup(validateSetupParams(args as Record<string, unknown>));
+          return { content: [{ type: "text" as const, text: result }] };
+        } catch (e) {
+          return { content: [{ type: "text" as const, text: String(e) }], isError: true };
+        }
+      }
+
       if (!API_KEY) {
         return {
           content: [{
             type: "text" as const,
-            text: "Error: NOVADA_API_KEY is not set. Get your API key at https://www.novada.com and set it as an environment variable.\n\nSetup: claude mcp add novada -e NOVADA_API_KEY=your-key -- npx -y novada",
+            text: [
+              "Error [INVALID_API_KEY]: NOVADA_API_KEY is not set.",
+              "failure_class: auth",
+              "retry_recommended: false",
+              `agent_instruction: "Call novada_setup for step-by-step setup instructions and exact config snippets for your MCP client. Get a key at https://www.novada.com"`,
+            ].join("\n"),
           }],
           isError: true,
         };
@@ -656,7 +685,7 @@ class NovadaMCPServer {
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_setup`,
               }],
               isError: true,
             };
