@@ -13,7 +13,6 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@vercel/kv": "^1.0.0",
-    "novada-mcp": "file:../../novada-mcp",
     "zod": "^4.3.6"
   },
   "devDependencies": {

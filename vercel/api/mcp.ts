@@ -89,7 +89,7 @@ import {
   ScraperStatusParamsSchema,
   ScraperResultParamsSchema,
   BrowserFlowParamsSchema,
-} from "novada-mcp/build/tools/index.js";
+} from "../vendor/novada-mcp/tools/index.js";
 
 import {
   SearchParamsSchema,
@@ -105,8 +105,8 @@ import {
   HealthParamsSchema,
   AiMonitorParamsSchema,
   validateAiMonitorParams,
-} from "novada-mcp/build/tools/types.js";
-import { MonitorParamsSchema } from "novada-mcp/build/tools/monitor.js";
+} from "../vendor/novada-mcp/tools/types.js";
+import { MonitorParamsSchema } from "../vendor/novada-mcp/tools/monitor.js";
 
 // ─── Edge runtime config ─────────────────────────────────────────────────────
 export const config = { runtime: "edge" };

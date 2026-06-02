@@ -1,0 +1,795 @@
+import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
+import { matchHeadingSectionWithReason } from "../utils/fields.js";
+import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { getCached, setCached } from "../_core/session-cache.js";
+export { detectJsHeavyContent } from "../utils/index.js";
+export async function novadaExtract(params, apiKey) {
+    // P1-6: Normalize url/urls into a list
+    const urlList = params.urls
+        ? params.urls
+        : Array.isArray(params.url)
+            ? params.url
+            : [params.url];
+    if (urlList.length > 10) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `Batch extract accepts at most 10 URLs per call. Received ${urlList.length}. Split into multiple calls.`, `url_count:${urlList.length} exceeds max:10`);
+    }
+    const isBatch = urlList.length > 1;
+    // Batch mode: array of URLs (via urls param or url array)
+    if (isBatch) {
+        const urls = urlList;
+        const results = await Promise.all(urls.map((url, i) => extractSingle({ ...params, url }, apiKey)
+            .then(content => ({ i, url, content, ok: true }))
+            .catch(err => {
+            const message = err instanceof Error ? err.message : String(err);
+            const fix = getSuggestedFix(url, message);
+            return { i, url, content: `Error: ${message}\n${fix}`, ok: false };
+        })));
+        const successful = results.filter(r => r.ok).length;
+        const failed = results.length - successful;
+        // Fix 3: Cap total batch output to ~25K chars to prevent host systems from saving to file
+        const MAX_BATCH_TOTAL = 25000;
+        const rawTotal = results.reduce((sum, r) => sum + r.content.length, 0);
+        let batchTruncated = false;
+        if (rawTotal > MAX_BATCH_TOTAL) {
+            const perUrlLimit = Math.max(500, Math.floor(MAX_BATCH_TOTAL / results.length));
+            for (const r of results) {
+                if (r.content.length > perUrlLimit) {
+                    r.content = r.content.slice(0, perUrlLimit) +
+                        `\n\n[truncated at ${perUrlLimit} chars — call novada_extract with this URL individually for full content]`;
+                    batchTruncated = true;
+                }
+            }
+        }
+        const lines = [
+            `## Batch Extract Results`,
+            `urls:${urls.length} | successful:${successful} | failed:${failed}`,
+            ``,
+            `---`,
+            ``,
+        ];
+        for (const r of results) {
+            lines.push(`### [${r.i + 1}/${urls.length}] ${r.url}`);
+            if (!r.ok)
+                lines.push(`status: FAILED`);
+            lines.push(``);
+            lines.push(r.content);
+            lines.push(``);
+            lines.push(`---`);
+            lines.push(``);
+        }
+        lines.push(`## Agent Hints`);
+        if (failed > 0) {
+            lines.push(`- ${failed} URL(s) failed. Each failure includes a suggested_fix — read the error block above for per-URL guidance.`);
+        }
+        if (batchTruncated) {
+            lines.push(`- Batch output capped at ~${MAX_BATCH_TOTAL} chars total (${rawTotal} raw). Call novada_extract with individual URLs for full content.`);
+        }
+        lines.push(`- Use novada_map to discover additional pages on any of these domains.`);
+        return lines.join("\n");
+    }
+    // Single URL mode
+    try {
+        return await extractSingle({ ...params, url: urlList[0] }, apiKey);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const suggestedFix = getSuggestedFix(urlList[0], message);
+        return [
+            `## Extract Failed`,
+            `url: ${urlList[0]}`,
+            ``,
+            `Error: ${message}`,
+            ``,
+            `## Agent Hints`,
+            `- If the URL returns JSON or binary data, it cannot be extracted as HTML.`,
+            `- If the URL is unreachable, check the domain and try novada_map first.`,
+            `- For JS-heavy pages returning empty content, try with render="render".`,
+            ``,
+            `## Agent Action`,
+            `agent_instruction: status:failed | ${suggestedFix}`,
+        ].join("\n");
+    }
+}
+/** Derive a suggested_fix hint from a URL + error message */
+function getSuggestedFix(url, errorMsg) {
+    const lower = errorMsg.toLowerCase();
+    // Known anti-bot / access-denial patterns
+    if (lower.includes("bot") || lower.includes("challenge") || lower.includes("captcha") ||
+        lower.includes("cloudflare") || lower.includes("403") || lower.includes("forbidden") ||
+        lower.includes("access denied") || lower.includes("blocked")) {
+        return `suggested_fix: retry with render="render" (JS rendering + anti-bot bypass). If that also fails: novada_unblock(url="${url}") returns raw HTML via stealth browser — parse the response body manually`;
+    }
+    if (lower.includes("all promises were rejected") || lower.includes("eai_again") ||
+        lower.includes("econnrefused") || lower.includes("enotfound") || lower.includes("timeout")) {
+        return `suggested_fix: domain may be unreachable or rate-limiting. Verify URL is correct, then retry with render="render". Run novada_health_all() to check API status`;
+    }
+    if (lower.includes("js") || lower.includes("javascript") || lower.includes("js-heavy")) {
+        return `suggested_fix: retry with render="render" for JavaScript-rendered pages`;
+    }
+    // Domain-specific overrides
+    try {
+        const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+        if (host === "zhihu.com")
+            return `suggested_fix: zhihu.com blocks automated access. Use render="render" first; if blocked, novada_unblock returns raw HTML. Alternatively search via novada_search`;
+        if (host === "amazon.com")
+            return `suggested_fix: try novada_scrape(platform="amazon.com", operation="amazon_product_keywords") for structured product data`;
+        if (host === "x.com" || host === "twitter.com")
+            return `suggested_fix: try novada_scrape(platform="x.com", operation="twitter_profile_username") for Twitter/X data`;
+        if (host === "instagram.com")
+            return `suggested_fix: try novada_scrape(platform="instagram.com", operation="instagram_profile_url")`;
+        if (host === "linkedin.com")
+            return `suggested_fix: try novada_scrape(platform="linkedin.com", operation="linkedin_company_information_url")`;
+    }
+    catch { /* ignore */ }
+    return `suggested_fix: retry with render="render" for JS-heavy pages. If blocked: novada_unblock(url="${url}") returns raw HTML via stealth browser`;
+}
+function rewriteRedditUrl(url) {
+    try {
+        const parsed = new URL(url);
+        const host = parsed.hostname.toLowerCase();
+        if ((host === "reddit.com" || host === "www.reddit.com") && !url.includes("old.reddit.com")) {
+            parsed.hostname = "old.reddit.com";
+            return parsed.toString();
+        }
+        return null;
+    }
+    catch {
+        return null;
+    }
+}
+async function extractSingle(params, apiKey) {
+    // Normalize render="js" → "render" (js is the agent-friendly alias)
+    if (params.render === "js") {
+        params = { ...params, render: "render" };
+    }
+    // Phase 3: Session dedup cache — skip fetch if same URL+mode+fields was extracted recently
+    const cacheRenderMode = params.render ?? "auto";
+    const cached = getCached(params.url, cacheRenderMode, params.fields);
+    if (cached) {
+        // Inject source: cache into the cached result so agents know it's from cache
+        return cached.replace(/source: live/, "source: cache");
+    }
+    // Reddit rewrite: new reddit.com blocks all scrapers; old.reddit.com works with static fetch
+    const redditUrl = rewriteRedditUrl(params.url);
+    if (redditUrl) {
+        params = { ...params, url: redditUrl, render: "static" };
+    }
+    const renderMode = params.render ?? "auto";
+    const fetchedAt = new Date().toISOString();
+    let html;
+    let usedMode = "static";
+    let renderError = null;
+    /** Anti-bot provider detected during fetch (null = none detected) */
+    let detectedAntiBot = null;
+    /** Whether anti-bot was resolved via escalation */
+    let antiBotResolved = false;
+    // Domain registry: skip auto-detection probe for known sites
+    const domainHint = renderMode === "auto" ? lookupDomain(params.url) : null;
+    const effectiveMode = domainHint ? domainHint.method : renderMode;
+    // Pre-populate anti-bot provider from domain registry if known
+    if (domainHint?.provider) {
+        detectedAntiBot = domainHint.provider;
+    }
+    // Force modes (or registry-resolved modes) skip escalation logic
+    if (effectiveMode === "browser") {
+        html = await fetchViaBrowser(params.url);
+        usedMode = "browser";
+    }
+    else if (effectiveMode === "render") {
+        const response = await fetchWithRender(params.url, apiKey);
+        const contentType = String(response.headers?.["content-type"] ?? "");
+        if (isPdfResponse(params.url, contentType)) {
+            const pdfBuffer = Buffer.isBuffer(response.data)
+                ? response.data
+                : Buffer.from(response.data, "binary");
+            const pdf = await extractPdf(pdfBuffer);
+            html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
+        }
+        else if (contentType.includes("application/json")) {
+            const body = typeof response.data === "string"
+                ? response.data
+                : JSON.stringify(response.data, null, 2);
+            if (body.trimStart().startsWith("<")) {
+                html = body;
+            }
+            else {
+                return formatJsonExtract(params.url, "render", body, params.max_chars);
+            }
+        }
+        else {
+            if (typeof response.data !== "string") {
+                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "Response is not HTML. The URL may return JSON or binary data.", `url:${params.url} returned non-string content-type`);
+            }
+            html = response.data;
+        }
+        usedMode = "render";
+    }
+    else {
+        // Auto or static:
+        // P1-2: Race a direct HTTP fetch (no proxy) against the proxy for "auto" mode.
+        // Open static sites (HN, TechCrunch, Wikipedia) respond in ~300ms direct vs ~3s via proxy.
+        // Direct "wins" only if it returns clean HTML (no bot challenge, no JS-heavy indicators).
+        // Bot-protected or JS-heavy: direct rejects, proxy result is used — no change in behavior.
+        const response = await (effectiveMode === "auto"
+            ? Promise.any([
+                fetchWithRetry(params.url, { headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
+                    .then(r => {
+                    const body = typeof r.data === "string" ? r.data : null;
+                    if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body))
+                        return r;
+                    throw new Error("not-static");
+                }),
+                fetchViaProxy(params.url, apiKey),
+            ])
+            : fetchViaProxy(params.url, apiKey));
+        const contentType = String(response.headers?.["content-type"] ?? "");
+        if (isPdfResponse(params.url, contentType)) {
+            const pdfBuffer = Buffer.isBuffer(response.data)
+                ? response.data
+                : Buffer.from(response.data, "binary");
+            const pdf = await extractPdf(pdfBuffer);
+            html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
+        }
+        else if (contentType.includes("application/json")) {
+            const body = typeof response.data === "string"
+                ? response.data
+                : JSON.stringify(response.data, null, 2);
+            if (body.trimStart().startsWith("<")) {
+                html = body;
+            }
+            else {
+                return formatJsonExtract(params.url, "static", body, params.max_chars);
+            }
+        }
+        else {
+            if (typeof response.data !== "string") {
+                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "Response is not HTML. The URL may return JSON or binary data.", `url:${params.url} returned non-string content-type`);
+            }
+            html = response.data;
+        }
+        // Skip JS detection if we already have PDF content (no escalation needed)
+        if (renderMode === "auto" && !html.startsWith("pdf_pages:") && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
+            // Identify anti-bot provider from the static HTML before escalation
+            detectedAntiBot = identifyAntiBot(html);
+            // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
+            try {
+                const renderResponse = await fetchWithRender(params.url, apiKey);
+                const renderHtml = String(renderResponse.data);
+                if (detectBotChallenge(renderHtml)) {
+                    // Re-check anti-bot on render result (may differ from static)
+                    detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
+                    // Render returned a bot challenge page — escalate to browser if available
+                    if (isBrowserConfigured()) {
+                        html = await fetchViaBrowser(params.url);
+                        usedMode = "browser";
+                        antiBotResolved = true;
+                    }
+                    else {
+                        // No browser available — keep static html, mark as failed
+                        usedMode = "render-failed";
+                        renderError = "Render returned a bot challenge page";
+                    }
+                }
+                else if (!detectJsHeavyContent(renderHtml)) {
+                    html = renderHtml;
+                    usedMode = "render";
+                    antiBotResolved = detectedAntiBot !== null;
+                }
+                else if (isBrowserConfigured()) {
+                    // render also JS-heavy — try full browser
+                    html = await fetchViaBrowser(params.url);
+                    usedMode = "browser";
+                    antiBotResolved = true;
+                }
+                else {
+                    // render worked but still JS-heavy, use it (better than static)
+                    html = renderHtml;
+                    usedMode = "render";
+                }
+            }
+            catch (err) {
+                // render threw — try Browser API if available
+                renderError = err instanceof Error ? err.message : String(err);
+                if (isBrowserConfigured()) {
+                    html = await fetchViaBrowser(params.url);
+                    usedMode = "browser";
+                    antiBotResolved = true;
+                }
+                else {
+                    usedMode = "render-failed";
+                }
+            }
+        }
+    }
+    // Detect PDF output from router (prefixed with pdf_pages:N)
+    const pdfPageMatch = html.match(/^pdf_pages:(\d+)\n/);
+    let pdfPages = null;
+    let pdfTitle;
+    if (pdfPageMatch) {
+        pdfPages = parseInt(pdfPageMatch[1], 10);
+        // Extract optional title line before stripping prefix
+        const titleLine = html.match(/^pdf_pages:\d+\ntitle: ([^\n]+)\n/);
+        pdfTitle = titleLine?.[1];
+        // Strip the pdf_pages prefix (and optional title line)
+        html = html.replace(/^pdf_pages:\d+\n(?:title: [^\n]+\n)?/, "");
+    }
+    let title = pdfPages !== null ? (pdfTitle ?? params.url) : extractTitle(html);
+    let description = extractDescription(html);
+    let stillJsHeavy = renderMode === "auto" && (usedMode === "static" || usedMode === "render-failed") && detectJsHeavyContent(html);
+    if (params.format === "html") {
+        if (html.length <= 10000)
+            return html;
+        const truncated = html.slice(0, 10000);
+        const lastTagClose = truncated.lastIndexOf(">");
+        return (lastTagClose > 9000 ? truncated.slice(0, lastTagClose + 1) : truncated) +
+            "\n<!-- Content truncated at 10,000 characters -->";
+    }
+    // For PDF content, use the text directly (no HTML parsing needed)
+    let mainContent = pdfPages !== null
+        ? html.slice(0, 25000)
+        : extractMainContent(html, params.url);
+    let allLinks = pdfPages !== null ? [] : extractLinks(html, params.url);
+    let baseDomain;
+    try {
+        baseDomain = new URL(params.url).hostname.replace(/^www\./, "");
+    }
+    catch {
+        baseDomain = "";
+    }
+    let sameDomainLinks = allLinks
+        .filter(link => {
+        try {
+            return new URL(link).hostname.replace(/^www\./, "") === baseDomain;
+        }
+        catch {
+            return false;
+        }
+    })
+        .slice(0, 15);
+    // P0-5: max_chars truncation — applies to ALL formats (text, markdown, html handled separately)
+    const MAX_CHARS_DEFAULT = 25000;
+    const maxChars = params.max_chars ?? MAX_CHARS_DEFAULT;
+    if (params.format === "text") {
+        let plainContent = mainContent
+            .replace(/^#{1,6}\s+/gm, "")
+            .replace(/^\- /gm, "  * ")
+            .replace(/\*\*([^*]+)\*\*/g, "$1");
+        const totalCharsText = plainContent.length;
+        if (plainContent.length > maxChars) {
+            const suggestedHigher = Math.min(maxChars * 2, 100000);
+            plainContent = plainContent.slice(0, maxChars) +
+                `\n\n[Content may be truncated — showing first ${maxChars} of ${totalCharsText} total characters. Pass max_chars=${suggestedHigher} to get more.]`;
+        }
+        const linksText = sameDomainLinks.length > 0
+            ? `\nSame-domain links:\n${sameDomainLinks.map(l => `  ${l}`).join("\n")}`
+            : "";
+        return `${title}\n${description ? description + "\n" : ""}\n${plainContent}${linksText}`;
+    }
+    // Quality scoring (skip structured data extraction for PDFs — no HTML schema)
+    let structuredData = pdfPages !== null ? null : extractStructuredData(html);
+    let hasStructuredData = structuredData !== null;
+    let quality = scoreExtraction(html, mainContent, usedMode, hasStructuredData);
+    // P0-1: Quality floor — never return quality:0 for non-empty content
+    if (mainContent && mainContent.length > 0 && quality.score === 0) {
+        quality.score = 1;
+    }
+    // BUG-E1: Auto-escalation — retry with render when static quality is too low
+    let autoEscalated = false;
+    let autoEscalatedTo = null;
+    if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !html.startsWith("pdf_pages:")) {
+        try {
+            const renderResponse = await fetchWithRender(params.url, apiKey);
+            if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
+                const renderHtml = renderResponse.data;
+                const renderMain = extractMainContent(renderHtml, params.url);
+                const renderSD = extractStructuredData(renderHtml);
+                const renderQuality = scoreExtraction(renderHtml, renderMain, "render", renderSD !== null);
+                if (renderQuality.score > quality.score) {
+                    html = renderHtml;
+                    usedMode = "render";
+                    mainContent = renderMain;
+                    allLinks = extractLinks(renderHtml, params.url);
+                    sameDomainLinks = allLinks
+                        .filter(link => {
+                        try {
+                            return new URL(link).hostname.replace(/^www\./, "") === baseDomain;
+                        }
+                        catch {
+                            return false;
+                        }
+                    })
+                        .slice(0, 15);
+                    structuredData = renderSD;
+                    hasStructuredData = renderSD !== null;
+                    quality = renderQuality;
+                    if (quality.score === 0 && mainContent.length > 0)
+                        quality.score = 1;
+                    title = extractTitle(renderHtml);
+                    description = extractDescription(renderHtml);
+                    stillJsHeavy = false;
+                    autoEscalated = true;
+                    autoEscalatedTo = "render";
+                    detectedAntiBot = detectedAntiBot ?? identifyAntiBot(html);
+                    antiBotResolved = detectedAntiBot !== null;
+                }
+            }
+        }
+        catch { /* keep static result */ }
+        // If render escalation didn't improve quality enough, try browser as final fallback
+        if (quality.score < 40 && isBrowserConfigured()) {
+            try {
+                const browserHtml = await fetchViaBrowser(params.url);
+                const browserMain = extractMainContent(browserHtml, params.url);
+                const browserSD = extractStructuredData(browserHtml);
+                const browserQuality = scoreExtraction(browserHtml, browserMain, "browser", browserSD !== null);
+                if (browserQuality.score > quality.score) {
+                    html = browserHtml;
+                    usedMode = "browser";
+                    mainContent = browserMain;
+                    allLinks = extractLinks(browserHtml, params.url);
+                    sameDomainLinks = allLinks
+                        .filter(link => {
+                        try {
+                            return new URL(link).hostname.replace(/^www\./, "") === baseDomain;
+                        }
+                        catch {
+                            return false;
+                        }
+                    })
+                        .slice(0, 15);
+                    structuredData = browserSD;
+                    hasStructuredData = browserSD !== null;
+                    quality = browserQuality;
+                    if (quality.score === 0 && mainContent.length > 0)
+                        quality.score = 1;
+                    title = extractTitle(browserHtml);
+                    description = extractDescription(browserHtml);
+                    stillJsHeavy = false;
+                    autoEscalated = true;
+                    autoEscalatedTo = "browser";
+                    detectedAntiBot = detectedAntiBot ?? identifyAntiBot(browserHtml);
+                    antiBotResolved = true;
+                }
+            }
+            catch { /* keep previous result */ }
+        }
+    }
+    // P2-1: Wayback Machine auto-fallback — when content is very poor, try archive.org
+    let waybackFallback = false;
+    if (mainContent.length < 100 && quality.score < 20 && !html.startsWith("pdf_pages:")) {
+        try {
+            const archiveUrl = `https://web.archive.org/web/2024/${params.url}`;
+            const wbResponse = await fetchViaProxy(archiveUrl, apiKey);
+            if (typeof wbResponse.data === "string" && wbResponse.data.length > 500) {
+                const wbHtml = wbResponse.data;
+                const wbMain = extractMainContent(wbHtml, params.url);
+                if (wbMain.length > mainContent.length) {
+                    html = wbHtml;
+                    mainContent = wbMain;
+                    title = extractTitle(wbHtml);
+                    description = extractDescription(wbHtml);
+                    allLinks = extractLinks(wbHtml, params.url);
+                    sameDomainLinks = allLinks
+                        .filter(link => {
+                        try {
+                            return new URL(link).hostname.replace(/^www\./, "") === baseDomain;
+                        }
+                        catch {
+                            return false;
+                        }
+                    })
+                        .slice(0, 15);
+                    structuredData = extractStructuredData(wbHtml);
+                    hasStructuredData = structuredData !== null;
+                    quality = scoreExtraction(wbHtml, wbMain, usedMode, hasStructuredData);
+                    if (quality.score === 0 && wbMain.length > 0)
+                        quality.score = 1;
+                    waybackFallback = true;
+                }
+            }
+        }
+        catch { /* Wayback unavailable — keep original result */ }
+    }
+    // max_chars truncation for markdown format
+    const totalChars = mainContent.length;
+    let displayContent = mainContent;
+    let contentTruncated = false;
+    if (displayContent.length > maxChars) {
+        displayContent = displayContent.slice(0, maxChars);
+        const suggestedHigher = Math.min(maxChars * 2, 100000);
+        displayContent += `\n\n[Content may be truncated — showing first ${maxChars} of ${totalChars} total characters. Pass max_chars=${suggestedHigher} to get more.]`;
+        contentTruncated = true;
+    }
+    const contentLen = totalChars;
+    const isTruncated = contentTruncated;
+    // Field extraction
+    let fieldResults = null;
+    if (params.fields && params.fields.length > 0) {
+        fieldResults = extractFields(params.fields, structuredData, displayContent);
+    }
+    const metaExtra = contentTruncated
+        ? ` | content_truncated:true | total_chars:${totalChars}`
+        : "";
+    const contentOk = mainContent.length > 100 && usedMode !== "render-failed" && !stillJsHeavy && quality.score >= 40;
+    // Compute extraction_quality label
+    let extractionQuality = "n/a";
+    if (fieldResults && fieldResults.length > 0) {
+        const matched = fieldResults.filter(r => r.source !== "not_found").length;
+        const total = fieldResults.length;
+        if (matched === total) {
+            extractionQuality = "high";
+        }
+        else if (matched === 0) {
+            extractionQuality = "none";
+        }
+        else if (matched === 1) {
+            extractionQuality = "low";
+        }
+        else {
+            extractionQuality = "partial";
+        }
+    }
+    const qLabel = qualityLabel(quality.score);
+    // JSON structured output — return early
+    if (params.format === "json") {
+        const jsonResult = {
+            url: params.url,
+            title,
+            description: description || null,
+            mode: usedMode,
+            source: waybackFallback ? "wayback" : "live",
+            fetched_at: fetchedAt,
+            quality: { score: quality.score, label: qLabel, content_ok: contentOk },
+            content: displayContent,
+            structured_data: structuredData ?? null,
+            fields: fieldResults
+                ? Object.fromEntries(fieldResults.map(r => [r.field, r.source === "not_found" ? null : r.value]))
+                : null,
+            links: { same_domain: sameDomainLinks, total: allLinks.length },
+            hints: [],
+            ...(pdfPages !== null ? { pdf: { pages: pdfPages, title: pdfTitle ?? null } } : {}),
+            ...(autoEscalated ? { auto_escalated: true, ...(autoEscalatedTo ? { escalated_to: autoEscalatedTo } : {}) } : {}),
+            ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
+            ...(waybackFallback ? { wayback_fallback: true } : {}),
+            remember: `${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`,
+        };
+        // Build hints array
+        const hints = jsonResult.hints;
+        if (redditUrl)
+            hints.push("Reddit URL rewritten to old.reddit.com — new reddit.com blocks all scrapers.");
+        if (waybackFallback)
+            hints.push("Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.");
+        try {
+            const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
+            if (extractedHost === "trends24.in")
+                hints.push("[THIRD-PARTY DATA] trends24.in is an independent aggregator, not an official X/Twitter source.");
+        }
+        catch { /* ignore */ }
+        if (stillJsHeavy)
+            hints.push("Page is JavaScript-rendered. Content may be incomplete. Try render='js' or render='browser'.");
+        // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
+        if (!contentOk && baseDomain) {
+            const SCRAPER_PLATFORMS = {
+                "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
+                "github.com": "github_repository_repo-url", "tiktok.com": "tiktok_posts_url",
+                "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
+                "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
+                "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
+            };
+            const scraperOp = SCRAPER_PLATFORMS[baseDomain];
+            if (scraperOp) {
+                hints.push(`For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
+            }
+            if (usedMode === "render-failed" || (stillJsHeavy && !contentOk)) {
+                hints.push(`Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
+            }
+        }
+        if (isTruncated)
+            hints.push(`Content truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more.`);
+        try {
+            hints.push(`Discover more pages: novada_map(url="${new URL(params.url).origin}")`);
+        }
+        catch { /* ignore */ }
+        const jsonOutput = JSON.stringify(jsonResult, null, 2);
+        setCached(params.url, cacheRenderMode, jsonOutput, params.fields);
+        return jsonOutput;
+    }
+    const lines = [
+        `## Extracted Content`,
+        `url: ${params.url}`,
+        `mode: ${usedMode} | source: ${waybackFallback ? "wayback" : "live"} | quality:${quality.score}/100 (${qLabel}) | content_ok:${contentOk}`,
+        `fetched_at: ${fetchedAt}`,
+        `extraction_quality: ${extractionQuality}`,
+        `title: ${title}`,
+        ...(description ? [`description: ${description}`] : []),
+        `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? ` | auto_escalated:true${autoEscalatedTo ? ` | escalated_to:${autoEscalatedTo}` : ""}` : ""}${detectedAntiBot ? ` | anti_bot:${detectedAntiBot} | resolved:${antiBotResolved}` : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
+        ``,
+        `---`,
+        ``,
+    ];
+    // Requested Fields block (before Structured Data)
+    if (fieldResults && fieldResults.length > 0) {
+        lines.push(`## Requested Fields`);
+        for (const r of fieldResults) {
+            const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : r.source === "heading" ? " *(from heading)*" : " *(pattern)*";
+            if (r.source === "not_found") {
+                lines.push(`${r.field}: —`);
+            }
+            else {
+                // P0-3: Strip *(pattern)* annotation from the field value itself
+                const cleanValue = typeof r.value === "string"
+                    ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
+                    : r.value;
+                lines.push(`${r.field}: ${cleanValue}${sourceTag}`);
+            }
+        }
+        lines.push(``, `---`, ``);
+    }
+    // Prepend structured data block if available
+    if (hasStructuredData && structuredData) {
+        lines.push(`## Structured Data`);
+        lines.push(`type: ${structuredData.type}`);
+        for (const [key, value] of Object.entries(structuredData.fields)) {
+            lines.push(`${key}: ${value}`);
+        }
+        lines.push(``, `---`, ``);
+    }
+    lines.push(displayContent);
+    if (sameDomainLinks.length > 0) {
+        lines.push(``, `---`, `## Same-Domain Links (${sameDomainLinks.length} of ${allLinks.length})`);
+        for (const link of sameDomainLinks) {
+            lines.push(`- ${link}`);
+        }
+    }
+    // Extraction Diagnostics — emit only when fields were requested and at least one is null
+    let hasNoHeadingMatchField = false;
+    if (fieldResults && fieldResults.some(r => r.source === "not_found")) {
+        lines.push(``, `---`, `## Extraction Diagnostics`);
+        for (const r of fieldResults) {
+            if (r.source !== "not_found") {
+                const method = r.source === "heading" ? "heading-match" : r.source === "structured_data" ? "meta-tag" : "pattern-match";
+                lines.push(`- ${r.field}: matched ✓ (via ${method})`);
+            }
+            else {
+                const headingResult = matchHeadingSectionWithReason(displayContent, r.field);
+                const reasonText = headingResult.reason === "section_empty"
+                    ? "heading found but content was empty/fenced"
+                    : `no "## ${r.field}" heading found in page`;
+                if (headingResult.reason === "no_heading_match")
+                    hasNoHeadingMatchField = true;
+                lines.push(`- ${r.field}: null — reason: ${headingResult.reason} (${reasonText})`);
+            }
+        }
+    }
+    lines.push(``);
+    lines.push(`## Agent Memory`);
+    lines.push(`remember: ${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`);
+    lines.push(``, `---`, `## Agent Hints`);
+    if (redditUrl) {
+        lines.push(`- Reddit URL rewritten to old.reddit.com (static HTML) — new reddit.com blocks all scrapers.`);
+    }
+    if (waybackFallback) {
+        lines.push(`- [WAYBACK] Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.`);
+    }
+    // Warn when content is sourced from a known third-party aggregator
+    try {
+        const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
+        if (extractedHost === "trends24.in") {
+            lines.push(`- [THIRD-PARTY DATA] trends24.in is an independent aggregator, not an official X/Twitter source. Data may lag by minutes and coverage is limited to trending topics only.`);
+        }
+    }
+    catch { /* ignore */ }
+    if (autoEscalated) {
+        lines.push(`- Auto-escalated to render mode (static quality score was < 40). Content above was fetched with JS rendering enabled.`);
+    }
+    if (hasNoHeadingMatchField) {
+        lines.push(`- Some fields were not found via heading-match. For list or aggregated pages (bestseller lists, search results, news feeds), data is embedded as inline list items — parse the body markdown directly. Field extraction works best on single-entity pages (product detail pages, GitHub repos, articles).`);
+    }
+    if (pdfPages !== null) {
+        lines.push(`- PDF extracted automatically: ${pdfPages} page(s). pdf_pages:${pdfPages} in metadata above.`);
+        lines.push(`- PDF URLs are extracted automatically — use novada_extract the same way as HTML.`);
+        lines.push(`- For large PDFs (>10MB), try a more specific page URL.`);
+    }
+    if (usedMode === "browser") {
+        lines.push(`- Content fetched via Browser API (CDP). Cost: ~$3/GB — use only when static/render modes fail.`);
+    }
+    if (stillJsHeavy) {
+        if (usedMode === "render-failed") {
+            // Render was already attempted and failed — do NOT suggest retrying with render='render'
+            lines.push(`- [WARNING] Page is JavaScript-rendered. Web Unblocker was attempted but failed.`);
+            if (renderError)
+                lines.push(`- Render error: ${renderError}`);
+            lines.push(`- Do NOT retry with render="render" — it was already tried and failed.`);
+            if (isBrowserConfigured()) {
+                lines.push(`- Try render="browser" to use the Browser API instead. Note: Browser API costs ~$3/GB.`);
+            }
+            else {
+                lines.push(`- To enable browser-level rendering: set NOVADA_BROWSER_WS env var (get credentials at https://dashboard.novada.com/overview/browser/), then retry with render="browser".`);
+                lines.push(`- Also verify NOVADA_WEB_UNBLOCKER_KEY is set correctly.`);
+                lines.push(`- Note: Browser API costs ~$3/GB — use sparingly.`);
+            }
+        }
+        else if (usedMode === "static") {
+            lines.push(`- [WARNING] Page appears JavaScript-rendered. Content above may be incomplete.`);
+            lines.push(`- Retry with render="render" to use Novada Web Unblocker (JS rendering).`);
+            if (!isBrowserConfigured()) {
+                lines.push(`- For full browser rendering (costs ~$3/GB), set NOVADA_BROWSER_WS env var.`);
+            }
+        }
+    }
+    // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
+    if (!contentOk && baseDomain) {
+        const SCRAPER_PLATFORMS = {
+            "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
+            "github.com": "github_repository_repo-url", "tiktok.com": "tiktok_posts_url",
+            "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
+            "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
+            "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
+        };
+        const scraperOp = SCRAPER_PLATFORMS[baseDomain];
+        if (scraperOp) {
+            lines.push(`- For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
+        }
+        if (usedMode === "render-failed" || (stillJsHeavy && !contentOk)) {
+            lines.push(`- Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
+        }
+    }
+    if (isTruncated) {
+        lines.push(`- Content was truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more, or use novada_map to find specific subpages.`);
+    }
+    try {
+        lines.push(`- To discover more pages: novada_map with url="${new URL(params.url).origin}"`);
+    }
+    catch { /* ignore */ }
+    if (params.query) {
+        lines.push(`- Query context: "${params.query}". Focus analysis on this topic.`);
+    }
+    // Agent Action block — structured next steps for every extraction
+    const nextActions = [];
+    if (contentOk) {
+        nextActions.push(`status:success quality:${quality.score}/100`);
+        nextActions.push(`next: novada_map for related pages`);
+        nextActions.push(`next: novada_research for multi-source analysis`);
+    }
+    else {
+        nextActions.push(`status:low_quality quality:${quality.score}/100`);
+        if (usedMode === "static")
+            nextActions.push(`fix: retry with render="render"`);
+        nextActions.push(`alt: novada_scrape for platform data`);
+    }
+    lines.push(``);
+    lines.push(`## Agent Action`);
+    lines.push(`agent_instruction: ${nextActions.join(" | ")}`);
+    const mdOutput = lines.join("\n");
+    setCached(params.url, cacheRenderMode, mdOutput, params.fields);
+    return mdOutput;
+}
+function formatJsonExtract(url, mode, jsonStr, maxChars) {
+    const limit = maxChars ?? 25000;
+    const truncated = jsonStr.length > limit
+        ? jsonStr.slice(0, limit) + "\n\n[truncated]"
+        : jsonStr;
+    let origin = url;
+    try {
+        origin = new URL(url).origin;
+    }
+    catch { /* ignore */ }
+    return [
+        `## Extracted Content`,
+        `url: ${url}`,
+        `mode: ${mode}`,
+        `format: json (raw)`,
+        ``,
+        `---`,
+        ``,
+        "```json",
+        truncated,
+        "```",
+        ``,
+        `---`,
+        `## Agent Hints`,
+        `- This URL returned JSON, not HTML. Showing raw JSON content.`,
+        `- To discover more pages: novada_map with url="${origin}"`,
+    ].join("\n");
+}
+//# sourceMappingURL=extract.js.map

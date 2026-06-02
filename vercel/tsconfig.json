@@ -13,11 +13,8 @@
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
     "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "novada-mcp/build/*": ["../../novada-mcp/build/*"]
-    }
+    "baseUrl": "."
   },
-  "include": ["api/**/*.ts"],
+  "include": ["api/**/*.ts", "vendor/**/*.ts"],
   "exclude": ["node_modules", ".vercel", "dist"]
 }

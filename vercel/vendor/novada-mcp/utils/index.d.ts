@@ -1,0 +1,21 @@
+export { fetchWithRetry, fetchViaProxy, fetchWithRender, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, USER_AGENT } from "./http.js";
+export { withCredentials, getWebUnblockerKey, getBrowserWs, getProxyCredentials } from "./credentials.js";
+export type { ToolCredentials } from "./credentials.js";
+export { normalizeUrl, isContentLink } from "./url.js";
+export { extractMainContent, extractTitle, extractDescription, extractLinks, extractStructuredData, scoreExtraction, qualityLabel } from "./html.js";
+export type { StructuredData, ExtractionQuality } from "./html.js";
+export { cleanParams } from "./params.js";
+export { isBrowserConfigured, fetchViaBrowser, getSession, storeSession, closeSession, listSessions } from "./browser.js";
+export { formatRecords, formatAsCsv, formatAsHtml, formatAsXlsx, formatAsMarkdown } from "./format.js";
+export type { OutputFormat } from "./format.js";
+export { extractFields, extractFieldsWithDiagnostics } from "./fields.js";
+export type { FieldResult, FieldDiagnostic, DiagnosticMethod, DiagnosticReasonCode } from "./fields.js";
+export { rerankResults } from "./rerank.js";
+export type { RankedResult } from "./rerank.js";
+export { routeFetch, getModeCost } from "./router.js";
+export type { RenderMode, UsedMode, CostTier, RouteResult } from "./router.js";
+export { lookupDomain, DOMAIN_REGISTRY } from "./domains.js";
+export type { FetchMethod, DomainEntry, AntiBotProvider } from "./domains.js";
+export { extractPdf, isPdfResponse } from "./pdf.js";
+export type { PdfExtractResult } from "./pdf.js";
+//# sourceMappingURL=index.d.ts.map
