@@ -2,7 +2,7 @@
   "name": "novada-mcpserver",
   "version": "0.1.0",
   "private": true,
-  "description": "Vercel Edge Function hosting Novada MCP as a remote Streamable HTTP endpoint at https://mcp.novada.com/mcp",
+  "description": "Vercel Function (Node.js runtime) hosting Novada MCP as a remote Streamable HTTP endpoint at https://mcp.novada.com/mcp",
   "type": "module",
   "scripts": {
     "dev": "vercel dev",
@@ -13,6 +13,10 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@vercel/kv": "^1.0.0",
+    "axios": "^1.15.0",
+    "cheerio": "^1.2.0",
+    "exceljs": "^4.4.0",
+    "pdf-parse": "^2.4.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
