@@ -1,0 +1,91 @@
+[
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Novada MCP",
+    "alternateName": "Novada Hosted MCP Server",
+    "description": "Remote Streamable-HTTP MCP server with 25 web-data tools — search, SERP, scrape, extract, map, crawl, verify, discover, research, and 6 proxy types. One URL, zero install, works with Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf.",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Any (MCP-compatible client required)",
+    "url": "https://mcp.novada.com/",
+    "featureList": [
+      "search",
+      "serp",
+      "scrape",
+      "extract",
+      "map",
+      "crawl",
+      "verify",
+      "discover",
+      "research",
+      "novada_proxy_residential",
+      "novada_proxy_datacenter",
+      "novada_proxy_isp",
+      "novada_proxy_dedicated",
+      "novada_proxy_static",
+      "novada_proxy_universal"
+    ],
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "description": "5,000 tool calls per month free. No credit card required."
+    },
+    "provider": {
+      "@type": "Organization",
+      "name": "Novada",
+      "sameAs": "https://www.novada.com"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Novada",
+      "sameAs": "https://www.novada.com"
+    }
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How is this different from calling the Novada REST API directly?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The MCP endpoint exposes Novada tools through the Model Context Protocol so any MCP-compatible agent (Claude, Cursor, Cline, Codex…) can discover and call them with a structured contract — no client SDK, no per-tool wrapper code. Underneath, it dispatches to the same Novada backend."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need a separate key for MCP?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. The same Novada API key works for the hosted MCP, the local npx novada-mcp, and the REST API. Quota counters are per token."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why can't I use browser tools on the hosted endpoint?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Headless browsers (Playwright) don't run inside serverless edge functions. The hosted endpoint returns 501 with an agent_instruction telling the agent to switch to the local MCP via npx novada-mcp — same key, same tool names."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I send the key as a header instead of a URL query?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Authorization: Bearer sk-eu-novada-YOUR_KEY against https://mcp.novada.com/mcp works identically. Prefer the header when sharing screens or storing client configs in repos."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What's the difference between hosted and npx novada-mcp?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Hosted = zero install, paste-a-URL, always latest, but no browser tools. Local npx novada-mcp = runs everything including Playwright browser flows, works offline-from-cloud, but you manage updates yourself."
+        }
+      }
+    ]
+  }
+]
