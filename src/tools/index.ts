@@ -41,3 +41,21 @@ export type { SetupParams } from "./setup.js";
 export type { SearchParams, ExtractParams, CrawlParams, ResearchParams, MapParams, ProxyParams, ScrapeParams, VerifyParams, UnblockParams, BrowserParams, BrowserAction, NovadaSearchResult, NovadaApiResponse, HealthParams } from "./types.js";
 export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
 export { classifyError, NovadaErrorCode } from "../_core/errors.js";
+
+// ─── KR-6: Novada developer-api account-management tools ────────────────────
+export { novadaWalletBalance, validateWalletBalanceParams, WalletBalanceParamsSchema } from "./wallet_balance.js";
+export type { WalletBalanceParams } from "./wallet_balance.js";
+export { novadaWalletUsageRecord, validateWalletUsageRecordParams, WalletUsageRecordParamsSchema } from "./wallet_usage_record.js";
+export type { WalletUsageRecordParams } from "./wallet_usage_record.js";
+export { novadaProxyAccountCreate, validateProxyAccountCreateParams, ProxyAccountCreateParamsSchema } from "./proxy_account_create.js";
+export type { ProxyAccountCreateParams } from "./proxy_account_create.js";
+export { novadaProxyAccountList, validateProxyAccountListParams, ProxyAccountListParamsSchema } from "./proxy_account_list.js";
+export type { ProxyAccountListParams } from "./proxy_account_list.js";
+export { novadaTrafficDaily, validateTrafficDailyParams, TrafficDailyParamsSchema } from "./traffic_daily.js";
+export type { TrafficDailyParams } from "./traffic_daily.js";
+export { novadaPlanBalanceAll, validatePlanBalanceAllParams, PlanBalanceAllParamsSchema } from "./plan_balance_all.js";
+export type { PlanBalanceAllParams } from "./plan_balance_all.js";
+export { novadaCaptureLogs, validateCaptureLogsParams, CaptureLogsParamsSchema } from "./capture_logs.js";
+export type { CaptureLogsParams } from "./capture_logs.js";
+export { novadaAccountSummary, validateAccountSummaryParams, AccountSummaryParamsSchema } from "./account_summary.js";
+export type { AccountSummaryParams } from "./account_summary.js";

@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novada MCP × Developer-API 集成需求 — 给后端 / 甫栋</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a2540;
+    --navy-2: #1e3a5f;
+    --cyan: #06b6d4;
+    --cyan-bg: #ecfeff;
+    --cyan-light: #67e8f9;
+    --orange: #ea580c;
+    --orange-bg: #fff7ed;
+    --orange-light: #fed7aa;
+    --green: #16a34a;
+    --green-bg: #f0fdf4;
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --yellow: #ca8a04;
+    --yellow-bg: #fefce8;
+    --ink: #1f2937;
+    --ink-soft: #6b7280;
+    --paper: #ffffff;
+    --paper-2: #f8fafc;
+    --line: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans SC', 'Inter', -apple-system, sans-serif;
+    background: var(--paper-2);
+    color: var(--ink);
+    line-height: 1.75;
+    padding: 40px 20px;
+  }
+  .container { max-width: 980px; margin: 0 auto; }
+  code, pre { font-family: 'JetBrains Mono', 'SF Mono', monospace; }
+  code {
+    background: var(--navy);
+    color: #e0f2fe;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.88em;
+    font-weight: 500;
+  }
+  pre {
+    background: var(--navy);
+    color: #e0f2fe;
+    padding: 16px 20px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 12px 0;
+  }
+  pre code { background: transparent; padding: 0; color: inherit; }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, var(--navy), var(--navy-2));
+    color: #fff;
+    padding: 36px 40px;
+    border-radius: 18px;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.25), transparent 70%);
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  .header .sub {
+    font-size: 14px;
+    opacity: 0.8;
+    font-weight: 500;
+    position: relative;
+  }
+  .header .meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+    position: relative;
+  }
+  .header .meta-pill {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #e0f2fe;
+  }
+
+  /* Section */
+  section {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+  section h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--navy);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px; height: 32px;
+    background: var(--cyan);
+    color: #fff;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  section h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-top: 18px;
+    margin-bottom: 8px;
+  }
+  section p { font-size: 14.5px; margin-bottom: 10px; }
+
+  /* Priority badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .badge.p0 { background: var(--red-bg); color: var(--red); border: 1px solid #fca5a5; }
+  .badge.p1 { background: var(--yellow-bg); color: var(--yellow); border: 1px solid #fde047; }
+  .badge.p2 { background: var(--cyan-bg); color: var(--cyan); border: 1px solid var(--cyan-light); }
+  .badge.ok { background: var(--green-bg); color: var(--green); border: 1px solid #bbf7d0; }
+  .badge.gap { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange-light); }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 13.5px;
+  }
+  th {
+    text-align: left;
+    background: var(--paper-2);
+    padding: 10px 14px;
+    font-weight: 700;
+    color: var(--navy);
+    border-bottom: 2px solid var(--line);
+    font-size: 12.5px;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    line-height: 1.6;
+  }
+  tr:last-child td { border-bottom: none; }
+  td code { font-size: 0.85em; }
+
+  /* Need list */
+  .need-block {
+    background: var(--paper-2);
+    border-left: 4px solid var(--cyan);
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin: 12px 0;
+  }
+  .need-block.p0 { border-left-color: var(--red); background: #fef2f2; }
+  .need-block.p1 { border-left-color: var(--yellow); background: var(--yellow-bg); }
+  .need-block.p2 { border-left-color: var(--cyan); background: var(--cyan-bg); }
+  .need-block-head {
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 6px;
+    font-size: 14.5px;
+  }
+  .need-block-body { font-size: 13.5px; color: var(--ink); line-height: 1.7; }
+
+  /* List */
+  ul, ol {
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  li {
+    font-size: 14px;
+    margin-bottom: 6px;
+    line-height: 1.7;
+  }
+  li code { font-size: 0.88em; }
+
+  /* Strategic callout */
+  .strategic {
+    background: linear-gradient(135deg, var(--cyan-bg), #fff);
+    border: 1px solid var(--cyan-light);
+    border-left: 5px solid var(--cyan);
+    padding: 18px 22px;
+    border-radius: 12px;
+    margin: 14px 0;
+  }
+  .strategic strong { color: var(--cyan); }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 12px;
+    padding: 24px 0;
+    margin-top: 16px;
+  }
+
+  /* Two-column for compact */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 12px 0;
+  }
+  @media (max-width: 720px) {
+    .two-col { grid-template-columns: 1fr; }
+    section { padding: 22px 18px; }
+    .header { padding: 24px 22px; }
+    .header h1 { font-size: 22px; }
+  }
+
+  /* Highlight number */
+  .big-num {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--cyan);
+    line-height: 1;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- HEADER -->
+<div class="header">
+  <h1>Novada MCP × Developer-API 集成需求</h1>
+  <div class="sub">给后端 / 甫栋的对齐文档 · Tong Wu @ Novada Labs · 2026-06-04 更新</div>
+  <div class="meta">
+    <span class="meta-pill">✅ 8 个 MCP tool 本地写完</span>
+    <span class="meta-pill">✅ 7/8 endpoint 真实数据跑通</span>
+    <span class="meta-pill" style="background:#fef2f2;color:#dc2626;border-color:#fca5a5;">🚨 卡在 1 个 endpoint 的 schema</span>
+    <span class="meta-pill">⏱ 甫栋 5 分钟可解锁</span>
+  </div>
+</div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  甫栋请直接看这一块 — 不用读后面任何东西                                ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<section style="background:#0a2540;color:#fff;border-radius:16px;padding:32px;margin-bottom:24px;border:3px solid #dc2626;box-shadow:0 8px 32px rgba(220,38,38,0.2);">
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+    <span style="font-size:36px;">👋</span>
+    <div>
+      <h2 style="margin:0;color:#fef2f2;font-size:26px;">甫栋,直接看这块就行</h2>
+      <div style="font-size:13px;color:#a5f3fc;margin-top:4px;">本文档其它部分都是背景资料 · 你只需要做下面 1 件事 · 预计 5 分钟</div>
+    </div>
+  </div>
+
+  <!-- The blocker — one sentence -->
+  <div style="background:#dc2626;color:#fff;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:600;letter-spacing:1px;margin-bottom:6px;opacity:0.9;">🚨 卡点(一句话)</div>
+    <div style="font-size:17px;font-weight:600;line-height:1.5;">
+      你的 <code style="background:#7f1d1d;color:#fef2f2;padding:2px 8px;border-radius:4px;">POST /v1/proxy_account/list</code> 和 <code style="background:#7f1d1d;color:#fef2f2;padding:2px 8px;border-radius:4px;">POST /v1/proxy_account/create</code> endpoint,我用 17 种不同的 body 都试过,服务端永远返回 <code style="background:#7f1d1d;color:#fef2f2;padding:2px 8px;border-radius:4px;">code=10001 "Invalid parameter"</code>。
+    </div>
+  </div>
+
+  <!-- What fudong needs to do — exact 3 steps -->
+  <div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:20px 24px;margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:600;letter-spacing:1px;color:#67e8f9;margin-bottom:12px;">✅ 你要做的(3 步)</div>
+
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <span style="background:#67e8f9;color:#0a2540;border-radius:50%;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;">1</span>
+        <div style="flex:1;">
+          <div style="font-weight:600;color:#fff;margin-bottom:4px;">打开 server 端 proxy_account 这两条路由的代码</div>
+          <div style="font-size:13px;color:#cbd5e1;">看一眼 controller / handler 里 <code style="background:#1e293b;color:#a5f3fc;padding:1px 6px;border-radius:3px;">create</code> 和 <code style="background:#1e293b;color:#a5f3fc;padding:1px 6px;border-radius:3px;">list</code> 的参数校验长什么样。</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <span style="background:#67e8f9;color:#0a2540;border-radius:50%;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;">2</span>
+        <div style="flex:1;">
+          <div style="font-weight:600;color:#fff;margin-bottom:4px;">写一段能跑通的 curl 示例发给 Tong</div>
+          <div style="font-size:13px;color:#cbd5e1;">就像下面这个模板,把 <code style="background:#1e293b;color:#a5f3fc;padding:1px 6px;border-radius:3px;">&lt;XXX&gt;</code> 替换成真实字段名和值即可:</div>
+          <pre style="background:#1e293b;color:#a5f3fc;padding:14px 16px;border-radius:6px;margin-top:8px;font-size:12.5px;line-height:1.5;overflow-x:auto;"># Example for proxy_account/list
+curl -X POST https://api-m.novada.com/v1/proxy_account/list \
+  -H "Authorization: Bearer &lt;some_user_key&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"&lt;真实字段1&gt;": &lt;value&gt;, "&lt;真实字段2&gt;": &lt;value&gt;}'
+
+# Example for proxy_account/create
+curl -X POST https://api-m.novada.com/v1/proxy_account/create \
+  -H "Authorization: Bearer &lt;some_user_key&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"&lt;username 字段&gt;": "test1", "&lt;password 字段&gt;": "test1234", "&lt;其它必填&gt;": ...}'</pre>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <span style="background:#67e8f9;color:#0a2540;border-radius:50%;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;">3</span>
+        <div style="flex:1;">
+          <div style="font-weight:600;color:#fff;margin-bottom:4px;">顺便告诉我们:code=10001 在你们 server 端到底是什么含义?</div>
+          <div style="font-size:13px;color:#cbd5e1;">("参数错" / "功能未开通" / "需要 admin 权限" / 其它)— 我们好在 MCP 错误提示里给客户更精准的反馈。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expected reply template -->
+  <div style="background:rgba(103,232,249,0.1);border:1px dashed #67e8f9;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:600;letter-spacing:1px;color:#67e8f9;margin-bottom:8px;">📋 你回复给我的最低信息(填空即可)</div>
+    <pre style="background:transparent;color:#fff;padding:0;margin:0;font-size:13px;line-height:1.7;">/v1/proxy_account/list 接受的 body 是:
+  必填字段: ____, ____, ____
+  示例 body: {"____": ____}
+
+/v1/proxy_account/create 接受的 body 是:
+  必填字段: ____, ____, ____
+  示例 body: {"____": ____, "____": ____}
+
+code=10001 = ________________________
+(可选)还需要任何特殊 header / scope / admin key 吗: ________________________</pre>
+  </div>
+
+  <!-- Why this matters -->
+  <div style="background:rgba(34,197,94,0.1);border-left:4px solid #22c55e;border-radius:6px;padding:14px 18px;">
+    <div style="font-size:13px;font-weight:600;color:#86efac;letter-spacing:0.5px;margin-bottom:6px;">💚 你这一回复解锁的事</div>
+    <div style="color:#dcfce7;font-size:14px;line-height:1.6;">
+      客户能直接对 AI agent 说 <strong style="color:#fff;">"帮我开个美国住宅代理"</strong>,AI 自动调 <code style="background:rgba(255,255,255,0.1);padding:1px 6px;border-radius:3px;">proxy_account/create</code> → 拿到 username/password/endpoint → 直接帮客户用。<strong style="color:#fff;">客户全程不用离开 Cursor/Claude Desktop 去 dashboard 手动操作。</strong>这是 Ethan 想要的"AI 直接管账户"的 last mile。
+    </div>
+  </div>
+</section>
+
+<!-- HERO: 2026-06-03 实测结论(给甫栋的最重要一段) -->
+<section style="background:linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%); border:2px solid #dc2626; border-radius:16px; padding:28px 32px; margin-bottom:32px;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+    <span style="font-size:28px;">🚨</span>
+    <div>
+      <h2 style="margin:0;color:#dc2626;font-size:24px;">最新结论 — 2026-06-03 实测</h2>
+      <div style="font-size:13px;color:var(--ink-soft);margin-top:2px;">给甫栋的 TL;DR · 90 秒读完</div>
+    </div>
+  </div>
+
+  <p style="font-size:16px;font-weight:500;margin-bottom:18px;">
+    <strong>我们这边代码层 100% 写完了。</strong>用 Tong 自己的 API key 实测,<strong style="color:var(--green);">7 个 endpoint 真实数据全部返回正常</strong>(钱包余额 €254.40、capture 余量 39.46、residential/isp/dc 日流量、wallet usage record、capture logs)。
+    <br><br>
+    <strong style="color:#dc2626;">只剩 2 个 endpoint 被服务端 block 住了 — <code style="background:#dc2626;">/v1/proxy_account/create</code> 和 <code style="background:#dc2626;">/v1/proxy_account/list</code></strong>。试过 17 种不同的 body 字段组合,服务端始终返回 <code>code=10001 "Invalid parameter"</code>(不是 auth 错,同一个 key 调其他 endpoint 都正常)。
+    <br><br>
+    <strong>需要甫栋的就一件事:告诉我们这俩 endpoint 真实的 body schema 是什么。一行字搞定。</strong>
+  </p>
+
+  <h3 style="color:#dc2626;margin-top:24px;margin-bottom:12px;font-size:18px;">💡 为什么这件事是 P0(给 Ethan / Zoey 看的商业理由)</h3>
+
+  <div class="two-col" style="margin-top:8px;">
+    <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;">
+      <div style="color:var(--ink-soft);font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:8px;">❌ 客户当前流程(5 步手动)</div>
+      <ol style="padding-left:20px;font-size:13.5px;line-height:1.9;">
+        <li>用户跟 AI 说"我想用美国住宅代理"</li>
+        <li><strong style="color:#dc2626;">AI: 抱歉做不了 →</strong> 你去 dashboard.novada.com</li>
+        <li>用户登录 → Residential → Create sub-account → 复制 3 个字段</li>
+        <li>用户把 3 个字段塞进 MCP 配置 env vars</li>
+        <li>用户重启 AI agent,现在可以用了</li>
+      </ol>
+      <p style="margin-top:10px;font-size:12.5px;color:var(--ink-soft);"><strong>断点:第 2 步 AI 必须把人踢出对话。</strong></p>
+    </div>
+
+    <div style="background:#f0fdf4;border:1px solid var(--green);border-radius:10px;padding:16px 18px;">
+      <div style="color:var(--green);font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:8px;">✅ 解锁后流程(0 步离开 AI)</div>
+      <ol style="padding-left:20px;font-size:13.5px;line-height:1.9;">
+        <li>用户:"我想用美国住宅代理"</li>
+        <li>AI 调 <code>novada_account_summary</code>:"你有 €254 主钱包 + 1 个活跃产品"</li>
+        <li>AI 调 <code>novada_proxy_account_create</code>(干跑)→ 给用户看预览</li>
+        <li>用户:"确认"</li>
+        <li>AI 拿到 <code>(username, password, endpoint)</code> 三元组,直接用 <code>novada_extract</code> 跑用户的任务</li>
+      </ol>
+      <p style="margin-top:10px;font-size:12.5px;color:var(--green);font-weight:600;">端到端 0 离开对话 = Ethan 想要的 AI 直接管账户。</p>
+    </div>
+  </div>
+
+  <h3 style="color:#dc2626;margin-top:24px;margin-bottom:12px;font-size:18px;">🔬 实测证据 — 同一个 API key,7 个跑通 / 2 个被 block</h3>
+
+  <table style="margin-top:8px;">
+    <tr>
+      <th style="width:40%;">Endpoint</th>
+      <th style="width:15%;">HTTP</th>
+      <th style="width:15%;">业务 code</th>
+      <th>结果</th>
+    </tr>
+    <tr><td><code>POST /v1/wallet/balance</code></td><td>200</td><td>0</td><td><span class="badge ok">✅ 真实数据</span> <code>balance: 254.4</code></td></tr>
+    <tr><td><code>POST /v1/wallet/usage_record</code></td><td>200</td><td>0</td><td><span class="badge ok">✅ 真实数据</span> <code>count: 10</code> (服务端 list 为空,见 P1-16)</td></tr>
+    <tr><td><code>POST /v1/residential_flow/balance</code></td><td>200</td><td>0</td><td><span class="badge ok">✅</span> <code>balance: 0, expire_time: 1779990882</code> (已过期)</td></tr>
+    <tr><td><code>POST /v1/isp_flow/balance</code></td><td>200</td><td>0</td><td><span class="badge ok">✅</span> 同上</td></tr>
+    <tr><td><code>POST /v1/dc_flow/balance</code></td><td>200</td><td>0</td><td><span class="badge ok">✅</span> <strong>路径是 <code>dc_flow</code> 不是 <code>datacenter_flow</code></strong>(实测发现,见 P0-NEW-A)</td></tr>
+    <tr><td><code>POST /v1/capture/get_balance</code></td><td>200</td><td>0</td><td><span class="badge ok">✅</span> <code>39.463547</code></td></tr>
+    <tr><td><code>POST /v1/capture/logs</code></td><td>200</td><td>0</td><td><span class="badge ok">✅ 真实数据</span></td></tr>
+    <tr><td><code>POST /v1/residential_flow/consume_log</code></td><td>200</td><td>0</td><td><span class="badge ok">✅</span> 日流量数据齐</td></tr>
+    <tr><td><code>POST /v1/isp_flow/consume_log</code></td><td>200</td><td>0</td><td><span class="badge ok">✅</span></td></tr>
+    <tr><td><code>POST /v1/dc_flow/consume_log</code></td><td>200</td><td>0</td><td><span class="badge ok">✅</span></td></tr>
+    <tr><td><code>POST /v1/mobile_flow/balance</code></td><td>404</td><td>—</td><td><span class="badge gap">⚠️ 账户没开通</span> (产品级,非 bug)</td></tr>
+    <tr><td><code>POST /v1/static_flow/balance</code></td><td>404</td><td>—</td><td><span class="badge gap">⚠️ 账户没开通</span></td></tr>
+    <tr style="background:#fef2f2;"><td><code>POST /v1/proxy_account/list</code></td><td>200</td><td><strong>10001</strong></td><td><span class="badge p0">🚨 BLOCKED</span> 试过 8 种 body 都 10001</td></tr>
+    <tr style="background:#fef2f2;"><td><code>POST /v1/proxy_account/create</code></td><td>200</td><td><strong>10001</strong></td><td><span class="badge p0">🚨 BLOCKED</span> 试过 9 种 body 都 10001</td></tr>
+  </table>
+
+  <h3 style="color:#dc2626;margin-top:24px;margin-bottom:12px;font-size:18px;">📋 试过的 17 种 body(给甫栋看,证明不是我们没认真)</h3>
+
+  <details style="margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 16px;">
+    <summary style="cursor:pointer;font-weight:600;color:var(--navy);">点开看完整 17 种参数尝试 → 全部 <code>code=10001</code></summary>
+    <table style="margin-top:12px;">
+      <tr><th>#</th><th>Body</th><th>结果</th></tr>
+      <tr><td>1</td><td><code>{}</code></td><td>10001</td></tr>
+      <tr><td>2</td><td><code>{"page":1}</code></td><td>10001</td></tr>
+      <tr><td>3</td><td><code>{"page_num":1}</code></td><td>10001</td></tr>
+      <tr><td>4</td><td><code>{"page":1,"size":10}</code></td><td>10001</td></tr>
+      <tr><td>5</td><td><code>{"page_index":1,"page_size":10}</code></td><td>10001</td></tr>
+      <tr><td>6</td><td><code>{"page":1,"pageSize":10}</code></td><td>10001</td></tr>
+      <tr><td>7</td><td><code>{"current":1,"size":10}</code></td><td>10001</td></tr>
+      <tr><td>8</td><td><code>{"username":"probe1"}</code></td><td>10001</td></tr>
+      <tr><td>9</td><td><code>{"username":"probe1","password":"probepass1234"}</code></td><td>10001</td></tr>
+      <tr><td>10</td><td><code>{"account":"probe1","password":"probepass1234"}</code></td><td>10001</td></tr>
+      <tr><td>11</td><td><code>{"user":"probe1","password":"probepass1234"}</code></td><td>10001</td></tr>
+      <tr><td>12</td><td><code>{"name":"probe1","password":"probepass1234"}</code></td><td>10001</td></tr>
+      <tr><td>13</td><td><code>{...,"type":"residential"}</code></td><td>10001</td></tr>
+      <tr><td>14</td><td><code>{...,"product":"residential"}</code></td><td>10001</td></tr>
+      <tr><td>15</td><td><code>{...,"plan_id":1}</code></td><td>10001</td></tr>
+      <tr><td>16</td><td><code>{...,"flow":1000}</code></td><td>10001</td></tr>
+      <tr><td>17</td><td><code>{"sub_username":"probe1","sub_password":"probepass1234"}</code></td><td>10001</td></tr>
+    </table>
+    <p style="margin-top:10px;font-size:12.5px;color:var(--ink-soft);"><strong>关键观察:</strong>不管发什么字段,服务端 error message 都一样(<code>"Invalid parameter"</code>),不告诉我们具体哪个字段错了。所以我们没办法暴力穷举出正确 schema — 需要甫栋直接给。</p>
+  </details>
+
+  <h3 style="color:#dc2626;margin-top:24px;margin-bottom:12px;font-size:18px;">❓ 需要甫栋回的 3 个问题(其中任何一个能答都解锁)</h3>
+
+  <div class="need-block p0" style="margin-bottom:10px;">
+    <div class="need-block-head"><span class="badge p0">Q1</span><code>/v1/proxy_account/create</code> 的真实 body schema</div>
+    <div class="need-block-body">
+      <p>具体字段名(<code>username</code> 还是 <code>account</code> 还是 <code>name</code>?)、哪些必填、哪些是枚举(<code>type</code> 字段如果有,枚举值是什么?)。一段示例 curl 即可,我这边 5 分钟集成完。</p>
+    </div>
+  </div>
+
+  <div class="need-block p0" style="margin-bottom:10px;">
+    <div class="need-block-head"><span class="badge p0">Q2</span><code>/v1/proxy_account/list</code> 的真实 body schema</div>
+    <div class="need-block-body">
+      <p>同上。这个连 <code>{}</code> 都返回 10001 很奇怪 — 是不是有什么 header 我们漏了?或者必须传一个 master_account_id?</p>
+    </div>
+  </div>
+
+  <div class="need-block p0" style="margin-bottom:0;">
+    <div class="need-block-head"><span class="badge p0">Q3</span>这个功能是不是需要账户有 <em>active proxy plan</em>?</div>
+    <div class="need-block-body">
+      <p>Tong 的账户 residential / isp / dc 套餐 5 天前(2026-05-28)集体过期,主钱包还有 €254 但没买新套餐。如果是这个原因导致 sub-account 系列被服务端 block,我们写在 MCP 错误提示里告诉用户"先去续套餐",也行。</p>
+    </div>
+  </div>
+
+  <div style="margin-top:24px;background:#0a2540;color:#e0f2fe;border-radius:10px;padding:16px 20px;font-size:14px;">
+    <strong style="color:#67e8f9;">📦 我们这边已经准备好的(代码层,等服务端一解锁就立刻能用)</strong>
+    <ul style="margin-top:8px;padding-left:24px;line-height:1.85;">
+      <li><code style="background:#1e3a5f;">novada_proxy_account_create</code> — WRITE 工具,带<strong>两步确认 gate</strong>(<code>confirm:true</code> 才打 API),实测 1ms 干跑,密码自动 mask 成 <code>********</code></li>
+      <li><code style="background:#1e3a5f;">novada_proxy_account_list</code> — READ 工具,zod 参数校验</li>
+      <li><code style="background:#1e3a5f;">novada_account_summary</code> — <strong>NEW aggregator</strong>,一次调用看账户全状态(钱包 + 6 个产品余量 + capture logs)</li>
+      <li><code style="background:#1e3a5f;">novada_wallet_balance / usage_record</code>、<code style="background:#1e3a5f;">novada_plan_balance_all</code>、<code style="background:#1e3a5f;">novada_traffic_daily</code>、<code style="background:#1e3a5f;">novada_capture_logs</code> — 全部 smoke 过</li>
+    </ul>
+    <p style="margin-top:10px;color:#a5f3fc;">代码本地,等甫栋一个回复,即刻 commit + 发版到 <code style="background:#1e3a5f;">mcp.novada.com</code>。</p>
+  </div>
+</section>
+
+<!-- 1. 背景 -->
+<section>
+  <h2><span class="num">1</span> 背景与目标</h2>
+  <p><strong>Ethan 提出方向:</strong>把 Novada developer-api 包装成 MCP(Model Context Protocol)工具,让客户的 AI agent(Claude Desktop / Cursor / Cline / Windsurf 等)可以直接通过自然语言调用 Novada 的能力 — 包括<strong>查用量、管账户、续套餐、监控抓取任务</strong>,而不需要客户手动登 dashboard。</p>
+
+  <div class="strategic">
+    <strong>战略价值 — 这是差异化 USP</strong><br>
+    BrightData / Tavily / Firecrawl 等竞品都做了 hosted MCP,但它们的 MCP 工具<strong>只覆盖数据获取(search / scrape)</strong>,不覆盖账户管理。Novada 如果做出"<strong>AI agent 自己管你的 Novada 账户</strong>",将是市场上第一家。客户体验从「我得登 dashboard 查余额」变成「我问 AI 余额还有多少 + 帮我续费」。
+  </div>
+
+  <p><strong>我们(Novada Labs / Tong Wu)负责的:</strong>把所有可调 endpoint 包装成 MCP tool,处理 auth / 参数验证 / 错误码 / 用户确认逻辑。<strong>后端(甫栋 / domestic team)负责的:</strong>给出完整文档 + 补几个目前缺的 endpoint。</p>
+</section>
+
+<!-- 2. 现状 -->
+<section>
+  <h2><span class="num">2</span> 文档调研现状(我们已经做完的)</h2>
+  <p>我们用 AI agent 扫了 <code>developer-api.novada.com</code> 全站,从 <code>llms-full.txt</code> 拉到了完整 endpoint 清单。结论:<strong>40+ endpoint 已经覆盖大部分需求</strong>,只有几个关键缺口。</p>
+
+  <h3>✅ 已覆盖的(可以立刻包装成 MCP tool)</h3>
+  <table>
+    <tr><th>类别</th><th>endpoint 数量</th><th>样例</th></tr>
+    <tr><td>钱包余额</td><td>1</td><td><code>POST /v1/wallet/balance</code></td></tr>
+    <tr><td>消费历史</td><td>1</td><td><code>POST /v1/wallet/usage_record</code></td></tr>
+    <tr><td>各产品日流量(5 个产品)</td><td>5</td><td><code>POST /v1/residential_flow/consume_log</code> 等</td></tr>
+    <tr><td>各产品套餐余额(5 个产品)</td><td>5</td><td><code>POST /v1/residential_flow/balance</code> 等</td></tr>
+    <tr><td>抓取套餐(Capture)管理</td><td>6</td><td><code>/v1/capture/{logs, get_balance, unit, get_apikey, reset_apikey, ...}</code></td></tr>
+    <tr><td>代理认证账户管理</td><td>4</td><td><code>/v1/proxy_account/{create, list, update, consume_log}</code></td></tr>
+    <tr><td>静态 IP 管理(DC + ISP)</td><td>12</td><td><code>/v1/static/*</code>, <code>/v1/static_house/*</code></td></tr>
+    <tr><td>地理字典(国家/城市/ISP)</td><td>12</td><td><code>/v1/proxy/domestic_dynamic_area</code> 等</td></tr>
+    <tr><td>IP 白名单</td><td>4</td><td><code>/v1/white_list/{add, list, del, remark}</code></td></tr>
+    <tr><td>抓取任务监控</td><td>4</td><td><code>/v1/scraper/{task_list, task_status, last_task_status, task_download}</code></td></tr>
+    <tr><td>OAuth2 token(遗留)</td><td>1</td><td><code>POST /v1/oauth2/token</code></td></tr>
+  </table>
+  <p style="margin-top:10px;font-size:13.5px;color:var(--ink-soft);">总计 <span class="big-num">40+</span> 个可用 endpoint,domain 覆盖 <code>api-m.novada.com</code> + <code>scraper.novada.com</code> + <code>webunlocker.novada.com</code>。</p>
+
+  <h3 style="margin-top:18px;">🎯 第二轮 deep crawl 新发现(2026-06-03 下午)</h3>
+  <p>之前只爬了 <code>developer-api.novada.com</code>。今天用 bb-browser 走 <code>novada.com</code> + <code>developer.novada.com</code>(GitBook 站,跟 API docs 站分开!),又发现:</p>
+
+  <div class="strategic" style="background:linear-gradient(135deg, var(--green-bg), #fff);border-left:5px solid var(--green);">
+    <strong style="color:var(--green);">✅ Novada 已经官方推广 MCP</strong><br>
+    <code>developer.novada.com/novada/useful-links/mcp-installation-and-usage-guide</code> 这一页明确写:"Novada MCP is a unified access layer that allows AI Agents and MCP-compatible clients to call Novada products through the Model Context Protocol." 推荐 <code>npx -y novada-mcp</code>。<strong>意味着我们做的 hosted server (mcp.novada.com) 不是外部项目,而是 Novada 官方 MCP 渠道的延伸。</strong> 跟甫栋 / 艺璇 / Ethan 对齐时强调这一点。
+  </div>
+
+  <h3 style="color:var(--orange);">🔑 关键:Novada-MCP 官方支持 5 个环境变量(我们目前只用了 1 个)</h3>
+  <p>官方 MCP 指南列出的 env 变量:</p>
+  <table>
+    <tr><th>Env var</th><th>用途</th><th>影响哪些工具</th></tr>
+    <tr><td><code>NOVADA_API_KEY</code></td><td>统一主 key</td><td>所有</td></tr>
+    <tr><td><code>NOVADA_WEB_UNBLOCKER_KEY</code></td><td>Web Unblocker 专属 key</td><td>web_unblocker tool</td></tr>
+    <tr><td><code>NOVADA_BROWSER_WS</code></td><td>Browser API WebSocket URL</td><td>browser tools</td></tr>
+    <tr><td><code>NOVADA_PROXY_USER</code> / <code>_PASS</code> / <code>_ENDPOINT</code></td><td>代理认证三元组</td><td>所有 proxy 工具</td></tr>
+  </table>
+  <p style="font-size:13px;color:var(--ink-soft);"><strong>影响 KR-5 (hosted MCP):</strong> 客户在 <code>mcp.novada.com</code> 用 Web Unblocker / Browser / Proxy 工具需要这些额外 credentials。<strong>架构决策待定 — 这是给甫栋的问题 #11</strong>(见下方)。</p>
+
+  <h3 style="margin-top:18px;">📦 营销站发现的 3 个新产品(目前 MCP 都没覆盖)</h3>
+  <ul>
+    <li><strong>Video Data API</strong> — <code>novada.com/video-data/</code> · 视频数据 API</li>
+    <li><strong>IPv6 Proxy</strong> — <code>novada.com/products/ipv6-proxy/</code> · IPv6 代理变种</li>
+    <li><strong>Datasets</strong> — <code>novada.com/datasets/</code> · 预爬数据集</li>
+    <li><strong>12 个 data-scrapers</strong>(YouTube/LinkedIn/Walmart/Amazon/Instagram/TikTok/Github/Google/Yahoo/Bing/Yandex/DuckDuckGo)— 可能是 <code>novada_scrape</code> 的 platform 参数,需确认</li>
+  </ul>
+</section>
+
+<!-- 3. 需要的 -->
+<section>
+  <h2><span class="num">3</span> 我们需要的(请后端确认 / 提供)</h2>
+
+  <h3 style="color:var(--red);">🔴 P0 — 强需求(实测后更新,本周内希望确认)</h3>
+
+  <p style="background:var(--yellow-bg);border-left:4px solid var(--yellow);padding:12px 16px;border-radius:6px;font-size:13.5px;margin-bottom:14px;">
+    <strong>📌 更新说明(2026-06-03):</strong>上方"实测结论"hero 块已经给了所有 P0 的最新状态。这里保留历史 P0-1/2/3 的演变记录,方便甫栋追溯。<strong>新的真正 P0(2 个 endpoint schema)在 hero 块的 Q1 / Q2 / Q3。</strong>
+  </p>
+
+  <div class="need-block p0">
+    <div class="need-block-head"><span class="badge p0">P0-1 ⚡ 实测后改写</span><code>/v1/proxy_account/{create,list}</code> 的 schema(REAL BLOCKER)</div>
+    <div class="need-block-body">
+      <p><strong>原问题</strong>(已撤销):"创建 API Key 接口" — 经实测,API key 创建不是 MCP 层的主要痛点。<strong>真正的 P0 是:proxy sub-account 创建/列出。</strong></p>
+      <p><strong>新问题:</strong>这俩 endpoint 服务端返回 <code>code=10001 Invalid parameter</code>,17 种 body 都试过(详见 hero 块)。同一个 key 调 wallet / plan / capture / traffic 全部正常 → 不是 auth,是 schema 不匹配。</p>
+      <p><strong>需要:</strong>甫栋给 1 段示例 curl(create 一个 sub-account 的真实 body),5 分钟集成完。详见 hero 块 Q1 / Q2 / Q3。</p>
+      <p><strong>为何重要:</strong>这是 Ethan 提出的"<em>AI 直接用 key 调 API 创建认证账户</em>"那条 — 没这俩,客户每次还是要回 dashboard 手动创建子账户,体验断裂。详见 hero 块的 before/after 流程对比。</p>
+    </div>
+  </div>
+
+  <div class="need-block" style="border-left-color:var(--green);background:var(--green-bg);">
+    <div class="need-block-head" style="color:var(--green);"><span class="badge ok">✅ 我们已经解决</span>P0-2「我所有产品的日用量」聚合(原 P0-2)</div>
+    <div class="need-block-body">
+      <p><strong>状态:</strong>我们在 MCP 层用 <code>devApiParallel</code> 并行 fan-out 实现了 — <code>novada_traffic_daily</code>。实测 3.9s 完成 5 个产品并行查询,带 graceful partial-failure(账户没开通的产品自动标 <code>unavailable: true</code>)。</p>
+      <p><strong>仍欢迎后端原生聚合 endpoint:</strong>如果后端能提供 <code>POST /v1/usage/daily_aggregate</code>,我们可以省一层 fan-out,延迟更低。但已经<strong>不是 launch blocker</strong>。</p>
+    </div>
+  </div>
+
+  <div class="need-block" style="border-left-color:var(--green);background:var(--green-bg);">
+    <div class="need-block-head" style="color:var(--green);"><span class="badge ok">✅ 我们已经解决</span>P0-3「我所有在用套餐」列表(原 P0-3)</div>
+    <div class="need-block-body">
+      <p><strong>状态:</strong>实现为 <code>novada_plan_balance_all</code> + <code>novada_account_summary</code>。一次调用返回 6 个产品的余量 + 自动算 <code>expired</code>/<code>expires_at_human</code> + 标 <code>active_products</code>/<code>expired_products</code>/<code>unavailable_products</code> 三个分类。</p>
+      <p>实测输出 headline:<strong style="color:var(--navy);">"Wallet: €254.40 · Plans: 1 active / 3 expired / 2 unavailable"</strong> — 一行字客户就看懂账户状态。</p>
+      <p><strong>同上,仍欢迎后端原生聚合 endpoint。</strong></p>
+    </div>
+  </div>
+
+  <div class="need-block p0">
+    <div class="need-block-head"><span class="badge p0">P0-NEW-A</span>路径命名:<code>dc_flow</code> vs <code>datacenter_flow</code></div>
+    <div class="need-block-body">
+      <p><strong>实测发现:</strong>文档/code 里写的 <code>/v1/datacenter_flow/*</code> 返回 404,真实路径是 <code>/v1/dc_flow/*</code>(我们已经在 MCP 层改对了)。</p>
+      <p><strong>需要确认:</strong>这是<em>故意</em>用 <code>dc_</code> 简称(那文档需更新),还是<em>历史 typo</em>(那 server 路径需统一)?我们怎么处理 forward-compat?</p>
+    </div>
+  </div>
+
+  <h3 style="color:var(--yellow);">🟡 P1 — 需要确认的细节(本周到下周)</h3>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-4</span>子账户体系</div>
+    <div class="need-block-body">
+      文档里的 <code>proxy_account</code> 看起来是代理认证账户(用户名密码),不是用户层级的子账户。Novada 业务上是否支持团队 / 子账户?如果支持,对应的 CRUD endpoint 是哪些?
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-5</span>充值历史 vs 消费历史</div>
+    <div class="need-block-body">
+      <code>POST /v1/wallet/usage_record</code> 返回的是消费记录还是充值记录?是否有单独的「充值历史」endpoint(我们需要它支持"agent 帮你查最近 3 个月充值情况")?
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-6</span>Sitemap 里 404 的两个文档页(发现)</div>
+    <div class="need-block-body">
+      <p>在 <code>sitemap.md</code> 里看到这两个路径存在但访问返回 404:</p>
+      <ul>
+        <li><code>/zh/apis/yong-hu-guan-li.md</code>(用户管理)</li>
+        <li><code>/zh/apis/xian-liu.md</code>(流量)</li>
+      </ul>
+      <p>是即将上线的新文档吗?如果是,能给我们看下草稿吗?我们可以提前对齐,避免重复造轮子。</p>
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-7</span>参数 typo 确认</div>
+    <div class="need-block-body">
+      <code>POST /v1/{residential,dc,isp}_flow/consume_log</code> 的请求参数文档写的是 <code>strat_time</code> / <code>end_time</code>。<code>strat</code> 看起来是 <code>start</code> 的 typo。这是真实参数名(我们要按 typo 来调)还是文档笔误(我们用 <code>start_time</code>)?是否需要保留两个都兼容?
+    </div>
+  </div>
+
+  <h3 style="color:var(--cyan);">🔵 P2 — 锦上添花(看后端方便)</h3>
+
+  <div class="need-block p2">
+    <div class="need-block-head"><span class="badge p2">P2-8</span>OpenAPI / Swagger schema</div>
+    <div class="need-block-body">
+      <code>/openapi.json</code> 和 <code>/swagger.json</code> 都 404。后端有维护 OpenAPI 规范吗?如果有,开放给我们直接拉一份,后面我们写 SDK 会快 10 倍 + 类型同步。
+    </div>
+  </div>
+
+  <div class="need-block p2">
+    <div class="need-block-head"><span class="badge p2">P2-9</span>Webhook 机制</div>
+    <div class="need-block-body">
+      是否有 webhook 回调(任务完成、余额预警、key 即将过期等)?
+    </div>
+  </div>
+
+  <div class="need-block p2">
+    <div class="need-block-head"><span class="badge p2">P2-10</span>错误码字典机读化</div>
+    <div class="need-block-body">
+      现在错误码只有 markdown 文档页。能否提供 JSON 版本?这样我们 MCP 层可以做错误的本地化翻译给 AI(让 AI 看到更友好的错误)。
+    </div>
+  </div>
+
+  <h3 style="color:var(--orange);margin-top:24px;">🟠 P1 — 第二轮 crawl 后新增的问题(2026-06-03 下午)</h3>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-11</span>Hosted MCP 的多 env var 策略(关键架构决策)</div>
+    <div class="need-block-body">
+      <p>官方 MCP 指南列了 5 个 env var(API_KEY + WEB_UNBLOCKER_KEY + BROWSER_WS + PROXY_USER/PASS/ENDPOINT)。在我们的 hosted 模式下,客户只输入一个 token,后端怎么映射?两个方向:</p>
+      <ul>
+        <li><strong>方向 A — 主 key 推导式:</strong>每个客户只给一个 <code>NOVADA_API_KEY</code>,我们后端按这个 key 查到他对应的 web_unblocker key + proxy 凭证 + browser WS。<strong>需要后端给 endpoint:</strong><code>POST /v1/user/credentials_bundle</code> 返回该 user 的全部凭证。</li>
+        <li><strong>方向 B — 客户自己配:</strong>客户在我们的 hosted MCP URL 里附带多个 token 参数(URL 太长)或者在 dashboard 里关联(复杂)。</li>
+      </ul>
+      <p>建议 A,需要后端配合一个 "credentials lookup" endpoint。</p>
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-12</span>IPv6 Proxy / Video Data API / Datasets 的 endpoint</div>
+    <div class="need-block-body">
+      营销站这 3 个产品没在公开 API docs 出现。这些产品有 API 接口吗?endpoint 在哪个 docs 站?这是后面 MCP 扩展的范围。
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-13</span>12 个 data-scrapers 的接入方式</div>
+    <div class="need-block-body">
+      <code>novada.com/data-scrapers/</code> 下列了 YouTube / LinkedIn / Walmart / Amazon / Instagram / TikTok / Github / Google / Yahoo / Bing / Yandex / DuckDuckGo 12 个特定平台 scrapers。这些是通过 <code>scraper.novada.com/request</code> 的 <code>scraper_name</code> 参数访问?还是各自有独立 endpoint?能给一份"已支持平台 + scraper_name 参数值"的全集表吗?
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-14</span>"Novada Auto-Setup Agent Prompt"</div>
+    <div class="need-block-body">
+      MCP 指南页提到 <strong>"Lazy Start — Novada Auto-Setup Agent Prompt"</strong>,是 Novada 官方维护的 AI agent 安装提示词。能否给我们看下?我们可以让 hosted MCP 自动适配同样的初始化体验。
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-15</span>购买历史(purchase history)endpoint</div>
+    <div class="need-block-body">
+      <code>developer.novada.com/novada/useful-links/public-api</code> 页面提到 "review purchase history" 是 Public API 的能力之一。具体哪个 endpoint?<code>/v1/wallet/usage_record</code> 是这个?还是单独有 <code>/v1/purchase/history</code>?
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-16 ⚡ 实测发现</span><code>/v1/wallet/usage_record</code> 的 <code>count</code> 和 <code>list</code> 不一致</div>
+    <div class="need-block-body">
+      <p><strong>实测:</strong>调 <code>POST /v1/wallet/usage_record</code> body=<code>{"page":1,"page_size":5}</code>,服务端返回 <code>{"code":0,"data":{"count":10,"list":[]}}</code> — <strong>count=10 但 list 是空的</strong>。</p>
+      <p>是 server-side bug 还是 design(比如 count 包含其他维度的总数)?我们在 MCP 层加了 <code>data_anomaly</code> 提示 agent,但根因需要后端确认。</p>
+    </div>
+  </div>
+
+  <div class="need-block p1">
+    <div class="need-block-head"><span class="badge p1">P1-17 ⚡ 实测发现</span>错误码 10001 的含义:参数错 vs 功能未开通</div>
+    <div class="need-block-body">
+      <p><strong>背景:</strong>错误码文档说 10001 = "Invalid parameter",但实测 <code>proxy_account/list</code> 不管什么参数都返回 10001。<strong>怀疑:</strong>10001 实际上被复用来表达"功能未对此账户开通"(对应套餐已过期)。</p>
+      <p><strong>需要:</strong>后端能否拆出一个 <code>code=10005 "Feature not enabled for account"</code> 之类的细分错误码?这样我们的 MCP 错误提示能更精准:"你的套餐过期了,请续费" vs "你参数错了"。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4. 我们的实现路径 -->
+<section>
+  <h2><span class="num">4</span> 我们的实现路径(Novada Labs 这边)</h2>
+  <p>我们用 <strong>3 个 milestone</strong> 落地这 20 个新 MCP tool,代码全部在 <code>~/Projects/novada-mcp/</code> 本地完成,验证通过前不发版。</p>
+
+  <table>
+    <tr>
+      <th>Milestone</th>
+      <th>内容</th>
+      <th>工具数</th>
+      <th>风险</th>
+      <th>目标日期</th>
+    </tr>
+    <tr>
+      <td><strong>M-6.1</strong><br><span style="color:var(--ink-soft);font-size:12px;">READ 类</span></td>
+      <td>钱包余额 / 日用量聚合 / 套餐余额聚合 / 抓取单价 / 消费历史 / 地理字典 / capture logs</td>
+      <td>7 + 1 aggregator</td>
+      <td><span class="badge ok">零风险</span><br>只读</td>
+      <td>6/14</td>
+    </tr>
+    <tr>
+      <td><strong>M-6.2</strong><br><span style="color:var(--ink-soft);font-size:12px;">WRITE + 用户确认</span></td>
+      <td>proxy_account CRUD / 静态 IP 开 / 续 / 导出 / IP 白名单管理</td>
+      <td>8</td>
+      <td><span class="badge gap">中风险</span><br>所有 WRITE 强制走 MCP <code>elicitInput</code> 协议弹用户确认</td>
+      <td>6/21</td>
+    </tr>
+    <tr>
+      <td><strong>M-6.3</strong><br><span style="color:var(--ink-soft);font-size:12px;">任务监控</span></td>
+      <td>capture key 管理 / scraper 异步任务 list / status / download</td>
+      <td>5</td>
+      <td><span class="badge ok">低风险</span></td>
+      <td>6/28</td>
+    </tr>
+  </table>
+
+  <h3>关键技术点</h3>
+  <ul>
+    <li><strong>MCP <code>elicitInput</code>:</strong>所有写操作(创建 key / 开 IP / 续套餐 / 重置 key)必须先弹 prompt 让用户确认,不会"AI 没问你就消费"</li>
+    <li><strong>聚合层:</strong>P0-2 + P0-3 如果后端没原生聚合 endpoint,我们在 MCP 层并行调多个产品的接口拼结果,但希望后端提供原生聚合</li>
+    <li><strong>auth:</strong>客户的 sk-xxx key 通过 MCP server 透传到后端,同一个 key 跨所有产品(沿用现有模型)</li>
+    <li><strong>错误兼容:</strong>处理后端可能的 typo 参数(<code>strat_time</code> 等),wrapper 双发兼容</li>
+  </ul>
+</section>
+
+<!-- 5. 时间线 + 期望 -->
+<section>
+  <h2><span class="num">5</span> 时间线与期望</h2>
+
+  <div class="two-col">
+    <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:10px;padding:14px 18px;">
+      <h3 style="margin-top:0;color:var(--green);">✅ 已经完成(2026-06-03)</h3>
+      <ul>
+        <li>M-6.1 READ 工具 8 个(wallet × 2、plan × 1、traffic × 1、capture × 1、proxy_account × 2、account_summary)</li>
+        <li>WRITE 两步确认 gate 实现 + 实测 1ms 干跑 + 密码自动 mask</li>
+        <li>错误码映射 + dc_flow 路径修正 + 过期 plan auto-flag</li>
+        <li>真实数据 smoke:7/8 endpoint 验证通过</li>
+        <li>tsc clean / build clean / local-only(0 commit, 0 push, 0 publish)</li>
+      </ul>
+    </div>
+    <div style="background:#fef2f2;border:1px solid var(--red);border-radius:10px;padding:14px 18px;">
+      <h3 style="margin-top:0;color:var(--red);">🚨 等甫栋(本周内任意时间)</h3>
+      <ul>
+        <li><strong>1 个回复</strong>:hero 块的 Q1 / Q2 / Q3 任答其一(<code>proxy_account/{create,list}</code> 的真实 body schema)</li>
+        <li>收到 → 我们 5 分钟集成 → 8/8 endpoint 全跑通 → 准备 commit + 发版到 <code>mcp.novada.com</code></li>
+        <li>其他 P1 / P2 不阻断 launch,可以后续 batch 回</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>需要后端这周回的(最少 — 已大幅简化)</h3>
+  <ul>
+    <li><strong>hero 块 Q1 / Q2 / Q3</strong>(任一):<code>proxy_account/{create,list}</code> 的真实 schema 或前置条件 — <strong>这是唯一 launch blocker</strong></li>
+    <li><strong>P0-NEW-A</strong>(可选):<code>dc_flow</code> vs <code>datacenter_flow</code> 命名规范确认</li>
+    <li><strong>P1-7 typo</strong>(可选):<code>strat_time</code> 真实参数名 — 我们已经在 wrapper 层双发兼容,不阻断</li>
+    <li>其他 P1 / P2:有空再答</li>
+  </ul>
+</section>
+
+<!-- 6. 沟通 -->
+<section>
+  <h2><span class="num">6</span> 沟通与责任分工</h2>
+  <table>
+    <tr><th>角色</th><th>对接人</th><th>责任</th></tr>
+    <tr><td>Novada Labs(我方)</td><td>Tong Wu(<code>tong.wu@novada.com</code>)</td><td>MCP wrapper 开发 / 文档 / 测试 / hosted 部署(<code>mcp.novada.com</code>)</td></tr>
+    <tr><td>Novada 后端 / API</td><td><strong>甫栋</strong>、<strong>艺璇</strong>(同一团队)</td><td>endpoint 文档完整 / 缺失 endpoint 设计 + 上线 / OpenAPI 维护(可选)</td></tr>
+  </table>
+
+  <div class="strategic" style="margin-top:16px;background:linear-gradient(135deg, #fef2f2, #fff7ed);border-left-color:var(--red);">
+    <strong style="color:var(--red);">下一步(实测后简化版)</strong><br>
+    1. <strong>甫栋只需要回 hero 块的 Q1 / Q2 / Q3 任一个。</strong>一段 curl 示例即可。<br>
+    2. 收到回复后,我这边 5 分钟集成 → 重跑 smoke → 8/8 endpoint 全绿。<br>
+    3. 验证通过后准备 commit + 发版到 <code>mcp.novada.com</code>(等 Ethan 批准)。<br>
+    4. 其他 P1/P2 不阻断 launch,可以后续 batch 回。<br>
+    5. 任何问题直接微信 / 钉钉找 Tong Wu。<strong>这事真的就差一行字。</strong>
+  </div>
+</section>
+
+<div class="footer">
+  Novada Labs · 2026-06-03 实测版 · 7/8 endpoint 验证通过 · 等甫栋 1 行 schema 解锁 proxy_account · <code>recall('api scraper auth')</code>
+</div>
+
+</div>
+</body>
+</html>

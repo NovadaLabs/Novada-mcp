@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.7.12",
+  "version": "0.8.0",
   "description": "One MCP server for all web data. Search, scrape, crawl, proxy, and AI research in one install.",
   "mcpName": "novada",
   "type": "module",
@@ -84,6 +84,7 @@
     "axios": "^1.15.0",
     "cheerio": "^1.2.0",
     "exceljs": "^4.4.0",
+    "form-data": "^4.0.5",
     "pdf-parse": "^2.4.5",
     "playwright-core": "^1.59.1",
     "zod": "^4.3.6"
