@@ -29,7 +29,7 @@
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "USD",
-      "description": "5,000 tool calls per month free. No credit card required."
+      "description": "1,000 tool calls per month free. No credit card required."
     },
     "provider": {
       "@type": "Organization",

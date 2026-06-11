@@ -8,7 +8,7 @@
 - Auth (option A): query param `?token=sk-eu-novada-YOUR_KEY`
 - Auth (option B): header `Authorization: Bearer sk-eu-novada-YOUR_KEY` (preferred — keeps key out of logs and screen-shares)
 - Transport: Streamable HTTP per MCP March 2025 spec
-- Free tier: 5,000 tool calls / month per token, no credit card required
+- Free tier: 1,000 tool calls / month per token, no credit card required
 - Rate limit: 60 requests / minute per IP
 - Infrastructure: Vercel Edge, 195+ countries, auto-SSL
 
