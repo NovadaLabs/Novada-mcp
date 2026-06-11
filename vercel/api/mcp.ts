@@ -475,19 +475,24 @@ function getClientIp(request: Request): string {
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-async function nodeReqToWebReq(req: IncomingMessage): Promise<Request> {
+interface NodeCtx {
+  req: IncomingMessage;
+  res: ServerResponse;
+  parsedBody?: unknown;
+}
+
+async function readNodeBody(req: IncomingMessage): Promise<Buffer | undefined> {
+  const method = (req.method || "GET").toUpperCase();
+  if (["GET", "HEAD"].includes(method)) return undefined;
+  const chunks: Buffer[] = [];
+  for await (const chunk of req as AsyncIterable<Buffer>) chunks.push(chunk);
+  return chunks.length ? Buffer.concat(chunks) : undefined;
+}
+
+function nodeReqToWebReq(req: IncomingMessage, rawBody: Buffer | undefined): Request {
   const host = (req.headers.host as string) || "localhost";
   const url = `https://${host}${req.url || "/"}`;
   const method = (req.method || "GET").toUpperCase();
-
-  // Slurp body for methods that have one. Vercel buffers small bodies into
-  // req.body already on some runtimes; we read the stream to be safe.
-  let body: BodyInit | undefined = undefined;
-  if (!["GET", "HEAD"].includes(method)) {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req as AsyncIterable<Buffer>) chunks.push(chunk);
-    if (chunks.length) body = Buffer.concat(chunks);
-  }
 
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
@@ -495,6 +500,8 @@ async function nodeReqToWebReq(req: IncomingMessage): Promise<Request> {
     else if (typeof v === "string") headers.set(k, v);
   }
 
+  // Buffer is a Uint8Array under the hood; cast to satisfy BodyInit typing.
+  const body = rawBody ? new Uint8Array(rawBody) : undefined;
   return new Request(url, { method, headers, body });
 }
 
@@ -507,21 +514,37 @@ async function sendWebRes(res: ServerResponse, webRes: Response): Promise<void> 
 
 export default async function nodeHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   try {
-    const webReq = await nodeReqToWebReq(req);
-    const webRes = await fetchHandler(webReq);
-    await sendWebRes(res, webRes);
+    // Read body once — pass to both the Fetch shim (for pre-transport logic)
+    // and the MCP SDK transport (which would otherwise re-read the stream).
+    const rawBody = await readNodeBody(req);
+    let parsedBody: unknown;
+    if (rawBody) {
+      const text = rawBody.toString("utf8");
+      try { parsedBody = JSON.parse(text); } catch { /* leave undefined */ }
+    }
+
+    const webReq = nodeReqToWebReq(req, rawBody);
+    const webRes = await fetchHandler(webReq, { req, res, parsedBody });
+
+    // If the MCP transport already wrote to res (Node-style dispatch), skip
+    // re-sending. The transport sets res.headersSent after its first write.
+    if (!res.headersSent) {
+      await sendWebRes(res, webRes);
+    }
   } catch (err) {
-    res.statusCode = 500;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({
-      error: "INTERNAL_ERROR",
-      message: (err as Error)?.message ?? String(err),
-    }));
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        error: "INTERNAL_ERROR",
+        message: (err as Error)?.message ?? String(err),
+      }));
+    }
   }
 }
 
 // ─── Original Fetch-API handler (called by the Node adapter above) ───────────
-async function fetchHandler(request: Request): Promise<Response> {
+async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Response> {
   const env = readEnv();
   // Vercel Node.js Functions: request.url is path-only ("/mcp"). Vercel Edge:
   // absolute URL. Provide a base so URL parsing works in both runtimes.
@@ -614,8 +637,25 @@ async function fetchHandler(request: Request): Promise<Response> {
 
   try {
     await server.connect(transport);
-    // @ts-expect-error — transport.handleRequest accepts Fetch Request/Response when running in Workers/edge runtimes via the SDK's edge shim.
-    const response: Response = await transport.handleRequest(request);
+
+    if (nodeCtx) {
+      // Node runtime: MCP SDK's StreamableHTTPServerTransport.handleRequest
+      // expects Node's (req, res, parsedBody?) and writes the response stream
+      // directly to res. We supply the pre-parsed body because nodeHandler
+      // already consumed req's stream to build the Fetch Request above.
+      // CORS must be set on res BEFORE the SDK writes headers.
+      nodeCtx.res.setHeader("access-control-allow-origin", "*");
+      nodeCtx.res.setHeader("access-control-expose-headers", "mcp-session-id");
+      // SDK types are Node-first; pass through with a cast.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (transport as any).handleRequest(nodeCtx.req, nodeCtx.res, nodeCtx.parsedBody);
+      // Sentinel — nodeHandler checks res.headersSent and skips sendWebRes.
+      return new Response(null, { status: 200, headers: { "x-handled-by": "mcp-transport" } });
+    }
+
+    // Theoretical Fetch-API path (Edge runtime). Unused while we're on Node.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response: Response = await (transport as any).handleRequest(request);
     const headers = new Headers(response.headers);
     headers.set("access-control-allow-origin", "*");
     headers.set("access-control-expose-headers", "mcp-session-id");
