@@ -1,0 +1,5 @@
+{
+  "name": "novada-mcp",
+  "version": "0.8.0",
+  "description": "Vendored shim — provides version metadata for vendored novada-mcp build. The real package source lives at ~/Projects/novada-mcp/. Sync this version when vendor refresh happens."
+}
