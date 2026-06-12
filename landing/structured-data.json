@@ -75,7 +75,7 @@
         "name": "Can I send the key as a header instead of a URL query?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Authorization: Bearer sk-eu-novada-YOUR_KEY against https://mcp.novada.com/mcp works identically. Prefer the header when sharing screens or storing client configs in repos."
+          "text": "Yes. Authorization: Bearer YOUR_API_KEY against https://mcp.novada.com/mcp works identically. Prefer the header when sharing screens or storing client configs in repos."
         }
       },
       {

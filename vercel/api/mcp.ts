@@ -7,8 +7,8 @@
  * Vercel KV (Upstash Redis under the hood) via @vercel/kv.
  *
  * Auth (Tavily-style, both accepted):
- *   1. ?token=sk-eu-novada-XXX
- *   2. Authorization: Bearer sk-eu-novada-XXX
+ *   1. ?token=YOUR_NOVADA_API_KEY
+ *   2. Authorization: Bearer YOUR_NOVADA_API_KEY
  *
  * Quota: per-token monthly KV counter at <token>:<YYYY-MM>. Decrement
  * before each tool call. 429 when exhausted.
@@ -207,18 +207,14 @@ interface TokenInfo {
 }
 
 /**
- * 🔴 TODO(sub2api): replace this stub with a sub2api lookup that resolves the
- * presented MCP token to a Novada user + plan + remaining quota. RIGHT NOW we
- * accept any token shaped like `sk-eu-novada-*` — meaning the free tier IS NOT
- * GATED. Operator must explicitly set env STUB_AUTH_WARNING_ACCEPTED=true to
- * deploy this function. See PRE_LAUNCH_CHECKLIST.md.
+ * Validate a Novada API key. Accepts any non-empty hex-like string (the standard
+ * Novada API key format, e.g. "1f35b477c9e1802778ec64aee2a6adfa").
+ * TODO(sub2api): wire to sub2api for per-user plan/quota resolution.
  */
 async function validateToken(token: string, env: Env): Promise<TokenInfo> {
-  if (!token || !token.startsWith("sk-eu-novada-")) {
+  // Accept any non-empty token that looks like a valid API key (alphanumeric, 16+ chars).
+  if (!token || token.length < 16 || !/^[a-zA-Z0-9_\-]+$/.test(token)) {
     return { valid: false, plan: "free", quota_remaining: 0 };
-  }
-  if ((env.LOG_LEVEL ?? "info") !== "silent") {
-    console.warn("[novada-mcp-hosted] STUB AUTH ACTIVE — any sk-eu-novada-* prefix accepted. Wire sub2api before production launch.");
   }
   const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
   return { valid: true, plan: "free", quota_remaining: monthlyQuota };
@@ -272,8 +268,16 @@ function extractToken(req: Request): string | null {
   // the absolute URL. Provide a base so URL parsing works in both runtimes.
   const base = `https://${req.headers.get("host") || "localhost"}`;
   const url = new URL(req.url, base);
+
+  // 1. Path-based auth (Firecrawl pattern): /:key/mcp → rewritten to /api/mcp?pathKey=:key
+  const pathKey = url.searchParams.get("pathKey");
+  if (pathKey && pathKey.trim().length >= 16) return pathKey.trim();
+
+  // 2. Query param: ?token=YOUR_API_KEY
   const qp = url.searchParams.get("token");
   if (qp) return qp.trim();
+
+  // 3. Bearer header: Authorization: Bearer YOUR_API_KEY
   const auth = req.headers.get("authorization") || req.headers.get("Authorization");
   if (auth && /^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, "").trim();
   return null;
@@ -323,7 +327,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string }): Server {
             "Error [QUOTA_EXCEEDED]: free-plan monthly quota exhausted.",
             "failure_class: quota",
             "retry_recommended: false",
-            "agent_instruction: Upgrade at https://www.novada.com/pricing or wait until next month for the free tier to reset.",
+            "agent_instruction: Upgrade at https://dashboard.novada.com or wait until next month for the free tier to reset.",
           ].join("\n"),
         }],
         isError: true,
@@ -569,8 +573,8 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // until sub2api integration lands. See PRE_LAUNCH_CHECKLIST.md.
   if (env.STUB_AUTH_WARNING_ACCEPTED !== "true") {
     return jsonError(503, "STUB_AUTH_UNACKED",
-      "This function has stub token validation (any sk-eu-novada-* prefix is accepted). Refusing to serve until operator acknowledges.",
-      "Operator: set env STUB_AUTH_WARNING_ACCEPTED=true via `vercel env add STUB_AUTH_WARNING_ACCEPTED production` and redeploy. Then wire sub2api before public launch.");
+      "Auth system not yet activated. Contact the operator.",
+      "Operator: set env STUB_AUTH_WARNING_ACCEPTED=true via `vercel env add STUB_AUTH_WARNING_ACCEPTED production` and redeploy.");
   }
 
   // KV connection check — must be explicit. Vercel auto-injects KV_REST_API_URL +
@@ -607,23 +611,24 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   const token = extractToken(request);
   if (!token) {
     return jsonError(401, "MISSING_TOKEN",
-      "Missing token. Pass ?token=sk-eu-novada-XXX or Authorization: Bearer sk-eu-novada-XXX.",
-      "Get a token at https://www.novada.com");
+      "Missing token. Pass ?token=YOUR_API_KEY or Authorization: Bearer YOUR_API_KEY.",
+      "Get your API key at https://dashboard.novada.com/overview/scraper/api-playground/");
   }
   const info = await validateToken(token, env);
   if (!info.valid) {
     return jsonError(401, "INVALID_TOKEN",
-      "Invalid token format. Expected sk-eu-novada-*.",
-      "Get a valid token at https://www.novada.com");
+      "Invalid API key. Use your Novada API key (32-char hex string from the dashboard).",
+      "Get your API key at https://dashboard.novada.com/overview/scraper/api-playground/");
   }
 
-  // Upstream Novada API key — set via `vercel env add NOVADA_API_KEY production`.
-  // TODO(sub2api): swap to a per-user resolved key once sub2api is wired up.
-  const apiKey = env.NOVADA_API_KEY?.trim();
+  // Upstream Novada API key — use the customer's own key (pass-through model).
+  // The customer's token IS their Novada API key. Their own account balance is used.
+  // Fallback to env var NOVADA_API_KEY only for backward compat / operator testing.
+  const apiKey = token || env.NOVADA_API_KEY?.trim();
   if (!apiKey) {
     return jsonError(500, "FUNCTION_MISCONFIGURED",
-      "Upstream NOVADA_API_KEY env var is not set on this Vercel project.",
-      "Operator: run `vercel env add NOVADA_API_KEY production` and redeploy.");
+      "No API key available. Provide your Novada API key via the URL.",
+      "Get your API key at https://dashboard.novada.com/overview/scraper/api-playground/");
   }
 
   // Build a fresh server + transport per request (stateless mode). Edge

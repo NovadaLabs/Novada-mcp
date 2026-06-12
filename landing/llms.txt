@@ -5,8 +5,8 @@
 ## Endpoint
 
 - URL: `https://mcp.novada.com/mcp`
-- Auth (option A): query param `?token=sk-eu-novada-YOUR_KEY`
-- Auth (option B): header `Authorization: Bearer sk-eu-novada-YOUR_KEY` (preferred — keeps key out of logs and screen-shares)
+- Auth (option A): query param `?token=YOUR_API_KEY`
+- Auth (option B): header `Authorization: Bearer YOUR_API_KEY` (preferred — keeps key out of logs and screen-shares)
 - Transport: Streamable HTTP per MCP March 2025 spec
 - Free tier: 1,000 tool calls / month per token, no credit card required
 - Rate limit: 60 requests / minute per IP
@@ -48,7 +48,7 @@
 
 In Claude Desktop: Customize → Connectors → + → Add custom connector
 
-URL to paste: `https://mcp.novada.com/mcp?token=sk-eu-novada-YOUR_KEY`
+URL to paste: `https://mcp.novada.com/mcp?token=YOUR_API_KEY`
 
 ### Claude Desktop (Option B — stdio bridge via mcp-remote)
 
@@ -59,7 +59,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.novada.com/mcp?token=sk-eu-novada-YOUR_KEY"]
+      "args": ["-y", "mcp-remote", "https://mcp.novada.com/mcp?token=YOUR_API_KEY"]
     }
   }
 }
@@ -69,7 +69,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 
 ```bash
 claude mcp add --transport http novada https://mcp.novada.com/mcp \
-  --header "Authorization: Bearer sk-eu-novada-YOUR_KEY" \
+  --header "Authorization: Bearer YOUR_API_KEY" \
   --scope user
 ```
 
@@ -83,7 +83,7 @@ Add to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in project root for project s
 {
   "mcpServers": {
     "novada": {
-      "url": "https://mcp.novada.com/mcp?token=sk-eu-novada-YOUR_KEY"
+      "url": "https://mcp.novada.com/mcp?token=YOUR_API_KEY"
     }
   }
 }
@@ -95,7 +95,7 @@ Add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.novada]
-url = "https://mcp.novada.com/mcp?token=sk-eu-novada-YOUR_KEY"
+url = "https://mcp.novada.com/mcp?token=YOUR_API_KEY"
 ```
 
 To keep the key out of the file: set `bearer_token_env_var = "NOVADA_API_KEY"` and use `https://mcp.novada.com/mcp` as the URL.
@@ -109,7 +109,7 @@ Edit `cline_mcp_settings.json` (Cline → MCP Servers → Edit):
   "mcpServers": {
     "novada": {
       "type": "streamableHttp",
-      "url": "https://mcp.novada.com/mcp?token=sk-eu-novada-YOUR_KEY"
+      "url": "https://mcp.novada.com/mcp?token=YOUR_API_KEY"
     }
   }
 }
@@ -125,7 +125,7 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "novada": {
-      "serverUrl": "https://mcp.novada.com/mcp?token=sk-eu-novada-YOUR_KEY"
+      "serverUrl": "https://mcp.novada.com/mcp?token=YOUR_API_KEY"
     }
   }
 }
@@ -146,7 +146,7 @@ To use browser tools, run the local MCP instead:
 npx novada-mcp
 ```
 
-The same `sk-eu-novada-YOUR_KEY` key works. All 25 tools including browser flows are available locally.
+The same `YOUR_API_KEY` key works. All 25 tools including browser flows are available locally.
 
 ## Source / repo
 
