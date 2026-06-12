@@ -21,10 +21,25 @@
     theme: {
       extend: {
         colors: {
-          violet: { DEFAULT: '#5b2eeb', 600: '#4a23c9', 700: '#3a1ba0', 50: '#f1edff', 100: '#e3daff' },
-          mint: { DEFAULT: '#10d49c', 600: '#0bb585', 50: '#e6fbf4' },
-          ink: { DEFAULT: '#0c0a17', 800: '#161226', 700: '#251f3d' },
-          paper: '#fbfaff',
+          violet: {
+            DEFAULT: '#6c40e2',
+            50: '#f5eeff',
+            100: '#e3daff',
+            200: '#c9b4fb',
+            600: '#431fd5',
+            700: '#3a1ba0',
+            alt: '#5d34f2',
+          },
+          ink: {
+            DEFAULT: '#191228',
+            text: '#0a142f',
+            700: '#251f3d',
+            800: '#161226',
+          },
+          slate: '#677489',
+          paper: '#ffffff',
+          'tint-violet': '#f5eeff',
+          'tint-cool': '#f7f8fc',
         },
         fontFamily: {
           display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
@@ -37,44 +52,51 @@
 </script>
 <style>
   html { scroll-behavior: smooth; }
-  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #161226; background: #fbfaff; }
+  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #0a142f; background: #ffffff; }
   h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
   body.lang-en .zh { display: none !important; }
   body.lang-zh .en { display: none !important; }
   .mono { font-family: 'IBM Plex Mono', monospace; }
-  .code-block { background: #0c0a17; color: #e9e4ff; border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; position: relative; }
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #0c0a17; color: white; padding: 10px 18px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 100; }
+  .code-block { background: #191228; color: #e9e4ff; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; position: relative; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #191228; color: white; padding: 10px 18px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 100; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .pg-card { background: #ffffff; border-radius: 10px; box-shadow: rgba(18,17,39,0.08) 0px 10px 50px 0px; }
   .pg-tool-pill { padding: 10px 8px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s ease; background: white; border: 1px solid #e7e2f5; color: #251f3d; font-family: 'IBM Plex Sans', sans-serif; }
-  .pg-tool-pill:hover { border-color: #5b2eeb; color: #5b2eeb; }
-  .pg-tool-pill.pg-active { background: #0c0a17; color: white; border-color: #0c0a17; }
-  .pg-input { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #e7e2f5; border-radius: 8px; background: white; font-family: 'IBM Plex Mono', monospace; }
-  .pg-input:focus { outline: none; border-color: #5b2eeb; box-shadow: 0 0 0 3px rgba(91,46,235,0.12); }
+  .pg-tool-pill:hover { border-color: #6c40e2; color: #6c40e2; }
+  .pg-tool-pill.pg-active { background: #191228; color: white; border-color: #191228; }
+  .pg-input { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #e7e2f5; border-radius: 8px; background: white; font-family: 'IBM Plex Mono', monospace; color: #0a142f; }
+  .pg-input:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.12); }
   .pg-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .pg-input-row .pg-input { flex: 1; min-width: 140px; }
-  .pg-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b6483; margin-bottom: 4px; font-weight: 600; }
+  .pg-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #677489; margin-bottom: 4px; font-weight: 600; }
   #pg-output { padding: 16px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .pg-run-btn { background: #191228; color: #ffffff; border-radius: 10px; font-weight: 700; transition: background .15s ease; }
+  .pg-run-btn:hover:not(:disabled) { background: #6c40e2; }
+  .pg-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .pg-key-ready { background: #f5eeff; color: #6c40e2; }
+  .pg-key-required { background: #f1f0f5; color: #677489; }
+  .badge-live { background: #f5eeff; color: #6c40e2; border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 </style>
 </head>
-<body class="lang-en">
+<body class="lang-en" style="background: linear-gradient(180deg, #fff 0%, rgba(174,179,217,0.18) 50%, #fff 100%); min-height: 100vh;">
 
 <!-- HEADER -->
-<header class="sticky top-0 z-50 bg-paper/90 backdrop-blur border-b border-violet-100">
+<header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-violet-100">
   <div class="max-w-5xl mx-auto px-5 h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
       <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
     </a>
-    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-ink-700">
-      <a href="/#install" class="hover:text-violet">Install</a>
-      <a href="/#tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
-      <a href="/#free" class="hover:text-violet"><span class="en">Free tier</span><span class="zh">免费额度</span></a>
-      <a href="/#faq" class="hover:text-violet">FAQ</a>
-      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+    <nav class="hidden md:flex items-center gap-7 text-sm font-medium" style="color:#0a142f">
+      <a href="/#install" class="hover:text-violet transition">Install</a>
+      <a href="/#tools" class="hover:text-violet transition"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/#free" class="hover:text-violet transition"><span class="en">Free tier</span><span class="zh">免费额度</span></a>
+      <a href="/#faq" class="hover:text-violet transition">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet transition">GitHub</a>
     </nav>
     <div class="flex items-center gap-3">
-      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
-      <a href="https://dashboard.novada.com/sign-up/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-lg transition">
+      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition" style="color:#0a142f">中 / EN</button>
+      <a href="https://dashboard.novada.com/sign-up/" class="hidden sm:inline-flex items-center text-sm font-semibold text-white px-4 py-2 rounded-[10px] transition" style="background:#191228;" onmouseover="this.style.background='#6c40e2'" onmouseout="this.style.background='#191228'">
         <span class="en">Get API key</span><span class="zh">获取密钥</span>
       </a>
     </div>
@@ -85,25 +107,25 @@
 
   <!-- Title -->
   <div class="mb-8">
-    <a href="/" class="text-sm text-ink-700/60 hover:text-violet">← <span class="en">Back to home</span><span class="zh">返回首页</span></a>
-    <div class="inline-flex items-center gap-2 bg-violet-50 text-violet rounded-full px-3 py-1 text-xs font-semibold mt-4 mb-3">
-      <span class="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"></span>
+    <a href="/" class="text-sm hover:text-violet transition" style="color:#677489">← <span class="en">Back to home</span><span class="zh">返回首页</span></a>
+    <div class="badge-live mt-4 mb-3">
+      <span class="w-1.5 h-1.5 rounded-full bg-violet animate-pulse inline-block"></span>
       <span class="en">LIVE · runs against production mcp.novada.com</span>
       <span class="zh">在线 · 直连生产端点 mcp.novada.com</span>
     </div>
-    <h1 class="text-3xl sm:text-4xl font-bold text-ink mb-2 display">
+    <h1 class="text-3xl sm:text-4xl font-bold mb-2 display" style="color:#0a142f">
       <span class="en">MCP Playground</span><span class="zh">MCP 在线试玩</span>
     </h1>
-    <p class="text-ink-700/70">
+    <p style="color:#677489">
       <span class="en">Run any of Novada's 26 web-data tools live. Same endpoint your AI agent calls — pick a tool, hit Run, see the real response.</span>
       <span class="zh">在线运行 Novada 的 26 个网络数据工具。这就是你的 AI agent 调用的同一个端点 — 选工具、点 Run、看真实响应。</span>
     </p>
   </div>
 
   <!-- API KEY (required — customer brings their own) -->
-  <div id="pg-key-card" class="border border-violet-100 rounded-2xl p-5 sm:p-6 mb-6 bg-white">
+  <div id="pg-key-card" class="pg-card p-5 sm:p-6 mb-6">
     <div class="flex items-center justify-between mb-2">
-      <label class="text-sm font-semibold text-ink">
+      <label class="text-sm font-semibold" style="color:#0a142f">
         <span class="en">Your API key</span><span class="zh">你的 API 密钥</span>
         <span class="text-violet">*</span>
       </label>
@@ -113,12 +135,12 @@
       <input id="pg-token" type="password" autocomplete="off" spellcheck="false"
              placeholder="sk-eu-novada-..."
              class="pg-input flex-1" />
-      <button id="pg-save-key" class="px-4 py-2 text-sm font-semibold bg-ink hover:bg-violet text-white rounded-lg transition whitespace-nowrap">
+      <button id="pg-save-key" class="px-4 py-2 text-sm font-semibold text-white rounded-[10px] transition whitespace-nowrap" style="background:#191228;" onmouseover="this.style.background='#6c40e2'" onmouseout="this.style.background='#191228'">
         <span class="en">Save</span><span class="zh">保存</span>
       </button>
     </div>
     <div class="flex items-center justify-between mt-2 flex-wrap gap-2">
-      <p class="text-xs text-ink-700/55">
+      <p class="text-xs" style="color:#677489;opacity:0.85">
         <span class="en">Required. Stored only in your browser (localStorage) — never sent to Novada except as your own call token. Get one free at the link →</span>
         <span class="zh">必填。仅保存在你的浏览器本地 (localStorage) — 除作为你自己的调用 token 外不会发送给 Novada。点右侧免费获取 →</span>
       </p>
@@ -129,8 +151,8 @@
   </div>
 
   <!-- TOOL RUNNER -->
-  <div class="bg-paper border border-violet-100 rounded-2xl p-5 sm:p-7">
-    <div class="text-xs uppercase tracking-wider text-ink-700/60 font-semibold mb-2">
+  <div class="pg-card p-5 sm:p-7">
+    <div class="text-xs uppercase tracking-wider font-semibold mb-2" style="color:#677489">
       <span class="en">Tool</span><span class="zh">工具</span>
     </div>
     <div id="pg-tools" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
@@ -144,17 +166,17 @@
       <button data-tool="novada_discover" class="pg-tool-pill">🧭 discover</button>
     </div>
 
-    <div class="text-xs uppercase tracking-wider text-ink-700/60 font-semibold mb-2">
+    <div class="text-xs uppercase tracking-wider font-semibold mb-2" style="color:#677489">
       <span class="en">Arguments</span><span class="zh">参数</span>
     </div>
     <div id="pg-args" class="space-y-3 mb-4"></div>
 
-    <button id="pg-run" class="w-full bg-violet hover:bg-violet-600 text-white font-bold py-3 rounded-xl transition disabled:opacity-50 disabled:cursor-wait">
+    <button id="pg-run" class="w-full pg-run-btn py-3">
       <span class="pg-run-label">▶ <span class="en">Run</span><span class="zh">运行</span></span>
     </button>
 
     <div id="pg-result-area" class="mt-5 hidden">
-      <div class="flex justify-between items-center mb-2 text-xs font-mono text-ink-700/60">
+      <div class="flex justify-between items-center mb-2 text-xs font-mono" style="color:#677489">
         <span id="pg-meta">—</span>
         <button id="pg-copy" class="text-violet hover:underline">Copy</button>
       </div>
@@ -163,7 +185,7 @@
       </div>
     </div>
 
-    <p class="text-xs text-ink-700/55 mt-4 leading-relaxed">
+    <p class="text-xs mt-4 leading-relaxed" style="color:#677489;opacity:0.8">
       <span class="en">⚠️ Browser-side calls expose the key in your network tab — fine for testing, use server-side for production. Browser tools (<code class="mono">novada_browser*</code>) and PDF extraction need <code class="mono">npx novada-mcp</code> locally.</span>
       <span class="zh">⚠️ 浏览器调用会在网络请求里暴露密钥 —— 测试无所谓,生产环境请走服务端。浏览器类工具 (<code class="mono">novada_browser*</code>) 与 PDF 解析需在本地用 <code class="mono">npx novada-mcp</code>。</span>
     </p>
@@ -171,11 +193,11 @@
 
   <!-- How to use in your own agent -->
   <div class="mt-8 text-center">
-    <p class="text-sm text-ink-700/70">
+    <p class="text-sm" style="color:#677489">
       <span class="en">Like what you see? Add it to your AI client in 30 seconds →</span>
       <span class="zh">喜欢?30 秒接入你的 AI 客户端 →</span>
     </p>
-    <a href="/#install" class="inline-flex items-center justify-center mt-3 border border-violet-100 hover:border-violet text-ink hover:text-violet font-semibold px-6 py-2.5 rounded-xl transition">
+    <a href="/#install" class="inline-flex items-center justify-center mt-3 border border-violet-100 hover:border-violet hover:text-violet font-semibold px-6 py-2.5 rounded-[10px] transition" style="color:#0a142f">
       <span class="en">Install guide</span><span class="zh">查看接入指南</span>
     </a>
   </div>
@@ -206,15 +228,25 @@
   const keyStatus = document.getElementById('pg-key-status');
   const isZh = () => document.body.classList.contains('lang-zh');
 
+  // Tool-runner element refs — declared here (before refreshKeyStatus runs) so
+  // syncRunButton can safely reference pgRunBtn during the initial load call.
+  const pgToolsEl = document.getElementById('pg-tools');
+  const pgArgsEl = document.getElementById('pg-args');
+  const pgRunBtn = document.getElementById('pg-run');
+  const pgResultArea = document.getElementById('pg-result-area');
+  const pgOutput = document.getElementById('pg-output');
+  const pgMeta = document.getElementById('pg-meta');
+  let pgCurrentTool = 'novada_search';
+
   function hasKey() { return tokenInput.value.trim().length > 0; }
 
   function refreshKeyStatus() {
     if (!hasKey()) {
       keyStatus.textContent = isZh() ? '需要密钥' : 'KEY REQUIRED';
-      keyStatus.className = 'text-xs font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-700';
+      keyStatus.className = 'text-xs font-mono px-2 py-0.5 rounded-full pg-key-required';
     } else {
       keyStatus.textContent = isZh() ? '已就绪 · 独享配额' : 'READY · your quota';
-      keyStatus.className = 'text-xs font-mono px-2 py-0.5 rounded-full bg-mint-50 text-mint-600';
+      keyStatus.className = 'text-xs font-mono px-2 py-0.5 rounded-full pg-key-ready';
     }
     if (typeof syncRunButton === 'function') syncRunButton();
   }
@@ -284,18 +316,10 @@
       build: () => ({ query: document.getElementById('pg-q').value, depth: document.getElementById('pg-depth-mode').value }),
     },
     novada_discover: {
-      render: () => `<p class="text-xs text-ink-700/55" style="margin:8px 0;">${isZh() ? '列出所有可用的 Novada 工具(无参数)。' : 'List all available Novada tools (no arguments).'}</p>`,
+      render: () => `<p class="text-xs" style="color:#677489;margin:8px 0;">${isZh() ? '列出所有可用的 Novada 工具(无参数)。' : 'List all available Novada tools (no arguments).'}</p>`,
       build: () => ({}),
     },
   };
-
-  const pgToolsEl = document.getElementById('pg-tools');
-  const pgArgsEl = document.getElementById('pg-args');
-  const pgRunBtn = document.getElementById('pg-run');
-  const pgResultArea = document.getElementById('pg-result-area');
-  const pgOutput = document.getElementById('pg-output');
-  const pgMeta = document.getElementById('pg-meta');
-  let pgCurrentTool = 'novada_search';
 
   function pgRenderArgs() { pgArgsEl.innerHTML = PG_TOOLS[pgCurrentTool]?.render() ?? ''; }
   pgRenderArgs();
