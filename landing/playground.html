@@ -100,16 +100,17 @@
     </p>
   </div>
 
-  <!-- API KEY (first-class) -->
+  <!-- API KEY (required — customer brings their own) -->
   <div id="pg-key-card" class="border border-violet-100 rounded-2xl p-5 sm:p-6 mb-6 bg-white">
     <div class="flex items-center justify-between mb-2">
       <label class="text-sm font-semibold text-ink">
         <span class="en">Your API key</span><span class="zh">你的 API 密钥</span>
+        <span class="text-violet">*</span>
       </label>
       <span id="pg-key-status" class="text-xs font-mono px-2 py-0.5 rounded-full"></span>
     </div>
     <div class="flex gap-2">
-      <input id="pg-token" type="text" autocomplete="off" spellcheck="false"
+      <input id="pg-token" type="password" autocomplete="off" spellcheck="false"
              placeholder="sk-eu-novada-..."
              class="pg-input flex-1" />
       <button id="pg-save-key" class="px-4 py-2 text-sm font-semibold bg-ink hover:bg-violet text-white rounded-lg transition whitespace-nowrap">
@@ -118,17 +119,12 @@
     </div>
     <div class="flex items-center justify-between mt-2 flex-wrap gap-2">
       <p class="text-xs text-ink-700/55">
-        <span class="en">Stored only in your browser (localStorage). Never sent to Novada except as the call token.</span>
-        <span class="zh">仅保存在你的浏览器本地 (localStorage),除作为调用 token 外不会发送给 Novada。</span>
+        <span class="en">Required. Stored only in your browser (localStorage) — never sent to Novada except as your own call token. Get one free at the link →</span>
+        <span class="zh">必填。仅保存在你的浏览器本地 (localStorage) — 除作为你自己的调用 token 外不会发送给 Novada。点右侧免费获取 →</span>
       </p>
-      <div class="flex items-center gap-3 text-xs">
-        <button id="pg-use-demo" class="text-violet hover:underline">
-          <span class="en">Use shared demo key</span><span class="zh">用共享演示密钥</span>
-        </button>
-        <a href="https://dashboard.novada.com/sign-up/" class="text-violet hover:underline font-semibold">
-          <span class="en">Get a free key →</span><span class="zh">免费获取密钥 →</span>
-        </a>
-      </div>
+      <a href="https://dashboard.novada.com/sign-up/" class="text-xs text-violet hover:underline font-semibold whitespace-nowrap">
+        <span class="en">Get a free key →</span><span class="zh">免费获取密钥 →</span>
+      </a>
     </div>
   </div>
 
@@ -203,43 +199,41 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
   }
 
-  // ─── API key management ──────────────────────────────────────
+  // ─── API key management (customer's own key — no demo key) ──────
   const PG_ENDPOINT = 'https://mcp.novada.com/mcp';
-  const DEMO_TOKEN = 'sk-eu-novada-playground-demo';
   const LS_KEY = 'novada_mcp_api_key';
   const tokenInput = document.getElementById('pg-token');
   const keyStatus = document.getElementById('pg-key-status');
   const isZh = () => document.body.classList.contains('lang-zh');
 
+  function hasKey() { return tokenInput.value.trim().length > 0; }
+
   function refreshKeyStatus() {
-    const v = tokenInput.value.trim();
-    if (!v || v === DEMO_TOKEN) {
-      keyStatus.textContent = isZh() ? 'DEMO · 共享配额' : 'DEMO · shared quota';
+    if (!hasKey()) {
+      keyStatus.textContent = isZh() ? '需要密钥' : 'KEY REQUIRED';
       keyStatus.className = 'text-xs font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-700';
     } else {
-      keyStatus.textContent = isZh() ? '已保存 · 独享配额' : 'SAVED · private quota';
+      keyStatus.textContent = isZh() ? '已就绪 · 独享配额' : 'READY · your quota';
       keyStatus.className = 'text-xs font-mono px-2 py-0.5 rounded-full bg-mint-50 text-mint-600';
     }
+    if (typeof syncRunButton === 'function') syncRunButton();
   }
 
-  // Load saved key on page open
+  // Load saved key on page open (only the customer's own previously-saved key).
   const saved = localStorage.getItem(LS_KEY);
-  tokenInput.value = saved || DEMO_TOKEN;
+  tokenInput.value = saved || '';
   refreshKeyStatus();
 
   document.getElementById('pg-save-key').addEventListener('click', () => {
     const v = tokenInput.value.trim();
-    if (v && v !== DEMO_TOKEN) {
+    if (v) {
       localStorage.setItem(LS_KEY, v);
       showToast(isZh() ? '密钥已保存到本地' : 'Key saved locally ✓');
     } else {
       localStorage.removeItem(LS_KEY);
-      showToast(isZh() ? '使用共享演示密钥' : 'Using shared demo key');
+      showToast(isZh() ? '已清除' : 'Cleared');
     }
     refreshKeyStatus();
-  });
-  document.getElementById('pg-use-demo').addEventListener('click', () => {
-    tokenInput.value = DEMO_TOKEN; localStorage.removeItem(LS_KEY); refreshKeyStatus();
   });
   tokenInput.addEventListener('input', refreshKeyStatus);
 
@@ -306,6 +300,15 @@
   function pgRenderArgs() { pgArgsEl.innerHTML = PG_TOOLS[pgCurrentTool]?.render() ?? ''; }
   pgRenderArgs();
 
+  // Disable Run until the customer enters a key.
+  function syncRunButton() {
+    pgRunBtn.disabled = !hasKey();
+    pgRunBtn.querySelector('.pg-run-label').innerHTML = hasKey()
+      ? '▶ ' + (isZh() ? '运行' : 'Run')
+      : (isZh() ? '↑ 先填入你的 API 密钥' : '↑ Enter your API key first');
+  }
+  syncRunButton();
+
   pgToolsEl.addEventListener('click', (e) => {
     const btn = e.target.closest('.pg-tool-pill');
     if (!btn) return;
@@ -316,7 +319,8 @@
   });
 
   pgRunBtn.addEventListener('click', async () => {
-    const token = (tokenInput.value || DEMO_TOKEN).trim();
+    const token = tokenInput.value.trim();
+    if (!token) { showToast(isZh() ? '请先填入你的 API 密钥' : 'Enter your API key first'); return; }
     let args; try { args = PG_TOOLS[pgCurrentTool].build(); } catch (e) { args = {}; }
     pgRunBtn.disabled = true;
     pgRunBtn.querySelector('.pg-run-label').innerHTML = '⏳ ' + (isZh() ? '运行中…' : 'Running…');
@@ -340,8 +344,7 @@
       pgMeta.textContent = 'network error';
       pgOutput.textContent = String(err);
     } finally {
-      pgRunBtn.disabled = false;
-      pgRunBtn.querySelector('.pg-run-label').innerHTML = '▶ ' + (isZh() ? '运行' : 'Run');
+      syncRunButton();
     }
   });
 
