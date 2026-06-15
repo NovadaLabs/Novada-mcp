@@ -226,9 +226,9 @@
         <span class="en">Playground</span><span class="zh">在线试玩</span>
       </a>
       <a href="#install" class="hover:text-violet">Install</a>
-      <a href="#tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
-      <a href="#free" class="hover:text-violet"><span class="en">Free tier</span><span class="zh">免费额度</span></a>
-      <a href="#faq" class="hover:text-violet">FAQ</a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
       <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
     </nav>
     <div class="flex items-center gap-3">
@@ -530,122 +530,6 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
   </div>
 </section>
 
-<!-- TOOLS GRID -->
-<section id="tools" class="py-20 bg-white">
-  <div class="max-w-6xl mx-auto px-5">
-    <div class="text-center mb-12">
-      <h2 class="text-3xl sm:text-4xl font-bold text-ink mb-3 display">
-        <span class="en">25 tools, one endpoint</span>
-        <span class="zh">25 个工具,一个端点</span>
-      </h2>
-      <p class="text-ink-700/70 max-w-2xl mx-auto">
-        <span class="en">Nine first-class data tools, six proxy variants, plus discover / research / verify — all callable through the same MCP URL with the same key.</span>
-        <span class="zh">9 个核心数据工具,6 种代理变体,外加发现 / 研究 / 验证 — 全部通过同一 MCP URL 与同一密钥调用。</span>
-      </p>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">🔍</div>
-        <div class="font-bold text-ink mono text-sm mb-1">search</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Web search across major engines.</span><span class="zh">主流引擎的网页搜索。</span></p>
-      </div>
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">📊</div>
-        <div class="font-bold text-ink mono text-sm mb-1">serp</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Structured Google / Bing SERP JSON.</span><span class="zh">结构化的 Google / Bing SERP JSON。</span></p>
-      </div>
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">🌐</div>
-        <div class="font-bold text-ink mono text-sm mb-1">scrape</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Single-URL clean markdown content.</span><span class="zh">单 URL 干净 Markdown 正文。</span></p>
-      </div>
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">📑</div>
-        <div class="font-bold text-ink mono text-sm mb-1">extract</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Schema-driven structured JSON.</span><span class="zh">按 schema 提取结构化 JSON。</span></p>
-      </div>
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">🗺️</div>
-        <div class="font-bold text-ink mono text-sm mb-1">map</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Discover all URLs on a site.</span><span class="zh">发现站点上所有 URL。</span></p>
-      </div>
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">🔄</div>
-        <div class="font-bold text-ink mono text-sm mb-1">crawl</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Multi-page crawl with depth control.</span><span class="zh">可控深度的多页面爬取。</span></p>
-      </div>
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">✓</div>
-        <div class="font-bold text-ink mono text-sm mb-1">verify</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Source check &amp; confidence scoring.</span><span class="zh">来源核验与置信度打分。</span></p>
-      </div>
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">🧭</div>
-        <div class="font-bold text-ink mono text-sm mb-1">discover</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Find related sources for a topic.</span><span class="zh">围绕主题发现相关来源。</span></p>
-      </div>
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">🧠</div>
-        <div class="font-bold text-ink mono text-sm mb-1">research</div>
-        <p class="text-sm text-ink-700/70"><span class="en">Deep multi-source research agent.</span><span class="zh">多源深度研究 Agent。</span></p>
-      </div>
-
-      <!-- Proxy block -->
-      <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5 sm:col-span-2 lg:col-span-3">
-        <div class="flex items-start gap-4">
-          <div class="text-2xl">🛡️</div>
-          <div class="flex-1">
-            <div class="font-bold text-ink mono text-sm mb-1">novada_proxy_* <span class="text-violet">×6</span></div>
-            <p class="text-sm text-ink-700/70 mb-3">
-              <span class="en">Six proxy products, one key: residential, datacenter, ISP, dedicated, static, universal.</span>
-              <span class="zh">一把钥匙,六种代理:住宅、机房、ISP、独享、静态、通用。</span>
-            </p>
-            <div class="flex flex-wrap gap-1.5">
-              <span class="pill bg-violet-50 text-violet">residential</span>
-              <span class="pill bg-violet-50 text-violet">datacenter</span>
-              <span class="pill bg-violet-50 text-violet">isp</span>
-              <span class="pill bg-violet-50 text-violet">dedicated</span>
-              <span class="pill bg-violet-50 text-violet">static</span>
-              <span class="pill bg-violet-50 text-violet">universal</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Browser tools — local-only callout -->
-      <div class="tool-card bg-white border border-violet-200 rounded-[10px] p-5">
-        <div class="text-2xl mb-2">🖥️</div>
-        <div class="font-bold text-ink mono text-sm mb-1">novada_browser<span class="text-ink-700/40"> *</span></div>
-        <p class="text-sm text-ink-700/70 mb-2"><span class="en">Headless browser + flow automation.</span><span class="zh">无头浏览器 + 流程自动化。</span></p>
-        <p class="text-xs text-violet font-medium">
-          <span class="en">* Local MCP only — see below</span>
-          <span class="zh">* 仅本地 MCP — 见下方</span>
-        </p>
-      </div>
-    </div>
-
-    <!-- Browser-tools / local fallback callout -->
-    <div class="mt-10 border border-violet-100 bg-violet-50 rounded-2xl p-6 sm:p-7 flex flex-col sm:flex-row items-start gap-5">
-      <div class="text-2xl">⚠️</div>
-      <div class="flex-1">
-        <h3 class="font-bold text-ink display mb-2">
-          <span class="en">Need headless browser tools? Install the local MCP.</span>
-          <span class="zh">需要无头浏览器工具?请安装本地 MCP。</span>
-        </h3>
-        <p class="text-sm text-ink-700/75 leading-relaxed mb-3">
-          <span class="en"><code class="mono bg-white px-1.5 py-0.5 rounded border border-violet-100">novada_browser</code> and <code class="mono bg-white px-1.5 py-0.5 rounded border border-violet-100">novada_browser_flow</code> return <code class="mono">501 NOT_AVAILABLE_ON_HOSTED</code> with an <code class="mono">agent_instruction</code> pointing here — Playwright doesn't run on serverless edge. Everything else runs on the hosted endpoint.</span>
-          <span class="zh"><code class="mono bg-white px-1.5 py-0.5 rounded border border-violet-100">novada_browser</code> 与 <code class="mono bg-white px-1.5 py-0.5 rounded border border-violet-100">novada_browser_flow</code> 在托管端返回 <code class="mono">501 NOT_AVAILABLE_ON_HOSTED</code>,并附带 <code class="mono">agent_instruction</code> 指引到本地 — Playwright 无法在 serverless edge 运行。其他工具均可直接在托管端使用。</span>
-        </p>
-        <div class="code-block max-w-md">
-          <button class="copy-btn" data-copy="npx novada-mcp">Copy</button>
-<pre class="mono"><span class="text-violet-200">$</span> npx novada-mcp</pre>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- WHY HOSTED -->
 <section class="py-20 bg-paper">
   <div class="max-w-6xl mx-auto px-5">
@@ -690,99 +574,6 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
   </div>
 </section>
 
-<!-- FREE TIER -->
-<section id="free" class="py-20 bg-white">
-  <div class="max-w-4xl mx-auto px-5">
-    <div class="bg-gradient-to-br from-ink to-ink-700 rounded-3xl p-10 sm:p-14 text-white relative overflow-hidden">
-      <div class="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-violet/30 blur-3xl"></div>
-      <div class="absolute -bottom-12 -left-12 w-64 h-64 rounded-full bg-violet/20 blur-3xl"></div>
-      <div class="relative">
-        <div class="text-violet-200 text-sm font-semibold uppercase tracking-wider mb-3">
-          <span class="en">Free tier</span><span class="zh">免费额度</span>
-        </div>
-        <div class="text-5xl sm:text-6xl font-bold mb-3 tracking-tight display">
-          <span class="en">1,000 calls<span class="text-violet-200">/month</span></span>
-          <span class="zh">每月 1,000 次<span class="text-violet-200"> 免费</span></span>
-        </div>
-        <p class="text-white/75 text-lg mb-6">
-          <span class="en">One unified Novada key. Same endpoint as paid usage. No credit card to start.</span>
-          <span class="zh">一把统一的 Novada 密钥。与付费版同端点。无需信用卡即可开始。</span>
-        </p>
-        <ul class="text-white/75 text-sm space-y-2 mb-8">
-          <li class="flex items-center gap-2"><span class="text-violet-200">✓</span> <span class="en">All 25 tools available (browser tools local-only)</span><span class="zh">25 个工具全部可用(浏览器类工具仅本地)</span></li>
-          <li class="flex items-center gap-2"><span class="text-violet-200">✓</span> <span class="en">60 requests / minute per IP</span><span class="zh">每 IP 60 次/分钟</span></li>
-          <li class="flex items-center gap-2"><span class="text-violet-200">✓</span> <span class="en">Hosted on Vercel Edge — global, auto-SSL</span><span class="zh">运行于 Vercel Edge — 全球节点,自动 SSL</span></li>
-          <li class="flex items-center gap-2"><span class="text-violet-200">✓</span> <span class="en">Same key works with <code class="mono">npx novada-mcp</code> locally</span><span class="zh">同一密钥可直接用于本地 <code class="mono">npx novada-mcp</code></span></li>
-        </ul>
-        <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="inline-flex items-center bg-violet hover:bg-violet-600 text-white font-bold px-7 py-3.5 rounded-xl shadow-lg shadow-violet/30 transition">
-          <span class="en">Get your API key →</span><span class="zh">获取你的 API 密钥 →</span>
-        </a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FAQ -->
-<section id="faq" class="py-20 bg-paper">
-  <div class="max-w-3xl mx-auto px-5">
-    <h2 class="text-3xl sm:text-4xl font-bold text-ink mb-10 display text-center">
-      <span class="en">FAQ</span><span class="zh">常见问题</span>
-    </h2>
-    <div class="space-y-3">
-      <details class="faq bg-white border border-violet-100 rounded-xl p-5">
-        <summary class="font-semibold text-ink">
-          <span class="en">How is this different from calling the Novada REST API directly?</span>
-          <span class="zh">这和直接调用 Novada REST API 有什么区别?</span>
-        </summary>
-        <p class="text-sm text-ink-700/75 mt-3 leading-relaxed">
-          <span class="en">The MCP endpoint exposes Novada tools through the Model Context Protocol so any MCP-compatible agent (Claude, Cursor, Cline, Codex…) can discover and call them with a structured contract — no client SDK, no per-tool wrapper code. Underneath, it dispatches to the same Novada backend.</span>
-          <span class="zh">MCP 端点通过 Model Context Protocol 暴露 Novada 工具,任何兼容 MCP 的 Agent(Claude、Cursor、Cline、Codex 等)都能以结构化协议自动发现与调用 — 无需客户端 SDK,无需逐工具封装代码。底层仍由 Novada 后端处理。</span>
-        </p>
-      </details>
-      <details class="faq bg-white border border-violet-100 rounded-xl p-5">
-        <summary class="font-semibold text-ink">
-          <span class="en">Do I need a separate key for MCP?</span>
-          <span class="zh">MCP 需要单独的密钥吗?</span>
-        </summary>
-        <p class="text-sm text-ink-700/75 mt-3 leading-relaxed">
-          <span class="en">No. The same Novada API key works for the hosted MCP, the local <code class="mono">npx novada-mcp</code>, and the REST API. Quota counters are per token.</span>
-          <span class="zh">不需要。同一把 Novada API Key 同时适用于托管 MCP、本地 <code class="mono">npx novada-mcp</code> 与 REST API。额度按 Token 计算。</span>
-        </p>
-      </details>
-      <details class="faq bg-white border border-violet-100 rounded-xl p-5">
-        <summary class="font-semibold text-ink">
-          <span class="en">Why can't I use browser tools on the hosted endpoint?</span>
-          <span class="zh">为什么托管端无法使用浏览器工具?</span>
-        </summary>
-        <p class="text-sm text-ink-700/75 mt-3 leading-relaxed">
-          <span class="en">Headless browsers (Playwright) don't run inside serverless edge functions. The hosted endpoint returns <code class="mono">501</code> with an <code class="mono">agent_instruction</code> telling the agent to switch to the local MCP via <code class="mono">npx novada-mcp</code> — same key, same tool names.</span>
-          <span class="zh">无头浏览器(Playwright)无法在 serverless 边缘函数中运行。托管端会返回 <code class="mono">501</code> 并附带 <code class="mono">agent_instruction</code>,引导 Agent 切换到本地 MCP <code class="mono">npx novada-mcp</code> — 同一密钥、同一工具名。</span>
-        </p>
-      </details>
-      <details class="faq bg-white border border-violet-100 rounded-xl p-5">
-        <summary class="font-semibold text-ink">
-          <span class="en">Can I send the key as a header instead of a URL query?</span>
-          <span class="zh">能否用请求头代替 URL 查询参数传递密钥?</span>
-        </summary>
-        <p class="text-sm text-ink-700/75 mt-3 leading-relaxed">
-          <span class="en">Yes. <code class="mono">Authorization: Bearer YOUR_API_KEY</code> against <code class="mono">https://mcp.novada.com/mcp</code> works identically. Prefer the header when sharing screens or storing client configs in repos.</span>
-          <span class="zh">可以。对 <code class="mono">https://mcp.novada.com/mcp</code> 使用 <code class="mono">Authorization: Bearer YOUR_API_KEY</code> 效果相同。分享屏幕或将客户端配置纳入仓库时,推荐使用请求头方式。</span>
-        </p>
-      </details>
-      <details class="faq bg-white border border-violet-100 rounded-xl p-5">
-        <summary class="font-semibold text-ink">
-          <span class="en">What's the difference between hosted and <code class="mono">npx novada-mcp</code>?</span>
-          <span class="zh">托管版与 <code class="mono">npx novada-mcp</code> 有何不同?</span>
-        </summary>
-        <p class="text-sm text-ink-700/75 mt-3 leading-relaxed">
-          <span class="en">Hosted = zero install, paste-a-URL, always latest, but no browser tools. Local <code class="mono">npx novada-mcp</code> = runs everything including Playwright browser flows, works offline-from-cloud, but you manage updates yourself.</span>
-          <span class="zh">托管版 = 零安装、粘贴 URL、始终最新,但不支持浏览器工具。本地 <code class="mono">npx novada-mcp</code> = 全功能含 Playwright 浏览器流程、可离线使用,但需自行管理更新。</span>
-        </p>
-      </details>
-    </div>
-  </div>
-</section>
-
 <!-- FOOTER -->
 <footer class="bg-ink text-white/65 py-12">
   <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -792,9 +583,9 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
     </div>
     <nav class="flex flex-wrap items-center gap-6 text-sm">
       <a href="#install" class="hover:text-violet"><span class="en">Install</span><span class="zh">接入</span></a>
-      <a href="#tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
-      <a href="#free" class="hover:text-violet"><span class="en">Free tier</span><span class="zh">免费额度</span></a>
-      <a href="#faq" class="hover:text-violet">FAQ</a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
       <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
       <a href="https://www.npmjs.com/package/novada-mcp" class="hover:text-violet">npm</a>
     </nav>

@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tools — Novada MCP</title>
+<meta name="description" content="All 26 Novada MCP tools — search, SERP, scrape, extract, crawl, map, research, verify, discover, async scraper API, 6 proxy types, and local browser tools — through one endpoint." />
+<link rel="canonical" href="https://mcp.novada.com/tools" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Novada MCP" />
+<meta property="og:title" content="Tools — Novada MCP" />
+<meta property="og:description" content="26 tools across search, scraping, crawling, research, async scraper API, 6 proxy types, and browser automation. One endpoint, one key." />
+<meta property="og:url" content="https://mcp.novada.com/tools" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Tools — Novada MCP" />
+<meta name="twitter:description" content="26 tools across search, scraping, crawling, research, proxies, and browser automation. One endpoint, one key." />
+<meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
+          ink: { DEFAULT: '#191228', text: '#0a142f', 800: '#161226', 700: '#251f3d' },
+          slate: '#677489',
+          paper: '#ffffff',
+          'tint-cool': '#f7f8fc',
+        },
+        fontFamily: {
+          display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          sans: ['IBM Plex Sans', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #0a142f; background: #ffffff; }
+  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
+  body.lang-en .zh { display: none !important; }
+  body.lang-zh .en { display: none !important; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  /* Light periwinkle-wash hero, matching novada.com */
+  .grad-hero {
+    background: linear-gradient(180deg, #ffffff 0%, rgba(174,179,217,0.35) 55%, #ffffff 100%);
+  }
+  /* Purple gradient highlight (clipped to text) — novada.com signature */
+  .grad-text {
+    background: linear-gradient(45deg, #9863f0 0%, #6c40e2 51%, #431fd5 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .code-block {
+    background: #191228; color: #e9e4ff; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; position: relative;
+  }
+  .code-block pre { padding: 18px 56px 18px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.65; }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(255,255,255,0.08); color: #e9e4ff;
+    border: 1px solid rgba(255,255,255,0.18);
+    padding: 6px 10px; border-radius: 8px; font-size: 12px;
+    transition: all .15s ease; cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .copy-btn:hover { background: #6c40e2; border-color: #6c40e2; color: #0c0a17; }
+  .copy-btn.copied { background: #6c40e2; border-color: #6c40e2; color: #0c0a17; }
+  .tab-btn {
+    padding: 9px 14px; border-radius: 10px; font-weight: 500; font-size: 14px;
+    color: #4b4565; cursor: pointer; transition: all .15s ease;
+    white-space: nowrap; border: 1px solid transparent;
+  }
+  .tab-btn:hover { color: #0c0a17; background: #f1edff; }
+  .tab-btn.active { background: #0c0a17; color: white; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .tool-card {
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .tool-card:hover {
+    transform: translateY(-2px);
+    box-shadow: rgba(18,17,39,0.10) 0px 14px 50px 0px;
+    border-color: #5b2eeb;
+  }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #0c0a17; color: white; padding: 10px 18px; border-radius: 10px;
+    font-size: 14px; opacity: 0; pointer-events: none;
+    transition: all .2s ease; z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .panel-mock {
+    background: white; border-radius: 10px; padding: 22px;
+    border: 1px solid #e7e2f5;
+    box-shadow: rgba(18,17,39,0.08) 0px 10px 50px 0px;
+  }
+  .panel-mock .row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #f3effd; }
+  .panel-mock .row:last-child { border-bottom: none; }
+  .panel-mock label { width: 80px; color: #6b6483; font-size: 13px; font-weight: 500; }
+  .panel-mock .val { flex: 1; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #0c0a17; word-break: break-all; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  details.faq summary { list-style: none; cursor: pointer; }
+  details.faq summary::-webkit-details-marker { display: none; }
+  details.faq summary::after { content: '+'; float: right; font-weight: 300; font-size: 22px; line-height: 1; color: #5b2eeb; transition: transform .2s ease; }
+  details.faq[open] summary::after { content: '−'; }
+
+  /* ─── Playground ─────────────────────────────────────────────── */
+  .pg-tool-pill {
+    padding: 10px 8px; border-radius: 10px; font-size: 13px;
+    font-weight: 500; cursor: pointer; transition: all .15s ease;
+    background: white; border: 1px solid #e7e2f5; color: #251f3d;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .pg-tool-pill:hover { border-color: #5b2eeb; color: #5b2eeb; }
+  .pg-tool-pill.pg-active { background: #0c0a17; color: white; border-color: #0c0a17; }
+  .pg-input {
+    width: 100%; padding: 10px 12px; font-size: 14px;
+    border: 1px solid #e7e2f5; border-radius: 8px; background: white;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .pg-input:focus { outline: none; border-color: #5b2eeb; box-shadow: 0 0 0 3px rgba(91,46,235,0.12); }
+  .pg-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pg-input-row .pg-input { flex: 1; min-width: 140px; }
+  .pg-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b6483; margin-bottom: 4px; font-weight: 600; }
+  #pg-output { padding: 16px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+
+  /* ─── Tools page specific ─────────────────────────────────────── */
+  .category-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 700; color: #6c40e2; margin-bottom: 12px;
+  }
+  .tool-name-badge {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px; font-weight: 600;
+    color: #0a142f;
+    background: #f5eeff;
+    border: 1px solid #e3daff;
+    border-radius: 6px;
+    padding: 2px 8px;
+    margin-bottom: 8px;
+  }
+  .async-badge {
+    display: inline-flex; align-items: center;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+    text-transform: uppercase; color: #431fd5;
+    background: #e3daff; border-radius: 4px;
+    padding: 2px 6px; margin-left: 6px; vertical-align: middle;
+  }
+  .local-badge {
+    display: inline-flex; align-items: center;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+    text-transform: uppercase; color: #b45309;
+    background: #fef3c7; border-radius: 4px;
+    padding: 2px 6px; margin-left: 6px; vertical-align: middle;
+  }
+</style>
+</head>
+<body class="lang-en">
+
+<!-- HEADER -->
+<header class="sticky top-0 z-50 bg-paper/90 backdrop-blur border-b border-violet-100">
+  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-ink-700">
+      <a href="/playground" class="inline-flex items-center gap-1.5 text-violet font-semibold hover:text-violet-600">
+        <span class="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"></span>
+        <span class="en">Playground</span><span class="zh">在线试玩</span>
+      </a>
+      <a href="/#install" class="hover:text-violet"><span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools" class="text-violet font-semibold"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">定价</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
+        <span class="en">Get API key</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- PAGE HERO -->
+<section class="grad-hero">
+  <div class="max-w-6xl mx-auto px-5 pt-16 pb-14 text-center">
+    <div class="inline-flex items-center gap-2 bg-white border border-violet-100 rounded-full px-4 py-1.5 text-xs font-medium mb-7 shadow-sm" style="color:#677489">
+      <span class="w-2 h-2 rounded-full bg-violet animate-pulse shrink-0"></span>
+      <span class="en">26 tools · one endpoint · one key</span>
+      <span class="zh">26 个工具 · 一个端点 · 一把密钥</span>
+    </div>
+    <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.05] mb-5 display" style="color:#0a142f">
+      <span class="en"><span class="grad-text">Tool Reference</span></span>
+      <span class="zh"><span class="grad-text">工具参考手册</span></span>
+    </h1>
+    <p class="text-base sm:text-lg max-w-2xl mx-auto mb-6 leading-relaxed" style="color:#677489">
+      <span class="en">All 26 tools callable through one endpoint: <code class="mono text-violet text-sm">https://mcp.novada.com/mcp</code> with your API key. See <a href="/#install" class="underline hover:text-violet-600">Install</a>.</span>
+      <span class="zh">全部 26 个工具均通过同一端点调用:<code class="mono text-violet text-sm">https://mcp.novada.com/mcp</code>,搭配你的 API 密钥即可。查看<a href="/#install" class="underline hover:text-violet-600">接入指南</a>。</span>
+    </p>
+    <!-- Quick stats row -->
+    <div class="flex flex-wrap justify-center gap-6 text-sm" style="color:#677489">
+      <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-violet"></span>
+        <span class="en">9 data tools</span><span class="zh">9 个数据工具</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-violet"></span>
+        <span class="en">3 async scraper tools</span><span class="zh">3 个异步抓取工具</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-violet"></span>
+        <span class="en">7 proxy tools</span><span class="zh">7 个代理工具</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:#b45309"></span>
+        <span class="en">2 local-only browser tools</span><span class="zh">2 个仅本地浏览器工具</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN CONTENT -->
+<main class="py-16 bg-paper">
+  <div class="max-w-6xl mx-auto px-5 space-y-16">
+
+    <!-- ─── SEARCH & SERP ──────────────────────────────────────── -->
+    <section>
+      <div class="category-label">
+        <span class="en">Search &amp; SERP</span>
+        <span class="zh">搜索与 SERP</span>
+      </div>
+      <h2 class="text-2xl font-bold text-ink display mb-2">
+        <span class="en">Search &amp; SERP</span>
+        <span class="zh">搜索与 SERP</span>
+      </h2>
+      <p class="text-sm text-ink-700/65 mb-6 max-w-2xl">
+        <span class="en">Query the web and retrieve structured search engine results. Use <code class="mono">search</code> for general content retrieval; use <code class="mono">serp</code> when you need raw, structured SERP JSON for analysis or ranking tasks.</span>
+        <span class="zh">查询网络内容或获取结构化搜索引擎结果。通用内容获取用 <code class="mono">search</code>;需要原始结构化 SERP JSON 用于分析或排名任务时使用 <code class="mono">serp</code>。</span>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- search -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">search</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Web search across major engines. Returns clean text results with titles, URLs, and snippets. The primary tool for any question-answering or research task that starts from the open web.</span>
+            <span class="zh">跨主流引擎的网页搜索。返回带标题、URL 和摘要的纯文本结果。适合从公开网络出发的问答或研究任务。</span>
+          </p>
+        </div>
+        <!-- serp -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">serp</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Structured Google / Bing SERP JSON. Returns organic results, ads, featured snippets, knowledge panels, and related searches as typed objects — ideal for SEO analysis and competitive intelligence.</span>
+            <span class="zh">结构化的 Google / Bing SERP JSON。返回自然结果、广告、精选摘要、知识面板和相关搜索的类型化对象 — 适合 SEO 分析和竞争情报。</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── SCRAPE & EXTRACT ───────────────────────────────────── -->
+    <section>
+      <div class="category-label">
+        <span class="en">Scrape &amp; Extract</span>
+        <span class="zh">抓取与提取</span>
+      </div>
+      <h2 class="text-2xl font-bold text-ink display mb-2">
+        <span class="en">Scrape &amp; Extract</span>
+        <span class="zh">抓取与提取</span>
+      </h2>
+      <p class="text-sm text-ink-700/65 mb-6 max-w-2xl">
+        <span class="en">Turn any URL into structured data. <code class="mono">scrape</code> gives clean Markdown prose; <code class="mono">extract</code> applies a schema to produce typed JSON fields; <code class="mono">unblock</code> handles JS-heavy or bot-protected pages by returning the fully rendered HTML.</span>
+        <span class="zh">将任意 URL 转化为结构化数据。<code class="mono">scrape</code> 输出干净的 Markdown 正文;<code class="mono">extract</code> 按 schema 生成类型化 JSON 字段;<code class="mono">unblock</code> 处理 JS 渲染或有反爬保护的页面并返回完整 HTML。</span>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- scrape -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">scrape</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Single-URL clean Markdown content. Strips nav, ads, and boilerplate. Returns the main body in Markdown, ready to pass directly to an LLM context window.</span>
+            <span class="zh">单 URL 干净 Markdown 正文。去除导航、广告与无关内容,将主体内容以 Markdown 返回,可直接写入 LLM 上下文窗口。</span>
+          </p>
+        </div>
+        <!-- extract -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">extract</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Schema-driven structured JSON extraction. Define the fields you want (e.g. price, title, date, author) and get back a typed JSON object — no XPath or CSS selectors needed.</span>
+            <span class="zh">按 schema 提取结构化 JSON。定义所需字段(如价格、标题、日期、作者),返回类型化 JSON 对象 — 无需 XPath 或 CSS 选择器。</span>
+          </p>
+        </div>
+        <!-- unblock -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">unblock</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Raw rendered HTML of blocked or JS-heavy pages. Bypasses common bot protection to return the fully rendered DOM — use when <code class="mono">scrape</code> returns incomplete content.</span>
+            <span class="zh">返回被封锁或 JS 渲染页面的完整 HTML。绕过常见反爬机制并返回完整渲染的 DOM — 当 <code class="mono">scrape</code> 返回内容不完整时使用。</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── CRAWL & MAP ────────────────────────────────────────── -->
+    <section>
+      <div class="category-label">
+        <span class="en">Crawl &amp; Map</span>
+        <span class="zh">爬取与站点地图</span>
+      </div>
+      <h2 class="text-2xl font-bold text-ink display mb-2">
+        <span class="en">Crawl &amp; Map</span>
+        <span class="zh">爬取与站点地图</span>
+      </h2>
+      <p class="text-sm text-ink-700/65 mb-6 max-w-2xl">
+        <span class="en">Explore entire sites rather than a single page. <code class="mono">map</code> discovers all reachable URLs; <code class="mono">crawl</code> fetches and returns the content at each URL with configurable depth and scope.</span>
+        <span class="zh">探索整个网站而非单页。<code class="mono">map</code> 发现所有可达 URL;<code class="mono">crawl</code> 以可配置的深度和范围抓取并返回每个 URL 的内容。</span>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- crawl -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">crawl</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Multi-page crawl with depth control. Follows internal links from a seed URL and returns clean Markdown for each page up to the configured depth and page limit. Respects <code class="mono">robots.txt</code> by default.</span>
+            <span class="zh">可控深度的多页面爬取。从种子 URL 跟踪内部链接,并在配置的深度与页数限制内返回每页的干净 Markdown。默认遵守 <code class="mono">robots.txt</code>。</span>
+          </p>
+        </div>
+        <!-- map -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">map</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Discover all URLs on a site. Returns a flat list of reachable URLs from the given root — useful as a first step before targeted scraping or to audit site structure.</span>
+            <span class="zh">发现站点上所有 URL。从给定根 URL 返回可达 URL 的平铺列表 — 适合定向抓取前的前置步骤或站点结构审计。</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── RESEARCH & VERIFY ─────────────────────────────────── -->
+    <section>
+      <div class="category-label">
+        <span class="en">Research &amp; Verify</span>
+        <span class="zh">研究与验证</span>
+      </div>
+      <h2 class="text-2xl font-bold text-ink display mb-2">
+        <span class="en">Research &amp; Verify</span>
+        <span class="zh">研究与验证</span>
+      </h2>
+      <p class="text-sm text-ink-700/65 mb-6 max-w-2xl">
+        <span class="en">Higher-level intelligence tools: autonomous multi-source research, fact-checking with confidence scoring, source discovery, AI brand monitoring, and real-time page change detection.</span>
+        <span class="zh">高级智能工具:自主多源研究、带置信度评分的事实核查、来源发现、AI 品牌监测及实时页面变更检测。</span>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- research -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">research</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Deep multi-source research agent. Searches, fetches, and synthesizes information from multiple sources into a coherent answer with citations — equivalent to a junior analyst pass over the web.</span>
+            <span class="zh">多源深度研究 Agent。搜索、抓取并综合多个来源的信息,输出带引用的完整答案 — 相当于初级分析师的网络检索汇总。</span>
+          </p>
+        </div>
+        <!-- verify -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">verify</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Source check and confidence scoring. Given a claim, searches the web for corroborating or contradicting evidence and returns a confidence score with supporting sources.</span>
+            <span class="zh">来源核验与置信度打分。针对给定声明,搜索网络中的支持或反驳证据,并返回带来源的置信度评分。</span>
+          </p>
+        </div>
+        <!-- discover -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">discover</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Find related sources for a topic. Given a seed URL or topic, surfaces authoritative sources, similar sites, and key references — useful for building a corpus or competitive research.</span>
+            <span class="zh">围绕主题发现相关来源。给定种子 URL 或主题,挖掘权威来源、相似网站和关键参考 — 适合构建语料库或竞争调研。</span>
+          </p>
+        </div>
+        <!-- ai_monitor -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">ai_monitor</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Monitor how AI models reference a brand. Tracks mentions, sentiment, and positioning of a brand or product across AI-generated content and model outputs over time.</span>
+            <span class="zh">监测 AI 模型如何引用品牌。追踪品牌或产品在 AI 生成内容和模型输出中的提及、情感倾向和定位变化。</span>
+          </p>
+        </div>
+        <!-- monitor -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">monitor</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Detect page changes over time. Periodically checks a URL for content changes and surfaces diffs — useful for price tracking, news alerts, or compliance monitoring.</span>
+            <span class="zh">检测页面随时间的变化。定期检查 URL 内容并输出差异 — 适合价格追踪、新闻提醒或合规监控。</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── SCRAPER API (ASYNC) ───────────────────────────────── -->
+    <section>
+      <div class="category-label">
+        <span class="en">Scraper API — Async</span>
+        <span class="zh">Scraper API — 异步</span>
+      </div>
+      <h2 class="text-2xl font-bold text-ink display mb-2">
+        <span class="en">Scraper API <span class="async-badge">Async</span></span>
+        <span class="zh">Scraper API <span class="async-badge">异步</span></span>
+      </h2>
+      <p class="text-sm text-ink-700/65 mb-6 max-w-2xl">
+        <span class="en">Task-based async structured scraping of 129+ platforms (Amazon, LinkedIn, Google Maps, …). Submit a job, poll for status, retrieve the result — designed for high-volume or slow-rendering targets that would time out in a synchronous call.</span>
+        <span class="zh">基于任务的异步结构化抓取,支持 129+ 平台(亚马逊、LinkedIn、谷歌地图等)。提交任务 → 轮询状态 → 获取结果 — 专为高并发或渲染慢的目标设计,避免同步调用超时。</span>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- scraper_submit -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">scraper_submit</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Submit an async scraper task. Specify the target platform and parameters; returns a <code class="mono">task_id</code> immediately. The task runs in the background across Novada's scraper infrastructure.</span>
+            <span class="zh">提交异步抓取任务。指定目标平台与参数,立即返回 <code class="mono">task_id</code>。任务在 Novada 抓取基础设施后台运行。</span>
+          </p>
+        </div>
+        <!-- scraper_status -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">scraper_status</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Poll a task's status by <code class="mono">task_id</code>. Returns <code class="mono">pending</code>, <code class="mono">running</code>, <code class="mono">completed</code>, or <code class="mono">failed</code>. Call this before retrieving results to avoid wasted quota.</span>
+            <span class="zh">通过 <code class="mono">task_id</code> 轮询任务状态。返回 <code class="mono">pending</code>、<code class="mono">running</code>、<code class="mono">completed</code> 或 <code class="mono">failed</code>。取结果前先调用以避免消耗额度。</span>
+          </p>
+        </div>
+        <!-- scraper_result -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">scraper_result</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Retrieve the completed result for a task. Returns the structured JSON payload from the scraper — platform-specific schema (product data, listing data, review data, etc.).</span>
+            <span class="zh">获取已完成任务的结果。返回抓取器输出的结构化 JSON — 根据平台有特定 schema(商品数据、列表数据、评论数据等)。</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── PROXIES ────────────────────────────────────────────── -->
+    <section>
+      <div class="category-label">
+        <span class="en">Proxies</span>
+        <span class="zh">代理</span>
+      </div>
+      <h2 class="text-2xl font-bold text-ink display mb-2">
+        <span class="en">Proxies <span class="text-violet font-semibold">×7</span></span>
+        <span class="zh">代理工具 <span class="text-violet font-semibold">×7</span></span>
+      </h2>
+      <p class="text-sm text-ink-700/65 mb-6 max-w-2xl">
+        <span class="en">One key unlocks six distinct proxy products plus a universal router. All tools share the same parameter surface — pass a URL and optional country/session parameters; get back the proxied response. 195+ countries, 100M+ residential IPs, sub-second rotation.</span>
+        <span class="zh">一把密钥解锁六种代理产品,外加一个通用路由器。所有工具参数一致 — 传入 URL 及可选的国家/会话参数,返回代理响应。覆盖 195+ 国家,1 亿+ 住宅 IP,毫秒级轮换。</span>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <!-- novada_proxy -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">novada_proxy</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Universal proxy router. Automatically selects the best proxy type for the target URL — the recommended default for agents that don't need to specify a product explicitly.</span>
+            <span class="zh">通用代理路由器。自动为目标 URL 选择最佳代理类型 — 适合无需显式指定产品的 Agent 的推荐默认选项。</span>
+          </p>
+        </div>
+        <!-- residential -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">novada_proxy_residential</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Residential proxies. Routes requests through real consumer IP addresses. Highest trust score for geo-sensitive or heavily protected targets. 100M+ IPs across 195+ countries.</span>
+            <span class="zh">住宅代理。通过真实消费者 IP 路由请求。对地理敏感或重度保护目标信任度最高。195+ 国家,1 亿+ IP。</span>
+          </p>
+        </div>
+        <!-- datacenter -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">novada_proxy_datacenter</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Datacenter proxies. Fast, high-throughput proxies from commercial data centers. Best for speed-sensitive bulk crawls where residential trust level is not required.</span>
+            <span class="zh">机房代理。来自商业数据中心的高速、高吞吐代理。适合不需要住宅级信任、对速度敏感的批量爬取。</span>
+          </p>
+        </div>
+        <!-- ISP -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">novada_proxy_isp</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">ISP proxies. Static IPs assigned by real ISPs — combines the trust profile of residential IPs with the stability and speed of datacenter infrastructure.</span>
+            <span class="zh">ISP 代理。由真实 ISP 分配的静态 IP — 兼具住宅 IP 的信任度与机房基础设施的稳定性和速度。</span>
+          </p>
+        </div>
+        <!-- dedicated -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">novada_proxy_dedicated</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Dedicated datacenter proxies. Exclusive IPs not shared with other users. Ideal for targets that blacklist shared IPs or for workflows requiring consistent session identity.</span>
+            <span class="zh">独享机房代理。不与其他用户共享的专用 IP。适合将共享 IP 列入黑名单的目标,或需要一致会话身份的工作流。</span>
+          </p>
+        </div>
+        <!-- static -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">novada_proxy_static</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Static residential proxies. Long-lived residential IPs that persist across requests — use when a site tracks session continuity or requires login state to be maintained.</span>
+            <span class="zh">静态住宅代理。跨请求持久存在的长效住宅 IP — 适用于追踪会话连续性或需要保持登录状态的网站。</span>
+          </p>
+        </div>
+        <!-- mobile -->
+        <div class="tool-card bg-paper border border-violet-100 rounded-[10px] p-5">
+          <div class="tool-name-badge">novada_proxy_mobile</div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Mobile carrier proxies. Routes through 4G/5G mobile network IPs. Highest trust for mobile-first platforms and apps that differentiate between mobile and desktop traffic.</span>
+            <span class="zh">移动运营商代理。通过 4G/5G 移动网络 IP 路由。对区分移动端与桌面端流量的移动优先平台和应用信任度最高。</span>
+          </p>
+        </div>
+      </div>
+      <!-- proxy type pills summary -->
+      <div class="border border-violet-100 bg-violet-50 rounded-xl p-4 flex flex-wrap gap-2 items-center">
+        <span class="text-xs font-semibold text-violet-600 mr-1">
+          <span class="en">Products:</span><span class="zh">产品:</span>
+        </span>
+        <span class="pill bg-white border border-violet-100 text-violet">residential</span>
+        <span class="pill bg-white border border-violet-100 text-violet">datacenter</span>
+        <span class="pill bg-white border border-violet-100 text-violet">isp</span>
+        <span class="pill bg-white border border-violet-100 text-violet">dedicated</span>
+        <span class="pill bg-white border border-violet-100 text-violet">static</span>
+        <span class="pill bg-white border border-violet-100 text-violet">mobile</span>
+        <span class="pill bg-white border border-violet-100 text-violet">universal</span>
+      </div>
+    </section>
+
+    <!-- ─── BROWSER (LOCAL-ONLY) ──────────────────────────────── -->
+    <section>
+      <div class="category-label" style="color:#b45309">
+        <span class="en">Browser — Local MCP only</span>
+        <span class="zh">浏览器 — 仅本地 MCP</span>
+      </div>
+      <h2 class="text-2xl font-bold text-ink display mb-2">
+        <span class="en">Browser <span class="local-badge">Local only</span></span>
+        <span class="zh">浏览器工具 <span class="local-badge">仅本地</span></span>
+      </h2>
+      <p class="text-sm text-ink-700/65 mb-6 max-w-2xl">
+        <span class="en">Playwright-powered headless browser and flow automation. These tools require the local MCP runtime and return <code class="mono">501 NOT_AVAILABLE_ON_HOSTED</code> on the cloud endpoint — see the callout below.</span>
+        <span class="zh">基于 Playwright 的无头浏览器和流程自动化工具。这些工具需要本地 MCP 运行时,在云端点会返回 <code class="mono">501 NOT_AVAILABLE_ON_HOSTED</code> — 详见下方提示框。</span>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <!-- novada_browser -->
+        <div class="tool-card bg-white border border-violet-200 rounded-[10px] p-5">
+          <div class="flex items-start justify-between gap-2 mb-3">
+            <div class="tool-name-badge" style="background:#fef3c7;border-color:#fcd34d;color:#92400e">novada_browser</div>
+            <span class="local-badge shrink-0">Local only</span>
+          </div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Headless browser automation. Navigate URLs, click elements, fill forms, take screenshots, and return the rendered DOM — powered by Playwright. Use when <code class="mono">scrape</code> or <code class="mono">unblock</code> can't handle the interaction flow.</span>
+            <span class="zh">无头浏览器自动化。导航 URL、点击元素、填写表单、截图并返回渲染后的 DOM — 基于 Playwright。当 <code class="mono">scrape</code> 或 <code class="mono">unblock</code> 无法处理交互流程时使用。</span>
+          </p>
+        </div>
+        <!-- novada_browser_flow -->
+        <div class="tool-card bg-white border border-violet-200 rounded-[10px] p-5">
+          <div class="flex items-start justify-between gap-2 mb-3">
+            <div class="tool-name-badge" style="background:#fef3c7;border-color:#fcd34d;color:#92400e">novada_browser_flow</div>
+            <span class="local-badge shrink-0">Local only</span>
+          </div>
+          <p class="text-sm text-ink-700/70 leading-relaxed">
+            <span class="en">Multi-step browser flow automation. Define a sequence of browser actions (navigate → fill → click → wait → extract) and execute them atomically. Useful for login-gated scrapes or checkout flows.</span>
+            <span class="zh">多步骤浏览器流程自动化。定义动作序列(导航 → 填写 → 点击 → 等待 → 提取)并原子化执行。适合需要登录的抓取或结账流程。</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Browser-tools / local fallback callout — copied from index.html -->
+      <div class="border border-violet-100 bg-violet-50 rounded-2xl p-6 sm:p-7 flex flex-col sm:flex-row items-start gap-5">
+        <div class="text-2xl">⚠️</div>
+        <div class="flex-1">
+          <h3 class="font-bold text-ink display mb-2">
+            <span class="en">Need headless browser tools? Install the local MCP.</span>
+            <span class="zh">需要无头浏览器工具?请安装本地 MCP。</span>
+          </h3>
+          <p class="text-sm text-ink-700/75 leading-relaxed mb-3">
+            <span class="en"><code class="mono bg-white px-1.5 py-0.5 rounded border border-violet-100">novada_browser</code> and <code class="mono bg-white px-1.5 py-0.5 rounded border border-violet-100">novada_browser_flow</code> return <code class="mono">501 NOT_AVAILABLE_ON_HOSTED</code> with an <code class="mono">agent_instruction</code> pointing here — Playwright doesn't run on serverless edge. Everything else runs on the hosted endpoint.</span>
+            <span class="zh"><code class="mono bg-white px-1.5 py-0.5 rounded border border-violet-100">novada_browser</code> 与 <code class="mono bg-white px-1.5 py-0.5 rounded border border-violet-100">novada_browser_flow</code> 在托管端返回 <code class="mono">501 NOT_AVAILABLE_ON_HOSTED</code>,并附带 <code class="mono">agent_instruction</code> 指引到本地 — Playwright 无法在 serverless edge 运行。其他工具均可直接在托管端使用。</span>
+          </p>
+          <div class="code-block max-w-md">
+            <button class="copy-btn" data-copy="npx novada-mcp">Copy</button>
+<pre class="mono"><span class="text-violet-200">$</span> npx novada-mcp</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── TOOL COUNT SUMMARY ─────────────────────────────────── -->
+    <section class="border border-violet-100 rounded-2xl p-8 bg-tint-cool">
+      <h2 class="text-xl font-bold text-ink display mb-6">
+        <span class="en">All 26 tools at a glance</span>
+        <span class="zh">26 个工具一览</span>
+      </h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider text-violet mb-3">
+            <span class="en">Search &amp; SERP</span><span class="zh">搜索与 SERP</span>
+          </div>
+          <ul class="space-y-1.5 text-sm">
+            <li><code class="mono text-ink">search</code></li>
+            <li><code class="mono text-ink">serp</code></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider text-violet mb-3">
+            <span class="en">Scrape &amp; Extract</span><span class="zh">抓取与提取</span>
+          </div>
+          <ul class="space-y-1.5 text-sm">
+            <li><code class="mono text-ink">scrape</code></li>
+            <li><code class="mono text-ink">extract</code></li>
+            <li><code class="mono text-ink">unblock</code></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider text-violet mb-3">
+            <span class="en">Crawl &amp; Map</span><span class="zh">爬取与地图</span>
+          </div>
+          <ul class="space-y-1.5 text-sm">
+            <li><code class="mono text-ink">crawl</code></li>
+            <li><code class="mono text-ink">map</code></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider text-violet mb-3">
+            <span class="en">Research &amp; Verify</span><span class="zh">研究与验证</span>
+          </div>
+          <ul class="space-y-1.5 text-sm">
+            <li><code class="mono text-ink">research</code></li>
+            <li><code class="mono text-ink">verify</code></li>
+            <li><code class="mono text-ink">discover</code></li>
+            <li><code class="mono text-ink">ai_monitor</code></li>
+            <li><code class="mono text-ink">monitor</code></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider text-violet mb-3">
+            <span class="en">Scraper API — Async</span><span class="zh">异步 Scraper API</span>
+          </div>
+          <ul class="space-y-1.5 text-sm">
+            <li><code class="mono text-ink">scraper_submit</code></li>
+            <li><code class="mono text-ink">scraper_status</code></li>
+            <li><code class="mono text-ink">scraper_result</code></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider text-violet mb-3">
+            <span class="en">Proxies</span><span class="zh">代理</span>
+          </div>
+          <ul class="space-y-1.5 text-sm">
+            <li><code class="mono text-ink">novada_proxy</code></li>
+            <li><code class="mono text-ink">novada_proxy_residential</code></li>
+            <li><code class="mono text-ink">novada_proxy_datacenter</code></li>
+            <li><code class="mono text-ink">novada_proxy_isp</code></li>
+            <li><code class="mono text-ink">novada_proxy_dedicated</code></li>
+            <li><code class="mono text-ink">novada_proxy_static</code></li>
+            <li><code class="mono text-ink">novada_proxy_mobile</code></li>
+          </ul>
+        </div>
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#b45309">
+            <span class="en">Browser (Local only)</span><span class="zh">浏览器(仅本地)</span>
+          </div>
+          <ul class="space-y-1.5 text-sm">
+            <li><code class="mono text-ink">novada_browser</code></li>
+            <li><code class="mono text-ink">novada_browser_flow</code></li>
+          </ul>
+        </div>
+        <div class="flex flex-col justify-center">
+          <div class="text-5xl font-bold display grad-text leading-none mb-2">26</div>
+          <div class="text-sm text-ink-700/65">
+            <span class="en">total tools</span><span class="zh">个工具总计</span>
+          </div>
+          <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="mt-4 inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition w-fit">
+            <span class="en">Get API key →</span><span class="zh">获取密钥 →</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- FOOTER -->
+<footer class="bg-ink text-white/65 py-12">
+  <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-6 brightness-0 invert opacity-90" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-lg font-bold text-white display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet-200 bg-violet/10 px-2 py-1 rounded">MCP</span>
+    </div>
+    <nav class="flex flex-wrap items-center gap-6 text-sm">
+      <a href="/#install" class="hover:text-violet"><span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">定价</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
+      <a href="/playground" class="hover:text-violet"><span class="en">Playground</span><span class="zh">在线试玩</span></a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+      <a href="https://www.npmjs.com/package/novada-mcp" class="hover:text-violet">npm</a>
+    </nav>
+    <div class="text-xs text-white/50">
+      © 2026 Novada · <span class="text-violet-200">Built for AI agents.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div id="toast" class="toast">Copied ✓</div>
+
+<script>
+  // Language toggle
+  const body = document.body;
+  const langBtn = document.getElementById('lang-toggle');
+  langBtn.addEventListener('click', () => {
+    if (body.classList.contains('lang-en')) {
+      body.classList.remove('lang-en');
+      body.classList.add('lang-zh');
+      langBtn.textContent = 'EN / 中';
+    } else {
+      body.classList.remove('lang-zh');
+      body.classList.add('lang-en');
+      langBtn.textContent = '中 / EN';
+    }
+  });
+
+  // Tabs
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabPanels = document.querySelectorAll('.tab-panel');
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      tabBtns.forEach(b => b.classList.toggle('active', b === btn));
+      tabPanels.forEach(p => p.classList.toggle('active', p.dataset.panel === target));
+    });
+  });
+
+  // Copy buttons
+  const toast = document.getElementById('toast');
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+  }
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.copy-btn');
+    if (!btn) return;
+    const text = btn.dataset.copy;
+    try {
+      await navigator.clipboard.writeText(text);
+      const orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      btn.classList.add('copied');
+      showToast('Copied ✓');
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.classList.remove('copied');
+      }, 1500);
+    } catch (err) {
+      showToast('Copy failed');
+    }
+  });
+</script>
+
+</body>
+</html>

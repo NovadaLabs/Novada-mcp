@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pricing — Novada MCP</title>
+<meta name="description" content="Novada MCP pricing: 1,000 free tool calls per month, no credit card required. Simple, usage-based. Start free with all 25 web-data tools." />
+<link rel="canonical" href="https://mcp.novada.com/pricing" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Novada MCP" />
+<meta property="og:title" content="Pricing — Novada MCP" />
+<meta property="og:description" content="1,000 free tool calls per month. No credit card. All 25 web-data tools. Simple, usage-based pricing." />
+<meta property="og:url" content="https://mcp.novada.com/pricing" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Novada MCP Pricing — 1,000 free calls/month, no credit card" />
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Pricing — Novada MCP" />
+<meta name="twitter:description" content="1,000 free tool calls per month. No credit card. All 25 web-data tools." />
+<meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
+          ink: { DEFAULT: '#191228', text: '#0a142f', 800: '#161226', 700: '#251f3d' },
+          slate: '#677489',
+          paper: '#ffffff',
+          'tint-cool': '#f7f8fc',
+        },
+        fontFamily: {
+          display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          sans: ['IBM Plex Sans', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #0a142f; background: #ffffff; }
+  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
+  body.lang-en .zh { display: none !important; }
+  body.lang-zh .en { display: none !important; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  /* Light periwinkle-wash hero, matching novada.com */
+  .grad-hero {
+    background: linear-gradient(180deg, #ffffff 0%, rgba(174,179,217,0.35) 55%, #ffffff 100%);
+  }
+  /* Purple gradient highlight (clipped to text) — novada.com signature */
+  .grad-text {
+    background: linear-gradient(45deg, #9863f0 0%, #6c40e2 51%, #431fd5 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .code-block {
+    background: #191228; color: #e9e4ff; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; position: relative;
+  }
+  .code-block pre { padding: 18px 56px 18px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.65; }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(255,255,255,0.08); color: #e9e4ff;
+    border: 1px solid rgba(255,255,255,0.18);
+    padding: 6px 10px; border-radius: 8px; font-size: 12px;
+    transition: all .15s ease; cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .copy-btn:hover { background: #6c40e2; border-color: #6c40e2; color: #0c0a17; }
+  .copy-btn.copied { background: #6c40e2; border-color: #6c40e2; color: #0c0a17; }
+  .tab-btn {
+    padding: 9px 14px; border-radius: 10px; font-weight: 500; font-size: 14px;
+    color: #4b4565; cursor: pointer; transition: all .15s ease;
+    white-space: nowrap; border: 1px solid transparent;
+  }
+  .tab-btn:hover { color: #0c0a17; background: #f1edff; }
+  .tab-btn.active { background: #0c0a17; color: white; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .tool-card {
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .tool-card:hover {
+    transform: translateY(-2px);
+    box-shadow: rgba(18,17,39,0.10) 0px 14px 50px 0px;
+    border-color: #5b2eeb;
+  }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #0c0a17; color: white; padding: 10px 18px; border-radius: 10px;
+    font-size: 14px; opacity: 0; pointer-events: none;
+    transition: all .2s ease; z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .panel-mock {
+    background: white; border-radius: 10px; padding: 22px;
+    border: 1px solid #e7e2f5;
+    box-shadow: rgba(18,17,39,0.08) 0px 10px 50px 0px;
+  }
+  .panel-mock .row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #f3effd; }
+  .panel-mock .row:last-child { border-bottom: none; }
+  .panel-mock label { width: 80px; color: #6b6483; font-size: 13px; font-weight: 500; }
+  .panel-mock .val { flex: 1; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #0c0a17; word-break: break-all; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  details.faq summary { list-style: none; cursor: pointer; }
+  details.faq summary::-webkit-details-marker { display: none; }
+  details.faq summary::after { content: '+'; float: right; font-weight: 300; font-size: 22px; line-height: 1; color: #5b2eeb; transition: transform .2s ease; }
+  details.faq[open] summary::after { content: '−'; }
+
+  /* ─── Playground ─────────────────────────────────────────────── */
+  .pg-tool-pill {
+    padding: 10px 8px; border-radius: 10px; font-size: 13px;
+    font-weight: 500; cursor: pointer; transition: all .15s ease;
+    background: white; border: 1px solid #e7e2f5; color: #251f3d;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .pg-tool-pill:hover { border-color: #5b2eeb; color: #5b2eeb; }
+  .pg-tool-pill.pg-active { background: #0c0a17; color: white; border-color: #0c0a17; }
+  .pg-input {
+    width: 100%; padding: 10px 12px; font-size: 14px;
+    border: 1px solid #e7e2f5; border-radius: 8px; background: white;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .pg-input:focus { outline: none; border-color: #5b2eeb; box-shadow: 0 0 0 3px rgba(91,46,235,0.12); }
+  .pg-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pg-input-row .pg-input { flex: 1; min-width: 140px; }
+  .pg-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b6483; margin-bottom: 4px; font-weight: 600; }
+  #pg-output { padding: 16px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body class="lang-en">
+
+<!-- HEADER -->
+<header class="sticky top-0 z-50 bg-paper/90 backdrop-blur border-b border-violet-100">
+  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-ink-700">
+      <a href="/playground" class="inline-flex items-center gap-1.5 text-violet font-semibold hover:text-violet-600">
+        <span class="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"></span>
+        <span class="en">Playground</span><span class="zh">在线试玩</span>
+      </a>
+      <a href="/#install" class="hover:text-violet">Install</a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="text-violet font-semibold"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
+        <span class="en">Get API key</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- PAGE HERO -->
+<section class="grad-hero">
+  <div class="max-w-4xl mx-auto px-5 pt-20 pb-16 text-center">
+    <div class="inline-flex items-center gap-2 bg-white border border-violet-100 rounded-full px-4 py-1.5 text-xs font-medium mb-7 shadow-sm" style="color:#677489">
+      <span class="w-2 h-2 rounded-full bg-violet shrink-0"></span>
+      <span class="en">Simple · Usage-based · Start free</span>
+      <span class="zh">简单 · 按用量计费 · 免费开始</span>
+    </div>
+    <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.08] mb-5 display" style="color:#0a142f">
+      <span class="en"><span class="grad-text">Pricing</span></span>
+      <span class="zh"><span class="grad-text">价格</span></span>
+    </h1>
+    <p class="text-base sm:text-lg max-w-2xl mx-auto leading-relaxed" style="color:#677489">
+      <span class="en">Start free. Pay only for what you use. One key, one endpoint — no separate billing for MCP vs REST.</span>
+      <span class="zh">免费上手。按实际用量付费。一把密钥,一个端点 — MCP 与 REST 共用同一账单。</span>
+    </p>
+  </div>
+</section>
+
+<!-- FREE TIER CARD (centerpiece) -->
+<section id="free" class="pb-20 bg-white">
+  <div class="max-w-4xl mx-auto px-5">
+    <div class="bg-gradient-to-br from-ink to-ink-700 rounded-3xl p-10 sm:p-14 text-white relative overflow-hidden">
+      <div class="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-violet/30 blur-3xl"></div>
+      <div class="absolute -bottom-12 -left-12 w-64 h-64 rounded-full bg-violet/20 blur-3xl"></div>
+      <div class="relative">
+        <!-- Label row -->
+        <div class="flex items-center gap-3 mb-4">
+          <div class="text-violet-200 text-sm font-semibold uppercase tracking-wider">
+            <span class="en">Free tier</span><span class="zh">免费额度</span>
+          </div>
+          <span class="pill bg-violet/25 text-violet-200 text-[11px] font-bold uppercase tracking-wide">
+            <span class="en">No credit card</span><span class="zh">无需信用卡</span>
+          </span>
+        </div>
+
+        <!-- Big number -->
+        <div class="text-5xl sm:text-6xl font-bold mb-3 tracking-tight display">
+          <span class="en">1,000 calls<span class="text-violet-200">/month</span></span>
+          <span class="zh">每月 1,000 次<span class="text-violet-200"> 免费</span></span>
+        </div>
+        <p class="text-white/75 text-lg mb-8">
+          <span class="en">One unified Novada key. Same endpoint as paid usage. No credit card to start.</span>
+          <span class="zh">一把统一的 Novada 密钥。与付费版同端点。无需信用卡即可开始。</span>
+        </p>
+
+        <!-- Bullet list -->
+        <ul class="text-white/80 text-sm space-y-3 mb-10">
+          <li class="flex items-start gap-3">
+            <span class="text-violet-200 font-bold mt-0.5">✓</span>
+            <span class="en">All 25 tools available — <span class="text-white/55">browser tools run locally via <code class="mono">npx novada-mcp</code>, don't count against hosted quota</span></span>
+            <span class="zh">25 个工具全部可用 — <span class="text-white/55">浏览器工具通过 <code class="mono">npx novada-mcp</code> 本地运行,不占用托管额度</span></span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="text-violet-200 font-bold mt-0.5">✓</span>
+            <span class="en">60 requests / minute per IP</span>
+            <span class="zh">每 IP 60 次/分钟速率限制</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="text-violet-200 font-bold mt-0.5">✓</span>
+            <span class="en">Hosted on Vercel Edge — global PoPs, auto-SSL, zero ops</span>
+            <span class="zh">运行于 Vercel Edge — 全球节点,自动 SSL,零运维</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="text-violet-200 font-bold mt-0.5">✓</span>
+            <span class="en">Same key works with <code class="mono">npx novada-mcp</code> locally — quota shared across hosted + local</span>
+            <span class="zh">同一密钥直接用于本地 <code class="mono">npx novada-mcp</code> — 托管与本地共享同一配额</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="text-violet-200 font-bold mt-0.5">✓</span>
+            <span class="en">Quota resets monthly, per API token</span>
+            <span class="zh">配额按月重置,以 API Token 为单位计算</span>
+          </li>
+        </ul>
+
+        <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="inline-flex items-center bg-violet hover:bg-violet-600 text-white font-bold px-7 py-3.5 rounded-xl shadow-lg shadow-violet/30 transition text-base">
+          <span class="en">Get your API key →</span><span class="zh">获取你的 API 密钥 →</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW USAGE IS COUNTED -->
+<section id="usage" class="py-20 bg-paper border-t border-b border-violet-100">
+  <div class="max-w-4xl mx-auto px-5">
+    <div class="text-center mb-12">
+      <h2 class="text-2xl sm:text-3xl font-bold text-ink mb-3 display">
+        <span class="en">How usage is counted</span>
+        <span class="zh">用量如何计算</span>
+      </h2>
+      <p class="text-ink-700/70 max-w-xl mx-auto text-sm">
+        <span class="en">Straightforward rules — no hidden multipliers, no per-tool surcharges.</span>
+        <span class="zh">规则简单透明 — 没有隐藏倍率,没有按工具收费。</span>
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <!-- Rule 1 -->
+      <div class="border border-violet-100 bg-white rounded-2xl p-6 hover:border-violet transition">
+        <div class="w-10 h-10 rounded-xl bg-violet-50 text-violet flex items-center justify-center mb-4 font-bold text-lg display">1</div>
+        <h3 class="font-bold text-ink mb-2 display text-base">
+          <span class="en">1 tool call = 1 unit</span>
+          <span class="zh">1 次工具调用 = 1 个单位</span>
+        </h3>
+        <p class="text-sm text-ink-700/70 leading-relaxed">
+          <span class="en">Every successful MCP tool invocation deducts one unit from your monthly quota, regardless of which tool, how much data is returned, or response time.</span>
+          <span class="zh">每次成功的 MCP 工具调用消耗一个单位配额,与具体工具、返回数据量或响应时间无关。</span>
+        </p>
+      </div>
+
+      <!-- Rule 2 -->
+      <div class="border border-violet-100 bg-white rounded-2xl p-6 hover:border-violet transition">
+        <div class="w-10 h-10 rounded-xl bg-violet-50 text-violet flex items-center justify-center mb-4 font-bold text-lg display">2</div>
+        <h3 class="font-bold text-ink mb-2 display text-base">
+          <span class="en">Quota is per API token, monthly</span>
+          <span class="zh">配额按 API Token 每月重置</span>
+        </h3>
+        <p class="text-sm text-ink-700/70 leading-relaxed">
+          <span class="en">The counter is attached to your API key, not an IP address or device. You can use the same key across Claude Desktop, Claude Code, Cursor, and local <code class="mono">npx novada-mcp</code> — quota is shared.</span>
+          <span class="zh">计数绑定在你的 API 密钥上,与 IP 地址或设备无关。你可以在 Claude Desktop、Claude Code、Cursor 和本地 <code class="mono">npx novada-mcp</code> 共用同一密钥 — 配额合并计算。</span>
+        </p>
+      </div>
+
+      <!-- Rule 3 -->
+      <div class="border border-violet-100 bg-white rounded-2xl p-6 hover:border-violet transition">
+        <div class="w-10 h-10 rounded-xl bg-violet-50 text-violet flex items-center justify-center mb-4 font-bold text-lg display">3</div>
+        <h3 class="font-bold text-ink mb-2 display text-base">
+          <span class="en">Browser tools don't count against hosted quota</span>
+          <span class="zh">浏览器工具不占用托管配额</span>
+        </h3>
+        <p class="text-sm text-ink-700/70 leading-relaxed">
+          <span class="en"><code class="mono">novada_browser</code> and <code class="mono">novada_browser_flow</code> run locally via <code class="mono">npx novada-mcp</code>. The hosted endpoint returns <code class="mono">501</code> for these — they are never dispatched to the Novada backend from the hosted URL.</span>
+          <span class="zh"><code class="mono">novada_browser</code> 与 <code class="mono">novada_browser_flow</code> 通过 <code class="mono">npx novada-mcp</code> 在本地执行。托管端对这两个工具返回 <code class="mono">501</code> — 不会从托管 URL 发起后端请求。</span>
+        </p>
+      </div>
+
+      <!-- Rule 4 -->
+      <div class="border border-violet-100 bg-white rounded-2xl p-6 hover:border-violet transition">
+        <div class="w-10 h-10 rounded-xl bg-violet-50 text-violet flex items-center justify-center mb-4 font-bold text-lg display">4</div>
+        <h3 class="font-bold text-ink mb-2 display text-base">
+          <span class="en">Rate limit: 60 req / min per IP</span>
+          <span class="zh">速率限制:每 IP 60 次/分钟</span>
+        </h3>
+        <p class="text-sm text-ink-700/70 leading-relaxed">
+          <span class="en">The hosted endpoint enforces 60 requests per minute per source IP, independent of quota. Requests that exceed the rate limit receive <code class="mono">429 Too Many Requests</code> and are not counted against your monthly quota.</span>
+          <span class="zh">托管端对每个来源 IP 每分钟限制 60 次请求,与月度配额独立计算。超出速率限制的请求返回 <code class="mono">429 Too Many Requests</code>,不消耗月度配额。</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick reference table -->
+    <div class="mt-10 border border-violet-100 bg-white rounded-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-violet-100 bg-violet-50">
+        <h3 class="font-bold text-ink display text-sm uppercase tracking-wide">
+          <span class="en">Quick reference</span>
+          <span class="zh">快速参考</span>
+        </h3>
+      </div>
+      <div class="divide-y divide-violet-50">
+        <div class="flex items-center justify-between px-6 py-4 text-sm">
+          <span class="text-ink-700/80 font-medium"><span class="en">Free monthly quota</span><span class="zh">每月免费配额</span></span>
+          <span class="font-bold text-ink mono">1,000 calls</span>
+        </div>
+        <div class="flex items-center justify-between px-6 py-4 text-sm">
+          <span class="text-ink-700/80 font-medium"><span class="en">Quota counter</span><span class="zh">配额计数单位</span></span>
+          <span class="font-bold text-ink mono"><span class="en">Per API token</span><span class="zh">按 API Token</span></span>
+        </div>
+        <div class="flex items-center justify-between px-6 py-4 text-sm">
+          <span class="text-ink-700/80 font-medium"><span class="en">Reset cadence</span><span class="zh">重置周期</span></span>
+          <span class="font-bold text-ink mono"><span class="en">Monthly</span><span class="zh">每月</span></span>
+        </div>
+        <div class="flex items-center justify-between px-6 py-4 text-sm">
+          <span class="text-ink-700/80 font-medium"><span class="en">Rate limit</span><span class="zh">速率限制</span></span>
+          <span class="font-bold text-ink mono">60 req / min / IP</span>
+        </div>
+        <div class="flex items-center justify-between px-6 py-4 text-sm">
+          <span class="text-ink-700/80 font-medium"><span class="en">Cost per call (all 25 tools)</span><span class="zh">每次调用费用(全部 25 个工具)</span></span>
+          <span class="font-bold text-ink mono">1 unit</span>
+        </div>
+        <div class="flex items-center justify-between px-6 py-4 text-sm">
+          <span class="text-ink-700/80 font-medium"><span class="en">Browser tools on hosted endpoint</span><span class="zh">托管端浏览器工具</span></span>
+          <span class="font-semibold text-violet text-xs"><span class="en">Local only — 0 quota consumed</span><span class="zh">仅本地 — 不消耗配额</span></span>
+        </div>
+        <div class="flex items-center justify-between px-6 py-4 text-sm">
+          <span class="text-ink-700/80 font-medium"><span class="en">Credit card required?</span><span class="zh">需要信用卡吗?</span></span>
+          <span class="font-bold text-ink"><span class="en">No</span><span class="zh">不需要</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- NEED MORE? -->
+<section id="more" class="py-20 bg-white">
+  <div class="max-w-4xl mx-auto px-5">
+    <div class="border border-violet-100 bg-violet-50 rounded-2xl p-8 sm:p-10 flex flex-col sm:flex-row items-start gap-8">
+      <!-- Icon -->
+      <div class="w-14 h-14 rounded-2xl bg-violet/10 text-violet flex items-center justify-center shrink-0">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg>
+      </div>
+      <!-- Text -->
+      <div class="flex-1">
+        <h2 class="text-xl sm:text-2xl font-bold text-ink mb-3 display">
+          <span class="en">Need higher limits?</span>
+          <span class="zh">需要更高的限制?</span>
+        </h2>
+        <p class="text-ink-700/75 text-sm leading-relaxed mb-4">
+          <span class="en">The free tier is designed to get you moving — production agents and high-volume pipelines need more. Paid tiers with higher monthly quotas and rate limits are available through the Novada dashboard. See current options and contact us there.</span>
+          <span class="zh">免费额度设计用于快速上手 — 生产级 Agent 和高频流水线则需要更多。更高月度配额与速率限制的付费方案可通过 Novada 控制台获取,具体选项和联系方式请查看控制台。</span>
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="inline-flex items-center justify-center bg-ink hover:bg-violet text-white font-bold px-6 py-3 rounded-[10px] transition text-sm">
+            <span class="en">View options in dashboard →</span><span class="zh">查看控制台中的方案 →</span>
+          </a>
+          <a href="https://www.novada.com" class="inline-flex items-center justify-center border border-violet-200 hover:border-violet text-ink hover:text-violet font-semibold px-6 py-3 rounded-[10px] transition text-sm">
+            <span class="en">Learn about Novada</span><span class="zh">了解 Novada</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Additional context -->
+    <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <div class="border border-violet-100 bg-white rounded-xl p-5">
+        <div class="w-9 h-9 rounded-lg bg-violet-50 text-violet flex items-center justify-center mb-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+        </div>
+        <h3 class="font-bold text-ink text-sm mb-1 display">
+          <span class="en">Same key everywhere</span>
+          <span class="zh">一把密钥通用</span>
+        </h3>
+        <p class="text-xs text-ink-700/65 leading-relaxed">
+          <span class="en">Your Novada API key works for hosted MCP, local <code class="mono">npx novada-mcp</code>, and the REST API. No separate billing accounts.</span>
+          <span class="zh">Novada API 密钥适用于托管 MCP、本地 <code class="mono">npx novada-mcp</code> 与 REST API,无需分别注册账单账户。</span>
+        </p>
+      </div>
+      <div class="border border-violet-100 bg-white rounded-xl p-5">
+        <div class="w-9 h-9 rounded-lg bg-violet-50 text-violet flex items-center justify-center mb-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3 class="font-bold text-ink text-sm mb-1 display">
+          <span class="en">No rollover</span>
+          <span class="zh">配额不滚存</span>
+        </h3>
+        <p class="text-xs text-ink-700/65 leading-relaxed">
+          <span class="en">Free quota resets at the start of each calendar month and does not carry over. Paid plans follow the same cadence unless otherwise specified.</span>
+          <span class="zh">免费配额每月初重置,不滚存到下个月。付费方案遵循相同节奏,除非另有说明。</span>
+        </p>
+      </div>
+      <div class="border border-violet-100 bg-white rounded-xl p-5">
+        <div class="w-9 h-9 rounded-lg bg-violet-50 text-violet flex items-center justify-center mb-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        </div>
+        <h3 class="font-bold text-ink text-sm mb-1 display">
+          <span class="en">No vendor lock-in</span>
+          <span class="zh">无供应商锁定</span>
+        </h3>
+        <p class="text-xs text-ink-700/65 leading-relaxed">
+          <span class="en">MCP is an open protocol. Your agent code stays the same if you switch hosts or move to the local <code class="mono">npx novada-mcp</code> — same tool names, same key.</span>
+          <span class="zh">MCP 是开放协议。切换宿主或移至本地 <code class="mono">npx novada-mcp</code> 时 Agent 代码不变 — 相同工具名、相同密钥。</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="bg-ink text-white/65 py-12">
+  <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-6 brightness-0 invert opacity-90" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-lg font-bold text-white display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet-200 bg-violet/10 px-2 py-1 rounded">MCP</span>
+    </div>
+    <nav class="flex flex-wrap items-center gap-6 text-sm">
+      <a href="/#install" class="hover:text-violet"><span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="text-violet font-semibold"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+      <a href="https://www.npmjs.com/package/novada-mcp" class="hover:text-violet">npm</a>
+    </nav>
+    <div class="text-xs text-white/50">
+      © 2026 Novada · <span class="text-violet-200">Built for AI agents.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div id="toast" class="toast">Copied ✓</div>
+
+<script>
+  // Language toggle
+  const body = document.body;
+  const langBtn = document.getElementById('lang-toggle');
+  langBtn.addEventListener('click', () => {
+    if (body.classList.contains('lang-en')) {
+      body.classList.remove('lang-en');
+      body.classList.add('lang-zh');
+      langBtn.textContent = 'EN / 中';
+    } else {
+      body.classList.remove('lang-zh');
+      body.classList.add('lang-en');
+      langBtn.textContent = '中 / EN';
+    }
+  });
+
+  // Copy buttons
+  const toast = document.getElementById('toast');
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+  }
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.copy-btn');
+    if (!btn) return;
+    const text = btn.dataset.copy;
+    try {
+      await navigator.clipboard.writeText(text);
+      const orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      btn.classList.add('copied');
+      showToast('Copied ✓');
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.classList.remove('copied');
+      }, 1500);
+    } catch (err) {
+      showToast('Copy failed');
+    }
+  });
+</script>
+
+</body>
+</html>
