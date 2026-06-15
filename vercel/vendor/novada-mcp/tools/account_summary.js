@@ -39,12 +39,12 @@ async function runSection(label, fn) {
  * One-call account-status snapshot. Parallel-runs the three READ tools and
  * folds them into a single human-readable headline plus per-section detail.
  */
-export async function novadaAccountSummary(_params, _apiKey) {
+export async function novadaAccountSummary(_params, apiKey) {
     const t0 = Date.now();
     const [wallet, plans, capture] = await Promise.all([
-        runSection("wallet_balance", () => novadaWalletBalance({})),
-        runSection("plan_balance_all", () => novadaPlanBalanceAll({})),
-        runSection("capture_logs", () => novadaCaptureLogs({ page: 1, page_size: 5 })),
+        runSection("wallet_balance", () => novadaWalletBalance({}, apiKey)),
+        runSection("plan_balance_all", () => novadaPlanBalanceAll({}, apiKey)),
+        runSection("capture_logs", () => novadaCaptureLogs({ page: 1, page_size: 5 }, apiKey)),
     ]);
     // ─── Headline derivation ────────────────────────────────────────────────
     const walletBalance = wallet.ok ? wallet.data?.data?.balance : undefined;

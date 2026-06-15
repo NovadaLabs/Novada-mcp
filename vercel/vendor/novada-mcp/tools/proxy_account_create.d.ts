@@ -31,5 +31,5 @@ export declare function validateProxyAccountCreateParams(args: Record<string, un
  * by devApiPost. Fields posted: product, account, password, status,
  * remark?, limit_flow?.
  */
-export declare function novadaProxyAccountCreate(params: ProxyAccountCreateParams, _apiKey?: string): Promise<string>;
+export declare function novadaProxyAccountCreate(params: ProxyAccountCreateParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=proxy_account_create.d.ts.map

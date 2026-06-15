@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chat — Novada MCP</title>
+<meta name="description" content="Conversational playground for the Novada Hosted MCP server. Type a request, watch one MCP tool run live against mcp.novada.com, and read the answer in a chat thread." />
+<link rel="canonical" href="https://mcp.novada.com/chat" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+<meta property="og:title" content="Novada MCP — Chat Playground" />
+<meta property="og:description" content="Type a request, watch one Novada MCP tool run live, and read the answer in a chat thread. Your key, your quota." />
+<meta property="og:url" content="https://mcp.novada.com/chat" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      colors: {
+        violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
+        ink: { DEFAULT: '#191228', text: '#0a142f', 800: '#161226', 700: '#251f3d' },
+        slate: '#677489', paper: '#ffffff', 'tint-cool': '#f7f8fc',
+      },
+      fontFamily: {
+        display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['IBM Plex Sans', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
+    } },
+  };
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #0a142f; background: #f7f8fc; }
+  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
+  body.lang-en .zh { display: none !important; }
+  body.lang-zh .en { display: none !important; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #191228; color: white; padding: 10px 18px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 100; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ─── Inputs (shared with console) ─────────────────────── */
+  .pg-input { width: 100%; padding: 9px 12px; font-size: 13px; border: 1px solid #e7e2f5; border-radius: 8px; background: #fff; font-family: 'IBM Plex Mono', monospace; color: #0a142f; }
+  .pg-input:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.10); }
+  .pg-label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #677489; margin-bottom: 5px; font-weight: 600; }
+  .key-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .key-need { background: #f1f0f5; color: #677489; }
+  .key-ok { background: #f5eeff; color: #6c40e2; }
+
+  /* ─── Chat ─────────────────────────────────────────────── */
+  .chat-shell { border: 1px solid #e7e2f5; border-radius: 12px; background: #fff; box-shadow: rgba(18,17,39,0.06) 0 10px 40px 0; overflow: hidden; display: flex; flex-direction: column; }
+  .chat-thread { overflow-y: auto; padding: 22px 18px; display: flex; flex-direction: column; gap: 16px; background: #fbfaff; }
+  .msg-row { display: flex; gap: 10px; max-width: 100%; }
+  .msg-row.user { justify-content: flex-end; }
+  .msg-row.assistant { justify-content: flex-start; }
+  .avatar { flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .avatar-bot { background: #f5eeff; color: #6c40e2; font-family: 'IBM Plex Mono', monospace; }
+  .avatar-user { background: #191228; color: #fff; }
+  .bubble { padding: 11px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; max-width: 78%; word-break: break-word; }
+  .bubble-user { background: #6c40e2; color: #fff; border-bottom-right-radius: 4px; }
+  .bubble-assistant { background: #fff; color: #251f3d; border: 1px solid #eee6fb; border-bottom-left-radius: 4px; }
+  .bubble-error { background: #fdeaea; color: #9b271b; border: 1px solid #f6c9c4; border-bottom-left-radius: 4px; }
+  .bubble-out { white-space: pre-wrap; }
+  .tool-chip { display: inline-flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; font-weight: 500; color: #6c40e2; background: #f5eeff; border: 1px solid #e3daff; padding: 3px 9px; border-radius: 7px; margin-bottom: 9px; }
+  .tool-chip .arr { font-weight: 700; }
+  .tool-dot { width: 6px; height: 6px; border-radius: 999px; background: #6c40e2; display: inline-block; }
+  .quota-line { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #97a0b0; margin-top: 7px; }
+  .typing { display: inline-flex; gap: 4px; align-items: center; }
+  .typing span { width: 6px; height: 6px; border-radius: 999px; background: #c9b4fb; animation: blink 1.2s infinite both; }
+  .typing span:nth-child(2){ animation-delay: .2s; } .typing span:nth-child(3){ animation-delay: .4s; }
+  @keyframes blink { 0%,80%,100%{ opacity:.25; transform: translateY(0);} 40%{ opacity:1; transform: translateY(-2px);} }
+  /* suggested-prompt chips */
+  .prompt-chip { font-size: 12.5px; color: #251f3d; background: #fff; border: 1px solid #e7e2f5; border-radius: 999px; padding: 6px 13px; cursor: pointer; transition: all .12s; white-space: nowrap; }
+  .prompt-chip:hover { border-color: #6c40e2; color: #6c40e2; background: #f5eeff; }
+  /* composer */
+  .composer { border-top: 1px solid #eee6fb; background: #fff; padding: 12px 14px; }
+  .composer-box { display: flex; gap: 10px; align-items: flex-end; }
+  .chat-textarea { flex: 1; resize: none; max-height: 140px; padding: 10px 12px; font-size: 14px; line-height: 1.5; border: 1px solid #e7e2f5; border-radius: 10px; background: #fff; color: #0a142f; font-family: 'IBM Plex Sans','Noto Sans SC',system-ui,sans-serif; }
+  .chat-textarea:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.10); }
+  .send-btn { background: #191228; color: #fff; font-weight: 700; border-radius: 10px; padding: 10px 18px; font-size: 13px; transition: background .15s; display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; }
+  .send-btn:hover:not(:disabled) { background: #6c40e2; }
+  .send-btn:disabled { opacity: .45; cursor: not-allowed; }
+</style>
+</head>
+<body class="lang-en">
+
+<!-- HEADER -->
+<header class="sticky top-0 z-50 bg-paper/90 backdrop-blur border-b border-violet-100">
+  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-ink-700">
+      <a href="/playground" class="hover:text-violet"><span class="en">Playground</span><span class="zh">在线试玩</span></a>
+      <a href="/chat" class="inline-flex items-center gap-1.5 text-violet font-semibold">
+        <span class="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"></span>
+        <span class="en">Chat</span><span class="zh">对话</span>
+      </a>
+      <a href="/configure" class="hover:text-violet"><span class="en">Configure</span><span class="zh">配置</span></a>
+      <a href="/chat" class="hover:text-violet"><span class="en">Chat</span><span class="zh">对话</span></a>
+
+      <a href="/#install" class="hover:text-violet">Install</a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
+        <span class="en">Get API key</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-4xl mx-auto px-5 py-10">
+
+  <!-- Title row -->
+  <div class="flex items-end justify-between flex-wrap gap-3 mb-3">
+    <div>
+      <a href="/" class="text-sm hover:text-violet transition" style="color:#677489">← <span class="en">Back to home</span><span class="zh">返回首页</span></a>
+      <h1 class="text-2xl sm:text-3xl font-bold mt-2 display" style="color:#0a142f">
+        <span class="en">Chat Playground</span><span class="zh">对话试玩</span>
+      </h1>
+    </div>
+    <!-- API key -->
+    <div class="w-full sm:w-auto">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="pg-label" style="margin:0">
+          <span class="en">API key</span><span class="zh">API 密钥</span> <span class="text-violet">*</span>
+        </span>
+        <span id="ck-key-status" class="key-badge key-need"></span>
+      </div>
+      <div class="flex gap-2">
+        <input id="ck-token" type="password" autocomplete="off" spellcheck="false" placeholder="sk-eu-novada-…" class="pg-input" style="width:280px;max-width:60vw" />
+        <button id="ck-save-key" class="px-3 py-2 text-xs font-semibold bg-ink hover:bg-violet text-white rounded-lg transition whitespace-nowrap">
+          <span class="en">Save</span><span class="zh">保存</span>
+        </button>
+        <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="px-3 py-2 text-xs font-semibold border border-violet-100 text-violet rounded-lg hover:border-violet transition whitespace-nowrap flex items-center">
+          <span class="en">Get key</span><span class="zh">获取</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disclaimer -->
+  <p class="text-xs mb-5 leading-relaxed" style="color:#677489">
+    <span class="en">Guided demo — picks <strong>one</strong> tool by intent and runs it live against <code class="mono text-violet">mcp.novada.com</code>. In Claude/Cursor, a full LLM agent chains these tools automatically.</span>
+    <span class="zh">引导式演示 — 按你的意图挑选<strong>一个</strong>工具,并实时调用 <code class="mono text-violet">mcp.novada.com</code>。在 Claude/Cursor 中,完整的 LLM Agent 会自动串联这些工具。</span>
+  </p>
+
+  <!-- Chat shell -->
+  <div class="chat-shell" style="height:min(640px,72vh)">
+    <!-- thread -->
+    <div id="ck-thread" class="chat-thread" style="flex:1"></div>
+
+    <!-- suggested prompts -->
+    <div class="px-3.5 pt-3 pb-1 flex gap-2 overflow-x-auto" id="ck-chips" style="border-top:1px solid #eee6fb; background:#fff"></div>
+
+    <!-- composer -->
+    <div class="composer">
+      <div class="composer-box">
+        <textarea id="ck-input" class="chat-textarea" rows="1"
+          data-ph-en="Ask anything, paste a URL, or state a claim to verify…"
+          data-ph-zh="提问、粘贴一个 URL,或输入一个待核实的陈述…"></textarea>
+        <button id="ck-send" class="send-btn">
+          <span class="en">Send</span><span class="zh">发送</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </div>
+      <p id="ck-hint" class="text-xs mt-2" style="color:#97a0b0"></p>
+    </div>
+  </div>
+
+  <p class="text-xs mt-4 leading-relaxed" style="color:#97a0b0">
+    <span class="en">⚠️ Browser-side calls expose your key in the network tab — use it only for testing, call server-side in production. Each message runs exactly one tool and consumes one request from your own quota.</span>
+    <span class="zh">⚠️ 浏览器端调用会在 network 标签暴露密钥 — 仅供测试,生产请走服务端。每条消息只运行一个工具,并消耗你自己配额中的一次请求。</span>
+  </p>
+
+  <div class="mt-8 text-center">
+    <p class="text-sm" style="color:#677489"><span class="en">Want the raw request/response view instead?</span><span class="zh">想看原始的请求 / 响应视图?</span></p>
+    <a href="/playground" class="inline-flex items-center justify-center mt-3 border border-violet-100 hover:border-violet text-ink hover:text-violet font-semibold px-6 py-2.5 rounded-[10px] transition"><span class="en">Open the API Console</span><span class="zh">打开 API 控制台</span></a>
+  </div>
+</main>
+
+<div id="toast" class="toast">Copied ✓</div>
+
+<script>
+  const body = document.body;
+  const langBtn = document.getElementById('lang-toggle');
+  const isZh = () => body.classList.contains('lang-zh');
+  const toast = document.getElementById('toast'); let toastTimer;
+  function showToast(m){ toast.textContent=m; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),1500); }
+
+  // ── config ──
+  const CK_ENDPOINT = 'https://mcp.novada.com/mcp';
+  const LS_KEY = 'novada_mcp_api_key';
+  const tokenInput = document.getElementById('ck-token');
+  const keyStatus = document.getElementById('ck-key-status');
+  const thread = document.getElementById('ck-thread');
+  const chipsEl = document.getElementById('ck-chips');
+  const input = document.getElementById('ck-input');
+  const sendBtn = document.getElementById('ck-send');
+  const hint = document.getElementById('ck-hint');
+  function hasKey(){ return tokenInput.value.trim().length > 0; }
+
+  // ── suggested prompts (bilingual) ──
+  const CHIPS = [
+    { en: 'Compare Firecrawl vs BrightData pricing', zh: '对比 Firecrawl 和 BrightData 的价格' },
+    { en: 'Scrape https://www.tavily.com/pricing', zh: '抓取 https://www.tavily.com/pricing' },
+    { en: 'Map https://www.firecrawl.dev', zh: '生成 https://www.firecrawl.dev 的站点地图' },
+    { en: "Is 'Novada has 100M residential IPs' true?", zh: "“Novada 拥有 1 亿住宅 IP” 是真的吗?" },
+  ];
+  function renderChips(){
+    chipsEl.innerHTML = CHIPS.map((c,i) => `<button class="prompt-chip" data-chip="${i}">${isZh()?c.zh:c.en}</button>`).join('');
+  }
+  chipsEl.addEventListener('click', e => {
+    const b = e.target.closest('.prompt-chip'); if(!b) return;
+    const c = CHIPS[+b.dataset.chip];
+    input.value = isZh() ? c.zh : c.en;
+    autoGrow(); input.focus();
+  });
+
+  // ── client-side intent router → picks ONE Novada tool ──
+  const URL_RE = /\bhttps?:\/\/[^\s]+/i;
+  function firstUrl(text){ const m = text.match(URL_RE); return m ? m[0].replace(/[)\]}.,;]+$/,'') : null; }
+  function routeIntent(raw){
+    const text = raw.trim();
+    const low = text.toLowerCase();
+    const url = firstUrl(text);
+    // crawl
+    if (/^crawl\b/.test(low)) return { tool: 'novada_crawl', args: { url: url || text.replace(/^crawl\s*/i,'').trim(), max_pages: 5, max_depth: 2 } };
+    // map / sitemap
+    if (/^map\b/.test(low) || /\bsitemap\b/.test(low)) return { tool: 'novada_map', args: { url: url || text.replace(/^map\s*/i,'').trim() } };
+    // extract
+    if (/^extract\b/.test(low)) return { tool: 'novada_extract', args: { url: url || text.replace(/^extract\s*/i,'').trim() } };
+    // verify / fact-check  ("is ... true", "verify", "fact")
+    if (/\bverify\b/.test(low) || /\bfact[\s-]?check\b/.test(low) || (/\bis\b/.test(low) && /\btrue\b/.test(low))) {
+      return { tool: 'novada_verify', args: { claim: text } };
+    }
+    // scrape (explicit verb) OR a bare URL with no other intent
+    if (/^scrape\b/.test(low)) return { tool: 'novada_scrape', args: { url: url || text.replace(/^scrape\s*/i,'').trim() } };
+    if (url && url.length >= text.length - 4) return { tool: 'novada_scrape', args: { url } };
+    // default: research (questions, comparisons) → synthesized cited report
+    return { tool: 'novada_research', args: { query: text, depth: 'balanced' } };
+  }
+  function toolDescription(tool){
+    const map = {
+      novada_research: { en: 'researching & synthesizing a cited answer', zh: '研究并综合一份带引用的回答' },
+      novada_verify:   { en: 'fact-checking the claim',                  zh: '核实该陈述' },
+      novada_scrape:   { en: 'scraping the page',                        zh: '抓取该页面' },
+      novada_extract:  { en: 'extracting structured data',               zh: '抽取结构化数据' },
+      novada_crawl:    { en: 'crawling the site',                        zh: '爬取该站点' },
+      novada_map:      { en: 'mapping the site URLs',                    zh: '映射站点 URL' },
+    };
+    return map[tool] || { en: 'running the tool', zh: '运行该工具' };
+  }
+
+  // ── render helpers ──
+  function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+  function scrollDown(){ thread.scrollTop = thread.scrollHeight; }
+
+  function addUser(text){
+    const row = document.createElement('div');
+    row.className = 'msg-row user';
+    row.innerHTML = `<div class="bubble bubble-user">${esc(text)}</div><div class="avatar avatar-user">You</div>`;
+    thread.appendChild(row); scrollDown();
+  }
+
+  // Returns an object with handles to fill the assistant bubble in place.
+  function addAssistant(tool){
+    const desc = toolDescription(tool);
+    const row = document.createElement('div');
+    row.className = 'msg-row assistant';
+    const chipHtml = `<div class="tool-chip"><span class="tool-dot"></span><span class="arr">→</span> <span>calling <strong>${esc(tool)}</strong></span> <span class="en">… ${esc(desc.en)}</span><span class="zh">… ${esc(desc.zh)}</span></div>`;
+    row.innerHTML = `<div class="avatar avatar-bot">N</div><div style="max-width:78%"><div class="bubble bubble-assistant" style="display:inline-block"><div class="chip-host">${chipHtml}</div><div class="body-host"><span class="typing"><span></span><span></span><span></span></span></div></div><div class="quota-host"></div></div>`;
+    thread.appendChild(row); scrollDown();
+    const bubble = row.querySelector('.bubble');
+    const bodyHost = row.querySelector('.body-host');
+    const quotaHost = row.querySelector('.quota-host');
+    return {
+      success(textOut, quota){
+        bodyHost.classList.add('bubble-out');
+        bodyHost.textContent = textOut;
+        if (quota !== undefined && quota !== null){
+          quotaHost.innerHTML = `<div class="quota-line"><span class="en">quota remaining: ${esc(quota)}</span><span class="zh">剩余配额:${esc(quota)}</span></div>`;
+        }
+        scrollDown();
+      },
+      error(textOut){
+        bubble.classList.remove('bubble-assistant');
+        bubble.classList.add('bubble-error');
+        bodyHost.classList.add('bubble-out');
+        bodyHost.textContent = textOut;
+        scrollDown();
+      }
+    };
+  }
+
+  function addWelcome(){
+    const row = document.createElement('div');
+    row.className = 'msg-row assistant';
+    row.innerHTML = `<div class="avatar avatar-bot">N</div><div class="bubble bubble-assistant">
+      <span class="en">Hi! Type a request below and I'll route it to <strong>one</strong> Novada MCP tool, run it live, and show the result. Try a suggested prompt to start.</span>
+      <span class="zh">你好!在下方输入一个请求,我会把它路由到<strong>一个</strong> Novada MCP 工具,实时运行并展示结果。点一个推荐问题开始吧。</span>
+    </div>`;
+    thread.appendChild(row);
+  }
+
+  // ── key handling ──
+  function refreshKey(){
+    if (!hasKey()){ keyStatus.textContent = isZh()?'需要密钥':'KEY REQUIRED'; keyStatus.className='key-badge key-need'; }
+    else { keyStatus.textContent = isZh()?'已就绪':'READY'; keyStatus.className='key-badge key-ok'; }
+    sendBtn.disabled = !hasKey();
+    hint.textContent = hasKey() ? '' : (isZh()?'↑ 先填入你的 API 密钥即可发送':'↑ enter your API key above to send');
+  }
+  tokenInput.value = localStorage.getItem(LS_KEY) || '';
+  document.getElementById('ck-save-key').addEventListener('click', () => {
+    const v = tokenInput.value.trim();
+    if(v){ localStorage.setItem(LS_KEY, v); showToast(isZh()?'已保存到本地':'Saved locally ✓'); }
+    else { localStorage.removeItem(LS_KEY); showToast(isZh()?'已清除':'Cleared'); }
+    refreshKey();
+  });
+  tokenInput.addEventListener('input', refreshKey);
+
+  // ── composer behavior ──
+  function autoGrow(){ input.style.height='auto'; input.style.height = Math.min(input.scrollHeight,140)+'px'; }
+  input.addEventListener('input', autoGrow);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); doSend(); }
+  });
+  sendBtn.addEventListener('click', doSend);
+
+  function rpcBody(tool, args){ return { jsonrpc:'2.0', id:1, method:'tools/call', params:{ name: tool, arguments: args } }; }
+
+  let busy = false;
+  async function doSend(){
+    if (busy) return;
+    const token = tokenInput.value.trim();
+    if (!token){ showToast(isZh()?'请先填入密钥':'Enter your API key first'); return; }
+    const text = input.value.trim();
+    if (!text) return;
+
+    busy = true; sendBtn.disabled = true;
+    addUser(text);
+    input.value=''; autoGrow();
+
+    const { tool, args } = routeIntent(text);
+    const handle = addAssistant(tool);
+
+    try {
+      const res = await fetch(`${CK_ENDPOINT}?token=${encodeURIComponent(token)}`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Accept':'application/json, text/event-stream' },
+        body: JSON.stringify(rpcBody(tool, args)),
+      });
+      const data = await res.json();
+      if (data.error){
+        handle.error((isZh()?'错误:':'Error: ') + JSON.stringify(data.error, null, 2));
+      } else if (!res.ok){
+        handle.error(`HTTP ${res.status}\n` + JSON.stringify(data, null, 2));
+      } else {
+        const textOut = data?.result?.content?.[0]?.text ?? JSON.stringify(data.result, null, 2);
+        const quota = data?.result?._meta?.quota_remaining;
+        handle.success(textOut, quota);
+      }
+    } catch(err){
+      handle.error((isZh()?'网络错误:':'Network error: ') + String(err));
+    } finally {
+      busy = false; refreshKey(); input.focus();
+    }
+  }
+
+  // ── lang toggle (re-render bilingual UI bits) ──
+  langBtn.addEventListener('click', () => {
+    body.classList.toggle('lang-zh'); body.classList.toggle('lang-en');
+    langBtn.textContent = isZh() ? 'EN / 中' : '中 / EN';
+    renderChips(); applyPlaceholder(); refreshKey();
+  });
+  function applyPlaceholder(){ input.placeholder = isZh() ? input.dataset.phZh : input.dataset.phEn; }
+
+  // ── init ──
+  renderChips(); applyPlaceholder(); addWelcome(); refreshKey(); autoGrow();
+</script>
+
+</body>
+</html>

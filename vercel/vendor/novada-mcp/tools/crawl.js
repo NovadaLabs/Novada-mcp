@@ -225,8 +225,25 @@ export async function novadaCrawl(params, apiKey) {
         `---`,
         ``,
     ].filter(l => l !== "");
+    // Cap total crawl text to ~25K chars to prevent oversized output
+    const MAX_CRAWL_TOTAL = 25000;
+    const rawTextTotal = results.reduce((sum, r) => sum + r.text.length, 0);
+    let crawlTruncated = false;
+    if (rawTextTotal > MAX_CRAWL_TOTAL) {
+        const perPageLimit = Math.max(200, Math.floor(MAX_CRAWL_TOTAL / results.length));
+        for (const r of results) {
+            if (r.text.length > perPageLimit) {
+                r.text = r.text.slice(0, perPageLimit) +
+                    `\n[truncated — call novada_extract on this URL for full content]`;
+                crawlTruncated = true;
+            }
+        }
+    }
     lines.push(`## Agent Hints`);
     lines.push(`- ${results.length} pages crawled. For targeted extraction, use novada_map first then novada_extract on chosen pages.`);
+    if (crawlTruncated) {
+        lines.push(`- Crawl text capped at ~${MAX_CRAWL_TOTAL} chars total (raw: ${rawTextTotal}). Call novada_extract with individual URLs for full content.`);
+    }
     if (jsMissingCount > 0) {
         lines.push(`- ${jsMissingCount} page(s) are JS-heavy but were crawled in static mode — content may be incomplete.`);
         lines.push(`  Re-crawl with render="render" for full content (3–5s/page vs 0.5s/page).`);

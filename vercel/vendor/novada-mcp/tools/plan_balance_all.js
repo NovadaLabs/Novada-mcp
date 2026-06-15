@@ -43,12 +43,12 @@ function enrichBalance(raw) {
  * products in parallel. Never hard-fails — partial errors are surfaced in
  * `errors[]` while successful per-product balances are returned alongside.
  */
-export async function novadaPlanBalanceAll(params, _apiKey) {
+export async function novadaPlanBalanceAll(params, apiKey) {
     const requested = params.products?.length
         ? BALANCE_ENDPOINTS.filter(e => params.products.includes(e.key))
         : BALANCE_ENDPOINTS;
     const selected = requested.map(e => ({ key: e.key, path: e.path, body: {} }));
-    const results = await devApiParallel(selected);
+    const results = await devApiParallel(selected, { apiKey });
     const summary = {};
     const errors = [];
     const expired_products = [];

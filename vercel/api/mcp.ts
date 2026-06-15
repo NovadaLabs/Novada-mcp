@@ -96,6 +96,31 @@ import {
   ScraperStatusParamsSchema,
   ScraperResultParamsSchema,
   BrowserFlowParamsSchema,
+  // ── Account / billing tools (KR-6) — pass-through key only (customer's own account) ──
+  novadaWalletBalance,
+  novadaWalletUsageRecord,
+  novadaPlanBalanceAll,
+  novadaProxyAccountList,
+  novadaProxyAccountCreate,
+  novadaTrafficDaily,
+  novadaAccountSummary,
+  novadaCaptureLogs,
+  validateWalletBalanceParams,
+  validateWalletUsageRecordParams,
+  validatePlanBalanceAllParams,
+  validateProxyAccountListParams,
+  validateProxyAccountCreateParams,
+  validateTrafficDailyParams,
+  validateAccountSummaryParams,
+  validateCaptureLogsParams,
+  WalletBalanceParamsSchema,
+  WalletUsageRecordParamsSchema,
+  PlanBalanceAllParamsSchema,
+  ProxyAccountListParamsSchema,
+  ProxyAccountCreateParamsSchema,
+  TrafficDailyParamsSchema,
+  AccountSummaryParamsSchema,
+  CaptureLogsParamsSchema,
 } from "../vendor/novada-mcp/tools/index.js";
 
 import {
@@ -192,12 +217,64 @@ const TOOLS = [
   { name: "novada_ai_monitor", schema: AiMonitorParamsSchema, description: "Monitor how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand." },
   { name: "novada_monitor", schema: MonitorParamsSchema, description: "Detect page changes over time via content hash + field-level diff." },
   { name: "novada_setup", schema: SetupParamsSchema, description: "Diagnose env config and emit setup snippets for all MCP clients. Auth-free." },
+  // ── Account / billing tools (KR-6) — operate on the CALLER's own Novada account via pass-through key ──
+  { name: "novada_wallet_balance", schema: WalletBalanceParamsSchema, description: "Your master wallet balance (the account the API key belongs to)." },
+  { name: "novada_wallet_usage_record", schema: WalletUsageRecordParamsSchema, description: "Paginated wallet transaction / usage history." },
+  { name: "novada_plan_balance_all", schema: PlanBalanceAllParamsSchema, description: "Per-product plan balances (residential/isp/datacenter/mobile/static/capture) in parallel." },
+  { name: "novada_proxy_account_list", schema: ProxyAccountListParamsSchema, description: "List proxy sub-accounts for a product (paginated)." },
+  { name: "novada_proxy_account_create", schema: ProxyAccountCreateParamsSchema, description: "⚠️ WRITE — create a proxy sub-account. Two-step confirm gate (pass confirm:true after human approval).", write: true },
+  { name: "novada_traffic_daily", schema: TrafficDailyParamsSchema, description: "Daily traffic consumption across proxy products for a date range." },
+  { name: "novada_account_summary", schema: AccountSummaryParamsSchema, description: "One-shot account overview: wallet + plans + recent capture cost." },
+  { name: "novada_capture_logs", schema: CaptureLogsParamsSchema, description: "Hourly capture/unlocker/scraper/browser cost breakdown." },
 ].map((t) => ({
   name: t.name,
   description: t.description,
   inputSchema: zodToMcpSchema(t.schema),
-  annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+  annotations: ("write" in t && t.write)
+    ? { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true }
+    : { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
 }));
+
+// ─── Tool-set filtering (?tools= / ?groups=) ─────────────────────────────────
+// Lets a client request a slim toolset, e.g. ?groups=search,scrape or
+// ?tools=novada_search,novada_scrape. Matches BrightData's ?groups= pattern.
+// Fewer tools = less token overhead in the agent's context window.
+const TOOL_GROUPS: Record<string, string[]> = {
+  search: ["novada_search"],
+  scrape: ["novada_scrape", "novada_extract", "novada_unblock"],
+  crawl: ["novada_crawl", "novada_map"],
+  research: ["novada_research", "novada_verify", "novada_discover", "novada_ai_monitor", "novada_monitor"],
+  scraper: ["novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
+  proxy: ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
+  account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_plan_balance_all", "novada_proxy_account_list", "novada_proxy_account_create", "novada_traffic_daily", "novada_account_summary", "novada_capture_logs"],
+  browser: ["novada_browser", "novada_browser_flow"],
+};
+const ALL_TOOL_NAMES = new Set(TOOLS.map((t) => t.name));
+
+/**
+ * Resolve the allowed-tool set from URL params. Returns null = no filter (all tools).
+ * `tools` accepts full names (novada_search) or short names (search). `groups`
+ * accepts category keys from TOOL_GROUPS. novada_setup is always allowed (auth-free helper).
+ */
+function resolveAllowedTools(url: URL): Set<string> | null {
+  const toolsParam = url.searchParams.get("tools");
+  const groupsParam = url.searchParams.get("groups");
+  if (!toolsParam && !groupsParam) return null;
+  const allowed = new Set<string>(["novada_setup"]);
+  if (groupsParam) {
+    for (const g of groupsParam.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)) {
+      (TOOL_GROUPS[g] ?? []).forEach((n) => allowed.add(n));
+    }
+  }
+  if (toolsParam) {
+    for (const raw of toolsParam.split(",").map((s) => s.trim()).filter(Boolean)) {
+      const full = raw.startsWith("novada_") ? raw : `novada_${raw}`;
+      if (ALL_TOOL_NAMES.has(full)) allowed.add(full);
+    }
+  }
+  // If params were given but matched nothing real, fall back to no-filter rather than an empty server.
+  return allowed.size > 1 ? allowed : null;
+}
 
 // ─── Token auth + quota ──────────────────────────────────────────────────────
 interface TokenInfo {
@@ -295,18 +372,32 @@ function logUsage(env: Env, token: string, tool: string, ok: boolean, ms: number
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────
-function buildServer(apiKey: string, env: Env, ctx: { token: string }): Server {
+function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTools?: Set<string> | null }): Server {
   const server = new Server(
     { name: "novada", version: "0.7.13-hosted" },
     { capabilities: { tools: {} } },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  const visibleTools = ctx.allowedTools
+    ? TOOLS.filter((t) => ctx.allowedTools!.has(t.name))
+    : TOOLS;
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: visibleTools }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const argsObj = (args as Record<string, unknown>) ?? {};
     const started = Date.now();
+
+    // Tool-set filter: reject tools not in the endpoint's ?tools=/?groups= selection.
+    if (ctx.allowedTools && !ctx.allowedTools.has(name)) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Error [TOOL_NOT_ENABLED]: '${name}' is not enabled on this endpoint. It was filtered out by the ?tools=/?groups= URL parameter.\nagent_instruction: Remove the filter from the MCP URL, or add this tool/group to it, to use ${name}.`,
+        }],
+        isError: true,
+      };
+    }
 
     // novada_setup is auth-free and never charged against quota.
     if (name === "novada_setup") {
@@ -408,6 +499,23 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string }): Server {
           result = await novadaAiMonitor(validateAiMonitorParams(argsObj), apiKey); break;
         case "novada_monitor":
           result = await novadaMonitor(validateMonitorParams(argsObj), apiKey); break;
+        // ── Account / billing (KR-6) — apiKey is the customer's pass-through key (their own account) ──
+        case "novada_wallet_balance":
+          result = await novadaWalletBalance(validateWalletBalanceParams(argsObj), apiKey); break;
+        case "novada_wallet_usage_record":
+          result = await novadaWalletUsageRecord(validateWalletUsageRecordParams(argsObj), apiKey); break;
+        case "novada_plan_balance_all":
+          result = await novadaPlanBalanceAll(validatePlanBalanceAllParams(argsObj), apiKey); break;
+        case "novada_proxy_account_list":
+          result = await novadaProxyAccountList(validateProxyAccountListParams(argsObj), apiKey); break;
+        case "novada_proxy_account_create":
+          result = await novadaProxyAccountCreate(validateProxyAccountCreateParams(argsObj), apiKey); break;
+        case "novada_traffic_daily":
+          result = await novadaTrafficDaily(validateTrafficDailyParams(argsObj), apiKey); break;
+        case "novada_account_summary":
+          result = await novadaAccountSummary(validateAccountSummaryParams(argsObj), apiKey); break;
+        case "novada_capture_logs":
+          result = await novadaCaptureLogs(validateCaptureLogsParams(argsObj), apiKey); break;
         default:
           logUsage(env, ctx.token, name, false, Date.now() - started);
           return {
@@ -640,10 +748,13 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
       "Get your API key at https://dashboard.novada.com/overview/scraper/api-playground/");
   }
 
+  // Optional tool-set filter from ?tools= / ?groups= (BrightData-style slim endpoint).
+  const allowedTools = resolveAllowedTools(url);
+
   // Build a fresh server + transport per request (stateless mode). Edge
   // functions are per-request isolates with no shared memory — same pattern
   // as the CF Worker port.
-  const server = buildServer(apiKey, env, { token });
+  const server = buildServer(apiKey, env, { token, allowedTools });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,

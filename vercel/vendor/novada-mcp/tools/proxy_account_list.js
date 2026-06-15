@@ -45,7 +45,7 @@ export function validateProxyAccountListParams(args) {
  * Read-only — paginated; optional status + account-name filters.
  * Request body is multipart/form-data per the API contract.
  */
-export async function novadaProxyAccountList(params, _apiKey) {
+export async function novadaProxyAccountList(params, apiKey) {
     const body = {
         product: params.product,
         page: params.page,
@@ -53,7 +53,7 @@ export async function novadaProxyAccountList(params, _apiKey) {
         ...(params.status !== undefined ? { status: params.status } : {}),
         ...(params.account !== undefined ? { account: params.account } : {}),
     };
-    const data = await devApiPost("/v1/proxy_account/list", body);
+    const data = await devApiPost("/v1/proxy_account/list", body, { apiKey });
     return JSON.stringify({
         status: "ok",
         data,

@@ -170,10 +170,13 @@ function extractRecords(data) {
     }
     return [];
 }
-// Aliases for stale operation IDs that appeared in old docs/examples
+// Aliases for stale or non-canonical operation IDs that appeared in old docs/examples.
+// Maps a near-miss op ID an agent might guess → the canonical op ID the backend accepts.
 const OPERATION_ALIASES = {
     "amazon_product_by-keywords": "amazon_product_keywords",
     "amazon_product_by-asin": "amazon_product_asin",
+    "google_shopping": "google_shopping_keywords",
+    "google_shopping_by-keyword": "google_shopping_keywords",
 };
 export async function novadaScrape(params, apiKey) {
     const { platform, params: opParams, format, limit } = params;
@@ -310,17 +313,31 @@ export async function novadaScrape(params, apiKey) {
     catch (err) {
         // H5: use typed NovadaError.code instead of brittle string matching
         if (err instanceof NovadaError && err.code === NovadaErrorCode.PRODUCT_UNAVAILABLE) {
+            // Surface any known canonical aliases for the operation the agent tried, so the
+            // agent can self-correct a near-miss op ID without a second round-trip. Most 11006
+            // errors are malformed/non-canonical op IDs, NOT a deactivated Scraper API.
+            const aliasHint = OPERATION_ALIASES[params.operation]
+                ? `The operation '${params.operation}' was automatically resolved to canonical ID '${OPERATION_ALIASES[params.operation]}', which was submitted but still rejected. The canonical ID itself may be incorrect for this platform, or Scraper API access is not activated. Read novada://scraper-platforms to confirm the exact operation ID.`
+                : `The operation '${operation}' was rejected. Operation IDs are exact and cannot be guessed.`;
             return JSON.stringify({
                 status: "unavailable",
                 code: 11006,
-                reason: "Scraper returned code 11006 — invalid operation ID or Scraper API not activated.",
-                agent_instruction: "First verify the operation ID against novada://scraper-platforms resource. If the operation ID is correct, activate Scraper API at dashboard.novada.com/overview/scraper/. Do not retry automatically.",
+                reason: "Scraper returned code 11006 — almost always an invalid/non-canonical operation ID, not a deactivated Scraper API.",
+                operation_tried: params.operation,
+                ...(operation !== params.operation ? { operation_resolved: operation } : {}),
+                ...(OPERATION_ALIASES[params.operation]
+                    ? { alias_resolved_to: OPERATION_ALIASES[params.operation] }
+                    : {}),
+                agent_instruction: `${aliasHint} To find the exact operation ID for platform '${platform}', read the novada://scraper-platforms resource — it lists every valid operation per platform. Only if the operation ID is confirmed correct should you treat this as a Scraper API activation issue. Do not retry automatically with the same ID.`,
                 alternatives: [
                     "Use novada_extract for general web page content extraction.",
                     "Use novada_unblock for bot-protected pages.",
                     "Use novada_crawl for multi-page site traversal.",
                 ],
-                next_steps: ["Activate at: https://dashboard.novada.com/overview/scraper/"],
+                next_steps: [
+                    "Read novada://scraper-platforms to confirm the canonical operation ID.",
+                    "If the operation ID is confirmed correct, activate Scraper API at: https://dashboard.novada.com/overview/scraper/",
+                ],
             }, null, 2);
         }
         if (err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_PARAMS && err.detail === "code 11008") {

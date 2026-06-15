@@ -75,7 +75,7 @@ export function validateProxyAccountCreateParams(args) {
  * by devApiPost. Fields posted: product, account, password, status,
  * remark?, limit_flow?.
  */
-export async function novadaProxyAccountCreate(params, _apiKey) {
+export async function novadaProxyAccountCreate(params, apiKey) {
     if (params.confirm !== true) {
         return JSON.stringify({
             status: "confirmation_required",
@@ -100,7 +100,7 @@ export async function novadaProxyAccountCreate(params, _apiKey) {
         ...(params.remark !== undefined ? { remark: params.remark } : {}),
         ...(params.limit_flow !== undefined ? { limit_flow: params.limit_flow } : {}),
     };
-    const data = await devApiPost("/v1/proxy_account/create", body);
+    const data = await devApiPost("/v1/proxy_account/create", body, { apiKey });
     return JSON.stringify({
         status: "created",
         data,

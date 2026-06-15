@@ -177,7 +177,7 @@ export async function novadaScraperStatus(params, apiKey) {
                 return JSON.stringify({
                     status: "not_found",
                     task_id,
-                    agent_instruction: "Task not found on either endpoint. Verify task_id from a successful novada_scraper_submit call. Tasks expire after 24 hours.",
+                    agent_instruction: "Task not found yet. If you just called novada_scraper_submit, this is normal — the task_id takes a few seconds to propagate. Wait 5-10 seconds and retry novada_scraper_status ONCE with the same task_id. If it is still not_found after that single retry, the task_id is likely invalid (not from a successful submit) or expired (tasks expire after 24 hours).",
                 }, null, 2);
             }
             if (status === 401 || status === 403) {

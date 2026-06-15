@@ -70,7 +70,7 @@ function extractTotalMb(data) {
  * totals. Partial failures are tolerated — each product's outcome is reported
  * independently in per_product[<name>] and errors[].
  */
-export async function novadaTrafficDaily(params, _apiKey) {
+export async function novadaTrafficDaily(params, apiKey) {
     const selected = params.products?.length
         ? FLOW_ENDPOINTS.filter(e => params.products.includes(e.key))
         : FLOW_ENDPOINTS;
@@ -81,7 +81,7 @@ export async function novadaTrafficDaily(params, _apiKey) {
             end: params.end_time,
         });
     }
-    const results = await devApiParallel(selected.map(e => ({ key: e.key, path: e.path, body: { ...baseBody } })));
+    const results = await devApiParallel(selected.map(e => ({ key: e.key, path: e.path, body: { ...baseBody } })), { apiKey });
     const summary = {};
     let totalMb = 0;
     const errors = [];

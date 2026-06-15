@@ -23,5 +23,5 @@ export declare function validateProxyAccountListParams(args: Record<string, unkn
  * Read-only — paginated; optional status + account-name filters.
  * Request body is multipart/form-data per the API contract.
  */
-export declare function novadaProxyAccountList(params: ProxyAccountListParams, _apiKey?: string): Promise<string>;
+export declare function novadaProxyAccountList(params: ProxyAccountListParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=proxy_account_list.d.ts.map

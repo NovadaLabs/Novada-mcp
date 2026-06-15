@@ -10,9 +10,9 @@ export function validateWalletBalanceParams(args) {
  * Fetch the master wallet balance for the current developer-api account.
  * Returns the unwrapped envelope `data` payload alongside an agent hint.
  */
-export async function novadaWalletBalance(_params, _apiKey) {
+export async function novadaWalletBalance(_params, apiKey) {
     const body = {};
-    const data = await devApiPost("/v1/wallet/balance", body);
+    const data = await devApiPost("/v1/wallet/balance", body, { apiKey });
     return JSON.stringify({
         status: "ok",
         data,

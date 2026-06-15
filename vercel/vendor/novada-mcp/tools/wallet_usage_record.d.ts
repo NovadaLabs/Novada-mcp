@@ -11,5 +11,5 @@ export declare function validateWalletUsageRecordParams(args: Record<string, unk
  * Fetch paginated wallet usage / transaction records from the developer-api.
  * Emits both `start_time` and the server's typo'd `strat_time` for forward compat.
  */
-export declare function novadaWalletUsageRecord(params: WalletUsageRecordParams, _apiKey?: string): Promise<string>;
+export declare function novadaWalletUsageRecord(params: WalletUsageRecordParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=wallet_usage_record.d.ts.map

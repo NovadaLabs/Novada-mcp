@@ -18,5 +18,5 @@ export declare function validateTrafficDailyParams(args: Record<string, unknown>
  * totals. Partial failures are tolerated — each product's outcome is reported
  * independently in per_product[<name>] and errors[].
  */
-export declare function novadaTrafficDaily(params: TrafficDailyParams, _apiKey?: string): Promise<string>;
+export declare function novadaTrafficDaily(params: TrafficDailyParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=traffic_daily.d.ts.map

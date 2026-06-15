@@ -16,5 +16,5 @@ export declare function validatePlanBalanceAllParams(args: Record<string, unknow
  * products in parallel. Never hard-fails — partial errors are surfaced in
  * `errors[]` while successful per-product balances are returned alongside.
  */
-export declare function novadaPlanBalanceAll(params: PlanBalanceAllParams, _apiKey?: string): Promise<string>;
+export declare function novadaPlanBalanceAll(params: PlanBalanceAllParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=plan_balance_all.d.ts.map

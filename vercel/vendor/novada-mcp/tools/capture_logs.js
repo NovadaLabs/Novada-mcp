@@ -32,7 +32,7 @@ export function validateCaptureLogsParams(args) {
  * `strat_time`/`start_time` typo-compat shim so this tool keeps working
  * whether or not Novada fixes the server-side spelling.
  */
-export async function novadaCaptureLogs(params, _apiKey) {
+export async function novadaCaptureLogs(params, apiKey) {
     const baseBody = {
         page: params.page,
         page_size: params.page_size,
@@ -43,7 +43,7 @@ export async function novadaCaptureLogs(params, _apiKey) {
     const body = params.start_time !== undefined || params.end_time !== undefined
         ? withDateRangeCompat(baseBody, { start: params.start_time, end: params.end_time })
         : baseBody;
-    const data = await devApiPost("/v1/capture/logs", body);
+    const data = await devApiPost("/v1/capture/logs", body, { apiKey });
     return JSON.stringify({
         status: "ok",
         data,

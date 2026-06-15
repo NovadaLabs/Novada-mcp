@@ -6,5 +6,5 @@ export declare function validateWalletBalanceParams(args: Record<string, unknown
  * Fetch the master wallet balance for the current developer-api account.
  * Returns the unwrapped envelope `data` payload alongside an agent hint.
  */
-export declare function novadaWalletBalance(_params: WalletBalanceParams, _apiKey?: string): Promise<string>;
+export declare function novadaWalletBalance(_params: WalletBalanceParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=wallet_balance.d.ts.map

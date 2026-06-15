@@ -17,5 +17,5 @@ export declare function validateCaptureLogsParams(args: Record<string, unknown> 
  * `strat_time`/`start_time` typo-compat shim so this tool keeps working
  * whether or not Novada fixes the server-side spelling.
  */
-export declare function novadaCaptureLogs(params: CaptureLogsParams, _apiKey?: string): Promise<string>;
+export declare function novadaCaptureLogs(params: CaptureLogsParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=capture_logs.d.ts.map

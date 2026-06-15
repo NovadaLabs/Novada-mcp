@@ -19,9 +19,27 @@ export async function novadaExtract(params, apiKey) {
         const urls = urlList;
         const results = await Promise.all(urls.map((url, i) => extractSingle({ ...params, url }, apiKey)
             .then(content => ({ i, url, content, ok: true }))
-            .catch(err => ({ i, url, content: `Error: ${err instanceof Error ? err.message : String(err)}`, ok: false }))));
+            .catch(err => {
+            const message = err instanceof Error ? err.message : String(err);
+            const fix = getSuggestedFix(url, message);
+            return { i, url, content: `Error: ${message}\n${fix}`, ok: false };
+        })));
         const successful = results.filter(r => r.ok).length;
         const failed = results.length - successful;
+        // Fix 3: Cap total batch output to ~25K chars to prevent host systems from saving to file
+        const MAX_BATCH_TOTAL = 25000;
+        const rawTotal = results.reduce((sum, r) => sum + r.content.length, 0);
+        let batchTruncated = false;
+        if (rawTotal > MAX_BATCH_TOTAL) {
+            const perUrlLimit = Math.max(500, Math.floor(MAX_BATCH_TOTAL / results.length));
+            for (const r of results) {
+                if (r.content.length > perUrlLimit) {
+                    r.content = r.content.slice(0, perUrlLimit) +
+                        `\n\n[truncated at ${perUrlLimit} chars — call novada_extract with this URL individually for full content]`;
+                    batchTruncated = true;
+                }
+            }
+        }
         const lines = [
             `## Batch Extract Results`,
             `urls:${urls.length} | successful:${successful} | failed:${failed}`,
@@ -41,7 +59,10 @@ export async function novadaExtract(params, apiKey) {
         }
         lines.push(`## Agent Hints`);
         if (failed > 0) {
-            lines.push(`- ${failed} URL(s) failed. Check if they require JavaScript rendering.`);
+            lines.push(`- ${failed} URL(s) failed. Each failure includes a suggested_fix — read the error block above for per-URL guidance.`);
+        }
+        if (batchTruncated) {
+            lines.push(`- Batch output capped at ~${MAX_BATCH_TOTAL} chars total (${rawTotal} raw). Call novada_extract with individual URLs for full content.`);
         }
         lines.push(`- Use novada_map to discover additional pages on any of these domains.`);
         return lines.join("\n");
@@ -52,6 +73,7 @@ export async function novadaExtract(params, apiKey) {
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        const suggestedFix = getSuggestedFix(urlList[0], message);
         return [
             `## Extract Failed`,
             `url: ${urlList[0]}`,
@@ -62,8 +84,44 @@ export async function novadaExtract(params, apiKey) {
             `- If the URL returns JSON or binary data, it cannot be extracted as HTML.`,
             `- If the URL is unreachable, check the domain and try novada_map first.`,
             `- For JS-heavy pages returning empty content, try with render="render".`,
+            ``,
+            `## Agent Action`,
+            `agent_instruction: status:failed | ${suggestedFix}`,
         ].join("\n");
     }
+}
+/** Derive a suggested_fix hint from a URL + error message */
+function getSuggestedFix(url, errorMsg) {
+    const lower = errorMsg.toLowerCase();
+    // Known anti-bot / access-denial patterns
+    if (lower.includes("bot") || lower.includes("challenge") || lower.includes("captcha") ||
+        lower.includes("cloudflare") || lower.includes("403") || lower.includes("forbidden") ||
+        lower.includes("access denied") || lower.includes("blocked")) {
+        return `suggested_fix: retry with render="render" (JS rendering + anti-bot bypass). If that also fails: novada_unblock(url="${url}") returns raw HTML via stealth browser — parse the response body manually`;
+    }
+    if (lower.includes("all promises were rejected") || lower.includes("eai_again") ||
+        lower.includes("econnrefused") || lower.includes("enotfound") || lower.includes("timeout")) {
+        return `suggested_fix: domain may be unreachable or rate-limiting. Verify URL is correct, then retry with render="render". Run novada_health_all() to check API status`;
+    }
+    if (lower.includes("js") || lower.includes("javascript") || lower.includes("js-heavy")) {
+        return `suggested_fix: retry with render="render" for JavaScript-rendered pages`;
+    }
+    // Domain-specific overrides
+    try {
+        const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+        if (host === "zhihu.com")
+            return `suggested_fix: zhihu.com blocks automated access. Use render="render" first; if blocked, novada_unblock returns raw HTML. Alternatively search via novada_search`;
+        if (host === "amazon.com")
+            return `suggested_fix: try novada_scrape(platform="amazon.com", operation="amazon_product_keywords") for structured product data`;
+        if (host === "x.com" || host === "twitter.com")
+            return `suggested_fix: try novada_scrape(platform="x.com", operation="twitter_profile_username") for Twitter/X data`;
+        if (host === "instagram.com")
+            return `suggested_fix: try novada_scrape(platform="instagram.com", operation="instagram_profile_url")`;
+        if (host === "linkedin.com")
+            return `suggested_fix: try novada_scrape(platform="linkedin.com", operation="linkedin_company_information_url")`;
+    }
+    catch { /* ignore */ }
+    return `suggested_fix: retry with render="render" for JS-heavy pages. If blocked: novada_unblock(url="${url}") returns raw HTML via stealth browser`;
 }
 function rewriteRedditUrl(url) {
     try {
@@ -84,9 +142,9 @@ async function extractSingle(params, apiKey) {
     if (params.render === "js") {
         params = { ...params, render: "render" };
     }
-    // Phase 3: Session dedup cache — skip fetch if same URL+mode was extracted recently
+    // Phase 3: Session dedup cache — skip fetch if same URL+mode+fields was extracted recently
     const cacheRenderMode = params.render ?? "auto";
-    const cached = getCached(params.url, cacheRenderMode);
+    const cached = getCached(params.url, cacheRenderMode, params.fields);
     if (cached) {
         // Inject source: cache into the cached result so agents know it's from cache
         return cached.replace(/source: live/, "source: cache");
@@ -533,7 +591,7 @@ async function extractSingle(params, apiKey) {
         }
         catch { /* ignore */ }
         const jsonOutput = JSON.stringify(jsonResult, null, 2);
-        setCached(params.url, cacheRenderMode, jsonOutput);
+        setCached(params.url, cacheRenderMode, jsonOutput, params.fields);
         return jsonOutput;
     }
     const lines = [
@@ -703,7 +761,7 @@ async function extractSingle(params, apiKey) {
     lines.push(`## Agent Action`);
     lines.push(`agent_instruction: ${nextActions.join(" | ")}`);
     const mdOutput = lines.join("\n");
-    setCached(params.url, cacheRenderMode, mdOutput);
+    setCached(params.url, cacheRenderMode, mdOutput, params.fields);
     return mdOutput;
 }
 function formatJsonExtract(url, mode, jsonStr, maxChars) {

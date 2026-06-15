@@ -34,13 +34,13 @@ export function validateWalletUsageRecordParams(args) {
  * Fetch paginated wallet usage / transaction records from the developer-api.
  * Emits both `start_time` and the server's typo'd `strat_time` for forward compat.
  */
-export async function novadaWalletUsageRecord(params, _apiKey) {
+export async function novadaWalletUsageRecord(params, apiKey) {
     const { start_time, end_time, page, page_size } = params;
     let body = { page, page_size };
     if (start_time !== undefined || end_time !== undefined) {
         body = withDateRangeCompat(body, { start: start_time, end: end_time });
     }
-    const data = await devApiPost("/v1/wallet/usage_record", body);
+    const data = await devApiPost("/v1/wallet/usage_record", body, { apiKey });
     // Anomaly check: server sometimes returns count > 0 but an empty list
     // (smoke-verified 2026-06-03). Surface this so agents don't conclude
     // "no data" when there actually IS data on a different page.
