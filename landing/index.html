@@ -209,6 +209,12 @@
   .pg-input-row .pg-input { flex: 1; min-width: 140px; }
   .pg-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b6483; margin-bottom: 4px; font-weight: 600; }
   #pg-output { padding: 16px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  /* Framework tabs (scoped, independent of install .tab-btn) */
+  .ftab-btn { padding: 8px 14px; border-radius: 9px; font-weight: 500; font-size: 14px; color: #677489; cursor: pointer; transition: all .15s ease; white-space: nowrap; border: 1px solid transparent; }
+  .ftab-btn:hover { color: #191228; background: #f5eeff; }
+  .ftab-btn.active { background: #191228; color: #fff; }
+  .ftab-panel { display: none; }
+  .ftab-panel.active { display: block; }
 </style>
 </head>
 <body class="lang-en">
@@ -530,6 +536,168 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
   </div>
 </section>
 
+<!-- FRAMEWORKS & AGENTS -->
+<section id="frameworks" class="py-20 bg-white border-t border-violet-100">
+  <div class="max-w-3xl mx-auto px-5">
+    <div class="text-center mb-10">
+      <h2 class="text-3xl sm:text-4xl font-bold text-ink mb-3 display">
+        <span class="en">Use it from your agent framework</span>
+        <span class="zh">在你的 Agent 框架里使用</span>
+      </h2>
+      <p class="text-ink-700/70 max-w-2xl mx-auto">
+        <span class="en">Building agents in code? Point any MCP-aware framework at the same endpoint. Configs verified against each project's current docs.</span>
+        <span class="zh">用代码构建 Agent?让任意支持 MCP 的框架指向同一端点。以下配置均对照各项目最新文档核对。</span>
+      </p>
+    </div>
+
+    <div id="ftabs" class="flex flex-wrap gap-2 justify-center mb-8 border border-violet-100 bg-paper p-2 rounded-2xl">
+      <button class="ftab-btn active" data-ftab="langchain">LangChain</button>
+      <button class="ftab-btn" data-ftab="llamaindex">LlamaIndex</button>
+      <button class="ftab-btn" data-ftab="openai">OpenAI Agents</button>
+      <button class="ftab-btn" data-ftab="crewai">CrewAI</button>
+      <button class="ftab-btn" data-ftab="n8n">n8n</button>
+    </div>
+
+    <!-- LangChain -->
+    <div class="ftab-panel active" data-fpanel="langchain">
+      <p class="text-sm text-ink-700/80 mb-3">
+        <span class="en">Python — <code class="mono bg-violet-50 px-1.5 py-0.5 rounded">pip install langchain-mcp-adapters</code>. Native Streamable HTTP.</span>
+        <span class="zh">Python — <code class="mono bg-violet-50 px-1.5 py-0.5 rounded">pip install langchain-mcp-adapters</code>。原生支持 Streamable HTTP。</span>
+      </p>
+      <div class="code-block">
+        <button class="copy-btn" data-copy='from langchain_mcp_adapters.client import MultiServerMCPClient
+
+client = MultiServerMCPClient({
+    "novada": {
+        "transport": "http",
+        "url": "https://mcp.novada.com/mcp",
+        "headers": {"Authorization": "Bearer YOUR_NOVADA_API_KEY"},
+    }
+})
+tools = await client.get_tools()'>Copy</button>
+<pre class="mono"><span class="text-violet-200">from</span> langchain_mcp_adapters.client <span class="text-violet-200">import</span> MultiServerMCPClient
+
+client = MultiServerMCPClient({
+    <span class="text-violet-200">"novada"</span>: {
+        <span class="text-violet-200">"transport"</span>: <span class="text-violet-200">"http"</span>,
+        <span class="text-violet-200">"url"</span>: <span class="text-violet-200">"https://mcp.novada.com/mcp"</span>,
+        <span class="text-violet-200">"headers"</span>: {<span class="text-violet-200">"Authorization"</span>: <span class="text-violet-200">"Bearer YOUR_NOVADA_API_KEY"</span>},
+    }
+})
+tools = <span class="text-violet-200">await</span> client.get_tools()</pre>
+      </div>
+    </div>
+
+    <!-- LlamaIndex -->
+    <div class="ftab-panel" data-fpanel="llamaindex">
+      <p class="text-sm text-ink-700/80 mb-3">
+        <span class="en">Python — <code class="mono bg-violet-50 px-1.5 py-0.5 rounded">pip install llama-index-tools-mcp</code>. Auto-detects Streamable HTTP.</span>
+        <span class="zh">Python — <code class="mono bg-violet-50 px-1.5 py-0.5 rounded">pip install llama-index-tools-mcp</code>。自动识别 Streamable HTTP。</span>
+      </p>
+      <div class="code-block">
+        <button class="copy-btn" data-copy='from llama_index.tools.mcp import BasicMCPClient, McpToolSpec
+
+client = BasicMCPClient(
+    "https://mcp.novada.com/mcp",
+    headers={"Authorization": "Bearer YOUR_NOVADA_API_KEY"},
+)
+tools = await McpToolSpec(client=client).to_tool_list_async()'>Copy</button>
+<pre class="mono"><span class="text-violet-200">from</span> llama_index.tools.mcp <span class="text-violet-200">import</span> BasicMCPClient, McpToolSpec
+
+client = BasicMCPClient(
+    <span class="text-violet-200">"https://mcp.novada.com/mcp"</span>,
+    headers={<span class="text-violet-200">"Authorization"</span>: <span class="text-violet-200">"Bearer YOUR_NOVADA_API_KEY"</span>},
+)
+tools = <span class="text-violet-200">await</span> McpToolSpec(client=client).to_tool_list_async()</pre>
+      </div>
+    </div>
+
+    <!-- OpenAI Agents SDK -->
+    <div class="ftab-panel" data-fpanel="openai">
+      <p class="text-sm text-ink-700/80 mb-3">
+        <span class="en">Python — <code class="mono bg-violet-50 px-1.5 py-0.5 rounded">pip install openai-agents</code>. Native <code class="mono">MCPServerStreamableHttp</code>.</span>
+        <span class="zh">Python — <code class="mono bg-violet-50 px-1.5 py-0.5 rounded">pip install openai-agents</code>。原生 <code class="mono">MCPServerStreamableHttp</code>。</span>
+      </p>
+      <div class="code-block">
+        <button class="copy-btn" data-copy='from agents.mcp import MCPServerStreamableHttp
+
+server = MCPServerStreamableHttp(
+    name="Novada MCP",
+    params={
+        "url": "https://mcp.novada.com/mcp",
+        "headers": {"Authorization": "Bearer YOUR_NOVADA_API_KEY"},
+    },
+    cache_tools_list=True,
+)
+async with server:
+    ...  # pass to Agent(mcp_servers=[server])'>Copy</button>
+<pre class="mono"><span class="text-violet-200">from</span> agents.mcp <span class="text-violet-200">import</span> MCPServerStreamableHttp
+
+server = MCPServerStreamableHttp(
+    name=<span class="text-violet-200">"Novada MCP"</span>,
+    params={
+        <span class="text-violet-200">"url"</span>: <span class="text-violet-200">"https://mcp.novada.com/mcp"</span>,
+        <span class="text-violet-200">"headers"</span>: {<span class="text-violet-200">"Authorization"</span>: <span class="text-violet-200">"Bearer YOUR_NOVADA_API_KEY"</span>},
+    },
+    cache_tools_list=<span class="text-violet-200">True</span>,
+)
+<span class="text-violet-200">async with</span> server:
+    ...  <span style="color:#6b6483"># pass to Agent(mcp_servers=[server])</span></pre>
+      </div>
+    </div>
+
+    <!-- CrewAI -->
+    <div class="ftab-panel" data-fpanel="crewai">
+      <p class="text-sm text-ink-700/80 mb-3">
+        <span class="en">Python — <code class="mono bg-violet-50 px-1.5 py-0.5 rounded">pip install crewai-tools</code>. Via <code class="mono">MCPServerAdapter</code>.</span>
+        <span class="zh">Python — <code class="mono bg-violet-50 px-1.5 py-0.5 rounded">pip install crewai-tools</code>。通过 <code class="mono">MCPServerAdapter</code>。</span>
+      </p>
+      <div class="code-block">
+        <button class="copy-btn" data-copy='from crewai_tools import MCPServerAdapter
+
+params = {
+    "url": "https://mcp.novada.com/mcp",
+    "transport": "streamable-http",
+    "headers": {"Authorization": "Bearer YOUR_NOVADA_API_KEY"},
+}
+with MCPServerAdapter(params) as tools:
+    agent = Agent(..., tools=tools)'>Copy</button>
+<pre class="mono"><span class="text-violet-200">from</span> crewai_tools <span class="text-violet-200">import</span> MCPServerAdapter
+
+params = {
+    <span class="text-violet-200">"url"</span>: <span class="text-violet-200">"https://mcp.novada.com/mcp"</span>,
+    <span class="text-violet-200">"transport"</span>: <span class="text-violet-200">"streamable-http"</span>,
+    <span class="text-violet-200">"headers"</span>: {<span class="text-violet-200">"Authorization"</span>: <span class="text-violet-200">"Bearer YOUR_NOVADA_API_KEY"</span>},
+}
+<span class="text-violet-200">with</span> MCPServerAdapter(params) <span class="text-violet-200">as</span> tools:
+    agent = Agent(..., tools=tools)</pre>
+      </div>
+      <p class="text-xs text-ink-700/60 mt-3">
+        <span class="en">If the streamable-http passthrough is flaky on your version, bridge with <code class="mono">npx mcp-remote https://mcp.novada.com/mcp --header "Authorization: Bearer YOUR_NOVADA_API_KEY"</code> and point CrewAI at the local SSE URL.</span>
+        <span class="zh">若你的版本对 streamable-http 透传不稳定,可用 <code class="mono">npx mcp-remote https://mcp.novada.com/mcp --header "Authorization: Bearer YOUR_NOVADA_API_KEY"</code> 桥接,再让 CrewAI 指向本地 SSE 地址。</span>
+      </p>
+    </div>
+
+    <!-- n8n -->
+    <div class="ftab-panel" data-fpanel="n8n">
+      <p class="text-sm text-ink-700/80 mb-3">
+        <span class="en"><b>MCP Client Tool</b> node. n8n's node speaks SSE — bridge the Streamable-HTTP endpoint with <code class="mono">mcp-remote</code>:</span>
+        <span class="zh"><b>MCP Client Tool</b> 节点。n8n 节点走 SSE — 用 <code class="mono">mcp-remote</code> 桥接 Streamable-HTTP 端点:</span>
+      </p>
+      <div class="code-block">
+        <button class="copy-btn" data-copy='npx mcp-remote https://mcp.novada.com/mcp --header "Authorization: Bearer YOUR_NOVADA_API_KEY"'>Copy</button>
+<pre class="mono"><span class="text-violet-200">$</span> npx mcp-remote https://mcp.novada.com/mcp \
+    --header <span class="text-violet-200">"Authorization: Bearer YOUR_NOVADA_API_KEY"</span></pre>
+      </div>
+      <p class="text-xs text-ink-700/60 mt-3">
+        <span class="en">Then in the node set <b>SSE Endpoint</b> → the local bridge URL (e.g. <code class="mono">http://localhost:3000/sse</code>). Or, if your n8n build supports it, paste <code class="mono">https://mcp.novada.com/mcp?token=YOUR_NOVADA_API_KEY</code> directly with Bearer auth credential.</span>
+        <span class="zh">然后在节点的 <b>SSE Endpoint</b> 填本地桥接地址(如 <code class="mono">http://localhost:3000/sse</code>)。若你的 n8n 版本支持,也可直接填 <code class="mono">https://mcp.novada.com/mcp?token=YOUR_NOVADA_API_KEY</code> 并配 Bearer 凭据。</span>
+      </p>
+    </div>
+
+  </div>
+</section>
+
 <!-- WHY HOSTED -->
 <section class="py-20 bg-paper">
   <div class="max-w-6xl mx-auto px-5">
@@ -622,6 +790,17 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
       const target = btn.dataset.tab;
       tabBtns.forEach(b => b.classList.toggle('active', b === btn));
       tabPanels.forEach(p => p.classList.toggle('active', p.dataset.panel === target));
+    });
+  });
+
+  // Framework tabs (scoped to #ftabs / .ftab-panel)
+  const ftabBtns = document.querySelectorAll('.ftab-btn');
+  const ftabPanels = document.querySelectorAll('.ftab-panel');
+  ftabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.ftab;
+      ftabBtns.forEach(b => b.classList.toggle('active', b === btn));
+      ftabPanels.forEach(p => p.classList.toggle('active', p.dataset.fpanel === target));
     });
   });
 
