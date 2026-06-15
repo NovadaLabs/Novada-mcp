@@ -258,7 +258,13 @@ export async function novadaScraperStatus(
       );
     }
 
-    throw err;
+    return JSON.stringify({
+      status: "endpoint_error",
+      task_id,
+      error: err instanceof Error ? err.message : String(err),
+      agent_instruction:
+        "An unexpected error occurred while checking the scraper status. Do not retry automatically — report this to support@novada.com if it persists.",
+    }, null, 2);
   }
 
   // Build response based on normalized status
