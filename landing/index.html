@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<script>
+(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);})();
+function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Novada MCP — One URL. 25 web-data tools. Zero install.</title>
 <meta name="description" content="Novada Hosted MCP server. 25 tools — search, SERP, scrape, extract, map, crawl, verify, discover, research, and 6 proxy types — through one URL. Drop into Claude Desktop, Cursor, Cline, Windsurf, Codex in 30 seconds." />
@@ -98,7 +102,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
   tailwind.config = {
     theme: {
@@ -112,7 +116,7 @@
         },
         fontFamily: {
           display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-          sans: ['IBM Plex Sans', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          sans: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
           mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
         },
       },
@@ -120,15 +124,55 @@
   };
 </script>
 <style>
+  /* ── Theme variables ── */
+  :root {
+    --th-bg:#ffffff; --th-surface:#f8f7fc; --th-card:#ffffff;
+    --th-ink:#0a142f; --th-ink-mid:#3d4a6b; --th-ink-muted:#677489;
+    --th-vborder:rgba(108,64,226,0.15); --th-nav:rgba(255,255,255,0.92);
+    --th-nav-border:rgba(108,64,226,0.12);
+    --th-hero-grad:linear-gradient(180deg,#ffffff 0%,rgba(174,179,217,0.35) 55%,#ffffff 100%);
+  }
+  [data-theme="dark"] {
+    --th-bg:#0f0c1e; --th-surface:#19152e; --th-card:#1d1a33;
+    --th-ink:#e8e0ff; --th-ink-mid:#b0a8d8; --th-ink-muted:#8578b8;
+    --th-vborder:rgba(108,64,226,0.28); --th-nav:rgba(15,12,30,0.92);
+    --th-nav-border:rgba(108,64,226,0.22);
+    --th-hero-grad:linear-gradient(180deg,#0f0c1e 0%,rgba(108,64,226,0.12) 55%,#0f0c1e 100%);
+  }
+  [data-theme="dark"] body{background:var(--th-bg);color:var(--th-ink);}
+  [data-theme="dark"] header{background:var(--th-nav)!important;border-color:var(--th-nav-border)!important;}
+  [data-theme="dark"] .grad-hero{background:var(--th-hero-grad);}
+  [data-theme="dark"] section{background:var(--th-bg);}
+  [data-theme="dark"] .bg-white{background:var(--th-card)!important;}
+  [data-theme="dark"] .bg-paper{background:var(--th-bg)!important;}
+  [data-theme="dark"] .bg-tint-cool{background:var(--th-surface)!important;}
+  [data-theme="dark"] .bg-violet-50{background:rgba(108,64,226,0.1)!important;}
+  [data-theme="dark"] .bg-ink{background:#3a2e70!important;}
+  [data-theme="dark"] .text-ink{color:var(--th-ink)!important;}
+  [data-theme="dark"] .text-ink-700{color:var(--th-ink-mid)!important;}
+  [data-theme="dark"] .text-slate{color:var(--th-ink-muted)!important;}
+  [data-theme="dark"] .border-violet-100{border-color:var(--th-vborder)!important;}
+  [data-theme="dark"] .border-violet-200{border-color:rgba(108,64,226,0.4)!important;}
+  [data-theme="dark"] .shadow-sm{box-shadow:0 1px 4px rgba(0,0,0,0.4)!important;}
+  [data-theme="dark"] .border-ink{border-color:#3a2e70!important;}
+  [data-theme="dark"] .text-ink-700\/70,[data-theme="dark"] .text-ink-700\/80,[data-theme="dark"] .text-ink-700\/60,[data-theme="dark"] .text-ink-700\/55{color:var(--th-ink-mid)!important;opacity:0.8;}
+  [data-theme="dark"] .bg-paper\/90,[data-theme="dark"] header{background:var(--th-nav)!important;}
+  .theme-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid rgba(108,64,226,0.18);cursor:pointer;background:transparent;color:currentColor;transition:background 0.2s,border-color 0.2s;padding:0;}
+  .theme-btn:hover{background:rgba(108,64,226,0.08);}
+  .theme-btn .icon-sun{display:none;}
+  .theme-btn .icon-moon{display:block;}
+  [data-theme="dark"] .theme-btn .icon-sun{display:block;}
+  [data-theme="dark"] .theme-btn .icon-moon{display:none;}
+
   html { scroll-behavior: smooth; }
-  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #0a142f; background: #ffffff; }
-  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
+  body { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; color:var(--th-ink,#0a142f); background:var(--th-bg,#ffffff); letter-spacing: -0.01em; }
+  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.025em; }
   body.lang-en .zh { display: none !important; }
   body.lang-zh .en { display: none !important; }
   .mono { font-family: 'IBM Plex Mono', monospace; }
   /* Light periwinkle-wash hero, matching novada.com */
   .grad-hero {
-    background: linear-gradient(180deg, #ffffff 0%, rgba(174,179,217,0.35) 55%, #ffffff 100%);
+    background: var(--th-hero-grad,linear-gradient(180deg,#ffffff 0%,rgba(174,179,217,0.35) 55%,#ffffff 100%));
   }
   /* Purple gradient highlight (clipped to text) — novada.com signature */
   .grad-text {
@@ -190,12 +234,32 @@
   details.faq summary::after { content: '+'; float: right; font-weight: 300; font-size: 22px; line-height: 1; color: #5b2eeb; transition: transform .2s ease; }
   details.faq[open] summary::after { content: '−'; }
 
+  /* ─── Motion layer (Lenis + GSAP) ──────────────────────────────── */
+  .js-anim .hero-animate { opacity: 0; }
+  .js-anim .sf { opacity: 0; transform: translateY(30px); }
+  @keyframes badge-shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
+  .badge-shimmer { position: relative; overflow: hidden; }
+  .badge-shimmer::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+    background-size: 200% auto; animation: badge-shimmer 3.5s linear infinite;
+    pointer-events: none; border-radius: inherit;
+  }
+  @keyframes code-pulse-glow {
+    0%, 100% { box-shadow: rgba(108,64,226,0)    0 0  0px 0; }
+    50%       { box-shadow: rgba(108,64,226,0.18) 0 0 28px 3px; }
+  }
+  .code-glow { animation: code-pulse-glow 4s ease-in-out infinite; }
+
   /* ─── Playground ─────────────────────────────────────────────── */
   .pg-tool-pill {
     padding: 10px 8px; border-radius: 10px; font-size: 13px;
     font-weight: 500; cursor: pointer; transition: all .15s ease;
     background: white; border: 1px solid #e7e2f5; color: #251f3d;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: 'Hanken Grotesk', sans-serif;
   }
   .pg-tool-pill:hover { border-color: #5b2eeb; color: #5b2eeb; }
   .pg-tool-pill.pg-active { background: #0c0a17; color: white; border-color: #0c0a17; }
@@ -241,6 +305,10 @@
       <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
     </nav>
     <div class="flex items-center gap-3">
+      <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
       <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
       <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
         <span class="en">Get API key</span><span class="zh">获取密钥</span>
@@ -252,7 +320,7 @@
 <!-- HERO -->
 <section class="grad-hero">
   <div class="max-w-6xl mx-auto px-5 pt-20 pb-24 text-center">
-    <div class="inline-flex items-center gap-2 bg-white border border-violet-100 rounded-full px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-medium mb-7 max-w-full shadow-sm" style="color:#677489">
+    <div class="badge-shimmer inline-flex items-center gap-2 bg-white border border-violet-100 rounded-full px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-medium mb-7 max-w-full shadow-sm" style="color:#677489">
       <span class="w-2 h-2 rounded-full bg-violet animate-pulse shrink-0"></span>
       <span class="en">
         Live on Vercel · 26 tools available<span class="hidden sm:inline"> · 195+ countries · 100M+ residential IPs</span>
@@ -261,18 +329,18 @@
         已上线 · Vercel 部署 · 26 个工具可用<span class="hidden sm:inline"> · 覆盖 195+ 国家 · 1 亿+ 住宅 IP</span>
       </span>
     </div>
-    <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.05] mb-6 display" style="color:#0a142f">
+    <h1 class="hero-animate text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.05] mb-6 display" style="color:#0a142f">
       <span class="en">One URL. <span class="grad-text">25 web-data tools.</span><br/>Zero install.</span>
       <span class="zh">一个 URL,<span class="grad-text">25 个网络数据工具,</span><br/>零安装。</span>
     </h1>
-    <p class="text-base sm:text-lg max-w-3xl mx-auto mb-10 leading-relaxed" style="color:#677489">
+    <p class="hero-animate text-base sm:text-lg max-w-3xl mx-auto mb-10 leading-relaxed" style="color:#677489">
       <span class="en">Search, SERP, scrape, extract, map, crawl, verify, discover, research — plus 6 proxy types — through a single Streamable-HTTP MCP endpoint. Drop into Claude Desktop, Claude Code, Cursor, Codex, Cline, or Windsurf in 30 seconds.</span>
       <span class="zh">搜索、SERP、抓取、提取、站点地图、爬取、验证、发现、研究,加上 6 种代理 — 全部通过一个 Streamable-HTTP MCP 端点。30 秒接入 Claude Desktop、Claude Code、Cursor、Codex、Cline、Windsurf。</span>
     </p>
 
     <!-- Hero code block -->
-    <div class="max-w-3xl mx-auto mb-4">
-      <div class="code-block text-left">
+    <div class="hero-animate max-w-3xl mx-auto mb-4">
+      <div class="code-block code-glow text-left">
         <button class="copy-btn" data-copy="https://mcp.novada.com/YOUR_API_KEY/mcp">Copy</button>
         <pre class="mono"><span class="text-violet-200">https://</span>mcp.novada.com<span class="text-violet-200">/</span><span class="text-violet-100">YOUR_API_KEY</span><span class="text-violet-200">/mcp</span></pre>
       </div>
@@ -282,7 +350,7 @@
       </p>
     </div>
 
-    <div class="flex flex-col sm:flex-row gap-3 justify-center items-center mt-7">
+    <div class="hero-animate flex flex-col sm:flex-row gap-3 justify-center items-center mt-7">
       <a href="/playground" class="inline-flex items-center justify-center gap-2 text-white font-bold px-7 py-3.5 rounded-[10px] transition w-full sm:w-auto" style="background:#6c40e2" onmouseover="this.style.background='#431fd5'" onmouseout="this.style.background='#6c40e2'">
         <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
         <span class="en">▶ Try the live playground</span><span class="zh">▶ 打开在线 Playground</span>
@@ -291,7 +359,7 @@
         <span class="en">Get free API key →</span><span class="zh">免费获取 API 密钥 →</span>
       </a>
     </div>
-    <p class="text-sm mt-5" style="color:#677489">
+    <p class="hero-animate text-sm mt-5" style="color:#677489">
       <span class="en">1,000 tool calls / month free · No credit card · 60 req/min per IP</span>
       <span class="zh">每月 1,000 次免费调用 · 无需信用卡 · 每 IP 60 次/分钟</span>
     </p>
@@ -300,7 +368,7 @@
 
 <!-- COMPETITOR STRIP -->
 <section class="bg-ink text-white/80 py-6 border-y border-white/10">
-  <div class="max-w-6xl mx-auto px-5 grid sm:grid-cols-4 gap-4 text-sm">
+  <div class="sf max-w-6xl mx-auto px-5 grid sm:grid-cols-4 gap-4 text-sm">
     <div class="text-white">
       <div class="text-xs uppercase tracking-wider text-white/50 mb-1"><span class="en">vs alternatives</span><span class="zh">差异化</span></div>
       <div class="font-semibold display"><span class="en">Broadest stack, one key</span><span class="zh">最广栈,一把钥匙</span></div>
@@ -322,7 +390,7 @@
 
 <!-- TRY IT NOW -->
 <section id="try" class="py-16 bg-paper border-b border-violet-100">
-  <div class="max-w-3xl mx-auto px-5">
+  <div class="sf max-w-3xl mx-auto px-5">
     <div class="text-center mb-8">
       <h2 class="text-2xl sm:text-3xl font-bold text-ink mb-2 display">
         <span class="en">Try it in your terminal first</span>
@@ -350,7 +418,7 @@
 <!-- INSTALL TABS -->
 <section id="install" class="py-20 bg-paper">
   <div class="max-w-6xl mx-auto px-5">
-    <div class="text-center mb-12">
+    <div class="sf text-center mb-12">
       <h2 class="text-3xl sm:text-4xl font-bold text-ink mb-3 display">
         <span class="en">Install in 30 seconds</span>
         <span class="zh">30 秒接入</span>
@@ -542,7 +610,7 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
 <!-- FRAMEWORKS & AGENTS -->
 <section id="frameworks" class="py-20 bg-white border-t border-violet-100">
   <div class="max-w-3xl mx-auto px-5">
-    <div class="text-center mb-10">
+    <div class="sf text-center mb-10">
       <h2 class="text-3xl sm:text-4xl font-bold text-ink mb-3 display">
         <span class="en">Use it from your agent framework</span>
         <span class="zh">在你的 Agent 框架里使用</span>
@@ -710,7 +778,7 @@ params = {
         <span class="zh">为什么用托管 MCP?</span>
       </h2>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="sf grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="border border-violet-100 bg-white rounded-2xl p-6 hover:border-violet transition">
         <div class="w-11 h-11 rounded-xl bg-violet-50 text-violet flex items-center justify-center mb-4">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
@@ -834,6 +902,35 @@ params = {
       showToast('Copy failed');
     }
   });
+</script>
+
+<!-- Motion layer: Lenis smooth-scroll + GSAP scroll-reveal -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
+<script>
+  document.body.classList.add('js-anim');
+
+  const lenis = new Lenis({ duration: 1.1, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
+  gsap.registerPlugin(ScrollTrigger);
+  lenis.on('scroll', ScrollTrigger.update);
+  gsap.ticker.add(time => lenis.raf(time * 1000));
+  gsap.ticker.lagSmoothing(0);
+
+  // Section fade-up on scroll
+  gsap.utils.toArray('.sf').forEach(el => {
+    gsap.fromTo(el,
+      { y: 30, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.7, ease: 'power2.out',
+        scrollTrigger: { trigger: el, start: 'top 88%', toggleActions: 'play none none none' } }
+    );
+  });
+
+  // Hero entrance — staggered on load
+  gsap.fromTo('.hero-animate',
+    { y: 22, opacity: 0 },
+    { y: 0, opacity: 1, duration: 0.65, ease: 'power2.out', stagger: 0.13, delay: 0.15 }
+  );
 </script>
 
 </body>

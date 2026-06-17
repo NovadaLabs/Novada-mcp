@@ -2,20 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<script>
+(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);})();
+function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Chat — Novada MCP</title>
-<meta name="description" content="Conversational playground for the Novada Hosted MCP server. Type a request, watch one MCP tool run live against mcp.novada.com, and read the answer in a chat thread." />
+<title>MCP Playground — Novada</title>
+<meta name="description" content="Chat with Novada's 26 web-data tools through natural language. Zero setup required." />
 <link rel="canonical" href="https://mcp.novada.com/chat" />
 <link rel="icon" href="https://www.novada.com/favicon.ico" />
-<meta property="og:title" content="Novada MCP — Chat Playground" />
-<meta property="og:description" content="Type a request, watch one Novada MCP tool run live, and read the answer in a chat thread. Your key, your quota." />
+<meta property="og:title" content="Novada MCP Playground — The Web is Your Data" />
+<meta property="og:description" content="Use Novada's 26 web-data tools through natural language. Zero setup." />
 <meta property="og:url" content="https://mcp.novada.com/chat" />
 <meta property="og:image" content="https://mcp.novada.com/og-image.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
   tailwind.config = {
     theme: { extend: {
@@ -26,367 +30,1212 @@
       },
       fontFamily: {
         display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        sans: ['IBM Plex Sans', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
     } },
   };
 </script>
 <style>
-  html { scroll-behavior: smooth; }
-  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #0a142f; background: #f7f8fc; }
-  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
+  /* Dark = default (app is dark-first). Light mode overrides below. */
+  :root{
+    --th-bg:#191228; --th-surface:#22183d; --th-card:#2a2050;
+    --th-ink:#e8e0ff; --th-ink-mid:#b0a8d8; --th-ink-muted:#8578b8;
+    --th-vborder:rgba(108,64,226,0.28); --th-nav:rgba(25,18,40,0.95);
+    --th-input-bg:rgba(255,255,255,0.06); --th-input-border:rgba(255,255,255,0.15);
+  }
+  [data-theme="light"]{
+    --th-bg:#f8f7fc; --th-surface:#ffffff; --th-card:#ffffff;
+    --th-ink:#0a142f; --th-ink-mid:#3d4a6b; --th-ink-muted:#677489;
+    --th-vborder:rgba(108,64,226,0.18); --th-nav:rgba(255,255,255,0.95);
+    --th-input-bg:#ffffff; --th-input-border:rgba(108,64,226,0.25);
+  }
+  /* Apply base theme vars to body */
+  body{background:var(--th-bg)!important;color:var(--th-ink)!important;}
+
+  /* Light mode structural overrides */
+  [data-theme="light"] body{background:var(--th-bg)!important;color:var(--th-ink)!important;}
+  [data-theme="light"] header,
+  [data-theme="light"] nav,
+  [data-theme="light"] .chat-nav{background:var(--th-nav)!important;border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .chat-wrap,
+  [data-theme="light"] .chat-main,
+  [data-theme="light"] #chat-area{background:var(--th-bg)!important;}
+  [data-theme="light"] .welcome-area,
+  [data-theme="light"] .welcome-card{background:var(--th-bg)!important;color:var(--th-ink)!important;}
+  [data-theme="light"] .sugg-card{background:var(--th-surface)!important;border-color:var(--th-vborder)!important;color:var(--th-ink)!important;}
+  [data-theme="light"] .composer-wrap,
+  [data-theme="light"] .composer-bar,
+  [data-theme="light"] .input-area{background:var(--th-surface)!important;border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .chat-input,
+  [data-theme="light"] #chat-input,
+  [data-theme="light"] input[type="text"],
+  [data-theme="light"] input[type="password"]{background:var(--th-input-bg)!important;border-color:var(--th-input-border)!important;color:var(--th-ink)!important;}
+  [data-theme="light"] input::placeholder{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .msg-bubble.user{background:linear-gradient(135deg,#6c40e2,#431fd5)!important;color:#fff!important;}
+  [data-theme="light"] .msg-bubble.assistant,
+  [data-theme="light"] .msg-bubble.bot{background:var(--th-surface)!important;color:var(--th-ink)!important;border:1px solid var(--th-vborder)!important;}
+  [data-theme="light"] .status-bar,
+  [data-theme="light"] .chat-footer{background:rgba(255,255,255,0.9)!important;border-color:var(--th-vborder)!important;color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .headline,
+  [data-theme="light"] h1,
+  [data-theme="light"] h2{color:var(--th-ink)!important;}
+  [data-theme="light"] .avatar-ring,
+  [data-theme="light"] .logo-circle{border-color:var(--th-vborder)!important;background:var(--th-surface)!important;}
+  [data-theme="light"] main{background:var(--th-bg)!important;}
+  [data-theme="light"] .subtitle{color:var(--th-ink-mid)!important;}
+  [data-theme="light"] .key-field{background:var(--th-input-bg)!important;border-color:var(--th-input-border)!important;}
+  [data-theme="light"] #key-input{color:var(--th-ink)!important;}
+  [data-theme="light"] #key-input::placeholder{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .key-icon{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .eye-btn{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .key-hint{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .sugg-text{color:var(--th-ink)!important;}
+  [data-theme="light"] .sugg-spark{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] #chat-input{color:var(--th-ink)!important;}
+  [data-theme="light"] #chat-input::placeholder{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .composer-bar{background:var(--th-surface)!important;border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .status-left{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .status-right{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] #chat-header{border-color:var(--th-vborder)!important;}
+  [data-theme="light"] #chat-header-title{color:var(--th-ink)!important;}
+  [data-theme="light"] #chat-header-new{color:var(--th-ink-muted)!important;border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .bubble-user{background:#6c40e2!important;color:#fff!important;}
+  [data-theme="light"] .bubble-assistant{color:var(--th-ink)!important;}
+  [data-theme="light"] .mini-avatar{background:var(--th-surface)!important;border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .msg-avatar{background:var(--th-surface)!important;border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .logo-avatar{background:var(--th-surface)!important;border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .nav-links a{color:var(--th-ink-mid)!important;}
+  [data-theme="light"] .nav-links a:hover{color:var(--th-ink)!important;}
+  [data-theme="light"] .lang-btn{color:var(--th-ink-mid)!important;border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .toast{background:rgba(255,255,255,0.95)!important;color:var(--th-ink)!important;border-color:var(--th-vborder)!important;}
+
+  /* Theme toggle button */
+  .theme-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;background:transparent;color:currentColor;transition:background 0.2s;padding:0;}
+  [data-theme="light"] .theme-btn{border-color:rgba(108,64,226,0.25);}
+  .theme-btn:hover{background:rgba(255,255,255,0.08);}
+  [data-theme="light"] .theme-btn:hover{background:rgba(108,64,226,0.08);}
+  .theme-btn .icon-sun{display:block;}
+  .theme-btn .icon-moon{display:none;}
+  [data-theme="light"] .theme-btn .icon-sun{display:none;}
+  [data-theme="light"] .theme-btn .icon-moon{display:block;}
+
+  /* ── Reset & Base ────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+    color: #ffffff;
+    background: linear-gradient(135deg, #0f0a1f 0%, #191228 50%, #0a0620 100%);
+    display: flex;
+    flex-direction: column;
+    letter-spacing: -0.01em;
+  }
   body.lang-en .zh { display: none !important; }
   body.lang-zh .en { display: none !important; }
-  .mono { font-family: 'IBM Plex Mono', monospace; }
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #191228; color: white; padding: 10px 18px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 100; }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ─── Inputs (shared with console) ─────────────────────── */
-  .pg-input { width: 100%; padding: 9px 12px; font-size: 13px; border: 1px solid #e7e2f5; border-radius: 8px; background: #fff; font-family: 'IBM Plex Mono', monospace; color: #0a142f; }
-  .pg-input:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.10); }
-  .pg-label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #677489; margin-bottom: 5px; font-weight: 600; }
-  .key-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
-  .key-need { background: #f1f0f5; color: #677489; }
-  .key-ok { background: #f5eeff; color: #6c40e2; }
+  /* ── Nav ────────────────────────────────────── */
+  header {
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(25, 18, 40, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .nav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nav-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+  .nav-logo img { height: 26px; }
+  .nav-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #6c40e2;
+    background: rgba(108,64,226,0.15);
+    border: 1px solid rgba(108,64,226,0.3);
+    padding: 2px 7px;
+    border-radius: 5px;
+  }
+  .nav-links {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      font-size: 13.5px;
+      font-weight: 500;
+    }
+  }
+  .nav-links a {
+    color: rgba(255,255,255,0.6);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .nav-links a:hover { color: #ffffff; }
+  .nav-links a.active {
+    color: #6c40e2;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #6c40e2;
+    animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .nav-actions { display: flex; align-items: center; gap: 10px; }
+  .lang-btn {
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.6);
+    padding: 5px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .lang-btn:hover { border-color: #6c40e2; color: #6c40e2; }
+  .cta-btn {
+    display: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    background: #6c40e2;
+    padding: 7px 16px;
+    border-radius: 9px;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  @media (min-width: 640px) { .cta-btn { display: inline-flex; align-items: center; } }
+  .cta-btn:hover { background: #431fd5; }
 
-  /* ─── Chat ─────────────────────────────────────────────── */
-  .chat-shell { border: 1px solid #e7e2f5; border-radius: 12px; background: #fff; box-shadow: rgba(18,17,39,0.06) 0 10px 40px 0; overflow: hidden; display: flex; flex-direction: column; }
-  .chat-thread { overflow-y: auto; padding: 22px 18px; display: flex; flex-direction: column; gap: 16px; background: #fbfaff; }
+  /* ── Main content area ──────────────────────── */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow: hidden;
+    transition: justify-content 0.3s ease;
+  }
+  main.chat-mode {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+
+  /* ── Welcome screen ─────────────────────────── */
+  #welcome-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 880px;
+  }
+
+  /* Logo avatar */
+  .logo-avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: rgba(26, 16, 64, 0.8);
+    border: 1px solid rgba(108,64,226,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 28px;
+    flex-shrink: 0;
+    transition: width 0.3s, height 0.3s, margin 0.3s;
+  }
+  .logo-avatar img { height: 44px; width: auto; }
+  .logo-avatar-fallback {
+    font-family: 'Hanken Grotesk', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    color: #6c40e2;
+  }
+
+  /* Headline */
+  .headline {
+    font-family: 'Hanken Grotesk', 'Noto Sans SC', sans-serif;
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    color: #ffffff;
+    margin-bottom: 12px;
+    letter-spacing: -0.025em;
+  }
+
+  /* Subtitle */
+  .subtitle {
+    font-size: 15px;
+    color: rgba(255,255,255,0.55);
+    text-align: center;
+    margin-bottom: 28px;
+    line-height: 1.5;
+  }
+
+  /* API Key input */
+  .key-wrap {
+    width: 100%;
+    max-width: 520px;
+    margin-bottom: 28px;
+  }
+  .key-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .key-field:focus-within {
+    border-color: #6c40e2;
+    box-shadow: 0 0 0 3px rgba(108,64,226,0.18);
+  }
+  .key-icon {
+    color: rgba(255,255,255,0.3);
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+  #key-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  #key-input::placeholder { color: rgba(255,255,255,0.3); font-family: 'Hanken Grotesk', sans-serif; }
+  .eye-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.3);
+    cursor: pointer;
+    padding: 0 0 0 8px;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s;
+    flex-shrink: 0;
+  }
+  .eye-btn:hover { color: rgba(255,255,255,0.7); }
+  .key-hint {
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.3);
+    text-align: center;
+    margin-top: 8px;
+  }
+  .key-hint a { color: rgba(108,64,226,0.8); text-decoration: none; }
+  .key-hint a:hover { color: #6c40e2; }
+
+  /* Suggestion grid */
+  #suggestion-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    width: 100%;
+    max-width: 880px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 600px) {
+    #suggestion-grid { grid-template-columns: 1fr; }
+  }
+  .sugg-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    text-align: left;
+  }
+  .sugg-card:hover:not(.disabled) {
+    border-color: rgba(108,64,226,0.45);
+    background: rgba(108,64,226,0.08);
+  }
+  .sugg-card.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .sugg-spark {
+    color: rgba(255,255,255,0.35);
+    font-size: 18px;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .sugg-text {
+    font-size: 14px;
+    color: rgba(255,255,255,0.85);
+    line-height: 1.4;
+  }
+
+  /* Chat input bar */
+  .composer-wrap {
+    width: 100%;
+    max-width: 880px;
+  }
+  .composer-bar {
+    display: flex;
+    align-items: center;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.05);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .composer-bar:focus-within {
+    border-color: rgba(108,64,226,0.5);
+    box-shadow: 0 0 0 3px rgba(108,64,226,0.12);
+  }
+  #chat-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 14px 18px;
+    color: #ffffff;
+    font-size: 14px;
+    font-family: 'Hanken Grotesk', 'Noto Sans SC', sans-serif;
+    resize: none;
+    max-height: 140px;
+    line-height: 1.5;
+  }
+  #chat-input::placeholder { color: rgba(255,255,255,0.3); }
+  .send-btn {
+    background: #6c40e2;
+    color: #ffffff;
+    border: none;
+    padding: 14px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Hanken Grotesk', sans-serif;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .send-btn:hover:not(:disabled) { background: #431fd5; }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    width: 100%;
+    max-width: 880px;
+  }
+  .status-left {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.45);
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+  }
+  .status-dot.busy { background: #f59e0b; animation: pulse-dot 1s infinite; }
+  .status-right {
+    font-size: 12px;
+    color: rgba(255,255,255,0.28);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ── Chat mode ───────────────────────────────── */
+  #chat-area {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    max-width: 880px;
+    flex: 1;
+    overflow: hidden;
+    padding-top: 16px;
+  }
+  main.chat-mode #chat-area { display: flex; }
+  main.chat-mode #welcome-screen { display: none; }
+
+  /* Small avatar top of chat */
+  #chat-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  .mini-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(26,16,64,0.8);
+    border: 1px solid rgba(108,64,226,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .mini-avatar img { height: 18px; }
+  .mini-avatar-text { font-family: 'Hanken Grotesk', sans-serif; font-size: 15px; font-weight: 800; color: #6c40e2; }
+  #chat-header-title {
+    font-family: 'Hanken Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.85);
+  }
+  #chat-header-new {
+    margin-left: auto;
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.4);
+    cursor: pointer;
+    padding: 4px 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 999px;
+    background: transparent;
+    transition: all 0.15s;
+    font-family: 'Hanken Grotesk', sans-serif;
+  }
+  #chat-header-new:hover { border-color: rgba(108,64,226,0.4); color: rgba(255,255,255,0.7); }
+
+  /* Thread */
+  #thread {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(108,64,226,0.2) transparent;
+  }
+  #thread::-webkit-scrollbar { width: 4px; }
+  #thread::-webkit-scrollbar-track { background: transparent; }
+  #thread::-webkit-scrollbar-thumb { background: rgba(108,64,226,0.25); border-radius: 2px; }
+
+  /* Chat composer (chat mode) */
+  #chat-composer {
+    flex-shrink: 0;
+    padding-top: 12px;
+  }
+
+  /* Message rows */
   .msg-row { display: flex; gap: 10px; max-width: 100%; }
   .msg-row.user { justify-content: flex-end; }
-  .msg-row.assistant { justify-content: flex-start; }
-  .avatar { flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
-  .avatar-bot { background: #f5eeff; color: #6c40e2; font-family: 'IBM Plex Mono', monospace; }
-  .avatar-user { background: #191228; color: #fff; }
-  .bubble { padding: 11px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; max-width: 78%; word-break: break-word; }
-  .bubble-user { background: #6c40e2; color: #fff; border-bottom-right-radius: 4px; }
-  .bubble-assistant { background: #fff; color: #251f3d; border: 1px solid #eee6fb; border-bottom-left-radius: 4px; }
-  .bubble-error { background: #fdeaea; color: #9b271b; border: 1px solid #f6c9c4; border-bottom-left-radius: 4px; }
-  .bubble-out { white-space: pre-wrap; }
-  .tool-chip { display: inline-flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; font-weight: 500; color: #6c40e2; background: #f5eeff; border: 1px solid #e3daff; padding: 3px 9px; border-radius: 7px; margin-bottom: 9px; }
-  .tool-chip .arr { font-weight: 700; }
-  .tool-dot { width: 6px; height: 6px; border-radius: 999px; background: #6c40e2; display: inline-block; }
-  .quota-line { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #97a0b0; margin-top: 7px; }
-  .typing { display: inline-flex; gap: 4px; align-items: center; }
-  .typing span { width: 6px; height: 6px; border-radius: 999px; background: #c9b4fb; animation: blink 1.2s infinite both; }
-  .typing span:nth-child(2){ animation-delay: .2s; } .typing span:nth-child(3){ animation-delay: .4s; }
-  @keyframes blink { 0%,80%,100%{ opacity:.25; transform: translateY(0);} 40%{ opacity:1; transform: translateY(-2px);} }
-  /* suggested-prompt chips */
-  .prompt-chip { font-size: 12.5px; color: #251f3d; background: #fff; border: 1px solid #e7e2f5; border-radius: 999px; padding: 6px 13px; cursor: pointer; transition: all .12s; white-space: nowrap; }
-  .prompt-chip:hover { border-color: #6c40e2; color: #6c40e2; background: #f5eeff; }
-  /* composer */
-  .composer { border-top: 1px solid #eee6fb; background: #fff; padding: 12px 14px; }
-  .composer-box { display: flex; gap: 10px; align-items: flex-end; }
-  .chat-textarea { flex: 1; resize: none; max-height: 140px; padding: 10px 12px; font-size: 14px; line-height: 1.5; border: 1px solid #e7e2f5; border-radius: 10px; background: #fff; color: #0a142f; font-family: 'IBM Plex Sans','Noto Sans SC',system-ui,sans-serif; }
-  .chat-textarea:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.10); }
-  .send-btn { background: #191228; color: #fff; font-weight: 700; border-radius: 10px; padding: 10px 18px; font-size: 13px; transition: background .15s; display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; }
-  .send-btn:hover:not(:disabled) { background: #6c40e2; }
-  .send-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .msg-row.assistant { justify-content: flex-start; align-items: flex-start; }
+
+  /* User bubble */
+  .bubble-user {
+    background: #6c40e2;
+    color: #ffffff;
+    padding: 12px 16px;
+    border-radius: 18px 18px 4px 18px;
+    max-width: 70%;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  /* Assistant */
+  .assistant-inner { display: flex; gap: 10px; align-items: flex-start; max-width: 80%; }
+  .msg-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(26,16,64,0.8);
+    border: 1px solid rgba(108,64,226,0.3);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .msg-avatar img { height: 14px; }
+  .msg-avatar-n { font-family: 'Hanken Grotesk', sans-serif; font-size: 13px; font-weight: 800; color: #6c40e2; }
+  .bubble-assistant-wrap { display: flex; flex-direction: column; gap: 6px; }
+
+  /* Tool chip */
+  .tool-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(108,64,226,0.15);
+    border: 1px solid rgba(108,64,226,0.3);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.8);
+    white-space: nowrap;
+    width: fit-content;
+  }
+
+  /* Assistant text bubble */
+  .bubble-assistant {
+    color: rgba(255,255,255,0.85);
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Error bubble */
+  .bubble-error {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: #fca5a5;
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Typing indicator */
+  .typing-indicator {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .typing-indicator span {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(108,64,226,0.6);
+    animation: bounce 1.2s infinite both;
+  }
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-4px); }
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(25,18,40,0.95);
+    border: 1px solid rgba(108,64,226,0.3);
+    color: rgba(255,255,255,0.9);
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s ease;
+    z-index: 200;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body class="lang-en">
 
-<!-- HEADER -->
-<header class="sticky top-0 z-50 bg-paper/90 backdrop-blur border-b border-violet-100">
-  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-    <a href="/" class="flex items-center gap-2">
-      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
-      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+<!-- NAV -->
+<header>
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada"
+           onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',style:'font-family:Hanken Grotesk,sans-serif;font-size:20px;font-weight:800;color:#fff'}))" />
+      <span class="nav-badge">MCP</span>
     </a>
-    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-ink-700">
-      <a href="/playground" class="hover:text-violet"><span class="en">Playground</span><span class="zh">在线试玩</span></a>
-      <a href="/chat" class="inline-flex items-center gap-1.5 text-violet font-semibold">
-        <span class="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"></span>
+    <nav class="nav-links">
+      <a href="/playground"><span class="en">Playground</span><span class="zh">在线试玩</span></a>
+      <a href="/chat" class="active">
+        <span class="live-dot"></span>
         <span class="en">Chat</span><span class="zh">对话</span>
       </a>
-      <a href="/configure" class="hover:text-violet"><span class="en">Configure</span><span class="zh">配置</span></a>
-      <a href="/chat" class="hover:text-violet"><span class="en">Chat</span><span class="zh">对话</span></a>
-
-      <a href="/#install" class="hover:text-violet">Install</a>
-      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
-      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">价格</span></a>
-      <a href="/faq" class="hover:text-violet">FAQ</a>
-      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+      <a href="/configure"><span class="en">Configure</span><span class="zh">配置</span></a>
+      <a href="/#install"><span class="en">Install</span><span class="zh">安装</span></a>
+      <a href="/tools"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver">GitHub</a>
     </nav>
-    <div class="flex items-center gap-3">
-      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
-      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
+    <div class="nav-actions">
+      <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button class="lang-btn" id="lang-toggle">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="cta-btn">
         <span class="en">Get API key</span><span class="zh">获取密钥</span>
       </a>
     </div>
   </div>
 </header>
 
-<main class="max-w-4xl mx-auto px-5 py-10">
+<!-- MAIN -->
+<main id="main">
 
-  <!-- Title row -->
-  <div class="flex items-end justify-between flex-wrap gap-3 mb-3">
-    <div>
-      <a href="/" class="text-sm hover:text-violet transition" style="color:#677489">← <span class="en">Back to home</span><span class="zh">返回首页</span></a>
-      <h1 class="text-2xl sm:text-3xl font-bold mt-2 display" style="color:#0a142f">
-        <span class="en">Chat Playground</span><span class="zh">对话试玩</span>
-      </h1>
+  <!-- WELCOME SCREEN (before first message) -->
+  <div id="welcome-screen">
+
+    <!-- Logo avatar -->
+    <div class="logo-avatar" id="logo-avatar">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada"
+           onerror="this.outerHTML='<span class=\'logo-avatar-fallback\'>N</span>'" />
     </div>
-    <!-- API key -->
-    <div class="w-full sm:w-auto">
-      <div class="flex items-center gap-2 mb-1">
-        <span class="pg-label" style="margin:0">
-          <span class="en">API key</span><span class="zh">API 密钥</span> <span class="text-violet">*</span>
+
+    <!-- Headline -->
+    <h1 class="headline">
+      <span class="en">MCP Playground:<br>The Web is Your Data</span>
+      <span class="zh">MCP 试玩场：<br>网络数据，随问随取</span>
+    </h1>
+
+    <!-- Subtitle -->
+    <p class="subtitle">
+      <span class="en">Use Novada's 26 web-data tools through natural language. Zero setup.</span>
+      <span class="zh">通过自然语言调用 Novada 的 26 个网络数据工具，无需任何配置。</span>
+    </p>
+
+    <!-- API Key input -->
+    <div class="key-wrap">
+      <div class="key-field">
+        <span class="key-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+          </svg>
         </span>
-        <span id="ck-key-status" class="key-badge key-need"></span>
-      </div>
-      <div class="flex gap-2">
-        <input id="ck-token" type="password" autocomplete="off" spellcheck="false" placeholder="sk-eu-novada-…" class="pg-input" style="width:280px;max-width:60vw" />
-        <button id="ck-save-key" class="px-3 py-2 text-xs font-semibold bg-ink hover:bg-violet text-white rounded-lg transition whitespace-nowrap">
-          <span class="en">Save</span><span class="zh">保存</span>
+        <input id="key-input" type="password" autocomplete="off" spellcheck="false"
+               placeholder="Enter your Novada API key to start…"
+               data-ph-zh="输入你的 Novada API 密钥以开始…" />
+        <button class="eye-btn" id="eye-toggle" type="button" aria-label="Toggle key visibility">
+          <svg id="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+          <svg id="eye-closed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
         </button>
-        <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="px-3 py-2 text-xs font-semibold border border-violet-100 text-violet rounded-lg hover:border-violet transition whitespace-nowrap flex items-center">
-          <span class="en">Get key</span><span class="zh">获取</span>
-        </a>
       </div>
+      <p class="key-hint">
+        <span class="en">Your key stays in your browser. Get one at <a href="https://dashboard.novada.com/overview/scraper/api-playground/">dashboard.novada.com</a></span>
+        <span class="zh">密钥仅保存在你的浏览器中。在 <a href="https://dashboard.novada.com/overview/scraper/api-playground/">dashboard.novada.com</a> 获取</span>
+      </p>
     </div>
-  </div>
 
-  <!-- Disclaimer -->
-  <p class="text-xs mb-5 leading-relaxed" style="color:#677489">
-    <span class="en">Guided demo — picks <strong>one</strong> tool by intent and runs it live against <code class="mono text-violet">mcp.novada.com</code>. In Claude/Cursor, a full LLM agent chains these tools automatically.</span>
-    <span class="zh">引导式演示 — 按你的意图挑选<strong>一个</strong>工具,并实时调用 <code class="mono text-violet">mcp.novada.com</code>。在 Claude/Cursor 中,完整的 LLM Agent 会自动串联这些工具。</span>
-  </p>
+    <!-- Suggestion grid -->
+    <div id="suggestion-grid">
+      <button class="sugg-card disabled" data-sugg="0">
+        <span class="sugg-spark">✦</span>
+        <span class="sugg-text en">Search for top AI tools and startups from this week</span>
+        <span class="sugg-text zh">搜索本周热门 AI 工具和初创公司</span>
+      </button>
+      <button class="sugg-card disabled" data-sugg="1">
+        <span class="sugg-spark">✦</span>
+        <span class="sugg-text en">Scrape pricing and features from a competitor's website</span>
+        <span class="sugg-text zh">抓取竞品网站的定价和功能介绍</span>
+      </button>
+      <button class="sugg-card disabled" data-sugg="2">
+        <span class="sugg-spark">✦</span>
+        <span class="sugg-text en">Map all pages on a website and find broken links</span>
+        <span class="sugg-text zh">生成网站的完整页面地图，找出失效链接</span>
+      </button>
+      <button class="sugg-card disabled" data-sugg="3">
+        <span class="sugg-spark">✦</span>
+        <span class="sugg-text en">Find the latest research papers on LLM agents and RAG</span>
+        <span class="sugg-text zh">查找关于 LLM 智能体和 RAG 的最新研究论文</span>
+      </button>
+    </div>
 
-  <!-- Chat shell -->
-  <div class="chat-shell" style="height:min(640px,72vh)">
-    <!-- thread -->
-    <div id="ck-thread" class="chat-thread" style="flex:1"></div>
-
-    <!-- suggested prompts -->
-    <div class="px-3.5 pt-3 pb-1 flex gap-2 overflow-x-auto" id="ck-chips" style="border-top:1px solid #eee6fb; background:#fff"></div>
-
-    <!-- composer -->
-    <div class="composer">
-      <div class="composer-box">
-        <textarea id="ck-input" class="chat-textarea" rows="1"
-          data-ph-en="Ask anything, paste a URL, or state a claim to verify…"
-          data-ph-zh="提问、粘贴一个 URL,或输入一个待核实的陈述…"></textarea>
-        <button id="ck-send" class="send-btn">
+    <!-- Chat input bar -->
+    <div class="composer-wrap">
+      <div class="composer-bar">
+        <textarea id="chat-input" rows="1"
+                  placeholder="Ask me about web data, scraping, search, or anything else…"
+                  data-ph-zh="询问关于网络数据、抓取、搜索的任何问题…"></textarea>
+        <button class="send-btn" id="send-btn" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
           <span class="en">Send</span><span class="zh">发送</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
         </button>
       </div>
-      <p id="ck-hint" class="text-xs mt-2" style="color:#97a0b0"></p>
+      <div class="status-bar">
+        <span class="status-left">
+          <span class="status-dot" id="status-dot"></span>
+          <span id="status-text" class="en-status">Ready to help</span>
+        </span>
+        <span class="status-right">
+          <span class="en">Powered by Novada MCP</span>
+          <span class="zh">由 Novada MCP 驱动</span>
+        </span>
+      </div>
+    </div>
+
+  </div><!-- /welcome-screen -->
+
+  <!-- CHAT AREA (shown after first message) -->
+  <div id="chat-area">
+    <div id="chat-header">
+      <div class="mini-avatar">
+        <img src="https://www.novada.com/images/header/header-logo1.svg" alt="N"
+             onerror="this.outerHTML='<span class=\'mini-avatar-text\'>N</span>'" />
+      </div>
+      <span id="chat-header-title">
+        <span class="en">Novada MCP Playground</span>
+        <span class="zh">Novada MCP 试玩场</span>
+      </span>
+      <button id="chat-header-new" onclick="resetToWelcome()">
+        <span class="en">+ New chat</span>
+        <span class="zh">+ 新对话</span>
+      </button>
+    </div>
+
+    <div id="thread"></div>
+
+    <div id="chat-composer">
+      <!-- same composer bar, but this one is used in chat mode -->
+      <div class="composer-bar" id="chat-composer-bar">
+        <textarea id="chat-input-2" rows="1"
+                  placeholder="Ask me about web data, scraping, search, or anything else…"
+                  data-ph-zh="询问关于网络数据、抓取、搜索的任何问题…"></textarea>
+        <button class="send-btn" id="send-btn-2" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          <span class="en">Send</span><span class="zh">发送</span>
+        </button>
+      </div>
+      <div class="status-bar">
+        <span class="status-left">
+          <span class="status-dot" id="status-dot-2"></span>
+          <span id="status-text-2">
+            <span class="en">Ready to help</span>
+            <span class="zh">随时待命</span>
+          </span>
+        </span>
+        <span class="status-right">
+          <span class="en">Powered by Novada MCP</span>
+          <span class="zh">由 Novada MCP 驱动</span>
+        </span>
+      </div>
     </div>
   </div>
 
-  <p class="text-xs mt-4 leading-relaxed" style="color:#97a0b0">
-    <span class="en">⚠️ Browser-side calls expose your key in the network tab — use it only for testing, call server-side in production. Each message runs exactly one tool and consumes one request from your own quota.</span>
-    <span class="zh">⚠️ 浏览器端调用会在 network 标签暴露密钥 — 仅供测试,生产请走服务端。每条消息只运行一个工具,并消耗你自己配额中的一次请求。</span>
-  </p>
-
-  <div class="mt-8 text-center">
-    <p class="text-sm" style="color:#677489"><span class="en">Want the raw request/response view instead?</span><span class="zh">想看原始的请求 / 响应视图?</span></p>
-    <a href="/playground" class="inline-flex items-center justify-center mt-3 border border-violet-100 hover:border-violet text-ink hover:text-violet font-semibold px-6 py-2.5 rounded-[10px] transition"><span class="en">Open the API Console</span><span class="zh">打开 API 控制台</span></a>
-  </div>
 </main>
 
-<div id="toast" class="toast">Copied ✓</div>
+<div id="toast" class="toast"></div>
 
 <script>
-  const body = document.body;
-  const langBtn = document.getElementById('lang-toggle');
-  const isZh = () => body.classList.contains('lang-zh');
-  const toast = document.getElementById('toast'); let toastTimer;
-  function showToast(m){ toast.textContent=m; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),1500); }
+'use strict';
 
-  // ── config ──
-  const CK_ENDPOINT = 'https://mcp.novada.com/mcp';
-  const LS_KEY = 'novada_mcp_api_key';
-  const tokenInput = document.getElementById('ck-token');
-  const keyStatus = document.getElementById('ck-key-status');
-  const thread = document.getElementById('ck-thread');
-  const chipsEl = document.getElementById('ck-chips');
-  const input = document.getElementById('ck-input');
-  const sendBtn = document.getElementById('ck-send');
-  const hint = document.getElementById('ck-hint');
-  function hasKey(){ return tokenInput.value.trim().length > 0; }
+// ── Constants ──────────────────────────────────────────────
+const MCP_ENDPOINT = 'https://mcp.novada.com/mcp';
+const LS_KEY = 'novada_mcp_api_key';
 
-  // ── suggested prompts (bilingual) ──
-  const CHIPS = [
-    { en: 'Compare Firecrawl vs BrightData pricing', zh: '对比 Firecrawl 和 BrightData 的价格' },
-    { en: 'Scrape https://www.tavily.com/pricing', zh: '抓取 https://www.tavily.com/pricing' },
-    { en: 'Map https://www.firecrawl.dev', zh: '生成 https://www.firecrawl.dev 的站点地图' },
-    { en: "Is 'Novada has 100M residential IPs' true?", zh: "“Novada 拥有 1 亿住宅 IP” 是真的吗?" },
-  ];
-  function renderChips(){
-    chipsEl.innerHTML = CHIPS.map((c,i) => `<button class="prompt-chip" data-chip="${i}">${isZh()?c.zh:c.en}</button>`).join('');
-  }
-  chipsEl.addEventListener('click', e => {
-    const b = e.target.closest('.prompt-chip'); if(!b) return;
-    const c = CHIPS[+b.dataset.chip];
-    input.value = isZh() ? c.zh : c.en;
-    autoGrow(); input.focus();
-  });
+// ── DOM refs ───────────────────────────────────────────────
+const body = document.body;
+const main = document.getElementById('main');
+const langToggle = document.getElementById('lang-toggle');
+const keyInput = document.getElementById('key-input');
+const eyeToggle = document.getElementById('eye-toggle');
+const eyeOpen = document.getElementById('eye-open');
+const eyeClosed = document.getElementById('eye-closed');
+const suggCards = document.querySelectorAll('.sugg-card');
 
-  // ── client-side intent router → picks ONE Novada tool ──
-  const URL_RE = /\bhttps?:\/\/[^\s]+/i;
-  function firstUrl(text){ const m = text.match(URL_RE); return m ? m[0].replace(/[)\]}.,;]+$/,'') : null; }
-  function routeIntent(raw){
-    const text = raw.trim();
-    const low = text.toLowerCase();
-    const url = firstUrl(text);
-    // crawl
-    if (/^crawl\b/.test(low)) return { tool: 'novada_crawl', args: { url: url || text.replace(/^crawl\s*/i,'').trim(), max_pages: 5, max_depth: 2 } };
-    // map / sitemap
-    if (/^map\b/.test(low) || /\bsitemap\b/.test(low)) return { tool: 'novada_map', args: { url: url || text.replace(/^map\s*/i,'').trim() } };
-    // extract
-    if (/^extract\b/.test(low)) return { tool: 'novada_extract', args: { url: url || text.replace(/^extract\s*/i,'').trim() } };
-    // verify / fact-check  ("is ... true", "verify", "fact")
-    if (/\bverify\b/.test(low) || /\bfact[\s-]?check\b/.test(low) || (/\bis\b/.test(low) && /\btrue\b/.test(low))) {
-      return { tool: 'novada_verify', args: { claim: text } };
+// Welcome screen inputs
+const chatInput = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+
+// Chat mode inputs
+const chatInput2 = document.getElementById('chat-input-2');
+const sendBtn2 = document.getElementById('send-btn-2');
+const statusDot2 = document.getElementById('status-dot-2');
+
+const thread = document.getElementById('thread');
+const toast = document.getElementById('toast');
+
+const SUGGESTIONS_EN = [
+  'Search for top AI tools and startups from this week',
+  'Scrape pricing and features from a competitor\'s website',
+  'Map all pages on a website and find broken links',
+  'Find the latest research papers on LLM agents and RAG',
+];
+const SUGGESTIONS_ZH = [
+  '搜索本周热门 AI 工具和初创公司',
+  '抓取竞品网站的定价和功能介绍',
+  '生成网站的完整页面地图，找出失效链接',
+  '查找关于 LLM 智能体和 RAG 的最新研究论文',
+];
+
+// ── State ──────────────────────────────────────────────────
+let inChatMode = false;
+let busy = false;
+let keyVisible = false;
+
+// ── Lang ───────────────────────────────────────────────────
+const isZh = () => body.classList.contains('lang-zh');
+
+langToggle.addEventListener('click', () => {
+  body.classList.toggle('lang-zh');
+  body.classList.toggle('lang-en');
+  langToggle.textContent = isZh() ? 'EN / 中' : '中 / EN';
+  applyPlaceholders();
+  updateStatusText();
+});
+
+function applyPlaceholders() {
+  const zh = isZh();
+  chatInput.placeholder  = zh ? chatInput.dataset.phZh  : 'Ask me about web data, scraping, search, or anything else…';
+  chatInput2.placeholder = zh ? chatInput2.dataset.phZh : 'Ask me about web data, scraping, search, or anything else…';
+  keyInput.placeholder   = zh ? keyInput.dataset.phZh   : 'Enter your Novada API key to start…';
+}
+
+function updateStatusText() {
+  if (busy) return;
+  const zh = isZh();
+  statusText.textContent = zh ? '随时待命' : 'Ready to help';
+}
+
+// ── Eye toggle ─────────────────────────────────────────────
+eyeToggle.addEventListener('click', () => {
+  keyVisible = !keyVisible;
+  keyInput.type = keyVisible ? 'text' : 'password';
+  eyeOpen.style.display  = keyVisible ? 'block' : 'none';
+  eyeClosed.style.display = keyVisible ? 'none'  : 'block';
+});
+
+// ── API key handling ───────────────────────────────────────
+function hasKey() {
+  return keyInput.value.trim().length > 0;
+}
+
+function refreshKeyState() {
+  const ok = hasKey();
+  // Suggestions
+  suggCards.forEach(c => {
+    if (ok) {
+      c.classList.remove('disabled');
+    } else {
+      c.classList.add('disabled');
     }
-    // scrape (explicit verb) OR a bare URL with no other intent
-    if (/^scrape\b/.test(low)) return { tool: 'novada_scrape', args: { url: url || text.replace(/^scrape\s*/i,'').trim() } };
-    if (url && url.length >= text.length - 4) return { tool: 'novada_scrape', args: { url } };
-    // default: research (questions, comparisons) → synthesized cited report
-    return { tool: 'novada_research', args: { query: text, depth: 'balanced' } };
-  }
-  function toolDescription(tool){
-    const map = {
-      novada_research: { en: 'researching & synthesizing a cited answer', zh: '研究并综合一份带引用的回答' },
-      novada_verify:   { en: 'fact-checking the claim',                  zh: '核实该陈述' },
-      novada_scrape:   { en: 'scraping the page',                        zh: '抓取该页面' },
-      novada_extract:  { en: 'extracting structured data',               zh: '抽取结构化数据' },
-      novada_crawl:    { en: 'crawling the site',                        zh: '爬取该站点' },
-      novada_map:      { en: 'mapping the site URLs',                    zh: '映射站点 URL' },
-    };
-    return map[tool] || { en: 'running the tool', zh: '运行该工具' };
-  }
+  });
+  // Buttons
+  sendBtn.disabled  = !ok || busy;
+  sendBtn2.disabled = !ok || busy;
+}
 
-  // ── render helpers ──
-  function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-  function scrollDown(){ thread.scrollTop = thread.scrollHeight; }
+// Load saved key
+keyInput.value = localStorage.getItem(LS_KEY) || '';
+keyInput.addEventListener('input', () => {
+  const v = keyInput.value.trim();
+  if (v) localStorage.setItem(LS_KEY, v);
+  else localStorage.removeItem(LS_KEY);
+  refreshKeyState();
+});
 
-  function addUser(text){
-    const row = document.createElement('div');
-    row.className = 'msg-row user';
-    row.innerHTML = `<div class="bubble bubble-user">${esc(text)}</div><div class="avatar avatar-user">You</div>`;
-    thread.appendChild(row); scrollDown();
+// ── Suggestion cards ───────────────────────────────────────
+document.getElementById('suggestion-grid').addEventListener('click', e => {
+  const card = e.target.closest('.sugg-card');
+  if (!card || card.classList.contains('disabled')) return;
+  const idx = parseInt(card.dataset.sugg, 10);
+  const text = isZh() ? SUGGESTIONS_ZH[idx] : SUGGESTIONS_EN[idx];
+  doSend(text);
+});
+
+// ── Auto-grow textarea ────────────────────────────────────
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+chatInput.addEventListener('input', () => autoGrow(chatInput));
+chatInput2.addEventListener('input', () => autoGrow(chatInput2));
+
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(chatInput.value); }
+});
+chatInput2.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(chatInput2.value); }
+});
+sendBtn.addEventListener('click',  () => doSend(chatInput.value));
+sendBtn2.addEventListener('click', () => doSend(chatInput2.value));
+
+// ── Intent router ──────────────────────────────────────────
+const URL_RE = /\bhttps?:\/\/[^\s)}\]]+/i;
+
+function extractUrl(text) {
+  const m = text.match(URL_RE);
+  return m ? m[0].replace(/[)\]},;.]+$/, '') : null;
+}
+
+function routeTool(msg) {
+  const m = msg.toLowerCase();
+  const url = extractUrl(msg);
+
+  if (/^crawl\b/.test(m)) {
+    return { tool: 'novada_crawl', args: { url: url || msg.replace(/^crawl\s*/i,'').trim(), max_pages: 5, max_depth: 2 } };
   }
-
-  // Returns an object with handles to fill the assistant bubble in place.
-  function addAssistant(tool){
-    const desc = toolDescription(tool);
-    const row = document.createElement('div');
-    row.className = 'msg-row assistant';
-    const chipHtml = `<div class="tool-chip"><span class="tool-dot"></span><span class="arr">→</span> <span>calling <strong>${esc(tool)}</strong></span> <span class="en">… ${esc(desc.en)}</span><span class="zh">… ${esc(desc.zh)}</span></div>`;
-    row.innerHTML = `<div class="avatar avatar-bot">N</div><div style="max-width:78%"><div class="bubble bubble-assistant" style="display:inline-block"><div class="chip-host">${chipHtml}</div><div class="body-host"><span class="typing"><span></span><span></span><span></span></span></div></div><div class="quota-host"></div></div>`;
-    thread.appendChild(row); scrollDown();
-    const bubble = row.querySelector('.bubble');
-    const bodyHost = row.querySelector('.body-host');
-    const quotaHost = row.querySelector('.quota-host');
-    return {
-      success(textOut, quota){
-        bodyHost.classList.add('bubble-out');
-        bodyHost.textContent = textOut;
-        if (quota !== undefined && quota !== null){
-          quotaHost.innerHTML = `<div class="quota-line"><span class="en">quota remaining: ${esc(quota)}</span><span class="zh">剩余配额:${esc(quota)}</span></div>`;
-        }
-        scrollDown();
-      },
-      error(textOut){
-        bubble.classList.remove('bubble-assistant');
-        bubble.classList.add('bubble-error');
-        bodyHost.classList.add('bubble-out');
-        bodyHost.textContent = textOut;
-        scrollDown();
-      }
-    };
+  if (/^map\b/.test(m) || /\bsitemap\b/.test(m) || /map all pages/.test(m)) {
+    return { tool: 'novada_map', args: { url: url || msg.replace(/^map\s*/i,'').trim() } };
   }
+  if (/^extract\b/.test(m)) {
+    return { tool: 'novada_extract', args: { url: url || msg.replace(/^extract\s*/i,'').trim() } };
+  }
+  if (/\bverify\b/.test(m) || /\bfact[\s-]?check\b/.test(m) || (/\bis\b/.test(m) && /\btrue\b/.test(m))) {
+    return { tool: 'novada_verify', args: { claim: msg } };
+  }
+  if (/\bdiscover\b/.test(m) || /find links/.test(m) || /\blinks on\b/.test(m)) {
+    return { tool: 'novada_discover', args: { url: url || msg } };
+  }
+  if (/^scrape\b/.test(m) || /\bscrape\b/.test(m) || /\bextract.*from\b/.test(m) || /\bscreenshot\b/.test(m)) {
+    return { tool: 'novada_scrape', args: { url: url || 'https://example.com' } };
+  }
+  if (url && url.length >= msg.trim().length - 4) {
+    return { tool: 'novada_scrape', args: { url } };
+  }
+  if (/\bproxy\b/.test(m) || /residential ip/.test(m)) {
+    return { tool: 'novada_proxy_residential', args: { url: url || 'https://httpbin.org/ip' } };
+  }
+  if (/\bsearch\b/.test(m) || /\bfind\b/.test(m) || /\bnews\b/.test(m) || /\blatest\b/.test(m) || /top \d/.test(m) || /^who is\b/.test(m) || /^what is\b/.test(m)) {
+    return { tool: 'novada_search', args: { query: msg } };
+  }
+  if (/\bresearch\b/.test(m) || /\bdeep.?dive\b/.test(m) || /\bcomprehensive\b/.test(m) || /\banalyze\b/.test(m)) {
+    return { tool: 'novada_research', args: { query: msg, depth: 'balanced' } };
+  }
+  // Default
+  return { tool: 'novada_research', args: { query: msg, depth: 'balanced' } };
+}
 
-  function addWelcome(){
-    const row = document.createElement('div');
-    row.className = 'msg-row assistant';
-    row.innerHTML = `<div class="avatar avatar-bot">N</div><div class="bubble bubble-assistant">
-      <span class="en">Hi! Type a request below and I'll route it to <strong>one</strong> Novada MCP tool, run it live, and show the result. Try a suggested prompt to start.</span>
-      <span class="zh">你好!在下方输入一个请求,我会把它路由到<strong>一个</strong> Novada MCP 工具,实时运行并展示结果。点一个推荐问题开始吧。</span>
+const TOOL_ICONS = {
+  novada_search:              '🔍',
+  novada_scrape:              '🕷',
+  novada_crawl:               '🕸',
+  novada_map:                 '🗺',
+  novada_extract:             '📋',
+  novada_verify:              '✅',
+  novada_discover:            '🔗',
+  novada_research:            '📚',
+  novada_proxy_residential:   '🌐',
+  novada_proxy_datacenter:    '🏢',
+};
+function toolIcon(name) { return TOOL_ICONS[name] || '⚡'; }
+
+// ── Render helpers ─────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])
+  );
+}
+function scrollDown() { thread.scrollTop = thread.scrollHeight; }
+
+function addUserBubble(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  row.innerHTML = `<div class="bubble-user">${esc(text)}</div>`;
+  thread.appendChild(row);
+  scrollDown();
+}
+
+function addAssistantBubble(toolName) {
+  const row = document.createElement('div');
+  row.className = 'msg-row assistant';
+
+  const logoSrc = 'https://www.novada.com/images/header/header-logo1.svg';
+  const chipHtml = `<span class="tool-chip">${toolIcon(toolName)} ${esc(toolName)}</span>`;
+  const typingHtml = `<div class="typing-indicator"><span></span><span></span><span></span></div>`;
+
+  row.innerHTML = `
+    <div class="assistant-inner">
+      <div class="msg-avatar">
+        <img src="${logoSrc}" alt="N" onerror="this.outerHTML='<span class=\\'msg-avatar-n\\'>N</span>'" />
+      </div>
+      <div class="bubble-assistant-wrap">
+        ${chipHtml}
+        <div class="response-body">${typingHtml}</div>
+      </div>
     </div>`;
-    thread.appendChild(row);
-  }
 
-  // ── key handling ──
-  function refreshKey(){
-    if (!hasKey()){ keyStatus.textContent = isZh()?'需要密钥':'KEY REQUIRED'; keyStatus.className='key-badge key-need'; }
-    else { keyStatus.textContent = isZh()?'已就绪':'READY'; keyStatus.className='key-badge key-ok'; }
-    sendBtn.disabled = !hasKey();
-    hint.textContent = hasKey() ? '' : (isZh()?'↑ 先填入你的 API 密钥即可发送':'↑ enter your API key above to send');
-  }
-  tokenInput.value = localStorage.getItem(LS_KEY) || '';
-  document.getElementById('ck-save-key').addEventListener('click', () => {
-    const v = tokenInput.value.trim();
-    if(v){ localStorage.setItem(LS_KEY, v); showToast(isZh()?'已保存到本地':'Saved locally ✓'); }
-    else { localStorage.removeItem(LS_KEY); showToast(isZh()?'已清除':'Cleared'); }
-    refreshKey();
-  });
-  tokenInput.addEventListener('input', refreshKey);
+  thread.appendChild(row);
+  scrollDown();
 
-  // ── composer behavior ──
-  function autoGrow(){ input.style.height='auto'; input.style.height = Math.min(input.scrollHeight,140)+'px'; }
-  input.addEventListener('input', autoGrow);
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); doSend(); }
-  });
-  sendBtn.addEventListener('click', doSend);
+  const responseBody = row.querySelector('.response-body');
 
-  function rpcBody(tool, args){ return { jsonrpc:'2.0', id:1, method:'tools/call', params:{ name: tool, arguments: args } }; }
-
-  let busy = false;
-  async function doSend(){
-    if (busy) return;
-    const token = tokenInput.value.trim();
-    if (!token){ showToast(isZh()?'请先填入密钥':'Enter your API key first'); return; }
-    const text = input.value.trim();
-    if (!text) return;
-
-    busy = true; sendBtn.disabled = true;
-    addUser(text);
-    input.value=''; autoGrow();
-
-    const { tool, args } = routeIntent(text);
-    const handle = addAssistant(tool);
-
-    try {
-      const res = await fetch(`${CK_ENDPOINT}?token=${encodeURIComponent(token)}`, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'Accept':'application/json, text/event-stream' },
-        body: JSON.stringify(rpcBody(tool, args)),
-      });
-      const data = await res.json();
-      if (data.error){
-        handle.error((isZh()?'错误:':'Error: ') + JSON.stringify(data.error, null, 2));
-      } else if (!res.ok){
-        handle.error(`HTTP ${res.status}\n` + JSON.stringify(data, null, 2));
-      } else {
-        const textOut = data?.result?.content?.[0]?.text ?? JSON.stringify(data.result, null, 2);
-        const quota = data?.result?._meta?.quota_remaining;
-        handle.success(textOut, quota);
-      }
-    } catch(err){
-      handle.error((isZh()?'网络错误:':'Network error: ') + String(err));
-    } finally {
-      busy = false; refreshKey(); input.focus();
+  return {
+    success(text) {
+      responseBody.innerHTML = '';
+      const p = document.createElement('div');
+      p.className = 'bubble-assistant';
+      p.textContent = text;
+      responseBody.appendChild(p);
+      scrollDown();
+    },
+    error(errMsg) {
+      responseBody.innerHTML = '';
+      const d = document.createElement('div');
+      d.className = 'bubble-error';
+      d.textContent = errMsg;
+      responseBody.appendChild(d);
+      scrollDown();
     }
-  }
+  };
+}
 
-  // ── lang toggle (re-render bilingual UI bits) ──
-  langBtn.addEventListener('click', () => {
-    body.classList.toggle('lang-zh'); body.classList.toggle('lang-en');
-    langBtn.textContent = isZh() ? 'EN / 中' : '中 / EN';
-    renderChips(); applyPlaceholder(); refreshKey();
+// ── Mode switching ─────────────────────────────────────────
+function enterChatMode() {
+  if (inChatMode) return;
+  inChatMode = true;
+  main.classList.add('chat-mode');
+  // Transfer key-based state
+  chatInput2.value = '';
+  autoGrow(chatInput2);
+  refreshKeyState();
+  chatInput2.focus();
+}
+
+function resetToWelcome() {
+  inChatMode = false;
+  main.classList.remove('chat-mode');
+  thread.innerHTML = '';
+  chatInput.value = '';
+  autoGrow(chatInput);
+  refreshKeyState();
+  chatInput.focus();
+}
+
+// ── Status helpers ─────────────────────────────────────────
+function setBusy(val) {
+  busy = val;
+  [statusDot, statusDot2].forEach(d => {
+    if (val) d.classList.add('busy');
+    else d.classList.remove('busy');
   });
-  function applyPlaceholder(){ input.placeholder = isZh() ? input.dataset.phZh : input.dataset.phEn; }
+  const zh = isZh();
+  statusText.textContent = val ? (zh ? '思考中…' : 'Thinking…') : (zh ? '随时待命' : 'Ready to help');
+  [sendBtn, sendBtn2].forEach(b => { b.disabled = val || !hasKey(); });
+}
 
-  // ── init ──
-  renderChips(); applyPlaceholder(); addWelcome(); refreshKey(); autoGrow();
+// ── RPC builder ────────────────────────────────────────────
+function rpcBody(tool, args) {
+  return { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: tool, arguments: args } };
+}
+
+// ── Main send function ─────────────────────────────────────
+async function doSend(rawText) {
+  if (busy) return;
+  const token = keyInput.value.trim();
+  if (!token) {
+    showToast(isZh() ? '请先填入 API 密钥' : 'Enter your API key first');
+    return;
+  }
+  const text = rawText.trim();
+  if (!text) return;
+
+  // Clear inputs
+  chatInput.value = '';
+  chatInput2.value = '';
+  autoGrow(chatInput);
+  autoGrow(chatInput2);
+
+  // Switch to chat mode
+  if (!inChatMode) enterChatMode();
+
+  // Append user message
+  addUserBubble(text);
+
+  // Route and start assistant bubble
+  const { tool, args } = routeTool(text);
+  const handle = addAssistantBubble(tool);
+
+  setBusy(true);
+
+  try {
+    const res = await fetch(`${MCP_ENDPOINT}?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+      },
+      body: JSON.stringify(rpcBody(tool, args)),
+    });
+
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      // Not JSON — likely HTML error page
+      handle.error(`HTTP ${res.status} — unexpected response format. Check your API key and try again.`);
+      return;
+    }
+
+    if (!res.ok) {
+      const msg = data?.error?.message || data?.message || `HTTP ${res.status}`;
+      handle.error((isZh() ? '请求失败：' : 'Request failed: ') + msg);
+      return;
+    }
+
+    if (data.error) {
+      const errMsg = typeof data.error === 'string' ? data.error
+        : data.error.message || JSON.stringify(data.error, null, 2);
+      handle.error((isZh() ? '错误：' : 'Error: ') + errMsg);
+      return;
+    }
+
+    const textOut = data?.result?.content?.[0]?.text
+      ?? (data?.result ? JSON.stringify(data.result, null, 2) : 'No result returned.');
+    handle.success(textOut);
+
+  } catch (err) {
+    // Network-level error (offline, CORS, DNS fail)
+    handle.error((isZh() ? '网络错误：' : 'Network error: ') + String(err));
+  } finally {
+    setBusy(false);
+    chatInput2.focus();
+  }
+}
+
+// ── Toast ──────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+// ── Init ───────────────────────────────────────────────────
+applyPlaceholders();
+refreshKeyState();
+autoGrow(chatInput);
+autoGrow(chatInput2);
 </script>
-
 </body>
 </html>

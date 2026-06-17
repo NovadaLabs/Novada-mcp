@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<script>
+(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);})();
+function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Configure your MCP — Novada MCP</title>
 <meta name="description" content="Pick the Novada MCP tools your agent needs and get a slim endpoint URL. Fewer tools = less token overhead per request. Hosted at mcp.novada.com/mcp with your own key." />
@@ -15,7 +19,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
   tailwind.config = {
     theme: { extend: {
@@ -26,490 +30,1167 @@
       },
       fontFamily: {
         display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        sans: ['IBM Plex Sans', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
     } },
   };
 </script>
 <style>
-  html { scroll-behavior: smooth; }
-  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #0a142f; background: #f7f8fc; }
-  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
+  /* Dark = default. Light overrides below. */
+  :root{
+    --th-bg:#191228; --th-surface:#22183d; --th-card:#2a2050;
+    --th-col-bg:#1a1530; --th-mid-bg:#16132a; --th-right-bg:#1d1a33;
+    --th-ink:#e8e0ff; --th-ink-mid:#b0a8d8; --th-ink-muted:#8578b8;
+    --th-vborder:rgba(108,64,226,0.25); --th-nav:rgba(25,18,40,0.95);
+    --th-nav-border:rgba(108,64,226,0.2); --th-active:#6c40e2;
+    --th-input-bg:rgba(255,255,255,0.06); --th-input-border:rgba(255,255,255,0.15);
+  }
+  [data-theme="light"]{
+    --th-bg:#f8f7fc; --th-surface:#ffffff; --th-card:#f0eeff;
+    --th-col-bg:#ffffff; --th-mid-bg:#f8f7fc; --th-right-bg:#ffffff;
+    --th-ink:#0a142f; --th-ink-mid:#3d4a6b; --th-ink-muted:#677489;
+    --th-vborder:rgba(108,64,226,0.18); --th-nav:rgba(255,255,255,0.95);
+    --th-nav-border:rgba(108,64,226,0.15); --th-active:#6c40e2;
+    --th-input-bg:#ffffff; --th-input-border:rgba(108,64,226,0.3);
+  }
+  body{background:var(--th-bg)!important;color:var(--th-ink)!important;letter-spacing:-0.01em;}
+  [data-theme="light"] body{background:var(--th-bg)!important;color:var(--th-ink)!important;}
+  [data-theme="light"] .nav-bar{background:var(--th-nav)!important;border-color:var(--th-nav-border)!important;}
+  /* Sidebar / left column */
+  [data-theme="light"] .sidebar{background:var(--th-col-bg)!important;border-color:var(--th-vborder)!important;}
+  /* Middle column */
+  [data-theme="light"] .middle-panel{background:var(--th-mid-bg)!important;border-color:var(--th-vborder)!important;}
+  /* Right column */
+  [data-theme="light"] .right-panel{background:var(--th-right-bg)!important;border-color:var(--th-vborder)!important;}
+  /* Header strip */
+  [data-theme="light"] .header-strip{background:rgba(108,64,226,0.04)!important;border-color:var(--th-vborder)!important;}
+  /* Text */
+  [data-theme="light"] h1,[data-theme="light"] h2,[data-theme="light"] h3{color:var(--th-ink)!important;}
+  [data-theme="light"] .header-strip h1{color:var(--th-ink)!important;}
+  [data-theme="light"] .header-strip p{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .middle-title{color:var(--th-ink)!important;}
+  [data-theme="light"] .middle-subtitle{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .sidebar-title{color:var(--th-ink-mid)!important;}
+  [data-theme="light"] .sidebar-label{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .tool-name{color:var(--th-ink)!important;}
+  [data-theme="light"] .tool-desc{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .cat-name{color:var(--th-ink-mid)!important;}
+  [data-theme="light"] .cat-item.active .cat-name{color:var(--th-ink)!important;}
+  [data-theme="light"] .cat-count{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .panel-label{color:var(--th-ink-muted)!important;}
+  /* Nav links */
+  [data-theme="light"] .nav-links a{color:rgba(10,20,47,0.55)!important;}
+  [data-theme="light"] .nav-links a:hover{color:var(--th-ink)!important;}
+  [data-theme="light"] .nav-links a.active{color:#6c40e2!important;}
+  /* Inputs */
+  [data-theme="light"] .key-input{background:var(--th-input-bg)!important;border-color:var(--th-input-border)!important;color:var(--th-ink)!important;}
+  [data-theme="light"] .key-input::placeholder{color:var(--th-ink-muted)!important;}
+  /* Code/URL display */
+  [data-theme="light"] .url-block,[data-theme="light"] .qs-code{background:var(--th-card)!important;border-color:var(--th-vborder)!important;color:var(--th-ink)!important;}
+  /* Category items */
+  [data-theme="light"] .cat-item:hover{background:rgba(108,64,226,0.06)!important;}
+  [data-theme="light"] .cat-item.active{background:rgba(108,64,226,0.1)!important;}
+  /* Tool rows */
+  [data-theme="light"] .tool-row{border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .tool-row:hover{background:rgba(108,64,226,0.04)!important;}
+  /* Sidebar/middle borders */
+  [data-theme="light"] .sidebar-header{border-color:var(--th-vborder)!important;}
+  [data-theme="light"] .middle-header{border-color:var(--th-vborder)!important;}
+  /* Stats bar */
+  [data-theme="light"] .stats-bar{color:var(--th-ink-muted)!important;border-color:var(--th-vborder)!important;background:rgba(108,64,226,0.05)!important;}
+  /* Divider */
+  [data-theme="light"] .divider{background:var(--th-vborder)!important;}
+  /* Ghost button */
+  [data-theme="light"] .btn-ghost{color:var(--th-ink-mid)!important;border-color:var(--th-vborder)!important;}
+  /* Quick-start labels */
+  [data-theme="light"] .qs-title{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .qs-snippet-label{color:var(--th-ink-muted)!important;}
+  [data-theme="light"] .qs-copy{color:var(--th-ink-mid)!important;border-color:var(--th-vborder)!important;background:rgba(108,64,226,0.05)!important;}
+
+  /* Headings letter-spacing */
+  h1, h2, h3, .display { letter-spacing: -0.025em; }
+
+  /* Theme toggle button */
+  .theme-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;background:transparent;color:currentColor;transition:background 0.2s;padding:0;}
+  [data-theme="light"] .theme-btn{border-color:rgba(108,64,226,0.25);}
+  .theme-btn:hover{background:rgba(255,255,255,0.08);}
+  [data-theme="light"] .theme-btn:hover{background:rgba(108,64,226,0.08);}
+  .theme-btn .icon-sun{display:block;}
+  .theme-btn .icon-moon{display:none;}
+  [data-theme="light"] .theme-btn .icon-sun{display:none;}
+  [data-theme="light"] .theme-btn .icon-moon{display:block;}
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; padding: 0; scroll-behavior: smooth; }
+  body {
+    font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+    color: rgba(255,255,255,0.9);
+    background: #191228;
+    background-image: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(108,64,226,0.18) 0%, transparent 70%);
+    min-height: 100vh;
+  }
+  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; }
   body.lang-en .zh { display: none !important; }
   body.lang-zh .en { display: none !important; }
   .mono { font-family: 'IBM Plex Mono', monospace; }
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #191228; color: white; padding: 10px 18px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 100; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(108,64,226,0.95); color: white;
+    padding: 10px 18px; border-radius: 10px; font-size: 13px;
+    opacity: 0; pointer-events: none;
+    transition: all .2s ease; z-index: 200;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.15);
+  }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ─── Configure ───────────────────────────────────────── */
-  .console { border: 1px solid #e7e2f5; border-radius: 12px; background: #fff; box-shadow: rgba(18,17,39,0.06) 0 10px 40px 0; overflow: hidden; }
-  .cfg-label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #677489; margin-bottom: 5px; font-weight: 600; }
-  .cfg-input { width: 100%; padding: 9px 12px; font-size: 13px; border: 1px solid #e7e2f5; border-radius: 8px; background: #fff; font-family: 'IBM Plex Mono', monospace; color: #0a142f; }
-  .cfg-input:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.10); }
+  /* ── Nav ──────────────────────────────────────────────── */
+  .nav-bar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(25,18,40,0.85);
+    backdrop-filter: blur(16px) saturate(180%);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    height: 64px;
+  }
+  .nav-inner {
+    max-width: 1400px; margin: 0 auto; padding: 0 24px;
+    height: 64px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+  .nav-logo .mcp-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    color: #9863f0; background: rgba(108,64,226,0.15);
+    border: 1px solid rgba(108,64,226,0.3);
+    padding: 3px 8px; border-radius: 5px;
+  }
+  .nav-links { display: flex; align-items: center; gap: 28px; }
+  .nav-links a {
+    font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.55);
+    text-decoration: none; transition: color .15s;
+  }
+  .nav-links a:hover { color: rgba(255,255,255,0.9); }
+  .nav-links a.active { color: #9863f0; font-weight: 600; }
+  .nav-actions { display: flex; align-items: center; gap: 10px; }
+  .lang-btn {
+    font-size: 11px; font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.55);
+    padding: 6px 12px; border-radius: 999px;
+    background: transparent; cursor: pointer;
+    transition: all .15s;
+  }
+  .lang-btn:hover { border-color: rgba(108,64,226,0.6); color: #9863f0; }
+  .get-key-btn {
+    font-size: 13px; font-weight: 600;
+    background: rgba(108,64,226,0.9);
+    color: white; text-decoration: none;
+    padding: 8px 16px; border-radius: 10px;
+    transition: background .15s;
+    border: 1px solid rgba(108,64,226,0.5);
+  }
+  .get-key-btn:hover { background: #431fd5; }
 
-  /* segmented toggle (Per category / Per tool) */
-  .seg { display: inline-flex; border: 1px solid #e7e2f5; border-radius: 8px; overflow: hidden; }
-  .seg button { padding: 7px 16px; font-size: 13px; font-weight: 600; background: #fff; color: #677489; cursor: pointer; border: none; transition: background .12s; }
-  .seg button.on { background: #191228; color: #fff; }
+  /* ── Header strip ──────────────────────────────────────── */
+  .header-strip {
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    padding: 20px 24px;
+  }
+  .header-strip-inner { max-width: 1400px; margin: 0 auto; }
+  .header-strip h1 {
+    font-size: 20px; font-weight: 700;
+    color: rgba(255,255,255,0.92);
+    margin: 0 0 4px 0;
+    font-family: 'Hanken Grotesk', 'Noto Sans SC', sans-serif;
+  }
+  .header-strip p {
+    font-size: 13px; color: rgba(255,255,255,0.42);
+    margin: 0;
+  }
 
-  /* category card */
-  .cat-card { border: 1px solid #eee6fb; border-radius: 10px; background: #fff; transition: border-color .12s, box-shadow .12s; }
-  .cat-card.sel { border-color: #c9b4fb; box-shadow: 0 0 0 3px rgba(108,64,226,0.06); }
-  .cat-head { display: flex; align-items: flex-start; gap: 11px; padding: 14px 16px; cursor: pointer; }
-  .cat-title { font-size: 14.5px; font-weight: 700; color: #0a142f; font-family: 'Hanken Grotesk','Noto Sans SC',sans-serif; }
-  .cat-sub { font-size: 12px; color: #677489; margin-top: 2px; }
-  .cat-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 14px 51px; }
-  .tool-chip { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #251f3d; background: #f5eeff; border: 1px solid #e3daff; border-radius: 6px; padding: 2px 8px; }
-  .tool-chip.local { background: #f1f0f5; border-color: #e7e2f5; color: #97a0b0; }
+  /* ── 3-column layout ───────────────────────────────────── */
+  .workspace {
+    display: flex;
+    height: calc(100vh - 64px - 69px); /* nav + header strip */
+    overflow: hidden;
+  }
 
-  /* per-tool flat list */
-  .tool-row { display: flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: background .1s; }
-  .tool-row:hover { background: #f7f8fc; }
-  .tool-row .tname { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #251f3d; }
-  .tool-row.local .tname { color: #97a0b0; }
-  .grp-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: #97a0b0; font-weight: 700; padding: 14px 14px 4px; display: flex; align-items: center; justify-content: space-between; }
-  .grp-head a { color: #6c40e2; text-transform: none; letter-spacing: 0; font-weight: 600; cursor: pointer; }
-  .grp-head a:hover { text-decoration: underline; }
+  /* Left sidebar */
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.25);
+    border-right: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-header {
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .sidebar-label {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(255,255,255,0.3); margin-bottom: 2px;
+  }
+  .sidebar-title {
+    font-size: 13px; font-weight: 600;
+    color: rgba(255,255,255,0.75);
+    font-family: 'Hanken Grotesk', sans-serif;
+  }
+  .sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 8px;
+  }
+  .sidebar-list::-webkit-scrollbar { width: 4px; }
+  .sidebar-list::-webkit-scrollbar-track { background: transparent; }
+  .sidebar-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 
-  /* checkbox */
-  .cbx { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; min-width: 18px; border: 1.5px solid #c9b4fb; border-radius: 5px; background: #fff; cursor: pointer; position: relative; transition: background .1s, border-color .1s; margin-top: 1px; }
-  .cbx:checked { background: #6c40e2; border-color: #6c40e2; }
-  .cbx:checked::after { content: ''; position: absolute; left: 5px; top: 1.5px; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-  .cbx:disabled { background: #f1f0f5; border-color: #e7e2f5; cursor: not-allowed; }
-  .cbx:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(108,64,226,0.18); }
+  .cat-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 8px;
+    cursor: pointer; transition: background .12s;
+    margin-bottom: 1px;
+    border-left: 2px solid transparent;
+    user-select: none;
+  }
+  .cat-item:hover { background: rgba(255,255,255,0.05); }
+  .cat-item.active {
+    background: rgba(108,64,226,0.12);
+    border-left-color: #6c40e2;
+  }
+  .cat-item.disabled { cursor: default; opacity: 0.5; }
+  .cat-item.disabled:hover { background: transparent; }
+  .cat-icon {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 7px;
+    background: rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .cat-item.active .cat-icon {
+    background: rgba(108,64,226,0.2);
+  }
+  .cat-item.disabled .cat-icon {
+    background: rgba(255,255,255,0.04);
+  }
+  .cat-icon svg { width: 14px; height: 14px; stroke: rgba(255,255,255,0.55); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .cat-item.active .cat-icon svg { stroke: #9863f0; }
+  .cat-meta { flex: 1; min-width: 0; }
+  .cat-name {
+    font-size: 13px; font-weight: 500;
+    color: rgba(255,255,255,0.75);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cat-item.active .cat-name { color: rgba(255,255,255,0.92); font-weight: 600; }
+  .cat-count {
+    font-size: 10px; color: rgba(255,255,255,0.3);
+    font-family: 'IBM Plex Mono', monospace;
+    margin-top: 1px;
+  }
 
-  /* summary / url */
-  .summary { position: sticky; top: 88px; }
-  .url-box { background: #191228; color: #e9e4ff; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; line-height: 1.7; padding: 14px 16px; border-radius: 10px; white-space: pre-wrap; word-break: break-all; }
-  .url-box .tok { color: #c9b4fb; }
-  .url-box .prm { color: #9863f0; }
-  .btn-primary { background: #191228; color: #fff; font-weight: 700; border-radius: 10px; padding: 10px 18px; font-size: 13px; transition: background .15s; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
-  .btn-primary:hover { background: #6c40e2; }
-  .btn-secondary { background: #fff; color: #0a142f; font-weight: 600; border: 1px solid #e7e2f5; border-radius: 10px; padding: 10px 18px; font-size: 13px; transition: all .15s; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
-  .btn-secondary:hover { border-color: #6c40e2; color: #6c40e2; background: #f5eeff; }
-  .count-num { font-family: 'Hanken Grotesk','Noto Sans SC',sans-serif; font-weight: 800; font-size: 32px; color: #6c40e2; line-height: 1; }
-  .key-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
-  .key-need { background: #f1f0f5; color: #677489; }
-  .key-ok { background: #f5eeff; color: #6c40e2; }
-  .grad-text { background: linear-gradient(45deg,#9863f0 0,#6c40e2 51%,#431fd5 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  /* Toggle pill */
+  .toggle {
+    width: 36px; height: 20px; border-radius: 999px;
+    background: rgba(255,255,255,0.18); cursor: pointer;
+    position: relative; transition: background 0.2s;
+    flex-shrink: 0; border: none; outline: none;
+    -webkit-appearance: none; appearance: none;
+  }
+  .toggle.on { background: #22c55e; }
+  .toggle.indeterminate { background: rgba(108,64,226,0.5); }
+  .toggle::after {
+    content: ''; position: absolute;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: white; top: 3px; left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(16px); }
+  .toggle.indeterminate::after { transform: translateX(8px); }
+  .toggle:disabled { cursor: not-allowed; opacity: 0.35; }
+
+  /* Middle panel */
+  .middle-panel {
+    flex: 1;
+    min-width: 0;
+    border-right: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .middle-header {
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .middle-title {
+    font-size: 14px; font-weight: 600;
+    color: rgba(255,255,255,0.88);
+    font-family: 'Hanken Grotesk', 'Noto Sans SC', sans-serif;
+  }
+  .middle-subtitle {
+    font-size: 11px; color: rgba(255,255,255,0.35);
+    font-family: 'IBM Plex Mono', monospace;
+    margin-top: 1px;
+  }
+  .middle-actions {
+    display: flex; gap: 10px;
+  }
+  .action-link {
+    font-size: 12px; color: #9863f0;
+    cursor: pointer; text-decoration: none;
+    font-weight: 500; padding: 4px 0;
+    background: none; border: none; outline: none;
+    transition: color .12s;
+  }
+  .action-link:hover { color: #c9b4fb; }
+
+  .tool-list {
+    flex: 1; overflow-y: auto; padding: 6px 0;
+  }
+  .tool-list::-webkit-scrollbar { width: 4px; }
+  .tool-list::-webkit-scrollbar-track { background: transparent; }
+  .tool-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+  .tool-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background .1s;
+    cursor: pointer;
+  }
+  .tool-row:hover { background: rgba(255,255,255,0.03); }
+  .tool-row:last-child { border-bottom: none; }
+  .tool-row.local-only { cursor: default; }
+  .tool-row.local-only:hover { background: transparent; }
+  .tool-info { flex: 1; min-width: 0; }
+  .tool-name {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px; font-weight: 500;
+    color: rgba(255,255,255,0.82);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tool-row.local-only .tool-name { color: rgba(255,255,255,0.3); }
+  .tool-desc {
+    font-size: 11.5px; color: rgba(255,255,255,0.35);
+    margin-top: 2px;
+    font-family: 'Hanken Grotesk', sans-serif;
+  }
+  .local-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    padding: 2px 7px; border-radius: 4px;
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.25);
+    color: rgba(239,68,68,0.75);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* Right panel */
+  .right-panel {
+    width: 320px;
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .right-panel-inner {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 16px;
+  }
+  .right-panel-inner::-webkit-scrollbar { width: 4px; }
+  .right-panel-inner::-webkit-scrollbar-track { background: transparent; }
+  .right-panel-inner::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+  .panel-section { margin-bottom: 20px; }
+  .panel-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: rgba(255,255,255,0.28);
+    margin-bottom: 8px;
+  }
+
+  /* API key input */
+  .key-input-wrap {
+    position: relative;
+  }
+  .key-input {
+    width: 100%; padding: 9px 36px 9px 12px;
+    font-size: 12px; font-family: 'IBM Plex Mono', monospace;
+    color: rgba(255,255,255,0.85);
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px; outline: none;
+    transition: border-color .15s;
+    -webkit-appearance: none;
+  }
+  .key-input::placeholder { color: rgba(255,255,255,0.2); }
+  .key-input:focus { border-color: rgba(108,64,226,0.6); box-shadow: 0 0 0 3px rgba(108,64,226,0.12); }
+  .key-eye {
+    position: absolute; right: 10px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none; outline: none;
+    cursor: pointer; padding: 2px;
+    color: rgba(255,255,255,0.3);
+    transition: color .12s;
+    display: flex; align-items: center;
+  }
+  .key-eye:hover { color: rgba(255,255,255,0.6); }
+  .key-eye svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .key-hint {
+    font-size: 10.5px; color: rgba(255,255,255,0.25);
+    margin-top: 5px;
+    font-family: 'Hanken Grotesk', sans-serif;
+  }
+  .key-hint a { color: rgba(108,64,226,0.7); text-decoration: none; }
+  .key-hint a:hover { color: #9863f0; }
+
+  /* URL code block */
+  .url-block {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px; line-height: 1.65;
+    color: #e9e4ff;
+    word-break: break-all;
+  }
+  .url-token { color: #c9b4fb; }
+  .url-param { color: #9863f0; }
+
+  /* Buttons */
+  .btn-primary {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    width: 100%;
+    background: #6c40e2; color: white;
+    font-weight: 600; font-size: 13px;
+    border-radius: 9px; padding: 10px 16px;
+    border: none; cursor: pointer;
+    transition: background .15s;
+    text-decoration: none;
+    font-family: 'Hanken Grotesk', sans-serif;
+  }
+  .btn-primary:hover:not(:disabled) { background: #431fd5; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    width: 100%;
+    background: transparent; color: rgba(255,255,255,0.6);
+    font-weight: 500; font-size: 13px;
+    border-radius: 9px; padding: 10px 16px;
+    border: 1px solid rgba(255,255,255,0.12); cursor: pointer;
+    transition: all .15s;
+    text-decoration: none;
+    font-family: 'Hanken Grotesk', sans-serif;
+    margin-top: 7px;
+  }
+  .btn-ghost:hover:not([style*="pointer-events: none"]) {
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.85);
+    border-color: rgba(255,255,255,0.2);
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.15);
+    border-radius: 8px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.45);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .stats-count { color: #9863f0; font-weight: 700; }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+    margin: 16px 0;
+  }
+
+  /* Quick-start collapsible */
+  .qs-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+    padding: 0;
+  }
+  .qs-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: rgba(255,255,255,0.28);
+  }
+  .qs-arrow {
+    font-size: 11px; color: rgba(255,255,255,0.25);
+    transition: transform .2s;
+  }
+  .qs-arrow.open { transform: rotate(180deg); }
+  .qs-body { margin-top: 10px; }
+  .qs-snippet-label {
+    font-size: 11px; font-weight: 600;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .qs-code {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px; line-height: 1.6;
+    color: #e9e4ff;
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+  .qs-copy {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; margin-top: 6px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.09);
+    color: rgba(255,255,255,0.45);
+    font-size: 11.5px; font-weight: 500;
+    padding: 7px; border-radius: 7px;
+    cursor: pointer; font-family: 'Hanken Grotesk', sans-serif;
+    transition: all .12s;
+  }
+  .qs-copy:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+
+  /* Scrollbar global */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
 </style>
 </head>
 <body class="lang-en">
 
-<!-- HEADER -->
-<header class="sticky top-0 z-50 bg-paper/90 backdrop-blur border-b border-violet-100">
-  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-    <a href="/" class="flex items-center gap-2">
-      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
-      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+<!-- HEADER NAV -->
+<header class="nav-bar">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" style="height:28px;filter:brightness(0) invert(1);opacity:0.9"
+        onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',style:'font-size:18px;font-weight:700;color:white;font-family:Hanken Grotesk,sans-serif'}))" />
+      <span class="mcp-badge">MCP</span>
     </a>
-    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-ink-700">
-      <a href="/playground" class="inline-flex items-center gap-1.5 text-ink-700 hover:text-violet">
-        <span class="en">Playground</span><span class="zh">在线试玩</span>
-      </a>
-      <a href="/configure" class="text-violet font-semibold"><span class="en">Configure</span><span class="zh">配置</span></a>
-      <a href="/#install" class="hover:text-violet"><span class="en">Install</span><span class="zh">接入</span></a>
-      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
-      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">定价</span></a>
-      <a href="/faq" class="hover:text-violet">FAQ</a>
-      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+    <nav class="nav-links" style="display:flex">
+      <a href="/playground"><span class="en">Playground</span><span class="zh">在线试玩</span></a>
+      <a href="/configure" class="active"><span class="en">Configure</span><span class="zh">配置</span></a>
+      <a href="/chat"><span class="en">Chat</span><span class="zh">对话</span></a>
+      <a href="/#install"><span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver">GitHub</a>
     </nav>
-    <div class="flex items-center gap-3">
-      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
-      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
+    <div class="nav-actions">
+      <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button id="lang-toggle" class="lang-btn">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="get-key-btn">
         <span class="en">Get API key</span><span class="zh">获取密钥</span>
       </a>
     </div>
   </div>
 </header>
 
-<main class="max-w-6xl mx-auto px-5 py-10">
-
-  <!-- Title row -->
-  <div class="mb-7">
-    <a href="/" class="text-sm hover:text-violet transition" style="color:#677489">← <span class="en">Back to home</span><span class="zh">返回首页</span></a>
-    <h1 class="text-2xl sm:text-3xl font-bold mt-2 display" style="color:#0a142f">
-      <span class="en">Configure your <span class="grad-text">MCP</span></span>
-      <span class="zh">配置你的 <span class="grad-text">MCP</span></span>
+<!-- HEADER STRIP -->
+<div class="header-strip">
+  <div class="header-strip-inner">
+    <h1>
+      <span class="en">Configure Your MCP Endpoint</span>
+      <span class="zh">配置你的 MCP 端点</span>
     </h1>
-    <p class="text-sm sm:text-base mt-2 max-w-3xl leading-relaxed" style="color:#677489">
-      <span class="en">Pick only the tools you want — get a slim endpoint URL. Fewer tools mean a smaller tool list in every request, so your agent spends fewer tokens on definitions and chooses faster.</span>
-      <span class="zh">只勾选你需要的工具,即可生成一个精简的端点 URL。工具越少,每次请求里的工具清单越短,你的 Agent 在定义上消耗的 token 更少、选择更快。</span>
+    <p>
+      <span class="en">Select exactly which tools to include. Your endpoint URL updates instantly. Fewer tools = leaner agent context.</span>
+      <span class="zh">选择要包含的工具。端点 URL 即时更新。工具越少，Agent 上下文越精简。</span>
     </p>
   </div>
+</div>
 
-  <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+<!-- WORKSPACE: 3-column -->
+<div class="workspace">
 
-    <!-- LEFT: picker -->
-    <div class="console p-5">
-      <!-- Mode toggle + API key -->
-      <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
-        <div>
-          <span class="cfg-label"><span class="en">Group by</span><span class="zh">分组方式</span></span>
-          <div class="seg" id="cfg-mode">
-            <button data-mode="category" class="on"><span class="en">Per category</span><span class="zh">按分类</span></button>
-            <button data-mode="tool"><span class="en">Per tool</span><span class="zh">按工具</span></button>
-          </div>
-        </div>
-        <div class="flex items-center gap-2 text-xs">
-          <button id="cfg-select-all" class="btn-secondary" style="padding:6px 12px"><span class="en">Select all</span><span class="zh">全选</span></button>
-          <button id="cfg-clear-all" class="btn-secondary" style="padding:6px 12px"><span class="en">Clear all</span><span class="zh">清空</span></button>
-        </div>
+  <!-- LEFT SIDEBAR: Category list -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-label"><span class="en">Categories</span><span class="zh">工具分类</span></div>
+      <div class="sidebar-title"><span class="en">Select tools by group</span><span class="zh">按分组选择工具</span></div>
+    </div>
+    <div class="sidebar-list" id="sidebar-list">
+      <!-- rendered by JS -->
+    </div>
+  </aside>
+
+  <!-- MIDDLE PANEL: Tool list for active category -->
+  <main class="middle-panel">
+    <div class="middle-header">
+      <div>
+        <div class="middle-title" id="middle-title">Search</div>
+        <div class="middle-subtitle" id="middle-subtitle">1 tool</div>
       </div>
+      <div class="middle-actions" id="middle-actions">
+        <button class="action-link" id="btn-select-all">
+          <span class="en">Select all</span><span class="zh">全选</span>
+        </button>
+        <button class="action-link" id="btn-deselect-all">
+          <span class="en">Deselect all</span><span class="zh">取消全选</span>
+        </button>
+      </div>
+    </div>
+    <div class="tool-list" id="tool-list">
+      <!-- rendered by JS -->
+    </div>
+  </main>
+
+  <!-- RIGHT PANEL: URL generator + quick start -->
+  <aside class="right-panel">
+    <div class="right-panel-inner">
 
       <!-- API key -->
-      <div class="mb-5">
-        <div class="flex items-center gap-2 mb-1">
-          <span class="cfg-label" style="margin:0"><span class="en">Your API key</span><span class="zh">你的 API 密钥</span></span>
-          <span id="cfg-key-status" class="key-badge key-need"></span>
+      <div class="panel-section">
+        <div class="panel-label"><span class="en">Your API key</span><span class="zh">你的 API 密钥</span></div>
+        <div class="key-input-wrap">
+          <input id="cfg-token" type="password" autocomplete="off" spellcheck="false"
+            placeholder="sk-… (your Novada API key)"
+            class="key-input" />
+          <button class="key-eye" id="key-eye-btn" title="Show/hide key" aria-label="Toggle key visibility">
+            <svg id="eye-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
         </div>
-        <div class="flex gap-2 flex-wrap">
-          <input id="cfg-token" type="password" autocomplete="off" spellcheck="false" placeholder="sk-eu-novada-…" class="cfg-input" style="flex:1;min-width:220px" />
-          <button id="cfg-save-key" class="btn-primary" style="padding:9px 16px"><span class="en">Save</span><span class="zh">保存</span></button>
-          <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="btn-secondary" style="padding:9px 16px"><span class="en">Get key</span><span class="zh">获取密钥</span></a>
+        <div class="key-hint">
+          <span class="en">Stored locally only. <a href="https://dashboard.novada.com/overview/scraper/api-playground/">Get a key ↗</a></span>
+          <span class="zh">仅本地存储。<a href="https://dashboard.novada.com/overview/scraper/api-playground/">获取密钥 ↗</a></span>
         </div>
-        <p class="text-xs mt-1.5" style="color:#97a0b0">
-          <span class="en">Your own Novada key. Stored only in this browser (localStorage) — never sent anywhere except the endpoint itself.</span>
-          <span class="zh">填入你自己的 Novada 密钥。仅保存在本浏览器(localStorage)— 除端点本身外不会发送到任何地方。</span>
-        </p>
       </div>
 
-      <!-- Per-tool search (hidden in category mode) -->
-      <div id="cfg-search-wrap" class="mb-3" style="display:none">
-        <input id="cfg-search" class="cfg-input" placeholder="Filter tools… (search, proxy, wallet)" style="font-family:'IBM Plex Sans',sans-serif" />
+      <!-- Generated URL -->
+      <div class="panel-section">
+        <div class="panel-label"><span class="en">Your MCP endpoint</span><span class="zh">你的 MCP 端点</span></div>
+        <div class="url-block" id="cfg-url"></div>
       </div>
 
-      <!-- Picker body -->
-      <div id="cfg-picker"></div>
-    </div>
-
-    <!-- RIGHT: summary -->
-    <div class="summary">
-      <div class="console p-5">
-        <div class="flex items-baseline justify-between mb-1">
-          <span class="cfg-label" style="margin:0"><span class="en">Summary</span><span class="zh">配置概览</span></span>
-        </div>
-        <div class="flex items-end gap-3 mb-1">
-          <span class="count-num" id="cfg-count">0</span>
-          <span class="text-sm mb-1" style="color:#677489"><span class="en">tools selected</span><span class="zh">个工具已选</span></span>
-        </div>
-        <p class="text-xs mb-4" style="color:#97a0b0" id="cfg-count-note"></p>
-
-        <div class="rounded-lg p-3 mb-4" style="background:#f5eeff;border:1px solid #e3daff">
-          <p class="text-xs font-semibold" style="color:#6c40e2">
-            <span class="en">Free tier · 1,000 calls / month</span><span class="zh">免费额度 · 每月 1,000 次调用</span>
-          </p>
-          <p class="text-xs mt-1" style="color:#677489">
-            <span class="en">Same key works hosted or local. No card required to start.</span>
-            <span class="zh">同一密钥可用于托管或本地。无需绑卡即可开始。</span>
-          </p>
-        </div>
-
-        <span class="cfg-label"><span class="en">Your endpoint URL</span><span class="zh">你的端点 URL</span></span>
-        <div class="url-box mb-3" id="cfg-url"></div>
-
-        <div class="grid grid-cols-2 gap-2 mb-3">
-          <button id="cfg-copy" class="btn-primary"><span class="en">Copy URL</span><span class="zh">复制 URL</span></button>
-          <a id="cfg-open-pg" href="/playground" class="btn-secondary"><span class="en">Open in Playground →</span><span class="zh">在试玩台打开 →</span></a>
-        </div>
-
-        <p class="text-xs leading-relaxed" style="color:#97a0b0">
-          <span class="en">The hosted endpoint reads <code class="mono" style="color:#6c40e2">?tools=</code> / <code class="mono" style="color:#6c40e2">?groups=</code> to filter the toolset. When every tool is selected the param is omitted and you get the full endpoint.</span>
-          <span class="zh">托管端点会读取 <code class="mono" style="color:#6c40e2">?tools=</code> / <code class="mono" style="color:#6c40e2">?groups=</code> 来过滤工具集。当全部工具都被选中时,该参数会被省略,返回完整端点。</span>
-        </p>
-        <p class="text-xs mt-2" style="color:#97a0b0">
-          <span class="en">Browser-only tools (<code class="mono">novada_browser*</code>) run via the local MCP — <code class="mono">npx novada-mcp</code> — and are not part of the hosted URL.</span>
-          <span class="zh">浏览器类工具(<code class="mono">novada_browser*</code>)通过本地 MCP 运行 —— <code class="mono">npx novada-mcp</code> —— 不包含在托管 URL 中。</span>
-        </p>
+      <!-- Buttons -->
+      <div class="panel-section">
+        <button id="cfg-copy" class="btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span class="en">Copy URL</span><span class="zh">复制 URL</span>
+        </button>
+        <a id="cfg-open-pg" href="/playground" class="btn-ghost">
+          <span class="en">Open in Playground ↗</span><span class="zh">在试玩台打开 ↗</span>
+        </a>
       </div>
-    </div>
-  </div>
 
-  <!-- Why slim note -->
-  <div class="console p-5 mt-6 grid grid-cols-1 sm:grid-cols-3 gap-5">
-    <div>
-      <h3 class="text-sm font-bold mb-1" style="color:#0a142f"><span class="en">Leaner context</span><span class="zh">更精简的上下文</span></h3>
-      <p class="text-xs leading-relaxed" style="color:#677489"><span class="en">Every tool ships its JSON schema to the model on each turn. Trim the list to what your agent actually uses.</span><span class="zh">每个工具每一轮都会把 JSON schema 发给模型。把清单裁剪到 Agent 真正会用到的工具。</span></p>
-    </div>
-    <div>
-      <h3 class="text-sm font-bold mb-1" style="color:#0a142f"><span class="en">Sharper tool choice</span><span class="zh">更准的工具选择</span></h3>
-      <p class="text-xs leading-relaxed" style="color:#677489"><span class="en">Fewer near-duplicate options means the model picks the right tool more reliably.</span><span class="zh">相近选项更少,模型挑对工具的概率更高。</span></p>
-    </div>
-    <div>
-      <h3 class="text-sm font-bold mb-1" style="color:#0a142f"><span class="en">One key, one URL</span><span class="zh">一把密钥,一个 URL</span></h3>
-      <p class="text-xs leading-relaxed" style="color:#677489"><span class="en">Paste the generated URL straight into your MCP client config. Swap the toolset anytime by regenerating.</span><span class="zh">把生成的 URL 直接粘贴进你的 MCP 客户端配置。随时重新生成即可更换工具集。</span></p>
-    </div>
-  </div>
-</main>
+      <!-- Stats -->
+      <div class="panel-section">
+        <div class="stats-bar">
+          <span id="stats-text"></span>
+        </div>
+      </div>
 
-<footer class="bg-ink text-white/65 py-12">
-  <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-6">
-    <div class="flex items-center gap-3">
-      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-6 brightness-0 invert opacity-90" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-lg font-bold text-white display'}))" />
-      <span class="text-[11px] font-semibold tracking-wider text-violet-200 bg-violet/10 px-2 py-1 rounded">MCP</span>
-    </div>
-    <nav class="flex flex-wrap items-center gap-6 text-sm">
-      <a href="/configure" class="hover:text-violet"><span class="en">Configure</span><span class="zh">配置</span></a>
-      <a href="/#install" class="hover:text-violet"><span class="en">Install</span><span class="zh">接入</span></a>
-      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
-      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">定价</span></a>
-      <a href="/faq" class="hover:text-violet">FAQ</a>
-      <a href="/playground" class="hover:text-violet"><span class="en">Playground</span><span class="zh">在线试玩</span></a>
-      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
-      <a href="https://www.npmjs.com/package/novada-mcp" class="hover:text-violet">npm</a>
-    </nav>
-    <div class="text-xs text-white/50">
-      © 2026 Novada · <span class="text-violet-200">Built for AI agents.</span>
-    </div>
-  </div>
-</footer>
+      <div class="divider"></div>
 
-<div id="toast" class="toast">Copied ✓</div>
+      <!-- Quick start collapsible -->
+      <div class="panel-section">
+        <div class="qs-toggle" id="qs-toggle">
+          <span class="qs-title"><span class="en">Quick start</span><span class="zh">快速开始</span></span>
+          <span class="qs-arrow" id="qs-arrow">▼</span>
+        </div>
+        <div class="qs-body" id="qs-body" style="display:none">
+          <div class="qs-snippet-label">Claude Code</div>
+          <div class="qs-code" id="qs-code-claude"></div>
+          <button class="qs-copy" id="qs-copy-claude">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <span class="en">Copy snippet</span><span class="zh">复制代码</span>
+          </button>
+
+          <div class="qs-snippet-label" style="margin-top:12px">claude_desktop_config.json</div>
+          <div class="qs-code" id="qs-code-desktop"></div>
+          <button class="qs-copy" id="qs-copy-desktop">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <span class="en">Copy snippet</span><span class="zh">复制代码</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+</div><!-- /workspace -->
+
+<div id="toast" class="toast"></div>
 
 <script>
+  // ─── Bilingual ────────────────────────────────────────────
   const body = document.body;
   const langBtn = document.getElementById('lang-toggle');
   const isZh = () => body.classList.contains('lang-zh');
   langBtn.addEventListener('click', () => {
-    body.classList.toggle('lang-zh'); body.classList.toggle('lang-en');
+    body.classList.toggle('lang-zh');
+    body.classList.toggle('lang-en');
     langBtn.textContent = isZh() ? 'EN / 中' : '中 / EN';
-    renderPicker(); refreshSummary();
+    renderSidebar();
+    renderToolList();
+    refreshSummary();
   });
-  const toast = document.getElementById('toast'); let toastTimer;
-  function showToast(m){ toast.textContent=m; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),1500); }
 
+  // ─── Toast ────────────────────────────────────────────────
+  const toastEl = document.getElementById('toast');
+  let toastTimer;
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1700);
+  }
+
+  // ─── Constants ────────────────────────────────────────────
   const CFG_ENDPOINT = 'https://mcp.novada.com/mcp';
   const LS_KEY = 'novada_mcp_api_key';
 
-  // ── Category catalog ──────────────────────────────────
-  // `tools` = short-names (what goes into ?tools=). hosted = selectable for the hosted URL.
+  // ─── Category catalog ─────────────────────────────────────
   const CATEGORIES = [
-    { id:'search', en:'Search', zh:'搜索', enDesc:'Web + SERP search.', zhDesc:'网页与 SERP 搜索。', hosted:true,
-      tools:['search'] },
-    { id:'scrape', en:'Scrape & Extract', zh:'抓取与提取', enDesc:'Render, scrape, and unblock single pages.', zhDesc:'渲染、抓取并解锁单个页面。', hosted:true,
-      tools:['scrape','extract','unblock'] },
-    { id:'crawl', en:'Crawl & Map', zh:'爬取与站点地图', enDesc:'Multi-page crawl and URL discovery.', zhDesc:'多页爬取与 URL 发现。', hosted:true,
-      tools:['crawl','map'] },
-    { id:'research', en:'Research', zh:'研究', enDesc:'Deep research, fact-check, discovery, monitoring.', zhDesc:'深度研究、事实核查、来源发现与监控。', hosted:true,
-      tools:['research','verify','discover','ai_monitor','monitor'] },
-    { id:'scraper', en:'Scraper API', zh:'Scraper API', enDesc:'Async submit / status / result jobs.', zhDesc:'异步提交 / 状态 / 结果任务。', hosted:true,
-      tools:['scraper_submit','scraper_status','scraper_result'] },
-    { id:'proxy', en:'Proxies', zh:'代理', enDesc:'Residential, ISP, datacenter, mobile, static, dedicated.', zhDesc:'住宅、ISP、数据中心、移动、静态、独享。', hosted:true,
-      tools:['proxy','proxy_residential','proxy_isp','proxy_datacenter','proxy_mobile','proxy_static','proxy_dedicated'] },
-    { id:'account', en:'Account & Billing', zh:'账户与账单', enDesc:'Wallet, usage, plans, traffic, account summary.', zhDesc:'钱包、用量、套餐、流量与账户概览。', hosted:true,
-      tools:['wallet_balance','wallet_usage_record','plan_balance_all','proxy_account_list','proxy_account_create','traffic_daily','account_summary','capture_logs'] },
-    { id:'browser', en:'Browser — local only', zh:'浏览器 — 仅本地', enDesc:'Headful browser control. Runs via npx novada-mcp; returns 501 on hosted.', zhDesc:'有头浏览器控制。通过 npx novada-mcp 运行;托管端点返回 501。', hosted:false,
-      tools:['browser','browser_flow'] },
+    {
+      id: 'search', en: 'Search', zh: '搜索', hosted: true,
+      enDesc: 'Web search and SERP results',
+      zhDesc: '网页搜索与 SERP 结果',
+      tools: [
+        { id: 'search', enDesc: 'Web & SERP search with structured results', zhDesc: '网页与 SERP 搜索，返回结构化结果' },
+      ]
+    },
+    {
+      id: 'scrape', en: 'Scrape & Extract', zh: '抓取与提取', hosted: true,
+      enDesc: 'Render, scrape, and extract single pages',
+      zhDesc: '渲染、抓取并提取单个页面',
+      tools: [
+        { id: 'scrape',   enDesc: 'Fetch and render a URL to markdown or HTML', zhDesc: '抓取并渲染网页，返回 Markdown 或 HTML' },
+        { id: 'extract',  enDesc: 'AI-powered structured data extraction', zhDesc: 'AI 驱动的结构化数据提取' },
+        { id: 'unblock',  enDesc: 'Bypass anti-bot protection to scrape blocked pages', zhDesc: '绕过反爬虫保护，抓取受阻页面' },
+      ]
+    },
+    {
+      id: 'crawl', en: 'Crawl & Map', zh: '爬取与站点地图', hosted: true,
+      enDesc: 'Multi-page crawl and URL discovery',
+      zhDesc: '多页爬取与 URL 发现',
+      tools: [
+        { id: 'crawl', enDesc: 'Crawl a site up to N pages deep, returns all content', zhDesc: '爬取站点最多 N 层，返回所有内容' },
+        { id: 'map',   enDesc: 'Discover all URLs on a domain without fetching content', zhDesc: '发现域名下所有 URL，无需抓取内容' },
+      ]
+    },
+    {
+      id: 'research', en: 'Research', zh: '研究', hosted: true,
+      enDesc: 'Deep research, fact-check, discovery, monitoring',
+      zhDesc: '深度研究、事实核查、来源发现与监控',
+      tools: [
+        { id: 'research',   enDesc: 'Deep multi-source research with citation', zhDesc: '多源深度研究，带引用' },
+        { id: 'verify',     enDesc: 'Fact-check a claim against live web sources', zhDesc: '基于实时网页来源核查声明' },
+        { id: 'discover',   enDesc: 'Find relevant sources and pages for a topic', zhDesc: '为主题发现相关来源与页面' },
+        { id: 'ai_monitor', enDesc: 'AI-powered change monitoring for a URL', zhDesc: 'AI 驱动的网页变化监控' },
+        { id: 'monitor',    enDesc: 'Schedule and manage recurring page monitors', zhDesc: '计划并管理周期性页面监控' },
+      ]
+    },
+    {
+      id: 'scraper', en: 'Scraper API', zh: 'Scraper API', hosted: true,
+      enDesc: 'Async submit / status / result jobs',
+      zhDesc: '异步提交 / 状态 / 结果任务',
+      tools: [
+        { id: 'scraper_submit', enDesc: 'Submit an async scrape job, returns a job ID', zhDesc: '提交异步抓取任务，返回任务 ID' },
+        { id: 'scraper_status', enDesc: 'Poll the status of a submitted scrape job', zhDesc: '轮询已提交任务的状态' },
+        { id: 'scraper_result', enDesc: 'Retrieve the result of a completed scrape job', zhDesc: '获取已完成任务的结果' },
+      ]
+    },
+    {
+      id: 'proxy', en: 'Proxies', zh: '代理', hosted: true,
+      enDesc: 'Residential, ISP, datacenter, mobile, static, dedicated',
+      zhDesc: '住宅、ISP、数据中心、移动、静态、独享',
+      tools: [
+        { id: 'proxy',             enDesc: 'Universal proxy — auto-selects best type', zhDesc: '通用代理，自动选择最优类型' },
+        { id: 'proxy_residential', enDesc: 'Rotating residential IP proxy', zhDesc: '轮换住宅 IP 代理' },
+        { id: 'proxy_isp',         enDesc: 'ISP-grade static residential proxy', zhDesc: 'ISP 级静态住宅代理' },
+        { id: 'proxy_datacenter',  enDesc: 'High-speed datacenter proxy', zhDesc: '高速数据中心代理' },
+        { id: 'proxy_mobile',      enDesc: 'Mobile carrier IP proxy (3G/4G/5G)', zhDesc: '移动运营商 IP 代理（3G/4G/5G）' },
+        { id: 'proxy_static',      enDesc: 'Static (sticky) residential proxy', zhDesc: '静态（粘性）住宅代理' },
+        { id: 'proxy_dedicated',   enDesc: 'Dedicated private proxy with full control', zhDesc: '独享私人代理，完全可控' },
+      ]
+    },
+    {
+      id: 'account', en: 'Account & Billing', zh: '账户与账单', hosted: true,
+      enDesc: 'Wallet, usage, plans, traffic, account summary',
+      zhDesc: '钱包、用量、套餐、流量与账户概览',
+      tools: [
+        { id: 'wallet_balance',      enDesc: 'Get current wallet balance', zhDesc: '查询当前钱包余额' },
+        { id: 'wallet_usage_record', enDesc: 'Fetch usage history by date range', zhDesc: '按日期范围获取使用记录' },
+        { id: 'plan_balance_all',    enDesc: 'List all plan balances and quotas', zhDesc: '列出所有套餐余额与配额' },
+        { id: 'proxy_account_list',  enDesc: 'List sub-accounts for proxy services', zhDesc: '列出代理服务子账号' },
+        { id: 'proxy_account_create',enDesc: 'Create a new proxy sub-account', zhDesc: '创建新的代理子账号' },
+        { id: 'traffic_daily',       enDesc: 'Get daily traffic usage breakdown', zhDesc: '获取每日流量使用明细' },
+        { id: 'account_summary',     enDesc: 'Full account overview: balance, usage, plan', zhDesc: '完整账户概览：余额、用量、套餐' },
+        { id: 'capture_logs',        enDesc: 'Retrieve recent API call logs', zhDesc: '获取最近 API 调用日志' },
+      ]
+    },
+    {
+      id: 'browser', en: 'Browser', zh: '浏览器', hosted: false,
+      enDesc: 'Local only — runs via npx novada-mcp',
+      zhDesc: '仅本地 — 通过 npx novada-mcp 运行',
+      tools: [
+        { id: 'browser',       enDesc: 'Headful browser control via Playwright', zhDesc: '通过 Playwright 控制有头浏览器' },
+        { id: 'browser_flow',  enDesc: 'Multi-step browser automation flow', zhDesc: '多步骤浏览器自动化流程' },
+        { id: 'capture_logs',  enDesc: 'Capture browser console and network logs', zhDesc: '捕获浏览器控制台与网络日志' },
+      ]
+    },
   ];
 
-  // Flat list of all hosted short-names (for "all selected → omit param")
-  const ALL_HOSTED = CATEGORIES.filter(c=>c.hosted).flatMap(c=>c.tools);
+  // All hosted tool short-names (ordered for URL building)
+  const ALL_HOSTED = CATEGORIES.filter(c => c.hosted).flatMap(c => c.tools.map(t => t.id));
 
-  // State: set of selected short-names (hosted only). Default = all hosted selected.
+  // State
   let selected = new Set(ALL_HOSTED);
-  let mode = 'category';
+  let activeCatId = CATEGORIES[0].id;
 
-  const picker = document.getElementById('cfg-picker');
-  const searchWrap = document.getElementById('cfg-search-wrap');
-  const searchInput = document.getElementById('cfg-search');
+  // ─── Category icons (inline SVG paths) ───────────────────
+  const CAT_ICONS = {
+    search:   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+    scrape:   '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+    crawl:    '<circle cx="12" cy="3" r="1"/><circle cx="3" cy="21" r="1"/><circle cx="21" cy="21" r="1"/><path d="M12 4v4M5.8 19.5l5.2-11.5M18.2 19.5l-5.2-11.5"/>',
+    research: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+    scraper:  '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
+    proxy:    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+    account:  '<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+    browser:  '<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+  };
 
-  function catState(cat){
-    const sel = cat.tools.filter(t=>selected.has(t)).length;
-    if (sel===0) return 'none';
-    if (sel===cat.tools.length) return 'all';
+  // ─── Render sidebar ───────────────────────────────────────
+  function catState(cat) {
+    if (!cat.hosted) return 'off';
+    const hosted = cat.tools.filter(t => ALL_HOSTED.includes(t.id));
+    const selCount = hosted.filter(t => selected.has(t.id)).length;
+    if (selCount === 0) return 'none';
+    if (selCount === hosted.length) return 'all';
     return 'some';
   }
 
-  // ── Render: per-category ──
-  function renderCategory(){
-    picker.innerHTML = CATEGORIES.map(cat => {
+  function renderSidebar() {
+    const list = document.getElementById('sidebar-list');
+    list.innerHTML = CATEGORIES.map(cat => {
+      const active = cat.id === activeCatId ? ' active' : '';
+      const disabled = !cat.hosted ? ' disabled' : '';
       const st = catState(cat);
-      const checked = st==='all' ? 'checked' : '';
-      const indet = st==='some';
-      const disabled = !cat.hosted ? 'disabled' : '';
-      const chips = cat.tools.map(t =>
-        `<span class="tool-chip${cat.hosted?'':' local'}">${t}</span>`).join('');
-      const localTag = cat.hosted ? '' :
-        `<span class="ml-2 text-[10px] font-semibold align-middle" style="color:#97a0b0">${isZh()?'· 本地 / npx novada-mcp':'· local / npx novada-mcp'}</span>`;
-      return `<div class="cat-card mb-3${st!=='none'&&cat.hosted?' sel':''}" data-cat="${cat.id}">
-        <label class="cat-head">
-          <input type="checkbox" class="cbx cat-cbx" data-cat="${cat.id}" ${checked} ${disabled} ${indet?'data-indet="1"':''}>
-          <span style="flex:1">
-            <span class="cat-title">${isZh()?cat.zh:cat.en}</span>${localTag}
-            <span class="cat-sub">${isZh()?cat.zhDesc:cat.enDesc} <span style="color:#97a0b0">· ${cat.tools.length} ${isZh()?'个工具':(cat.tools.length===1?'tool':'tools')}</span></span>
-          </span>
-        </label>
-        <div class="cat-tools">${chips}</div>
+      const hostedTools = cat.tools.filter(t => ALL_HOSTED.includes(t.id));
+      const selCount = cat.hosted ? hostedTools.filter(t => selected.has(t.id)).length : 0;
+      const toolCount = cat.hosted ? hostedTools.length : cat.tools.length;
+      const countStr = cat.hosted
+        ? `${selCount}/${toolCount}`
+        : (isZh() ? '仅本地' : 'local only');
+
+      let toggleClass = 'toggle';
+      if (!cat.hosted) toggleClass += ' toggle-disabled';
+      else if (st === 'all') toggleClass += ' on';
+      else if (st === 'some') toggleClass += ' indeterminate';
+
+      const icon = CAT_ICONS[cat.id] || CAT_ICONS.search;
+
+      return `<div class="cat-item${active}${disabled}" data-cat="${cat.id}" role="button" tabindex="${cat.hosted ? 0 : -1}">
+        <div class="cat-icon">
+          <svg viewBox="0 0 24 24">${icon}</svg>
+        </div>
+        <div class="cat-meta">
+          <div class="cat-name">${isZh() ? cat.zh : cat.en}</div>
+          <div class="cat-count">${countStr}</div>
+        </div>
+        <button class="${toggleClass}" data-cat-toggle="${cat.id}"
+          title="${cat.hosted ? '' : (isZh() ? '仅本地 — 托管端点不可用' : 'Local only — not available on hosted endpoint')}"
+          ${!cat.hosted ? 'disabled' : ''}
+          aria-label="Toggle ${cat.en}"></button>
       </div>`;
     }).join('');
-    // apply indeterminate state
-    picker.querySelectorAll('.cat-cbx[data-indet]').forEach(c=>{ c.indeterminate = true; });
   }
 
-  // ── Render: per-tool (flat, grouped, searchable) ──
-  function renderTool(){
-    const q = (searchInput.value||'').trim().toLowerCase();
-    let html = '';
-    CATEGORIES.forEach(cat => {
-      const matched = cat.tools.filter(t => !q || ('novada_'+t).includes(q) || t.includes(q));
-      if (matched.length===0) return;
-      const localTag = cat.hosted ? '' : ` <span style="color:#97a0b0;font-weight:600">· ${isZh()?'本地':'local'}</span>`;
-      const allShown = matched.every(t=>selected.has(t));
-      const toggleLabel = cat.hosted
-        ? `<a data-grptoggle="${cat.id}">${allShown ? (isZh()?'取消全选':'deselect') : (isZh()?'全选':'select all')}</a>`
-        : '';
-      html += `<div class="grp-head"><span>${isZh()?cat.zh:cat.en}${localTag}</span>${toggleLabel}</div>`;
-      html += matched.map(t => {
-        const full = 'novada_'+t;
-        const checked = selected.has(t) ? 'checked' : '';
-        const disabled = cat.hosted ? '' : 'disabled';
-        return `<label class="tool-row${cat.hosted?'':' local'}">
-          <input type="checkbox" class="cbx tool-cbx" data-tool="${t}" ${checked} ${disabled}>
-          <span class="tname">${full}</span>
-        </label>`;
-      }).join('');
-    });
-    if (!html) html = `<p class="text-sm py-6 text-center" style="color:#97a0b0">${isZh()?'没有匹配的工具':'No tools match'}</p>`;
-    picker.innerHTML = html;
+  // ─── Render middle tool list ──────────────────────────────
+  function renderToolList() {
+    const cat = CATEGORIES.find(c => c.id === activeCatId);
+    if (!cat) return;
+
+    // Update header
+    document.getElementById('middle-title').textContent = isZh() ? cat.zh : cat.en;
+    const hostedCount = cat.tools.filter(t => ALL_HOSTED.includes(t.id)).length;
+    const totalCount = cat.tools.length;
+    const countLabel = cat.hosted
+      ? `${hostedCount} ${isZh() ? '个托管工具' : (hostedCount === 1 ? 'hosted tool' : 'hosted tools')}`
+      : (isZh() ? `${totalCount} 个本地工具` : `${totalCount} local ${totalCount === 1 ? 'tool' : 'tools'}`);
+    document.getElementById('middle-subtitle').textContent = countLabel;
+
+    // Show/hide actions for local-only categories
+    document.getElementById('middle-actions').style.display = cat.hosted ? 'flex' : 'none';
+
+    const list = document.getElementById('tool-list');
+    list.innerHTML = cat.tools.map(tool => {
+      const isLocal = !cat.hosted;
+      const isOn = !isLocal && selected.has(tool.id);
+      const localCls = isLocal ? ' local-only' : '';
+
+      return `<div class="tool-row${localCls}" data-tool="${tool.id}" data-hosted="${cat.hosted}" role="${isLocal ? 'presentation' : 'button'}"
+        title="${isLocal ? (isZh() ? '仅本地 — 托管端点不可用' : 'Local only — not available on hosted endpoint') : ''}">
+        <div class="tool-info">
+          <div class="tool-name">
+            novada_${tool.id}
+            ${isLocal ? `<span class="local-badge">${isZh() ? '仅本地' : 'local only'}</span>` : ''}
+          </div>
+          <div class="tool-desc">${isZh() ? tool.zhDesc : tool.enDesc}</div>
+        </div>
+        ${isLocal
+          ? `<button class="toggle" disabled title="${isZh() ? '仅本地' : 'Local only'}" aria-label="${tool.id} local only"></button>`
+          : `<button class="toggle${isOn ? ' on' : ''}" data-tool-toggle="${tool.id}" aria-label="Toggle ${tool.id}" aria-pressed="${isOn}"></button>`
+        }
+      </div>`;
+    }).join('');
   }
 
-  function renderPicker(){
-    searchWrap.style.display = mode==='tool' ? '' : 'none';
-    if (mode==='category') renderCategory(); else renderTool();
-  }
-
-  // ── Interactions ──
-  document.getElementById('cfg-mode').addEventListener('click', e => {
-    const b = e.target.closest('button[data-mode]'); if(!b) return;
-    mode = b.dataset.mode;
-    document.querySelectorAll('#cfg-mode button').forEach(x=>x.classList.toggle('on', x.dataset.mode===mode));
-    renderPicker(); refreshSummary();
-  });
-
-  picker.addEventListener('change', e => {
-    const cat = e.target.closest('.cat-cbx');
-    if (cat){
-      const c = CATEGORIES.find(x=>x.id===cat.dataset.cat);
-      if (cat.checked) c.tools.forEach(t=>selected.add(t));
-      else c.tools.forEach(t=>selected.delete(t));
-      renderCategory(); refreshSummary(); return;
+  // ─── Event delegation — sidebar ──────────────────────────
+  document.getElementById('sidebar-list').addEventListener('click', e => {
+    // Category toggle pill click
+    const toggleBtn = e.target.closest('[data-cat-toggle]');
+    if (toggleBtn && !toggleBtn.disabled) {
+      e.stopPropagation();
+      const catId = toggleBtn.dataset.catToggle;
+      const cat = CATEGORIES.find(c => c.id === catId);
+      if (!cat || !cat.hosted) return;
+      const st = catState(cat);
+      const hostedTools = cat.tools.filter(t => ALL_HOSTED.includes(t.id));
+      if (st === 'all') { hostedTools.forEach(t => selected.delete(t.id)); }
+      else { hostedTools.forEach(t => selected.add(t.id)); }
+      renderSidebar();
+      if (activeCatId === catId) renderToolList();
+      refreshSummary();
+      return;
     }
-    const tool = e.target.closest('.tool-cbx');
-    if (tool){
-      if (tool.checked) selected.add(tool.dataset.tool);
-      else selected.delete(tool.dataset.tool);
-      refreshSummary(); return;
+
+    // Category item click (switch active)
+    const item = e.target.closest('[data-cat]');
+    if (item) {
+      const catId = item.dataset.cat;
+      const cat = CATEGORIES.find(c => c.id === catId);
+      if (!cat) return;
+      activeCatId = catId;
+      renderSidebar();
+      renderToolList();
     }
   });
 
-  // per-tool group select / deselect link
-  picker.addEventListener('click', e => {
-    const a = e.target.closest('a[data-grptoggle]'); if(!a) return;
-    e.preventDefault();
-    const c = CATEGORIES.find(x=>x.id===a.dataset.grptoggle); if(!c||!c.hosted) return;
-    const allShown = c.tools.every(t=>selected.has(t));
-    if (allShown) c.tools.forEach(t=>selected.delete(t));
-    else c.tools.forEach(t=>selected.add(t));
-    renderTool(); refreshSummary();
+  // ─── Event delegation — tool list ────────────────────────
+  document.getElementById('tool-list').addEventListener('click', e => {
+    // Tool toggle click
+    const toggleBtn = e.target.closest('[data-tool-toggle]');
+    if (toggleBtn) {
+      e.stopPropagation();
+      const toolId = toggleBtn.dataset.toolToggle;
+      if (selected.has(toolId)) selected.delete(toolId); else selected.add(toolId);
+      renderSidebar();
+      renderToolList();
+      refreshSummary();
+      return;
+    }
+
+    // Row click (not on toggle) — same effect
+    const row = e.target.closest('.tool-row:not(.local-only)');
+    if (row) {
+      const toolId = row.dataset.tool;
+      if (!toolId) return;
+      if (selected.has(toolId)) selected.delete(toolId); else selected.add(toolId);
+      renderSidebar();
+      renderToolList();
+      refreshSummary();
+    }
   });
 
-  searchInput.addEventListener('input', () => renderTool());
-
-  document.getElementById('cfg-select-all').addEventListener('click', () => {
-    selected = new Set(ALL_HOSTED); renderPicker(); refreshSummary();
+  // ─── Select all / Deselect all (middle panel) ─────────────
+  document.getElementById('btn-select-all').addEventListener('click', () => {
+    const cat = CATEGORIES.find(c => c.id === activeCatId);
+    if (!cat || !cat.hosted) return;
+    cat.tools.filter(t => ALL_HOSTED.includes(t.id)).forEach(t => selected.add(t.id));
+    renderSidebar(); renderToolList(); refreshSummary();
   });
-  document.getElementById('cfg-clear-all').addEventListener('click', () => {
-    selected = new Set(); renderPicker(); refreshSummary();
+
+  document.getElementById('btn-deselect-all').addEventListener('click', () => {
+    const cat = CATEGORIES.find(c => c.id === activeCatId);
+    if (!cat || !cat.hosted) return;
+    cat.tools.filter(t => ALL_HOSTED.includes(t.id)).forEach(t => selected.delete(t.id));
+    renderSidebar(); renderToolList(); refreshSummary();
   });
 
-  // ── Key handling ──
+  // ─── API key handling ────────────────────────────────────
   const tokenInput = document.getElementById('cfg-token');
-  const keyStatus = document.getElementById('cfg-key-status');
-  function hasKey(){ return tokenInput.value.trim().length>0; }
-  function maskedKey(){
-    return 'sk-eu-novada-••••';
-  }
-  function refreshKey(){
-    if (!hasKey()){ keyStatus.textContent = isZh()?'未填写':'NO KEY'; keyStatus.className='key-badge key-need'; }
-    else { keyStatus.textContent = isZh()?'已就绪':'READY'; keyStatus.className='key-badge key-ok'; }
-  }
   tokenInput.value = localStorage.getItem(LS_KEY) || '';
-  document.getElementById('cfg-save-key').addEventListener('click', () => {
+
+  // Auto-save key to localStorage on input
+  tokenInput.addEventListener('input', () => {
     const v = tokenInput.value.trim();
-    if (v){ localStorage.setItem(LS_KEY, v); showToast(isZh()?'已保存到本地':'Saved locally ✓'); }
-    else { localStorage.removeItem(LS_KEY); showToast(isZh()?'已清除':'Cleared'); }
-    refreshKey(); refreshSummary();
+    if (v) localStorage.setItem(LS_KEY, v);
+    else localStorage.removeItem(LS_KEY);
+    refreshSummary();
   });
-  tokenInput.addEventListener('input', () => { refreshKey(); refreshSummary(); });
 
-  // ── Summary + URL ──
-  const urlBox = document.getElementById('cfg-url');
-  const countEl = document.getElementById('cfg-count');
-  const countNote = document.getElementById('cfg-count-note');
-  const openPg = document.getElementById('cfg-open-pg');
+  // Eye toggle
+  let keyVisible = false;
+  const eyeBtn = document.getElementById('key-eye-btn');
+  const eyeIcon = document.getElementById('eye-icon');
+  eyeBtn.addEventListener('click', () => {
+    keyVisible = !keyVisible;
+    tokenInput.type = keyVisible ? 'text' : 'password';
+    eyeIcon.innerHTML = keyVisible
+      ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  });
 
-  // ordered selected short-names (catalog order, hosted only)
-  function selectedList(){ return ALL_HOSTED.filter(t => selected.has(t)); }
+  // ─── selectedList: ordered by catalog, hosted only ────────
+  function selectedList() {
+    return ALL_HOSTED.filter(t => selected.has(t));
+  }
 
-  // build URL with a key string (real or placeholder), returns plain string
-  function buildUrl(keyStr){
+  // Masked key for display
+  function maskedKey() { return '••••••••'; }
+
+  // Build real URL for clipboard
+  function copyUrl() {
+    const key = tokenInput.value.trim() || 'YOUR_KEY';
     const list = selectedList();
     const allSelected = list.length === ALL_HOSTED.length;
-    let url = `${CFG_ENDPOINT}?token=${keyStr}`;
-    if (!allSelected && list.length>0) url += `&tools=${list.join(',')}`;
+    let url = `${CFG_ENDPOINT}?token=${encodeURIComponent(key)}`;
+    if (!allSelected && list.length > 0) url += `&tools=${list.join(',')}`;
     return url;
   }
-  // the real URL we copy: real key if entered, else YOUR_KEY placeholder
-  function copyUrl(){
-    const key = hasKey() ? encodeURIComponent(tokenInput.value.trim()) : 'YOUR_KEY';
-    return buildUrl(key);
+
+  // Build quick-start Claude Code snippet
+  function claudeCodeSnippet() {
+    const list = selectedList();
+    const allSelected = list.length === ALL_HOSTED.length;
+    const toolsParam = (!allSelected && list.length > 0) ? `?token=YOUR_KEY&tools=${list.join(',')}` : '?token=YOUR_KEY';
+    return `claude mcp add --transport http novada \\\n  ${CFG_ENDPOINT}${toolsParam} \\\n  --scope user`;
   }
 
-  function refreshSummary(){
+  // Build quick-start Desktop JSON snippet
+  function desktopSnippet() {
+    const list = selectedList();
+    const allSelected = list.length === ALL_HOSTED.length;
+    const toolsParam = (!allSelected && list.length > 0) ? `?token=YOUR_KEY&tools=${list.join(',')}` : '?token=YOUR_KEY';
+    return `{\n  "mcpServers": {\n    "novada": {\n      "type": "http",\n      "url": "${CFG_ENDPOINT}${toolsParam}"\n    }\n  }\n}`;
+  }
+
+  // ─── Refresh summary / URL / snippets ────────────────────
+  function refreshSummary() {
     const list = selectedList();
     const n = list.length;
-    const allSelected = n === ALL_HOSTED.length;
-    countEl.textContent = n;
+    const total = ALL_HOSTED.length;
+    const allSelected = n === total;
 
-    // count note
-    if (n===0) countNote.innerHTML = isZh()
-      ? '至少选择一个工具来生成过滤后的端点。'
-      : 'Select at least one tool to generate a filtered endpoint.';
-    else if (allSelected) countNote.innerHTML = isZh()
-      ? `已选全部 ${ALL_HOSTED.length} 个托管工具 — URL 省略 <code class="mono">&tools=</code>。`
-      : `All ${ALL_HOSTED.length} hosted tools — URL omits <code class="mono">&tools=</code>.`;
-    else countNote.innerHTML = isZh()
-      ? `${n} / ${ALL_HOSTED.length} 个托管工具 · 更精简的工具清单。`
-      : `${n} of ${ALL_HOSTED.length} hosted tools · leaner tool list.`;
+    // URL block
+    const urlEl = document.getElementById('cfg-url');
+    const displayKey = tokenInput.value.trim() ? maskedKey() : 'YOUR_KEY';
+    if (n === 0) {
+      urlEl.innerHTML = `<span style="color:rgba(255,255,255,0.25)">${isZh() ? '请至少选择一个工具…' : 'Select at least one tool…'}</span>`;
+    } else {
+      let html = `${CFG_ENDPOINT}?token=<span class="url-token">${displayKey}</span>`;
+      if (!allSelected) html += `<span class="url-param">&amp;tools=</span>${list.join(',')}`;
+      urlEl.innerHTML = html;
+    }
 
-    // displayed URL (always masks the key, even if entered)
-    const displayKey = hasKey() ? maskedKey() : 'YOUR_KEY';
-    let display = `${CFG_ENDPOINT}?token=<span class="tok">${displayKey}</span>`;
-    if (!allSelected && n>0) display += `<span class="prm">&tools=</span>${list.join(',')}`;
-    urlBox.innerHTML = display;
+    // Stats
+    const statsEl = document.getElementById('stats-text');
+    const catsFull = CATEGORIES.filter(c => c.hosted && catState(c) === 'all').length;
+    if (n === 0) {
+      statsEl.innerHTML = isZh()
+        ? '<span class="stats-count">0</span> 个工具已选'
+        : '<span class="stats-count">0</span> tools selected';
+    } else if (allSelected) {
+      statsEl.innerHTML = isZh()
+        ? `<span class="stats-count">${n}</span> / ${total} 个工具 · 完整端点`
+        : `<span class="stats-count">${n}</span> / ${total} tools · full endpoint`;
+    } else {
+      statsEl.innerHTML = isZh()
+        ? `<span class="stats-count">${n}</span> / ${total} 个工具已选 · ${catsFull} 个分类全部启用`
+        : `<span class="stats-count">${n}</span> of ${total} tools · ${catsFull} categories fully enabled`;
+    }
 
-    // Open in Playground link (carries no key; tools as hint)
-    openPg.href = (!allSelected && n>0) ? `/playground?tools=${list.join(',')}` : '/playground';
+    // Playground link
+    const openPg = document.getElementById('cfg-open-pg');
+    openPg.href = (!allSelected && n > 0) ? `/playground?tools=${list.join(',')}` : '/playground';
+    openPg.style.opacity = n === 0 ? '0.4' : '';
+    openPg.style.pointerEvents = n === 0 ? 'none' : '';
 
-    // Disable Copy / Open when nothing is selected (avoid emitting a misleading full-toolset URL)
+    // Copy button
     const copyBtn = document.getElementById('cfg-copy');
-    copyBtn.disabled = (n === 0);
-    copyBtn.style.opacity = (n === 0) ? '0.45' : '';
-    copyBtn.style.cursor = (n === 0) ? 'not-allowed' : '';
-    openPg.style.pointerEvents = (n === 0) ? 'none' : '';
-    openPg.style.opacity = (n === 0) ? '0.45' : '';
+    copyBtn.disabled = n === 0;
+
+    // Quick-start snippets
+    document.getElementById('qs-code-claude').textContent = claudeCodeSnippet();
+    document.getElementById('qs-code-desktop').textContent = desktopSnippet();
   }
 
+  // ─── Copy URL ─────────────────────────────────────────────
   document.getElementById('cfg-copy').addEventListener('click', async () => {
-    if (selectedList().length === 0) { showToast(isZh()?'请至少选择一个工具':'Select at least one tool'); return; }
-    try { await navigator.clipboard.writeText(copyUrl()); showToast(isZh()?'已复制 URL ✓':'URL copied ✓'); }
-    catch { showToast(isZh()?'复制失败':'Copy failed'); }
+    const list = selectedList();
+    if (list.length === 0) {
+      showToast(isZh() ? '请至少选择一个工具' : 'Select at least one tool');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(copyUrl());
+      showToast(isZh() ? '已复制 URL ✓' : 'URL copied ✓');
+    } catch {
+      showToast(isZh() ? '复制失败' : 'Copy failed');
+    }
   });
 
-  // init
-  renderPicker(); refreshKey(); refreshSummary();
-</script>
+  // ─── Quick-start copy buttons ─────────────────────────────
+  document.getElementById('qs-copy-claude').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(claudeCodeSnippet());
+      showToast(isZh() ? '已复制 ✓' : 'Copied ✓');
+    } catch { showToast('Copy failed'); }
+  });
 
+  document.getElementById('qs-copy-desktop').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(desktopSnippet());
+      showToast(isZh() ? '已复制 ✓' : 'Copied ✓');
+    } catch { showToast('Copy failed'); }
+  });
+
+  // ─── Quick-start toggle ───────────────────────────────────
+  let qsOpen = false;
+  document.getElementById('qs-toggle').addEventListener('click', () => {
+    qsOpen = !qsOpen;
+    document.getElementById('qs-body').style.display = qsOpen ? 'block' : 'none';
+    document.getElementById('qs-arrow').classList.toggle('open', qsOpen);
+  });
+
+  // ─── Keyboard nav for sidebar ─────────────────────────────
+  document.getElementById('sidebar-list').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      const item = e.target.closest('[data-cat]');
+      if (item) { e.preventDefault(); item.click(); }
+    }
+  });
+
+  // ─── 4-point self-check traces ────────────────────────────
+  // 1. 0 tools selected → Copy disabled, URL shows placeholder text (checked in refreshSummary)
+  // 2. Category toggle → catState() checks all hosted tools, toggles all on/off (checked above)
+  // 3. Browser category → hosted:false → toggle has disabled attr, CSS opacity:0.35 (checked in renderSidebar)
+  // 4. Key display → maskedKey() always returns '••••••••', real key never rendered in urlEl (checked in refreshSummary)
+
+  // ─── Init ─────────────────────────────────────────────────
+  renderSidebar();
+  renderToolList();
+  refreshSummary();
+</script>
 </body>
 </html>
