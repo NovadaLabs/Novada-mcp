@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);})();
+function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MCP Dashboard — Novada</title>
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --th-bg:#f8f7fc; --th-surface:#ffffff; --th-card:#ffffff;
+    --th-ink:#0a142f; --th-ink-mid:#3d4a6b; --th-ink-muted:#677489;
+    --th-vborder:rgba(108,64,226,0.14); --th-sep:rgba(108,64,226,0.1);
+    --th-nav:rgba(255,255,255,0.95); --th-nav-border:rgba(108,64,226,0.12);
+    --th-badge-bg:rgba(108,64,226,0.08); --th-badge-ink:#6c40e2;
+    --th-code-bg:#f0eeff; --th-hover:rgba(108,64,226,0.04);
+    --th-tag-bg:#f0fdf4; --th-tag-ink:#15803d; --th-tag-border:#bbf7d0;
+    --th-shadow:0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(108,64,226,0.06);
+  }
+  [data-theme="dark"] {
+    --th-bg:#0f0c1e; --th-surface:#16132a; --th-card:#1d1a33;
+    --th-ink:#e8e0ff; --th-ink-mid:#b0a8d8; --th-ink-muted:#8578b8;
+    --th-vborder:rgba(108,64,226,0.22); --th-sep:rgba(108,64,226,0.15);
+    --th-nav:rgba(15,12,30,0.96); --th-nav-border:rgba(108,64,226,0.2);
+    --th-badge-bg:rgba(108,64,226,0.18); --th-badge-ink:#c4a9ff;
+    --th-code-bg:rgba(108,64,226,0.12); --th-hover:rgba(108,64,226,0.08);
+    --th-tag-bg:rgba(21,128,61,0.18); --th-tag-ink:#4ade80; --th-tag-border:rgba(74,222,128,0.25);
+    --th-shadow:0 1px 3px rgba(0,0,0,0.4),0 4px 16px rgba(0,0,0,0.3);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; padding: 0; }
+  body { font-family: 'Hanken Grotesk', system-ui, sans-serif; background: var(--th-bg); color: var(--th-ink); letter-spacing: -0.01em; min-height: 100vh; transition: background 0.2s, color 0.2s; }
+  h1,h2,h3 { letter-spacing: -0.025em; }
+
+  .nav-bar { position:sticky; top:0; z-index:50; background:var(--th-nav); border-bottom:1px solid var(--th-nav-border); backdrop-filter:blur(12px); }
+  .tab { cursor:pointer; padding:0 4px 14px; font-size:14px; font-weight:500; color:var(--th-ink-muted); border-bottom:2px solid transparent; transition:color 0.15s,border-color 0.15s; user-select:none; }
+  .tab:hover { color:var(--th-ink); }
+  .tab.active { color:#6c40e2; border-bottom-color:#6c40e2; }
+
+  .card { background:var(--th-card); border:1px solid var(--th-vborder); border-radius:12px; box-shadow:var(--th-shadow); }
+  .badge-pill { display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--th-badge-bg);color:var(--th-badge-ink);border:1px solid rgba(108,64,226,0.2); }
+  .badge-green { background:var(--th-tag-bg)!important;color:var(--th-tag-ink)!important;border-color:var(--th-tag-border)!important; }
+
+  .url-field { display:flex;align-items:center;gap:8px;background:var(--th-code-bg);border:1px solid var(--th-vborder);border-radius:8px;padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--th-ink-mid);cursor:pointer;transition:border-color 0.15s; }
+  .url-field:hover { border-color:rgba(108,64,226,0.4); }
+
+  /* Integration cards */
+  .int-card { display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:10px;background:var(--th-surface);border:1px solid var(--th-vborder);cursor:pointer;text-decoration:none;color:var(--th-ink);font-size:13.5px;font-weight:500;transition:background 0.15s,border-color 0.15s,transform 0.1s; }
+  .int-card:hover { background:var(--th-hover);border-color:rgba(108,64,226,0.3);transform:translateY(-1px); }
+  .int-icon { width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden; }
+  .int-icon img { width:20px;height:20px;object-fit:contain; }
+
+  /* Tool list */
+  .tool-item { display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:13px;color:var(--th-ink-mid);border-bottom:1px solid var(--th-sep); }
+  .tool-item:last-child { border-bottom:none; }
+
+  /* Theme toggle */
+  .theme-btn { display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--th-vborder);cursor:pointer;background:transparent;color:var(--th-ink-muted);transition:background 0.2s; }
+  .theme-btn:hover { background:var(--th-hover); }
+  .theme-btn .icon-sun { display:block; }
+  .theme-btn .icon-moon { display:none; }
+  [data-theme="dark"] .theme-btn .icon-sun { display:none; }
+  [data-theme="dark"] .theme-btn .icon-moon { display:block; }
+
+  .nav-link { font-size:14px;font-weight:500;color:var(--th-ink-muted);text-decoration:none;transition:color 0.15s; }
+  .nav-link:hover { color:var(--th-ink); }
+  .nav-link.active { color:#6c40e2; }
+  .section-label { font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--th-ink-muted);margin-bottom:14px; }
+  .sidebar { background:var(--th-card);border:1px solid var(--th-vborder);border-radius:12px;box-shadow:var(--th-shadow); }
+  .reveal-btn { cursor:pointer;color:var(--th-ink-muted);transition:color 0.15s;background:none;border:none;padding:0;display:flex;align-items:center; }
+  .reveal-btn:hover { color:#6c40e2; }
+  .demo-card { background:linear-gradient(135deg,#6c40e2 0%,#9863f0 100%);border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer; }
+  .play-btn { width:38px;height:38px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+
+  /* ── Drawer ── */
+  .drawer-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;opacity:0;pointer-events:none;transition:opacity 0.25s; }
+  .drawer-backdrop.open { opacity:1;pointer-events:all; }
+  .drawer { position:fixed;top:0;right:0;height:100vh;width:480px;max-width:100vw;background:#13102a;border-left:1px solid rgba(108,64,226,0.3);z-index:101;transform:translateX(100%);transition:transform 0.28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden; }
+  .drawer.open { transform:translateX(0); }
+  .drawer-header { display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid rgba(108,64,226,0.2);flex-shrink:0; }
+  .drawer-body { flex:1;overflow-y:auto;padding:22px; }
+  .drawer-body::-webkit-scrollbar { width:4px; }
+  .drawer-body::-webkit-scrollbar-track { background:transparent; }
+  .drawer-body::-webkit-scrollbar-thumb { background:rgba(108,64,226,0.3);border-radius:2px; }
+  .code-block { background:#0b0920;border:1px solid rgba(108,64,226,0.25);border-radius:10px;padding:16px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c4a9ff;line-height:1.65;overflow-x:auto;white-space:pre;position:relative;margin:12px 0; }
+  .code-block .key-highlight { color:#a78bfa;font-weight:600; }
+  .step-item { display:flex;gap:12px;margin-bottom:14px; }
+  .step-num { width:22px;height:22px;border-radius:50%;background:rgba(108,64,226,0.25);color:#c4a9ff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px; }
+  .step-text { font-size:13px;color:#b0a8d8;line-height:1.55; }
+  .step-text code { background:rgba(108,64,226,0.2);padding:1px 5px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c4a9ff; }
+  .copy-btn { position:absolute;top:10px;right:10px;background:rgba(108,64,226,0.25);border:none;border-radius:6px;color:#c4a9ff;cursor:pointer;padding:5px 10px;font-size:11px;font-weight:600;transition:background 0.15s; }
+  .copy-btn:hover { background:rgba(108,64,226,0.45); }
+  #tab-events { display:none; }
+</style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav class="nav-bar">
+  <div style="max-width:1060px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:28px;">
+      <a href="/" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
+        <div style="width:28px;height:28px;background:#6c40e2;border-radius:7px;display:flex;align-items:center;justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="2"/><path d="M8 12h8M12 8v8" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <span style="font-weight:700;font-size:15px;color:var(--th-ink);">Novada MCP</span>
+      </a>
+      <div style="display:flex;align-items:center;gap:20px;">
+        <a href="/tools" class="nav-link">Tools</a>
+        <a href="/pricing" class="nav-link">Pricing</a>
+        <a href="/playground" class="nav-link">Playground</a>
+        <a href="/configure" class="nav-link">Configure</a>
+        <a href="/dashboard" class="nav-link active">Dashboard</a>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <a href="https://github.com/NovadaLabs/novada-mcp" target="_blank" style="font-size:13px;font-weight:500;color:var(--th-ink-muted);text-decoration:none;display:flex;align-items:center;gap:5px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12.021C22 6.484 17.522 2 12 2Z"/></svg>
+        GitHub
+      </a>
+      <a href="https://npmjs.com/package/novada-mcp" target="_blank" class="nav-link">npm</a>
+      <a href="https://docs.novada.com" target="_blank" class="nav-link">Docs</a>
+      <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Page header + tabs ── -->
+<div style="max-width:1060px;margin:0 auto;padding:32px 20px 0;">
+  <h1 style="font-size:22px;font-weight:700;color:var(--th-ink);margin:0 0 4px;">MCP</h1>
+  <div style="display:flex;gap:24px;border-bottom:1px solid var(--th-vborder);margin-top:16px;">
+    <div class="tab active" onclick="switchTab('overview',this)">Overview</div>
+    <div class="tab" onclick="switchTab('events',this)">Event Log</div>
+  </div>
+</div>
+
+<!-- ── Main content ── -->
+<div style="max-width:1060px;margin:0 auto;padding:28px 20px 60px;">
+
+  <!-- Overview tab -->
+  <div id="tab-overview">
+    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start;">
+
+      <!-- LEFT -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Status card -->
+        <div class="card" style="padding:22px 24px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="width:38px;height:38px;background:var(--th-tag-bg);border:1.5px solid var(--th-tag-border);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--th-tag-ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <div style="font-size:17px;font-weight:700;color:var(--th-ink);">MCP configured</div>
+                <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">
+                  <span class="badge-pill">Remote</span>
+                  <span class="badge-pill">Streamable-HTTP</span>
+                  <span class="badge-pill">25+ tools enabled</span>
+                </div>
+              </div>
+            </div>
+            <button onclick="showEditKey()" style="font-size:13px;font-weight:500;color:#6c40e2;background:var(--th-badge-bg);border:1px solid rgba(108,64,226,0.25);border-radius:7px;padding:6px 14px;cursor:pointer;">Edit</button>
+          </div>
+
+          <div style="margin-top:18px;">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--th-ink-muted);display:block;margin-bottom:6px;">Your MCP Endpoint</label>
+            <div id="key-entry" style="display:none;margin-bottom:10px;">
+              <div style="display:flex;gap:8px;">
+                <input id="api-key-input" type="text" placeholder="Paste your Novada API key…" style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid var(--th-vborder);background:var(--th-surface);color:var(--th-ink);font-size:13px;font-family:inherit;outline:none;" />
+                <button onclick="confirmKey()" style="padding:9px 16px;background:#6c40e2;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Save</button>
+              </div>
+            </div>
+            <div class="url-field" onclick="copyUrl()" title="Click to copy">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--th-ink-muted);"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <span id="url-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+              <button class="reveal-btn" onclick="event.stopPropagation();toggleReveal()" title="Show/hide key">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+              <button style="cursor:pointer;color:var(--th-ink-muted);background:none;border:none;padding:0;display:flex;" onclick="event.stopPropagation();copyUrl()" title="Copy">
+                <svg id="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+            <p style="font-size:11.5px;color:var(--th-ink-muted);margin:7px 0 0;">Add this URL as a <strong style="color:var(--th-ink);">remote MCP server</strong> in any compatible client. No install required.</p>
+          </div>
+        </div>
+
+        <!-- Integration docs -->
+        <div class="card" style="padding:22px 24px;">
+          <div class="section-label">Integration docs</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;" id="int-grid"></div>
+        </div>
+
+      </div><!-- /LEFT -->
+
+      <!-- RIGHT SIDEBAR -->
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="sidebar" style="padding:18px 20px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--th-ink-muted);margin-bottom:12px;">Summary</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:14px;font-weight:600;color:var(--th-ink);">Web Data <span style="color:var(--th-ink-muted);font-weight:500;">(25+)</span></div>
+            <span class="badge-pill badge-green" style="font-size:11px;padding:2px 8px;border-radius:12px;">Free tier</span>
+          </div>
+          <div style="font-size:12px;color:#6c40e2;font-weight:600;margin-bottom:14px;">1,000 calls/month included</div>
+          <div>
+            <div class="tool-item"><span>Search Engine</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>SERP</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Scrape</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Extract</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Map</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Crawl</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Research</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Browser</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Proxy — Residential</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Proxy — Datacenter</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item"><span>Proxy — ISP</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="tool-item" style="border:none;"><span style="color:var(--th-ink-muted);">+ 14 more tools</span><a href="/tools" style="font-size:11px;color:#6c40e2;text-decoration:none;font-weight:600;">View all →</a></div>
+          </div>
+        </div>
+
+        <div class="demo-card">
+          <div class="play-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:white;line-height:1.3;">Watch: connect Novada MCP in 60s</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;">1:02</div>
+          </div>
+        </div>
+
+        <div style="background:var(--th-card);border:1px solid var(--th-vborder);border-radius:12px;padding:16px 18px;text-align:center;">
+          <div style="font-size:13px;font-weight:600;color:var(--th-ink);margin-bottom:4px;">Need an API key?</div>
+          <div style="font-size:12px;color:var(--th-ink-muted);margin-bottom:12px;">Free tier — 1,000 calls/month, no credit card.</div>
+          <a href="https://www.novada.com/signup" target="_blank" style="display:block;background:#6c40e2;color:white;border-radius:8px;padding:9px;font-size:13px;font-weight:600;text-decoration:none;">Get free API key →</a>
+        </div>
+      </div><!-- /RIGHT -->
+
+    </div>
+  </div><!-- /tab-overview -->
+
+  <!-- Event Log tab -->
+  <div id="tab-events">
+    <div class="card" style="padding:60px 24px;text-align:center;">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--th-ink-muted)" stroke-width="1.5" style="margin:0 auto 12px;display:block;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <div style="font-size:15px;font-weight:600;color:var(--th-ink);margin-bottom:6px;">No events yet</div>
+      <div style="font-size:13px;color:var(--th-ink-muted);">Tool calls will appear here once your agent starts using Novada MCP.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Drawer ── -->
+<div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div id="drawer-icon" style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;"></div>
+      <div>
+        <div id="drawer-name" style="font-size:16px;font-weight:700;color:#e8e0ff;"></div>
+        <div id="drawer-config-title" style="font-size:11px;color:#8578b8;font-family:'IBM Plex Mono',monospace;margin-top:2px;"></div>
+      </div>
+    </div>
+    <button onclick="closeDrawer()" style="background:none;border:none;color:#8578b8;cursor:pointer;padding:4px;border-radius:6px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#8578b8;margin-bottom:8px;">Configuration</div>
+    <div style="position:relative;">
+      <pre class="code-block" id="drawer-snippet"></pre>
+      <button class="copy-btn" onclick="copySnippet()" id="snippet-copy-btn">Copy</button>
+    </div>
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#8578b8;margin:20px 0 12px;">Setup steps</div>
+    <div id="drawer-steps"></div>
+    <a id="drawer-docs-link" href="#" target="_blank" style="display:inline-flex;align-items:center;gap:6px;margin-top:18px;font-size:13px;font-weight:500;color:#9863f0;text-decoration:none;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      View official docs →
+    </a>
+  </div>
+</div>
+
+<script>
+// ── Integration data ──
+const INTEGRATIONS = [
+  {
+    id: 'claude-desktop',
+    name: 'Claude Desktop',
+    subtitle: 'Desktop',
+    logoSrc: 'https://cdn.simpleicons.org/anthropic/ffffff',
+    logoBg: '#cc5200',
+    configTitle: 'claude_desktop_config.json',
+    configLang: 'json',
+    snippet: `{
+  "mcpServers": {
+    "novada": {
+      "type": "http",
+      "url": "https://mcp.novada.com/NOVADA_API_KEY/mcp"
+    }
+  }
+}`,
+    steps: [
+      'Open Claude Desktop → <code>Claude menu → Settings → Developer → Edit Config</code>. This opens <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>.',
+      'Add the <code>mcpServers</code> block shown above. Replace <code>NOVADA_API_KEY</code> with your actual Novada API key. The <code>url</code> field points directly at the remote Streamable-HTTP endpoint — no command or args needed.',
+      'Save the file, then fully quit and relaunch Claude Desktop. A connector icon appears in the chat input bar when connected.',
+    ],
+    docsUrl: 'https://modelcontextprotocol.io/docs/develop/connect-remote-servers',
+  },
+  {
+    id: 'claude-code',
+    name: 'Claude Code',
+    subtitle: 'Code',
+    logoSrc: 'https://cdn.simpleicons.org/anthropic/ffffff',
+    logoBg: '#d97757',
+    configTitle: 'claude mcp add --transport http',
+    configLang: 'bash',
+    snippet: `# Add Novada MCP (recommended — project scope)
+claude mcp add --transport http novada \\
+  https://mcp.novada.com/NOVADA_API_KEY/mcp
+
+# Add globally (all projects)
+claude mcp add --scope user --transport http novada \\
+  https://mcp.novada.com/NOVADA_API_KEY/mcp
+
+# Verify
+claude mcp list`,
+    steps: [
+      'Get your Novada API key from the dashboard, then run the <code>claude mcp add</code> command above — replace <code>NOVADA_API_KEY</code> with your real key.',
+      'Verify with <code>claude mcp list</code> — you should see <code>novada</code>. Then inside a session, run <code>/mcp</code> to confirm it is connected and tools are loaded.',
+      'Use <code>--scope user</code> to make the server available across all projects, not just the current one.',
+    ],
+    docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/mcp',
+  },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    subtitle: null,
+    logoSrc: 'https://cdn.simpleicons.org/cursor/ffffff',
+    logoBg: '#1a1a1a',
+    configTitle: '~/.cursor/mcp.json',
+    configLang: 'json',
+    snippet: `{
+  "mcpServers": {
+    "novada": {
+      "url": "https://mcp.novada.com/NOVADA_API_KEY/mcp"
+    }
+  }
+}`,
+    steps: [
+      'Copy your Novada API key from the dashboard.',
+      'Open or create <code>~/.cursor/mcp.json</code> and add the <code>mcpServers</code> block, replacing <code>NOVADA_API_KEY</code> with your key.',
+      'Restart Cursor (or go to <code>Settings → MCP → Refresh</code>). A green indicator confirms the server is connected.',
+    ],
+    docsUrl: 'https://cursor.com/docs/context/mcp',
+  },
+  {
+    id: 'openai-sdk',
+    name: 'OpenAI Agents',
+    subtitle: 'SDK',
+    logoSrc: null,
+    logoSvg: '<svg viewBox="0 0 24 24" fill="white" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>',
+    logoBg: '#000000',
+    configTitle: 'MCPServerStreamableHttp (Python)',
+    configLang: 'python',
+    snippet: `from agents import Agent, Runner
+from agents.mcp import MCPServerStreamableHttp
+
+async def main():
+    async with MCPServerStreamableHttp(
+        name="Novada MCP",
+        params={"url": "https://mcp.novada.com/NOVADA_API_KEY/mcp"},
+        cache_tools_list=True,
+    ) as server:
+        agent = Agent(
+            name="Assistant",
+            instructions="Use Novada tools to answer questions.",
+            mcp_servers=[server],
+        )
+        result = await Runner.run(agent, "Search for AI news.")
+        print(result.final_output)`,
+    steps: [
+      'Install the SDK: <code>pip install openai-agents</code> (Python) or <code>npm install @openai/agents</code> (Node.js).',
+      'Replace <code>NOVADA_API_KEY</code> with your key — it is embedded in the URL path, no Authorization header needed.',
+      'Wrap the server in an async context manager and pass it to <code>Agent</code> via <code>mcp_servers=[server]</code>.',
+    ],
+    docsUrl: 'https://openai.github.io/openai-agents-python/mcp/',
+  },
+  {
+    id: 'openai-agent-builder',
+    name: 'OpenAI',
+    subtitle: 'Agent Builder',
+    logoSrc: null,
+    logoSvg: '<svg viewBox="0 0 24 24" fill="white" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>',
+    logoBg: '#000000',
+    configTitle: 'Responses API — tools array',
+    configLang: 'python',
+    snippet: `from openai import OpenAI
+client = OpenAI()
+
+resp = client.responses.create(
+    model="gpt-4o",
+    tools=[{
+        "type": "mcp",
+        "server_label": "novada",
+        "server_url": "https://mcp.novada.com/NOVADA_API_KEY/mcp",
+        "server_description": "Novada web-data tools.",
+        "require_approval": "never",
+    }],
+    input="Search for the latest AI news.",
+)
+print(resp.output_text)`,
+    steps: [
+      'In <code>platform.openai.com → Agent Builder</code>, click the agent node → Tools → MCP → paste your URL: <code>https://mcp.novada.com/NOVADA_API_KEY/mcp</code>.',
+      'For API usage: add the MCP tool object (type, server_label, server_url, require_approval) to the <code>tools</code> array in <code>client.responses.create()</code>.',
+      'Send a prompt and verify Novada tools appear in the response. OpenAI auto-detects the Streamable-HTTP transport.',
+    ],
+    docsUrl: 'https://platform.openai.com/docs/guides/tools-remote-mcp',
+  },
+  {
+    id: 'langchain',
+    name: 'Langchain',
+    subtitle: null,
+    logoSrc: 'https://cdn.simpleicons.org/langchain/ffffff',
+    logoBg: '#1c3c3c',
+    configTitle: 'langchain-mcp-adapters',
+    configLang: 'python',
+    snippet: `from langchain_mcp_adapters.client import MultiServerMCPClient
+
+client = MultiServerMCPClient({
+    "novada": {
+        "transport": "streamable_http",
+        "url": "https://mcp.novada.com/NOVADA_API_KEY/mcp",
+        "timeout": 30,
+    }
+})
+
+# In an async context:
+tools = await client.get_tools()`,
+    steps: [
+      'Install: <code>pip install langchain-mcp-adapters</code>.',
+      'Replace <code>NOVADA_API_KEY</code> with your key in the URL.',
+      'Call <code>await client.get_tools()</code> to retrieve all Novada tools, then pass them to your LangGraph agent or <code>AgentExecutor</code>.',
+    ],
+    docsUrl: 'https://github.com/langchain-ai/langchain-mcp-adapters',
+  },
+  {
+    id: 'n8n',
+    name: 'n8n',
+    subtitle: null,
+    logoSrc: 'https://cdn.simpleicons.org/n8n/ffffff',
+    logoBg: '#ea4b71',
+    configTitle: 'MCP Client Tool node',
+    configLang: 'text',
+    snippet: `Node type:        MCP Client Tool
+Connection type:  HTTP Streamable
+HTTP Streamable URL:
+  https://mcp.novada.com/NOVADA_API_KEY/mcp
+Authentication:   None (key embedded in URL)
+Tools to expose:  All`,
+    steps: [
+      'In your n8n workflow, add an <code>MCP Client Tool</code> sub-node to the Tools port of an AI Agent node. Set <code>Connection Type</code> to <code>HTTP Streamable</code>.',
+      'In the HTTP Streamable URL field enter <code>https://mcp.novada.com/NOVADA_API_KEY/mcp</code> — no extra auth header needed, the key is embedded in the path.',
+      'Set <code>Tools to Include</code> to <code>All</code>, then click <code>List Tools</code> to verify the connection returns Novada\'s tool list.',
+    ],
+    docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.toolmcp/',
+  },
+  {
+    id: 'llamaindex',
+    name: 'LlamaIndex',
+    subtitle: null,
+    logoSrc: null,
+    logoEmoji: '🦙',
+    logoBg: '#7c3aed',
+    configTitle: 'llama-index-tools-mcp',
+    configLang: 'python',
+    snippet: `from llama_index.tools.mcp import BasicMCPClient, McpToolSpec
+from llama_index.core.agent.workflow import FunctionAgent
+from llama_index.llms.openai import OpenAI
+
+mcp_client = BasicMCPClient(
+    "https://mcp.novada.com/NOVADA_API_KEY/mcp"
+)
+mcp_tool_spec = McpToolSpec(client=mcp_client)
+tools = await mcp_tool_spec.to_tool_list_async()
+
+agent = FunctionAgent(
+    llm=OpenAI(model="gpt-4o"),
+    tools=tools,
+    system_prompt="You have Novada web tools.",
+)
+resp = await agent.run("Search for AI news")`,
+    steps: [
+      'Install: <code>pip install llama-index-tools-mcp</code>.',
+      'Replace <code>NOVADA_API_KEY</code> with your actual key from the Novada dashboard.',
+      'Call <code>to_tool_list_async()</code> to fetch available tools, then pass the list to <code>FunctionAgent</code> or any LlamaIndex agent.',
+    ],
+    docsUrl: 'https://docs.llamaindex.ai/en/stable/examples/tools/mcp/',
+  },
+  {
+    id: 'crewai',
+    name: 'CrewAI',
+    subtitle: null,
+    logoSrc: 'https://cdn.simpleicons.org/crewai/ffffff',
+    logoBg: '#ff4b4b',
+    configTitle: 'MCPServerAdapter',
+    configLang: 'python',
+    snippet: `from crewai import Agent, Task, Crew
+from crewai_tools import MCPServerAdapter
+
+server_params = {
+    "url": "https://mcp.novada.com/NOVADA_API_KEY/mcp",
+    "transport": "streamable-http",
+}
+
+with MCPServerAdapter(server_params) as tools:
+    agent = Agent(
+        role="Research Agent",
+        goal="Use Novada tools for web research.",
+        backstory="AI with Novada web intelligence.",
+        tools=tools,
+    )
+    task = Task(
+        description="Search and extract key findings.",
+        expected_output="Structured research summary.",
+        agent=agent,
+    )
+    crew = Crew(agents=[agent], tasks=[task])
+    print(crew.kickoff())`,
+    steps: [
+      'Install: <code>pip install crewai crewai-tools</code>.',
+      'Replace <code>NOVADA_API_KEY</code> with your actual key.',
+      '<code>MCPServerAdapter</code> connects via Streamable-HTTP, fetches available tools, and injects them into your agent automatically.',
+    ],
+    docsUrl: 'https://docs.crewai.com/en/mcp/streamable-http',
+  },
+  {
+    id: 'windsurf',
+    name: 'Windsurf',
+    subtitle: null,
+    logoSrc: 'https://cdn.simpleicons.org/windsurf/ffffff',
+    logoBg: '#1a1a2e',
+    configTitle: '~/.codeium/windsurf/mcp_config.json',
+    configLang: 'json',
+    snippet: `{
+  "mcpServers": {
+    "novada": {
+      "serverUrl": "https://mcp.novada.com/NOVADA_API_KEY/mcp"
+    }
+  }
+}`,
+    steps: [
+      'Open or create <code>~/.codeium/windsurf/mcp_config.json</code> (Windows: <code>%USERPROFILE%\\.codeium\\windsurf\\mcp_config.json</code>).',
+      'Add the novada entry using the <code>serverUrl</code> field — replace <code>NOVADA_API_KEY</code> with your actual key.',
+      'Fully quit and relaunch Windsurf (not just reload window) for Cascade to pick up the new MCP server.',
+    ],
+    docsUrl: 'https://docs.windsurf.com/windsurf/mcp',
+  },
+  {
+    id: 'cline',
+    name: 'Cline',
+    subtitle: null,
+    logoSrc: 'https://cdn.simpleicons.org/cline/ffffff',
+    logoBg: '#1e1e2e',
+    configTitle: 'cline_mcp_settings.json',
+    configLang: 'json',
+    snippet: `{
+  "mcpServers": {
+    "novada": {
+      "type": "streamableHttp",
+      "url": "https://mcp.novada.com/NOVADA_API_KEY/mcp",
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}`,
+    steps: [
+      'In VS Code press <code>Cmd+Shift+P</code> (Mac) or <code>Ctrl+Shift+P</code> (Win/Linux) and run <code>Cline: Open MCP Settings</code>.',
+      'Add the novada server block inside <code>mcpServers</code>, replacing <code>NOVADA_API_KEY</code> with your key.',
+      'Save the file. Cline auto-detects the change and connects — verify the green status in the Cline MCP panel.',
+    ],
+    docsUrl: 'https://docs.cline.bot/mcp/mcp-overview',
+  },
+  {
+    id: 'codex',
+    name: 'Codex',
+    subtitle: 'CLI',
+    logoSrc: null,
+    logoSvg: '<svg viewBox="0 0 24 24" fill="white" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>',
+    logoBg: '#111111',
+    configTitle: '~/.codex/config.toml',
+    configLang: 'toml',
+    snippet: `[mcp_servers.novada]
+url = "https://mcp.novada.com/NOVADA_API_KEY/mcp"`,
+    steps: [
+      'Install: <code>npm install -g @openai/codex</code> or <code>brew install --cask codex</code>.',
+      'Open or create <code>~/.codex/config.toml</code> and add the <code>[mcp_servers.novada]</code> block with your URL.',
+      'Run <code>codex</code> — on startup it connects to Novada MCP and lists tools in the TUI banner.',
+    ],
+    docsUrl: 'https://github.com/openai/codex',
+  },
+];
+
+// ── Build integration grid ──
+function buildGrid() {
+  const grid = document.getElementById('int-grid');
+  grid.innerHTML = INTEGRATIONS.map(intg => {
+    const iconHtml = intg.logoSvg
+      ? intg.logoSvg
+      : intg.logoSrc
+        ? `<img src="${intg.logoSrc}" alt="${intg.name}" style="width:20px;height:20px;object-fit:contain;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:16px;">${intg.logoEmoji||'⚡'}</span>`
+        : `<span style="font-size:18px;">${intg.logoEmoji||'⚡'}</span>`;
+    return `<div class="int-card" onclick="openDrawer('${intg.id}')">
+      <div class="int-icon" style="background:${intg.logoBg};">${iconHtml}</div>
+      <div>
+        <div>${intg.name}</div>
+        ${intg.subtitle ? `<div style="font-size:11px;color:var(--th-ink-muted);font-weight:400;">${intg.subtitle}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── API key / URL logic ──
+var savedKey = localStorage.getItem('novada_api_key') || '';
+var revealed = false;
+
+function maskKey(k) {
+  if (!k || k.length < 8) return k;
+  return k.slice(0, 4) + '•'.repeat(Math.max(0, k.length - 8)) + k.slice(-4);
+}
+
+function renderUrl() {
+  const el = document.getElementById('url-text');
+  if (!savedKey) {
+    el.innerHTML = 'https://mcp.novada.com/<span style="color:#9863f0;font-weight:600;">YOUR_API_KEY</span>/mcp';
+  } else if (revealed) {
+    el.textContent = `https://mcp.novada.com/${savedKey}/mcp`;
+  } else {
+    el.textContent = `https://mcp.novada.com/${maskKey(savedKey)}/mcp`;
+  }
+}
+
+function confirmKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val) return;
+  savedKey = val;
+  localStorage.setItem('novada_api_key', val);
+  document.getElementById('key-entry').style.display = 'none';
+  renderUrl();
+}
+
+function showEditKey() {
+  const el = document.getElementById('key-entry');
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+  if (savedKey) document.getElementById('api-key-input').value = savedKey;
+}
+
+function toggleReveal() { revealed = !revealed; renderUrl(); }
+
+function copyUrl() {
+  const url = `https://mcp.novada.com/${savedKey || 'YOUR_API_KEY'}/mcp`;
+  navigator.clipboard.writeText(url).then(() => {
+    const el = document.getElementById('copy-icon');
+    el.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+    el.setAttribute('stroke', '#6c40e2');
+    setTimeout(() => { el.innerHTML = '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'; el.setAttribute('stroke','currentColor'); }, 2000);
+  });
+}
+
+// ── Drawer ──
+function openDrawer(id) {
+  const intg = INTEGRATIONS.find(x => x.id === id);
+  if (!intg) return;
+
+  const key = savedKey || 'YOUR_API_KEY';
+  const snippet = intg.snippet.replace(/NOVADA_API_KEY/g, key);
+
+  // Icon
+  const iconEl = document.getElementById('drawer-icon');
+  iconEl.style.background = intg.logoBg;
+  iconEl.innerHTML = intg.logoSrc
+    ? `<img src="${intg.logoSrc}" alt="${intg.name}" style="width:20px;height:20px;object-fit:contain;">`
+    : `<span style="font-size:20px;">${intg.logoEmoji||'⚡'}</span>`;
+
+  document.getElementById('drawer-name').textContent = intg.name + (intg.subtitle ? ' · ' + intg.subtitle : '');
+  document.getElementById('drawer-config-title').textContent = intg.configTitle;
+
+  // Code block — highlight the key
+  const safeSnippet = snippet.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const highlighted = savedKey
+    ? safeSnippet.replace(new RegExp(savedKey.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g'), `<span class="key-highlight">${savedKey}</span>`)
+    : safeSnippet.replace(/YOUR_API_KEY/g, '<span style="color:#f59e0b;font-weight:600;">YOUR_API_KEY</span>');
+  document.getElementById('drawer-snippet').innerHTML = highlighted;
+
+  // Steps
+  document.getElementById('drawer-steps').innerHTML = intg.steps.map((s, i) =>
+    `<div class="step-item">
+      <div class="step-num">${i+1}</div>
+      <div class="step-text">${s}</div>
+    </div>`
+  ).join('');
+
+  document.getElementById('drawer-docs-link').href = intg.docsUrl;
+
+  document.getElementById('backdrop').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDrawer() {
+  document.getElementById('backdrop').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function copySnippet() {
+  const text = document.getElementById('drawer-snippet').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('snippet-copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  });
+}
+
+// ── Tab switching ──
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-overview').style.display = tab === 'overview' ? '' : 'none';
+  document.getElementById('tab-events').style.display = tab === 'events' ? '' : 'none';
+}
+
+// ── ESC to close drawer ──
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+// ── Init ──
+buildGrid();
+renderUrl();
+</script>
+</body>
+</html>
