@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "novada-dev": {
+      "command": "node",
+      "args": ["/path/to/novada-mcp/build/index.js"],
+      "env": {
+        "NOVADA_API_KEY": "your-api-key-here",
+        "NOVADA_PROXY_USER": "your-proxy-user",
+        "NOVADA_PROXY_PASS": "your-proxy-pass",
+        "NOVADA_PROXY_ENDPOINT": "your-proxy-endpoint:7777",
+        "NOVADA_WEB_UNBLOCKER_KEY": "your-unblocker-key",
+        "NOVADA_BROWSER_WS": "wss://your-browser-ws-endpoint"
+      }
+    }
+  }
+}
