@@ -144,10 +144,13 @@ export async function novadaVerify(params, apiKey) {
         .filter(Boolean)
         .slice(0, 3);
     lines.push(`- Supporting URLs: ${supportUrls.length > 0 ? supportUrls.join(", ") : "none"}`);
-    // Top URLs from query 2 (contradicting)
-    const contradictUrls = skepticalResult.results
+    // INC-196: Use FILTERED contradictingEvidence (only items with genuine dispute markers),
+    // not the raw skepticalResult.results. Also dedup against supporting URLs.
+    const supportUrlSet = new Set(supportUrls);
+    const contradictUrls = contradictingEvidence
         .map(r => r.url || r.link)
-        .filter(Boolean)
+        .filter((u) => Boolean(u))
+        .filter(u => !supportUrlSet.has(u))
         .slice(0, 3);
     lines.push(`- Contradicting URLs: ${contradictUrls.length > 0 ? contradictUrls.join(", ") : "none"}`);
     // Neutral sources hint if any

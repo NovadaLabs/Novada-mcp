@@ -79,19 +79,19 @@ async function probeScraper(apiKey) {
         catch { /* ignore */ }
         const code = body?.code;
         if (code === 0)
-            return { status: "active", label: "Scraper API (search + 129 platforms)", latency };
+            return { status: "active", label: "Scraper API (search + 13 active platforms)", latency };
         // 11006 = product not activated; 11000 = invalid key
         if (code === 11006) {
-            return { status: "not_activated", label: "Scraper API (search + 129 platforms)", latency, note: "dashboard.novada.com/overview/scraper/ — contact support to enable Bearer token access" };
+            return { status: "not_activated", label: "Scraper API (search + 13 active platforms)", latency, note: "dashboard.novada.com/overview/scraper/ — contact support to enable Bearer token access" };
         }
         if (code === 11000) {
-            return { status: "error", label: "Scraper API (search + 129 platforms)", latency, note: "Invalid API key (11000)" };
+            return { status: "error", label: "Scraper API (search + 13 active platforms)", latency, note: "Invalid API key (11000)" };
         }
-        return { status: "not_activated", label: "Scraper API (search + 129 platforms)", latency, note: `code=${code ?? res.status}` };
+        return { status: "not_activated", label: "Scraper API (search + 13 active platforms)", latency, note: `code=${code ?? res.status}` };
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        return { status: "error", label: "Scraper API (search + 129 platforms)", latency: null, note: msg.slice(0, 80) };
+        return { status: "error", label: "Scraper API (search + 13 active platforms)", latency: null, note: msg.slice(0, 80) };
     }
     finally {
         clearTimeout(timer);
@@ -114,10 +114,23 @@ function probeProxy() {
         note: "set NOVADA_PROXY_USER env var",
     };
 }
+// INC-195: Detect hosted (Vercel) environment where Browser API is architecturally unavailable
+function isHostedEnvironment() {
+    return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
 function probeBrowser() {
+    // INC-195: On hosted environments, Browser API requires WebSocket transport
+    // that is not available on Vercel Edge/Lambda — don't mislead with "set env"
+    if (isHostedEnvironment()) {
+        return {
+            status: "not_configured",
+            label: "Browser API",
+            latency: null,
+            note: "Not available on hosted — requires WebSocket transport. Use local MCP server for browser features.",
+        };
+    }
     const ws = getBrowserWs();
     if (ws) {
-        // Validate WS URL format: must start with "wss://" and contain "@" (user:pass@host)
         const wsValid = ws.startsWith("wss://") && ws.includes("@");
         if (wsValid) {
             return { status: "active", label: "Browser API", latency: null };
@@ -155,7 +168,7 @@ export async function novadaHealth(apiKey) {
     ]);
     const results = [
         extractSettled.status === "fulfilled" ? extractSettled.value : { status: "error", label: "Web Unblocker / Extract", latency: null, note: "probe threw unexpectedly" },
-        scraperSettled.status === "fulfilled" ? scraperSettled.value : { status: "error", label: "Scraper API (search + 129 platforms)", latency: null, note: "probe threw unexpectedly" },
+        scraperSettled.status === "fulfilled" ? scraperSettled.value : { status: "error", label: "Scraper API (search + 13 active platforms)", latency: null, note: "probe threw unexpectedly" },
         probeProxy(),
         probeBrowser(),
     ];
@@ -203,7 +216,7 @@ export async function novadaHealth(apiKey) {
             }
             else if (r.status === "not_configured") {
                 if (r.label === "Proxy") {
-                    lines.push(`- Proxy: Export NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT`);
+                    lines.push(`- Proxy: Set NOVADA_PROXY_ENDPOINT (user/pass auto-provisioned from NOVADA_API_KEY). Or set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT for explicit credentials.`);
                 }
                 else if (r.label === "Browser API") {
                     lines.push(`- Browser API: Export NOVADA_BROWSER_WS (get credentials at dashboard.novada.com/overview/browser/)`);

@@ -77,9 +77,14 @@ export const ExtractParamsSchema = z.object({
     fields: z.array(z.string().min(1)).max(20).optional()
         .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching."),
     max_chars: z.number().int().min(1000).max(100000).optional()
-        .describe("Maximum characters to return (default: 25000, max: 100000). " +
-        "When content exceeds this limit, it is truncated and a notice is appended. " +
-        "Common mistake: do not set max_chars=100000 by default — use 25000 for most pages."),
+        .describe("Maximum characters to return (default: 100000, max: 100000). " +
+        "When content exceeds this limit, it is truncated and a notice is appended."),
+    wait_for: z.string().optional()
+        .describe("CSS selector to wait for before capturing content (browser mode only). E.g. '.price', '#product-title', '[data-testid=price]'. Delays capture until the element appears in the DOM. Max wait: 15s."),
+    wait_ms: z.number().int().min(0).max(30000).optional()
+        .describe("Fixed milliseconds to wait after page load before capturing content. Use wait_for (CSS selector) instead when possible — it is more reliable. wait_ms is a fallback for pages with no stable selector. Max: 30000ms."),
+    clean: z.boolean().optional()
+        .describe("Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage."),
 });
 export const CrawlParamsSchema = z.object({
     url: safeUrl,
@@ -164,10 +169,15 @@ export function validateProxyParams(args) {
     return ProxyParamsSchema.parse(args ?? {});
 }
 // ─── Scrape Params ────────────────────────────────────────────────────────────
+/** Shared regex for task_id validation across scraper tools (L-2: single source of truth) */
+export const TASK_ID_REGEX = /^[a-zA-Z0-9_\-\.]{1,128}$/;
+export const TASK_ID_REGEX_MSG = "task_id must be alphanumeric with underscores/hyphens/dots only";
 const scrapeBase = {
-    platform: z.string().min(1)
+    platform: z.string().min(1).max(100)
+        .regex(/^[a-zA-Z0-9._\-]+$/, "platform must be a valid domain name (alphanumeric, dots, hyphens)")
         .describe("Platform domain to scrape. E.g. 'amazon.com', 'reddit.com', 'tiktok.com', 'linkedin.com', 'google.com'."),
-    operation: z.string().min(1)
+    operation: z.string().min(1).max(100)
+        .regex(/^[a-zA-Z0-9_\-]+$/, "operation must be alphanumeric with underscores/hyphens")
         .describe("Scraping operation ID. Examples: 'amazon_product_keywords', 'amazon_product_asin', 'tiktok_posts_url', 'linkedin_company_information_url', 'github_repository_repo-url', 'twitter_profile_username', 'youtube_video_search_label'. Read novada://scraper-platforms resource for the complete list with required params."),
     params: z.record(z.string(), z.unknown()).default({})
         .describe("Operation-specific parameters. E.g. { keyword: 'iphone 16', num: 5 } for keyword search, { url: 'https://...' } for URL-based ops, { asin: 'B09...' } for ASIN lookup."),
@@ -201,12 +211,6 @@ export const UnblockParamsSchema = z.object({
         .describe("ISO 2-letter country code for geo-targeted rendering."),
     wait_for: z.string().optional()
         .describe("CSS selector to wait for before capturing HTML. E.g. '.price', '#product-title'."),
-    wait_ms: z.number().int().min(0).max(100000).optional()
-        .describe("[NOT_IMPLEMENTED — reserved for future use] Max time in ms to wait for page to fully load before capture. Use when wait_for selector is unavailable. Max 100000ms."),
-    block_resources: z.boolean().optional()
-        .describe("[NOT_IMPLEMENTED — reserved for future use] Block images, CSS, and video loading for faster captures. Reduces bandwidth and latency on image-heavy pages."),
-    auto_runs: z.number().int().min(1).max(10).optional()
-        .describe("[NOT_IMPLEMENTED — reserved for future use] Number of retry attempts if the page load fails or returns incomplete content. Default 2, max 10."),
     timeout: z.number().int().min(5000).max(120000).default(30000)
         .describe("Timeout in ms. Default 30000, max 120000."),
     max_chars: z.number().int().min(1000).max(500000).optional()

@@ -22,6 +22,7 @@ export declare function routeFetch(url: string, options?: {
     apiKey?: string;
     timeout?: number;
     waitForSelector?: string;
+    wait_ms?: number;
     country?: string;
 }): Promise<RouteResult>;
 /** Map UsedMode to its cost tier */

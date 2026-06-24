@@ -57,6 +57,9 @@ export declare const ExtractParamsSchema: z.ZodObject<{
     }>>;
     fields: z.ZodOptional<z.ZodArray<z.ZodString>>;
     max_chars: z.ZodOptional<z.ZodNumber>;
+    wait_for: z.ZodOptional<z.ZodString>;
+    wait_ms: z.ZodOptional<z.ZodNumber>;
+    clean: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const CrawlParamsSchema: z.ZodObject<{
     url: z.ZodString;
@@ -140,9 +143,9 @@ export interface NovadaApiResponse {
 export declare const ProxyParamsSchema: z.ZodObject<{
     type: z.ZodDefault<z.ZodEnum<{
         residential: "residential";
+        datacenter: "datacenter";
         mobile: "mobile";
         isp: "isp";
-        datacenter: "datacenter";
     }>>;
     country: z.ZodOptional<z.ZodString>;
     city: z.ZodOptional<z.ZodString>;
@@ -155,6 +158,9 @@ export declare const ProxyParamsSchema: z.ZodObject<{
 }, z.core.$strip>;
 export type ProxyParams = z.infer<typeof ProxyParamsSchema>;
 export declare function validateProxyParams(args: Record<string, unknown> | undefined): ProxyParams;
+/** Shared regex for task_id validation across scraper tools (L-2: single source of truth) */
+export declare const TASK_ID_REGEX: RegExp;
+export declare const TASK_ID_REGEX_MSG = "task_id must be alphanumeric with underscores/hyphens/dots only";
 /** MCP tool schema — agent-optimized formats only */
 export declare const ScrapeParamsSchema: z.ZodObject<{
     format: z.ZodDefault<z.ZodEnum<{
@@ -196,9 +202,6 @@ export declare const UnblockParamsSchema: z.ZodObject<{
     }>>;
     country: z.ZodOptional<z.ZodString>;
     wait_for: z.ZodOptional<z.ZodString>;
-    wait_ms: z.ZodOptional<z.ZodNumber>;
-    block_resources: z.ZodOptional<z.ZodBoolean>;
-    auto_runs: z.ZodOptional<z.ZodNumber>;
     timeout: z.ZodDefault<z.ZodNumber>;
     max_chars: z.ZodOptional<z.ZodNumber>;
 }, z.core.$strip>;

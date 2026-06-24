@@ -1,7 +1,9 @@
-import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
+import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
+import { saveOutput } from "../utils/output.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
+import { TIMEOUTS } from "../config.js";
 export { detectJsHeavyContent } from "../utils/index.js";
 export async function novadaExtract(params, apiKey) {
     // P1-6: Normalize url/urls into a list
@@ -137,7 +139,8 @@ function rewriteRedditUrl(url) {
         return null;
     }
 }
-async function extractSingle(params, apiKey) {
+/** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
+async function extractSingleInner(params, apiKey) {
     // Normalize render="js" → "render" (js is the agent-friendly alias)
     if (params.render === "js") {
         params = { ...params, render: "render" };
@@ -172,11 +175,11 @@ async function extractSingle(params, apiKey) {
     }
     // Force modes (or registry-resolved modes) skip escalation logic
     if (effectiveMode === "browser") {
-        html = await fetchViaBrowser(params.url);
+        html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
         usedMode = "browser";
     }
     else if (effectiveMode === "render") {
-        const response = await fetchWithRender(params.url, apiKey);
+        const response = await fetchWithRender(params.url, apiKey, domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {});
         const contentType = String(response.headers?.["content-type"] ?? "");
         if (isPdfResponse(params.url, contentType)) {
             const pdfBuffer = Buffer.isBuffer(response.data)
@@ -202,7 +205,21 @@ async function extractSingle(params, apiKey) {
             }
             html = response.data;
         }
-        usedMode = "render";
+        // QW-4: If rendered content is suspiciously short, it may be a bot-challenge page
+        // that passed detectBotChallenge — attempt browser escalation before accepting
+        if (typeof html === "string" && html.length < 2000 && detectBotChallenge(html) && isBrowserConfigured()) {
+            const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => null);
+            if (browserHtml && browserHtml.length > html.length) {
+                html = browserHtml;
+                usedMode = "browser";
+            }
+            else {
+                usedMode = "render";
+            }
+        }
+        else {
+            usedMode = "render";
+        }
     }
     else {
         // Auto or static:
@@ -210,6 +227,7 @@ async function extractSingle(params, apiKey) {
         // Open static sites (HN, TechCrunch, Wikipedia) respond in ~300ms direct vs ~3s via proxy.
         // Direct "wins" only if it returns clean HTML (no bot challenge, no JS-heavy indicators).
         // Bot-protected or JS-heavy: direct rejects, proxy result is used — no change in behavior.
+        const domainProxyTier = domainHint?.proxyTier;
         const response = await (effectiveMode === "auto"
             ? Promise.any([
                 fetchWithRetry(params.url, { headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
@@ -219,9 +237,9 @@ async function extractSingle(params, apiKey) {
                         return r;
                     throw new Error("not-static");
                 }),
-                fetchViaProxy(params.url, apiKey),
+                fetchViaProxy(params.url, apiKey, domainProxyTier ? { proxyTier: domainProxyTier } : {}),
             ])
-            : fetchViaProxy(params.url, apiKey));
+            : fetchViaProxy(params.url, apiKey, domainProxyTier ? { proxyTier: domainProxyTier } : {}));
         const contentType = String(response.headers?.["content-type"] ?? "");
         if (isPdfResponse(params.url, contentType)) {
             const pdfBuffer = Buffer.isBuffer(response.data)
@@ -260,7 +278,7 @@ async function extractSingle(params, apiKey) {
                     detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
                     // Render returned a bot challenge page — escalate to browser if available
                     if (isBrowserConfigured()) {
-                        html = await fetchViaBrowser(params.url);
+                        html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
                         usedMode = "browser";
                         antiBotResolved = true;
                     }
@@ -277,7 +295,7 @@ async function extractSingle(params, apiKey) {
                 }
                 else if (isBrowserConfigured()) {
                     // render also JS-heavy — try full browser
-                    html = await fetchViaBrowser(params.url);
+                    html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
                     usedMode = "browser";
                     antiBotResolved = true;
                 }
@@ -291,7 +309,7 @@ async function extractSingle(params, apiKey) {
                 // render threw — try Browser API if available
                 renderError = err instanceof Error ? err.message : String(err);
                 if (isBrowserConfigured()) {
-                    html = await fetchViaBrowser(params.url);
+                    html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
                     usedMode = "browser";
                     antiBotResolved = true;
                 }
@@ -325,9 +343,13 @@ async function extractSingle(params, apiKey) {
             "\n<!-- Content truncated at 10,000 characters -->";
     }
     // For PDF content, use the text directly (no HTML parsing needed)
+    // clean=true → main-content only; clean=false (default) → full page for maximum coverage
+    const useFullPage = params.clean !== true;
     let mainContent = pdfPages !== null
         ? html.slice(0, 25000)
-        : extractMainContent(html, params.url);
+        : useFullPage
+            ? extractFullPageContent(html, params.url)
+            : extractMainContent(html, params.url);
     let allLinks = pdfPages !== null ? [] : extractLinks(html, params.url);
     let baseDomain;
     try {
@@ -347,7 +369,7 @@ async function extractSingle(params, apiKey) {
     })
         .slice(0, 15);
     // P0-5: max_chars truncation — applies to ALL formats (text, markdown, html handled separately)
-    const MAX_CHARS_DEFAULT = 25000;
+    const MAX_CHARS_DEFAULT = 100000;
     const maxChars = params.max_chars ?? MAX_CHARS_DEFAULT;
     if (params.format === "text") {
         let plainContent = mainContent
@@ -376,12 +398,19 @@ async function extractSingle(params, apiKey) {
     // BUG-E1: Auto-escalation — retry with render when static quality is too low
     let autoEscalated = false;
     let autoEscalatedTo = null;
+    // INC-199: Track failed escalation attempts so we can surface them instead of silent failure
+    let escalationAttempted = false;
+    let escalationFailed = false;
+    let escalationError = null;
     if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !html.startsWith("pdf_pages:")) {
+        escalationAttempted = true;
         try {
             const renderResponse = await fetchWithRender(params.url, apiKey);
             if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
                 const renderHtml = renderResponse.data;
-                const renderMain = extractMainContent(renderHtml, params.url);
+                const renderMain = useFullPage
+                    ? extractFullPageContent(renderHtml, params.url)
+                    : extractMainContent(renderHtml, params.url);
                 const renderSD = extractStructuredData(renderHtml);
                 const renderQuality = scoreExtraction(renderHtml, renderMain, "render", renderSD !== null);
                 if (renderQuality.score > quality.score) {
@@ -414,12 +443,17 @@ async function extractSingle(params, apiKey) {
                 }
             }
         }
-        catch { /* keep static result */ }
+        catch (e) {
+            // INC-199: Track render escalation failure
+            escalationError = e instanceof Error ? e.message : String(e);
+        }
         // If render escalation didn't improve quality enough, try browser as final fallback
         if (quality.score < 40 && isBrowserConfigured()) {
             try {
-                const browserHtml = await fetchViaBrowser(params.url);
-                const browserMain = extractMainContent(browserHtml, params.url);
+                const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
+                const browserMain = useFullPage
+                    ? extractFullPageContent(browserHtml, params.url)
+                    : extractMainContent(browserHtml, params.url);
                 const browserSD = extractStructuredData(browserHtml);
                 const browserQuality = scoreExtraction(browserHtml, browserMain, "browser", browserSD !== null);
                 if (browserQuality.score > quality.score) {
@@ -453,6 +487,10 @@ async function extractSingle(params, apiKey) {
             }
             catch { /* keep previous result */ }
         }
+        // INC-199: If quality is still low after all escalation attempts, mark as failed
+        if (quality.score < 40 && !autoEscalated) {
+            escalationFailed = true;
+        }
     }
     // P2-1: Wayback Machine auto-fallback — when content is very poor, try archive.org
     let waybackFallback = false;
@@ -462,7 +500,9 @@ async function extractSingle(params, apiKey) {
             const wbResponse = await fetchViaProxy(archiveUrl, apiKey);
             if (typeof wbResponse.data === "string" && wbResponse.data.length > 500) {
                 const wbHtml = wbResponse.data;
-                const wbMain = extractMainContent(wbHtml, params.url);
+                const wbMain = useFullPage
+                    ? extractFullPageContent(wbHtml, params.url)
+                    : extractMainContent(wbHtml, params.url);
                 if (wbMain.length > mainContent.length) {
                     html = wbHtml;
                     mainContent = wbMain;
@@ -549,6 +589,7 @@ async function extractSingle(params, apiKey) {
             hints: [],
             ...(pdfPages !== null ? { pdf: { pages: pdfPages, title: pdfTitle ?? null } } : {}),
             ...(autoEscalated ? { auto_escalated: true, ...(autoEscalatedTo ? { escalated_to: autoEscalatedTo } : {}) } : {}),
+            ...(escalationFailed ? { escalation_attempted: true, escalation_failed: true, ...(escalationError ? { escalation_error: escalationError } : {}) } : {}),
             ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
             ...(waybackFallback ? { wayback_fallback: true } : {}),
             remember: `${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`,
@@ -567,6 +608,12 @@ async function extractSingle(params, apiKey) {
         catch { /* ignore */ }
         if (stillJsHeavy)
             hints.push("Page is JavaScript-rendered. Content may be incomplete. Try render='js' or render='browser'.");
+        // INC-199: Surface escalation failure so agents know quality:0 is not silent
+        if (escalationFailed) {
+            hints.push(`Auto-escalation attempted (render${isBrowserConfigured() ? "+browser" : ""}) but quality remained low (${quality.score}/100). ${escalationError ? `Render error: ${escalationError}` : "The page may require a specialized approach."}`);
+            if (!isBrowserConfigured())
+                hints.push("Set NOVADA_BROWSER_WS to enable Browser API as a final fallback for JS-heavy pages.");
+        }
         // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
         if (!contentOk && baseDomain) {
             const SCRAPER_PLATFORMS = {
@@ -590,6 +637,19 @@ async function extractSingle(params, apiKey) {
             hints.push(`Discover more pages: novada_map(url="${new URL(params.url).origin}")`);
         }
         catch { /* ignore */ }
+        // Wire output save — best-effort, never breaks the tool.
+        // Add save path INTO the JSON object (not after it) to keep output parseable.
+        try {
+            const domain = new URL(params.url).hostname.replace("www.", "");
+            const outputResult = await saveOutput({
+                tool: "extract",
+                hint: domain,
+                format: "json",
+                data: jsonResult,
+            });
+            jsonResult.output_saved = outputResult.filePath;
+        }
+        catch { /* best-effort */ }
         const jsonOutput = JSON.stringify(jsonResult, null, 2);
         setCached(params.url, cacheRenderMode, jsonOutput, params.fields);
         return jsonOutput;
@@ -682,6 +742,13 @@ async function extractSingle(params, apiKey) {
     if (autoEscalated) {
         lines.push(`- Auto-escalated to render mode (static quality score was < 40). Content above was fetched with JS rendering enabled.`);
     }
+    // INC-199: Surface escalation failure in markdown output
+    if (escalationFailed) {
+        lines.push(`- [ESCALATION FAILED] Auto-escalation attempted (render${isBrowserConfigured() ? "+browser" : ""}) but quality remained low (${quality.score}/100).${escalationError ? ` Render error: ${escalationError}` : ""}`);
+        if (!isBrowserConfigured()) {
+            lines.push(`- Set NOVADA_BROWSER_WS to enable Browser API as final fallback for JS-heavy pages.`);
+        }
+    }
     if (hasNoHeadingMatchField) {
         lines.push(`- Some fields were not found via heading-match. For list or aggregated pages (bestseller lists, search results, news feeds), data is embedded as inline list items — parse the body markdown directly. Field extraction works best on single-entity pages (product detail pages, GitHub repos, articles).`);
     }
@@ -734,6 +801,10 @@ async function extractSingle(params, apiKey) {
             lines.push(`- Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
         }
     }
+    // Low quality on static+auto — guide agent to escalate rendering and/or add proxy
+    if (qLabel === "low" && usedMode === "static" && renderMode === "auto") {
+        lines.push(`- Low quality on static mode — try with render="render" for JS-heavy or anti-bot protected pages.`);
+    }
     if (isTruncated) {
         lines.push(`- Content was truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more, or use novada_map to find specific subpages.`);
     }
@@ -751,6 +822,9 @@ async function extractSingle(params, apiKey) {
         nextActions.push(`next: novada_map for related pages`);
         nextActions.push(`next: novada_research for multi-source analysis`);
     }
+    else if (quality.score < 30 && usedMode === "static" && renderMode === "auto") {
+        nextActions.push(`status:low_quality | content_ok:false | suggested_fix: retry with render="render" for JS-heavy or bot-protected pages. If render also returns low quality, try render="browser". For sites like airbnb.com/booking.com, also ensure NOVADA_PROXY_ENDPOINT is set for residential IP routing.`);
+    }
     else {
         nextActions.push(`status:low_quality quality:${quality.score}/100`);
         if (usedMode === "static")
@@ -760,9 +834,61 @@ async function extractSingle(params, apiKey) {
     lines.push(``);
     lines.push(`## Agent Action`);
     lines.push(`agent_instruction: ${nextActions.join(" | ")}`);
-    const mdOutput = lines.join("\n");
+    let mdOutput = lines.join("\n");
     setCached(params.url, cacheRenderMode, mdOutput, params.fields);
+    // Wire output save — best-effort, never breaks the tool
+    try {
+        const domain = new URL(params.url).hostname.replace("www.", "");
+        const outputResult = await saveOutput({
+            tool: "extract",
+            hint: domain,
+            format: "md",
+            data: mdOutput,
+        });
+        mdOutput += `\n\n---\nOutput saved: ${outputResult.filePath}`;
+    }
+    catch { /* best-effort */ }
     return mdOutput;
+}
+/**
+ * Per-URL entry point with a hard total-request ceiling (TIMEOUTS.TOTAL_REQUEST_CEILING).
+ * Uses Promise.race to guarantee no single URL blocks for more than 45s regardless of
+ * how many auto-escalation steps (static → render → browser) are attempted.
+ * The ceiling is per-URL so batch requests each get their own independent timer.
+ */
+async function extractSingle(params, apiKey) {
+    let ceilingTimer = null;
+    const ceiling = new Promise((_, reject) => {
+        ceilingTimer = setTimeout(() => reject(new Error(`TOTAL_REQUEST_CEILING: extractSingle for ${params.url} exceeded ${TIMEOUTS.TOTAL_REQUEST_CEILING}ms`)), TIMEOUTS.TOTAL_REQUEST_CEILING);
+    });
+    try {
+        const result = await Promise.race([
+            extractSingleInner(params, apiKey),
+            ceiling,
+        ]);
+        return result;
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.startsWith("TOTAL_REQUEST_CEILING:")) {
+            // Return a structured error string in the same format as other extraction errors
+            // so callers (batch mode, novadaExtract) get usable output rather than a thrown exception.
+            const ceiling_s = TIMEOUTS.TOTAL_REQUEST_CEILING / 1000;
+            return [
+                `## Extraction Error`,
+                `url: ${params.url}`,
+                `error: Request exceeded the ${ceiling_s}s total ceiling and was aborted.`,
+                ``,
+                `## Agent Action`,
+                `agent_instruction: This URL took too long (>${ceiling_s}s). Try render="static" to skip escalation, or novada_scrape for platform-specific data.`,
+            ].join("\n");
+        }
+        throw err;
+    }
+    finally {
+        if (ceilingTimer !== null)
+            clearTimeout(ceilingTimer);
+    }
 }
 function formatJsonExtract(url, mode, jsonStr, maxChars) {
     const limit = maxChars ?? 25000;

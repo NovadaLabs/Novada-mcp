@@ -2,7 +2,7 @@ export { fetchWithRetry, fetchViaProxy, fetchWithRender, detectJsHeavyContent, d
 export { withCredentials, getWebUnblockerKey, getBrowserWs, getProxyCredentials } from "./credentials.js";
 export type { ToolCredentials } from "./credentials.js";
 export { normalizeUrl, isContentLink } from "./url.js";
-export { extractMainContent, extractTitle, extractDescription, extractLinks, extractStructuredData, scoreExtraction, qualityLabel } from "./html.js";
+export { extractMainContent, extractFullPageContent, extractTitle, extractDescription, extractLinks, extractStructuredData, scoreExtraction, qualityLabel } from "./html.js";
 export type { StructuredData, ExtractionQuality } from "./html.js";
 export { cleanParams } from "./params.js";
 export { isBrowserConfigured, fetchViaBrowser, getSession, storeSession, closeSession, listSessions } from "./browser.js";
@@ -18,4 +18,6 @@ export { lookupDomain, DOMAIN_REGISTRY } from "./domains.js";
 export type { FetchMethod, DomainEntry, AntiBotProvider } from "./domains.js";
 export { extractPdf, isPdfResponse } from "./pdf.js";
 export type { PdfExtractResult } from "./pdf.js";
+export { saveOutput, toCsv } from "./output.js";
+export type { OutputOptions, OutputResult } from "./output.js";
 //# sourceMappingURL=index.d.ts.map

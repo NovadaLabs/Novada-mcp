@@ -216,7 +216,7 @@ Which Novada products are active on your API key?
 | novada_map                | a domain, need URL list              | URL list only           | Low        |
 | novada_crawl              | a domain, need N pages               | Content of N pages      | High       |
 | novada_research           | a complex question                   | Cited report            | Medium     |
-| novada_scrape             | a supported platform (129 platforms) | Structured records      | Medium     |
+| novada_scrape             | a supported platform (13 platforms)  | Structured records      | Medium     |
 | novada_scraper_submit     | async scraping job submission        | task_id                 | Minimal    |
 | novada_scraper_status     | task_id, need to check progress      | Status JSON             | Minimal    |
 | novada_scraper_result     | completed task_id, need results      | Formatted records       | Low        |
@@ -489,7 +489,7 @@ Required: question. Optional: depth (quick/deep/comprehensive/auto), focus.
 Example: novada_research({question: "How do MCP servers work with Claude?", depth: "deep"})
 
 ## novada_scrape
-Best for: structured data from 129 specific platforms (Amazon, TikTok, LinkedIn, Reddit, etc.).
+Best for: structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.).
 Not for: arbitrary sites not in the platform list (use novada_extract or novada_crawl).
 Required: platform, operation, params. Optional: format (markdown/json/toon), limit.
 Example: novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "iphone 16"}})
@@ -531,7 +531,7 @@ Required: none.
 Example: novada_discover({})
 
 ## novada_scraper_submit
-Best for: submitting an async scraping job for platforms outside novada_scrape's 129 platforms.
+Best for: submitting an async scraping job for platforms outside novada_scrape's 13 active platforms.
 Not for: synchronous extraction (use novada_scrape for supported platforms).
 Required: url, platform. Optional: operation, params, country.
 Example: novada_scraper_submit({url: "https://example.com", platform: "custom"})

@@ -3,6 +3,13 @@
  * Tries semantic selectors first, then density scoring, then falls back to boilerplate removal.
  */
 export declare function extractMainContent(html: string, baseUrl?: string, maxChars?: number): string;
+/**
+ * Extract full page content from HTML — keeps nav, header, footer, aside, form.
+ * Only removes non-renderable tags: script, style, noscript, iframe, svg, canvas.
+ * Uses the same inlineMarkdown walker as extractMainContent.
+ * Target output: 50,000–100,000 chars.
+ */
+export declare function extractFullPageContent(html: string, baseUrl?: string): string;
 export interface StructuredData {
     type: string;
     fields: Record<string, string>;

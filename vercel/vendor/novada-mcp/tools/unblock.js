@@ -7,11 +7,7 @@ import { routeFetch } from "../utils/router.js";
  */
 const UNBLOCK_MAX_CHARS_DEFAULT = 100000;
 export async function novadaUnblock(params, apiKey) {
-    const { url, method, country, wait_for, timeout, wait_ms, block_resources, auto_runs } = params;
-    // wait_ms, block_resources, auto_runs are Web Unblocker params — passed when routeFetch supports them
-    void wait_ms;
-    void block_resources;
-    void auto_runs;
+    const { url, method, country, wait_for, timeout } = params;
     const renderMode = method === "browser" ? "browser" : "render";
     const result = await routeFetch(url, {
         render: renderMode,

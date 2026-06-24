@@ -30,7 +30,7 @@ export const PROXY_ENDPOINT = process.env.NOVADA_PROXY_ENDPOINT;
 export const JS_DETECTION_THRESHOLD = 200;
 // Timeout configuration (milliseconds)
 export const TIMEOUTS = {
-    STATIC_FETCH: 30000,
+    STATIC_FETCH: 15000, // was 30000; halved to cut worst-case static time (3 retries = 45s max)
     PROXY_FETCH: 45000,
     RENDER: 60000,
     BROWSER_CONNECT: 10000,
@@ -38,6 +38,10 @@ export const TIMEOUTS = {
     SITEMAP: 8000,
     CRAWL_STATIC: 15000,
     CRAWL_RENDER: 60000,
+    TOTAL_REQUEST_CEILING: 90000, // hard per-URL ceiling enforced in extractSingle via Promise.race
+    SEARCH_SUBMIT_TIMEOUT: 30_000,
+    SEARCH_POLL_TIMEOUT: 60_000,
+    SEARCH_TOTAL_CEILING: 90_000,
 };
 // Excel max sheet name length
 export const EXCEL_MAX_SHEET_NAME = 31;

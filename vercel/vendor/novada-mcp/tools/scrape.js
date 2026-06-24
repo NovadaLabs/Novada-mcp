@@ -1,7 +1,8 @@
 import axios, { AxiosError } from "axios";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import { formatAsMarkdown } from "../utils/format.js";
-import { NovadaError, NovadaErrorCode, makeNovadaError } from "../_core/errors.js";
+import { saveOutput } from "../utils/output.js";
+import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 // How long to wait for a task to complete before giving up
 // Amazon and similar scrapers can take 120-180s; 90s is too short
@@ -12,11 +13,13 @@ function sleep(ms) {
 }
 /** Submit a scraper task and return the task_id */
 export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params) {
+    const file_name = `novada_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const form = new URLSearchParams();
     form.append("scraper_name", scraper_name);
     form.append("scraper_id", scraper_id);
     form.append("scraper_errors", "true");
     form.append("is_auto_push", "false");
+    form.append("file_name", file_name);
     // Two param formats exist in the Novada Scraper API:
     //   A) Search engines (google, bing, duckduckgo, yandex) — flat form fields + json=1
     //   B) All other platforms — scraper_params=[{...}] JSON array
@@ -24,9 +27,11 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
     const SEARCH_ENGINES = new Set(["google.com", "bing.com", "duckduckgo.com", "yandex.com"]);
     const RESERVED = new Set(["scraper_name", "scraper_id", "apikey", "api_key", "authorization",
         "scraper_errors", "is_auto_push"]);
+    // H-4: Block prototype-pollution keys from flowing to form/JSON
+    const BLOCKED_KEYS = new Set(["__proto__", "constructor", "prototype"]);
     const opParams = {};
     for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null && !RESERVED.has(k.toLowerCase())) {
+        if (v !== undefined && v !== null && !RESERVED.has(k.toLowerCase()) && !BLOCKED_KEYS.has(k)) {
             opParams[k] = v;
         }
     }
@@ -51,6 +56,13 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
         timeout: 60000,
     });
     const body = resp.data;
+    // Auth error codes returned as HTTP 200 with non-zero body code
+    if (body.code === 50001 || body.code === 50002 || body.code === 50003) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Scraper API auth error (code: ${body.code})`);
+    }
+    if (body.code === 500) {
+        throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper API server error`);
+    }
     if (body.code !== 0) {
         // H5: throw typed NovadaError for 11006/11008 — no brittle string matching needed at catch site
         if (body.code === 11006) {
@@ -64,14 +76,14 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
             11000: "Invalid API key.",
         };
         const msg = errorMessages[body.code] ?? body.msg ?? "Unknown scraper error";
-        throw new Error(`Scraper error (code ${body.code}): ${msg}`);
+        throw new Error(`Scraper error (code ${body.code}): ${sanitizeServerMsg(msg)}`);
     }
     // Accept both flat { code:0, data: { task_id: "..." } } and nested { code:0, data: { data: { task_id: "..." } } }
     const inner = body.data;
     const taskId = (inner?.task_id ??
         inner?.data?.task_id);
     if (!taskId) {
-        throw new Error(`Scraper submit succeeded but no task_id in response: ${JSON.stringify(body)}`);
+        throw new Error(`Scraper submit succeeded but no task_id in response: ${sanitizeServerMsg(JSON.stringify(body))}`);
     }
     return taskId;
 }
@@ -112,35 +124,46 @@ async function pollForResult(apiKey, taskId) {
             if (errCode === 27203) {
                 throw new Error(`Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`);
             }
+            // INC-190: code 10000 = task completed but no collectible data. Surface clearly
+            // instead of falling through to generic "Unexpected download response".
+            if (errCode === 10000) {
+                throw new Error(`Scraper task completed but collected no valid data (code 10000). The target page may have blocked scraping, returned empty content, or the parser failed. Try a different operation or check the target URL. Raw: ${sanitizeServerMsg(errMsg || "result data not exist")}`);
+            }
             // Direct result object — Google SERP and similar formats return organic/search_metadata at top level
             if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {
                 return [{ spider_code: 200, rest: bErr }];
             }
-            throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${errMsg || JSON.stringify(bErr).slice(0, 150)}`);
+            throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${sanitizeServerMsg(errMsg || JSON.stringify(bErr).slice(0, 150))}`);
         }
-        throw new Error(`Unexpected download response: ${JSON.stringify(body).slice(0, 200)}`);
+        throw new Error(`Unexpected download response: ${sanitizeServerMsg(JSON.stringify(body).slice(0, 200))}`);
     }
-    throw new Error(`Scraper task ${taskId} timed out after ${POLL_TIMEOUT_MS / 1000}s. task_id="${taskId}" — the task may still be running. This is a transient error; retry the same call.`);
+    // H-8: Use NovadaError(TASK_PENDING) instead of generic Error to avoid
+    // classifyError mismatching "timed out" → URL_UNREACHABLE
+    throw makeNovadaError(NovadaErrorCode.TASK_PENDING, `Scraper poll exceeded ${POLL_TIMEOUT_MS / 1000}s for task_id="${taskId}". The task may still be running server-side.`, "poll_timeout");
 }
-/** Flatten a potentially nested object for tabular display */
-function flattenRecord(obj, prefix = "") {
+/** Flatten a potentially nested object for tabular display.
+ *  M-1: depth limit prevents stack overflow on deeply nested server responses. */
+function flattenRecord(obj, prefix = "", depth = 0) {
     if (obj === null || obj === undefined)
         return {};
     if (typeof obj !== "object" || Array.isArray(obj)) {
         return { [prefix || "value"]: String(obj) };
     }
+    if (depth > 10) {
+        return { [prefix || "value"]: JSON.stringify(obj).slice(0, 200) };
+    }
     const result = {};
     for (const [k, v] of Object.entries(obj)) {
         const key = prefix ? `${prefix}.${k}` : k;
         if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-            Object.assign(result, flattenRecord(v, key));
+            Object.assign(result, flattenRecord(v, key, depth + 1));
         }
         else if (Array.isArray(v)) {
             if (v.length > 0 && typeof v[0] === "object" && v[0] !== null) {
                 // Array of objects — flatten first 5; add truncation hint if more exist
                 const cap = 5;
                 v.slice(0, cap).forEach((item, idx) => {
-                    Object.assign(result, flattenRecord(item, `${key}.${idx}`));
+                    Object.assign(result, flattenRecord(item, `${key}.${idx}`, depth + 1));
                 });
                 if (v.length > cap)
                     result[`${key}._count`] = `${v.length} total (showing first ${cap})`;
@@ -172,15 +195,18 @@ function extractRecords(data) {
 }
 // Aliases for stale or non-canonical operation IDs that appeared in old docs/examples.
 // Maps a near-miss op ID an agent might guess → the canonical op ID the backend accepts.
-const OPERATION_ALIASES = {
+// H-1: null-prototype object prevents __proto__/constructor/toString lookup pollution.
+export const OPERATION_ALIASES = Object.assign(Object.create(null), {
     "amazon_product_by-keywords": "amazon_product_keywords",
     "amazon_product_by-asin": "amazon_product_asin",
     "google_shopping": "google_shopping_keywords",
     "google_shopping_by-keyword": "google_shopping_keywords",
-};
+});
 export async function novadaScrape(params, apiKey) {
     const { platform, params: opParams, format, limit } = params;
-    const operation = OPERATION_ALIASES[params.operation] ?? params.operation;
+    // H-1: safe lookup — null-prototype + hasOwnProperty guard
+    const hasAlias = Object.prototype.hasOwnProperty.call(OPERATION_ALIASES, params.operation);
+    const operation = hasAlias ? OPERATION_ALIASES[params.operation] : params.operation;
     try {
         // Step 1: Submit task
         let taskId;
@@ -205,7 +231,7 @@ export async function novadaScrape(params, apiKey) {
         }
         catch (error) {
             if (error instanceof AxiosError) {
-                throw new Error(`Failed to retrieve scraper results: ${error.message}`);
+                throw new Error(`Failed to retrieve scraper results: ${sanitizeServerMsg(error.message)}`);
             }
             throw error;
         }
@@ -228,22 +254,39 @@ export async function novadaScrape(params, apiKey) {
             rawRecords = extractRecords(firstAsRecord.rest);
         }
         else {
-            // Format A: flat array — filter out genuinely failed items (error is a non-empty string)
+            // Format A: flat array — separate successful items from error items
+            const errorItems = resultItems.filter(item => {
+                const err = item.error;
+                return typeof err === "string" && err.length > 0;
+            });
             rawRecords = resultItems
                 .filter(item => {
                 const err = item.error;
                 return typeof err !== "string" || err.length === 0;
             })
                 .map(item => item);
+            // INC-190: When ALL items have errors, surface the error details instead of
+            // misleading "No records returned". The underlying error_code (e.g. 300 = parse failure)
+            // is the real root cause the agent needs.
+            if (rawRecords.length === 0 && errorItems.length > 0) {
+                const firstErr = errorItems[0];
+                const errCode = firstErr.error_code ?? "unknown";
+                const errMsg = firstErr.error ?? "Unknown scraper error";
+                throw new Error(`Scraper collected ${errorItems.length} result(s) but all failed. ` +
+                    `error_code: ${errCode} — ${sanitizeServerMsg(String(errMsg))}. ` +
+                    `This means the target page was reached but data extraction failed (parser error, empty page, or access blocked). ` +
+                    `Try a different operation or verify the target URL is correct.`);
+            }
         }
         const records = rawRecords.slice(0, limit).map(r => flattenRecord(r));
         if (records.length === 0) {
             return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
         }
         const title = `${platform} — ${operation}`;
+        let output;
         switch (format) {
             case "json":
-                return [
+                output = [
                     `## Scrape Results`,
                     `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live`,
                     ``,
@@ -257,6 +300,7 @@ export async function novadaScrape(params, apiKey) {
                     `- For human-readable output: use format='markdown' instead.`,
                     `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
                 ].join("\n");
+                break;
             case "toon": {
                 // TOON: headers declared once, then pipe-separated rows — 40-65% token savings vs JSON/markdown
                 // Union all keys across records to avoid dropping columns from heterogeneous rows
@@ -268,7 +312,7 @@ export async function novadaScrape(params, apiKey) {
                     `HEADERS: ${headers.join(" | ")}`,
                     ...records.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
                 ];
-                return [
+                output = [
                     `## Scrape Results`,
                     `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live | format: toon`,
                     ``,
@@ -283,10 +327,15 @@ export async function novadaScrape(params, apiKey) {
                     `## Agent Memory`,
                     `remember: ${platform}/${operation} — ${records.length} records retrieved`,
                 ].join("\n");
+                break;
             }
+            // M-4: CLI/SDK formats that reach here via ScrapeParamsFullType — render as markdown with a notice
+            case "csv":
+            case "html":
+            case "xlsx":
             case "markdown":
             default:
-                return [
+                output = [
                     `## Scrape Results`,
                     `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live${records.length >= limit ? ` (limit:${limit})` : ""}`,
                     ``,
@@ -308,7 +357,21 @@ export async function novadaScrape(params, apiKey) {
                     `## Agent Memory`,
                     `remember: ${platform}/${operation} — ${records.length} records retrieved`,
                 ].join("\n");
+                break;
         }
+        // Wire output save — best-effort, never breaks the tool
+        try {
+            const domain = platform || "scrape";
+            const outputResult = await saveOutput({
+                tool: "scrape",
+                hint: domain,
+                format: format === "json" ? "json" : "csv",
+                data: rawRecords.slice(0, limit),
+            });
+            output += `\n\n## Output Saved\n${outputResult.summary}`;
+        }
+        catch { /* file save is best-effort */ }
+        return output;
     }
     catch (err) {
         // H5: use typed NovadaError.code instead of brittle string matching
@@ -316,37 +379,23 @@ export async function novadaScrape(params, apiKey) {
             // Surface any known canonical aliases for the operation the agent tried, so the
             // agent can self-correct a near-miss op ID without a second round-trip. Most 11006
             // errors are malformed/non-canonical op IDs, NOT a deactivated Scraper API.
-            const aliasHint = OPERATION_ALIASES[params.operation]
-                ? `The operation '${params.operation}' was automatically resolved to canonical ID '${OPERATION_ALIASES[params.operation]}', which was submitted but still rejected. The canonical ID itself may be incorrect for this platform, or Scraper API access is not activated. Read novada://scraper-platforms to confirm the exact operation ID.`
+            // H-7: Re-throw as NovadaError so index.ts sets isError: true
+            const aliasHint = hasAlias
+                ? `The operation '${params.operation}' was auto-resolved to '${OPERATION_ALIASES[params.operation]}' but still rejected. The canonical ID itself may be wrong for this platform.`
                 : `The operation '${operation}' was rejected. Operation IDs are exact and cannot be guessed.`;
-            return JSON.stringify({
-                status: "unavailable",
-                code: 11006,
-                reason: "Scraper returned code 11006 — almost always an invalid/non-canonical operation ID, not a deactivated Scraper API.",
-                operation_tried: params.operation,
-                ...(operation !== params.operation ? { operation_resolved: operation } : {}),
-                ...(OPERATION_ALIASES[params.operation]
-                    ? { alias_resolved_to: OPERATION_ALIASES[params.operation] }
-                    : {}),
-                agent_instruction: `${aliasHint} To find the exact operation ID for platform '${platform}', read the novada://scraper-platforms resource — it lists every valid operation per platform. Only if the operation ID is confirmed correct should you treat this as a Scraper API activation issue. Do not retry automatically with the same ID.`,
-                alternatives: [
-                    "Use novada_extract for general web page content extraction.",
-                    "Use novada_unblock for bot-protected pages.",
-                    "Use novada_crawl for multi-page site traversal.",
-                ],
-                next_steps: [
-                    "Read novada://scraper-platforms to confirm the canonical operation ID.",
-                    "If the operation ID is confirmed correct, activate Scraper API at: https://dashboard.novada.com/overview/scraper/",
-                ],
-            }, null, 2);
+            throw new NovadaError({
+                code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
+                message: `Scraper code 11006 for '${operation}' on '${platform}'. ${aliasHint}`,
+                agent_instruction: `${aliasHint} Read novada://scraper-platforms to confirm the exact operation ID. ` +
+                    `Alternatives: novada_extract (general pages), novada_unblock (bot-protected), novada_crawl (multi-page). ` +
+                    `Only treat as an activation issue if the operation ID is confirmed correct. Do not retry with the same ID.`,
+                retryable: false,
+                detail: hasAlias ? `alias:${params.operation}→${OPERATION_ALIASES[params.operation]}` : "code 11006",
+            });
         }
+        // H-7: Re-throw 11008 as NovadaError so index.ts sets isError: true
         if (err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_PARAMS && err.detail === "code 11008") {
-            return JSON.stringify({
-                status: "error",
-                code: 11008,
-                reason: err.message,
-                agent_instruction: "This is a parameter error — do not retry. Check scraper_name and scraper_id are valid. Use the novada://scraper-platforms resource to find supported platforms.",
-            }, null, 2);
+            throw err;
         }
         // All other errors (network, timeout, poll failure, missing task_id): re-throw
         // index.ts will handle them via classifyError and return isError: true

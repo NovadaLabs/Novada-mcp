@@ -5,7 +5,8 @@ export declare function formatAsCsv(records: Record<string, unknown>[]): string;
 export declare function formatAsHtml(records: Record<string, unknown>[], title?: string): string;
 /** Convert records to XLSX buffer */
 export declare function formatAsXlsx(records: Record<string, unknown>[], sheetName?: string): Promise<Buffer>;
-/** Convert records to markdown table */
+/** Convert records to markdown table.
+ *  M-5: Union all keys across records — columns present only in later records are no longer dropped. */
 export declare function formatAsMarkdown(records: Record<string, unknown>[], maxCellLen?: number): string;
 /**
  * Format structured records into the requested output format.

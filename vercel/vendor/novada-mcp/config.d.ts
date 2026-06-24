@@ -10,7 +10,7 @@ export declare const PROXY_PASS: string | undefined;
 export declare const PROXY_ENDPOINT: string | undefined;
 export declare const JS_DETECTION_THRESHOLD = 200;
 export declare const TIMEOUTS: {
-    readonly STATIC_FETCH: 30000;
+    readonly STATIC_FETCH: 15000;
     readonly PROXY_FETCH: 45000;
     readonly RENDER: 60000;
     readonly BROWSER_CONNECT: 10000;
@@ -18,6 +18,10 @@ export declare const TIMEOUTS: {
     readonly SITEMAP: 8000;
     readonly CRAWL_STATIC: 15000;
     readonly CRAWL_RENDER: 60000;
+    readonly TOTAL_REQUEST_CEILING: 90000;
+    readonly SEARCH_SUBMIT_TIMEOUT: 30000;
+    readonly SEARCH_POLL_TIMEOUT: 60000;
+    readonly SEARCH_TOTAL_CEILING: 90000;
 };
 export declare const EXCEL_MAX_SHEET_NAME = 31;
 //# sourceMappingURL=config.d.ts.map

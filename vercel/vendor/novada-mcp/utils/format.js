@@ -67,11 +67,15 @@ export async function formatAsXlsx(records, sheetName = "Data") {
     const buf = await wb.xlsx.writeBuffer();
     return Buffer.from(buf);
 }
-/** Convert records to markdown table */
+/** Convert records to markdown table.
+ *  M-5: Union all keys across records — columns present only in later records are no longer dropped. */
 export function formatAsMarkdown(records, maxCellLen = 80) {
     if (records.length === 0)
         return "_No data_";
-    const headers = Object.keys(records[0]);
+    const headerSet = new Set();
+    for (const r of records)
+        Object.keys(r).forEach(k => headerSet.add(k));
+    const headers = Array.from(headerSet);
     const cell = (v) => {
         const s = String(v ?? "");
         const truncated = s.length > maxCellLen ? s.slice(0, maxCellLen - 1) + "…" : s;

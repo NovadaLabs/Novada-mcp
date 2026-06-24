@@ -3,11 +3,11 @@ export declare const TrafficDailyParamsSchema: z.ZodObject<{
     start_time: z.ZodOptional<z.ZodString>;
     end_time: z.ZodOptional<z.ZodString>;
     products: z.ZodOptional<z.ZodArray<z.ZodEnum<{
-        static: "static";
         residential: "residential";
+        datacenter: "datacenter";
+        static: "static";
         mobile: "mobile";
         isp: "isp";
-        datacenter: "datacenter";
     }>>>;
 }, z.core.$strict>;
 export type TrafficDailyParams = z.infer<typeof TrafficDailyParamsSchema>;

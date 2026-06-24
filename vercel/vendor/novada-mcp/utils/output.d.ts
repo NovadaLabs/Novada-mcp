@@ -1,0 +1,22 @@
+export interface OutputOptions {
+    tool: string;
+    hint?: string;
+    format: "json" | "csv" | "md";
+    data: unknown;
+    cosUrl?: string;
+}
+export interface OutputResult {
+    filePath: string;
+    cosUrl?: string;
+    recordCount?: number;
+    summary: string;
+}
+/**
+ * Convert an array of records to CSV string.
+ */
+export declare function toCsv(records: Record<string, unknown>[]): string;
+/**
+ * Save output to file. Returns metadata about the saved file.
+ */
+export declare function saveOutput(options: OutputOptions): Promise<OutputResult>;
+//# sourceMappingURL=output.d.ts.map

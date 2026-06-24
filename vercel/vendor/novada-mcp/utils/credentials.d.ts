@@ -21,27 +21,35 @@ export declare function getProxyCredentials(): {
     endpoint: string;
 } | null;
 /**
- * Fetch proxy sub-account credentials from the Novada management API.
- * Requires NOVADA_USERNAME + NOVADA_API_KEY. Cached 6h in memory.
- *
- * Auth flow:
- *   POST /oauth2/token  (Basic username:apiKey)  → access_token
- *   POST /proxy_account/list  (Bearer token)      → account + password
+ * Residential proxy credentials — separate from datacenter proxy.
+ * Reads NOVADA_RESIDENTIAL_PROXY_USER / PASS / ENDPOINT env vars.
+ * Falls back to standard proxy credentials if residential vars are not set.
  */
-export declare function fetchProxyCredentials(apiKey: string, username: string): Promise<{
+export declare function getResidentialProxyCredentials(): {
+    user: string;
+    pass: string;
+    endpoint: string;
+} | null;
+/**
+ * Fetch the first active proxy sub-account using NOVADA_API_KEY as a Bearer token.
+ * Calls POST /v1/proxy_account/list directly — no OAuth2 exchange required.
+ * Result is cached 6h in memory.
+ */
+export declare function fetchProxySubAccountCredentials(apiKey: string): Promise<{
     account: string;
     password: string;
-}>;
+} | null>;
 /**
  * Resolve proxy credentials with priority:
- * 1. Explicit env vars (NOVADA_PROXY_USER / PASS / ENDPOINT) — no API call.
- * 2. Auto-fetch via NOVADA_USERNAME + NOVADA_API_KEY from management API, cached 6h.
+ * 1. Explicit env vars (NOVADA_PROXY_USER + NOVADA_PROXY_PASS + NOVADA_PROXY_ENDPOINT) — no API call.
+ * 2. Auto-fetch via NOVADA_API_KEY Bearer token when only NOVADA_PROXY_ENDPOINT is set.
  *
  * NOVADA_PROXY_ENDPOINT is required in both cases.
+ * Returns null if NOVADA_PROXY_ENDPOINT is not set (proxy tools disabled).
  */
 export declare function resolveProxyCredentials(): Promise<{
     user: string;
     pass: string;
     endpoint: string;
-}>;
+} | null>;
 //# sourceMappingURL=credentials.d.ts.map

@@ -22,5 +22,6 @@ export declare function fetchViaBrowser(url: string, options?: {
     timeout?: number;
     waitForSelector?: string;
     sessionId?: string;
+    wait_ms?: number;
 }): Promise<string>;
 //# sourceMappingURL=browser.d.ts.map

@@ -1,8 +1,14 @@
 import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
+import https from "https";
 import { cleanParams, rerankResults } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
+import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
+import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg } from "../_core/errors.js";
+const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+const _searchCache = new Map();
+const SEARCH_CACHE_TTL = 60_000;
 const SCRAPER_SEARCH_ENGINES = new Set(["google", "bing", "duckduckgo", "yandex"]);
 const ENGINE_MAP = {
     google: { scraper_name: "google.com", scraper_id: "google_search", query_param: "q", supports_num: true },
@@ -56,6 +62,7 @@ async function submitBingSearch(apiKey, query) {
                 "Content-Type": "application/x-www-form-urlencoded",
             },
             timeout: 60000,
+            httpsAgent: keepAliveAgent,
         });
         const body = resp.data;
         if (body.code !== 0) {
@@ -89,7 +96,7 @@ async function submitBingSearch(apiKey, query) {
     return [];
 }
 /** Submit a search task via the Scraper API and return the task_id. */
-export async function submitSearchScrapeTask(apiKey, scraperName, scraperId, query, num, queryParam = "q", supportsNum = true) {
+export async function submitSearchScrapeTask(apiKey, scraperName, scraperId, query, num, queryParam = "q", supportsNum = true, filterParams = {}) {
     const form = new URLSearchParams();
     form.append("scraper_name", scraperName);
     form.append("scraper_id", scraperId);
@@ -103,16 +110,34 @@ export async function submitSearchScrapeTask(apiKey, scraperName, scraperId, que
     if (scraperName === "bing.com") {
         form.append("safe", "off");
     }
+    if (filterParams.time_range)
+        form.append("time_range", filterParams.time_range);
+    if (filterParams.start_date)
+        form.append("start_date", filterParams.start_date);
+    if (filterParams.end_date)
+        form.append("end_date", filterParams.end_date);
+    if (filterParams.country)
+        form.append("country", filterParams.country);
+    if (filterParams.language)
+        form.append("language", filterParams.language);
     const resp = await axios.post(`${SCRAPER_API_BASE}/request`, form, {
         headers: {
             "Authorization": `Bearer ${apiKey}`,
             "Content-Type": "application/x-www-form-urlencoded",
         },
         timeout: 60000,
+        httpsAgent: keepAliveAgent,
     });
     const body = resp.data;
+    // Auth error codes returned as HTTP 200 with non-zero body code
+    if (body.code === 50001 || body.code === 50002 || body.code === 50003) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Scraper API auth error (code: ${body.code})`);
+    }
+    if (body.code === 500) {
+        throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper API server error`);
+    }
     if (body.code !== 0) {
-        throw new Error(`Scraper search submit error (code ${body.code}): ${body.msg ?? "unknown"}`);
+        throw new Error(`Scraper search submit error (code ${body.code}): ${sanitizeServerMsg(body.msg ?? "unknown")}`);
     }
     const inner = body.data;
     const taskId = (inner?.task_id ??
@@ -126,13 +151,17 @@ export async function submitSearchScrapeTask(apiKey, scraperName, scraperId, que
 export async function pollSearchResult(apiKey, taskId) {
     const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
     const deadline = Date.now() + 90_000;
+    let pollAttempt = 0;
+    // Give backend ~300ms to start the task before first poll
+    await new Promise(r => setTimeout(r, 300));
     while (Date.now() < deadline) {
-        const resp = await axios.get(url, { timeout: 30000 });
+        const resp = await axios.get(url, { timeout: 30000, httpsAgent: keepAliveAgent });
         const body = resp.data;
         // Pending
         if (body !== null && typeof body === "object" && !Array.isArray(body) &&
             body.code === 27202) {
-            await scraperSleep(2000);
+            await scraperSleep(Math.min(100 * Math.pow(2, pollAttempt), 2000));
+            pollAttempt++;
             continue;
         }
         // Complete: array of result items — take first successful item
@@ -156,7 +185,8 @@ export async function pollSearchResult(apiKey, taskId) {
             }
             // Still pending
             if (bObj.code === 27202) {
-                await scraperSleep(2000);
+                await scraperSleep(Math.min(100 * Math.pow(2, pollAttempt), 2000));
+                pollAttempt++;
                 continue;
             }
             throw new Error(`Scraper download error (code ${bObj.code ?? "?"}): ${bObj.msg ?? JSON.stringify(bObj).slice(0, 150)}`);
@@ -206,6 +236,11 @@ export async function novadaSearch(params, apiKey) {
     // Yahoo has no scraper-API path — return a clear redirect message immediately.
     if (engine === "yahoo") {
         return YAHOO_UNAVAILABLE;
+    }
+    const cacheKey = `${engine}:${params.query}:${params.num ?? 10}`;
+    const cached = _searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
+        return cached.result;
     }
     const rawParams = {
         q: params.query,
@@ -264,7 +299,13 @@ export async function novadaSearch(params, apiKey) {
         }
         else {
             const engineCfg = ENGINE_MAP[engine];
-            const taskId = await submitSearchScrapeTask(apiKey, engineCfg.scraper_name, engineCfg.scraper_id, effectiveQuery, params.num || 10, engineCfg.query_param, engineCfg.supports_num);
+            const taskId = await submitSearchScrapeTask(apiKey, engineCfg.scraper_name, engineCfg.scraper_id, effectiveQuery, params.num || 10, engineCfg.query_param, engineCfg.supports_num, {
+                time_range: params.time_range,
+                start_date: params.start_date,
+                end_date: params.end_date,
+                country: params.country || undefined,
+                language: params.language || undefined,
+            });
             const resultData = await pollSearchResult(apiKey, taskId);
             scraperResults = parseScraperSearchResults(resultData);
         }
@@ -282,7 +323,7 @@ export async function novadaSearch(params, apiKey) {
     }
     const results = scraperResults;
     if (results.length === 0) {
-        return [
+        const emptyResult = [
             `## Search Results`,
             `results:0 | engine:${engine}`,
             ``,
@@ -294,6 +335,13 @@ export async function novadaSearch(params, apiKey) {
             `- Use novada_research for multi-source investigation`,
             `- Use novada_map + novada_extract if you have a known site`,
         ].join("\n");
+        // Cache empty results too so repeated calls don't re-poll the API
+        _searchCache.set(cacheKey, { result: emptyResult, ts: Date.now() });
+        if (_searchCache.size > 100) {
+            const oldest = [..._searchCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+            _searchCache.delete(oldest[0]);
+        }
+        return emptyResult;
     }
     // Rerank by relevance to query
     const reranked = rerankResults(results, params.query);
@@ -361,7 +409,24 @@ export async function novadaSearch(params, apiKey) {
             }),
             agent_instruction: "Search complete. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.",
         };
-        return JSON.stringify(jsonResult, null, 2);
+        let finalResult = JSON.stringify(jsonResult, null, 2);
+        // Wire output save — best-effort, never breaks the tool
+        try {
+            const outputResult = await saveOutput({
+                tool: "search",
+                hint: params.query?.slice(0, 30) || "search",
+                format: "json",
+                data: { query: params.query, engine: params.engine, results: reranked },
+            });
+            finalResult += `\n\n// Output saved: ${outputResult.filePath}`;
+        }
+        catch { /* best-effort */ }
+        _searchCache.set(cacheKey, { result: finalResult, ts: Date.now() });
+        if (_searchCache.size > 100) {
+            const oldest = [..._searchCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+            _searchCache.delete(oldest[0]);
+        }
+        return finalResult;
     }
     // Active filters summary for agent metadata
     const activeFilters = [];
@@ -392,16 +457,18 @@ export async function novadaSearch(params, apiKey) {
         let url = unwrapBingUrl(rawUrl);
         // Strip pagination UI text from snippets
         const rawSnippet = r.description || r.snippet || "";
-        const cleanSnippet = rawSnippet
+        const fullSnippet = rawSnippet
             .replace(/\.{3}\s*Read\s+more\s*$/i, "...")
             .replace(/\s+Read\s+more\s*$/i, "")
             .replace(/\s+More\s*$/i, "")
-            .trim() || "No description";
-        lines.push(`### ${i + 1}. ${r.title || "Untitled"}`);
-        lines.push(`url: ${url}`);
-        lines.push(`snippet: ${cleanSnippet}`);
+            .trim();
+        const cleanSnippet = fullSnippet.length > 400
+            ? fullSnippet.slice(0, 397) + "..."
+            : fullSnippet || "No description";
+        lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
         if (r.published || r.date)
             lines.push(`published: ${r.published || r.date}`);
+        lines.push(cleanSnippet);
         const rExt = r;
         if (rExt.extracted_content != null) {
             lines.push(`extracted_content:`);
@@ -430,7 +497,24 @@ export async function novadaSearch(params, apiKey) {
     const topTitle = topResult?.title || "Untitled";
     const topUrl = topResult?.url || topResult?.link || "N/A";
     lines.push(`remember: Top result for '${params.query}': ${topTitle} — ${topUrl}`);
-    return lines.join("\n");
+    let finalResult = lines.join("\n");
+    // Wire output save — best-effort, never breaks the tool
+    try {
+        const outputResult = await saveOutput({
+            tool: "search",
+            hint: params.query?.slice(0, 30) || "search",
+            format: "json",
+            data: { query: params.query, engine: params.engine, results: reranked },
+        });
+        finalResult += `\n\nOutput saved: ${outputResult.filePath}`;
+    }
+    catch { /* best-effort */ }
+    _searchCache.set(cacheKey, { result: finalResult, ts: Date.now() });
+    if (_searchCache.size > 100) {
+        const oldest = [..._searchCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+        _searchCache.delete(oldest[0]);
+    }
+    return finalResult;
 }
 /** Unwrap Bing redirect/base64 encoded URLs */
 function unwrapBingUrl(url) {

@@ -1,7 +1,26 @@
+import https from "https";
 import axios, { AxiosError } from "axios";
 import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS } from "../config.js";
-import { getProxyCredentials, getWebUnblockerKey } from "./credentials.js";
-export const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+import { getProxyCredentials, getResidentialProxyCredentials, getWebUnblockerKey } from "./credentials.js";
+const _sharedHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+const SSL_ERROR_CODES = new Set([
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "CERT_HAS_EXPIRED",
+    "DEPTH_ZERO_SELF_SIGNED_CERT",
+    "SELF_SIGNED_CERT_IN_CHAIN",
+    "ERR_TLS_CERT_ALTNAME_INVALID",
+]);
+// Rotate through 3 realistic Chrome UAs to appear more human
+const BROWSER_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+];
+function getRandomUA() {
+    return BROWSER_USER_AGENTS[Math.floor(Math.random() * BROWSER_USER_AGENTS.length)];
+}
+/** @deprecated Use getRandomUA() for content fetches. Kept for interface compatibility. */
+export const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 /** HTTP GET with exponential backoff retry on 429/503/network errors */
@@ -9,11 +28,18 @@ export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
             return await axios.get(url, {
-                headers: { "User-Agent": USER_AGENT },
-                timeout: 30000,
+                headers: {
+                    "User-Agent": getRandomUA(),
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Connection": "keep-alive",
+                },
+                timeout: TIMEOUTS.STATIC_FETCH,
                 maxRedirects: 5,
                 maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
                 maxBodyLength: 10 * 1024 * 1024,
+                httpsAgent: _sharedHttpsAgent,
                 ...options,
             });
         }
@@ -23,6 +49,20 @@ export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
                 throw new Error(`Response from ${url} exceeds the 10MB content limit. This is usually a binary file, a very large page, or a misconfigured server. ` +
                     "Try a more specific subpage URL, or use novada_map to find the exact page you need.");
             }
+            // SSL error: retry once ignoring certificate validation — common for small Chinese sites with expired/self-signed certs
+            if (error instanceof AxiosError && SSL_ERROR_CODES.has(error.cause?.code ?? error.code ?? "")) {
+                return await axios.get(url, {
+                    headers: {
+                        "User-Agent": getRandomUA(),
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.5",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Connection": "keep-alive",
+                    },
+                    httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 10, rejectUnauthorized: false }),
+                    ...options,
+                });
+            }
             if (attempt === retries)
                 throw error;
             const isRetryable = error instanceof AxiosError &&
@@ -31,37 +71,54 @@ export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
                     !error.response);
             if (!isRetryable)
                 throw error;
-            const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-            await new Promise((resolve) => setTimeout(resolve, delay));
+            const base = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+            const jitter = Math.random() * base;
+            await new Promise((resolve) => setTimeout(resolve, Math.min(jitter, 30_000)));
         }
     }
     throw new Error(`Failed after ${retries + 1} attempts: ${url}`);
 }
 const proxyCircuits = new Map();
 const PROXY_CIRCUIT_RESET_MS = 5 * 60 * 1000; // 5 minutes
-function getCircuit(endpoint) {
-    let state = proxyCircuits.get(endpoint);
+function getCircuit(tier, endpoint) {
+    const key = `${tier}:${endpoint}`;
+    let state = proxyCircuits.get(key);
     if (!state) {
         state = { available: null, disabledAt: null };
-        proxyCircuits.set(endpoint, state);
+        proxyCircuits.set(key, state);
     }
     return state;
 }
 export async function fetchViaProxy(url, _apiKey, options = {}) {
-    // Credentials: SDK-scoped (via AsyncLocalStorage) > NOVADA_PROXY_* env vars
-    const proxyCreds = getProxyCredentials();
+    const { proxyTier, ...axiosOptions } = options;
+    // Credentials: use residential creds if proxyTier === "residential", else standard proxy creds
+    let effectiveTier = proxyTier ?? "datacenter";
+    const proxyCreds = proxyTier === "residential"
+        ? (() => {
+            const residentialSpecific = process.env.NOVADA_RESIDENTIAL_PROXY_USER &&
+                process.env.NOVADA_RESIDENTIAL_PROXY_PASS &&
+                process.env.NOVADA_RESIDENTIAL_PROXY_ENDPOINT;
+            if (!residentialSpecific) {
+                console.warn("[novada-mcp] NOVADA_RESIDENTIAL_PROXY_* env vars not set — " +
+                    "falling back to datacenter proxy credentials for residential tier. " +
+                    "Set NOVADA_RESIDENTIAL_PROXY_USER/PASS/ENDPOINT to use dedicated residential proxies.");
+                effectiveTier = "datacenter";
+            }
+            return getResidentialProxyCredentials();
+        })()
+        : getProxyCredentials();
     const proxyUser = proxyCreds?.user;
     const proxyPass = proxyCreds?.pass;
     const proxyEndpoint = proxyCreds?.endpoint;
     if (proxyUser && proxyPass && proxyEndpoint) {
-        const circuit = getCircuit(proxyEndpoint);
+        const circuit = getCircuit(effectiveTier, proxyEndpoint);
         // Auto-reset circuit breaker after TTL (recovers from transient failures)
         if (circuit.available === false && circuit.disabledAt !== null && Date.now() - circuit.disabledAt > PROXY_CIRCUIT_RESET_MS) {
             circuit.available = null;
             circuit.disabledAt = null;
         }
         if (circuit.available === false) {
-            return fetchWithRetry(url, options);
+            return fetchWithRetry(url, axiosOptions);
         }
         const [proxyHost, proxyPortStr] = proxyEndpoint.split(":");
         const proxyPort = parseInt(proxyPortStr ?? "7777", 10);
@@ -73,12 +130,12 @@ export async function fetchViaProxy(url, _apiKey, options = {}) {
         };
         if (circuit.available === true) {
             // Known-good: use proxy directly
-            return fetchWithRetry(url, { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...options });
+            return fetchWithRetry(url, { headers: { "User-Agent": getRandomUA(), "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive" }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions });
         }
         // Unknown state: race proxy vs direct fetch — take the first successful response.
         // Probe proxy with 0 retries: a single failure is enough to mark circuit open and
         // fall back to direct without burning 3 retries × exponential backoff (~7s).
-        const proxyProbeOptions = { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...options };
+        const proxyProbeOptions = { headers: { "User-Agent": getRandomUA(), "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive" }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions };
         const proxyFetch = fetchWithRetry(url, proxyProbeOptions, 0)
             .then(r => { circuit.available = true; return r; })
             .catch((error) => {
@@ -97,7 +154,7 @@ export async function fetchViaProxy(url, _apiKey, options = {}) {
             circuit.disabledAt = Date.now();
             return null; // signal: proxy unavailable, caller will use directFetch result
         });
-        const directFetch = fetchWithRetry(url, options).catch((err) => {
+        const directFetch = fetchWithRetry(url, axiosOptions).catch((err) => {
             throw Object.assign(new Error(`Direct fetch failed: ${err instanceof Error ? err.message : String(err)}. Proxy circuit: ${circuit.available === false ? "open (disabled)" : "unknown"}`), { cause: err });
         });
         // Use Promise.any semantics: whichever non-null result arrives first wins.
@@ -118,7 +175,7 @@ export async function fetchViaProxy(url, _apiKey, options = {}) {
         });
         return result;
     }
-    return fetchWithRetry(url, options);
+    return fetchWithRetry(url, axiosOptions);
 }
 /**
  * Fetch a URL through Novada Web Unblocker (JS rendering, anti-bot bypass).
@@ -127,7 +184,7 @@ export async function fetchViaProxy(url, _apiKey, options = {}) {
  */
 export async function fetchWithRender(url, scraperApiKey, options = {}) {
     const unblockerKey = getWebUnblockerKey();
-    const { country, ...axiosOptions } = options;
+    const { country, proxyTier, ...axiosOptions } = options;
     if (unblockerKey) {
         // Web Unblocker API is intermittently flaky — inner data.code returns 403/502
         // on ~30% of requests even for simple targets. Retry up to 2 times on transient failures.
@@ -135,14 +192,21 @@ export async function fetchWithRender(url, scraperApiKey, options = {}) {
         let lastError = null;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
-                const resp = await axios.post(`${WEB_UNBLOCKER_BASE}/request`, { target_url: url, response_format: "html", js_render: true, country: country ?? "" }, {
+                const params = new URLSearchParams();
+                params.append("target_url", url);
+                params.append("response_format", "html");
+                params.append("js_render", "true");
+                if (country)
+                    params.append("country", country);
+                const resp = await axios.post(`${WEB_UNBLOCKER_BASE}/request`, params.toString(), {
                     headers: {
-                        "Content-Type": "application/json",
+                        "Content-Type": "application/x-www-form-urlencoded",
                         "Authorization": `Bearer ${unblockerKey}`,
                     },
                     timeout: TIMEOUTS.RENDER,
                     maxContentLength: 10 * 1024 * 1024,
                     maxBodyLength: 10 * 1024 * 1024,
+                    httpsAgent: _sharedHttpsAgent,
                     ...axiosOptions,
                 });
                 // Response format: { code: 0, data: { code: 200, html: "...", msg, msg_detail } }
@@ -155,7 +219,9 @@ export async function fetchWithRender(url, scraperApiKey, options = {}) {
                     // 403/429/500/502/503 are transient — retry
                     if ([403, 429, 500, 502, 503].includes(innerCode) && attempt < MAX_RETRIES) {
                         lastError = new Error(`Web Unblocker error (${innerCode}): ${resp.data.data.msg ?? "unknown"}`);
-                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // backoff: 1s, 2s
+                        const _base1 = Math.pow(2, attempt) * 1000;
+                        const _jitter1 = Math.random() * _base1;
+                        await new Promise(r => setTimeout(r, Math.min(_jitter1, 30_000)));
                         continue;
                     }
                     throw new Error(`Web Unblocker error (${innerCode}): ${resp.data.data.msg ?? "unknown"}`);
@@ -174,7 +240,9 @@ export async function fetchWithRender(url, scraperApiKey, options = {}) {
                 const status = error?.response?.status;
                 if (status && [502, 503, 429].includes(status) && attempt < MAX_RETRIES) {
                     lastError = error instanceof Error ? error : new Error(String(error));
-                    await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                    const _base2 = Math.pow(2, attempt) * 1000;
+                    const _jitter2 = Math.random() * _base2;
+                    await new Promise(r => setTimeout(r, Math.min(_jitter2, 30_000)));
                     continue;
                 }
                 throw error;
@@ -184,7 +252,7 @@ export async function fetchWithRender(url, scraperApiKey, options = {}) {
         throw lastError ?? new Error("Web Unblocker failed after retries");
     }
     // Fallback: no unblocker key configured — use proxy/direct fetch (best effort)
-    return fetchViaProxy(url, scraperApiKey, axiosOptions);
+    return fetchViaProxy(url, scraperApiKey, { ...axiosOptions, ...(proxyTier ? { proxyTier } : {}) });
 }
 /** Detect if fetched HTML is a JS-required page (empty shell, Cloudflare, etc.) */
 export function detectJsHeavyContent(html) {
@@ -251,6 +319,13 @@ export function detectBotChallenge(html) {
         "please wait while we verify",
         "human verification",
         "human-challenge",
+        // DataDome challenge page markers (not just the cookie name)
+        "robot check",
+        "enter the characters you see below",
+        "sorry, we just need to make sure",
+        // Amazon WAF
+        "to discuss automated access to amazon data",
+        "apologies, but we're having trouble saving your cookie",
     ];
     for (const signal of knownChallengeStrings) {
         if (lower.includes(signal)) {

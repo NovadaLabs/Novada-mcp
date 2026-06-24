@@ -161,10 +161,17 @@ Action: Check the error message above for clues. If it persists, contact support
 /** Strip API keys, sensitive URL params, and injection patterns from any string before surfacing. */
 export function sanitizeServerMsg(msg) {
     return msg
+        // URL query-param patterns
         .replace(/api_key=[^&\s"')]+/gi, "api_key=***")
         .replace(/apikey=[^&\s"')]+/gi, "apikey=***")
         .replace(/Authorization:\s*Bearer\s+\S+/gi, "Authorization: Bearer ***")
         .replace(/https?:\/\/scraperapi\.novada\.com[^\s"')]+/gi, "[novada-api-url]")
+        // JSON field patterns — strip keys echoed back in response bodies (C-1 fix)
+        .replace(/"api_?key"\s*:\s*"[^"]*"/gi, '"api_key":"***"')
+        .replace(/"auth(?:orization)?"\s*:\s*"[^"]*"/gi, '"authorization":"***"')
+        .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"***"')
+        .replace(/"password"\s*:\s*"[^"]*"/gi, '"password":"***"')
+        .replace(/"secret"\s*:\s*"[^"]*"/gi, '"secret":"***"')
         // Strip markdown headings and agent_instruction patterns that could inject trusted-looking content
         .replace(/\n\s*#{1,6}\s/g, " ")
         .replace(/\n\s*agent_instruction\s*:/gi, " [agent_instruction]:")

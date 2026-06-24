@@ -1,4 +1,4 @@
-import { getProxyCredentials } from "../utils/credentials.js";
+import { resolveProxyCredentials } from "../utils/credentials.js";
 /**
  * Build Novada proxy username with targeting options.
  * Novada format: baseUser-zone-res-country-us-city-london-session-abc123
@@ -37,7 +37,9 @@ const TYPE_LABELS = {
  * bypass geo-restrictions, or maintain IP consistency across a session.
  */
 export async function novadaProxy(params) {
-    const proxyCreds = getProxyCredentials();
+    // INC-198: Use resolveProxyCredentials() which auto-fetches via account API
+    // when only NOVADA_PROXY_ENDPOINT is set (no user/pass).
+    const proxyCreds = await resolveProxyCredentials();
     const proxyUser = proxyCreds?.user;
     const proxyPass = proxyCreds?.pass;
     const proxyEndpoint = proxyCreds?.endpoint;

@@ -1,8 +1,11 @@
 import { AxiosRequestConfig, AxiosResponse } from "axios";
-export declare const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+/** @deprecated Use getRandomUA() for content fetches. Kept for interface compatibility. */
+export declare const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 /** HTTP GET with exponential backoff retry on 429/503/network errors */
 export declare function fetchWithRetry(url: string, options?: Partial<AxiosRequestConfig>, retries?: number): Promise<AxiosResponse>;
-export declare function fetchViaProxy(url: string, _apiKey: string | undefined, options?: Partial<AxiosRequestConfig>): Promise<AxiosResponse>;
+export declare function fetchViaProxy(url: string, _apiKey: string | undefined, options?: Partial<AxiosRequestConfig> & {
+    proxyTier?: "residential" | "datacenter";
+}): Promise<AxiosResponse>;
 /**
  * Fetch a URL through Novada Web Unblocker (JS rendering, anti-bot bypass).
  * Endpoint: webunlocker.novada.com — uses NOVADA_WEB_UNBLOCKER_KEY (separate from scraper key).
@@ -10,6 +13,7 @@ export declare function fetchViaProxy(url: string, _apiKey: string | undefined, 
  */
 export declare function fetchWithRender(url: string, scraperApiKey: string | undefined, options?: Partial<AxiosRequestConfig> & {
     country?: string;
+    proxyTier?: "residential" | "datacenter";
 }): Promise<AxiosResponse>;
 /** Detect if fetched HTML is a JS-required page (empty shell, Cloudflare, etc.) */
 export declare function detectJsHeavyContent(html: string): boolean;

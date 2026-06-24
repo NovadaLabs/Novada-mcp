@@ -1,4 +1,5 @@
 import { normalizeUrl } from "../utils/index.js";
+import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
 const PRIMARY = { name: "google.com", id: "google_search", param: "q", supportsNum: true };
@@ -206,7 +207,7 @@ export async function novadaResearch(params, apiKey) {
     if (failedCount > 0) {
         agentHints.push(`- ${failedCount} of ${queries.length} search queries failed; results may be incomplete.`);
     }
-    return formatResearchOutput({
+    let finalReport = formatResearchOutput({
         topic,
         query: queryValue,
         depth: depthValue,
@@ -221,6 +222,18 @@ export async function novadaResearch(params, apiKey) {
         sourceLines,
         agentHints,
     });
+    // Wire output save — best-effort, never breaks the tool
+    try {
+        const outputResult = await saveOutput({
+            tool: "research",
+            hint: params.question?.slice(0, 30) || params.query?.slice(0, 30) || "research",
+            format: "md",
+            data: finalReport,
+        });
+        finalReport += `\n\n---\nResearch saved: ${outputResult.filePath}`;
+    }
+    catch { /* best-effort */ }
+    return finalReport;
 }
 // ─── Synthesis ─────────────────────────────────────────────────────────────
 // Build a structured synthesis: direct answer + contrasting points + common finding

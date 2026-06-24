@@ -36,10 +36,14 @@ export function validateWalletUsageRecordParams(args) {
  */
 export async function novadaWalletUsageRecord(params, apiKey) {
     const { start_time, end_time, page, page_size } = params;
-    let body = { page, page_size };
-    if (start_time !== undefined || end_time !== undefined) {
-        body = withDateRangeCompat(body, { start: start_time, end: end_time });
-    }
+    // INC-193: Always send date range defaults (30 days) — server returns count but empty list
+    // when no date range is provided, causing the count=41/list=[] anomaly.
+    // Note: wallet endpoint uses `limit` (not `page_size`) — confirmed by regression test.
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const defaultStart = thirtyDaysAgo.toISOString().slice(0, 10);
+    const defaultEnd = now.toISOString().slice(0, 10);
+    const body = withDateRangeCompat({ page, limit: page_size }, { start: start_time ?? defaultStart, end: end_time ?? defaultEnd });
     const data = await devApiPost("/v1/wallet/usage_record", body, { apiKey });
     // Anomaly check: server sometimes returns count > 0 but an empty list
     // (smoke-verified 2026-06-03). Surface this so agents don't conclude

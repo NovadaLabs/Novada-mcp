@@ -1,11 +1,11 @@
 import { z } from "zod";
 export declare const PlanBalanceAllParamsSchema: z.ZodObject<{
     products: z.ZodOptional<z.ZodArray<z.ZodEnum<{
-        static: "static";
         residential: "residential";
+        datacenter: "datacenter";
+        static: "static";
         mobile: "mobile";
         isp: "isp";
-        datacenter: "datacenter";
         capture: "capture";
     }>>>;
 }, z.core.$strict>;

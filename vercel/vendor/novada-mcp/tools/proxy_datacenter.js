@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { getProxyCredentials } from "../utils/credentials.js";
-import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { resolveProxyCredentials } from "../utils/credentials.js";
 // ─── Schema ──────────────────────────────────────────────────────────────────
 export const ProxyDatacenterParamsSchema = z.object({
     url: z.string().optional()
@@ -40,19 +39,26 @@ function buildDatacenterUsername(user, params) {
  * (APIs, public data feeds, non-protected pages).
  */
 export async function novadaProxyDatacenter(params) {
-    const proxyCreds = getProxyCredentials();
+    // INC-197/198: Use resolveProxyCredentials + friendly error format
+    const proxyCreds = await resolveProxyCredentials();
     if (!proxyCreds) {
-        const missing = [
-            !process.env.NOVADA_PROXY_USER ? "NOVADA_PROXY_USER" : null,
-            !process.env.NOVADA_PROXY_PASS ? "NOVADA_PROXY_PASS" : null,
-            !process.env.NOVADA_PROXY_ENDPOINT ? "NOVADA_PROXY_ENDPOINT" : null,
-        ].filter(Boolean).join(", ");
-        return makeNovadaError(NovadaErrorCode.PROXY_AUTH_FAILURE, `Proxy credentials not configured. Missing: ${missing}`, `Set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT environment variables. Get credentials from: https://dashboard.novada.com → Residential Proxies → Endpoint Generator`).toAgentString();
+        return [
+            `## Proxy Configuration`,
+            `status: not configured`,
+            ``,
+            `Proxy credentials could not be resolved. Either:`,
+            `- Set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars, OR`,
+            `- Set NOVADA_PROXY_ENDPOINT + NOVADA_API_KEY (credentials auto-fetched from your account)`,
+            ``,
+            `Get credentials from: https://dashboard.novada.com → Residential Proxies → Endpoint Generator`,
+            ``,
+            `## Agent Hints`,
+            `- For web extraction without managing proxies, use novada_extract or novada_crawl instead.`,
+        ].join("\n");
     }
     const { user, pass, endpoint } = proxyCreds;
     const username = buildDatacenterUsername(user, params);
     const encodedUser = encodeURIComponent(username);
-    const encodedPass = encodeURIComponent(pass);
     const maskedUrl = `http://${encodedUser}:***@${endpoint}`;
     const endpointParts = endpoint.split(":");
     const proxyHost = endpointParts[0];

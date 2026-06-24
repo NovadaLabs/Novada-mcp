@@ -5,7 +5,7 @@ import { devApiParallel } from "../_core/developer_api.js";
 const BALANCE_ENDPOINTS = [
     { key: "residential", path: "/v1/residential_flow/balance" },
     { key: "isp", path: "/v1/isp_flow/balance" },
-    { key: "mobile", path: "/v1/mobile_flow/balance" },
+    { key: "mobile", path: "/v1/mobile_flow/mobile_flow_balance" },
     { key: "datacenter", path: "/v1/dc_flow/balance" },
     { key: "static", path: "/v1/static_flow/balance" },
     { key: "capture", path: "/v1/capture/get_balance" },

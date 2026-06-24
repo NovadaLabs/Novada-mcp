@@ -54,10 +54,27 @@ export async function novadaProxyAccountList(params, apiKey) {
         ...(params.account !== undefined ? { account: params.account } : {}),
     };
     const data = await devApiPost("/v1/proxy_account/list", body, { apiKey });
+    // INC-189 (Security): Mask plaintext passwords in API response.
+    // The server returns `password` in cleartext for each sub-account — strip it
+    // before surfacing to agents/users to prevent credential leakage via MCP transcript.
+    if (data !== null && typeof data === "object" && !Array.isArray(data)) {
+        const obj = data;
+        const list = obj.list;
+        if (Array.isArray(list)) {
+            for (const item of list) {
+                if (item !== null && typeof item === "object") {
+                    const rec = item;
+                    if (typeof rec.password === "string") {
+                        rec.password = "****";
+                    }
+                }
+            }
+        }
+    }
     return JSON.stringify({
         status: "ok",
         data,
-        agent_instruction: "Lists proxy sub-accounts for the given product code. To create one use novada_proxy_account_create with `confirm: true`. Repeat with different `product` codes to see other product tiers.",
+        agent_instruction: "Lists proxy sub-accounts for the given product code. Passwords are masked for security. To create one use novada_proxy_account_create with `confirm: true`. Repeat with different `product` codes to see other product tiers.",
     }, null, 2);
 }
 //# sourceMappingURL=proxy_account_list.js.map

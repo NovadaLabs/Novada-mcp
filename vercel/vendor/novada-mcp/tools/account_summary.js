@@ -27,8 +27,12 @@ function tryParse(jsonText) {
 }
 async function runSection(label, fn) {
     try {
-        const text = await fn();
-        return { ok: true, data: tryParse(text) };
+        const raw = await fn();
+        const parsed = tryParse(raw);
+        if (parsed && typeof parsed === 'object' && '_parse_error' in parsed) {
+            throw new Error('Failed to parse API response — raw: ' + String(raw).slice(0, 200));
+        }
+        return { ok: true, data: parsed };
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
