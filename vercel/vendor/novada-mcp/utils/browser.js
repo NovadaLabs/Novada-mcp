@@ -1,6 +1,13 @@
 import { chromium } from "playwright-core";
 import { TIMEOUTS } from "../config.js";
 import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
+/**
+ * Strip credentials from WSS URLs in error messages.
+ * wss://user:pass@host → wss://***:***@host
+ */
+function sanitizeBrowserError(msg) {
+    return msg.replace(/wss:\/\/[^:]+:[^@]+@/g, "wss://***:***@");
+}
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes idle timeout
 /**
  * Module-level session store. Scoped to the process (single-tenant MCP server use).
@@ -157,8 +164,12 @@ export async function fetchViaBrowser(url, options = {}) {
         }
         return html;
     }
+    catch (err) {
+        // P0 SECURITY: strip WSS credentials from any playwright error message
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(sanitizeBrowserError(msg));
+    }
     finally {
-        // Only close browser if not in a named session
         if (browser && !options.sessionId) {
             await browser.close();
         }
