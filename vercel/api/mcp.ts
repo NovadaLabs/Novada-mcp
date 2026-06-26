@@ -191,32 +191,32 @@ function zodToMcpSchema(schema: any): Record<string, unknown> {
 
 // ─── Tool catalog ────────────────────────────────────────────────────────────
 const TOOLS = [
-  { name: "novada_search",              title: "Web Search",                 schema: SearchParamsSchema,              description: "Search the web via 5 engines. Returns titles/URLs/snippets reranked by relevance." },
-  { name: "novada_extract",             title: "Content Extractor",          schema: ExtractParamsSchema,             description: "Extract clean content from any URL with anti-bot auto-escalation." },
-  { name: "novada_crawl",               title: "Site Crawler",               schema: CrawlParamsSchema,               description: "BFS/DFS crawl up to 20 pages of a site, extract content from each." },
-  { name: "novada_research",            title: "Deep Research",              schema: ResearchParamsSchema,            description: "Multi-source research: fan-out search → dedup → extract → synthesized cited report." },
-  { name: "novada_map",                 title: "URL Mapper",                 schema: MapParamsSchema,                 description: "Discover URLs on a site via sitemap.xml or BFS crawl. URL list only." },
-  { name: "novada_scrape",              title: "Platform Scraper",           schema: ScrapeParamsSchema,              description: "Structured data from 129 platforms (Amazon, Reddit, TikTok, LinkedIn, etc.)." },
-  { name: "novada_verify",              title: "Claim Verifier",             schema: VerifyParamsSchema,              description: "Fact-check a claim via 3 parallel search angles. Returns verdict + confidence." },
-  { name: "novada_unblock",             title: "Anti-Bot Unblocking",        schema: UnblockParamsSchema,             description: "Raw rendered HTML of blocked/JS-heavy pages via Web Unblocker or Browser API." },
-  { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Multi-action browser automation via CDP on Novada cloud browser." },
-  { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Generic proxy credentials (URL/env/curl format) for your own HTTP clients." },
-  { name: "novada_proxy_residential",   title: "Residential Proxy",          schema: ProxyResidentialParamsSchema,    description: "Residential proxy credentials (100M+ home ISP IPs)." },
-  { name: "novada_proxy_isp",           title: "ISP Proxy",                  schema: ProxyIspParamsSchema,            description: "ISP-assigned static proxy credentials — looks like real home users." },
-  { name: "novada_proxy_datacenter",    title: "Datacenter Proxy",           schema: ProxyDatacenterParamsSchema,     description: "Datacenter proxy credentials — fastest, cheapest." },
-  { name: "novada_proxy_mobile",        title: "Mobile Proxy",               schema: ProxyMobileParamsSchema,         description: "4G/5G mobile proxy credentials." },
-  { name: "novada_proxy_static",        title: "Static ISP Proxy",           schema: ProxyStaticParamsSchema,         description: "Static dedicated ISP IP — never changes for same session_id+country." },
-  { name: "novada_proxy_dedicated",     title: "Dedicated Proxy",            schema: ProxyDedicatedParamsSchema,      description: "Exclusive datacenter IP, not shared with any other user." },
-  { name: "novada_health",              title: "Health Check",               schema: HealthParamsSchema,              description: "Check which Novada API products are active on your key." },
-  { name: "novada_health_all",          title: "Extended Health Check",      schema: HealthAllParamsSchema,           description: "Extended per-product health check across all Novada endpoints." },
-  { name: "novada_discover",            title: "Tool Discovery",             schema: DiscoverParamsSchema,            description: "List all available Novada tools by category and status." },
-  { name: "novada_scraper_submit",      title: "Async Scraper Submit",       schema: ScraperSubmitParamsSchema,       description: "Submit async scraping task. Returns task_id." },
-  { name: "novada_scraper_status",      title: "Async Scraper Status",       schema: ScraperStatusParamsSchema,       description: "Poll async scraping task status." },
-  { name: "novada_scraper_result",      title: "Async Scraper Result",       schema: ScraperResultParamsSchema,       description: "Retrieve completed async scraping task result." },
-  { name: "novada_browser_flow",        title: "Browser Flow Automation",    schema: BrowserFlowParamsSchema,         description: "Multi-step browser automation on Novada cloud browser." },
-  { name: "novada_ai_monitor",          title: "AI Brand Monitor",           schema: AiMonitorParamsSchema,           description: "Monitor how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand." },
-  { name: "novada_monitor",             title: "Page Change Monitor",        schema: MonitorParamsSchema,             description: "Detect page changes over time via content hash + field-level diff." },
-  { name: "novada_setup",               title: "Setup & Configuration",      schema: SetupParamsSchema,               description: "Diagnose env config and emit setup snippets for all MCP clients. Auth-free." },
+  { name: "novada_search",              title: "Web Search",                 schema: SearchParamsSchema,              description: "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract." },
+  { name: "novada_extract",             title: "Content Extractor",          schema: ExtractParamsSchema,             description: "Read clean content from one or more URLs. Use when you have a specific page URL and need its content. Handles anti-bot protection automatically (if extract still fails, try unblock). For multiple pages on one site, use crawl instead." },
+  { name: "novada_crawl",               title: "Site Crawler",               schema: CrawlParamsSchema,               description: "Read content from multiple pages on one site (up to 20). Use when you need an entire section of a website. Optionally run map first to discover target URLs." },
+  { name: "novada_research",            title: "Deep Research",              schema: ResearchParamsSchema,            description: "Deep multi-source research: searches multiple angles, reads top sources, returns a synthesized report with citations. Use when you need comprehensive analysis of an open-ended topic (not a yes/no claim — use verify for that). Slower than a single search." },
+  { name: "novada_map",                 title: "URL Mapper",                 schema: MapParamsSchema,                 description: "List all URLs on a website via sitemap or crawl. Use when you need to find the right page before crawl/extract. Returns URLs only, no content. Fast site reconnaissance." },
+  { name: "novada_scrape",              title: "Platform Scraper",           schema: ScrapeParamsSchema,              description: "Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings — NOT general websites (use extract for those)." },
+  { name: "novada_verify",              title: "Claim Verifier",             schema: VerifyParamsSchema,              description: "Fact-check a claim by searching from 3 angles (supporting, skeptical, fact-check). Use when you need to validate a statement before citing it. Returns verdict (supported/unsupported/contested) + confidence 0-100." },
+  { name: "novada_unblock",             title: "Anti-Bot Unblocking",        schema: UnblockParamsSchema,             description: "Get raw HTML from bot-protected pages via JS rendering or headless browser. Use only when extract fails on a protected page and you need the raw HTML." },
+  { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate a cloud browser via CDP — click, type, screenshot, navigate. Local MCP only (not available on hosted)." },
+  { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Generate proxy credentials (URL/env/curl format) for your own HTTP clients. Not needed for extract/crawl — those handle proxies internally." },
+  { name: "novada_proxy_residential",   title: "Residential Proxy",          schema: ProxyResidentialParamsSchema,    description: "Residential proxy credentials — real home ISP IPs, best for anti-bot bypass. For web extraction, use extract instead." },
+  { name: "novada_proxy_isp",           title: "ISP Proxy",                  schema: ProxyIspParamsSchema,            description: "ISP proxy credentials — looks like home users. For web extraction, use extract instead." },
+  { name: "novada_proxy_datacenter",    title: "Datacenter Proxy",           schema: ProxyDatacenterParamsSchema,     description: "Datacenter proxy credentials — fastest, cheapest. For web extraction, use extract instead." },
+  { name: "novada_proxy_mobile",        title: "Mobile Proxy",               schema: ProxyMobileParamsSchema,         description: "Mobile 4G/5G proxy credentials. For web extraction, use extract instead." },
+  { name: "novada_proxy_static",        title: "Static ISP Proxy",           schema: ProxyStaticParamsSchema,         description: "Static ISP proxy — same IP every request for a session_id+country pair. For web extraction, use extract instead." },
+  { name: "novada_proxy_dedicated",     title: "Dedicated Proxy",            schema: ProxyDedicatedParamsSchema,      description: "Exclusive datacenter IP, not shared with other users. For web extraction, use extract instead." },
+  { name: "novada_health",              title: "Health Check",               schema: HealthParamsSchema,              description: "Quick health check — which Novada API products are active on your key." },
+  { name: "novada_health_all",          title: "Extended Health Check",      schema: HealthAllParamsSchema,           description: "Detailed health check across all 6 Novada product endpoints with latency." },
+  { name: "novada_discover",            title: "Tool Discovery",             schema: DiscoverParamsSchema,            description: "List all available Novada tools grouped by category." },
+  { name: "novada_scraper_submit",      title: "Async Scraper Submit",       schema: ScraperSubmitParamsSchema,       description: "Start an async scraping task. Returns task_id. Step 1 of 3: submit → status → result." },
+  { name: "novada_scraper_status",      title: "Async Scraper Status",       schema: ScraperStatusParamsSchema,       description: "Check async scraping task progress. Step 2 of 3: submit → status → result." },
+  { name: "novada_scraper_result",      title: "Async Scraper Result",       schema: ScraperResultParamsSchema,       description: "Get completed async scraping results. Step 3 of 3: submit → status → result." },
+  { name: "novada_browser_flow",        title: "Browser Flow Automation",    schema: BrowserFlowParamsSchema,         description: "Multi-step browser automation with persistent sessions. Local MCP only (not available on hosted)." },
+  { name: "novada_ai_monitor",          title: "AI Brand Monitor",           schema: AiMonitorParamsSchema,           description: "Check how AI models (ChatGPT, Perplexity, Grok, etc.) reference a brand or product." },
+  { name: "novada_monitor",             title: "Page Change Monitor",        schema: MonitorParamsSchema,             description: "Track changes on a web page over time. Compares content hash and field-level diffs." },
+  { name: "novada_setup",               title: "Setup & Configuration",      schema: SetupParamsSchema,               description: "Check your API key and environment configuration. Use when you want to verify setup or see which Novada products are active. Auth-free, no quota used." },
   // ── Account / billing tools ──
   { name: "novada_wallet_balance",      title: "Wallet Balance",             schema: WalletBalanceParamsSchema,       description: "Your master wallet balance (the account the API key belongs to)." },
   { name: "novada_wallet_usage_record", title: "Wallet Usage Record",        schema: WalletUsageRecordParamsSchema,   description: "Paginated wallet transaction / usage history." },
@@ -236,11 +236,18 @@ const TOOLS = [
     : { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
 }));
 
+// ─── Hosted-hidden tools ──────────────────────────────────────────────────────
+// Tools that are architecturally unavailable on hosted (Vercel) but should still
+// be callable (returns NOT_AVAILABLE_ON_HOSTED error) if explicitly requested.
+// Separated from TOOLS array because .map() strips non-standard properties.
+const HOSTED_HIDDEN = new Set(["novada_browser", "novada_browser_flow"]);
+
 // ─── Tool-set filtering (?tools= / ?groups=) ─────────────────────────────────
 // Lets a client request a slim toolset, e.g. ?groups=search,scrape or
 // ?tools=novada_search,novada_scrape. Matches BrightData's ?groups= pattern.
 // Fewer tools = less token overhead in the agent's context window.
 const TOOL_GROUPS: Record<string, string[]> = {
+  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_verify", "novada_setup"],
   search: ["novada_search"],
   scrape: ["novada_scrape", "novada_extract", "novada_unblock"],
   crawl: ["novada_crawl", "novada_map"],
@@ -260,10 +267,17 @@ const ALL_TOOL_NAMES = new Set(TOOLS.map((t) => t.name));
 function resolveAllowedTools(url: URL): Set<string> | null {
   const toolsParam = url.searchParams.get("tools");
   const groupsParam = url.searchParams.get("groups");
-  if (!toolsParam && !groupsParam) return null;
+  if (!toolsParam && !groupsParam) {
+    // Default to core tools for first-time users — reduces cognitive overload from 40+ tools
+    // Users can pass ?groups=all or ?groups=core,advanced,account to see more
+    return new Set([...TOOL_GROUPS["core"], "novada_setup"]);
+  }
   const allowed = new Set<string>(["novada_setup"]);
   if (groupsParam) {
-    for (const g of groupsParam.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)) {
+    const groups = groupsParam.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    // "all" = no filter, expose every tool
+    if (groups.includes("all")) return null;
+    for (const g of groups) {
       (TOOL_GROUPS[g] ?? []).forEach((n) => allowed.add(n));
     }
   }
@@ -273,8 +287,12 @@ function resolveAllowedTools(url: URL): Set<string> | null {
       if (ALL_TOOL_NAMES.has(full)) allowed.add(full);
     }
   }
-  // If params were given but matched nothing real, fall back to no-filter rather than an empty server.
-  return allowed.size > 1 ? allowed : null;
+  // If params were given but matched nothing real, fall back to core (not all — a typo shouldn't
+  // grant broader access than no params at all).
+  if (allowed.size <= 1) {
+    return new Set([...TOOL_GROUPS["core"], "novada_setup"]);
+  }
+  return allowed;
 }
 
 // ─── Token auth + quota ──────────────────────────────────────────────────────
@@ -372,16 +390,41 @@ function logUsage(env: Env, token: string, tool: string, ok: boolean, ms: number
   }
 }
 
+// ─── Output sanitization for hosted ──────────────────────────────────────────
+// Strip verbose sections that waste tokens on hosted: Agent Memory (no persistent
+// memory), Output Saved (no filesystem), Extraction Diagnostics (debug noise),
+// Same-Domain Links (map tool available). Saves ~15-30% tokens per response.
+const STRIP_SECTIONS = [
+  /\n+## Output Saved\n[\s\S]*?(?=\n## |\n---\n|$)/g,
+  /\n+## Agent Memory\n[\s\S]*?(?=\n## |\n---\n|$)/g,
+  /\n+## Extraction Diagnostics\n[\s\S]*?(?=\n## |\n---\n|$)/g,
+  /\n+## Same-Domain Links[^\n]*\n[\s\S]*?(?=\n## |\n---\n|$)/g,
+  /\n+Output saved: [^\n]+/g,
+  /\n+\/\/ Output saved: [^\n]+/g,
+];
+
+function sanitizeHostedOutput(text: string): string {
+  let result = text;
+  for (const pattern of STRIP_SECTIONS) {
+    result = result.replace(pattern, "");
+  }
+  // Collapse multiple consecutive blank lines into one
+  result = result.replace(/\n{3,}/g, "\n\n");
+  return result.trim();
+}
+
 // ─── MCP server factory ──────────────────────────────────────────────────────
 function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTools?: Set<string> | null }): Server {
   const server = new Server(
-    { name: "novada", version: "0.7.13-hosted" },
+    { name: "novada", version: "0.8.2-hosted" },
     { capabilities: { tools: {} } },
   );
 
-  const visibleTools = ctx.allowedTools
+  const isHosted = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+  const visibleTools = (ctx.allowedTools
     ? TOOLS.filter((t) => ctx.allowedTools!.has(t.name))
-    : TOOLS;
+    : TOOLS
+  ).filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name));
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: visibleTools }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -419,10 +462,16 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
         content: [{
           type: "text" as const,
           text: [
-            "Error [QUOTA_EXCEEDED]: free-plan monthly quota exhausted.",
-            "failure_class: quota",
-            "retry_recommended: false",
-            "agent_instruction: Upgrade at https://dashboard.novada.com or wait until next month for the free tier to reset.",
+            "## Quota Exhausted",
+            "",
+            `Your free-plan monthly quota (${parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10)} calls/month) has been used up.`,
+            "",
+            "**Options:**",
+            "1. Wait until next month for the free tier to reset",
+            "2. Use a local MCP server (unlimited): `npx novada-mcp` with your own API key",
+            "3. Contact sales@novada.com for higher limits",
+            "",
+            "agent_instruction: quota_exhausted | retry_recommended: false | alternative: install local MCP server via npx novada-mcp for unlimited usage with your own API key",
           ].join("\n"),
         }],
         isError: true,
@@ -525,8 +574,14 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
           };
       }
       logUsage(env, ctx.token, name, true, Date.now() - started);
+      const sanitized = sanitizeHostedOutput(result);
+      // Append quota footer only when quota is running low (< 20% of monthly)
+      const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
+      const quotaFooter = remaining < monthlyQuota * 0.2
+        ? `\n\n---\n⚠ Quota: ${remaining}/${monthlyQuota} calls remaining this month.`
+        : "";
       return {
-        content: [{ type: "text" as const, text: result }],
+        content: [{ type: "text" as const, text: sanitized + quotaFooter }],
         _meta: { quota_remaining: remaining },
       };
     } catch (error) {
@@ -534,12 +589,37 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
       if (error instanceof ZodError) {
         const issues = error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
         return {
-          content: [{ type: "text" as const, text: `Validation failed:\n${issues}` }],
+          content: [{ type: "text" as const, text: `Validation failed for ${name}:\n${issues}\n\nagent_instruction: Check the tool's inputSchema for required fields and valid types. Call list_tools to see the schema for ${name}.` }],
           isError: true,
         };
       }
+      // Hosted-aware error wrapping — translate internal errors to actionable guidance
+      const rawMsg = error instanceof Error ? error.message : String(error);
+      let userMsg = rawMsg;
+
+      // Common hosted failure: NOVADA_WEB_UNBLOCKER_KEY not set → extract/unblock render fails
+      if (rawMsg.includes("NOVADA_WEB_UNBLOCKER_KEY") || rawMsg.includes("UNBLOCKER_NOT_CONFIGURED")) {
+        userMsg = `Extract/unblock JS rendering is not configured on this hosted endpoint. The tool attempted static extraction only. For JS-heavy pages, use a local MCP server with NOVADA_WEB_UNBLOCKER_KEY configured, or try novada_scrape for platform-specific data.`;
+      }
+      // Proxy not configured
+      else if (rawMsg.includes("PROXY_AUTH_FAILURE") || rawMsg.includes("proxy credentials not configured")) {
+        userMsg = `Proxy credentials are not available on this hosted endpoint. For web extraction, use novada_extract or novada_crawl instead — they handle proxies internally.`;
+      }
+      // Browser not available
+      else if (rawMsg.includes("NOT_AVAILABLE_ON_HOSTED") || rawMsg.includes("Playwright")) {
+        userMsg = `This tool requires a local MCP server. Install via: npx novada-mcp`;
+      }
+      // Fallback: don't leak raw internals (stack traces, file paths, API response bodies)
+      else {
+        userMsg = `Tool error: ${rawMsg.slice(0, 200)}`;
+      }
+      // Cap total length
+      if (userMsg.length > 500) {
+        userMsg = userMsg.slice(0, 497) + "...";
+      }
+
       return {
-        content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+        content: [{ type: "text" as const, text: userMsg }],
         isError: true,
       };
     }
@@ -649,11 +729,13 @@ export default async function nodeHandler(req: IncomingMessage, res: ServerRespo
     }
   } catch (err) {
     if (!res.headersSent) {
+      // Log full error server-side but don't leak internals to client
+      console.error("[nodeHandler] Internal error:", (err as Error)?.message ?? String(err));
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({
         error: "INTERNAL_ERROR",
-        message: (err as Error)?.message ?? String(err),
+        message: "An internal error occurred. Please try again or contact support.",
       }));
     }
   }
