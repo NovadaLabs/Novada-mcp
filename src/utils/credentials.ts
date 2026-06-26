@@ -30,9 +30,9 @@ export function getWebUnblockerKey(): string | undefined {
   return store.getStore()?.webUnblockerKey ?? process.env.NOVADA_WEB_UNBLOCKER_KEY ?? process.env.NOVADA_API_KEY;
 }
 
-/** Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var. */
+/** Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var > auto-provisioned. */
 export function getBrowserWs(): string | undefined {
-  return store.getStore()?.browserWs ?? process.env.NOVADA_BROWSER_WS;
+  return store.getStore()?.browserWs ?? process.env.NOVADA_BROWSER_WS ?? _browserWsCache?.wsUrl;
 }
 
 /** Active proxy credentials: SDK-scoped > NOVADA_PROXY_* env vars. */
@@ -111,6 +111,76 @@ export async function fetchProxySubAccountCredentials(
   } catch {
     return null;
   }
+}
+
+// ─── Auto-fetch Browser API credentials via management API ──────────────────
+
+interface FetchedBrowserCreds {
+  wsUrl: string;
+  fetchedAt: number;
+}
+
+let _browserWsCache: FetchedBrowserCreds | null = null;
+
+const BROWSER_WS_HOST = "upg-scbr2.novada.com"; // confirmed from credentials file
+
+/**
+ * Fetch Browser API WSS endpoint using NOVADA_API_KEY as Bearer token.
+ * Calls POST /v1/proxy_account/list with product=10 (Browser API).
+ * Returns wss://{account}:{password}@upg-scbr2.novada.com
+ * Cached 6h in memory.
+ */
+export async function fetchBrowserSubAccountCredentials(
+  apiKey: string
+): Promise<string | null> {
+  if (_browserWsCache && Date.now() - _browserWsCache.fetchedAt < CACHE_TTL_MS) {
+    return _browserWsCache.wsUrl;
+  }
+
+  try {
+    const form = new URLSearchParams();
+    form.append("product", "10"); // Browser API product code
+    form.append("page", "1");
+    form.append("limit", "5");
+    form.append("status", "1");
+    const res = await fetch(`${MGMT_API_BASE}/proxy_account/list`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      code?: number;
+      data?: { list?: Array<{ account: string; password: string }> };
+    };
+    const accounts = data?.data?.list ?? [];
+    if (accounts.length === 0) return null;
+    const { account, password } = accounts[0];
+    const wsUrl = `wss://${account}:${password}@${BROWSER_WS_HOST}`;
+    _browserWsCache = { wsUrl, fetchedAt: Date.now() };
+    return wsUrl;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve Browser API WebSocket URL with priority:
+ * 1. SDK-scoped browserWs
+ * 2. NOVADA_BROWSER_WS env var
+ * 3. Auto-fetch via NOVADA_API_KEY (product=10)
+ */
+export async function resolveBrowserWs(apiKey?: string): Promise<string | null> {
+  const direct = getBrowserWs();
+  if (direct) return direct;
+
+  const key = apiKey ?? process.env.NOVADA_API_KEY;
+  if (!key) return null;
+
+  return fetchBrowserSubAccountCredentials(key);
 }
 
 /**

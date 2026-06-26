@@ -141,6 +141,12 @@ export const DOMAIN_REGISTRY: Record<string, DomainEntry> = {
   "cloudflare.com":       { method: "browser", note: "Fingerprinting", provider: "cloudflare" },
   "blog.cloudflare.com":  { method: "browser", note: "CF self-hosted, blocks unblocker, browser only", provider: "cloudflare" },
   "discord.com":          { method: "browser", note: "TLS fingerprinting required", provider: "cloudflare" },
+
+  // === Novada own properties ===
+  "novada.com":           { method: "browser", note: "Vue SPA — pricing tables JS-rendered, needs CDP for full pricing data" },
+  "www.novada.com":       { method: "browser", note: "Vue SPA — pricing tables JS-rendered, needs CDP for full pricing data" },
+  "dashboard.novada.com": { method: "browser", note: "Auth-gated dashboard — requires NOVADA_BROWSER_WS + login session" },
+  "mcp.novada.com":       { method: "static",  note: "Hosted MCP endpoint — static JSON/SSE responses" },
 };
 
 /** Look up optimal fetch method for a URL. Returns null if domain unknown. */

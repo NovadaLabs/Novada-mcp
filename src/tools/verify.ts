@@ -1,5 +1,5 @@
 import type { VerifyParams, NovadaSearchResult } from "./types.js";
-import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 
 interface QueryResult {
   results: NovadaSearchResult[];
@@ -8,9 +8,8 @@ interface QueryResult {
 
 async function runSearchQuery(query: string, apiKey: string): Promise<QueryResult> {
   try {
-    const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
-    const data = await pollSearchResult(apiKey, taskId);
-    const results = parseScraperSearchResults(data);
+    const submitted = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
+    const results = await resolveSearchResults(apiKey, submitted);
     return { results, failed: false };
   } catch {
     return { results: [], failed: true };

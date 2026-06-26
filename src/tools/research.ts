@@ -2,7 +2,7 @@ import { normalizeUrl } from "../utils/index.js";
 import { saveOutput } from "../utils/output.js";
 import type { ResearchParams, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 
 // ─── Engine Fallback ──────────────────────────────────────────────────────
 // Primary engine first (cheapest — 1 API call). On failure, race 2 fallback
@@ -29,17 +29,15 @@ const FALLBACKS: SearchEngine[] = [
 async function searchWithFallback(apiKey: string, query: string, num: number): Promise<NovadaSearchResult[]> {
   // Attempt 1: Primary engine (Google) — cheapest path
   try {
-    const taskId = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum);
-    const data = await pollSearchResult(apiKey, taskId);
-    const results = parseScraperSearchResults(data);
+    const submitted = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum);
+    const results = await resolveSearchResults(apiKey, submitted);
     if (results.length > 0) return results;
   } catch { /* fall through to fallback race */ }
 
   // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery
   const attempts = FALLBACKS.map(eng =>
     submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum)
-      .then(taskId => pollSearchResult(apiKey, taskId))
-      .then(data => parseScraperSearchResults(data))
+      .then(submitted => resolveSearchResults(apiKey, submitted))
       .then(results => {
         if (results.length === 0) throw new Error("empty results");
         return results;
@@ -168,7 +166,8 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
             return { ok: false as const, title: source.title, url: source.url, snippet: source.snippet };
           }
           // Strip Agent Hints section from extracted content — too noisy in research output
-          const cleanContent = content.split("## Agent Hints")[0].trim();
+          const strippedContent = content.replace(/^📁[^\n]*\n\n/, "");
+          const cleanContent = strippedContent.split("## Agent Hints")[0].trim();
           return { ok: true as const, title: source.title, url: source.url, content: cleanContent };
         } catch {
           return { ok: false as const, title: source.title, url: source.url, snippet: source.snippet };
@@ -229,16 +228,13 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     ? sources.map(s => `- **${s.title}** (${s.url})${s.snippet ? ` — ${s.snippet}` : ""}`)
     : [`- No structured findings extracted.`];
 
-  // Build Sources list — include both extracted and snippet-only sources
-  const sourceLines: string[] = [];
+  // Build Sources table — include both extracted and snippet-only sources
+  const sourceRows: { label: string; url: string; note: string }[] = [];
   for (const s of extractedContents) {
-    sourceLines.push(`- ${s.url} — ${sourceLabel(s.title, s.url)} (full content extracted)`);
+    sourceRows.push({ label: sourceLabel(s.title, s.url), url: s.url, note: "full content extracted" });
   }
   for (const s of extractFailedSources) {
-    sourceLines.push(`- ${s.url} — ${sourceLabel(s.title, s.url)} (snippet only — extraction failed)`);
-  }
-  if (sourceLines.length === 0) {
-    sourceLines.push(`- No sources fetched.`);
+    sourceRows.push({ label: sourceLabel(s.title, s.url), url: s.url, note: "snippet only" });
   }
 
   // Agent hints
@@ -263,7 +259,7 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     snippetOnlyCount: extractFailedSources.length,
     summaryText,
     findingBullets,
-    sourceLines,
+    sourceRows,
     agentHints,
   });
 
@@ -372,7 +368,7 @@ function formatResearchOutput(args: {
   snippetOnlyCount: number;
   summaryText: string;
   findingBullets: string[];
-  sourceLines: string[];
+  sourceRows: { label: string; url: string; note: string }[];
   agentHints: string[];
 }): string {
   const fallbackSummary = "Synthesis unavailable — see raw findings below.";
@@ -382,8 +378,24 @@ function formatResearchOutput(args: {
   const synthesisStatus = hasSynthesis ? "ok" : "failed";
   const summary = hasSynthesis ? summaryText : fallbackSummary;
   const findingBullets = args.findingBullets.length > 0 ? args.findingBullets : [`- No structured findings extracted.`];
-  const sourceLines = args.sourceLines.length > 0 ? args.sourceLines : [`- No sources fetched.`];
   const agentHints = args.agentHints.length > 0 ? args.agentHints : [`- Try a narrower query or provide known source URLs to inspect directly.`];
+  const totalSources = args.sourceRows.length;
+
+  // Build sources as a markdown table for indexed citation (e.g. Source[1], Source[3])
+  const sourceTableLines: string[] = [];
+  if (totalSources > 0) {
+    sourceTableLines.push(`| # | Title | URL | Notes |`);
+    sourceTableLines.push(`|---|-------|-----|-------|`);
+    for (let i = 0; i < args.sourceRows.length; i++) {
+      const row = args.sourceRows[i];
+      // Escape pipe chars in label/note to avoid breaking table
+      const safeLabel = row.label.replace(/\|/g, "\\|");
+      const safeNote = row.note.replace(/\|/g, "\\|");
+      sourceTableLines.push(`| ${i + 1} | [${safeLabel}](${row.url}) | ${row.url} | ${safeNote} |`);
+    }
+  } else {
+    sourceTableLines.push(`_No sources fetched._`);
+  }
 
   const failedQueriesLine = args.failedQueries && args.failedQueries.length > 0
     ? [`**failed_queries**: ${args.failedQueries.map(q => `"${q}"`).join(", ")}`]
@@ -395,8 +407,7 @@ function formatResearchOutput(args: {
   const lines: string[] = [
     `## Research: ${args.topic}`,
     ``,
-    `**Query**: ${args.query}`,
-    `**depth**: ${args.depth}`,
+    `**Query**: ${args.query} | **top_sources**: ${totalSources} | **depth**: ${args.depth}`,
     `**queries**: ${args.queriesSucceeded}/${args.queriesTotal} succeeded`,
     ...failedQueriesLine,
     ...generatedQueriesLines,
@@ -413,7 +424,8 @@ function formatResearchOutput(args: {
     ...findingBullets,
     ``,
     `## Sources`,
-    ...sourceLines,
+    ``,
+    ...sourceTableLines,
     ``,
     `## Agent Hints`,
     ...agentHints,

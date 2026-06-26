@@ -2,7 +2,7 @@ import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
 import https from "https";
 import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
-import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
@@ -132,7 +132,20 @@ interface SearchFilterParams {
   language?: string;
 }
 
-/** Submit a search task via the Scraper API and return the task_id. */
+interface SubmitSearchResult {
+  /** Inline results parsed directly from the submit response (avoids a download round-trip). */
+  inlineResults?: Record<string, unknown>;
+  /** task_id for polling the download endpoint when inline results are absent. */
+  taskId?: string;
+}
+
+/** Submit a search task via the Scraper API.
+ *
+ * Returns inline results when the API includes them synchronously in the submit
+ * response (body.data.data.json[0].rest) — this is the common path for Google/DDG.
+ * Falls back to returning a task_id for async download polling when inline results
+ * are absent.
+ */
 export async function submitSearchScrapeTask(
   apiKey: string,
   scraperName: string,
@@ -142,7 +155,7 @@ export async function submitSearchScrapeTask(
   queryParam = "q",
   supportsNum = true,
   filterParams: SearchFilterParams = {}
-): Promise<string> {
+): Promise<SubmitSearchResult> {
   const form = new URLSearchParams();
   form.append("scraper_name", scraperName);
   form.append("scraper_id", scraperId);
@@ -185,33 +198,69 @@ export async function submitSearchScrapeTask(
   }
 
   const inner = body.data as Record<string, unknown> | null;
+  const innerData = inner?.data as Record<string, unknown> | undefined;
+
+  // Fast path: API returned inline results synchronously in body.data.data.json[0].rest
+  // This is the common response shape for Google and DuckDuckGo — avoids a download round-trip.
+  const inlineJson = innerData?.json as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(inlineJson) && inlineJson.length > 0) {
+    const firstItem = inlineJson[0];
+    const rest = firstItem?.rest as Record<string, unknown> | undefined;
+    if (rest && (Array.isArray(rest.organic) || Array.isArray(rest.organic_results))) {
+      return { inlineResults: rest };
+    }
+  }
+
+  // Slow path: no inline results — extract task_id for async download polling
   const taskId = (
     (inner?.task_id as string | undefined) ??
-    ((inner?.data as Record<string, unknown> | undefined)?.task_id as string | undefined)
+    (innerData?.task_id as string | undefined)
   );
   if (!taskId) {
     throw new Error(`Scraper search submit: no task_id in response: ${JSON.stringify(body)}`);
   }
-  return taskId;
+  return { taskId };
+}
+
+/**
+ * Resolve a SubmitSearchResult to NovadaSearchResult[].
+ * Uses inline results when available (fast path), falls back to polling the
+ * download endpoint (slow path).
+ */
+export async function resolveSearchResults(
+  apiKey: string,
+  submitted: SubmitSearchResult
+): Promise<NovadaSearchResult[]> {
+  if (submitted.inlineResults) {
+    return parseScraperSearchResults(submitted.inlineResults);
+  }
+  if (submitted.taskId) {
+    const data = await pollSearchResult(apiKey, submitted.taskId);
+    return parseScraperSearchResults(data);
+  }
+  return [];
 }
 
 /** Poll the download endpoint until the search task completes or times out. */
 export async function pollSearchResult(apiKey: string, taskId: string): Promise<Record<string, unknown>> {
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
-  const deadline = Date.now() + 90_000;
+  const deadline = Date.now() + TIMEOUTS.SEARCH_TOTAL_CEILING;
   let pollAttempt = 0;
 
-  // Give backend ~300ms to start the task before first poll
-  await new Promise(r => setTimeout(r, 300));
+  // No pre-wait: poll immediately. If the task is still pending we get 27202 and
+  // enter the backoff loop (100ms first interval). Removing the 300ms fixed pre-wait
+  // saves ~300ms on the slow path and has zero cost on the fast path.
 
   while (Date.now() < deadline) {
     const resp = await axios.get(url, { timeout: 30000, httpsAgent: keepAliveAgent });
     const body = resp.data;
 
-    // Pending
+    // Pending: exponential backoff capped at 1000ms (was 2000ms).
+    // Backend processing is typically 1–3s so a 1000ms cap gives good coverage
+    // while cutting worst-case poll delay in half vs the old 2000ms cap.
     if (body !== null && typeof body === "object" && !Array.isArray(body) &&
         (body as Record<string, unknown>).code === 27202) {
-      await scraperSleep(Math.min(100 * Math.pow(2, pollAttempt), 2000));
+      await scraperSleep(Math.min(100 * Math.pow(2, pollAttempt), 1000));
       pollAttempt++;
       continue;
     }
@@ -238,7 +287,7 @@ export async function pollSearchResult(apiKey: string, taskId: string): Promise<
       }
       // Still pending
       if (bObj.code === 27202) {
-        await scraperSleep(Math.min(100 * Math.pow(2, pollAttempt), 2000));
+        await scraperSleep(Math.min(100 * Math.pow(2, pollAttempt), 1000));
         pollAttempt++;
         continue;
       }
@@ -248,7 +297,7 @@ export async function pollSearchResult(apiKey: string, taskId: string): Promise<
     throw new Error(`Unexpected scraper download response: ${JSON.stringify(body).slice(0, 200)}`);
   }
 
-  throw new Error(`Scraper search task ${taskId} timed out after 90s.`);
+  throw new Error(`Scraper search task ${taskId} timed out after ${TIMEOUTS.SEARCH_TOTAL_CEILING / 1000}s.`);
 }
 
 /** Parse scraper API result data into NovadaSearchResult[]. */
@@ -365,7 +414,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       scraperResults = await submitBingSearch(apiKey, effectiveQuery);
     } else {
       const engineCfg = ENGINE_MAP[engine];
-      const taskId = await submitSearchScrapeTask(
+      const submitted = await submitSearchScrapeTask(
         apiKey,
         engineCfg.scraper_name,
         engineCfg.scraper_id,
@@ -381,8 +430,14 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
           language: params.language || undefined,
         }
       );
-      const resultData = await pollSearchResult(apiKey, taskId);
-      scraperResults = parseScraperSearchResults(resultData);
+      // Fast path: inline results from submit response (no download round-trip needed)
+      if (submitted.inlineResults) {
+        scraperResults = parseScraperSearchResults(submitted.inlineResults);
+      } else if (submitted.taskId) {
+        // Slow path: poll download endpoint
+        const resultData = await pollSearchResult(apiKey, submitted.taskId);
+        scraperResults = parseScraperSearchResults(resultData);
+      }
     }
   } catch (err: unknown) {
     // 4xx errors: SERP endpoint unavailable / quota exhausted / auth failure
@@ -441,7 +496,8 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
             fields: opts.fields,
             max_chars: opts.max_chars,
           }, apiKey);
-          return { url, content, ok: true };
+          const extractedText = content.replace(/^📁[^\n]*\n\n/, "");
+          return { url, content: extractedText, ok: true };
         } catch (err) {
           return { url, content: null, extract_error: String(err), ok: false };
         }
@@ -487,9 +543,8 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       }),
       agent_instruction: "Search complete. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.",
     };
-    let finalResult = JSON.stringify(jsonResult, null, 2);
-
-    // Wire output save — best-effort, never breaks the tool
+    // Wire output save — best-effort, never breaks the tool.
+    // Inject output_saved as a field so JSON remains valid and parseable.
     try {
       const outputResult = await saveOutput({
         tool: "search",
@@ -497,8 +552,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
         format: "json",
         data: { query: params.query, engine: params.engine, results: reranked },
       });
-      finalResult += `\n\n// Output saved: ${outputResult.filePath}`;
+      (jsonResult as Record<string, unknown>).output_saved = outputResult.filePath;
     } catch { /* best-effort */ }
+    const finalResult = JSON.stringify(jsonResult, null, 2);
 
     _searchCache.set(cacheKey, { result: finalResult, ts: Date.now() });
     if (_searchCache.size > 100) {
@@ -582,7 +638,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   let finalResult = lines.join("\n");
 
-  // Wire output save — best-effort, never breaks the tool
+  // Wire output save — best-effort, never breaks the tool.
+  // Prepend the file path to the HEADER so agents that truncate long responses still see it.
+  let savePrefix = "";
   try {
     const outputResult = await saveOutput({
       tool: "search",
@@ -590,8 +648,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       format: "json",
       data: { query: params.query, engine: params.engine, results: reranked },
     });
-    finalResult += `\n\nOutput saved: ${outputResult.filePath}`;
+    savePrefix = `📁 ${outputResult.filePath}\n\n`;
   } catch { /* best-effort */ }
+  finalResult = savePrefix + finalResult;
 
   _searchCache.set(cacheKey, { result: finalResult, ts: Date.now() });
   if (_searchCache.size > 100) {

@@ -1,7 +1,7 @@
 import { chromium } from "playwright-core";
 import type { Page } from "playwright-core";
 import { TIMEOUTS } from "../config.js";
-import { getBrowserWs } from "./credentials.js";
+import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
 
 // ─── Session Management ────────────────────────────────────────────────────
 
@@ -97,10 +97,11 @@ export async function fetchViaBrowser(
   url: string,
   options: { timeout?: number; waitForSelector?: string; sessionId?: string; wait_ms?: number } = {}
 ): Promise<string> {
-  const wsEndpoint = getBrowserWs();
+  // Auto-resolve: NOVADA_BROWSER_WS env var OR auto-provision via NOVADA_API_KEY (product=10)
+  const wsEndpoint = await resolveBrowserWs(process.env.NOVADA_API_KEY);
   if (!wsEndpoint) {
     throw new Error(
-      "NOVADA_BROWSER_WS not configured. Set it to wss://user:pass@upg-scbr.novada.com to enable Browser API."
+      "Browser API not available. Set NOVADA_BROWSER_WS or ensure your NOVADA_API_KEY has Browser API access (product=10)."
     );
   }
 

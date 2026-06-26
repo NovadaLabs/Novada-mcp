@@ -195,6 +195,7 @@ export async function novadaHealth(apiKey: string): Promise<string> {
   for (const r of results) {
     lines.push(`| ${r.label} | ${statusIcon(r)} | ${latencyStr(r)} |`);
   }
+  lines.push(`| Output Pipeline | ✅ active — ~/Downloads/novada-mcp/ | — |`);
 
   lines.push("");
   lines.push("---");

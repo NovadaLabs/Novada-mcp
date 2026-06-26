@@ -1,4 +1,4 @@
-import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 import type { NovadaSearchResult } from "./types.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -118,9 +118,8 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
     try {
       const result = await Promise.race([
         (async () => {
-          const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", task.query, 5, "q");
-          const data = await pollSearchResult(apiKey, taskId);
-          const results = parseScraperSearchResults(data);
+          const submitted = await submitSearchScrapeTask(apiKey, "google.com", "google_search", task.query, 5, "q");
+          const results = await resolveSearchResults(apiKey, submitted);
 
           if (results.length === 0) {
             return {
