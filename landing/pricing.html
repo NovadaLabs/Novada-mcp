@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <script>
-(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);})();
-function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();
+function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Pricing — Novada MCP</title>
@@ -32,148 +32,68 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
   tailwind.config = {
     theme: {
       extend: {
         colors: {
           violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
-          ink: { DEFAULT: '#191228', text: '#0a142f', 800: '#161226', 700: '#251f3d' },
-          slate: '#677489',
-          paper: '#ffffff',
-          'tint-cool': '#f7f8fc',
+          ink: { DEFAULT: '#0a0818', text: '#0a0818', 800: '#110e24', 700: '#161230' },
+          slate: '#7a6faa',
+          paper: '#faf9ff',
+          'tint-cool': '#f3f0fb',
         },
         fontFamily: {
-          display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-          sans: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-          mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+          display: ['Nunito', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          sans: ['Nunito', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
         },
       },
     },
   };
 </script>
+<link rel="stylesheet" href="shared.css">
 <style>
-  :root{--th-bg:#ffffff;--th-surface:#f8f7fc;--th-card:#ffffff;--th-ink:#0a142f;--th-ink-mid:#3d4a6b;--th-ink-muted:#677489;--th-vborder:rgba(108,64,226,0.15);--th-nav:rgba(255,255,255,0.92);--th-nav-border:rgba(108,64,226,0.12);}
-  [data-theme="dark"]{--th-bg:#0f0c1e;--th-surface:#19152e;--th-card:#1d1a33;--th-ink:#e8e0ff;--th-ink-mid:#b0a8d8;--th-ink-muted:#8578b8;--th-vborder:rgba(108,64,226,0.28);--th-nav:rgba(15,12,30,0.92);--th-nav-border:rgba(108,64,226,0.22);}
-  [data-theme="dark"] body{background:var(--th-bg);color:var(--th-ink);}
-  [data-theme="dark"] header{background:var(--th-nav)!important;border-color:var(--th-nav-border)!important;}
-  [data-theme="dark"] section{background:var(--th-bg);}
-  [data-theme="dark"] .bg-white{background:var(--th-card)!important;}
-  [data-theme="dark"] .bg-paper{background:var(--th-bg)!important;}
-  [data-theme="dark"] .bg-tint-cool{background:var(--th-surface)!important;}
-  [data-theme="dark"] .bg-violet-50{background:rgba(108,64,226,0.1)!important;}
-  [data-theme="dark"] .bg-ink{background:#3a2e70!important;}
-  [data-theme="dark"] .text-ink{color:var(--th-ink)!important;}
-  [data-theme="dark"] .text-ink-700{color:var(--th-ink-mid)!important;}
-  [data-theme="dark"] .text-slate{color:var(--th-ink-muted)!important;}
-  [data-theme="dark"] .border-violet-100{border-color:var(--th-vborder)!important;}
-  [data-theme="dark"] .border-violet-200{border-color:rgba(108,64,226,0.4)!important;}
-  [data-theme="dark"] .shadow-sm{box-shadow:0 1px 4px rgba(0,0,0,0.4)!important;}
-  [data-theme="dark"] .border-ink{border-color:#3a2e70!important;}
-  .theme-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid rgba(108,64,226,0.18);cursor:pointer;background:transparent;color:currentColor;transition:background 0.2s;padding:0;}
-  .theme-btn:hover{background:rgba(108,64,226,0.08);}
-  .theme-btn .icon-sun{display:none;}
-  .theme-btn .icon-moon{display:block;}
-  [data-theme="dark"] .theme-btn .icon-sun{display:block;}
-  [data-theme="dark"] .theme-btn .icon-moon{display:none;}
-  html { scroll-behavior: smooth; }
-  body { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; color: var(--th-ink,#0a142f); background: var(--th-bg,#ffffff); letter-spacing: -0.01em; }
-  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.025em; }
-  body.lang-en .zh { display: none !important; }
-  body.lang-zh .en { display: none !important; }
-  .mono { font-family: 'IBM Plex Mono', monospace; }
-  /* Light periwinkle-wash hero, matching novada.com */
-  .grad-hero {
-    background: linear-gradient(180deg, #ffffff 0%, rgba(174,179,217,0.35) 55%, #ffffff 100%);
-  }
-  /* Purple gradient highlight (clipped to text) — novada.com signature */
-  .grad-text {
-    background: linear-gradient(45deg, #9863f0 0%, #6c40e2 51%, #431fd5 100%);
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
-  }
-  .code-block {
-    background: #191228; color: #e9e4ff; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; position: relative;
-  }
-  .code-block pre { padding: 18px 56px 18px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.65; }
-  .copy-btn {
-    position: absolute; top: 10px; right: 10px;
-    background: rgba(255,255,255,0.08); color: #e9e4ff;
-    border: 1px solid rgba(255,255,255,0.18);
-    padding: 6px 10px; border-radius: 8px; font-size: 12px;
-    transition: all .15s ease; cursor: pointer;
-    font-family: 'IBM Plex Mono', monospace;
-  }
-  .copy-btn:hover { background: #6c40e2; border-color: #6c40e2; color: #0c0a17; }
-  .copy-btn.copied { background: #6c40e2; border-color: #6c40e2; color: #0c0a17; }
-  .tab-btn {
-    padding: 9px 14px; border-radius: 10px; font-weight: 500; font-size: 14px;
-    color: #4b4565; cursor: pointer; transition: all .15s ease;
-    white-space: nowrap; border: 1px solid transparent;
-  }
-  .tab-btn:hover { color: #0c0a17; background: #f1edff; }
-  .tab-btn.active { background: #0c0a17; color: white; }
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
-  .tool-card {
-    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-  }
-  .tool-card:hover {
-    transform: translateY(-2px);
-    box-shadow: rgba(18,17,39,0.10) 0px 14px 50px 0px;
-    border-color: #5b2eeb;
-  }
-  .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
-    background: #0c0a17; color: white; padding: 10px 18px; border-radius: 10px;
-    font-size: 14px; opacity: 0; pointer-events: none;
-    transition: all .2s ease; z-index: 100;
-  }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  /* ─── Page-specific: panel mock ──────────────────────────────── */
   .panel-mock {
-    background: white; border-radius: 10px; padding: 22px;
-    border: 1px solid #e7e2f5;
-    box-shadow: rgba(18,17,39,0.08) 0px 10px 50px 0px;
+    background: var(--th-card); border-radius: 10px; padding: 22px;
+    border: 1px solid var(--th-vborder);
+    box-shadow: 0 10px 50px rgba(0,0,0,0.08);
   }
-  .panel-mock .row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #f3effd; }
+  .panel-mock .row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--th-vborder); }
   .panel-mock .row:last-child { border-bottom: none; }
-  .panel-mock label { width: 80px; color: #6b6483; font-size: 13px; font-weight: 500; }
-  .panel-mock .val { flex: 1; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #0c0a17; word-break: break-all; }
-  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
-  details.faq summary { list-style: none; cursor: pointer; }
-  details.faq summary::-webkit-details-marker { display: none; }
-  details.faq summary::after { content: '+'; float: right; font-weight: 300; font-size: 22px; line-height: 1; color: #5b2eeb; transition: transform .2s ease; }
-  details.faq[open] summary::after { content: '−'; }
+  .panel-mock label { width: 80px; color: var(--th-ink-muted); font-size: 13px; font-weight: 500; }
+  .panel-mock .val { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--th-ink); word-break: break-all; }
 
-  /* ─── Playground ─────────────────────────────────────────────── */
+  /* ─── Page-specific: playground ──────────────────────────────── */
   .pg-tool-pill {
     padding: 10px 8px; border-radius: 10px; font-size: 13px;
     font-weight: 500; cursor: pointer; transition: all .15s ease;
-    background: white; border: 1px solid #e7e2f5; color: #251f3d;
-    font-family: 'Hanken Grotesk', sans-serif;
+    background: var(--th-card); border: 1px solid var(--th-vborder); color: var(--th-ink);
+    font-family: 'Nunito', sans-serif;
   }
-  .pg-tool-pill:hover { border-color: #5b2eeb; color: #5b2eeb; }
-  .pg-tool-pill.pg-active { background: #0c0a17; color: white; border-color: #0c0a17; }
+  .pg-tool-pill:hover { border-color: #6c40e2; color: #6c40e2; }
+  .pg-tool-pill.pg-active { background: linear-gradient(135deg, #6c40e2, #431fd5); color: white; border-color: transparent; }
   .pg-input {
     width: 100%; padding: 10px 12px; font-size: 14px;
-    border: 1px solid #e7e2f5; border-radius: 8px; background: white;
-    font-family: 'IBM Plex Mono', monospace;
+    border: 1px solid var(--th-vborder); border-radius: 8px; background: var(--th-card);
+    color: var(--th-ink);
+    font-family: 'JetBrains Mono', monospace;
   }
-  .pg-input:focus { outline: none; border-color: #5b2eeb; box-shadow: 0 0 0 3px rgba(91,46,235,0.12); }
+  .pg-input:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.12); }
   .pg-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .pg-input-row .pg-input { flex: 1; min-width: 140px; }
-  .pg-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b6483; margin-bottom: 4px; font-weight: 600; }
+  .pg-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--th-ink-muted); margin-bottom: 4px; font-weight: 600; }
   #pg-output { padding: 16px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
 </style>
 </head>
 <body class="lang-en">
 
 <!-- HEADER -->
-<header class="sticky top-0 z-50 bg-paper/90 backdrop-blur border-b border-violet-100">
-  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-    <a href="/" class="flex items-center gap-2">
+<header class="sticky top-0 z-50 backdrop-blur" style="background:var(--th-nav);border-bottom:1px solid var(--th-nav-border)">
+  <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2.5">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
       <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
     </a>
@@ -196,7 +116,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
         <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
+      <button id="lang-toggle" onclick="toggleLang()" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
       <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
         <span class="en">Get API key</span><span class="zh">获取密钥</span>
       </a>
@@ -495,67 +415,17 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 <!-- TOAST -->
 <div id="toast" class="toast">Copied ✓</div>
 
-<script>
-  // Language toggle
-  const body = document.body;
-  const langBtn = document.getElementById('lang-toggle');
-  langBtn.addEventListener('click', () => {
-    if (body.classList.contains('lang-en')) {
-      body.classList.remove('lang-en');
-      body.classList.add('lang-zh');
-      langBtn.textContent = 'EN / 中';
-    } else {
-      body.classList.remove('lang-zh');
-      body.classList.add('lang-en');
-      langBtn.textContent = '中 / EN';
-    }
-  });
-
-  // Copy buttons
-  const toast = document.getElementById('toast');
-  let toastTimer;
-  function showToast(msg) {
-    toast.textContent = msg;
-    toast.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
-  }
-  document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.copy-btn');
-    if (!btn) return;
-    const text = btn.dataset.copy;
-    try {
-      await navigator.clipboard.writeText(text);
-      const orig = btn.textContent;
-      btn.textContent = 'Copied ✓';
-      btn.classList.add('copied');
-      showToast('Copied ✓');
-      setTimeout(() => {
-        btn.textContent = orig;
-        btn.classList.remove('copied');
-      }, 1500);
-    } catch (err) {
-      showToast('Copy failed');
-    }
-  });
-</script>
-
+<script src="shared.js"></script>
 <!-- Motion layer: Lenis smooth-scroll + GSAP scroll-reveal -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
 <script>
-  document.body.classList.add('js-anim');
   const lenis = new Lenis({ duration: 1.1, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
-  gsap.registerPlugin(ScrollTrigger);
   lenis.on('scroll', ScrollTrigger.update);
   gsap.ticker.add(time => lenis.raf(time * 1000));
   gsap.ticker.lagSmoothing(0);
-  gsap.utils.toArray('.sf').forEach(el => {
-    gsap.fromTo(el, { y: 30, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.7, ease: 'power2.out',
-        scrollTrigger: { trigger: el, start: 'top 88%', toggleActions: 'play none none none' } });
-  });
+  initScrollAnimations();
 </script>
 
 </body>
