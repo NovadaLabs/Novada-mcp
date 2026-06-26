@@ -10,6 +10,9 @@ async function runSearchQuery(query, apiKey) {
     }
 }
 export async function novadaVerify(params, apiKey) {
+    if (!params.claim || typeof params.claim !== 'string' || params.claim.trim().length === 0) {
+        return JSON.stringify({ verdict: 'error', message: 'claim is required and must be a non-empty string' });
+    }
     const { claim, context } = params;
     const ctx = context ? ` ${context}` : "";
     // Generate 3 strategically angled queries

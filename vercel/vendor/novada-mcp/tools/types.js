@@ -46,6 +46,8 @@ export const SearchParamsSchema = z.object({
         .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
     enrich_top: z.boolean().optional()
         .describe("Auto-extract full content from the top result. Shorthand for extract_options.top_n=1. Adds ~2-4s latency. Default: false."),
+    project: z.string().max(30).optional()
+        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
     extract_options: z.object({
         format: z.enum(["text", "markdown", "html", "json"]).optional().default("markdown")
             .describe("Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
@@ -85,6 +87,8 @@ export const ExtractParamsSchema = z.object({
         .describe("Fixed milliseconds to wait after page load before capturing content. Use wait_for (CSS selector) instead when possible — it is more reliable. wait_ms is a fallback for pages with no stable selector. Max: 30000ms."),
     clean: z.boolean().optional()
         .describe("Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage."),
+    project: z.string().max(30).optional()
+        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
 });
 export const CrawlParamsSchema = z.object({
     url: safeUrl,
@@ -113,6 +117,8 @@ export const ResearchParamsSchema = z.object({
         .describe("'quick'=3 searches, 'deep'=5-6, 'comprehensive'=8-10, 'auto'=server decides based on question complexity."),
     focus: z.string().optional()
         .describe("Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'."),
+    project: z.string().max(30).optional()
+        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
 }).refine(data => !!(data.question || data.query), {
     message: "Either 'question' or 'query' must be provided",
 });
@@ -189,6 +195,8 @@ export const ScrapeParamsSchema = z.object({
     ...scrapeBase,
     format: z.enum(["markdown", "json", "toon"]).default("markdown")
         .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': raw records array for programmatic processing. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
+    project: z.string().max(30).optional()
+        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
 });
 /** CLI/SDK schema — all output formats */
 export const ScrapeParamsFullSchema = z.object({

@@ -5,7 +5,7 @@ import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
  * Strip credentials from WSS URLs in error messages.
  * wss://user:pass@host → wss://***:***@host
  */
-function sanitizeBrowserError(msg) {
+export function sanitizeBrowserError(msg) {
     return msg.replace(/wss:\/\/[^:]+:[^@]+@/g, "wss://***:***@");
 }
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes idle timeout

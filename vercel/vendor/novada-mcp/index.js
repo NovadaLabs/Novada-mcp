@@ -41,7 +41,8 @@ const TOOLS = [
 
 **Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.
 **Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).
-**Tip:** engine='duckduckgo' is similar speed to google (both use async scraper API), good for privacy-conscious queries.`,
+**Tip:** engine='duckduckgo' is similar speed to google (both use async scraper API), good for privacy-conscious queries.
+**Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(SearchParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -62,7 +63,8 @@ Common mistake: using markdown when you need specific data — use \`format="jso
 **Key rule:** Leave render="auto" (default). Only set render="render" for known JS-heavy SPAs. Auto mode is 15-100x faster on static sites.
 By default returns full page content for maximum information. Add clean=true to extract only the main article body (strips nav/footer/ads).
 
-**Results auto-saved:** Every extraction saves to \`~/Downloads/novada-mcp/YYYY-MM-DD/\` automatically. File path shown at the top of each response.`,
+**Results auto-saved:** Every extraction saves to \`~/Downloads/novada-mcp/YYYY-MM-DD/\` automatically. File path shown at the top of each response.
+**Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(ExtractParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -95,7 +97,8 @@ Not for:
 **Use for:** Any complex question needing multiple sources. Comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.
 **Not for:** Single fact lookup (novada_search) or reading one URL (novada_extract).
 **Depth:** "quick" (3 queries), "deep" (5-6), "comprehensive" (8-10), "auto" (default).
-**Key advantage:** Agents call this ONCE instead of orchestrating search→extract→synthesize manually. Saves tokens, time, and complexity.`,
+**Key advantage:** Agents call this ONCE instead of orchestrating search→extract→synthesize manually. Saves tokens, time, and complexity.
+**Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(ResearchParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -117,7 +120,8 @@ Not for:
 **Not for:** General web pages (use novada_extract), unknown domains not in the platform list (use novada_crawl).
 **Output formats:** "markdown" (default, agent-optimized table), "json" (structured, for programmatic use).
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}
-**Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.`,
+**Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.
+**Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(ScrapeParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -374,7 +378,8 @@ Not for:
 **Output:** Status of all env vars (NOVADA_API_KEY, NOVADA_BROWSER_WS, NOVADA_PROXY_*), setup commands for all MCP clients, and which tools are currently active.
 **No auth required:** This tool works even when NOVADA_API_KEY is not set.
 
-**UNIFIED KEY:** NOVADA_API_KEY is the only required key. It covers: Search, Extract, Web Unblocker, Scraper API, Research, Crawl, Map, Browser API HTTP management, Proxy management and auto-provisioning. NOVADA_BROWSER_WS (Browser WebSocket) and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no separate API key — NOVADA_API_KEY authenticates them all. Also shows output pipeline status (where extracted files are saved).`,
+**UNIFIED KEY:** NOVADA_API_KEY is the only required key. It covers: Search, Extract, Web Unblocker, Scraper API, Research, Crawl, Map, Browser API HTTP management, Proxy management and auto-provisioning. NOVADA_BROWSER_WS (Browser WebSocket) and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no separate API key — NOVADA_API_KEY authenticates them all. Also shows output pipeline status (where extracted files are saved).
+Output pipeline supports optional project folders for grouping related queries.`,
         inputSchema: zodToMcpSchema(SetupParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },

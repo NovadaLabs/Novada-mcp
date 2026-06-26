@@ -136,6 +136,9 @@ export async function submitSearchScrapeTask(apiKey, scraperName, scraperId, que
     });
     const body = resp.data;
     // Auth error codes returned as HTTP 200 with non-zero body code
+    if (body.code === 10001) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, 'Invalid or missing API key (code 10001)');
+    }
     if (body.code === 50001 || body.code === 50002 || body.code === 50003) {
         throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Scraper API auth error (code: ${body.code})`);
     }
@@ -268,12 +271,15 @@ Yahoo Search is not available on this account.
 ## Agent Notice — Engine Unavailable
 engine: yahoo | status: unsupported | suggested_alternatives: google, bing`;
 export async function novadaSearch(params, apiKey) {
+    if (!params.query || typeof params.query !== 'string') {
+        throw new Error('query is required and must be a non-empty string');
+    }
     const engine = params.engine || "google";
     // Yahoo has no scraper-API path — return a clear redirect message immediately.
     if (engine === "yahoo") {
         return YAHOO_UNAVAILABLE;
     }
-    const cacheKey = `${engine}:${params.query}:${params.num ?? 10}`;
+    const cacheKey = `${engine}:${params.query}:${params.num ?? 10}:${params.project ?? ""}`;
     const cached = _searchCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
         return cached.result;
@@ -461,6 +467,7 @@ export async function novadaSearch(params, apiKey) {
                 hint: params.query?.slice(0, 30) || "search",
                 format: "json",
                 data: { query: params.query, engine: params.engine, results: reranked },
+                project: params.project,
             });
             jsonResult.output_saved = outputResult.filePath;
         }
@@ -552,6 +559,7 @@ export async function novadaSearch(params, apiKey) {
             hint: params.query?.slice(0, 30) || "search",
             format: "json",
             data: { query: params.query, engine: params.engine, results: reranked },
+            project: params.project,
         });
         savePrefix = `📁 ${outputResult.filePath}\n\n`;
     }

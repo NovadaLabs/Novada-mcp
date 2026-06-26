@@ -26,6 +26,7 @@ export declare const SearchParamsSchema: z.ZodObject<{
         markdown: "markdown";
     }>>;
     enrich_top: z.ZodOptional<z.ZodBoolean>;
+    project: z.ZodOptional<z.ZodString>;
     extract_options: z.ZodOptional<z.ZodObject<{
         format: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
             json: "json";
@@ -60,6 +61,7 @@ export declare const ExtractParamsSchema: z.ZodObject<{
     wait_for: z.ZodOptional<z.ZodString>;
     wait_ms: z.ZodOptional<z.ZodNumber>;
     clean: z.ZodOptional<z.ZodBoolean>;
+    project: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export declare const CrawlParamsSchema: z.ZodObject<{
     url: z.ZodString;
@@ -96,6 +98,7 @@ export declare const ResearchParamsSchema: z.ZodObject<{
         comprehensive: "comprehensive";
     }>>;
     focus: z.ZodOptional<z.ZodString>;
+    project: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export declare const MapParamsSchema: z.ZodObject<{
     url: z.ZodString;
@@ -168,6 +171,7 @@ export declare const ScrapeParamsSchema: z.ZodObject<{
         markdown: "markdown";
         toon: "toon";
     }>>;
+    project: z.ZodOptional<z.ZodString>;
     platform: z.ZodString;
     operation: z.ZodString;
     params: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;

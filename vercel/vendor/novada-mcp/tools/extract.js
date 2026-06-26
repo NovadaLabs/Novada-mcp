@@ -309,6 +309,12 @@ async function extractSingleInner(params, apiKey) {
                 }
             }
             catch (err) {
+                // Early exit for SSL/TLS certificate errors — escalation won't fix server-side cert issues
+                const certMsg = err instanceof Error ? err.message : String(err);
+                const isCertError = certMsg?.includes('CERT_') || certMsg?.includes('SSL') || certMsg?.includes('certificate');
+                if (isCertError) {
+                    throw new Error(`SSL certificate error for ${params.url}. The site has an invalid/expired certificate. agent_instruction: This is a server-side issue, not fixable by changing render mode.`);
+                }
                 // render threw — try Browser API if available
                 renderError = err instanceof Error ? err.message : String(err);
                 if (isBrowserConfigured()) {
@@ -356,6 +362,7 @@ async function extractSingleInner(params, apiKey) {
                 hint: domain,
                 format: "html",
                 data: html,
+                project: params.project,
             });
             htmlOutput += `\n<!-- Output saved: ${outputResult.filePath} -->`;
         }
@@ -670,6 +677,7 @@ async function extractSingleInner(params, apiKey) {
                 hint: domain,
                 format: "json",
                 data: jsonResult,
+                project: params.project,
             });
             jsonResult.output_saved = outputResult.filePath;
         }
@@ -693,18 +701,27 @@ async function extractSingleInner(params, apiKey) {
     ];
     // Requested Fields block (before Structured Data)
     if (fieldResults && fieldResults.length > 0) {
-        lines.push(`## Requested Fields`);
-        for (const r of fieldResults) {
-            const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : r.source === "heading" ? " *(from heading)*" : " *(pattern)*";
-            if (r.source === "not_found") {
-                lines.push(`${r.field}: —`);
-            }
-            else {
-                // P0-3: Strip *(pattern)* annotation from the field value itself
-                const cleanValue = typeof r.value === "string"
-                    ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
-                    : r.value;
-                lines.push(`${r.field}: ${cleanValue}${sourceTag}`);
+        const allNotFound = fieldResults.every(r => r.source === "not_found");
+        if (allNotFound && fieldResults.length > 0) {
+            lines.push(`## Requested Fields (not available as structured data)`);
+            lines.push(`Fields [${fieldResults.map(r => r.field).join(', ')}] could not be extracted from structured data (JSON-LD/meta tags).`);
+            lines.push(`The data may be present in the page content above — read the markdown body directly.`);
+            lines.push(`agent_instruction: For Wikipedia/wiki pages, parse the content body. For e-commerce sites, fields extraction works automatically.`);
+        }
+        else {
+            lines.push(`## Requested Fields`);
+            for (const r of fieldResults) {
+                const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : r.source === "heading" ? " *(from heading)*" : " *(pattern)*";
+                if (r.source === "not_found") {
+                    lines.push(`${r.field}: — (not in structured data)`);
+                }
+                else {
+                    // P0-3: Strip *(pattern)* annotation from the field value itself
+                    const cleanValue = typeof r.value === "string"
+                        ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
+                        : r.value;
+                    lines.push(`${r.field}: ${cleanValue}${sourceTag}`);
+                }
             }
         }
         lines.push(``, `---`, ``);
@@ -869,6 +886,7 @@ async function extractSingleInner(params, apiKey) {
             hint: domain,
             format: "md",
             data: mdOutput,
+            project: params.project,
         });
         savePrefix = `📁 ${outputResult.filePath}\n\n`;
     }
@@ -884,6 +902,11 @@ async function extractSingleInner(params, apiKey) {
  * The ceiling is per-URL so batch requests each get their own independent timer.
  */
 async function extractSingle(params, apiKey) {
+    // Runtime SSRF guard for SDK direct callers (MCP path already has Zod validation)
+    const blocked = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/i;
+    if (blocked.test(params.url)) {
+        throw new Error('Blocked: private/internal URLs are not allowed. agent_instruction: Use a public URL.');
+    }
     let ceilingTimer = null;
     const ceiling = new Promise((_, reject) => {
         ceilingTimer = setTimeout(() => reject(new Error(`TOTAL_REQUEST_CEILING: extractSingle for ${params.url} exceeded ${TIMEOUTS.TOTAL_REQUEST_CEILING}ms`)), TIMEOUTS.TOTAL_REQUEST_CEILING);

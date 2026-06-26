@@ -1,5 +1,5 @@
 import { getBrowserWs } from "../utils/credentials.js";
-import { getSession, storeSession, closeSession, listSessions } from "../utils/browser.js";
+import { getSession, storeSession, closeSession, listSessions, sanitizeBrowserError } from "../utils/browser.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 /**
  * Interactive browser automation via Novada Browser API (CDP WebSocket).
@@ -20,7 +20,7 @@ export async function novadaBrowser(params) {
         const action = actions[0];
         if (action.action === "close_session") {
             if (!sessionId) {
-                return "Error: close_session requires a session_id parameter.";
+                return "Error: close_session requires a session_id parameter.\n\nagent_instruction: Pass session_id to close_session. List active sessions first with list_sessions action to find valid IDs.";
             }
             const closed = await closeSession(sessionId);
             return [
@@ -62,6 +62,8 @@ export async function novadaBrowser(params) {
             `    -- npx -y novada`,
             ``,
             `Get credentials at: https://dashboard.novada.com/overview/browser/`,
+            ``,
+            `agent_instruction: Set NOVADA_BROWSER_WS or ensure NOVADA_API_KEY has Browser API access (product=10). Auto-provisioning is available.`,
         ].join("\n");
     }
     // Dynamic import to avoid forcing playwright-core on users who don't need browser
@@ -76,6 +78,8 @@ export async function novadaBrowser(params) {
             ``,
             `playwright-core is required for browser automation but not installed.`,
             `Run: npm install playwright-core`,
+            ``,
+            `agent_instruction: Run: npm install playwright-core. This is required for browser automation.`,
         ].join("\n");
     }
     const results = [];
@@ -97,7 +101,7 @@ export async function novadaBrowser(params) {
                     results.push(result);
                 }
                 catch (err) {
-                    const errMsg = err instanceof Error ? err.message : String(err);
+                    const errMsg = sanitizeBrowserError(err instanceof Error ? err.message : String(err));
                     // Dead page: evict session so the next call gets a fresh connection
                     const isPageDead = /closed|crashed|detached|Target closed/i.test(errMsg);
                     if (isPageDead && sessionId) {
@@ -119,7 +123,7 @@ export async function novadaBrowser(params) {
         }
         catch (err) {
             // Only reaches here if setDefaultTimeout() itself throws (rare)
-            results.push({ action: "session_reuse", status: "error", error: err instanceof Error ? err.message : String(err) });
+            results.push({ action: "session_reuse", status: "error", error: sanitizeBrowserError(err instanceof Error ? err.message : String(err)) });
         }
     }
     else {
@@ -129,10 +133,10 @@ export async function novadaBrowser(params) {
         try {
             // Validate wsEndpoint format before attempting CDP connection
             if (!wsEndpoint.startsWith("wss://")) {
-                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `NOVADA_BROWSER_WS must start with wss:// — got: ${wsEndpoint.slice(0, 30)}... Format: wss://username:password@host`);
+                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `NOVADA_BROWSER_WS must start with wss:// — got: [redacted]. Format: wss://username:password@host`, "Set NOVADA_BROWSER_WS to a valid wss:// URL. Get credentials at https://dashboard.novada.com/overview/browser/");
             }
             if (!wsEndpoint.includes("@")) {
-                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "NOVADA_BROWSER_WS is missing credentials. Format: wss://username:password@host — get credentials from https://dashboard.novada.com/overview/browser/");
+                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "NOVADA_BROWSER_WS is missing credentials. Format: wss://username:password@host — get credentials from https://dashboard.novada.com/overview/browser/", "Include username:password@ in the wss:// URL. Get credentials at https://dashboard.novada.com/overview/browser/");
             }
             browser = await chromium.connectOverCDP(wsEndpoint);
             const context = await browser.newContext({
@@ -155,7 +159,7 @@ export async function novadaBrowser(params) {
                     results.push(result);
                 }
                 catch (err) {
-                    const errMsg = err instanceof Error ? err.message : String(err);
+                    const errMsg = sanitizeBrowserError(err instanceof Error ? err.message : String(err));
                     const isPageDead = /closed|crashed|detached|Target closed/i.test(errMsg);
                     if (isPageDead && sessionId) {
                         await closeSession(sessionId).catch(() => { });
@@ -173,6 +177,21 @@ export async function novadaBrowser(params) {
             if (!sessionId) {
                 await context.close();
             }
+        }
+        catch (err) {
+            // P0 SECURITY: sanitize WSS credentials from Playwright connection errors
+            const rawMsg = err instanceof Error ? err.message : String(err);
+            const safeMsg = sanitizeBrowserError(rawMsg);
+            // If this is already a NovadaError (e.g. from validation above), re-throw as-is
+            if (err instanceof Error && err.name === "NovadaError") {
+                throw err;
+            }
+            // Connection failures → push as error result instead of throwing (keeps output format consistent)
+            results.push({
+                action: actions[0]?.action ?? "connect",
+                status: "error",
+                error: safeMsg,
+            });
         }
         finally {
             if (browser && !sessionId) {
@@ -307,7 +326,7 @@ async function executeAction(page, action) {
             // These are handled before reaching executeAction
             return { action: action.action, status: "error", error: "Session management actions must be the only action in the call." };
         default:
-            return { action: "unknown", status: "error", error: `Unknown action: ${action.action}` };
+            return { action: "unknown", status: "error", error: `Unknown action: ${action.action}. agent_instruction: Supported actions are: navigate, click, type, screenshot, snapshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select, close_session, list_sessions.` };
     }
 }
 //# sourceMappingURL=browser.js.map

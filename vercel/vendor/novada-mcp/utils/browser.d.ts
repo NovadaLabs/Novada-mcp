@@ -1,4 +1,9 @@
 import type { Page } from "playwright-core";
+/**
+ * Strip credentials from WSS URLs in error messages.
+ * wss://user:pass@host → wss://***:***@host
+ */
+export declare function sanitizeBrowserError(msg: string): string;
 /** Get existing session page or return null if expired/missing */
 export declare function getSession(sessionId: string): Page | null;
 /** Store a page (and optionally its browser + context) under a session ID */

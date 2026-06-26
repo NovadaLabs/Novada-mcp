@@ -128,9 +128,22 @@ export async function novadaResearch(params, apiKey) {
                 if (content.startsWith("## Extract Failed")) {
                     return { ok: false, title: source.title, url: source.url, snippet: source.snippet };
                 }
-                // Strip Agent Hints section from extracted content — too noisy in research output
+                // Strip all extract-output metadata — only keep the page body content
                 const strippedContent = content.replace(/^📁[^\n]*\n\n/, "");
-                const cleanContent = strippedContent.split("## Agent Hints")[0].trim();
+                // Strip the ## Extracted Content metadata block (url: ... | mode: ... | quality: ...)
+                let cleaned = strippedContent.replace(/^## Extracted Content\n(?:.*\n)*?---\n\n?/m, "");
+                // Strip ## Structured Data block (JSON-LD: type, headline, author, datePublished etc.)
+                cleaned = cleaned.replace(/^## Structured Data\n(?:.*\n)*?---\n\n?/m, "");
+                // Strip ## Requested Fields block
+                cleaned = cleaned.replace(/^## Requested Fields[^\n]*\n(?:.*\n)*?---\n\n?/m, "");
+                // Strip ## Same-Domain Links block
+                cleaned = cleaned.replace(/## Same-Domain Links[^\n]*\n(?:[\s\S]*?)(?=\n## |\n---\n|$)/, "");
+                // Strip ## Extraction Diagnostics block
+                cleaned = cleaned.replace(/## Extraction Diagnostics\n(?:[\s\S]*?)(?=\n## |\n---\n|$)/, "");
+                // Strip ## Agent Memory block
+                cleaned = cleaned.replace(/## Agent Memory\n(?:[\s\S]*?)(?=\n## |\n---\n|$)/, "");
+                // Strip trailing metadata sections: Agent Hints, Agent Action
+                const cleanContent = cleaned.split("## Agent Hints")[0].split("## Agent Action")[0].trim();
                 return { ok: true, title: source.title, url: source.url, content: cleanContent };
             }
             catch {
@@ -225,6 +238,7 @@ export async function novadaResearch(params, apiKey) {
             hint: params.question?.slice(0, 30) || params.query?.slice(0, 30) || "research",
             format: "md",
             data: finalReport,
+            project: params.project,
         });
         finalReport += `\n\n---\nResearch saved: ${outputResult.filePath}`;
     }

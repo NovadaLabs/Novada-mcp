@@ -4,6 +4,7 @@ export interface OutputOptions {
     format: "json" | "csv" | "md" | "html";
     data: unknown;
     cosUrl?: string;
+    project?: string;
 }
 export interface OutputResult {
     filePath: string;

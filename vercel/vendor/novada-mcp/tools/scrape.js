@@ -205,7 +205,8 @@ export const OPERATION_ALIASES = Object.assign(Object.create(null), {
     "google_shopping_by-keyword": "google_shopping_keywords",
 });
 export async function novadaScrape(params, apiKey) {
-    const { platform, params: opParams, format, limit } = params;
+    const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
+    const { platform, params: opParams, format } = params;
     // H-1: safe lookup — null-prototype + hasOwnProperty guard
     const hasAlias = Object.prototype.hasOwnProperty.call(OPERATION_ALIASES, params.operation);
     const operation = hasAlias ? OPERATION_ALIASES[params.operation] : params.operation;
@@ -369,6 +370,7 @@ export async function novadaScrape(params, apiKey) {
                 hint: domain,
                 format: format === "json" ? "json" : "csv",
                 data: rawRecords.slice(0, limit),
+                project: params.project,
             });
             output += `\n\n## Output Saved\n${outputResult.summary}`;
         }
