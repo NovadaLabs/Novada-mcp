@@ -124,10 +124,12 @@ async function pollForResult(apiKey, taskId) {
             if (errCode === 27203) {
                 throw new Error(`Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`);
             }
-            // INC-190: code 10000 = task completed but no collectible data. Surface clearly
-            // instead of falling through to generic "Unexpected download response".
+            // code 10000 from the legacy proxy download endpoint means "result not yet available"
+            // (equivalent to 27202 from task_status). Continue polling — do NOT throw.
+            // Only throw if we've already seen 27202 confirmed Ready from task_status.
             if (errCode === 10000) {
-                throw new Error(`Scraper task completed but collected no valid data (code 10000). The target page may have blocked scraping, returned empty content, or the parser failed. Try a different operation or check the target URL. Raw: ${sanitizeServerMsg(errMsg || "result data not exist")}`);
+                await sleep(POLL_INTERVAL_MS);
+                continue;
             }
             // Direct result object — Google SERP and similar formats return organic/search_metadata at top level
             if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {

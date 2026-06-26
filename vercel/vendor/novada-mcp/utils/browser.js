@@ -1,6 +1,6 @@
 import { chromium } from "playwright-core";
 import { TIMEOUTS } from "../config.js";
-import { getBrowserWs } from "./credentials.js";
+import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes idle timeout
 /**
  * Module-level session store. Scoped to the process (single-tenant MCP server use).
@@ -78,9 +78,10 @@ export function isBrowserConfigured() {
  * @param sessionId - Optional session ID to reuse an existing browser page.
  */
 export async function fetchViaBrowser(url, options = {}) {
-    const wsEndpoint = getBrowserWs();
+    // Auto-resolve: NOVADA_BROWSER_WS env var OR auto-provision via NOVADA_API_KEY (product=10)
+    const wsEndpoint = await resolveBrowserWs(process.env.NOVADA_API_KEY);
     if (!wsEndpoint) {
-        throw new Error("NOVADA_BROWSER_WS not configured. Set it to wss://user:pass@upg-scbr.novada.com to enable Browser API.");
+        throw new Error("Browser API not available. Set NOVADA_BROWSER_WS or ensure your NOVADA_API_KEY has Browser API access (product=10).");
     }
     const timeout = options.timeout ?? TIMEOUTS.BROWSER_PAGE;
     // If a session ID is provided, try to reuse existing page

@@ -1,9 +1,8 @@
-import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 async function runSearchQuery(query, apiKey) {
     try {
-        const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
-        const data = await pollSearchResult(apiKey, taskId);
-        const results = parseScraperSearchResults(data);
+        const submitted = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
+        const results = await resolveSearchResults(apiKey, submitted);
         return { results, failed: false };
     }
     catch {

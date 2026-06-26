@@ -2,37 +2,70 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 /**
- * Sanitize a string for safe use as a filename component.
- * Removes special chars, truncates to 40 chars.
+ * Sanitize a string for safe use as a filename or folder name.
+ * Removes special chars, truncates.
  */
-function sanitizeHint(hint) {
-    return hint
+function sanitize(s, maxLen = 40) {
+    return s
         .replace(/^https?:\/\//, "")
-        .replace(/[^a-zA-Z0-9_-]/g, "_")
-        .replace(/_+/g, "_")
-        .replace(/^_|_$/g, "")
-        .slice(0, 40)
+        .replace(/[^a-zA-Z0-9_-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, maxLen)
         || "output";
 }
 /**
- * Get the output directory for today, creating it if needed.
- * Returns: ~/Downloads/novada-mcp/YYYY-MM-DD/
+ * Extract a short topic slug from the hint.
+ * For URLs: use the domain (e.g. "machinelearningmastery")
+ * For queries: use first 3 words (e.g. "agent-memory-AI")
  */
-async function getOutputDir() {
+function topicSlug(hint) {
+    // If it looks like a URL/domain, use the domain part
+    if (hint.includes(".") && !hint.includes(" ")) {
+        const domain = hint.replace(/^https?:\/\//, "").split("/")[0].replace(/^www\./, "");
+        return sanitize(domain, 30);
+    }
+    // Otherwise it's a query — take first 4 words, join with hyphens
+    const words = hint.trim().split(/\s+/).slice(0, 4).join("-");
+    return sanitize(words, 30);
+}
+/**
+ * Get or create the output directory.
+ * Structure: ~/Downloads/novada-mcp/YYYY-MM-DD/{topic}/
+ *
+ * @param topic - sanitized topic slug for subfolder (optional)
+ */
+async function getOutputDir(topic) {
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-    const dir = join(homedir(), "Downloads", "novada-mcp", today);
-    await mkdir(dir, { recursive: true }); // idempotent, no need for existsSync guard
+    const base = join(homedir(), "Downloads", "novada-mcp", today);
+    const dir = topic ? join(base, topic) : base;
+    await mkdir(dir, { recursive: true });
     return dir;
 }
 /**
- * Generate a unique filename.
- * Format: {tool}_{hint}_{HHmmss}.{format}
+ * Generate a filename following the naming convention:
+ * {YYYY-MM-DD}_{HHmmss}_{source_hint}.{format}
+ *
+ * Examples:
+ *   2026-06-26_114219_machinelearningmastery.md
+ *   2026-06-26_114207_search.json
+ *   2026-06-26_114300_novada-mcp-web-scraping.md  (research)
  */
-function generateFileName(tool, hint, format) {
+function generateFileName(hint, format) {
     const now = new Date();
-    const time = now.toTimeString().slice(0, 8).replace(/:/g, "") + String(now.getMilliseconds()).padStart(3, "0"); // HHmmssSSS
-    const safeHint = sanitizeHint(hint);
-    return `${tool}_${safeHint}_${time}.${format}`;
+    const date = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const time = now.toTimeString().slice(0, 8).replace(/:/g, ""); // HHmmss
+    // For source hint: if URL, use domain only; if query, first 3 words
+    let source;
+    if (hint.includes(".") && !hint.includes(" ")) {
+        // URL → domain name
+        source = sanitize(hint.replace(/^https?:\/\//, "").split("/")[0].replace(/^www\./, ""), 25);
+    }
+    else {
+        // Query → first 3 words
+        source = sanitize(hint.trim().split(/\s+/).slice(0, 3).join("-"), 25);
+    }
+    return `${date}_${time}_${source}.${format}`;
 }
 /**
  * Convert an array of records to CSV string.
@@ -40,7 +73,6 @@ function generateFileName(tool, hint, format) {
 export function toCsv(records) {
     if (records.length === 0)
         return "";
-    // Collect all unique keys across all records
     const allKeys = new Set();
     for (const rec of records) {
         for (const key of Object.keys(rec)) {
@@ -48,7 +80,6 @@ export function toCsv(records) {
         }
     }
     const headers = [...allKeys];
-    // Escape CSV field: wrap in quotes if contains comma, quote, or newline
     const escapeField = (val) => {
         const str = val === null || val === undefined ? "" : String(val);
         if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
@@ -62,17 +93,28 @@ export function toCsv(records) {
 }
 /**
  * Save output to file. Returns metadata about the saved file.
+ *
+ * Directory structure:
+ *   ~/Downloads/novada-mcp/YYYY-MM-DD/{topic}/
+ *
+ * Filename convention:
+ *   {YYYY-MM-DD}_{HHmmss}_{source_hint}.{format}
+ *
+ * Throws if the serialized content would be empty (0 bytes).
  */
 export async function saveOutput(options) {
     const { tool, hint = "output", format, data, cosUrl } = options;
-    const dir = await getOutputDir();
-    const fileName = generateFileName(tool, hint, format);
+    // Build topic subfolder from the hint
+    const topic = topicSlug(hint);
+    const dir = await getOutputDir(topic);
+    const fileName = generateFileName(hint, format);
     const filePath = join(dir, fileName);
     let content;
     let recordCount;
     switch (format) {
         case "json": {
-            content = JSON.stringify(data, null, 2);
+            const serialized = JSON.stringify(data, null, 2);
+            content = serialized ?? "";
             if (Array.isArray(data))
                 recordCount = data.length;
             break;
@@ -86,15 +128,22 @@ export async function saveOutput(options) {
             break;
         }
         case "md": {
-            content = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+            content = typeof data === "string" ? data : JSON.stringify(data, null, 2) ?? "";
+            break;
+        }
+        case "html": {
+            content = typeof data === "string" ? data : String(data);
             break;
         }
         default:
             content = String(data);
     }
+    if (content.trim().length === 0) {
+        throw new Error(`saveOutput: refusing to write empty file (tool=${tool}, format=${format})`);
+    }
     await writeFile(filePath, content, "utf-8");
     const sizeKB = Math.round(Buffer.byteLength(content) / 1024);
-    const parts = [`Saved to: ${filePath} (${sizeKB}KB)`];
+    const parts = [`${filePath} (${sizeKB}KB)`];
     if (recordCount !== undefined)
         parts.push(`${recordCount} records`);
     if (cosUrl)

@@ -1,4 +1,4 @@
-import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 // ─── Model domains for site-scoped search ────────────────────────────────────
 const MODEL_DOMAINS = {
     chatgpt: ["chatgpt.com", "openai.com"],
@@ -80,9 +80,8 @@ export async function novadaAiMonitor(params, apiKey) {
         try {
             const result = await Promise.race([
                 (async () => {
-                    const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", task.query, 5, "q");
-                    const data = await pollSearchResult(apiKey, taskId);
-                    const results = parseScraperSearchResults(data);
+                    const submitted = await submitSearchScrapeTask(apiKey, "google.com", "google_search", task.query, 5, "q");
+                    const results = await resolveSearchResults(apiKey, submitted);
                     if (results.length === 0) {
                         return {
                             model: task.model,

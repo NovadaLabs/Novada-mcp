@@ -1,7 +1,7 @@
 import { normalizeUrl } from "../utils/index.js";
 import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
-import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 const PRIMARY = { name: "google.com", id: "google_search", param: "q", supportsNum: true };
 const FALLBACKS = [
     { name: "duckduckgo.com", id: "duckduckgo", param: "q", supportsNum: true },
@@ -14,17 +14,15 @@ const FALLBACKS = [
 async function searchWithFallback(apiKey, query, num) {
     // Attempt 1: Primary engine (Google) — cheapest path
     try {
-        const taskId = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum);
-        const data = await pollSearchResult(apiKey, taskId);
-        const results = parseScraperSearchResults(data);
+        const submitted = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum);
+        const results = await resolveSearchResults(apiKey, submitted);
         if (results.length > 0)
             return results;
     }
     catch { /* fall through to fallback race */ }
     // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery
     const attempts = FALLBACKS.map(eng => submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum)
-        .then(taskId => pollSearchResult(apiKey, taskId))
-        .then(data => parseScraperSearchResults(data))
+        .then(submitted => resolveSearchResults(apiKey, submitted))
         .then(results => {
         if (results.length === 0)
             throw new Error("empty results");
@@ -131,7 +129,8 @@ export async function novadaResearch(params, apiKey) {
                     return { ok: false, title: source.title, url: source.url, snippet: source.snippet };
                 }
                 // Strip Agent Hints section from extracted content — too noisy in research output
-                const cleanContent = content.split("## Agent Hints")[0].trim();
+                const strippedContent = content.replace(/^📁[^\n]*\n\n/, "");
+                const cleanContent = strippedContent.split("## Agent Hints")[0].trim();
                 return { ok: true, title: source.title, url: source.url, content: cleanContent };
             }
             catch {
@@ -187,16 +186,13 @@ export async function novadaResearch(params, apiKey) {
     const findingBullets = sources.length > 0
         ? sources.map(s => `- **${s.title}** (${s.url})${s.snippet ? ` — ${s.snippet}` : ""}`)
         : [`- No structured findings extracted.`];
-    // Build Sources list — include both extracted and snippet-only sources
-    const sourceLines = [];
+    // Build Sources table — include both extracted and snippet-only sources
+    const sourceRows = [];
     for (const s of extractedContents) {
-        sourceLines.push(`- ${s.url} — ${sourceLabel(s.title, s.url)} (full content extracted)`);
+        sourceRows.push({ label: sourceLabel(s.title, s.url), url: s.url, note: "full content extracted" });
     }
     for (const s of extractFailedSources) {
-        sourceLines.push(`- ${s.url} — ${sourceLabel(s.title, s.url)} (snippet only — extraction failed)`);
-    }
-    if (sourceLines.length === 0) {
-        sourceLines.push(`- No sources fetched.`);
+        sourceRows.push({ label: sourceLabel(s.title, s.url), url: s.url, note: "snippet only" });
     }
     // Agent hints
     const agentHints = [
@@ -219,7 +215,7 @@ export async function novadaResearch(params, apiKey) {
         snippetOnlyCount: extractFailedSources.length,
         summaryText,
         findingBullets,
-        sourceLines,
+        sourceRows,
         agentHints,
     });
     // Wire output save — best-effort, never breaks the tool
@@ -305,8 +301,24 @@ function formatResearchOutput(args) {
     const synthesisStatus = hasSynthesis ? "ok" : "failed";
     const summary = hasSynthesis ? summaryText : fallbackSummary;
     const findingBullets = args.findingBullets.length > 0 ? args.findingBullets : [`- No structured findings extracted.`];
-    const sourceLines = args.sourceLines.length > 0 ? args.sourceLines : [`- No sources fetched.`];
     const agentHints = args.agentHints.length > 0 ? args.agentHints : [`- Try a narrower query or provide known source URLs to inspect directly.`];
+    const totalSources = args.sourceRows.length;
+    // Build sources as a markdown table for indexed citation (e.g. Source[1], Source[3])
+    const sourceTableLines = [];
+    if (totalSources > 0) {
+        sourceTableLines.push(`| # | Title | URL | Notes |`);
+        sourceTableLines.push(`|---|-------|-----|-------|`);
+        for (let i = 0; i < args.sourceRows.length; i++) {
+            const row = args.sourceRows[i];
+            // Escape pipe chars in label/note to avoid breaking table
+            const safeLabel = row.label.replace(/\|/g, "\\|");
+            const safeNote = row.note.replace(/\|/g, "\\|");
+            sourceTableLines.push(`| ${i + 1} | [${safeLabel}](${row.url}) | ${row.url} | ${safeNote} |`);
+        }
+    }
+    else {
+        sourceTableLines.push(`_No sources fetched._`);
+    }
     const failedQueriesLine = args.failedQueries && args.failedQueries.length > 0
         ? [`**failed_queries**: ${args.failedQueries.map(q => `"${q}"`).join(", ")}`]
         : [];
@@ -316,8 +328,7 @@ function formatResearchOutput(args) {
     const lines = [
         `## Research: ${args.topic}`,
         ``,
-        `**Query**: ${args.query}`,
-        `**depth**: ${args.depth}`,
+        `**Query**: ${args.query} | **top_sources**: ${totalSources} | **depth**: ${args.depth}`,
         `**queries**: ${args.queriesSucceeded}/${args.queriesTotal} succeeded`,
         ...failedQueriesLine,
         ...generatedQueriesLines,
@@ -334,7 +345,8 @@ function formatResearchOutput(args) {
         ...findingBullets,
         ``,
         `## Sources`,
-        ...sourceLines,
+        ``,
+        ...sourceTableLines,
         ``,
         `## Agent Hints`,
         ...agentHints,

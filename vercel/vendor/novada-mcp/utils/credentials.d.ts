@@ -12,7 +12,7 @@ export interface ToolCredentials {
 export declare function withCredentials<T>(creds: ToolCredentials, fn: () => T): T;
 /** Active web unblocker key: SDK-scoped > NOVADA_WEB_UNBLOCKER_KEY > NOVADA_API_KEY (unified). */
 export declare function getWebUnblockerKey(): string | undefined;
-/** Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var. */
+/** Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var > auto-provisioned. */
 export declare function getBrowserWs(): string | undefined;
 /** Active proxy credentials: SDK-scoped > NOVADA_PROXY_* env vars. */
 export declare function getProxyCredentials(): {
@@ -39,6 +39,20 @@ export declare function fetchProxySubAccountCredentials(apiKey: string): Promise
     account: string;
     password: string;
 } | null>;
+/**
+ * Fetch Browser API WSS endpoint using NOVADA_API_KEY as Bearer token.
+ * Calls POST /v1/proxy_account/list with product=10 (Browser API).
+ * Returns wss://{account}:{password}@upg-scbr2.novada.com
+ * Cached 6h in memory.
+ */
+export declare function fetchBrowserSubAccountCredentials(apiKey: string): Promise<string | null>;
+/**
+ * Resolve Browser API WebSocket URL with priority:
+ * 1. SDK-scoped browserWs
+ * 2. NOVADA_BROWSER_WS env var
+ * 3. Auto-fetch via NOVADA_API_KEY (product=10)
+ */
+export declare function resolveBrowserWs(apiKey?: string): Promise<string | null>;
 /**
  * Resolve proxy credentials with priority:
  * 1. Explicit env vars (NOVADA_PROXY_USER + NOVADA_PROXY_PASS + NOVADA_PROXY_ENDPOINT) — no API call.

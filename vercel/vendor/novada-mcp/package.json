@@ -1,0 +1,99 @@
+{
+  "name": "novada-mcp",
+  "version": "0.8.3",
+  "description": "One MCP server for all web data. Search, scrape, crawl, proxy, and AI research in one install.",
+  "mcpName": "novada",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./sdk": {
+      "types": "./build/sdk/index.d.ts",
+      "default": "./build/sdk/index.js"
+    }
+  },
+  "types": "./build/index.d.ts",
+  "bin": {
+    "novada-mcp": "build/index.js",
+    "novada": "build/cli.js"
+  },
+  "files": [
+    "build",
+    "server.json",
+    "skills"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js','755');require('fs').chmodSync('build/cli.js','755')\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "benchmark": "tsx benchmark/run.ts",
+    "test:bing-live": "node tests/live/bing-reliability.mjs",
+    "prepublishOnly": "if [ -f .env ]; then echo 'ERROR: .env file present — delete test credentials before publishing'; exit 1; fi && npm run build && npm test -- tests/tools/search.test.ts"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "modelcontextprotocol",
+    "novada",
+    "web-scraping",
+    "web-search",
+    "search-api",
+    "ai-agents",
+    "ai-tools",
+    "web-crawling",
+    "web-extraction",
+    "research",
+    "claude",
+    "cursor",
+    "vscode",
+    "windsurf",
+    "llm-tools",
+    "rag",
+    "proxy",
+    "anti-bot",
+    "data-extraction",
+    "web-data",
+    "tavily-alternative",
+    "firecrawl-alternative",
+    "exa-alternative",
+    "brave-search-alternative"
+  ],
+  "author": "Novada <support@novada.com>",
+  "license": "MIT",
+  "homepage": "https://www.novada.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NovadaLabs/novada-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NovadaLabs/novada-mcp/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "axios": "^1.15.0",
+    "cheerio": "^1.2.0",
+    "exceljs": "^4.4.0",
+    "form-data": "^4.0.5",
+    "pdf-parse": "^2.4.5",
+    "playwright-core": "^1.59.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/pdf-parse": "^1.1.5",
+    "@vitest/coverage-v8": "^3.1.0",
+    "typescript": "^5.3.3",
+    "vitest": "^3.1.0"
+  }
+}

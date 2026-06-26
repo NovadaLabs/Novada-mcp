@@ -118,6 +118,12 @@ export function novadaSetup(_params) {
         lines.push("  Get credentials at https://www.novada.com → Residential Proxies");
     }
     lines.push("");
+    lines.push("## Output Pipeline");
+    lines.push("");
+    lines.push("📁 Results auto-saved to: ~/Downloads/novada-mcp/YYYY-MM-DD/");
+    lines.push("   Formats: .md (content), .json (structured), .html (raw)");
+    lines.push("   Output directory is ~/Downloads/novada-mcp/YYYY-MM-DD/ (not yet configurable)");
+    lines.push("");
     lines.push("## Agent Action");
     lines.push(`status: ${allCoreReady ? "ready" : "setup_required"}`);
     if (allCoreReady) {

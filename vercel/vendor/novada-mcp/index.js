@@ -49,10 +49,20 @@ const TOOLS = [
         name: "novada_extract",
         description: `Extract content from any URL. Handles Cloudflare, DataDome, Kasada automatically via auto-escalation (static → JS render → Browser CDP). Batch mode: pass url as array for up to 10 pages in parallel.
 
+**CRITICAL — Format Selection:**
+- \`format="markdown"\` (default): full-page content for reading/analysis. Best for articles, docs.
+- \`format="json"\`: structured object. Key fields: url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at. Use \`fields=["price","title"]\` to populate the \`fields\` key — this is the primary reason to choose format="json".
+- \`format="html"\`: raw HTML source (truncated at 10K chars — use novada_unblock for full HTML). Best for debugging or custom parsing.
+- \`clean=true\`: strip nav/sidebar, return main content only (~15K chars vs ~100K full page).
+
+Common mistake: using markdown when you need specific data — use \`format="json"\` + \`fields=["price","title"]\` instead.
+
 **Use for:** Reading pages, batch-extracting search results, pulling structured fields (price, author, date). Works on anti-bot pages automatically.
 **Not for:** URL discovery (novada_map), multi-page crawl (novada_crawl), platform data like Amazon/LinkedIn (novada_scrape is richer).
 **Key rule:** Leave render="auto" (default). Only set render="render" for known JS-heavy SPAs. Auto mode is 15-100x faster on static sites.
-By default returns full page content for maximum information. Add clean=true to extract only the main article body (strips nav/footer/ads).`,
+By default returns full page content for maximum information. Add clean=true to extract only the main article body (strips nav/footer/ads).
+
+**Results auto-saved:** Every extraction saves to \`~/Downloads/novada-mcp/YYYY-MM-DD/\` automatically. File path shown at the top of each response.`,
         inputSchema: zodToMcpSchema(ExtractParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -245,7 +255,7 @@ Not for:
 **Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_unblock).
 **Actions:** navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call.
 **Sessions:** Pass session_id to maintain state (cookies, login) across multiple calls. Sessions expire after 10 min of inactivity. Use close_session to release early.
-**Requires:** NOVADA_BROWSER_WS environment variable.
+**Auth:** NOVADA_API_KEY (auto-provisions Browser API credentials). NOVADA_BROWSER_WS is optional — set it to override auto-provision.
 **Platform note:** TikTok is geo-restricted in some regions — pass country="us" in actions that support it. Use wait with domcontentloaded (never networkidle) for SPAs.
 **Constraint:** close_session and list_sessions must be the only action in the call — they cannot be combined with other actions.`,
         inputSchema: zodToMcpSchema(BrowserParamsSchema),
@@ -364,7 +374,7 @@ Not for:
 **Output:** Status of all env vars (NOVADA_API_KEY, NOVADA_BROWSER_WS, NOVADA_PROXY_*), setup commands for all MCP clients, and which tools are currently active.
 **No auth required:** This tool works even when NOVADA_API_KEY is not set.
 
-**UNIFIED KEY:** NOVADA_API_KEY is the only required key. It covers: Search, Extract, Web Unblocker, Scraper API, Research, Crawl, Map, Browser API HTTP management, Proxy management and auto-provisioning. NOVADA_BROWSER_WS (Browser WebSocket) and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no separate API key — NOVADA_API_KEY authenticates them all.`,
+**UNIFIED KEY:** NOVADA_API_KEY is the only required key. It covers: Search, Extract, Web Unblocker, Scraper API, Research, Crawl, Map, Browser API HTTP management, Proxy management and auto-provisioning. NOVADA_BROWSER_WS (Browser WebSocket) and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no separate API key — NOVADA_API_KEY authenticates them all. Also shows output pipeline status (where extracted files are saved).`,
         inputSchema: zodToMcpSchema(SetupParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },

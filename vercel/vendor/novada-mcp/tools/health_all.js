@@ -222,7 +222,7 @@ function probeProxyAll() {
             product: "Proxy",
             status: "not_configured",
             latency: null,
-            notes: "Set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT",
+            notes: "Set NOVADA_PROXY_ENDPOINT only — user/pass are auto-fetched via NOVADA_API_KEY",
             activationLink: "https://dashboard.novada.com/overview/proxy/",
         };
     }

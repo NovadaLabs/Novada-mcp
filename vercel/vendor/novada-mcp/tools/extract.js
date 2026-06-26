@@ -145,9 +145,10 @@ async function extractSingleInner(params, apiKey) {
     if (params.render === "js") {
         params = { ...params, render: "render" };
     }
-    // Phase 3: Session dedup cache — skip fetch if same URL+mode+fields was extracted recently
+    // Phase 3: Session dedup cache — skip fetch if same URL+mode+format+fields was extracted recently
     const cacheRenderMode = params.render ?? "auto";
-    const cached = getCached(params.url, cacheRenderMode, params.fields);
+    const cacheFormat = params.format ?? "markdown";
+    const cached = getCached(params.url, cacheRenderMode, cacheFormat, params.fields);
     if (cached) {
         // Inject source: cache into the cached result so agents know it's from cache
         return cached.replace(/source: live/, "source: cache");
@@ -265,8 +266,10 @@ async function extractSingleInner(params, apiKey) {
             }
             html = response.data;
         }
-        // Skip JS detection if we already have PDF content (no escalation needed)
-        if (renderMode === "auto" && !html.startsWith("pdf_pages:") && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
+        // Skip JS detection if we already have PDF content (no escalation needed).
+        // Also skip if domainHint resolved this domain — DOMAIN_REGISTRY classification is
+        // authoritative for known domains and overrides JS-heavy detection heuristics.
+        if (renderMode === "auto" && !domainHint && !html.startsWith("pdf_pages:") && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
             // Identify anti-bot provider from the static HTML before escalation
             detectedAntiBot = identifyAntiBot(html);
             // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
@@ -335,12 +338,29 @@ async function extractSingleInner(params, apiKey) {
     let description = extractDescription(html);
     let stillJsHeavy = renderMode === "auto" && (usedMode === "static" || usedMode === "render-failed") && detectJsHeavyContent(html);
     if (params.format === "html") {
-        if (html.length <= 10000)
-            return html;
-        const truncated = html.slice(0, 10000);
-        const lastTagClose = truncated.lastIndexOf(">");
-        return (lastTagClose > 9000 ? truncated.slice(0, lastTagClose + 1) : truncated) +
-            "\n<!-- Content truncated at 10,000 characters -->";
+        let htmlOutput;
+        if (html.length <= 10000) {
+            htmlOutput = html;
+        }
+        else {
+            const truncated = html.slice(0, 10000);
+            const lastTagClose = truncated.lastIndexOf(">");
+            htmlOutput = (lastTagClose > 9000 ? truncated.slice(0, lastTagClose + 1) : truncated) +
+                "\n<!-- Content truncated at 10,000 characters -->";
+        }
+        // Save full (untruncated) HTML to file — best-effort, never breaks the tool
+        try {
+            const domain = new URL(params.url).hostname.replace("www.", "");
+            const outputResult = await saveOutput({
+                tool: "extract",
+                hint: domain,
+                format: "html",
+                data: html,
+            });
+            htmlOutput += `\n<!-- Output saved: ${outputResult.filePath} -->`;
+        }
+        catch { /* best-effort */ }
+        return htmlOutput;
     }
     // For PDF content, use the text directly (no HTML parsing needed)
     // clean=true → main-content only; clean=false (default) → full page for maximum coverage
@@ -402,7 +422,11 @@ async function extractSingleInner(params, apiKey) {
     let escalationAttempted = false;
     let escalationFailed = false;
     let escalationError = null;
-    if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !html.startsWith("pdf_pages:")) {
+    // INC-202: Skip quality-score escalation when domain was resolved via DOMAIN_REGISTRY.
+    // Registry entries are pre-classified — a low quality score on a "static" known domain
+    // means the page is genuinely small (e.g. example.com), not that it needs JS rendering.
+    // Without this guard, minimal static pages trigger fetchWithRender, adding 3–10s of latency.
+    if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !html.startsWith("pdf_pages:") && !domainHint) {
         escalationAttempted = true;
         try {
             const renderResponse = await fetchWithRender(params.url, apiKey);
@@ -651,7 +675,7 @@ async function extractSingleInner(params, apiKey) {
         }
         catch { /* best-effort */ }
         const jsonOutput = JSON.stringify(jsonResult, null, 2);
-        setCached(params.url, cacheRenderMode, jsonOutput, params.fields);
+        setCached(params.url, cacheRenderMode, "json", jsonOutput, params.fields);
         return jsonOutput;
     }
     const lines = [
@@ -834,9 +858,10 @@ async function extractSingleInner(params, apiKey) {
     lines.push(``);
     lines.push(`## Agent Action`);
     lines.push(`agent_instruction: ${nextActions.join(" | ")}`);
-    let mdOutput = lines.join("\n");
-    setCached(params.url, cacheRenderMode, mdOutput, params.fields);
-    // Wire output save — best-effort, never breaks the tool
+    const mdOutput = lines.join("\n");
+    // Wire output save — best-effort, never breaks the tool.
+    // Prepend the file path to the HEADER so agents that truncate long responses still see it.
+    let savePrefix = "";
     try {
         const domain = new URL(params.url).hostname.replace("www.", "");
         const outputResult = await saveOutput({
@@ -845,10 +870,12 @@ async function extractSingleInner(params, apiKey) {
             format: "md",
             data: mdOutput,
         });
-        mdOutput += `\n\n---\nOutput saved: ${outputResult.filePath}`;
+        savePrefix = `📁 ${outputResult.filePath}\n\n`;
     }
     catch { /* best-effort */ }
-    return mdOutput;
+    const finalOutput = savePrefix + mdOutput;
+    setCached(params.url, cacheRenderMode, cacheFormat, finalOutput, params.fields);
+    return finalOutput;
 }
 /**
  * Per-URL entry point with a hard total-request ceiling (TIMEOUTS.TOTAL_REQUEST_CEILING).
