@@ -330,6 +330,12 @@ async function extractSingleInner(
           usedMode = "render";
         }
       } catch (err) {
+        // Early exit for SSL/TLS certificate errors — escalation won't fix server-side cert issues
+        const certMsg = err instanceof Error ? err.message : String(err);
+        const isCertError = certMsg?.includes('CERT_') || certMsg?.includes('SSL') || certMsg?.includes('certificate');
+        if (isCertError) {
+          throw new Error(`SSL certificate error for ${params.url}. The site has an invalid/expired certificate. agent_instruction: This is a server-side issue, not fixable by changing render mode.`);
+        }
         // render threw — try Browser API if available
         renderError = err instanceof Error ? err.message : String(err);
         if (isBrowserConfigured()) {
@@ -894,6 +900,12 @@ async function extractSingle(
   params: ExtractParams & { url: string },
   apiKey?: string
 ): Promise<string> {
+  // Runtime SSRF guard for SDK direct callers (MCP path already has Zod validation)
+  const blocked = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/i;
+  if (blocked.test(params.url)) {
+    throw new Error('Blocked: private/internal URLs are not allowed. agent_instruction: Use a public URL.');
+  }
+
   let ceilingTimer: ReturnType<typeof setTimeout> | null = null;
   const ceiling = new Promise<never>((_, reject) => {
     ceilingTimer = setTimeout(

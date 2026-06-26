@@ -171,10 +171,12 @@ async function pollForResult(apiKey: string, taskId: string): Promise<DownloadRe
       if (errCode === 27203) {
         throw new Error(`Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`);
       }
-      // INC-190: code 10000 = task completed but no collectible data. Surface clearly
-      // instead of falling through to generic "Unexpected download response".
+      // code 10000 from the legacy proxy download endpoint means "result not yet available"
+      // (equivalent to 27202 from task_status). Continue polling — do NOT throw.
+      // Only throw if we've already seen 27202 confirmed Ready from task_status.
       if (errCode === 10000) {
-        throw new Error(`Scraper task completed but collected no valid data (code 10000). The target page may have blocked scraping, returned empty content, or the parser failed. Try a different operation or check the target URL. Raw: ${sanitizeServerMsg(errMsg || "result data not exist")}`);
+        await sleep(POLL_INTERVAL_MS);
+        continue;
       }
       // Direct result object — Google SERP and similar formats return organic/search_metadata at top level
       if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {
@@ -258,7 +260,8 @@ export const OPERATION_ALIASES: Record<string, string> = Object.assign(
 );
 
 export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, apiKey: string): Promise<string> {
-  const { platform, params: opParams, format, limit } = params;
+  const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
+  const { platform, params: opParams, format } = params;
   // H-1: safe lookup — null-prototype + hasOwnProperty guard
   const hasAlias = Object.prototype.hasOwnProperty.call(OPERATION_ALIASES, params.operation);
   const operation = hasAlias ? OPERATION_ALIASES[params.operation] : params.operation;

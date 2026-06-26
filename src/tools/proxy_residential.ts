@@ -74,7 +74,11 @@ export async function novadaProxyResidential(params: ProxyResidentialParams): Pr
   const { user, pass, endpoint } = proxyCreds;
   const username = buildResidentialUsername(user, params);
   const encodedUser = encodeURIComponent(username);
-  const maskedUrl = `http://${encodedUser}:***@${endpoint}`;
+  // Mask username in output to prevent credential leakage
+  const maskedUser = user.slice(0, 4) + '***';
+  const maskedUsername = buildResidentialUsername(maskedUser, params);
+  const encodedMaskedUser = encodeURIComponent(maskedUsername);
+  const maskedUrl = `http://${encodedMaskedUser}:***@${endpoint}`;
   const endpointParts = endpoint.split(":");
   const proxyHost = endpointParts[0];
   const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
@@ -92,10 +96,10 @@ export async function novadaProxyResidential(params: ProxyResidentialParams): Pr
       `proxy_url: ${maskedUrl}`,
       ``,
       `export NOVADA_PROXY_PASS="<your-proxy-password>"  # Set this first`,
-      `export HTTP_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export HTTPS_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export http_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export https_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export HTTP_PROXY="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export HTTPS_PROXY="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export http_proxy="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export https_proxy="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
       ``,
       `## agent_instruction`,
       `Best for geo-restricted content. Use country param for targeting. Residential IPs from 100M+ real home devices pass anti-bot checks that datacenter IPs fail.`,
@@ -129,7 +133,7 @@ export async function novadaProxyResidential(params: ProxyResidentialParams): Pr
     `## Usage Examples`,
     ``,
     `Node.js (axios):`,
-    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "${username}", password: "<NOVADA_PROXY_PASS>" } }`,
+    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "${maskedUsername}", password: "<NOVADA_PROXY_PASS>" } }`,
     ``,
     `Python (requests):`,
     `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,

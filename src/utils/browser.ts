@@ -3,6 +3,14 @@ import type { Page } from "playwright-core";
 import { TIMEOUTS } from "../config.js";
 import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
 
+/**
+ * Strip credentials from WSS URLs in error messages.
+ * wss://user:pass@host → wss://***:***@host
+ */
+export function sanitizeBrowserError(msg: string): string {
+  return msg.replace(/wss:\/\/[^:]+:[^@]+@/g, "wss://***:***@");
+}
+
 // ─── Session Management ────────────────────────────────────────────────────
 
 interface SessionEntry {
@@ -195,8 +203,11 @@ export async function fetchViaBrowser(
       await context.close();
     }
     return html;
+  } catch (err) {
+    // P0 SECURITY: strip WSS credentials from any playwright error message
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(sanitizeBrowserError(msg));
   } finally {
-    // Only close browser if not in a named session
     if (browser && !options.sessionId) {
       await browser.close();
     }

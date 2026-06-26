@@ -17,6 +17,10 @@ async function runSearchQuery(query: string, apiKey: string): Promise<QueryResul
 }
 
 export async function novadaVerify(params: VerifyParams, apiKey: string): Promise<string> {
+  if (!params.claim || typeof params.claim !== 'string' || params.claim.trim().length === 0) {
+    return JSON.stringify({ verdict: 'error', message: 'claim is required and must be a non-empty string' });
+  }
+
   const { claim, context } = params;
   const ctx = context ? ` ${context}` : "";
 

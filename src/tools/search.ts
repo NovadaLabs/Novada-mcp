@@ -186,6 +186,9 @@ export async function submitSearchScrapeTask(
   const body = resp.data as { code: number; msg?: string; data: unknown };
 
   // Auth error codes returned as HTTP 200 with non-zero body code
+  if (body.code === 10001) {
+    throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, 'Invalid or missing API key (code 10001)');
+  }
   if (body.code === 50001 || body.code === 50002 || body.code === 50003) {
     throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Scraper API auth error (code: ${body.code})`);
   }
@@ -343,6 +346,10 @@ Yahoo Search is not available on this account.
 engine: yahoo | status: unsupported | suggested_alternatives: google, bing`;
 
 export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
+  if (!params.query || typeof params.query !== 'string') {
+    throw new Error('query is required and must be a non-empty string');
+  }
+
   const engine = params.engine || "google";
 
   // Yahoo has no scraper-API path — return a clear redirect message immediately.

@@ -369,7 +369,7 @@ Not for:
 **Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_unblock).
 **Actions:** navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call.
 **Sessions:** Pass session_id to maintain state (cookies, login) across multiple calls. Sessions expire after 10 min of inactivity. Use close_session to release early.
-**Requires:** NOVADA_BROWSER_WS environment variable.
+**Auth:** NOVADA_API_KEY (auto-provisions Browser API credentials). NOVADA_BROWSER_WS is optional — set it to override auto-provision.
 **Platform note:** TikTok is geo-restricted in some regions — pass country="us" in actions that support it. Use wait with domcontentloaded (never networkidle) for SPAs.
 **Constraint:** close_session and list_sessions must be the only action in the call — they cannot be combined with other actions.`,
     inputSchema: zodToMcpSchema(BrowserParamsSchema),

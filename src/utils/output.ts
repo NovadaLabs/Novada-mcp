@@ -73,7 +73,7 @@ async function getOutputDir(topic?: string): Promise<string> {
 function generateFileName(hint: string, format: string): string {
   const now = new Date();
   const date = now.toISOString().split("T")[0]; // YYYY-MM-DD
-  const time = now.toTimeString().slice(0, 8).replace(/:/g, ""); // HHmmss
+  const time = now.toTimeString().slice(0, 8).replace(/:/g, "") + String(now.getMilliseconds()).padStart(3, "0"); // HHmmssSSS
 
   // For source hint: if URL, use domain only; if query, first 3 words
   let source: string;
