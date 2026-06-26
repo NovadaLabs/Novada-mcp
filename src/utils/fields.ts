@@ -1,9 +1,10 @@
+import * as cheerio from "cheerio";
 import type { StructuredData } from "./html.js";
 
 export interface FieldResult {
   field: string;
   value: string;
-  source: "structured_data" | "pattern" | "heading" | "not_found";
+  source: "structured_data" | "infobox" | "table_header" | "microdata" | "pattern" | "heading" | "not_found";
 }
 
 /** Price patterns: $9.99, €1,299.00, £49, ¥2000, 99.99 USD */
@@ -177,7 +178,51 @@ export function matchHeadingSectionWithReason(text: string, field: string): Head
   return { value: firstNonEmpty.trim(), reason: "matched" };
 }
 
-export type DiagnosticMethod = "heading-match" | "pattern-match" | "meta-tag";
+/** Extract field value from Wikipedia-style infobox tables. */
+function extractFromInfobox(html: string, fieldName: string): string | null {
+  const $ = cheerio.load(html);
+  const rows = $("table.infobox tr, table.vcard tr");
+  for (let i = 0; i < rows.length; i++) {
+    const th = $(rows[i]).find("th").text().trim().toLowerCase();
+    const td = $(rows[i]).find("td").text().trim();
+    if (th && td && th.includes(fieldName.toLowerCase())) {
+      return td.slice(0, 200);
+    }
+  }
+  return null;
+}
+
+/** Extract field value by matching table column headers. */
+function extractFromTableHeaders(html: string, fieldName: string): string | null {
+  const $ = cheerio.load(html);
+  let result: string | null = null;
+  $("table").each((_, table) => {
+    if (result) return; // already found
+    const headers = $(table).find("th").map((__, th) => $(th).text().trim().toLowerCase()).get();
+    const colIdx = headers.findIndex(h => h.includes(fieldName.toLowerCase()));
+    if (colIdx >= 0) {
+      const firstRow = $(table).find("tbody tr").first();
+      const cell = firstRow.find("td").eq(colIdx).text().trim();
+      if (cell) {
+        result = cell.slice(0, 200);
+      }
+    }
+  });
+  return result;
+}
+
+/** Extract field value from Schema.org microdata (itemprop attributes). */
+function extractFromMicrodata(html: string, fieldName: string): string | null {
+  const $ = cheerio.load(html);
+  const el = $(`[itemprop="${fieldName}"], [itemprop="${fieldName.toLowerCase()}"]`).first();
+  if (el.length) {
+    const val = (el.attr("content") || el.text().trim()).slice(0, 200);
+    return val || null;
+  }
+  return null;
+}
+
+export type DiagnosticMethod = "heading-match" | "pattern-match" | "meta-tag" | "infobox" | "table-header" | "microdata";
 export type DiagnosticReasonCode =
   | "no_heading_match"
   | "section_empty"
@@ -197,11 +242,14 @@ export interface FieldDiagnostic {
 
 /**
  * Extract requested fields from structured data + markdown fallback.
+ * When raw HTML is provided, additional cheerio-based layers (infobox, table headers, microdata)
+ * are tried between structured data and regex patterns.
  */
 export function extractFields(
   fields: string[],
   structuredData: StructuredData | null,
-  markdown: string
+  markdown: string,
+  html?: string
 ): FieldResult[] {
   return fields.map(field => {
     const lower = field.toLowerCase().trim();
@@ -212,41 +260,62 @@ export function extractFields(
       const exact = sdKeys.find(k => k.toLowerCase() === lower);
       const fuzzy = exact ?? sdKeys.find(k => k.toLowerCase().includes(lower) || lower.includes(k.toLowerCase()));
       if (fuzzy) {
-        return { field, value: structuredData.fields[fuzzy], source: "structured_data" };
+        return { field, value: structuredData.fields[fuzzy], source: "structured_data" as const };
       }
     }
 
-    // 2. Pattern matching in markdown
+    // 2. Infobox extraction (Wikipedia-style tables)
+    if (html) {
+      const infoboxValue = extractFromInfobox(html, field);
+      if (infoboxValue) return { field, value: infoboxValue, source: "infobox" as const };
+    }
+
+    // 3. Table header matching
+    if (html) {
+      const tableValue = extractFromTableHeaders(html, field);
+      if (tableValue) return { field, value: tableValue, source: "table_header" as const };
+    }
+
+    // 4. Microdata extraction (Schema.org itemprop)
+    if (html) {
+      const microdataValue = extractFromMicrodata(html, field);
+      if (microdataValue) return { field, value: microdataValue, source: "microdata" as const };
+    }
+
+    // 5. Pattern matching in markdown
     const patterns = PATTERN_MAP[lower];
     if (patterns) {
       const value = matchPatterns(markdown, patterns);
-      if (value) return { field, value, source: "pattern" };
+      if (value) return { field, value, source: "pattern" as const };
     }
 
-    // 3. Generic: look for "field: value" or "**field**: value" in markdown
+    // 6. Generic: look for "field: value" or "**field**: value" in markdown
     const genericPattern = new RegExp(
       `(?:^|\\n)(?:\\*\\*)?${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\*\\*)?[:\\s]+([^\\n]{3,100})`,
       "im"
     );
     const gm = markdown.match(genericPattern);
-    if (gm?.[1]) return { field, value: gm[1].trim().replace(/\*\*/g, ""), source: "pattern" };
+    if (gm?.[1]) return { field, value: gm[1].trim().replace(/\*\*/g, ""), source: "pattern" as const };
 
-    // 4. Heading section fallback: "## FieldName\nvalue"
+    // 7. Heading section fallback: "## FieldName\nvalue"
     const headingValue = matchHeadingSection(markdown, field);
-    if (headingValue) return { field, value: headingValue, source: "heading" };
+    if (headingValue) return { field, value: headingValue, source: "heading" as const };
 
-    return { field, value: "", source: "not_found" };
+    return { field, value: "", source: "not_found" as const };
   });
 }
 
 /**
  * Like extractFields but also returns per-field diagnostics explaining why each null occurred.
+ * When raw HTML is provided, additional cheerio-based layers (infobox, table headers, microdata)
+ * are tried between structured data and regex patterns.
  */
 export function extractFieldsWithDiagnostics(
   fields: string[],
   structuredData: StructuredData | null,
   markdown: string,
-  htmlLength: number
+  htmlLength: number,
+  html?: string
 ): { results: FieldResult[]; diagnostics: FieldDiagnostic[] } {
   const results: FieldResult[] = [];
   const diagnostics: FieldDiagnostic[] = [];
@@ -278,7 +347,37 @@ export function extractFieldsWithDiagnostics(
       }
     }
 
-    // 2. Known pattern matching
+    // 2. Infobox extraction (Wikipedia-style tables)
+    if (html) {
+      const infoboxValue = extractFromInfobox(html, field);
+      if (infoboxValue) {
+        results.push({ field, value: infoboxValue, source: "infobox" });
+        diagnostics.push({ field, matched: true, method: "infobox" });
+        continue;
+      }
+    }
+
+    // 3. Table header matching
+    if (html) {
+      const tableValue = extractFromTableHeaders(html, field);
+      if (tableValue) {
+        results.push({ field, value: tableValue, source: "table_header" });
+        diagnostics.push({ field, matched: true, method: "table-header" });
+        continue;
+      }
+    }
+
+    // 4. Microdata extraction (Schema.org itemprop)
+    if (html) {
+      const microdataValue = extractFromMicrodata(html, field);
+      if (microdataValue) {
+        results.push({ field, value: microdataValue, source: "microdata" });
+        diagnostics.push({ field, matched: true, method: "microdata" });
+        continue;
+      }
+    }
+
+    // 5. Known pattern matching
     const patterns = PATTERN_MAP[lower];
     if (patterns) {
       const value = matchPatterns(markdown, patterns);
@@ -289,7 +388,7 @@ export function extractFieldsWithDiagnostics(
       }
     }
 
-    // 3. Generic inline "field: value" pattern
+    // 6. Generic inline "field: value" pattern
     const genericPattern = new RegExp(
       `(?:^|\\n)(?:\\*\\*)?${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\*\\*)?[:\\s]+([^\\n]{3,100})`,
       "im"
@@ -301,7 +400,7 @@ export function extractFieldsWithDiagnostics(
       continue;
     }
 
-    // 4. Heading section fallback — use instrumented version to get reason
+    // 7. Heading section fallback — use instrumented version to get reason
     const headingResult = matchHeadingSectionWithReason(markdown, field);
     if (headingResult.value !== null) {
       results.push({ field, value: headingResult.value, source: "heading" });

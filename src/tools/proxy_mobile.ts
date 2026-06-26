@@ -74,7 +74,11 @@ export async function novadaProxyMobile(params: ProxyMobileParams): Promise<stri
   const { user, pass, endpoint } = proxyCreds;
   const username = buildMobileUsername(user, params);
   const encodedUser = encodeURIComponent(username);
-  const maskedUrl = `http://${encodedUser}:***@${endpoint}`;
+  // Mask username in output to prevent credential leakage
+  const maskedUser = user.slice(0, 4) + '***';
+  const maskedUsername = buildMobileUsername(maskedUser, params);
+  const encodedMaskedUser = encodeURIComponent(maskedUsername);
+  const maskedUrl = `http://${encodedMaskedUser}:***@${endpoint}`;
   const endpointParts = endpoint.split(":");
   const proxyHost = endpointParts[0];
   const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
@@ -93,10 +97,10 @@ export async function novadaProxyMobile(params: ProxyMobileParams): Promise<stri
       `proxy_url: ${maskedUrl}`,
       ``,
       `export NOVADA_PROXY_PASS="<your-proxy-password>"  # Set this first`,
-      `export HTTP_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export HTTPS_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export http_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
-      `export https_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export HTTP_PROXY="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export HTTPS_PROXY="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export http_proxy="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export https_proxy="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
       ``,
       `## agent_instruction`,
       `Mobile IPs. Best for mobile-targeted content and apps. 4G/5G IPs from real devices. If targeting app APIs, pair with mobile User-Agent header.`,
@@ -130,7 +134,7 @@ export async function novadaProxyMobile(params: ProxyMobileParams): Promise<stri
     `## Usage Examples`,
     ``,
     `Node.js (axios):`,
-    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "${username}", password: "<NOVADA_PROXY_PASS>" } }`,
+    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "${maskedUsername}", password: "<NOVADA_PROXY_PASS>" } }`,
     ``,
     `Python (requests):`,
     `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,

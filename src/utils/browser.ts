@@ -99,6 +99,9 @@ export function isBrowserConfigured(): boolean {
  * Requires: NOVADA_BROWSER_WS env var (or SDK-scoped browserWs credential).
  * Cost: ~$3/GB. Use only when static/render modes fail.
  *
+ * Performance: Callers making repeated requests to the same domain should pass
+ * `sessionId` to reuse the browser page (~1.5s warm vs ~8s cold start).
+ *
  * @param sessionId - Optional session ID to reuse an existing browser page.
  */
 export async function fetchViaBrowser(
@@ -170,9 +173,10 @@ export async function fetchViaBrowser(
       timeout,
     });
 
-    // Wait for networkidle, fall back to domcontentloaded on timeout
-    await page.waitForLoadState('networkidle', { timeout: 12000 })
-      .catch(() => page.waitForLoadState('domcontentloaded'));
+    // Wait for DOM ready + fixed 2s for JS to render initial content
+    // (networkidle never fires on SPAs — saves ~5s on JS-heavy pages)
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+    await page.waitForTimeout(2000);
 
     // Check for Cloudflare challenge and wait it out
     const bodyText = await page.content().catch(() => '');
@@ -182,8 +186,14 @@ export async function fetchViaBrowser(
       bodyText.includes('Just a moment') ||
       bodyText.includes('cf_chl_opt')
     ) {
-      await page.waitForTimeout(6000);
-      await page.waitForLoadState('domcontentloaded').catch(() => {});
+      // Smart CF wait: poll until challenge resolves (usually 2-3s, max 8s)
+      await page.waitForFunction(() => {
+        return !document.body.innerText.includes('Just a moment') &&
+               !document.querySelector('#cf-challenge-running');
+      }, { timeout: 8000 }).catch(() => {
+        // Fallback: wait 3s if waitForFunction fails
+        return page.waitForTimeout(3000);
+      });
     }
 
     if (options.waitForSelector) {

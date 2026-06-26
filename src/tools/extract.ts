@@ -588,7 +588,7 @@ async function extractSingleInner(
   // Field extraction
   let fieldResults: FieldResult[] | null = null;
   if (params.fields && params.fields.length > 0) {
-    fieldResults = extractFields(params.fields, structuredData, displayContent);
+    fieldResults = extractFields(params.fields, structuredData, displayContent, html);
   }
 
   const metaExtra = contentTruncated
