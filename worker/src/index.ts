@@ -270,7 +270,11 @@ function logUsage(env: Env, token: string, tool: string, ok: boolean, ms: number
 // ─── MCP server factory ──────────────────────────────────────────────────────
 function buildServer(apiKey: string, env: Env, ctx: { token: string }): Server {
   const server = new Server(
-    { name: "novada", version: "0.7.13-hosted" },
+    // DORMANT — this Cloudflare Worker is NOT deployed: its mcp.novada.com route is
+    // commented out in wrangler.toml. The live server is vercel/api/mcp.ts, which
+    // derives its version from the vendored package. Hardcoded (not derived) here only
+    // because the derive isn't wired for the Worker bundle; keep in sync if revived.
+    { name: "novada", version: "0.8.4-hosted" },
     { capabilities: { tools: {} } },
   );
 

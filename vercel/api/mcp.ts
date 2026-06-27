@@ -139,6 +139,20 @@ import {
   validateAiMonitorParams,
 } from "../vendor/novada-mcp/tools/types.js";
 import { MonitorParamsSchema } from "../vendor/novada-mcp/tools/monitor.js";
+import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
+
+// Hosted server version = `<vendored npm version>.<server build tag>-hosted`.
+//   • The npm-version part is DERIVED from the vendored package — NEVER hardcoded.
+//     (A hardcoded "0.8.2-hosted" once silently drifted two releases behind the
+//     vendored 0.8.4; deriving guarantees this part always tracks the shipped tools.)
+//   • HOSTED_BUILD tags a server-ONLY deploy that ships no npm change — e.g. this
+//     version-derive fix lives only in novada-mcpserver, so npm stays 0.8.4 while
+//     the hosted build is "t1". Bump it per server-only deploy; reset to "t1" (or "")
+//     whenever the vendored package version changes.
+const HOSTED_BUILD = "t1";
+const HOSTED_VERSION = HOSTED_BUILD
+  ? `${vendorPkg.version}.${HOSTED_BUILD}-hosted`
+  : `${vendorPkg.version}-hosted`;
 
 // ─── Vercel Function runtime (Node.js serverless) ───────────────────────────
 // NOTE: we use Node.js runtime (NOT Edge) because the underlying novada-mcp
@@ -416,7 +430,7 @@ function sanitizeHostedOutput(text: string): string {
 // ─── MCP server factory ──────────────────────────────────────────────────────
 function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTools?: Set<string> | null }): Server {
   const server = new Server(
-    { name: "novada", version: "0.8.2-hosted" },
+    { name: "novada", version: HOSTED_VERSION },
     { capabilities: { tools: {} } },
   );
 
