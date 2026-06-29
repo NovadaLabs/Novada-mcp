@@ -158,6 +158,18 @@ export function toCsv(records) {
  */
 export async function saveOutput(options) {
     const { tool, hint = "output", format, data, cosUrl } = options;
+    // HOSTED PATCH (Vercel serverless = read-only FS): never write to disk; return a
+    // no-op result so tool calls (extract/search/research/scrape) don't crash. Keeps
+    // the full export surface intact. Mirrors the pre-0.8.5 hosted output.js stub.
+    if (process.env.VERCEL || process.env.VERCEL_ENV) {
+        const recordCount = Array.isArray(data) ? data.length : undefined;
+        const parts = ["(hosted mode — output not saved to disk)"];
+        if (recordCount !== undefined)
+            parts.push(`${recordCount} records`);
+        if (cosUrl)
+            parts.push(`Download: ${cosUrl}`);
+        return { filePath: "", cosUrl, recordCount, summary: parts.join(" | ") };
+    }
     // Build topic subfolder from the hint
     const topic = topicSlug(hint);
     const dir = await getOutputDir(topic, options.project ? sanitize(options.project, 30) : undefined);

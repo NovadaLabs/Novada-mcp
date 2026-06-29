@@ -18,6 +18,8 @@
     "exceljs": "^4.4.0",
     "pdf-parse": "^2.4.5",
     "playwright-core": "^1.61.1",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
