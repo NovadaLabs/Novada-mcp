@@ -58,12 +58,4 @@ export { novadaCaptureLogs, validateCaptureLogsParams, CaptureLogsParamsSchema }
 export type { CaptureLogsParams } from "./capture_logs.js";
 export { novadaAccountSummary, validateAccountSummaryParams, AccountSummaryParamsSchema } from "./account_summary.js";
 export type { AccountSummaryParams } from "./account_summary.js";
-export { novadaCaptureApikey, validateCaptureApikeyParams, CaptureApikeyParamsSchema } from "./capture_apikey.js";
-export type { CaptureApikeyParams } from "./capture_apikey.js";
-export { novadaScraperTaskMgmt, validateScraperTaskMgmtParams, ScraperTaskMgmtParamsSchema } from "./scraper_task_mgmt.js";
-export type { ScraperTaskMgmtParams } from "./scraper_task_mgmt.js";
-export { novadaIpWhitelist, validateIpWhitelistParams, IpWhitelistParamsSchema } from "./ip_whitelist.js";
-export type { IpWhitelistParams } from "./ip_whitelist.js";
-export { novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema } from "./static_ip_mgmt.js";
-export type { StaticIpMgmtParams } from "./static_ip_mgmt.js";
 //# sourceMappingURL=index.d.ts.map

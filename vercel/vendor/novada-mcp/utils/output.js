@@ -158,9 +158,10 @@ export function toCsv(records) {
  */
 export async function saveOutput(options) {
     const { tool, hint = "output", format, data, cosUrl } = options;
-    // HOSTED PATCH (Vercel serverless = read-only FS): never write to disk; return a
-    // no-op result so tool calls (extract/search/research/scrape) don't crash. Keeps
-    // the full export surface intact. Mirrors the pre-0.8.5 hosted output.js stub.
+    // Serverless guard (Vercel = read-only FS outside /tmp): never write to disk; return
+    // a no-op result so tool calls don't crash. This puts the hosted-safe behavior in the
+    // source so re-vendoring to novada-mcpserver no longer needs a manual output.js stub.
+    // Local / CLI usage (no VERCEL env) is unaffected and still writes to ~/Downloads.
     if (process.env.VERCEL || process.env.VERCEL_ENV) {
         const recordCount = Array.isArray(data) ? data.length : undefined;
         const parts = ["(hosted mode — output not saved to disk)"];

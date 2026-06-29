@@ -36,8 +36,4 @@ export { novadaTrafficDaily, validateTrafficDailyParams, TrafficDailyParamsSchem
 export { novadaPlanBalanceAll, validatePlanBalanceAllParams, PlanBalanceAllParamsSchema } from "./plan_balance_all.js";
 export { novadaCaptureLogs, validateCaptureLogsParams, CaptureLogsParamsSchema } from "./capture_logs.js";
 export { novadaAccountSummary, validateAccountSummaryParams, AccountSummaryParamsSchema } from "./account_summary.js";
-export { novadaCaptureApikey, validateCaptureApikeyParams, CaptureApikeyParamsSchema } from "./capture_apikey.js";
-export { novadaScraperTaskMgmt, validateScraperTaskMgmtParams, ScraperTaskMgmtParamsSchema } from "./scraper_task_mgmt.js";
-export { novadaIpWhitelist, validateIpWhitelistParams, IpWhitelistParamsSchema } from "./ip_whitelist.js";
-export { novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema } from "./static_ip_mgmt.js";
 //# sourceMappingURL=index.js.map

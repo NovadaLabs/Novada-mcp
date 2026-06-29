@@ -119,7 +119,10 @@ export function detectIntent(query) {
     if (!query)
         return "default";
     const q = ` ${query.toLowerCase()} `;
-    const hasSocial = SOCIAL_LEXICON.some((t) => q.includes(` ${t} `) || q.includes(`${t} `) || q.includes(` ${t}`));
+    // q is space-padded, so ` ${t} ` already matches a term at the start/end of the query.
+    // (NOV-574: the old `${t} ` / ` ${t}` variants substring-matched inside words — e.g.
+    // "profile" inside "userprofile" — mis-classifying factual queries as social.)
+    const hasSocial = SOCIAL_LEXICON.some((t) => q.includes(` ${t} `));
     if (hasSocial)
         return "social";
     // q is space-padded, so wrap every term (single- or multi-word) in spaces to enforce

@@ -421,6 +421,17 @@ const STAT_FIELDS = new Set([
     "52 week",
 ]);
 /**
+ * A STAT_FIELDS value must BE a number (optionally currency / sign / % / K-M-B-T) or a
+ * numeric range — not prose that merely CONTAINS a digit. Rejects "top 5 holdings" while
+ * allowing "233.37B", "$1,234.50", "-5.15%", "60.10 - 88.41".
+ * (NOV-574: the old `/\d/.test(v)` guard let a stray digit in a prose span resolve a
+ * numeric stat field to a sentence.)
+ */
+const STAT_VALUE_RE = /^[+\-]?[€$£¥₹]?\s*[\d,]+(?:\.\d+)?\s*[%KkMmBbTt]?(?:\s*[-–—]\s*[+\-]?[€$£¥₹]?\s*[\d,]+(?:\.\d+)?\s*[%KkMmBbTt]?)?$/;
+function isStatValue(v) {
+    return STAT_VALUE_RE.test(v.trim());
+}
+/**
  * Tolerant labelled-value regex over markdown. Handles forms a colon-only matcher misses:
  *  - GFM pipe rows:  "| Market Cap | 233.37B |"
  *  - multi-space:    "Market Cap     233.37B"
@@ -445,7 +456,7 @@ function tolerantLabelledValue(markdown, fieldName, requireDigit = false) {
         const m = markdown.match(re);
         if (m?.[1]) {
             const v = m[1].trim().replace(/\*\*/g, "").replace(/\s*\|\s*$/, "").trim();
-            if (v && (!guardDigit || /\d/.test(v)))
+            if (v && (!guardDigit || isStatValue(v)))
                 return v;
         }
     }

@@ -140,6 +140,7 @@ import {
 } from "../vendor/novada-mcp/tools/types.js";
 import { MonitorParamsSchema } from "../vendor/novada-mcp/tools/monitor.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
+import { NovadaError } from "../vendor/novada-mcp/_core/errors.js";
 
 // Hosted server version = `<vendored npm version>.<server build tag>-hosted`.
 //   • The npm-version part is DERIVED from the vendored package — NEVER hardcoded.
@@ -604,6 +605,16 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
         const issues = error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
         return {
           content: [{ type: "text" as const, text: `Validation failed for ${name}:\n${issues}\n\nagent_instruction: Check the tool's inputSchema for required fields and valid types. Call list_tools to see the schema for ${name}.` }],
+          isError: true,
+        };
+      }
+      // NovadaError carries a tailored agent_instruction / failure_class / retry hint —
+      // preserve it verbatim (npm-parity). Only fall through to the hosted substring hints
+      // below for non-NovadaError errors. (NOV-571: the hosted endpoint was dropping all of
+      // this and returning a bare truncated message.)
+      if (error instanceof NovadaError) {
+        return {
+          content: [{ type: "text" as const, text: error.toAgentString() }],
           isError: true,
         };
       }
