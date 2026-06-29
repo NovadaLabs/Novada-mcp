@@ -146,7 +146,7 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">npm v0.8.4 · hosted v0.8.4.t1 · 2026-06-27 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
+    <div class="sub">npm v0.8.5 · hosted v0.8.5 · 2026-06-29 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
     <div class="pills">
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
@@ -154,8 +154,8 @@
       <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">40+ <span class="zh">工具</span><span class="en">tools</span></span>
       <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
       <span class="pill">30+ bug fixes</span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.4</span>
-      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.4.t1</span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.5</span>
+      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.5</span>
     </div>
   </div>
 
@@ -165,7 +165,57 @@
   <!-- ============================================================ -->
   <!-- HOSTED VERSION SYNC — 2026-06-27                           -->
   <!-- ============================================================ -->
-  <details class="card" open style="border-left: 4px solid var(--purple);">
+  <!-- ============================================================ -->
+  <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
+  <!-- ============================================================ -->
+  <details class="card" open style="border-left: 4px solid var(--green);">
+    <summary>
+      <span class="date">2026-06-29</span>
+      <span class="tag tag-feat">
+        <span class="zh">优化发布</span><span class="en">Optimization</span>
+      </span>
+      <span>
+        <span class="zh">v0.8.5 — 6 项实测驱动的优化(批量 / 字段 / 质量 / 搜索 / 整站复制)</span>
+        <span class="en">v0.8.5 — 6 evidence-driven fixes (batch / fields / quality / search / site-copy)</span>
+      </span>
+      <span class="chip">v0.8.5</span>
+    </summary>
+    <div class="body">
+      <div class="note">
+        <b><span class="zh">由来：</span><span class="en">Origin:</span></b>
+        <span class="zh">用真实买家任务(文档摄取、股票数据、竞品抓取)dogfood Novada MCP,发现 6 个问题(NOV-563…568)。多 agent 实现 + 3 轮 QA 循环 + 独立对抗式复审,全部已验证。</span>
+        <span class="en">Surfaced by dogfooding Novada MCP on real buyer tasks (docs ingestion, stock data, competitor scraping) — 6 issues (NOV-563…568). Multi-agent implementation + 3 QA loops + an independent adversarial review, all verified.</span>
+      </div>
+      <h3><span class="zh">前后对比</span><span class="en">Before → After</span></h3>
+      <table>
+        <tr><th><span class="zh">场景</span><span class="en">Scenario</span></th><th>Before</th><th>After</th></tr>
+        <tr><td><span class="zh">批量提取 8 URL @ max_chars=20k</span><span class="en">Batch 8 URLs @ max_chars=20k</span></td><td>~3,125</td><td style="color:var(--green);font-weight:700;">~21,088</td></tr>
+        <tr><td><span class="zh">金融字段填充(MRVL,5 项)</span><span class="en">Finance fields (MRVL, 5)</span></td><td>0/5</td><td style="color:var(--green);font-weight:700;">4/5</td></tr>
+        <tr><td><span class="zh">文档页 content_ok / 分数</span><span class="en">Docs content_ok / score</span></td><td>false / 30</td><td style="color:var(--green);font-weight:700;">true / 45</td></tr>
+        <tr><td><span class="zh">整站文档复制(≥30 页)</span><span class="en">Site-copy (≥30 pages)</span></td><td><span class="zh">做不到</span><span class="en">impossible</span></td><td style="color:var(--green);font-weight:700;"><span class="zh">全量 + manifest</span><span class="en">full + manifest</span></td></tr>
+        <tr><td><span class="zh">搜索权威性(top-5)*</span><span class="en">Search authority (top-5)*</span></td><td>0.40</td><td style="color:var(--green);font-weight:700;">0.60</td></tr>
+      </table>
+      <h3><span class="zh">改了什么</span><span class="en">What changed</span></h3>
+      <ul>
+        <li><b>NOV-563/568</b> <code>extract.ts</code>: <span class="zh">删除批量二次截断,每页按 max_chars,加 returned_chars/content_truncated + 文件路径置顶</span><span class="en">drop batch re-truncation, honor max_chars per page, add returned_chars/content_truncated + file path on top</span></li>
+        <li><b>NOV-564</b> <code>fields.ts</code>: <span class="zh">新增行标签表格 / hero 数值块 / 容忍正则解析层 + 别名映射,不再静默返回 null</span><span class="en">row-label table / hero-block / tolerant-regex parsers + alias map; no more silent null</span></li>
+        <li><b>NOV-565</b> <code>html.ts</code>: <span class="zh">拆分 content_present 与 cleanliness_score;content_ok 跟实质内容走,不再被低分否决</span><span class="en">split content_present vs cleanliness_score; content_ok tracks presence, not the score gate</span></li>
+        <li><b>NOV-567</b> <code>rerank.ts</code> + <code>authority.ts</code>: <span class="zh">域名权威性信号 + 意图识别 + source_type 过滤(压制社媒/PR)</span><span class="en">domain-authority signal + intent gating + source_type filter (de-emphasize social/PR)</span></li>
+        <li><b>NOV-566</b> <span class="zh">新工具</span><span class="en">new tool</span> <code>novada_site_copy</code>: <span class="zh">llms.txt/sitemap 探测 → 流式落盘 + manifest,上限 20→1000</span><span class="en">llms.txt/sitemap detect → stream-to-disk + manifest, cap 20→1000</span></li>
+        <li><span class="zh">安全:新 </span><span class="en">Security: new </span><code>ssrf.ts</code> (<span class="zh">每个 fetch/重定向/DNS 重绑校验</span><span class="en">fetch/redirect/DNS-rebind guards</span>), <span class="zh">路径沙箱 + schema 防 ReDoS</span><span class="en">path sandbox + ReDoS schema bounds</span></li>
+      </ul>
+      <div class="note">
+        <b><span class="zh">质量：</span><span class="en">Quality:</span></b>
+        <span class="zh">32 文件,+3,708 / −396 行,7 新文件,+136 测试。构建通过;修复测试 201/201;全量 50 失败 / 726 通过(基线 59/579),0 新回归。独立复审捕获 2 HIGH + 3 MED 已修。* 搜索 0.40→0.60 为复现实测值,机制有测试覆盖、该比例非测试断言。</span>
+        <span class="en">32 files, +3,708 / −396, 7 new files, +136 tests. Build green; fix-tests 201/201; full suite 50 fail / 726 pass (baseline 59/579), 0 new regressions. Independent review caught 2 HIGH + 3 MED, fixed. * search 0.40→0.60 is an authored reproduction; the mechanism is test-backed, the exact ratio is not a test assertion.</span>
+      </div>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <!-- HOSTED VERSION SYNC — 2026-06-27                           -->
+  <!-- ============================================================ -->
+  <details class="card" style="border-left: 4px solid var(--purple);">
     <summary>
       <span class="date">2026-06-27</span>
       <span class="tag tag-sync">
