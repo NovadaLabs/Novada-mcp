@@ -119,9 +119,9 @@ export const CrawlParamsSchema = z.object({
     .describe("Crawl traversal order. 'bfs' (default): breadth-first — visits all pages at current depth before going deeper, good for broad discovery. 'dfs': depth-first — follows links deeply before backtracking, good for exploring specific paths."),
   instructions: z.string().optional()
     .describe("Natural language hint for which pages to prioritize. E.g. 'only API reference pages', 'skip blog and changelog'. Applied as path-level filtering; semantic filtering is agent-side."),
-  select_paths: z.array(z.string()).optional()
+  select_paths: z.array(z.string().min(1).max(200)).max(20).optional()
     .describe("Regex patterns to restrict crawled URL paths. E.g. ['/docs/.*', '/api/.*']."),
-  exclude_paths: z.array(z.string()).optional()
+  exclude_paths: z.array(z.string().min(1).max(200)).max(20).optional()
     .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
   format: z.enum(["markdown", "json"]).default("markdown")
     .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
@@ -164,9 +164,9 @@ export const SiteCopyParamsSchema = z.object({
   url: safeUrl,
   max_pages: z.number().int().min(1).max(SITE_COPY_HARD_MAX).default(200)
     .describe(`Maximum pages to copy. Default 200, hard max ${SITE_COPY_HARD_MAX}. The run drains the in-scope queue until empty or this ceiling is hit — it is a safety bound, not a target.`),
-  select_paths: z.array(z.string()).optional()
+  select_paths: z.array(z.string().min(1).max(200)).max(20).optional()
     .describe("Regex patterns to restrict copied URL paths. E.g. ['/docs/.*', '/api/.*']. Same-host is always enforced."),
-  exclude_paths: z.array(z.string()).optional()
+  exclude_paths: z.array(z.string().min(1).max(200)).max(20).optional()
     .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
   max_depth: z.number().int().min(1).max(10).default(5)
     .describe("BFS link-hops from root when no llms.txt/sitemap is found. Default 5. Ignored for llms.txt/sitemap discovery (which is flat)."),

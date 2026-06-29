@@ -221,10 +221,35 @@ describe("NOV-565 negatives → content_present:false + content_ok:false", () =>
 });
 
 describe("NOV-565 back-compat", () => {
-  it("score === cleanliness_score", () => {
+  it("cleanliness_score equals score when no floor fires (rich docs page)", () => {
+    // A full docs page scores well above the presence floor, so the raw additive
+    // score and the floored display score coincide.
     const md = docsMarkdown("Compat", 5);
     const q = scoreExtraction("<html></html>", md, "static", false);
+    expect(q.score).toBeGreaterThanOrEqual(40);
     expect(q.score).toBe(q.cleanliness_score);
+  });
+
+  it("cleanliness_score stays raw (below score) when the presence floor lifts score", () => {
+    // Substantive prose (>=200 chars, >=50 words) with no headings/code/lists scores
+    // low on the additive signals, so the presence floor lifts `score` to 40 while
+    // `cleanliness_score` keeps the raw pre-floor value (they differ).
+    const prose =
+      "This page describes the deployment process in plain prose without any markdown " +
+      "headings, code blocks, or bullet lists, which means it scores low on the additive " +
+      "cleanliness signals even though it clearly carries real informational content that " +
+      "a reader would consider substantive and complete for the topic at hand here today.";
+    const q = scoreExtraction("<html></html>", prose, "static", false);
+    expect(q.content_present).toBe(true);
+    expect(q.score).toBe(40);
+    expect(q.cleanliness_score).toBeLessThan(q.score);
+  });
+
+  it("cleanliness_score never exceeds score (floor only lifts the display value)", () => {
+    for (const n of [1, 3, 5, 8]) {
+      const q = scoreExtraction("<html></html>", docsMarkdown("Inv", n), "static", false);
+      expect(q.cleanliness_score).toBeLessThanOrEqual(q.score);
+    }
   });
 
   it("still returns a signals array", () => {

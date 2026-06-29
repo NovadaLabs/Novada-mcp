@@ -501,7 +501,8 @@ async function extractSingleInner(
   let hasStructuredData = structuredData !== null;
   let quality = scoreExtraction(html, mainContent, usedMode, hasStructuredData);
 
-  // P0-1: Quality floor — never return quality:0 for non-empty content
+  // P0-1: Quality floor — never return quality:0 for non-empty content.
+  // Only the display `score` is floored; `cleanliness_score` stays the raw markup value.
   if (mainContent && mainContent.length > 0 && quality.score === 0) {
     quality.score = 1;
   }
@@ -677,10 +678,10 @@ async function extractSingleInner(
       extractionQuality = "high";
     } else if (matched === 0) {
       extractionQuality = "none";
-    } else if (matched === 1) {
-      extractionQuality = "low";
     } else {
-      extractionQuality = "partial";
+      // Partial fill: "low" when under half the requested fields resolved, else "partial".
+      // (Avoids labelling 1-of-2 as "low" — that is a genuine partial match.)
+      extractionQuality = matched < total / 2 ? "low" : "partial";
     }
   }
 
@@ -853,7 +854,9 @@ async function extractSingleInner(
       } else {
         const attemptedList = r.attempted && r.attempted.length > 0 ? r.attempted.join(" → ") : "none";
         // Heading reason adds color to the "why" but the authoritative trail is `attempted`.
-        const headingResult = matchHeadingSectionWithReason(displayContent, r.field);
+        // Use full mainContent (not display-truncated) to match field extraction's input —
+        // otherwise a heading past the truncation point yields a misleading no_heading hint.
+        const headingResult = matchHeadingSectionWithReason(mainContent, r.field);
         if (headingResult.reason === "no_heading_match") hasNoHeadingMatchField = true;
         lines.push(`- ${r.field}: null — attempted: ${attemptedList}`);
         if (r.agent_instruction) lines.push(`  agent_instruction: ${r.agent_instruction}`);

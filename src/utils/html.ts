@@ -377,11 +377,11 @@ export function extractStructuredData(html: string): StructuredData | null {
 }
 
 export interface ExtractionQuality {
-  /** @deprecated back-compat alias of cleanliness_score. Prefer content_present + cleanliness_score. */
+  /** 0-100 display score: the floored/mutated value (presence floor + caller quality floors applied). Prefer content_present + cleanliness_score for orthogonal signals. */
   score: number;             // 0-100
   /** True when the page carries substantive prose/content (not a shell, wall, or boilerplate-only page). */
   content_present: boolean;
-  /** 0-100 markup-quality score (the historical `score`). */
+  /** 0-100 raw additive markup-quality score, captured BEFORE the presence floor (and untouched by caller quality floors). May be lower than `score` when a floor lifts the display value. */
   cleanliness_score: number;
   /** Human-readable reasons explaining content_present + cleanliness (agent-facing). */
   quality_reasons: string[];
@@ -448,8 +448,9 @@ export function hasSubstantiveContent(cleanedMarkdown: string): boolean {
  * docs pages with full text are no longer mislabelled "poor" just because their
  * markup is link-heavy or sparsely structured:
  *   - content_present  — is there real content here? (drives content_ok / escalation)
- *   - cleanliness_score — how clean is the markup? (the old additive 0-100 score)
- * `score` is kept as a back-compat alias of cleanliness_score.
+ *   - cleanliness_score — how clean is the markup? (the raw additive 0-100 score, pre-floor)
+ * `score` is the display value: cleanliness_score after the presence floor (and any caller
+ * quality floors) are applied, so `score` >= `cleanliness_score` whenever a floor lifts it.
  *
  * All length/link/heading signals run on the CLEANED markdown (boilerplate removed).
  */
@@ -563,6 +564,10 @@ export function scoreExtraction(
   // Clamp to [0, 100]
   score = Math.max(0, Math.min(100, score));
 
+  // Capture the raw additive markup score BEFORE the presence floor so callers can
+  // distinguish "actual markup cleanliness" from the floored display score.
+  const cleanliness_score = score;
+
   // Presence floor (NOV-565): a page with real content must not read as "poor".
   // Lift cleanliness to 40 (the "moderate" boundary) so content_ok consumers and
   // the qualityLabel never label a full-text docs page below "moderate".
@@ -587,7 +592,7 @@ export function scoreExtraction(
   return {
     score,
     content_present,
-    cleanliness_score: score,
+    cleanliness_score,
     quality_reasons,
     signals,
   };

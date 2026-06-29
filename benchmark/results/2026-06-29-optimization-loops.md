@@ -20,7 +20,7 @@
 | 2 | Finance fields fill-rate (MRVL fixture, 5 fields) | resolved fields | **0 / 5** | **4 / 5** | `tests/utils/fields.test.ts` › "NOV-564 finance fallback" |
 | 3 | Docs quality (BrightData-style intro page) | `content_ok` / score | **false** / 30 ("poor") | **true** / 45 ("moderate") | `tests/utils/quality.test.ts` › "NOV-565 docs fixtures…" |
 | 4 | Site-copy: ingest a ≥30-page docs section | pages + manifest | **impossible** (crawl cap 20, batch cap 10, no files) | **up to 1000 pages, 1 .md/page + manifest.json** | `tests/tools/site_copy.test.ts` (25-page run proven) |
-| 5 | Search authority: finance query, top-5 | authoritative-domain ratio | **2 / 5 (0.40)** | **3 / 5 (0.60)** | `tests/utils/rerank.test.ts` › "NOV-567" + reproduction fixture |
+| 5 | Search authority: finance query, top-5 | authoritative-domain ratio | **2 / 5 (0.40)** | **3 / 5 (0.60)** | rerank MECHANISM test-backed (`tests/utils/rerank.test.ts` › "NOV-567"); the 0.40→0.60 ratio itself is an **authored reproduction, not test-enforced** (no SERP-ratio assertion) |
 
 **Test suite vs the 59-fail baseline:** baseline **59 failed / 579 passed (638)** →
 working tree **50 failed / 724 passed (774)**. **0 net-new regressions** (every one of the 50
@@ -148,8 +148,12 @@ get `+1.0`, social/PR (Facebook/LinkedIn/X/Reddit/PRNewswire/Businesswire) get `
 queries apply **no** penalty (so a "reddit thread" query is never down-ranked). Magnitude stays below a
 two-term title-match gap, so authority nudges/breaks ties but never vetoes genuine keyword relevance.
 
-Reproduction fixture — finance SERP (`"Marvell MRVL quarterly earnings revenue SEC filing"`,
-`intent=factual`), 8 results all keyword-matched so keyword score alone leaves provider order:
+**Authored reproduction (NOT test-enforced):** the SERP ratio below is an authored illustration of
+the mechanism, hand-constructed to show the expected effect — it is **not asserted by any test**.
+No SERP-ratio test enforces 0.40→0.60. The reranking *mechanism* it illustrates IS test-backed (see
+`tests/utils/rerank.test.ts` below). Reproduction fixture — finance SERP
+(`"Marvell MRVL quarterly earnings revenue SEC filing"`, `intent=factual`), 8 results all
+keyword-matched so keyword score alone leaves provider order:
 
 ```
 intent: factual
@@ -160,9 +164,10 @@ AFTER  top-5 authoritative: 3/5 (0.60)
 ```
 
 PRNewswire + LinkedIn (PR/social) dropped out of the top 5; SEC, Reuters, AP (authoritative) rose.
-**Result: 2/5 (0.40) → 3/5 (0.60).** Backed by 20 rerank tests (incl. "authoritative outranks PR wire
-at equal keyword score", "factual intent does not override a genuine title-match delta", "social intent
-does NOT penalize social domains", "missing/invalid URL does not crash").
+**Result: 2/5 (0.40) → 3/5 (0.60) — authored reproduction; mechanism test-backed, exact ratio not
+test-enforced.** The underlying mechanism is backed by 20 rerank tests (incl. "authoritative outranks
+PR wire at equal keyword score", "factual intent does not override a genuine title-match delta",
+"social intent does NOT penalize social domains", "missing/invalid URL does not crash").
 
 ---
 

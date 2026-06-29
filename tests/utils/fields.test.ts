@@ -119,7 +119,10 @@ describe("extractFields — NOV-564 finance fallback", () => {
   it("hero price resolves from <span class=price>", () => {
     const results = extractFields(["price"], null, "", MRVL_HTML);
     expect(results[0].value).toBe("72.13");
-    expect(results[0].source).toBe("table"); // adjacent hero block tagged as table-class source
+    // Adjacent hero block matches by class/attr token (not a real table row), so it is
+    // tagged at the pattern tier — not "table". Confidence is the pattern-tier value.
+    expect(results[0].source).toBe("pattern");
+    expect(results[0].confidence).toBe(0.6);
   });
 
   it("market cap resolves from row-label table", () => {

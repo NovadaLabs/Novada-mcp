@@ -134,9 +134,9 @@ export function detectIntent(query: string | undefined): SearchIntent {
   );
   if (hasSocial) return "social";
 
-  const hasFactual = FACTUAL_LEXICON.some((t) =>
-    t.includes(" ") ? q.includes(t) : q.includes(` ${t} `)
-  );
+  // q is space-padded, so wrap every term (single- or multi-word) in spaces to enforce
+  // word-boundary matching and avoid substring false positives (e.g. "pe" inside "tape").
+  const hasFactual = FACTUAL_LEXICON.some((t) => q.includes(` ${t} `));
   if (hasFactual) return "factual";
 
   return "default";

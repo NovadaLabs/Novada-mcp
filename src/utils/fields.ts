@@ -615,10 +615,11 @@ export function extractFields(
       const microdataValue = extractFromMicrodata($, canonical) ?? extractFromMicrodata($, field);
       if (microdataValue) return resolved(field, microdataValue, "microdata", attempted);
 
-      // 6. Adjacent hero stat blocks (.price, [class*=change])
+      // 6. Adjacent hero stat blocks (.price, [class*=change]). Matched by class/attribute
+      //    token, not a real table row — score it at the pattern tier, not table confidence.
       attempted.push("adjacent");
       const adjacentValue = extractFromAdjacentPairs($, canonical);
-      if (adjacentValue) return resolved(field, adjacentValue, "table", attempted);
+      if (adjacentValue) return resolved(field, adjacentValue, "pattern", attempted);
     }
 
     // 7. Known pattern matching in markdown (canonical first, then raw field key).
