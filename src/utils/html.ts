@@ -377,13 +377,82 @@ export function extractStructuredData(html: string): StructuredData | null {
 }
 
 export interface ExtractionQuality {
-  score: number;      // 0-100
-  signals: string[];  // human-readable reasons (for debugging)
+  /** 0-100 display score: the floored/mutated value (presence floor + caller quality floors applied). Prefer content_present + cleanliness_score for orthogonal signals. */
+  score: number;             // 0-100
+  /** True when the page carries substantive prose/content (not a shell, wall, or boilerplate-only page). */
+  content_present: boolean;
+  /** 0-100 raw additive markup-quality score, captured BEFORE the presence floor (and untouched by caller quality floors). May be lower than `score` when a floor lifts the display value. */
+  cleanliness_score: number;
+  /** Human-readable reasons explaining content_present + cleanliness (agent-facing). */
+  quality_reasons: string[];
+  signals: string[];         // human-readable reasons (for debugging)
+}
+
+/** Boilerplate phrases that carry no informational content (docs-site chrome). */
+const BOILERPLATE_PHRASES: string[] = [
+  "Copy page",
+  "Building an AI startup?",
+  "On this page",
+  "Was this page helpful?",
+];
+
+/**
+ * Strip docs-site boilerplate from cleaned markdown before running quality signals.
+ * Removes empty / zero-width anchor links (e.g. `[​](#anchor)`, `[](#section)`)
+ * and known no-content chrome phrases. Returns markdown safe to length/word-count.
+ */
+export function stripBoilerplate(markdown: string): string {
+  if (!markdown) return "";
+  let out = markdown;
+
+  // Remove markdown links whose visible text is empty or only zero-width/whitespace
+  // chars, regardless of target (e.g. heading-anchor "permalink" icons docs sites emit).
+  // [​](#x), [](#x), [ ](https://...), [​​](...)
+  out = out.replace(/\[[\s​‌‍﻿]*\]\([^)]*\)/g, "");
+
+  // Remove known boilerplate phrases (case-insensitive, whole-line tolerant).
+  for (const phrase of BOILERPLATE_PHRASES) {
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(escaped, "gi"), "");
+  }
+
+  // Collapse blank lines left behind by the removals.
+  return out
+    .split("\n")
+    .filter((l, i, arr) => !(l.trim() === "" && (i === 0 || arr[i - 1].trim() === "")))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Count whitespace-delimited words in a string. */
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
 }
 
 /**
- * Score the quality of an extraction result on a 0-100 scale.
- * Additive signals, clamped to [0, 100].
+ * Heuristic: does the CLEANED markdown carry substantive content?
+ * Substantive = cleaned length >= 200 chars AND word count >= 50.
+ * Boilerplate (empty anchors, docs chrome) is stripped before measuring,
+ * so a shell/wall page that only renders nav + "Copy page" reads as not-present.
+ */
+export function hasSubstantiveContent(cleanedMarkdown: string): boolean {
+  if (!cleanedMarkdown) return false;
+  return cleanedMarkdown.length >= 200 && countWords(cleanedMarkdown) >= 50;
+}
+
+/**
+ * Score the quality of an extraction result.
+ *
+ * NOV-565: splits the historical single `score` into two orthogonal signals so
+ * docs pages with full text are no longer mislabelled "poor" just because their
+ * markup is link-heavy or sparsely structured:
+ *   - content_present  — is there real content here? (drives content_ok / escalation)
+ *   - cleanliness_score — how clean is the markup? (the raw additive 0-100 score, pre-floor)
+ * `score` is the display value: cleanliness_score after the presence floor (and any caller
+ * quality floors) are applied, so `score` >= `cleanliness_score` whenever a floor lifts it.
+ *
+ * All length/link/heading signals run on the CLEANED markdown (boilerplate removed).
  */
 export function scoreExtraction(
   html: string,
@@ -391,8 +460,13 @@ export function scoreExtraction(
   usedMode: string,
   hasStructuredData: boolean
 ): ExtractionQuality {
+  // Run signals on cleaned markdown so docs-site chrome doesn't skew length/links.
+  const cleaned = stripBoilerplate(markdown);
+  const content_present = hasSubstantiveContent(cleaned);
+
   let score = 0;
   const signals: string[] = [];
+  const quality_reasons: string[] = [];
 
   // Structured data bonus (reduced to +10 — pages without JSON-LD shouldn't be penalized heavily)
   if (hasStructuredData) {
@@ -400,8 +474,8 @@ export function scoreExtraction(
     signals.push("structured_data:+10");
   }
 
-  // Content length
-  const contentLen = markdown.length;
+  // Content length (measured on cleaned markdown)
+  const contentLen = cleaned.length;
   if (contentLen < 200) {
     score -= 20;
     signals.push("content_tiny:-20");
@@ -414,24 +488,24 @@ export function scoreExtraction(
   }
 
   // List items: reward pages with many structured list entries (listings, feeds, search results)
-  const listItemCount = (markdown.match(/^- /gm) ?? []).length;
+  const listItemCount = (cleaned.match(/^- /gm) ?? []).length;
   if (listItemCount >= 10) {
     score += 10;
     signals.push("has_list_items:+10");
   }
 
   // Content lines: reward well-structured content with many lines
-  const lineCount = markdown.split("\n").filter(l => l.trim().length > 0).length;
+  const lineCount = cleaned.split("\n").filter(l => l.trim().length > 0).length;
   if (lineCount >= 20) {
     score += 5;
     signals.push("content_lines:+5");
   }
 
   // Link density: count [text](url) patterns in markdown
-  const linkMatches = markdown.match(/\[[^\]]+\]\([^)]+\)/g);
+  const linkMatches = cleaned.match(/\[[^\]]+\]\([^)]+\)/g);
   const linkCount = linkMatches ? linkMatches.length : 0;
   // Rough word count for density: split on whitespace
-  const wordCount = markdown.split(/\s+/).filter(Boolean).length;
+  const wordCount = countWords(cleaned);
   if (wordCount > 0) {
     const density = linkCount / wordCount;
     // Upper bound raised from 0.4 to 0.6 — listing pages (Reddit, HN) have link-heavy content
@@ -442,17 +516,24 @@ export function scoreExtraction(
   }
 
   // Has H2 or H3 headings
-  const hasHeadings = /^## |^### /m.test(markdown);
+  const hasHeadings = /^## |^### /m.test(cleaned);
   if (hasHeadings) {
     score += 10;
     signals.push("has_headings:+10");
   }
 
   // Has at least one code block
-  const hasCodeBlock = /```/.test(markdown);
+  const hasCodeBlock = /```/.test(cleaned);
   if (hasCodeBlock) {
     score += 5;
     signals.push("has_code_block:+5");
+  }
+
+  // Substantive prose: real content with structure (NOV-565). Rescues docs/article pages
+  // whose markup is link-heavy or otherwise scores low on the additive signals.
+  if (content_present && hasHeadings) {
+    score += 15;
+    signals.push("substantive_prose:+15");
   }
 
   // Mode bonus/penalty
@@ -468,8 +549,8 @@ export function scoreExtraction(
   }
   // browser: 0 points, no signal
 
-  // Truncation penalty
-  if (markdown.length >= 25000) {
+  // Truncation penalty (measured on cleaned markdown)
+  if (contentLen >= 25000) {
     score -= 5;
     signals.push("truncated:-5");
   }
@@ -483,7 +564,38 @@ export function scoreExtraction(
   // Clamp to [0, 100]
   score = Math.max(0, Math.min(100, score));
 
-  return { score, signals };
+  // Capture the raw additive markup score BEFORE the presence floor so callers can
+  // distinguish "actual markup cleanliness" from the floored display score.
+  const cleanliness_score = score;
+
+  // Presence floor (NOV-565): a page with real content must not read as "poor".
+  // Lift cleanliness to 40 (the "moderate" boundary) so content_ok consumers and
+  // the qualityLabel never label a full-text docs page below "moderate".
+  if (content_present && score < 40) {
+    score = 40;
+    signals.push("presence_floor:=40");
+  }
+
+  // Agent-facing reasons (concise, parseable).
+  quality_reasons.push(
+    content_present
+      ? `content_present:true (cleaned ${contentLen} chars, ${wordCount} words)`
+      : `content_present:false (cleaned ${contentLen} chars, ${wordCount} words — below 200char/50word threshold)`
+  );
+  if (hasStructuredData) quality_reasons.push("has_structured_data");
+  if (hasHeadings) quality_reasons.push("has_headings");
+  if (hasCodeBlock) quality_reasons.push("has_code_block");
+  if (linkCount > 0 && wordCount > 0 && linkCount / wordCount > 0.6) {
+    quality_reasons.push("link_heavy (density>0.6)");
+  }
+
+  return {
+    score,
+    content_present,
+    cleanliness_score,
+    quality_reasons,
+    signals,
+  };
 }
 
 export function qualityLabel(score: number): string {

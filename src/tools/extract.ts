@@ -9,6 +9,52 @@ import { TIMEOUTS } from "../config.js";
 
 export { detectJsHeavyContent } from "../utils/index.js";
 
+/**
+ * Default character ceiling applied to extracted content when the caller does not
+ * pass max_chars. Matches docs (novada-mcp-documentation.md) and the extract test
+ * suite, and aligns with extractMainContent's internal 25000 cap so a default
+ * extraction never double-truncates. Hoisted to module scope so the single-URL
+ * path, the PDF slice, and any future call site share one source of truth.
+ */
+const MAX_CHARS_DEFAULT = 25000;
+
+/** Markdown annotation for a resolved field's source (used in the Requested Fields block). */
+function sourceAnnotation(source: FieldResult["source"]): string {
+  switch (source) {
+    case "jsonld":
+      return " *(from schema)*";
+    case "microdata":
+      return " *(microdata)*";
+    case "infobox":
+      return " *(infobox)*";
+    case "table":
+      return " *(table)*";
+    case "heading":
+      return " *(from heading)*";
+    case "llm":
+      return " *(llm)*";
+    default:
+      return " *(pattern)*";
+  }
+}
+
+/**
+ * Parse the per-page returned/total char counts and truncation flag out of a single
+ * extractSingle markdown/JSON result so the batch wrapper can surface consistent
+ * per-item flags without re-truncating. Best-effort: an error/timeout block (no
+ * recognizable content meta) is reported as not-truncated rather than crashing.
+ */
+function parseItemStats(content: string): { returnedChars: number; truncated: boolean; totalChars: number | null } {
+  const returnedChars = content.length;
+  // Markdown path exposes `... | content_truncated:true | total_chars:N` on the meta line.
+  // JSON path exposes "content_truncated": true and "total_chars": N.
+  const truncated = /content_truncated"?\s*[:=]\s*true/i.test(content);
+  let totalChars: number | null = null;
+  const totalMatch = content.match(/total_chars"?\s*[:=]\s*"?(\d+)/i);
+  if (totalMatch) totalChars = parseInt(totalMatch[1], 10);
+  return { returnedChars, truncated, totalChars };
+}
+
 export async function novadaExtract(params: ExtractParams, apiKey?: string): Promise<string> {
   // P1-6: Normalize url/urls into a list
   const urlList: string[] = params.urls
@@ -44,20 +90,12 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     const successful = results.filter(r => r.ok).length;
     const failed = results.length - successful;
 
-    // Fix 3: Cap total batch output to ~25K chars to prevent host systems from saving to file
-    const MAX_BATCH_TOTAL = 25000;
-    const rawTotal = results.reduce((sum, r) => sum + r.content.length, 0);
-    let batchTruncated = false;
-    if (rawTotal > MAX_BATCH_TOTAL) {
-      const perUrlLimit = Math.max(500, Math.floor(MAX_BATCH_TOTAL / results.length));
-      for (const r of results) {
-        if (r.content.length > perUrlLimit) {
-          r.content = r.content.slice(0, perUrlLimit) +
-            `\n\n[truncated at ${perUrlLimit} chars — call novada_extract with this URL individually for full content]`;
-          batchTruncated = true;
-        }
-      }
-    }
+    // NOV-563/568: Do NOT re-truncate per page. Each extractSingle already honors
+    // max_chars (default MAX_CHARS_DEFAULT). The old MAX_BATCH_TOTAL block sliced each
+    // page to floor(25000/N) (~3125 chars at 8 URLs), silently ignoring max_chars and
+    // destroying content. Instead we keep every page intact, surface per-item char
+    // flags parsed from the inner block, and persist the whole batch to disk so large
+    // output is recoverable even if the host truncates the inline response.
 
     const lines: string[] = [
       `## Batch Extract Results`,
@@ -70,6 +108,9 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     for (const r of results) {
       lines.push(`### [${r.i + 1}/${urls.length}] ${r.url}`);
       if (!r.ok) lines.push(`status: FAILED`);
+      const stats = parseItemStats(r.content);
+      const totalPart = stats.totalChars !== null ? ` | total_chars:${stats.totalChars}` : "";
+      lines.push(`returned_chars:${stats.returnedChars} | content_truncated:${stats.truncated}${totalPart}`);
       lines.push(``);
       lines.push(r.content);
       lines.push(``);
@@ -81,12 +122,32 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     if (failed > 0) {
       lines.push(`- ${failed} URL(s) failed. Each failure includes a suggested_fix — read the error block above for per-URL guidance.`);
     }
-    if (batchTruncated) {
-      lines.push(`- Batch output capped at ~${MAX_BATCH_TOTAL} chars total (${rawTotal} raw). Call novada_extract with individual URLs for full content.`);
-    }
+    lines.push(`- Per-page content is returned in full (each page honored its own max_chars). Pages flagged content_truncated:true hit max_chars — re-run that URL individually with a higher max_chars for the rest.`);
     lines.push(`- Use novada_map to discover additional pages on any of these domains.`);
 
-    return lines.join("\n");
+    const batchOutput = lines.join("\n");
+
+    // Best-effort: persist the entire batch to disk and put the path at the TOP so
+    // agents that truncate long responses still see where the full result landed.
+    // Removing the per-page cap can blow up inline size — the save + top-path land together.
+    let batchPrefix = "";
+    try {
+      const firstUrl = urls[0];
+      const hint = (() => {
+        try { return `batch-${new URL(firstUrl).hostname.replace(/^www\./, "")}`; }
+        catch { return "batch"; }
+      })();
+      const outputResult = await saveOutput({
+        tool: "extract",
+        hint,
+        format: "md",
+        data: batchOutput,
+        project: params.project,
+      });
+      batchPrefix = `path: ${outputResult.filePath}\n\n`;
+    } catch { /* best-effort */ }
+
+    return batchPrefix + batchOutput;
   }
 
   // Single URL mode
@@ -395,7 +456,7 @@ async function extractSingleInner(
   // clean=true → main-content only; clean=false (default) → full page for maximum coverage
   const useFullPage = params.clean !== true;
   let mainContent = pdfPages !== null
-    ? html.slice(0, 25000)
+    ? html.slice(0, MAX_CHARS_DEFAULT)
     : useFullPage
       ? extractFullPageContent(html, params.url)
       : extractMainContent(html, params.url);
@@ -416,7 +477,6 @@ async function extractSingleInner(
     .slice(0, 15);
 
   // P0-5: max_chars truncation — applies to ALL formats (text, markdown, html handled separately)
-  const MAX_CHARS_DEFAULT = 100000;
   const maxChars = params.max_chars ?? MAX_CHARS_DEFAULT;
 
   if (params.format === "text") {
@@ -441,7 +501,8 @@ async function extractSingleInner(
   let hasStructuredData = structuredData !== null;
   let quality = scoreExtraction(html, mainContent, usedMode, hasStructuredData);
 
-  // P0-1: Quality floor — never return quality:0 for non-empty content
+  // P0-1: Quality floor — never return quality:0 for non-empty content.
+  // Only the display `score` is floored; `cleanliness_score` stays the raw markup value.
   if (mainContent && mainContent.length > 0 && quality.score === 0) {
     quality.score = 1;
   }
@@ -457,7 +518,9 @@ async function extractSingleInner(
   // Registry entries are pre-classified — a low quality score on a "static" known domain
   // means the page is genuinely small (e.g. example.com), not that it needs JS rendering.
   // Without this guard, minimal static pages trigger fetchWithRender, adding 3–10s of latency.
-  if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !html.startsWith("pdf_pages:") && !domainHint) {
+  // NOV-565: also require !content_present — a page that already has substantive text
+  // must not re-fetch via render/browser just because its cleanliness score is low.
+  if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !quality.content_present && !html.startsWith("pdf_pages:") && !domainHint) {
     escalationAttempted = true;
     try {
       const renderResponse = await fetchWithRender(params.url, apiKey);
@@ -498,7 +561,8 @@ async function extractSingleInner(
     }
 
     // If render escalation didn't improve quality enough, try browser as final fallback
-    if (quality.score < 40 && isBrowserConfigured()) {
+    // NOV-565: skip browser fallback when content is already present (full-text page).
+    if (quality.score < 40 && !quality.content_present && isBrowserConfigured()) {
       try {
         const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
         const browserMain = useFullPage
@@ -533,7 +597,8 @@ async function extractSingleInner(
     }
 
     // INC-199: If quality is still low after all escalation attempts, mark as failed
-    if (quality.score < 40 && !autoEscalated) {
+    // NOV-565: don't flag escalation_failed when the page actually has content.
+    if (quality.score < 40 && !quality.content_present && !autoEscalated) {
       escalationFailed = true;
     }
   }
@@ -586,30 +651,37 @@ async function extractSingleInner(
   const isTruncated = contentTruncated;
 
   // Field extraction
+  // Use the FULL pre-truncation content (mainContent), not the display-capped slice.
+  // displayContent is sliced to max_chars (default 25k) purely for inline rendering;
+  // a field located past that cap on a long page must still resolve, so the markdown-text
+  // layers (pattern/generic/tolerant/proximity/heading in fields.ts) get the uncapped text.
   let fieldResults: FieldResult[] | null = null;
   if (params.fields && params.fields.length > 0) {
-    fieldResults = extractFields(params.fields, structuredData, displayContent, html);
+    fieldResults = extractFields(params.fields, structuredData, mainContent, html);
   }
 
   const metaExtra = contentTruncated
     ? ` | content_truncated:true | total_chars:${totalChars}`
     : "";
 
-  const contentOk = mainContent.length > 100 && usedMode !== "render-failed" && !stillJsHeavy && quality.score >= 40;
+  // NOV-565: content_ok is driven by content_present (substantive prose detected on the
+  // CLEANED markdown), not the cleanliness score. Docs pages with full text but link-heavy
+  // markup used to fail the old `score >= 40` gate; now a page with real content passes.
+  const contentOk = quality.content_present && mainContent.length > 100 && usedMode !== "render-failed" && !stillJsHeavy;
 
-  // Compute extraction_quality label
+  // Compute extraction_quality label from fill-rate (resolved fields / requested fields)
   let extractionQuality: "high" | "partial" | "low" | "none" | "n/a" = "n/a";
   if (fieldResults && fieldResults.length > 0) {
-    const matched = fieldResults.filter(r => r.source !== "not_found").length;
+    const matched = fieldResults.filter(r => r.source !== "unresolved").length;
     const total = fieldResults.length;
     if (matched === total) {
       extractionQuality = "high";
     } else if (matched === 0) {
       extractionQuality = "none";
-    } else if (matched === 1) {
-      extractionQuality = "low";
     } else {
-      extractionQuality = "partial";
+      // Partial fill: "low" when under half the requested fields resolved, else "partial".
+      // (Avoids labelling 1-of-2 as "low" — that is a genuine partial match.)
+      extractionQuality = matched < total / 2 ? "low" : "partial";
     }
   }
 
@@ -624,11 +696,29 @@ async function extractSingleInner(
       mode: usedMode,
       source: waybackFallback ? "wayback" : "live",
       fetched_at: fetchedAt,
-      quality: { score: quality.score, label: qLabel, content_ok: contentOk },
+      quality: {
+        score: quality.score,
+        cleanliness_score: quality.cleanliness_score,
+        content_present: quality.content_present,
+        label: qLabel,
+        content_ok: contentOk,
+        reasons: quality.quality_reasons,
+      },
       content: displayContent,
+      content_truncated: contentTruncated,
+      returned_chars: displayContent.length,
+      total_chars: totalChars,
       structured_data: structuredData ?? null,
       fields: fieldResults
-        ? Object.fromEntries(fieldResults.map(r => [r.field, r.source === "not_found" ? null : r.value]))
+        ? Object.fromEntries(fieldResults.map(r => [
+            r.field,
+            {
+              value: r.source === "unresolved" ? null : r.value,
+              source: r.source,
+              confidence: r.confidence,
+              ...(r.source === "unresolved" && r.agent_instruction ? { agent_instruction: r.agent_instruction } : {}),
+            },
+          ]))
         : null,
       links: { same_domain: sameDomainLinks, total: allLinks.length },
       hints: [] as string[],
@@ -666,7 +756,8 @@ async function extractSingleInner(
       if (scraperOp) {
         hints.push(`For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
       }
-      if (usedMode === "render-failed" || (stillJsHeavy && !contentOk)) {
+      // NOV-565: never show a bot-protection hint when the page already has full content.
+      if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
         hints.push(`Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
       }
     }
@@ -695,7 +786,8 @@ async function extractSingleInner(
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
-    `mode: ${usedMode} | source: ${waybackFallback ? "wayback" : "live"} | quality:${quality.score}/100 (${qLabel}) | content_ok:${contentOk}`,
+    `mode: ${usedMode} | source: ${waybackFallback ? "wayback" : "live"} | quality:${quality.score}/100 (${qLabel}) | content_present:${quality.content_present} | content_ok:${contentOk}`,
+    `quality_reasons: ${quality.quality_reasons.join("; ")}`,
     `fetched_at: ${fetchedAt}`,
     `extraction_quality: ${extractionQuality}`,
     `title: ${title}`,
@@ -708,24 +800,25 @@ async function extractSingleInner(
 
   // Requested Fields block (before Structured Data)
   if (fieldResults && fieldResults.length > 0) {
-    const allNotFound = fieldResults.every(r => r.source === "not_found");
-    if (allNotFound && fieldResults.length > 0) {
-      lines.push(`## Requested Fields (not available as structured data)`);
-      lines.push(`Fields [${fieldResults.map(r => r.field).join(', ')}] could not be extracted from structured data (JSON-LD/meta tags).`);
+    const allUnresolved = fieldResults.every(r => r.source === "unresolved");
+    if (allUnresolved && fieldResults.length > 0) {
+      lines.push(`## Requested Fields (none resolved)`);
+      lines.push(`Fields [${fieldResults.map(r => r.field).join(', ')}] could not be resolved from JSON-LD, tables, microdata, or page patterns.`);
       lines.push(`The data may be present in the page content above — read the markdown body directly.`);
-      lines.push(`agent_instruction: For Wikipedia/wiki pages, parse the content body. For e-commerce sites, fields extraction works automatically.`);
+      const firstInstruction = fieldResults.find(r => r.agent_instruction)?.agent_instruction;
+      lines.push(`agent_instruction: ${firstInstruction ?? `For Wikipedia/wiki pages, parse the content body. For finance/e-commerce pages, retry with render="render" to fetch JS-rendered values.`}`);
     } else {
       lines.push(`## Requested Fields`);
       for (const r of fieldResults) {
-        const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : r.source === "heading" ? " *(from heading)*" : " *(pattern)*";
-        if (r.source === "not_found") {
-          lines.push(`${r.field}: — (not in structured data)`);
+        const sourceTag = sourceAnnotation(r.source);
+        if (r.source === "unresolved") {
+          lines.push(`${r.field}: — *(unresolved)*${r.agent_instruction ? ` — ${r.agent_instruction}` : ""}`);
         } else {
           // P0-3: Strip *(pattern)* annotation from the field value itself
           const cleanValue = typeof r.value === "string"
             ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
             : r.value;
-          lines.push(`${r.field}: ${cleanValue}${sourceTag}`);
+          lines.push(`${r.field}: ${cleanValue}${sourceTag} *(conf:${r.confidence.toFixed(2)})*`);
         }
       }
     }
@@ -753,19 +846,20 @@ async function extractSingleInner(
 
   // Extraction Diagnostics — emit only when fields were requested and at least one is null
   let hasNoHeadingMatchField = false;
-  if (fieldResults && fieldResults.some(r => r.source === "not_found")) {
+  if (fieldResults && fieldResults.some(r => r.source === "unresolved")) {
     lines.push(``, `---`, `## Extraction Diagnostics`);
     for (const r of fieldResults) {
-      if (r.source !== "not_found") {
-        const method = r.source === "heading" ? "heading-match" : r.source === "structured_data" ? "meta-tag" : "pattern-match";
-        lines.push(`- ${r.field}: matched ✓ (via ${method})`);
+      if (r.source !== "unresolved") {
+        lines.push(`- ${r.field}: matched ✓ (via ${r.source}, conf:${r.confidence.toFixed(2)})`);
       } else {
-        const headingResult = matchHeadingSectionWithReason(displayContent, r.field);
-        const reasonText = headingResult.reason === "section_empty"
-          ? "heading found but content was empty/fenced"
-          : `no "## ${r.field}" heading found in page`;
+        const attemptedList = r.attempted && r.attempted.length > 0 ? r.attempted.join(" → ") : "none";
+        // Heading reason adds color to the "why" but the authoritative trail is `attempted`.
+        // Use full mainContent (not display-truncated) to match field extraction's input —
+        // otherwise a heading past the truncation point yields a misleading no_heading hint.
+        const headingResult = matchHeadingSectionWithReason(mainContent, r.field);
         if (headingResult.reason === "no_heading_match") hasNoHeadingMatchField = true;
-        lines.push(`- ${r.field}: null — reason: ${headingResult.reason} (${reasonText})`);
+        lines.push(`- ${r.field}: null — attempted: ${attemptedList}`);
+        if (r.agent_instruction) lines.push(`  agent_instruction: ${r.agent_instruction}`);
       }
     }
   }
@@ -843,7 +937,8 @@ async function extractSingleInner(
     if (scraperOp) {
       lines.push(`- For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
     }
-    if (usedMode === "render-failed" || (stillJsHeavy && !contentOk)) {
+    // NOV-565: never show a bot-protection hint when the page already has full content.
+    if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
       lines.push(`- Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
     }
   }
@@ -952,7 +1047,7 @@ async function extractSingle(
 }
 
 function formatJsonExtract(url: string, mode: string, jsonStr: string, maxChars?: number): string {
-  const limit = maxChars ?? 25000;
+  const limit = maxChars ?? MAX_CHARS_DEFAULT;
   const truncated = jsonStr.length > limit
     ? jsonStr.slice(0, limit) + "\n\n[truncated]"
     : jsonStr;

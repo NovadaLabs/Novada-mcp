@@ -3,6 +3,7 @@ export { novadaExtract } from "./extract.js";
 export { novadaCrawl } from "./crawl.js";
 export { novadaResearch } from "./research.js";
 export { novadaMap } from "./map.js";
+export { novadaSiteCopy } from "./site_copy.js";
 export { novadaProxy } from "./proxy.js";
 export { novadaProxyResidential, validateProxyResidentialParams, ProxyResidentialParamsSchema } from "./proxy_residential.js";
 export type { ProxyResidentialParams } from "./proxy_residential.js";
@@ -38,8 +39,8 @@ export { novadaMonitor, validateMonitorParams, MonitorParamsSchema } from "./mon
 export type { MonitorParams } from "./monitor.js";
 export { novadaSetup, validateSetupParams, SetupParamsSchema } from "./setup.js";
 export type { SetupParams } from "./setup.js";
-export type { SearchParams, ExtractParams, CrawlParams, ResearchParams, MapParams, ProxyParams, ScrapeParams, VerifyParams, UnblockParams, BrowserParams, BrowserAction, NovadaSearchResult, NovadaApiResponse, HealthParams } from "./types.js";
-export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
+export type { SearchParams, ExtractParams, CrawlParams, ResearchParams, MapParams, SiteCopyParams, ProxyParams, ScrapeParams, VerifyParams, UnblockParams, BrowserParams, BrowserAction, NovadaSearchResult, NovadaApiResponse, HealthParams } from "./types.js";
+export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
 export { classifyError, NovadaErrorCode } from "../_core/errors.js";
 
 // ─── KR-6: Novada developer-api account-management tools ────────────────────
