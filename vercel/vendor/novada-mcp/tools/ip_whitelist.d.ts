@@ -1,10 +1,10 @@
 import { z } from "zod";
 export declare const IpWhitelistParamsSchema: z.ZodObject<{
     action: z.ZodEnum<{
+        add: "add";
         del: "del";
         list: "list";
         remark: "remark";
-        add: "add";
     }>;
     product: z.ZodEnum<{
         1: "1";

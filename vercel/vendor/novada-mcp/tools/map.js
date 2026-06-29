@@ -1,4 +1,4 @@
-import { fetchViaProxy, extractLinks, normalizeUrl, isContentLink } from "../utils/index.js";
+import { fetchViaProxy, extractLinks, normalizeUrl, isContentLink, discoverViaSitemap } from "../utils/index.js";
 import { TIMEOUTS } from "../config.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode } from "../_core/errors.js";
 /**
@@ -159,75 +159,6 @@ async function novadaMapInner(params, apiKey, maxUrls, baseHostname, origin) {
     lines.push(`## Agent Action`);
     lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
     return lines.join("\n");
-}
-/** Attempt to discover URLs via sitemap.xml. Returns empty array if not available. */
-async function discoverViaSitemap(origin, apiKey, maxUrls) {
-    const urls = [];
-    // Find sitemap URL — check robots.txt first, then common paths
-    const sitemapCandidates = [];
-    try {
-        const robotsResp = await fetchViaProxy(`${origin}/robots.txt`, apiKey, { timeout: TIMEOUTS.SITEMAP });
-        if (typeof robotsResp.data === "string") {
-            const sitemapMatches = robotsResp.data.match(/^Sitemap:\s*(.+)$/gim);
-            if (sitemapMatches) {
-                for (const m of sitemapMatches) {
-                    const u = m.replace(/^Sitemap:\s*/i, "").trim();
-                    if (u.startsWith("http"))
-                        sitemapCandidates.unshift(u); // prefer robots.txt sitemap
-                }
-            }
-        }
-    }
-    catch { /* robots.txt not available */ }
-    // Fallback candidates
-    sitemapCandidates.push(`${origin}/sitemap.xml`);
-    sitemapCandidates.push(`${origin}/sitemap_index.xml`);
-    for (const sitemapUrl of sitemapCandidates.slice(0, 3)) {
-        if (urls.length >= maxUrls)
-            break;
-        try {
-            const resp = await fetchViaProxy(sitemapUrl, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC });
-            if (typeof resp.data !== "string")
-                continue;
-            const xml = resp.data;
-            if (!xml.includes("<urlset") && !xml.includes("<sitemapindex"))
-                continue;
-            // Sitemap index → recurse into child sitemaps
-            if (xml.includes("<sitemapindex")) {
-                const childSitemaps = [...xml.matchAll(/<loc>\s*(.*?)\s*<\/loc>/gs)]
-                    .map(m => m[1].trim())
-                    .filter(u => u.startsWith("http"));
-                for (const childUrl of childSitemaps.slice(0, 5)) {
-                    if (urls.length >= maxUrls)
-                        break;
-                    try {
-                        const childResp = await fetchViaProxy(childUrl, apiKey, { timeout: TIMEOUTS.SITEMAP });
-                        if (typeof childResp.data === "string") {
-                            extractSitemapUrls(childResp.data, urls, maxUrls);
-                        }
-                    }
-                    catch { /* skip */ }
-                }
-            }
-            else {
-                extractSitemapUrls(xml, urls, maxUrls);
-            }
-            if (urls.length > 0)
-                break; // found sitemap, no need to try more
-        }
-        catch { /* not found */ }
-    }
-    return urls;
-}
-function extractSitemapUrls(xml, out, max) {
-    const matches = [...xml.matchAll(/<loc>\s*(.*?)\s*<\/loc>/gs)];
-    for (const m of matches) {
-        if (out.length >= max)
-            break;
-        const u = m[1].trim();
-        if (u.startsWith("http"))
-            out.push(u);
-    }
 }
 /** Parallel BFS crawl — fetches up to CONCURRENCY pages at once */
 async function parallelBfsCrawl(params, apiKey, maxUrls, baseHostname) {

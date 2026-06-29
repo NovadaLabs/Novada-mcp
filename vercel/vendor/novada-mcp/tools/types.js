@@ -1,23 +1,21 @@
 import { z } from "zod";
+import { isBlockedHost } from "../utils/ssrf.js";
 // ─── URL Safety ─────────────────────────────────────────────────────────────
-/** Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs.
- * Matches bare IPv6 addresses (no brackets). The safeUrl refine strips brackets
- * before testing because Node.js new URL("[::1]").hostname returns "[::1]" with brackets. */
-const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|::1|::ffff:.+|fe80:.*|0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0*1)$/i;
+/**
+ * Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs.
+ *
+ * The private/loopback/link-local host decision is delegated to `isBlockedHost` in
+ * utils/ssrf.ts — the SAME helper the runtime fetch chokepoint uses — so the Zod boundary
+ * and the fetch-time guard can never drift. That helper parses the host numerically
+ * (net.isIP) and blocks by range, covering forms a string regex misses (0.0.0.0/8,
+ * 100.64.0.0/10 CGNAT, fc00::/7 ULA, IPv4-mapped/compatible loopback).
+ */
 const safeUrl = z.string()
     .url("A valid URL is required")
     .refine((url) => /^https?:\/\//i.test(url), "Only HTTP and HTTPS URLs are supported")
     .refine((url) => {
     try {
-        let host = new URL(url).hostname;
-        // Node.js wraps IPv6 in brackets (e.g. "[::1]") — strip before regex test
-        if (host.startsWith("[") && host.endsWith("]"))
-            host = host.slice(1, -1);
-        // Block decimal IP notation (e.g. http://2130706433/ = http://127.0.0.1/)
-        // and hex notation (e.g. http://0x7f000001/) — legitimate URLs never use these
-        if (/^\d+$/.test(host) || /^0x[0-9a-f]+$/i.test(host))
-            return false;
-        return !BLOCKED_HOSTS.test(host);
+        return !isBlockedHost(new URL(url).hostname);
     }
     catch {
         return false;
@@ -42,6 +40,10 @@ export const SearchParamsSchema = z.object({
         .describe("Only return results from these domains. E.g. ['github.com', 'arxiv.org']. Max 10."),
     exclude_domains: z.array(z.string()).optional()
         .describe("Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10."),
+    source_type: z.enum(["any", "news", "research", "official", "social"]).optional()
+        .describe("Bias result authority. 'research'/'official': prepend social+PR domains to the query exclusions and boost authoritative sources (*.gov, *.edu, sec.gov, arxiv.org, reuters.com, wikipedia.org, nature.com …). 'social': keep social results (no down-rank). 'news'/'any'/omitted: mild default reranking. Independent of, and combined with, automatic query-intent detection."),
+    exclude_social: z.boolean().optional()
+        .describe("When true, hard-drop social and press-release results (facebook, linkedin, x/twitter, instagram, tiktok, reddit, quora, medium, prnewswire, businesswire, globenewswire, prweb, einpresswire) from the response after fetching."),
     format: z.enum(["markdown", "json"]).default("markdown")
         .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
     enrich_top: z.boolean().optional()
@@ -79,8 +81,9 @@ export const ExtractParamsSchema = z.object({
     fields: z.array(z.string().min(1)).max(20).optional()
         .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching."),
     max_chars: z.number().int().min(1000).max(100000).optional()
-        .describe("Maximum characters to return (default: 100000, max: 100000). " +
-        "When content exceeds this limit, it is truncated and a notice is appended."),
+        .describe("Maximum characters to return (default: 25000, max: 100000). " +
+        "When content exceeds this limit, it is truncated and content_truncated:true plus total_chars are emitted. " +
+        "Raise up to 100000 only when you need the full page — do not set 100000 by default."),
     wait_for: z.string().optional()
         .describe("CSS selector to wait for before capturing content (browser mode only). E.g. '.price', '#product-title', '[data-testid=price]'. Delays capture until the element appears in the DOM. Max wait: 15s."),
     wait_ms: z.number().int().min(0).max(30000).optional()
@@ -97,9 +100,9 @@ export const CrawlParamsSchema = z.object({
         .describe("Crawl traversal order. 'bfs' (default): breadth-first — visits all pages at current depth before going deeper, good for broad discovery. 'dfs': depth-first — follows links deeply before backtracking, good for exploring specific paths."),
     instructions: z.string().optional()
         .describe("Natural language hint for which pages to prioritize. E.g. 'only API reference pages', 'skip blog and changelog'. Applied as path-level filtering; semantic filtering is agent-side."),
-    select_paths: z.array(z.string()).optional()
+    select_paths: z.array(z.string().min(1).max(200)).max(20).optional()
         .describe("Regex patterns to restrict crawled URL paths. E.g. ['/docs/.*', '/api/.*']."),
-    exclude_paths: z.array(z.string()).optional()
+    exclude_paths: z.array(z.string().min(1).max(200)).max(20).optional()
         .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
     format: z.enum(["markdown", "json"]).default("markdown")
         .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
@@ -130,6 +133,29 @@ export const MapParamsSchema = z.object({
     max_depth: z.number().int().min(1).max(5).default(2)
         .describe("Link-hops from root to follow. Default 2. Higher = more pages found but slower."),
 });
+// ─── Site Copy Params ─────────────────────────────────────────────────────────
+/** Hard ceiling on pages a single site_copy run will fetch (safety bound). */
+export const SITE_COPY_HARD_MAX = 1000;
+export const SiteCopyParamsSchema = z.object({
+    url: safeUrl,
+    max_pages: z.number().int().min(1).max(SITE_COPY_HARD_MAX).default(200)
+        .describe(`Maximum pages to copy. Default 200, hard max ${SITE_COPY_HARD_MAX}. The run drains the in-scope queue until empty or this ceiling is hit — it is a safety bound, not a target.`),
+    select_paths: z.array(z.string().min(1).max(200)).max(20).optional()
+        .describe("Regex patterns to restrict copied URL paths. E.g. ['/docs/.*', '/api/.*']. Same-host is always enforced."),
+    exclude_paths: z.array(z.string().min(1).max(200)).max(20).optional()
+        .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
+    max_depth: z.number().int().min(1).max(10).default(5)
+        .describe("BFS link-hops from root when no llms.txt/sitemap is found. Default 5. Ignored for llms.txt/sitemap discovery (which is flat)."),
+    include_subdomains: z.boolean().default(false)
+        .describe("When true, also copy pages on subdomains of the root host. Default false (same-host only)."),
+    render: z.enum(["auto", "static", "render"]).default("auto")
+        .describe("Rendering mode for each page fetch. 'auto' (default): static, escalate to render on JS-heavy detection. 'static': always static. 'render': always render (slower)."),
+    project: z.string().max(30).optional()
+        .describe("Optional project name to group outputs under ~/Downloads/novada-mcp/<date>/<project>/site-copy/. Defaults to the site domain."),
+});
+export function validateSiteCopyParams(args) {
+    return SiteCopyParamsSchema.parse(args ?? {});
+}
 export const VerifyParamsSchema = z.object({
     claim: z.string().min(10).describe("The factual claim to verify (min 10 chars)"),
     context: z.string().optional().describe("Optional context to narrow the search (e.g. 'as of 2024', 'in the US')"),

@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
 import https from "https";
-import { cleanParams, rerankResults } from "../utils/index.js";
+import { cleanParams, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
@@ -279,7 +279,23 @@ export async function novadaSearch(params, apiKey) {
     if (engine === "yahoo") {
         return YAHOO_UNAVAILABLE;
     }
-    const cacheKey = `${engine}:${params.query}:${params.num ?? 10}:${params.project ?? ""}`;
+    // Cache key must include every param that changes the result set, otherwise
+    // two searches differing only by (e.g.) exclude_social collide and return
+    // stale, semantically-wrong results.
+    const cacheKey = [
+        engine,
+        params.query,
+        params.num ?? 10,
+        params.project ?? "",
+        params.format ?? "markdown",
+        params.source_type ?? "",
+        params.exclude_social ? "1" : "",
+        (params.include_domains ?? []).join(","),
+        (params.exclude_domains ?? []).join(","),
+        params.time_range ?? "",
+        params.start_date ?? "",
+        params.end_date ?? "",
+    ].join("|");
     const cached = _searchCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
         return cached.result;
@@ -334,6 +350,25 @@ export async function novadaSearch(params, apiKey) {
         const exclusions = params.exclude_domains.slice(0, 10).map(d => `-site:${d}`).join(" ");
         effectiveQuery = `${effectiveQuery} ${exclusions}`;
     }
+    // Source-authority biasing: for research/official source_type, append the
+    // social/PR domains to the query-level exclusions so the SERP itself
+    // de-emphasizes them (cheaper + higher-quality than post-fetch filtering).
+    // Skip domains the caller already excluded to avoid a bloated query.
+    if (params.source_type === "research" || params.source_type === "official") {
+        const already = new Set((params.exclude_domains ?? []).map(d => d.toLowerCase()));
+        const socialExclusions = SOCIAL_PR_DOMAINS
+            .filter(d => !already.has(d))
+            .map(d => `-site:${d}`)
+            .join(" ");
+        if (socialExclusions)
+            effectiveQuery = `${effectiveQuery} ${socialExclusions}`;
+    }
+    // Effective rerank intent: source_type overrides automatic query detection.
+    const effectiveIntent = params.source_type === "research" || params.source_type === "official"
+        ? "factual"
+        : params.source_type === "social"
+            ? "social"
+            : detectIntent(params.query);
     try {
         if (engine === "bing") {
             // Bing uses is_auto_push=false and may return HTML synchronously or a task_id
@@ -370,7 +405,12 @@ export async function novadaSearch(params, apiKey) {
         }
         throw err;
     }
-    const results = scraperResults;
+    let results = scraperResults;
+    // exclude_social: hard-drop social/PR results post-fetch. Applied before the
+    // empty-check so an all-social SERP correctly reports "no results".
+    if (params.exclude_social) {
+        results = results.filter(r => !isSocialOrPr(r.url || r.link));
+    }
     if (results.length === 0) {
         const emptyResult = [
             `## Search Results`,
@@ -392,8 +432,8 @@ export async function novadaSearch(params, apiKey) {
         }
         return emptyResult;
     }
-    // Rerank by relevance to query
-    const reranked = rerankResults(results, params.query);
+    // Rerank by relevance to query, with bounded intent-gated domain-authority signal
+    const reranked = rerankResults(results, params.query, effectiveIntent);
     // P1-7: Auto-extract content from top N results when extract_options is provided
     // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
     if (params.extract_options || params.enrich_top) {
@@ -493,6 +533,10 @@ export async function novadaSearch(params, apiKey) {
         activeFilters.push(`only:${params.include_domains.join(",")}`);
     if (params.exclude_domains?.length)
         activeFilters.push(`exclude:${params.exclude_domains.join(",")}`);
+    if (params.source_type && params.source_type !== "any")
+        activeFilters.push(`source:${params.source_type}`);
+    if (params.exclude_social)
+        activeFilters.push(`exclude_social:true`);
     const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
     const lines = [
         `## Search Results`,
@@ -533,7 +577,7 @@ export async function novadaSearch(params, apiKey) {
     }
     lines.push(`---`);
     lines.push(`## Agent Hints`);
-    lines.push(`- Results are reranked by relevance to your query (title + snippet keyword scoring)`);
+    lines.push(`- Results are reranked by relevance (title + snippet keyword scoring) plus a bounded source-authority signal: authoritative sources (*.gov, *.edu, sec.gov, arxiv.org, reuters.com, wikipedia.org, nature.com …) are boosted and social/PR sources de-emphasized for factual/finance/research queries. Override via source_type or pass exclude_social=true to drop social/PR entirely.`);
     lines.push(`- To read any result in full: \`novada_extract\` with its url`);
     lines.push(`- To batch-read multiple results: \`novada_extract\` with \`url=[url1, url2, ...]\``);
     lines.push(`- For deeper multi-source research: \`novada_research\``);

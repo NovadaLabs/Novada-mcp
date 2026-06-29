@@ -21,6 +21,14 @@ export declare const SearchParamsSchema: z.ZodObject<{
     end_date: z.ZodOptional<z.ZodString>;
     include_domains: z.ZodOptional<z.ZodArray<z.ZodString>>;
     exclude_domains: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    source_type: z.ZodOptional<z.ZodEnum<{
+        social: "social";
+        research: "research";
+        any: "any";
+        news: "news";
+        official: "official";
+    }>>;
+    exclude_social: z.ZodOptional<z.ZodBoolean>;
     format: z.ZodDefault<z.ZodEnum<{
         json: "json";
         markdown: "markdown";
@@ -107,6 +115,24 @@ export declare const MapParamsSchema: z.ZodObject<{
     include_subdomains: z.ZodDefault<z.ZodBoolean>;
     max_depth: z.ZodDefault<z.ZodNumber>;
 }, z.core.$strip>;
+/** Hard ceiling on pages a single site_copy run will fetch (safety bound). */
+export declare const SITE_COPY_HARD_MAX = 1000;
+export declare const SiteCopyParamsSchema: z.ZodObject<{
+    url: z.ZodString;
+    max_pages: z.ZodDefault<z.ZodNumber>;
+    select_paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    exclude_paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    max_depth: z.ZodDefault<z.ZodNumber>;
+    include_subdomains: z.ZodDefault<z.ZodBoolean>;
+    render: z.ZodDefault<z.ZodEnum<{
+        static: "static";
+        render: "render";
+        auto: "auto";
+    }>>;
+    project: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export type SiteCopyParams = z.infer<typeof SiteCopyParamsSchema>;
+export declare function validateSiteCopyParams(args: Record<string, unknown> | undefined): SiteCopyParams;
 export declare const VerifyParamsSchema: z.ZodObject<{
     claim: z.ZodString;
     context: z.ZodOptional<z.ZodString>;
@@ -116,7 +142,14 @@ export type HealthParams = z.infer<typeof HealthParamsSchema>;
 export declare function validateHealthParams(args: Record<string, unknown> | undefined): HealthParams;
 export type SearchParams = z.infer<typeof SearchParamsSchema>;
 export type ExtractParams = z.infer<typeof ExtractParamsSchema>;
-export type CrawlParams = z.infer<typeof CrawlParamsSchema>;
+/** Public crawl params + an internal-only ceiling override.
+ *  `_maxPagesCeiling` is NOT part of CrawlParamsSchema, so MCP callers cannot set it
+ *  (Zod strips unknown keys). Only in-process callers (site_copy) pass it to raise the
+ *  flat 20-page cap; default novada_crawl behaviour is unchanged. */
+export type CrawlParams = z.infer<typeof CrawlParamsSchema> & {
+    /** Internal: raise the hard page cap above the default 20 (site_copy only). */
+    _maxPagesCeiling?: number;
+};
 export type ResearchParams = z.infer<typeof ResearchParamsSchema>;
 export type MapParams = z.infer<typeof MapParamsSchema>;
 export type VerifyParams = z.infer<typeof VerifyParamsSchema>;

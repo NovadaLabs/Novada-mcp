@@ -149,7 +149,7 @@ import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
 //     version-derive fix lives only in novada-mcpserver, so npm stays 0.8.4 while
 //     the hosted build is "t1". Bump it per server-only deploy; reset to "t1" (or "")
 //     whenever the vendored package version changes.
-const HOSTED_BUILD = "t1";
+const HOSTED_BUILD = "";
 const HOSTED_VERSION = HOSTED_BUILD
   ? `${vendorPkg.version}.${HOSTED_BUILD}-hosted`
   : `${vendorPkg.version}-hosted`;

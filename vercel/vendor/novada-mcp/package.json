@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "One MCP server for all web data. Search, scrape, crawl, proxy, and AI research in one install.",
   "mcpName": "novada",
   "type": "module",
@@ -87,11 +87,14 @@
     "form-data": "^4.0.5",
     "pdf-parse": "^2.4.5",
     "playwright-core": "^1.59.1",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
     "@types/pdf-parse": "^1.1.5",
+    "@types/turndown": "^5.0.6",
     "@vitest/coverage-v8": "^3.1.0",
     "typescript": "^5.3.3",
     "vitest": "^3.1.0"

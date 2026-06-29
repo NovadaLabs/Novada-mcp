@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { TIMEOUTS } from "../config.js";
 import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
+import { assertUrlSafe, isUrlSafe } from "./ssrf.js";
 /**
  * Strip credentials from WSS URLs in error messages.
  * wss://user:pass@host → wss://***:***@host
@@ -76,15 +77,34 @@ export function isBrowserConfigured() {
     return !!getBrowserWs();
 }
 /**
+ * Post-navigation SSRF check. `page.goto` follows 3xx redirects internally and
+ * Playwright/CDP exposes no `beforeRedirect` hook, so a public URL can land on a
+ * private host (e.g. 30x → http://169.254.169.254/). Re-validate the final
+ * `page.url()` and throw before any content is read.
+ */
+function assertLandingSafe(page) {
+    const landed = page.url();
+    if (landed && !isUrlSafe(landed)) {
+        assertUrlSafe(landed, "browser redirect landing");
+    }
+}
+/**
  * Fetch a URL using Novada Browser API via CDP WebSocket.
  * Connects to Novada's cloud browser, navigates to URL, returns rendered HTML.
  *
  * Requires: NOVADA_BROWSER_WS env var (or SDK-scoped browserWs credential).
  * Cost: ~$3/GB. Use only when static/render modes fail.
  *
+ * Performance: Callers making repeated requests to the same domain should pass
+ * `sessionId` to reuse the browser page (~1.5s warm vs ~8s cold start).
+ *
  * @param sessionId - Optional session ID to reuse an existing browser page.
  */
 export async function fetchViaBrowser(url, options = {}) {
+    // SSRF chokepoint: the CDP fetch path never passed through http.ts's assertUrlSafe,
+    // and the enrich_top/render="browser" paths can feed it a non-Zod-validated URL
+    // (scraped SERP result, or a forced browser mode). Validate before any page.goto.
+    assertUrlSafe(url, "browser navigate");
     // Auto-resolve: NOVADA_BROWSER_WS env var OR auto-provision via NOVADA_API_KEY (product=10)
     const wsEndpoint = await resolveBrowserWs(process.env.NOVADA_API_KEY);
     if (!wsEndpoint) {
@@ -96,6 +116,7 @@ export async function fetchViaBrowser(url, options = {}) {
         const existingPage = getSession(options.sessionId);
         if (existingPage) {
             await existingPage.goto(url, { waitUntil: "domcontentloaded", timeout });
+            assertLandingSafe(existingPage);
             if (options.waitForSelector) {
                 await existingPage.waitForSelector(options.waitForSelector, { timeout: 15000 }).catch(() => { });
             }
@@ -137,17 +158,25 @@ export async function fetchViaBrowser(url, options = {}) {
             waitUntil: "domcontentloaded",
             timeout,
         });
-        // Wait for networkidle, fall back to domcontentloaded on timeout
-        await page.waitForLoadState('networkidle', { timeout: 12000 })
-            .catch(() => page.waitForLoadState('domcontentloaded'));
+        assertLandingSafe(page);
+        // Wait for DOM ready + fixed 2s for JS to render initial content
+        // (networkidle never fires on SPAs — saves ~5s on JS-heavy pages)
+        await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+        await page.waitForTimeout(2000);
         // Check for Cloudflare challenge and wait it out
         const bodyText = await page.content().catch(() => '');
         if (bodyText.includes('cf-challenge') ||
             bodyText.includes('cf-turnstile') ||
             bodyText.includes('Just a moment') ||
             bodyText.includes('cf_chl_opt')) {
-            await page.waitForTimeout(6000);
-            await page.waitForLoadState('domcontentloaded').catch(() => { });
+            // Smart CF wait: poll until challenge resolves (usually 2-3s, max 8s)
+            await page.waitForFunction(() => {
+                return !document.body.innerText.includes('Just a moment') &&
+                    !document.querySelector('#cf-challenge-running');
+            }, { timeout: 8000 }).catch(() => {
+                // Fallback: wait 3s if waitForFunction fails
+                return page.waitForTimeout(3000);
+            });
         }
         if (options.waitForSelector) {
             await page.waitForSelector(options.waitForSelector, { timeout: 15000 }).catch(() => {

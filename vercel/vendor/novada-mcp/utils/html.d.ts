@@ -6,7 +6,7 @@ export declare function extractMainContent(html: string, baseUrl?: string, maxCh
 /**
  * Extract full page content from HTML — keeps nav, header, footer, aside, form.
  * Only removes non-renderable tags: script, style, noscript, iframe, svg, canvas.
- * Uses the same inlineMarkdown walker as extractMainContent.
+ * Uses Turndown + GFM plugin for HTML-to-markdown conversion.
  * Target output: 50,000–100,000 chars.
  */
 export declare function extractFullPageContent(html: string, baseUrl?: string): string;
@@ -21,12 +21,41 @@ export interface StructuredData {
  */
 export declare function extractStructuredData(html: string): StructuredData | null;
 export interface ExtractionQuality {
+    /** 0-100 display score: the floored/mutated value (presence floor + caller quality floors applied). Prefer content_present + cleanliness_score for orthogonal signals. */
     score: number;
+    /** True when the page carries substantive prose/content (not a shell, wall, or boilerplate-only page). */
+    content_present: boolean;
+    /** 0-100 raw additive markup-quality score, captured BEFORE the presence floor (and untouched by caller quality floors). May be lower than `score` when a floor lifts the display value. */
+    cleanliness_score: number;
+    /** Human-readable reasons explaining content_present + cleanliness (agent-facing). */
+    quality_reasons: string[];
     signals: string[];
 }
 /**
- * Score the quality of an extraction result on a 0-100 scale.
- * Additive signals, clamped to [0, 100].
+ * Strip docs-site boilerplate from cleaned markdown before running quality signals.
+ * Removes empty / zero-width anchor links (e.g. `[​](#anchor)`, `[](#section)`)
+ * and known no-content chrome phrases. Returns markdown safe to length/word-count.
+ */
+export declare function stripBoilerplate(markdown: string): string;
+/**
+ * Heuristic: does the CLEANED markdown carry substantive content?
+ * Substantive = cleaned length >= 200 chars AND word count >= 50.
+ * Boilerplate (empty anchors, docs chrome) is stripped before measuring,
+ * so a shell/wall page that only renders nav + "Copy page" reads as not-present.
+ */
+export declare function hasSubstantiveContent(cleanedMarkdown: string): boolean;
+/**
+ * Score the quality of an extraction result.
+ *
+ * NOV-565: splits the historical single `score` into two orthogonal signals so
+ * docs pages with full text are no longer mislabelled "poor" just because their
+ * markup is link-heavy or sparsely structured:
+ *   - content_present  — is there real content here? (drives content_ok / escalation)
+ *   - cleanliness_score — how clean is the markup? (the raw additive 0-100 score, pre-floor)
+ * `score` is the display value: cleanliness_score after the presence floor (and any caller
+ * quality floors) are applied, so `score` >= `cleanliness_score` whenever a floor lifts it.
+ *
+ * All length/link/heading signals run on the CLEANED markdown (boilerplate removed).
  */
 export declare function scoreExtraction(html: string, markdown: string, usedMode: string, hasStructuredData: boolean): ExtractionQuality;
 export declare function qualityLabel(score: number): string;

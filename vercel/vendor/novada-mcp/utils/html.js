@@ -1,5 +1,19 @@
 import * as cheerio from "cheerio";
-import { detectJsHeavyContent } from "./http.js";
+import TurndownService from "turndown";
+import { gfm } from "turndown-plugin-gfm";
+// detectJsHeavyContent is used by extract.ts for render-escalation decisions,
+// but no longer used in the quality scorer (removed unfair React SPA penalty).
+/** Shared Turndown instance configured for agent-friendly markdown */
+const turndown = new TurndownService({
+    headingStyle: "atx",
+    codeBlockStyle: "fenced",
+    bulletListMarker: "-",
+});
+turndown.use(gfm);
+/** Convert an HTML string to markdown via Turndown */
+function htmlToMarkdown(html) {
+    return turndown.turndown(html);
+}
 /** Elements to completely remove before content extraction */
 const REMOVE_TAGS = [
     "script", "style", "noscript", "svg", "iframe", "nav", "footer",
@@ -142,182 +156,10 @@ export function extractMainContent(html, baseUrl, maxChars = 25000) {
     }
     if (!$content || !$content.length)
         return "";
-    // Convert to markdown-like text
-    const lines = [];
-    /** Fix 7: Escape markdown special characters in plain text nodes */
-    function escapeMarkdown(text) {
-        return text
-            .replace(/\\/g, '\\\\')
-            .replace(/\*/g, '\\*')
-            .replace(/_/g, '\\_');
-    }
-    /** Render an element's inline content as markdown, preserving links/emphasis */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function inlineMarkdown($el, baseUrl) {
-        let md = "";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        $el.contents().each((_, node) => {
-            if (node.type === "text") {
-                // Fix 7: Escape markdown special chars in plain text (not in code/URLs)
-                md += escapeMarkdown((node.data || "").replace(/\s+/g, " "));
-            }
-            else if (node.type === "tag") {
-                const tag = (node.tagName || "").toLowerCase();
-                const $node = $(node);
-                const inner = inlineMarkdown($node, baseUrl);
-                if (tag === "a") {
-                    const href = $node.attr("href");
-                    const resolved = href ? resolveHref(href, baseUrl) : null;
-                    md += resolved && inner.trim() ? `[${inner.trim()}](${resolved})` : inner;
-                }
-                else if (tag === "strong" || tag === "b") {
-                    md += inner.trim() ? `**${inner.trim()}**` : inner;
-                }
-                else if (tag === "em" || tag === "i") {
-                    md += inner.trim() ? `*${inner.trim()}*` : inner;
-                }
-                else if (tag === "code") {
-                    md += inner.trim() ? `\`${inner.trim()}\`` : inner;
-                }
-                else if (tag === "img") {
-                    // Fix 6: Render <img> as markdown image, skip base64 data URIs
-                    const alt = $node.attr("alt") ?? "";
-                    const src = $node.attr("src") ?? "";
-                    if (src && !src.startsWith("data:")) {
-                        md += `![${alt}](${src})`;
-                    }
-                }
-                else {
-                    md += inner;
-                }
-            }
-        });
-        return md;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    // Exclude td/th — tables handled separately below to avoid duplication
-    $content.find("h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, dt, dd").filter((_, el) => {
-        // Skip elements inside tables to prevent duplicate content
-        return $(el).parents("table").length === 0 || ["dt", "dd"].includes((el.tagName || "").toLowerCase());
-    }).each((_, el) => {
-        const $el = $(el);
-        const tag = (el.tagName || "").toLowerCase();
-        const text = tag === "pre"
-            ? $el.text()
-            : $el.text().replace(/\s+/g, " ").trim();
-        if (!text)
-            return;
-        if (tag.match(/^h[1-6]$/)) {
-            const level = parseInt(tag[1]);
-            lines.push(`\n${"#".repeat(level)} ${text}\n`);
-        }
-        else if (tag === "li") {
-            // Fix 3: Detect ordered list parent for numbered list items
-            const isOrdered = $el.parent().is('ol');
-            const index = isOrdered ? $el.index() + 1 : null;
-            const prefix = isOrdered ? `${index}. ` : '- ';
-            lines.push(`${prefix}${inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim()}`);
-        }
-        else if (tag === "blockquote") {
-            lines.push(`> ${text}`);
-        }
-        else if (tag === "pre") {
-            // Fix 4: Extract language hint from <code class="language-xxx"> inside <pre>
-            const $codeEl = $el.find('code').first();
-            const lang = $codeEl.length
-                ? ($codeEl.attr('class')?.match(/(?:language|lang)-(\w+)/)?.[1] ?? '')
-                : '';
-            const codeText = $codeEl.length ? $codeEl.text() : text;
-            lines.push(`\`\`\`${lang}\n${codeText}\n\`\`\``);
-        }
-        else {
-            // p, dt, dd — preserve inline formatting
-            lines.push(inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim());
-        }
-    });
-    // Handle tables — render top-level tables and data tables nested in layout wrappers.
-    // Rules:
-    //   layout-in-layout  → skip (parent cell extraction handles it via inlineMarkdown)
-    //   data-in-data      → skip (parent data table already renders it)
-    //   data-in-layout    → RENDER (e.g. Wikipedia infobox inside page layout wrapper)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    $content.find("table").each((_, table) => {
-        const $table = $(table);
-        // Check for <th> in thead, direct tr children, or tbody rows (covers Wikipedia infoboxes
-        // and other tables that use <th scope="row"> inside <tbody> instead of <thead>)
-        const hasHeaders = $table.children("thead").children("tr").children("th").length > 0
-            || $table.children("tr").children("th").length > 0
-            || $table.children("tbody").children("tr").children("th").length > 0;
-        if ($table.parents("table").length > 0) {
-            if (!hasHeaders)
-                return; // nested layout table — skip, handled by cell extraction
-            // Nested data table: only render if every ancestor table is a layout table
-            // (i.e. no ancestor has <th> direct children). If an ancestor is itself a data
-            // table this table is already captured, so skip to avoid duplication.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const nestedInDataTable = $table.parents("table").filter((__, t) => $(t).children("thead").children("tr").children("th").length > 0 ||
-                $(t).children("tr").children("th").length > 0 ||
-                $(t).children("tbody").children("tr").children("th").length > 0).length > 0;
-            if (nestedInDataTable)
-                return;
-            // Fall through: data table inside layout wrapper — render it
-        }
-        const rows = [];
-        // Use only direct-child rows (add both <tbody>/<thead> wrappers and bare <tr>s)
-        const $directRows = $table.children("tbody, thead, tfoot").children("tr")
-            .add($table.children("tr"));
-        $directRows.each((__, tr) => {
-            const cells = [];
-            // Direct cell children only — avoids traversing into nested tables.
-            // Exception: if a cell contains a nested table (e.g. HN's story list inside
-            // a layout wrapper), extract each nested row as a separate paragraph so that
-            // individual list items don't collapse into a single wall of text.
-            $(tr).children("th, td").each((___, cell) => {
-                const $cell = $(cell);
-                const $nestedTable = $cell.children("table").first();
-                if ($nestedTable.length > 0) {
-                    const nestedLines = [];
-                    $nestedTable.find("tr").each((__, nestedTr) => {
-                        const rowText = $(nestedTr).children("td, th")
-                            .map((_, td) => inlineMarkdown($(td), baseUrl).trim())
-                            .get()
-                            .filter((t) => t.length > 0)
-                            .join(" ");
-                        if (rowText)
-                            nestedLines.push(rowText);
-                    });
-                    if (nestedLines.length > 0)
-                        cells.push(nestedLines.join("\n\n"));
-                }
-                else {
-                    const text = $cell.text().replace(/\s+/g, " ").trim();
-                    if (text)
-                        cells.push(text);
-                }
-            });
-            if (cells.length)
-                rows.push(cells);
-        });
-        if (!rows.length)
-            return;
-        if (hasHeaders) {
-            // Render as markdown table (data table)
-            const header = `| ${rows[0].join(" | ")} |`;
-            const separator = `| ${rows[0].map(() => "---").join(" | ")} |`;
-            const body = rows.slice(1).map(r => `| ${r.join(" | ")} |`).join("\n");
-            lines.push(`\n${header}\n${separator}\n${body}\n`);
-        }
-        else {
-            // Layout table — extract as plain text (one line per row, cells joined with " — ")
-            const textLines = rows
-                .map(cells => cells.join(" — "))
-                .filter(t => t.length > 0);
-            if (textLines.length > 0) {
-                lines.push(`\n${textLines.join("\n\n")}\n`);
-            }
-        }
-    });
-    const result = lines.join("\n")
+    // Convert content to markdown via Turndown (handles headings, lists, tables,
+    // code blocks, links, images, emphasis, blockquotes automatically)
+    const contentHtml = $.html($content);
+    const result = htmlToMarkdown(contentHtml)
         .replace(/\n{3,}/g, "\n\n")
         .trim();
     if (result.length <= maxChars)
@@ -329,7 +171,7 @@ export function extractMainContent(html, baseUrl, maxChars = 25000) {
 /**
  * Extract full page content from HTML — keeps nav, header, footer, aside, form.
  * Only removes non-renderable tags: script, style, noscript, iframe, svg, canvas.
- * Uses the same inlineMarkdown walker as extractMainContent.
+ * Uses Turndown + GFM plugin for HTML-to-markdown conversion.
  * Target output: 50,000–100,000 chars.
  */
 export function extractFullPageContent(html, baseUrl) {
@@ -345,172 +187,9 @@ export function extractFullPageContent(html, baseUrl) {
     const $body = $("body");
     if (!$body.length)
         return "";
-    /** Escape markdown special characters in plain text nodes */
-    function escapeMarkdown(text) {
-        return text
-            .replace(/\\/g, '\\\\')
-            .replace(/\*/g, '\\*')
-            .replace(/_/g, '\\_');
-    }
-    /** Render an element's inline content as markdown, preserving links/emphasis */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function inlineMarkdown($el, base) {
-        let md = "";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        $el.contents().each((_, node) => {
-            if (node.type === "text") {
-                md += escapeMarkdown((node.data || "").replace(/\s+/g, " "));
-            }
-            else if (node.type === "tag") {
-                const tag = (node.tagName || "").toLowerCase();
-                const $node = $(node);
-                const inner = inlineMarkdown($node, base);
-                if (tag === "a") {
-                    const href = $node.attr("href");
-                    let resolved = null;
-                    if (href && !href.startsWith("#") && !href.startsWith("javascript:") && !href.startsWith("mailto:")) {
-                        if (href.startsWith("//"))
-                            resolved = `https:${href}`;
-                        else if (base && !href.startsWith("http")) {
-                            try {
-                                resolved = new URL(href, base).href;
-                            }
-                            catch { /* ignore */ }
-                        }
-                        else if (href.startsWith("http")) {
-                            resolved = href;
-                        }
-                    }
-                    md += resolved && inner.trim() ? `[${inner.trim()}](${resolved})` : inner;
-                }
-                else if (tag === "strong" || tag === "b") {
-                    md += inner.trim() ? `**${inner.trim()}**` : inner;
-                }
-                else if (tag === "em" || tag === "i") {
-                    md += inner.trim() ? `*${inner.trim()}*` : inner;
-                }
-                else if (tag === "code") {
-                    md += inner.trim() ? `\`${inner.trim()}\`` : inner;
-                }
-                else if (tag === "img") {
-                    const alt = $node.attr("alt") ?? "";
-                    const src = $node.attr("src") ?? "";
-                    if (src && !src.startsWith("data:")) {
-                        md += `![${alt}](${src})`;
-                    }
-                }
-                else {
-                    md += inner;
-                }
-            }
-        });
-        return md;
-    }
-    const lines = [];
-    // Walk all block-level elements in document order
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    $body.find("h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, dt, dd").filter((_, el) => {
-        return $(el).parents("table").length === 0 || ["dt", "dd"].includes((el.tagName || "").toLowerCase());
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }).each((_, el) => {
-        const $el = $(el);
-        const tag = (el.tagName || "").toLowerCase();
-        const text = tag === "pre"
-            ? $el.text()
-            : $el.text().replace(/\s+/g, " ").trim();
-        if (!text)
-            return;
-        if (tag.match(/^h[1-6]$/)) {
-            const level = parseInt(tag[1]);
-            lines.push(`\n${"#".repeat(level)} ${text}\n`);
-        }
-        else if (tag === "li") {
-            const isOrdered = $el.parent().is('ol');
-            const index = isOrdered ? $el.index() + 1 : null;
-            const prefix = isOrdered ? `${index}. ` : '- ';
-            lines.push(`${prefix}${inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim()}`);
-        }
-        else if (tag === "blockquote") {
-            lines.push(`> ${text}`);
-        }
-        else if (tag === "pre") {
-            const $codeEl = $el.find('code').first();
-            const lang = $codeEl.length
-                ? ($codeEl.attr('class')?.match(/(?:language|lang)-(\w+)/)?.[1] ?? '')
-                : '';
-            const codeText = $codeEl.length ? $codeEl.text() : text;
-            lines.push(`\`\`\`${lang}\n${codeText}\n\`\`\``);
-        }
-        else {
-            lines.push(inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim());
-        }
-    });
-    // Handle tables
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    $body.find("table").each((_, table) => {
-        const $table = $(table);
-        const hasHeaders = $table.children("thead").children("tr").children("th").length > 0
-            || $table.children("tr").children("th").length > 0
-            || $table.children("tbody").children("tr").children("th").length > 0;
-        if ($table.parents("table").length > 0) {
-            if (!hasHeaders)
-                return;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const nestedInDataTable = $table.parents("table").filter((__, t) => $(t).children("thead").children("tr").children("th").length > 0 ||
-                $(t).children("tr").children("th").length > 0 ||
-                $(t).children("tbody").children("tr").children("th").length > 0).length > 0;
-            if (nestedInDataTable)
-                return;
-        }
-        const rows = [];
-        const $directRows = $table.children("tbody, thead, tfoot").children("tr")
-            .add($table.children("tr"));
-        $directRows.each((__, tr) => {
-            const cells = [];
-            $(tr).children("th, td").each((___, cell) => {
-                const $cell = $(cell);
-                const $nestedTable = $cell.children("table").first();
-                if ($nestedTable.length > 0) {
-                    const nestedLines = [];
-                    $nestedTable.find("tr").each((__, nestedTr) => {
-                        const rowText = $(nestedTr).children("td, th")
-                            .map((_, td) => inlineMarkdown($(td), baseUrl).trim())
-                            .get()
-                            .filter((t) => t.length > 0)
-                            .join(" ");
-                        if (rowText)
-                            nestedLines.push(rowText);
-                    });
-                    if (nestedLines.length > 0)
-                        cells.push(nestedLines.join("\n\n"));
-                }
-                else {
-                    const text = $cell.text().replace(/\s+/g, " ").trim();
-                    if (text)
-                        cells.push(text);
-                }
-            });
-            if (cells.length)
-                rows.push(cells);
-        });
-        if (!rows.length)
-            return;
-        if (hasHeaders) {
-            const header = `| ${rows[0].join(" | ")} |`;
-            const separator = `| ${rows[0].map(() => "---").join(" | ")} |`;
-            const body = rows.slice(1).map(r => `| ${r.join(" | ")} |`).join("\n");
-            lines.push(`\n${header}\n${separator}\n${body}\n`);
-        }
-        else {
-            const textLines = rows
-                .map(cells => cells.join(" — "))
-                .filter(t => t.length > 0);
-            if (textLines.length > 0) {
-                lines.push(`\n${textLines.join("\n\n")}\n`);
-            }
-        }
-    });
-    return lines.join("\n")
+    // Convert full body to markdown via Turndown
+    const bodyHtml = $.html($body);
+    return htmlToMarkdown(bodyHtml)
         .replace(/\n{3,}/g, "\n\n")
         .trim();
 }
@@ -668,20 +347,81 @@ export function extractStructuredData(html) {
     const fields = extractFields(best.type, best.obj);
     return { type: best.type, fields, raw: best.raw };
 }
+/** Boilerplate phrases that carry no informational content (docs-site chrome). */
+const BOILERPLATE_PHRASES = [
+    "Copy page",
+    "Building an AI startup?",
+    "On this page",
+    "Was this page helpful?",
+];
 /**
- * Score the quality of an extraction result on a 0-100 scale.
- * Additive signals, clamped to [0, 100].
+ * Strip docs-site boilerplate from cleaned markdown before running quality signals.
+ * Removes empty / zero-width anchor links (e.g. `[​](#anchor)`, `[](#section)`)
+ * and known no-content chrome phrases. Returns markdown safe to length/word-count.
+ */
+export function stripBoilerplate(markdown) {
+    if (!markdown)
+        return "";
+    let out = markdown;
+    // Remove markdown links whose visible text is empty or only zero-width/whitespace
+    // chars, regardless of target (e.g. heading-anchor "permalink" icons docs sites emit).
+    // [​](#x), [](#x), [ ](https://...), [​​](...)
+    out = out.replace(/\[[\s​‌‍﻿]*\]\([^)]*\)/g, "");
+    // Remove known boilerplate phrases (case-insensitive, whole-line tolerant).
+    for (const phrase of BOILERPLATE_PHRASES) {
+        const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        out = out.replace(new RegExp(escaped, "gi"), "");
+    }
+    // Collapse blank lines left behind by the removals.
+    return out
+        .split("\n")
+        .filter((l, i, arr) => !(l.trim() === "" && (i === 0 || arr[i - 1].trim() === "")))
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+/** Count whitespace-delimited words in a string. */
+function countWords(text) {
+    return text.split(/\s+/).filter(Boolean).length;
+}
+/**
+ * Heuristic: does the CLEANED markdown carry substantive content?
+ * Substantive = cleaned length >= 200 chars AND word count >= 50.
+ * Boilerplate (empty anchors, docs chrome) is stripped before measuring,
+ * so a shell/wall page that only renders nav + "Copy page" reads as not-present.
+ */
+export function hasSubstantiveContent(cleanedMarkdown) {
+    if (!cleanedMarkdown)
+        return false;
+    return cleanedMarkdown.length >= 200 && countWords(cleanedMarkdown) >= 50;
+}
+/**
+ * Score the quality of an extraction result.
+ *
+ * NOV-565: splits the historical single `score` into two orthogonal signals so
+ * docs pages with full text are no longer mislabelled "poor" just because their
+ * markup is link-heavy or sparsely structured:
+ *   - content_present  — is there real content here? (drives content_ok / escalation)
+ *   - cleanliness_score — how clean is the markup? (the raw additive 0-100 score, pre-floor)
+ * `score` is the display value: cleanliness_score after the presence floor (and any caller
+ * quality floors) are applied, so `score` >= `cleanliness_score` whenever a floor lifts it.
+ *
+ * All length/link/heading signals run on the CLEANED markdown (boilerplate removed).
  */
 export function scoreExtraction(html, markdown, usedMode, hasStructuredData) {
+    // Run signals on cleaned markdown so docs-site chrome doesn't skew length/links.
+    const cleaned = stripBoilerplate(markdown);
+    const content_present = hasSubstantiveContent(cleaned);
     let score = 0;
     const signals = [];
-    // Structured data (reduced from +30 to +20 — pages without JSON-LD shouldn't be capped at 55)
+    const quality_reasons = [];
+    // Structured data bonus (reduced to +10 — pages without JSON-LD shouldn't be penalized heavily)
     if (hasStructuredData) {
-        score += 20;
-        signals.push("structured_data:+20");
+        score += 10;
+        signals.push("structured_data:+10");
     }
-    // Content length
-    const contentLen = markdown.length;
+    // Content length (measured on cleaned markdown)
+    const contentLen = cleaned.length;
     if (contentLen < 200) {
         score -= 20;
         signals.push("content_tiny:-20");
@@ -695,22 +435,22 @@ export function scoreExtraction(html, markdown, usedMode, hasStructuredData) {
         signals.push("content_medium:+10");
     }
     // List items: reward pages with many structured list entries (listings, feeds, search results)
-    const listItemCount = (markdown.match(/^- /gm) ?? []).length;
+    const listItemCount = (cleaned.match(/^- /gm) ?? []).length;
     if (listItemCount >= 10) {
         score += 10;
         signals.push("has_list_items:+10");
     }
     // Content lines: reward well-structured content with many lines
-    const lineCount = markdown.split("\n").filter(l => l.trim().length > 0).length;
+    const lineCount = cleaned.split("\n").filter(l => l.trim().length > 0).length;
     if (lineCount >= 20) {
         score += 5;
         signals.push("content_lines:+5");
     }
     // Link density: count [text](url) patterns in markdown
-    const linkMatches = markdown.match(/\[[^\]]+\]\([^)]+\)/g);
+    const linkMatches = cleaned.match(/\[[^\]]+\]\([^)]+\)/g);
     const linkCount = linkMatches ? linkMatches.length : 0;
     // Rough word count for density: split on whitespace
-    const wordCount = markdown.split(/\s+/).filter(Boolean).length;
+    const wordCount = countWords(cleaned);
     if (wordCount > 0) {
         const density = linkCount / wordCount;
         // Upper bound raised from 0.4 to 0.6 — listing pages (Reddit, HN) have link-heavy content
@@ -720,16 +460,22 @@ export function scoreExtraction(html, markdown, usedMode, hasStructuredData) {
         }
     }
     // Has H2 or H3 headings
-    const hasHeadings = /^## |^### /m.test(markdown);
+    const hasHeadings = /^## |^### /m.test(cleaned);
     if (hasHeadings) {
         score += 10;
         signals.push("has_headings:+10");
     }
     // Has at least one code block
-    const hasCodeBlock = /```/.test(markdown);
+    const hasCodeBlock = /```/.test(cleaned);
     if (hasCodeBlock) {
         score += 5;
         signals.push("has_code_block:+5");
+    }
+    // Substantive prose: real content with structure (NOV-565). Rescues docs/article pages
+    // whose markup is link-heavy or otherwise scores low on the additive signals.
+    if (content_present && hasHeadings) {
+        score += 15;
+        signals.push("substantive_prose:+15");
     }
     // Mode bonus/penalty
     if (usedMode === "static") {
@@ -745,19 +491,48 @@ export function scoreExtraction(html, markdown, usedMode, hasStructuredData) {
         signals.push("mode_render_failed:-15");
     }
     // browser: 0 points, no signal
-    // Bot challenge detected in HTML
-    if (detectJsHeavyContent(html)) {
-        score -= 40;
-        signals.push("bot_challenge:-40");
-    }
-    // Truncation penalty
-    if (markdown.length >= 25000) {
+    // Truncation penalty (measured on cleaned markdown)
+    if (contentLen >= 25000) {
         score -= 5;
         signals.push("truncated:-5");
     }
+    // Quality floor: substantial content (>20k chars) should never score below 50
+    if (contentLen > 20000 && score < 50) {
+        score = 50;
+        signals.push("content_floor:=50");
+    }
     // Clamp to [0, 100]
     score = Math.max(0, Math.min(100, score));
-    return { score, signals };
+    // Capture the raw additive markup score BEFORE the presence floor so callers can
+    // distinguish "actual markup cleanliness" from the floored display score.
+    const cleanliness_score = score;
+    // Presence floor (NOV-565): a page with real content must not read as "poor".
+    // Lift cleanliness to 40 (the "moderate" boundary) so content_ok consumers and
+    // the qualityLabel never label a full-text docs page below "moderate".
+    if (content_present && score < 40) {
+        score = 40;
+        signals.push("presence_floor:=40");
+    }
+    // Agent-facing reasons (concise, parseable).
+    quality_reasons.push(content_present
+        ? `content_present:true (cleaned ${contentLen} chars, ${wordCount} words)`
+        : `content_present:false (cleaned ${contentLen} chars, ${wordCount} words — below 200char/50word threshold)`);
+    if (hasStructuredData)
+        quality_reasons.push("has_structured_data");
+    if (hasHeadings)
+        quality_reasons.push("has_headings");
+    if (hasCodeBlock)
+        quality_reasons.push("has_code_block");
+    if (linkCount > 0 && wordCount > 0 && linkCount / wordCount > 0.6) {
+        quality_reasons.push("link_heavy (density>0.6)");
+    }
+    return {
+        score,
+        content_present,
+        cleanliness_score,
+        quality_reasons,
+        signals,
+    };
 }
 export function qualityLabel(score) {
     if (score >= 80)

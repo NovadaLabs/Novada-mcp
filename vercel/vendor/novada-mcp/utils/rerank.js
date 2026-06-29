@@ -1,15 +1,26 @@
+import { authorityAdjustment } from "./authority.js";
 const STOP_WORDS = new Set([
     "the", "a", "an", "in", "on", "at", "to", "for", "of", "with",
     "and", "or", "but", "is", "are", "was", "were", "be", "been",
     "what", "how", "why", "when", "where", "who", "which",
 ]);
 /**
- * Rerank results by relevance to query using keyword scoring.
+ * Rerank results by relevance to query using keyword scoring plus a bounded,
+ * intent-gated domain-authority signal.
+ *
  * Title matches are weighted 3x (word boundary) / 2x (substring).
  * Snippet matches are weighted 1x (word boundary) / 0.5x (substring).
- * Returns original order when no meaningful query terms remain after stop-word filtering.
+ * Domain authority (see authority.ts) only nudges/breaks ties — its magnitude
+ * stays below the smallest title-match delta and is GATED by `intent`:
+ *   - "factual": authoritative sources boosted, social/PR down-ranked
+ *   - "social":  no authority adjustment (social results are the target)
+ *   - "default": mild adjustment only
+ *
+ * Returns original order when no meaningful query terms remain after stop-word
+ * filtering, preserving the prior keyword-only contract (authority is a
+ * tie-breaker/nudge layered on top of keyword relevance, not a standalone sort).
  */
-export function rerankResults(results, query) {
+export function rerankResults(results, query, intent = "default") {
     if (results.length <= 1)
         return results;
     const terms = query
@@ -19,11 +30,11 @@ export function rerankResults(results, query) {
     if (terms.length === 0)
         return results;
     return results
-        .map(r => ({ result: r, score: scoreResult(r, terms) }))
+        .map(r => ({ result: r, score: scoreResult(r, terms, intent) }))
         .sort((a, b) => b.score - a.score)
         .map(r => r.result);
 }
-function scoreResult(result, terms) {
+function scoreResult(result, terms, intent) {
     const title = (result.title || "").toLowerCase();
     const snippet = (result.description || result.snippet || "").toLowerCase();
     let score = 0;
@@ -39,6 +50,9 @@ function scoreResult(result, terms) {
     }
     // Bonus: snippet length signal (longer = more informative, up to 200 chars = max bonus 1.0)
     score += Math.min(snippet.length / 200, 1.0);
+    // Domain-authority signal — bounded + intent-gated. Reads the result URL,
+    // which the keyword pass ignores. Missing/invalid URL → 0 (no crash).
+    score += authorityAdjustment(result.url || result.link, intent);
     return score;
 }
 function escapeRegex(s) {

@@ -2,7 +2,26 @@ import https from "https";
 import axios, { AxiosError } from "axios";
 import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS } from "../config.js";
 import { getProxyCredentials, getResidentialProxyCredentials, getWebUnblockerKey } from "./credentials.js";
+import { assertUrlSafe, safeLookup } from "./ssrf.js";
 const _sharedHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+/**
+ * `safeLookup` is the DNS-rebinding guard (utils/ssrf.ts). Its runtime shape matches what
+ * axios calls, but axios types `family` as the literal union 4|6 whereas Node's dns types
+ * it as `number`; the structural difference is purely nominal, so we cast once here and use
+ * the typed alias on every request config.
+ */
+const SAFE_LOOKUP = safeLookup;
+/**
+ * axios `beforeRedirect` hook: re-validate every 3xx redirect target against the SSRF
+ * blocklist. Without this, a Zod-validated public URL can 30x-redirect to
+ * http://169.254.169.254/ or http://localhost/ and the request would still be issued.
+ * Throwing here aborts the redirect chain. Spread into every axios config that follows
+ * redirects (maxRedirects > 0).
+ */
+function beforeRedirect(options) {
+    const target = options.href ?? `${options.protocol ?? "https:"}//${options.hostname ?? ""}`;
+    assertUrlSafe(target, "redirect target");
+}
 const SSL_ERROR_CODES = new Set([
     "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
     "CERT_HAS_EXPIRED",
@@ -25,6 +44,9 @@ const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 /** HTTP GET with exponential backoff retry on 429/503/network errors */
 export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
+    // SSRF chokepoint: every fetch (incl. runtime-discovered URLs) is re-validated here,
+    // not just at the Zod boundary. beforeRedirect re-checks each 3xx hop.
+    assertUrlSafe(url);
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
             return await axios.get(url, {
@@ -37,10 +59,15 @@ export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
                 },
                 timeout: TIMEOUTS.STATIC_FETCH,
                 maxRedirects: 5,
+                beforeRedirect,
                 maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
                 maxBodyLength: 10 * 1024 * 1024,
                 httpsAgent: _sharedHttpsAgent,
                 ...options,
+                // DNS-rebinding guard: re-check the RESOLVED IP before connect. Placed after the
+                // spread so a caller option can never disable it. On proxied requests this resolves
+                // the (public) proxy host; on direct requests it resolves the real target.
+                lookup: SAFE_LOOKUP,
             });
         }
         catch (error) {
@@ -59,8 +86,11 @@ export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
                         "Accept-Encoding": "gzip, deflate, br",
                         "Connection": "keep-alive",
                     },
+                    maxRedirects: 5,
+                    beforeRedirect,
                     httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 10, rejectUnauthorized: false }),
                     ...options,
+                    lookup: SAFE_LOOKUP, // DNS-rebinding guard (see main GET) — non-bypassable.
                 });
             }
             if (attempt === retries)
@@ -90,6 +120,8 @@ function getCircuit(tier, endpoint) {
     return state;
 }
 export async function fetchViaProxy(url, _apiKey, options = {}) {
+    // SSRF chokepoint (also guards runtime-discovered URLs: sitemap/robots/llms.txt/BFS).
+    assertUrlSafe(url);
     const { proxyTier, ...axiosOptions } = options;
     // Credentials: use residential creds if proxyTier === "residential", else standard proxy creds
     let effectiveTier = proxyTier ?? "datacenter";
@@ -183,6 +215,9 @@ export async function fetchViaProxy(url, _apiKey, options = {}) {
  * Falls back to fetchViaProxy if web unblocker key is not configured.
  */
 export async function fetchWithRender(url, scraperApiKey, options = {}) {
+    // SSRF chokepoint: validate the target before it is handed to the unblocker or the
+    // proxy fallback. The unblocker POST itself targets Novada's own endpoint.
+    assertUrlSafe(url);
     const unblockerKey = getWebUnblockerKey();
     const { country, proxyTier, ...axiosOptions } = options;
     if (unblockerKey) {

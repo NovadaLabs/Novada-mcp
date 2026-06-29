@@ -37,4 +37,13 @@ export function setCached(url, renderMode, format, result, fields) {
         }
     }
 }
+/**
+ * Clear the entire session cache. Primarily for tests: vitest runs many cases
+ * in one process, and a success cached under url+mode+format would short-circuit
+ * a later test that reuses the same URL (the axios mock is never consulted).
+ * Call in a beforeEach so each test starts from a cold cache.
+ */
+export function clearCache() {
+    cache.clear();
+}
 //# sourceMappingURL=session-cache.js.map

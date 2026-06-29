@@ -3,6 +3,7 @@ export { novadaExtract } from "./extract.js";
 export { novadaCrawl } from "./crawl.js";
 export { novadaResearch } from "./research.js";
 export { novadaMap } from "./map.js";
+export { novadaSiteCopy } from "./site_copy.js";
 export { novadaProxy } from "./proxy.js";
 export { novadaProxyResidential, validateProxyResidentialParams, ProxyResidentialParamsSchema } from "./proxy_residential.js";
 export { novadaProxyIsp, validateProxyIspParams, ProxyIspParamsSchema } from "./proxy_isp.js";
@@ -24,7 +25,7 @@ export { novadaBrowserFlow, validateBrowserFlowParams, BrowserFlowParamsSchema }
 export { novadaAiMonitor } from "./ai_monitor.js";
 export { novadaMonitor, validateMonitorParams, MonitorParamsSchema } from "./monitor.js";
 export { novadaSetup, validateSetupParams, SetupParamsSchema } from "./setup.js";
-export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
+export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
 export { classifyError, NovadaErrorCode } from "../_core/errors.js";
 // ─── KR-6: Novada developer-api account-management tools ────────────────────
 export { novadaWalletBalance, validateWalletBalanceParams, WalletBalanceParamsSchema } from "./wallet_balance.js";

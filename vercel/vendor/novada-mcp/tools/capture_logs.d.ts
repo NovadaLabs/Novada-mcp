@@ -5,9 +5,9 @@ export declare const CaptureLogsParamsSchema: z.ZodObject<{
     page: z.ZodDefault<z.ZodNumber>;
     page_size: z.ZodDefault<z.ZodNumber>;
     status: z.ZodOptional<z.ZodDefault<z.ZodEnum<{
+        all: "all";
         success: "success";
         failed: "failed";
-        all: "all";
     }>>>;
 }, z.core.$strict>;
 export type CaptureLogsParams = z.infer<typeof CaptureLogsParamsSchema>;

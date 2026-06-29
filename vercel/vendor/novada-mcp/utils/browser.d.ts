@@ -21,6 +21,9 @@ export declare function isBrowserConfigured(): boolean;
  * Requires: NOVADA_BROWSER_WS env var (or SDK-scoped browserWs credential).
  * Cost: ~$3/GB. Use only when static/render modes fail.
  *
+ * Performance: Callers making repeated requests to the same domain should pass
+ * `sessionId` to reuse the browser page (~1.5s warm vs ~8s cold start).
+ *
  * @param sessionId - Optional session ID to reuse an existing browser page.
  */
 export declare function fetchViaBrowser(url: string, options?: {
