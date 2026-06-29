@@ -2,7 +2,7 @@
  * novada-search Professional Testing Playbook
  * Rounds 3–7 — specific test cases per playbook specification
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { extractMainContent, extractLinks, extractStructuredData } from "../../src/utils/html.js";
 import { detectJsHeavyContent } from "../../src/utils/http.js";
 import { rerankResults } from "../../src/utils/rerank.js";
@@ -215,12 +215,20 @@ describe("Round 4: Credential isolation — AsyncLocalStorage", () => {
       "batchExtract limit is 10 URLs per call. Received 11."
     );
 
-    // 10 URLs should NOT throw the limit error (network failures are acceptable)
+    // 10 URLs must pass the limit gate. Stub extract so the assertion is deterministic
+    // (no real network) — the old version raced a 500ms timeout against 10 live fetches,
+    // which flaked. We only need to prove the limit check does NOT fire at exactly 10.
     const tenUrls = urls.slice(0, 10);
-    await expect(Promise.race([
-      client.batchExtract(tenUrls),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("network timeout — expected")), 500)),
-    ])).rejects.not.toThrow("batchExtract limit is 10 URLs per call");
+    const extractSpy = vi
+      .spyOn(client, "extract")
+      .mockResolvedValue({ url: "x", title: "", content: "", quality: 0, mode: "static", chars: 0 } as any);
+    try {
+      const out = await client.batchExtract(tenUrls);
+      expect(out).toHaveLength(10);
+      expect(extractSpy).toHaveBeenCalledTimes(10);
+    } finally {
+      extractSpy.mockRestore();
+    }
   });
 });
 
@@ -303,22 +311,20 @@ describe("Round 7: Security", () => {
 
   it("credential leakage: error messages do not expose API keys verbatim", async () => {
     const { readFileSync } = await import("fs");
-    const httpSrc = readFileSync(new URL("../../src/utils/http.ts", import.meta.url), "utf8");
-    // Should not include raw credential values in throw messages
-    // Check that sanitizeMessage pattern is in types.ts
-    const typesSrc = readFileSync(new URL("../../src/tools/types.ts", import.meta.url), "utf8");
-    expect(typesSrc).toContain("sanitizeMessage");
-    expect(typesSrc).toContain("api_key=***");
+    // Credential sanitization lives in _core/errors.ts (sanitizeServerMsg/sanitizeMessage),
+    // applied to every NovadaError message. (Was previously asserted against types.ts.)
+    const errorsSrc = readFileSync(new URL("../../src/_core/errors.ts", import.meta.url), "utf8");
+    expect(errorsSrc).toContain("sanitizeMessage");
+    expect(errorsSrc).toContain("api_key=***");
   });
 
   it("multi-tenant isolation: proxyCircuits is keyed by endpoint, not shared globally", async () => {
     const { readFileSync } = await import("fs");
     const httpSrc = readFileSync(new URL("../../src/utils/http.ts", import.meta.url), "utf8");
     expect(httpSrc).toContain("proxyCircuits");
-    // getCircuit function takes endpoint param and returns/creates state entry
-    expect(httpSrc).toContain("function getCircuit(endpoint");
-    // Keyed by proxyEndpoint — distinct clients get distinct entries
-    expect(httpSrc).toContain("proxyCircuits.get(endpoint)");
+    // getCircuit keys by tier+endpoint so distinct clients/tiers get distinct state entries.
+    expect(httpSrc).toContain("function getCircuit(tier");
+    expect(httpSrc).toContain("proxyCircuits.get(key)");
   });
 
   it("URL injection: query parameter is not used in raw regex without escaping", async () => {

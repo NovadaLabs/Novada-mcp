@@ -1,3 +1,5 @@
+import { authorityAdjustment, type SearchIntent } from "./authority.js";
+
 const STOP_WORDS = new Set([
   "the", "a", "an", "in", "on", "at", "to", "for", "of", "with",
   "and", "or", "but", "is", "are", "was", "were", "be", "been",
@@ -10,14 +12,25 @@ export interface RankedResult<T extends { title?: string; description?: string; 
 }
 
 /**
- * Rerank results by relevance to query using keyword scoring.
+ * Rerank results by relevance to query using keyword scoring plus a bounded,
+ * intent-gated domain-authority signal.
+ *
  * Title matches are weighted 3x (word boundary) / 2x (substring).
  * Snippet matches are weighted 1x (word boundary) / 0.5x (substring).
- * Returns original order when no meaningful query terms remain after stop-word filtering.
+ * Domain authority (see authority.ts) only nudges/breaks ties — its magnitude
+ * stays below the smallest title-match delta and is GATED by `intent`:
+ *   - "factual": authoritative sources boosted, social/PR down-ranked
+ *   - "social":  no authority adjustment (social results are the target)
+ *   - "default": mild adjustment only
+ *
+ * Returns original order when no meaningful query terms remain after stop-word
+ * filtering, preserving the prior keyword-only contract (authority is a
+ * tie-breaker/nudge layered on top of keyword relevance, not a standalone sort).
  */
 export function rerankResults<T extends { title?: string; description?: string; snippet?: string; url?: string; link?: string }>(
   results: T[],
-  query: string
+  query: string,
+  intent: SearchIntent = "default"
 ): T[] {
   if (results.length <= 1) return results;
 
@@ -29,14 +42,15 @@ export function rerankResults<T extends { title?: string; description?: string; 
   if (terms.length === 0) return results;
 
   return results
-    .map(r => ({ result: r, score: scoreResult(r, terms) }))
+    .map(r => ({ result: r, score: scoreResult(r, terms, intent) }))
     .sort((a, b) => b.score - a.score)
     .map(r => r.result);
 }
 
-function scoreResult<T extends { title?: string; description?: string; snippet?: string }>(
+function scoreResult<T extends { title?: string; description?: string; snippet?: string; url?: string; link?: string }>(
   result: T,
-  terms: string[]
+  terms: string[],
+  intent: SearchIntent
 ): number {
   const title = (result.title || "").toLowerCase();
   const snippet = (result.description || result.snippet || "").toLowerCase();
@@ -56,6 +70,10 @@ function scoreResult<T extends { title?: string; description?: string; snippet?:
 
   // Bonus: snippet length signal (longer = more informative, up to 200 chars = max bonus 1.0)
   score += Math.min(snippet.length / 200, 1.0);
+
+  // Domain-authority signal — bounded + intent-gated. Reads the result URL,
+  // which the keyword pass ignores. Missing/invalid URL → 0 (no crash).
+  score += authorityAdjustment(result.url || result.link, intent);
 
   return score;
 }

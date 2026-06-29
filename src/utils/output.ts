@@ -1,6 +1,9 @@
 import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
+import { join, resolve, sep } from "path";
 import { homedir } from "os";
+
+/** Absolute root every Novada output must live under. Hard SSRF/path-traversal boundary. */
+export const DOWNLOADS_ROOT = join(homedir(), "Downloads", "novada-mcp");
 
 export interface OutputOptions {
   tool: string;        // "scrape", "extract", "search", "research"
@@ -20,7 +23,9 @@ export interface OutputResult {
 
 /**
  * Sanitize a string for safe use as a filename or folder name.
- * Removes special chars, truncates.
+ * Removes special chars, truncates. Drops every path separator and "." run, so
+ * `..`, `/etc/passwd`, and `C:\x` all collapse to safe single-segment slugs —
+ * the first line of defence for the site-copy path-traversal guard.
  */
 function sanitize(s: string, maxLen = 40): string {
   return s
@@ -30,6 +35,58 @@ function sanitize(s: string, maxLen = 40): string {
     .replace(/^-|-$/g, "")
     .slice(0, maxLen)
     || "output";
+}
+
+/**
+ * Public alias of {@link sanitize} for callers (e.g. site_copy) that build their
+ * own per-page filenames. Always returns a single safe path segment.
+ */
+export function sanitizeSlug(s: string, maxLen = 80): string {
+  return sanitize(s, maxLen);
+}
+
+/**
+ * Resolve (and create) a site-copy output directory, hard-constrained to live
+ * under {@link DOWNLOADS_ROOT}. Arbitrary absolute output paths are NOT accepted:
+ * `project` and `domain` are sanitized to single segments before joining, and the
+ * resolved path is re-checked to be inside the root (defence-in-depth SSRF/path-
+ * traversal guard). Throws if anything would escape the root.
+ *
+ * Structure: ~/Downloads/novada-mcp/YYYY-MM-DD/<project|domain>/site-copy/
+ */
+export async function resolveSiteCopyDir(domain: string, project?: string): Promise<string> {
+  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const group = project ? sanitize(project, 30) : sanitize(domain, 30);
+  const dir = join(DOWNLOADS_ROOT, today, group, "site-copy");
+
+  // Defence-in-depth: ensure the resolved path never escapes DOWNLOADS_ROOT.
+  const resolved = resolve(dir);
+  const rootResolved = resolve(DOWNLOADS_ROOT);
+  if (resolved !== rootResolved && !resolved.startsWith(rootResolved + sep)) {
+    throw new Error(`resolveSiteCopyDir: refusing to write outside Downloads root (${resolved})`);
+  }
+
+  await mkdir(resolved, { recursive: true });
+  return resolved;
+}
+
+/**
+ * Join a sanitized per-page filename onto an already-resolved site-copy dir, and
+ * re-verify the final file path stays inside {@link DOWNLOADS_ROOT}. Returns the
+ * safe absolute path. Throws on escape.
+ *
+ * `slug` is sanitized to a single safe segment; `ext` (default "md") is whitelisted
+ * to alphanumerics so it can never inject a path separator.
+ */
+export function safeSiteCopyFilePath(dir: string, slug: string, ext = "md"): string {
+  const safeExt = ext.replace(/[^a-zA-Z0-9]/g, "") || "md";
+  const fileName = `${sanitizeSlug(slug, 80)}.${safeExt}`;
+  const filePath = resolve(join(dir, fileName));
+  const rootResolved = resolve(DOWNLOADS_ROOT);
+  if (!filePath.startsWith(rootResolved + sep)) {
+    throw new Error(`safeSiteCopyFilePath: refusing to write outside Downloads root (${filePath})`);
+  }
+  return filePath;
 }
 
 /**

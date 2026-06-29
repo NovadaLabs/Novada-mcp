@@ -32,8 +32,9 @@ async function fetchPage(
 }
 
 /** Compile path filter regexes, ignore invalid or dangerous patterns.
- * Rejects patterns with nested quantifiers that cause catastrophic backtracking (ReDoS). */
-function compilePatterns(patterns: string[] | undefined): RegExp[] {
+ * Rejects patterns with nested quantifiers that cause catastrophic backtracking (ReDoS).
+ * Exported so site_copy reuses the exact same ReDoS-hardened compilation. */
+export function compilePatterns(patterns: string[] | undefined): RegExp[] {
   if (!patterns?.length) return [];
   return patterns.flatMap(p => {
     // Length guard
@@ -53,8 +54,9 @@ function compilePatterns(patterns: string[] | undefined): RegExp[] {
   });
 }
 
-/** Check if a URL path matches select/exclude path filters */
-function shouldCrawlUrl(
+/** Check if a URL path matches select/exclude path filters.
+ *  Exported so site_copy applies identical path-scope semantics. */
+export function shouldCrawlUrl(
   url: string,
   selectPatterns: RegExp[],
   excludePatterns: RegExp[]
@@ -69,8 +71,11 @@ function shouldCrawlUrl(
 }
 
 export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise<string> {
-  // Support intuitive alias param names
-  const maxPages = Math.min(params.max_pages ?? params.limit ?? 5, 20);
+  // Support intuitive alias param names.
+  // Hard cap is 20 for normal novada_crawl callers; site_copy raises it via the
+  // internal _maxPagesCeiling (the public CrawlParamsSchema still enforces .max(20)).
+  const pageCeiling = params._maxPagesCeiling ?? 20;
+  const maxPages = Math.min(params.max_pages ?? params.limit ?? 5, pageCeiling);
   const strategy = params.strategy ?? params.mode ?? "bfs";
   const renderMode = params.render ?? "auto";
   let renderDetected = false;

@@ -16,6 +16,7 @@ import {
   novadaCrawl,
   novadaResearch,
   novadaMap,
+  novadaSiteCopy,
   novadaProxy,
   novadaScrape,
   novadaVerify,
@@ -36,6 +37,7 @@ import {
   validateCrawlParams,
   validateResearchParams,
   validateMapParams,
+  validateSiteCopyParams,
   validateProxyParams,
   validateScrapeParams,
   validateVerifyParams,
@@ -57,6 +59,8 @@ import {
   CrawlParamsSchema,
   ResearchParamsSchema,
   MapParamsSchema,
+  SiteCopyParamsSchema,
+  SITE_COPY_HARD_MAX,
   ProxyParamsSchema,
   ScrapeParamsSchema,
   VerifyParamsSchema,
@@ -225,6 +229,19 @@ Not for:
 **Note:** Limited results on JavaScript SPAs — will flag this in output.`,
     inputSchema: zodToMcpSchema(MapParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+  },
+  {
+    name: "novada_site_copy",
+    description: `Copy an entire docs site or site section to disk as clean markdown — one .md file per page — and return a COMPACT manifest, not the page bodies. Use when you need a whole knowledge base on disk (offline docs ingest, RAG corpus, full-site mirror).
+
+**Discovery (in order):** (1) llms.txt / llms-full.txt if present (canonical, flat page list), (2) sitemap.xml, (3) scoped same-host BFS drained to completion. Path filters (select_paths/exclude_paths) and same-host are always enforced.
+**Best for:** "Copy all of docs.x.com", building a local docs corpus, ingesting an llms.txt index.
+**Not for:** A single page (use novada_extract), a handful of pages inline (use novada_crawl — it returns bodies), URL discovery only (use novada_map).
+**Output:** Each page is written to ~/Downloads/novada-mcp/<date>/<project|domain>/site-copy/<slug>.md as it completes. A manifest.json records {url,file,title,word_count,depth,bytes,status} per page plus run meta. The tool RETURNS a compact summary + the manifest path — Read the .md files or manifest.json, do not expect inline content.
+**Scale:** max_pages default 200, hard max ${SITE_COPY_HARD_MAX}. Drains the in-scope queue until empty or the ceiling is hit.
+**Key rule:** Files are streamed to disk; the response is intentionally small. After it completes, Read manifest.json then open the specific .md files you need.`,
+    inputSchema: zodToMcpSchema(SiteCopyParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "novada_scrape",
@@ -606,7 +623,7 @@ Output pipeline supports optional project folders for grouping related queries.`
 
 /** Category bundles — each group name expands to multiple tools */
 const CATEGORY_MAP: Record<string, string[]> = {
-  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor"],
+  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor"],
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
   browser: ["novada_browser", "novada_browser_flow"],
   scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
@@ -792,6 +809,9 @@ class NovadaMCPServer {
           case "novada_map":
             result = await novadaMap(validateMapParams(args as Record<string, unknown>), API_KEY!);
             break;
+          case "novada_site_copy":
+            result = await novadaSiteCopy(validateSiteCopyParams(args as Record<string, unknown>), API_KEY!);
+            break;
           case "novada_proxy":
             result = await novadaProxy(validateProxyParams(args as Record<string, unknown>));
             break;
@@ -886,7 +906,7 @@ class NovadaMCPServer {
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs, novada_ip_whitelist`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs, novada_ip_whitelist`,
               }],
               isError: true,
             };

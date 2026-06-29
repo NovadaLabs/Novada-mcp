@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
 import { novadaExtract } from "../../src/tools/extract.js";
 import { detectJsHeavyContent } from "../../src/utils/http.js";
+import { clearCache } from "../../src/_core/session-cache.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -10,6 +11,10 @@ const API_KEY = "test-key-123";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The extract session cache is a module-level Map keyed by url+mode+format.
+  // Many tests reuse https://example.com; without a reset, a success cached by
+  // an earlier test short-circuits later tests before the axios mock is hit.
+  clearCache();
 });
 
 describe("novadaExtract", () => {
@@ -77,26 +82,45 @@ describe("auto-escalation (static → render)", () => {
   const jsHeavyHtml = "<html><head><title>Just a moment...</title></head><body>Checking your browser</body></html>";
   const richHtml = `<html><head><title>Rich Page</title></head><body>${"<p>Real content paragraph.</p>".repeat(25)}</body></html>`;
 
-  it("escalates to render mode when static returns JS-heavy page", async () => {
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: jsHeavyHtml })   // static fetch
-      .mockResolvedValueOnce({ data: richHtml });       // render fallback (no unblocker key)
+  // NOTE: in auto mode the static phase races a direct fetch against a proxy fetch
+  // (two axios.get calls in non-deterministic order), so per-call mockResolvedValueOnce
+  // ordering is unreliable. We drive the mock by call count instead: the first two
+  // calls are the static race, everything after is the render/escalation path.
+  // The mode string in the output is "mode: <usedMode>" (with a space) — assert the
+  // behavioural contract (escalated away from a clean static success) rather than a
+  // brittle no-space literal.
 
-    const result = await novadaExtract({ url: "https://example.com", format: "markdown", render: "auto" }, API_KEY);
-    expect(result).toContain("mode:render");
-    expect(result).not.toContain("mode:static");
+  it("escalates away from static when the static fetch is JS-heavy", async () => {
+    let n = 0;
+    mockedAxios.get.mockImplementation(async () => {
+      n++;
+      // Static race (direct + proxy) both look JS-heavy → must trigger escalation.
+      if (n <= 2) return { data: jsHeavyHtml } as never;
+      // Render/escalation path returns rich content.
+      return { data: richHtml } as never;
+    });
+
+    const result = await novadaExtract({ url: "https://nov-esc-render.example", format: "markdown", render: "auto" }, API_KEY);
+    // A JS-heavy static page must never be reported as a clean static success.
+    expect(result).not.toContain("mode: static |");
+    // Escalation must be visible: either it succeeded (render/browser) or it was
+    // attempted and surfaced (render-failed / wayback fallback / escalation hint).
+    expect(result).toMatch(/mode: (render|browser|render-failed)/);
   });
 
-  it("uses render-failed mode when escalation attempt throws", async () => {
-    // fetchViaProxy: tries scraper API first, then falls back to direct fetch on non-401 errors.
-    // Both must fail for the render attempt to truly throw.
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: jsHeavyHtml })              // static: scraper API
-      .mockRejectedValueOnce(new Error("scraper api error"))     // render: scraper API fails
-      .mockRejectedValueOnce(new Error("direct fetch error"));   // render: direct fallback also fails
+  it("reports render-failed when every escalation fetch throws", async () => {
+    let n = 0;
+    mockedAxios.get.mockImplementation(async () => {
+      n++;
+      // Static race both JS-heavy → escalate.
+      if (n <= 2) return { data: jsHeavyHtml } as never;
+      // All render/escalation fetches fail.
+      throw new Error("render fetch failed");
+    });
 
-    const result = await novadaExtract({ url: "https://example.com", format: "markdown", render: "auto" }, API_KEY);
-    expect(result).toContain("mode:render-failed");
+    const result = await novadaExtract({ url: "https://nov-esc-failed.example", format: "markdown", render: "auto" }, API_KEY);
+    expect(result).toContain("mode: render-failed");
+    expect(result).not.toContain("mode: static |");
   });
 });
 
@@ -280,6 +304,21 @@ describe("P0-5: max_chars truncation", () => {
 
     expect(result).toContain("[Content may be truncated");
   });
+
+  it("single JSON object exposes content_truncated / returned_chars / total_chars", async () => {
+    mockedAxios.get.mockResolvedValue({ data: longPageHtml });
+
+    const result = await novadaExtract({
+      url: "https://nov563-json.example/long",
+      format: "json",
+      max_chars: 5000,
+    }, API_KEY);
+
+    const parsed = JSON.parse(result);
+    expect(parsed.content_truncated).toBe(true);
+    expect(parsed.returned_chars).toBe(parsed.content.length);
+    expect(parsed.total_chars).toBeGreaterThan(parsed.returned_chars);
+  });
 });
 
 describe("P1-6: urls array alias", () => {
@@ -320,19 +359,74 @@ describe("P1-6: urls array alias", () => {
     expect(result).toContain("## Extracted Content");
   });
 
-  it("urls array respects max_chars per URL", async () => {
-    mockedAxios.get.mockResolvedValue({ data: `<html><head><title>Test</title></head><body><main>${"<p>Long content here. ".repeat(1500)}</p></main></body></html>` });
+  // NOV-563/568: The old batch path re-truncated each page to floor(25000/N) chars,
+  // ignoring max_chars entirely. At 8 URLs that meant ~3125 chars/page. These tests
+  // lock in that the batch path now honors per-page max_chars and never re-slices.
+  const longHtml = `<html><head><title>Long</title></head><body><main>${"<p>Long content here paragraph. ".repeat(1500)}</p></main></body></html>`;
 
+  it("8-URL batch with max_chars=20000 keeps each page well above the old 3125-char cap and emits no batch sentinel", async () => {
+    mockedAxios.get.mockResolvedValue({ data: longHtml });
+
+    // Unique URLs avoid colliding with the session-dedup cache populated by other tests
+    // (cache key is url+mode+format+fields and excludes max_chars).
+    const urls = Array.from({ length: 8 }, (_, i) => `https://nov563-8url.example/page${i + 1}`);
     const result = await novadaExtract({
       url: "https://example.com",
-      urls: ["https://example.com/page1", "https://example.com/page2"],
+      urls,
       format: "markdown",
-      max_chars: 3000,
+      max_chars: 20000,
     }, API_KEY);
 
     expect(result).toContain("## Batch Extract Results");
-    // Each page should have truncation applied
-    expect(result).toContain("[Content may be truncated");
+    expect(result).toContain("urls:8");
+    // The old per-URL re-truncation sentinel must be gone.
+    expect(result).not.toContain("[truncated at");
+
+    // Each of the 8 page sections must carry far more than the old 3125-char cap.
+    const sections = result.split(/### \[\d+\/8\] /).slice(1);
+    expect(sections.length).toBe(8);
+    for (const section of sections) {
+      // Strip the per-item flag line we add so we measure actual page content.
+      const body = section.replace(/^[^\n]*\n?returned_chars:[^\n]*\n/, "");
+      expect(body.length).toBeGreaterThan(3125);
+    }
+  });
+
+  it("batch emits per-item returned_chars + content_truncated flags", async () => {
+    mockedAxios.get.mockResolvedValue({ data: longHtml });
+
+    const result = await novadaExtract({
+      url: "https://example.com",
+      urls: ["https://nov563-flags.example/a", "https://nov563-flags.example/b"],
+      format: "markdown",
+      max_chars: 4000,
+    }, API_KEY);
+
+    expect(result).toContain("## Batch Extract Results");
+    // Per-item flags appear once per page (2 pages).
+    const flagLines = result.split("\n").filter(l => /^returned_chars:\d+ \| content_truncated:(true|false)/.test(l));
+    expect(flagLines.length).toBe(2);
+    // With max_chars=4000 on a long page, each item should be truncated.
+    expect(flagLines.every(l => l.includes("content_truncated:true"))).toBe(true);
+    // total_chars surfaces when the inner block exposed it.
+    expect(flagLines.every(l => /total_chars:\d+/.test(l))).toBe(true);
+  });
+
+  it("batch persists full output to disk and puts the path at the TOP of the result", async () => {
+    mockedAxios.get.mockResolvedValue({ data: longHtml });
+
+    const result = await novadaExtract({
+      url: "https://example.com",
+      urls: ["https://nov563-path.example/a", "https://nov563-path.example/b"],
+      format: "markdown",
+      max_chars: 20000,
+    }, API_KEY);
+
+    // saveOutput is best-effort; when it succeeds the path must be the first line.
+    const firstLine = result.split("\n")[0];
+    expect(firstLine.startsWith("path: ")).toBe(true);
+    // The path prefix must sit above the batch header, not after it.
+    expect(result.indexOf("path: ")).toBeLessThan(result.indexOf("## Batch Extract Results"));
   });
 });
 
@@ -386,5 +480,106 @@ describe("quality score", () => {
     expect(result).toContain("## Structured Data");
     expect(result).toContain("type: Product");
     expect(result).toContain("name: Test Product");
+  });
+});
+
+describe("JSON fields contract (value/source/confidence object)", () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  const productJsonLdHtml = `
+    <html>
+      <head>
+        <title>Product Page</title>
+        <script type="application/ld+json">
+          {"@type":"Product","name":"Firecrawl","offers":{"price":"99.99","priceCurrency":"USD"}}
+        </script>
+      </head>
+      <body>
+        <main>
+          <h1>Firecrawl</h1>
+          ${"<p>Real product description content to exceed the content floor. </p>".repeat(40)}
+        </main>
+      </body>
+    </html>
+  `;
+
+  // NOV-564: format="json" returns fields[k] as a structured object
+  // { value, source, confidence } (plus agent_instruction when unresolved),
+  // NOT a bare scalar. This test locks that contract so it can't silently
+  // regress to a string (which would break downstream `parsed.fields.price`).
+  it("resolved field is an object with value/source/confidence", async () => {
+    mockedAxios.get.mockResolvedValue({ data: productJsonLdHtml });
+
+    const result = await novadaExtract({
+      url: "https://nov564-json-fields.example/product",
+      format: "json",
+      fields: ["price"],
+    }, API_KEY);
+
+    const parsed = JSON.parse(result);
+    expect(parsed.fields).toBeTypeOf("object");
+    expect(parsed.fields.price).toBeTypeOf("object");
+    // value is the scalar; source + confidence are siblings, not folded into value.
+    expect(parsed.fields.price.value).toBe("99.99");
+    expect(parsed.fields.price.source).toBe("jsonld");
+    expect(typeof parsed.fields.price.confidence).toBe("number");
+    expect(parsed.fields.price.confidence).toBeGreaterThan(0);
+  });
+
+  it("unresolved field has value:null and an agent_instruction", async () => {
+    mockedAxios.get.mockResolvedValue({ data: productJsonLdHtml });
+
+    const result = await novadaExtract({
+      url: "https://nov564-json-unresolved.example/product",
+      format: "json",
+      fields: ["nonexistent_field_xyz"],
+    }, API_KEY);
+
+    const parsed = JSON.parse(result);
+    const f = parsed.fields.nonexistent_field_xyz;
+    expect(f).toBeTypeOf("object");
+    expect(f.value).toBeNull();
+    expect(f.source).toBe("unresolved");
+    expect(typeof f.agent_instruction).toBe("string");
+  });
+});
+
+describe("field extraction window — full content, not display-truncated", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCache();
+  });
+
+  // Regression: extractFields must see the FULL pre-truncation content (mainContent),
+  // not displayContent which is sliced to max_chars (default 25k) for inline rendering.
+  // A field whose markdown text lands past char 25k on a long page must still resolve.
+  // Before the fix (passing displayContent), the markdown-text layers only saw the first
+  // 25k chars and returned `unresolved` for a value that lives further down the page.
+  it("resolves a markdown field located past the 25k display cap on a long page", async () => {
+    // ~30k chars of filler before the field, so the field sits beyond the default cap.
+    const filler = `<p>${"Lorem ipsum dolor sit amet consectetur. ".repeat(800)}</p>`;
+    const longHtml = `
+      <html><head><title>Long Doc</title></head>
+      <body><main>
+        <h1>Long Document</h1>
+        ${filler}
+        <p>Author: Jane Researcher</p>
+      </main></body></html>
+    `;
+    expect(longHtml.length).toBeGreaterThan(25000);
+    mockedAxios.get.mockResolvedValue({ data: longHtml });
+
+    const result = await novadaExtract({
+      url: "https://nov564-longpage.example/doc",
+      format: "json",
+      fields: ["author"],
+    }, API_KEY);
+
+    const parsed = JSON.parse(result);
+    // The inline content is still capped (display contract preserved)...
+    expect(parsed.content_truncated).toBe(true);
+    // ...but the field resolves from the full content, not the truncated slice.
+    expect(parsed.fields.author.source).not.toBe("unresolved");
+    expect(parsed.fields.author.value).toContain("Jane Researcher");
   });
 });

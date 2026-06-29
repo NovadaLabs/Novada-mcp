@@ -182,6 +182,61 @@ describe("novadaSearch", () => {
     novadaExtractSpy.mockRestore();
   });
 
+  // ─── NOV-567: source authority / exclude_social ─────────────────────────────
+
+  it("exclude_social drops social + PR results from the response", async () => {
+    mockGoogleSuccess([
+      { title: "Acme on PRNewswire", url: "https://www.prnewswire.com/news/acme", description: "press release" },
+      { title: "Acme reported by Reuters", url: "https://www.reuters.com/markets/acme", description: "news" },
+      { title: "Acme on LinkedIn", url: "https://www.linkedin.com/company/acme", description: "profile" },
+      { title: "Acme blog", url: "https://acme.example.com/blog", description: "company blog" },
+    ]);
+
+    const result = await novadaSearch(
+      { query: "acme-excludesocial-unique", engine: "google", num: 10, country: "", language: "", exclude_social: true },
+      API_KEY
+    );
+
+    // Social/PR domains removed
+    expect(result).not.toContain("prnewswire.com");
+    expect(result).not.toContain("linkedin.com");
+    // Authoritative + neutral kept
+    expect(result).toContain("reuters.com");
+    expect(result).toContain("acme.example.com");
+    expect(result).toContain("exclude_social:true");
+  });
+
+  it("exclude_social on an all-social SERP reports no results", async () => {
+    mockGoogleSuccess([
+      { title: "X post", url: "https://x.com/acme", description: "tweet" },
+      { title: "Reddit thread", url: "https://www.reddit.com/r/acme/x", description: "thread" },
+    ]);
+
+    const result = await novadaSearch(
+      { query: "acme-allsocial-unique", engine: "google", num: 10, country: "", language: "", exclude_social: true },
+      API_KEY
+    );
+    expect(result).toContain("No results found for:");
+  });
+
+  it("source_type=research appends social/PR exclusions to the query", async () => {
+    mockedAxios.post.mockResolvedValue({ data: { code: 0, data: { task_id: "task-src" } } });
+    mockedAxios.get.mockResolvedValue({
+      data: { organic_results: [{ title: "Study", url: "https://arxiv.org/abs/1", description: "paper" }] },
+    });
+
+    await novadaSearch(
+      { query: "acme clinical study", engine: "google", num: 10, country: "", language: "", source_type: "research" },
+      API_KEY
+    );
+
+    const postBody = mockedAxios.post.mock.calls[0][1] as URLSearchParams;
+    const q = postBody.get("q") ?? "";
+    expect(q).toContain("acme clinical study");
+    expect(q).toContain("-site:prnewswire.com");
+    expect(q).toContain("-site:reddit.com");
+  });
+
   // ─── Bing-specific regression tests ─────────────────────────────────────────
 
   it("Bing: uses a_auto_push=false (not is_auto_push)", async () => {

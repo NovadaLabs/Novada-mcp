@@ -2,6 +2,7 @@ import { chromium } from "playwright-core";
 import type { Page } from "playwright-core";
 import { TIMEOUTS } from "../config.js";
 import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
+import { assertUrlSafe, isUrlSafe } from "./ssrf.js";
 
 /**
  * Strip credentials from WSS URLs in error messages.
@@ -93,6 +94,19 @@ export function isBrowserConfigured(): boolean {
 }
 
 /**
+ * Post-navigation SSRF check. `page.goto` follows 3xx redirects internally and
+ * Playwright/CDP exposes no `beforeRedirect` hook, so a public URL can land on a
+ * private host (e.g. 30x → http://169.254.169.254/). Re-validate the final
+ * `page.url()` and throw before any content is read.
+ */
+function assertLandingSafe(page: Page): void {
+  const landed = page.url();
+  if (landed && !isUrlSafe(landed)) {
+    assertUrlSafe(landed, "browser redirect landing");
+  }
+}
+
+/**
  * Fetch a URL using Novada Browser API via CDP WebSocket.
  * Connects to Novada's cloud browser, navigates to URL, returns rendered HTML.
  *
@@ -108,6 +122,11 @@ export async function fetchViaBrowser(
   url: string,
   options: { timeout?: number; waitForSelector?: string; sessionId?: string; wait_ms?: number } = {}
 ): Promise<string> {
+  // SSRF chokepoint: the CDP fetch path never passed through http.ts's assertUrlSafe,
+  // and the enrich_top/render="browser" paths can feed it a non-Zod-validated URL
+  // (scraped SERP result, or a forced browser mode). Validate before any page.goto.
+  assertUrlSafe(url, "browser navigate");
+
   // Auto-resolve: NOVADA_BROWSER_WS env var OR auto-provision via NOVADA_API_KEY (product=10)
   const wsEndpoint = await resolveBrowserWs(process.env.NOVADA_API_KEY);
   if (!wsEndpoint) {
@@ -123,6 +142,7 @@ export async function fetchViaBrowser(
     const existingPage = getSession(options.sessionId);
     if (existingPage) {
       await existingPage.goto(url, { waitUntil: "domcontentloaded", timeout });
+      assertLandingSafe(existingPage);
       if (options.waitForSelector) {
         await existingPage.waitForSelector(options.waitForSelector, { timeout: 15000 }).catch(() => {});
       }
@@ -172,6 +192,7 @@ export async function fetchViaBrowser(
       waitUntil: "domcontentloaded",
       timeout,
     });
+    assertLandingSafe(page);
 
     // Wait for DOM ready + fixed 2s for JS to render initial content
     // (networkidle never fires on SPAs — saves ~5s on JS-heavy pages)
