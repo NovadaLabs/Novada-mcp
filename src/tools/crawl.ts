@@ -31,25 +31,96 @@ async function fetchPage(
   }
 }
 
-/** Compile path filter regexes, ignore invalid or dangerous patterns.
- * Rejects patterns with nested quantifiers that cause catastrophic backtracking (ReDoS).
+/** Max characters per path pattern. Over-long patterns are skipped (ReDoS bound). */
+const MAX_PATTERN_LENGTH = 1000;
+/** Max number of path patterns honored per filter list. Excess are skipped. */
+const MAX_PATTERN_COUNT = 50;
+
+/** A compiled path-glob matcher: returns true iff the URL pathname matches the glob.
+ *  Exported so site_copy can type its discovery helper with the same shape. */
+export type PathMatcher = (path: string) => boolean;
+
+type GlobToken =
+  | { t: "lit"; c: string }   // literal character
+  | { t: "star" }             // `*`  — any run of non-`/` chars (within one segment)
+  | { t: "globstar" }         // `**` — any run of any chars (crosses `/`)
+  | { t: "question" };        // `?`  — exactly one non-`/` char
+
+/** Tokenize a glob pattern. `**` is one globstar token; `*`/`?` are single tokens; every
+ *  other character (including regex metacharacters) is a plain literal — so user input can
+ *  never inject quantifiers/groups. */
+function tokenizeGlob(pattern: string): GlobToken[] {
+  const toks: GlobToken[] = [];
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === "*") {
+      if (pattern[i + 1] === "*") { toks.push({ t: "globstar" }); i++; }
+      else toks.push({ t: "star" });
+    } else if (ch === "?") {
+      toks.push({ t: "question" });
+    } else {
+      toks.push({ t: "lit", c: ch });
+    }
+  }
+  return toks;
+}
+
+/** Compile a glob pattern into a linear-time matcher. The matcher is a dynamic-programming
+ *  whole-string match (O(tokens × pathLen) time, O(pathLen) space) — there is NO backtracking
+ *  RegExp involved, so crafted patterns like `*a*a*a…` can NEVER cause catastrophic
+ *  (exponential) backtracking that freezes the event loop (NOV-570).
+ *
+ *  Glob semantics are exactly equivalent to the previous anchored-regex implementation
+ *  (`**`→`.*`, `*`→`[^/]*`, `?`→`[^/]`, anchored ^…$), so crawl/site_copy scope behavior is
+ *  unchanged — only the catastrophic-backtracking failure mode is removed. */
+function globToMatcher(pattern: string): PathMatcher {
+  const toks = tokenizeGlob(pattern);
+  const n = toks.length;
+  return (s: string): boolean => {
+    const m = s.length;
+    // dp[si] === can toks[ti:] match s[si:]. Build bottom-up over tokens (ti = n .. 0),
+    // each row depending only on the previous (ti+1) row. Two rolling rows = O(m) space.
+    let next = new Array<boolean>(m + 1).fill(false);
+    next[m] = true; // empty token list matches only the empty remainder
+    for (let ti = n - 1; ti >= 0; ti--) {
+      const tok = toks[ti];
+      const cur = new Array<boolean>(m + 1).fill(false);
+      for (let si = m; si >= 0; si--) {
+        switch (tok.t) {
+          case "globstar":
+            // match zero chars (next[si]) OR consume one char of any kind (cur[si+1])
+            cur[si] = next[si] || (si < m && cur[si + 1]);
+            break;
+          case "star":
+            // match zero chars OR consume one non-`/` char
+            cur[si] = next[si] || (si < m && s[si] !== "/" && cur[si + 1]);
+            break;
+          case "question":
+            cur[si] = si < m && s[si] !== "/" && next[si + 1];
+            break;
+          default: // lit
+            cur[si] = si < m && s[si] === tok.c && next[si + 1];
+            break;
+        }
+      }
+      next = cur;
+    }
+    return next[0];
+  };
+}
+
+/** Compile path filters into linear-time glob matchers — never compiles raw user input as a
+ * backtracking regex, so crafted ReDoS patterns cannot freeze the event loop (NOV-570).
+ * Patterns are treated as GLOBS (`**`, `*`, `?`); all other characters are literals.
+ * Over-long (>1000 chars) patterns are skipped; at most 50 patterns are honored.
  * Exported so site_copy reuses the exact same ReDoS-hardened compilation. */
-export function compilePatterns(patterns: string[] | undefined): RegExp[] {
+export function compilePatterns(patterns: string[] | undefined): PathMatcher[] {
   if (!patterns?.length) return [];
-  return patterns.flatMap(p => {
-    // Length guard
-    if (p.length > 200) return [];
-    // Static guard: reject obvious nested quantifier forms e.g. (a+)+ or ([a-z]*)*
-    if (/\([^)]*[+*][^)]*\)[+*?{]/.test(p)) return [];
+  return patterns.slice(0, MAX_PATTERN_COUNT).flatMap(p => {
+    // Length guard: skip over-long patterns (defense in depth above the Zod cap).
+    if (p.length > MAX_PATTERN_LENGTH) return [];
     try {
-      const re = new RegExp(p);
-      // Runtime probe: test against a pathological input to catch remaining ReDoS patterns.
-      // A legitimate path pattern (<200 chars) should match in <5ms against a 50-char string.
-      const probe = "/api/" + "a".repeat(45) + "!";
-      const start = Date.now();
-      re.test(probe);
-      if (Date.now() - start > 50) return []; // >50ms = catastrophic backtracking
-      return [re];
+      return [globToMatcher(p)];
     } catch { return []; }
   });
 }
@@ -58,15 +129,15 @@ export function compilePatterns(patterns: string[] | undefined): RegExp[] {
  *  Exported so site_copy applies identical path-scope semantics. */
 export function shouldCrawlUrl(
   url: string,
-  selectPatterns: RegExp[],
-  excludePatterns: RegExp[]
+  selectPatterns: PathMatcher[],
+  excludePatterns: PathMatcher[]
 ): boolean {
   let path: string;
   try { path = new URL(url).pathname; }
   catch { return false; }
 
-  if (excludePatterns.some(re => re.test(path))) return false;
-  if (selectPatterns.length > 0 && !selectPatterns.some(re => re.test(path))) return false;
+  if (excludePatterns.some(match => match(path))) return false;
+  if (selectPatterns.length > 0 && !selectPatterns.some(match => match(path))) return false;
   return true;
 }
 

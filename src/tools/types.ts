@@ -120,9 +120,9 @@ export const CrawlParamsSchema = z.object({
   instructions: z.string().optional()
     .describe("Natural language hint for which pages to prioritize. E.g. 'only API reference pages', 'skip blog and changelog'. Applied as path-level filtering; semantic filtering is agent-side."),
   select_paths: z.array(z.string().min(1).max(200)).max(20).optional()
-    .describe("Regex patterns to restrict crawled URL paths. E.g. ['/docs/.*', '/api/.*']."),
+    .describe("Glob patterns to restrict crawled URL paths. '*' matches within a path segment, '**' matches across segments, '?' matches one char. E.g. ['/docs/**', '/api/**']."),
   exclude_paths: z.array(z.string().min(1).max(200)).max(20).optional()
-    .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
+    .describe("Glob patterns for URL paths to skip entirely. '*' matches within a path segment, '**' matches across segments. E.g. ['/blog/**', '/changelog/**']."),
   format: z.enum(["markdown", "json"]).default("markdown")
     .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
   render: z.enum(["auto", "static", "render"]).default("auto")
@@ -165,9 +165,9 @@ export const SiteCopyParamsSchema = z.object({
   max_pages: z.number().int().min(1).max(SITE_COPY_HARD_MAX).default(200)
     .describe(`Maximum pages to copy. Default 200, hard max ${SITE_COPY_HARD_MAX}. The run drains the in-scope queue until empty or this ceiling is hit — it is a safety bound, not a target.`),
   select_paths: z.array(z.string().min(1).max(200)).max(20).optional()
-    .describe("Regex patterns to restrict copied URL paths. E.g. ['/docs/.*', '/api/.*']. Same-host is always enforced."),
+    .describe("Glob patterns to restrict copied URL paths. '*' matches within a path segment, '**' matches across segments, '?' matches one char. E.g. ['/docs/**', '/api/**']. Same-host is always enforced."),
   exclude_paths: z.array(z.string().min(1).max(200)).max(20).optional()
-    .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
+    .describe("Glob patterns for URL paths to skip entirely. '*' matches within a path segment, '**' matches across segments. E.g. ['/blog/**', '/changelog/**']."),
   max_depth: z.number().int().min(1).max(10).default(5)
     .describe("BFS link-hops from root when no llms.txt/sitemap is found. Default 5. Ignored for llms.txt/sitemap discovery (which is flat)."),
   include_subdomains: z.boolean().default(false)

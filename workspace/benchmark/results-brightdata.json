@@ -1,0 +1,4802 @@
+[
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 1,
+    "latency_ms": 116,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 2,
+    "latency_ms": 137,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 3,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 4,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 5,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 6,
+    "latency_ms": 170,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 7,
+    "latency_ms": 128,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 8,
+    "latency_ms": 106,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 9,
+    "latency_ms": 107,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 10,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 11,
+    "latency_ms": 189,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 12,
+    "latency_ms": 122,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 13,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 14,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 15,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 16,
+    "latency_ms": 197,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 17,
+    "latency_ms": 130,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 18,
+    "latency_ms": 102,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 19,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 20,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 21,
+    "latency_ms": 187,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 22,
+    "latency_ms": 129,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 23,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 24,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 25,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 26,
+    "latency_ms": 174,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 27,
+    "latency_ms": 130,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 28,
+    "latency_ms": 116,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 29,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T1",
+    "round": 30,
+    "latency_ms": 129,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 1,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 2,
+    "latency_ms": 121,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 3,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 4,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 5,
+    "latency_ms": 153,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 6,
+    "latency_ms": 131,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 7,
+    "latency_ms": 100,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 8,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 9,
+    "latency_ms": 102,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 10,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 11,
+    "latency_ms": 115,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 12,
+    "latency_ms": 124,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 13,
+    "latency_ms": 102,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 14,
+    "latency_ms": 108,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 15,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 16,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 17,
+    "latency_ms": 116,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 18,
+    "latency_ms": 119,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 19,
+    "latency_ms": 101,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 20,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 21,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 22,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 23,
+    "latency_ms": 116,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 24,
+    "latency_ms": 124,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 25,
+    "latency_ms": 149,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 26,
+    "latency_ms": 166,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 27,
+    "latency_ms": 177,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 28,
+    "latency_ms": 130,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 29,
+    "latency_ms": 103,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T2",
+    "round": 30,
+    "latency_ms": 108,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 1,
+    "latency_ms": 149,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 2,
+    "latency_ms": 124,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 3,
+    "latency_ms": 106,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 4,
+    "latency_ms": 131,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 5,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 6,
+    "latency_ms": 161,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 7,
+    "latency_ms": 126,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 8,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 9,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 10,
+    "latency_ms": 106,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 11,
+    "latency_ms": 103,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 12,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 13,
+    "latency_ms": 136,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 14,
+    "latency_ms": 108,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 15,
+    "latency_ms": 113,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 16,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 17,
+    "latency_ms": 172,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 18,
+    "latency_ms": 143,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 19,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 20,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 21,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 22,
+    "latency_ms": 164,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 23,
+    "latency_ms": 123,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 24,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 25,
+    "latency_ms": 116,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 26,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 27,
+    "latency_ms": 163,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 28,
+    "latency_ms": 132,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 29,
+    "latency_ms": 117,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T3",
+    "round": 30,
+    "latency_ms": 97,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 1,
+    "latency_ms": 132,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 2,
+    "latency_ms": 121,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 3,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 4,
+    "latency_ms": 113,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 5,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 6,
+    "latency_ms": 108,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 7,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 8,
+    "latency_ms": 126,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 9,
+    "latency_ms": 107,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 10,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 11,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 12,
+    "latency_ms": 194,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 13,
+    "latency_ms": 122,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 14,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 15,
+    "latency_ms": 108,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 16,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 17,
+    "latency_ms": 190,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 18,
+    "latency_ms": 125,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 19,
+    "latency_ms": 123,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 20,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 21,
+    "latency_ms": 100,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 22,
+    "latency_ms": 177,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 23,
+    "latency_ms": 126,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 24,
+    "latency_ms": 113,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 25,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 26,
+    "latency_ms": 102,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 27,
+    "latency_ms": 192,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 28,
+    "latency_ms": 250,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 29,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T4",
+    "round": 30,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 1,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 2,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 3,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 4,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 5,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 6,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 7,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 8,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 9,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 10,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 11,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 12,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 13,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 14,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 15,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 16,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 17,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 18,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 19,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 20,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 21,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 22,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 23,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 24,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 25,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 26,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 27,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 28,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 29,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T5",
+    "round": 30,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 1,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 2,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 3,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 4,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 5,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 6,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 7,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 8,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 9,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 10,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 11,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 12,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 13,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 14,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 15,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 16,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 17,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 18,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 19,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 20,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 21,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 22,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 23,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 24,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 25,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 26,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 27,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 28,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 29,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T6",
+    "round": 30,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": false,
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Not supported by this competitor"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 1,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 2,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 3,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 4,
+    "latency_ms": 100,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 5,
+    "latency_ms": 100,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 6,
+    "latency_ms": 115,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 7,
+    "latency_ms": 120,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 8,
+    "latency_ms": 106,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 9,
+    "latency_ms": 116,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 10,
+    "latency_ms": 100,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 11,
+    "latency_ms": 198,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 12,
+    "latency_ms": 128,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 13,
+    "latency_ms": 103,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 14,
+    "latency_ms": 106,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 15,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 16,
+    "latency_ms": 102,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 17,
+    "latency_ms": 119,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 18,
+    "latency_ms": 123,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 19,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 20,
+    "latency_ms": 102,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 21,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 22,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 23,
+    "latency_ms": 115,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 24,
+    "latency_ms": 122,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 25,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 26,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 27,
+    "latency_ms": 108,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 28,
+    "latency_ms": 184,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 29,
+    "latency_ms": 141,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T7",
+    "round": 30,
+    "latency_ms": 103,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 1,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 2,
+    "latency_ms": 141,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 3,
+    "latency_ms": 117,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 4,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 5,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 6,
+    "latency_ms": 104,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 7,
+    "latency_ms": 103,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 8,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 9,
+    "latency_ms": 135,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 10,
+    "latency_ms": 103,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 11,
+    "latency_ms": 103,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 12,
+    "latency_ms": 101,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 13,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 14,
+    "latency_ms": 115,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 15,
+    "latency_ms": 129,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 16,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 17,
+    "latency_ms": 103,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 18,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 19,
+    "latency_ms": 189,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 20,
+    "latency_ms": 124,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 21,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 22,
+    "latency_ms": 116,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 23,
+    "latency_ms": 105,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 24,
+    "latency_ms": 186,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 25,
+    "latency_ms": 130,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 26,
+    "latency_ms": 108,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 27,
+    "latency_ms": 131,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 28,
+    "latency_ms": 116,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 29,
+    "latency_ms": 144,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  },
+  {
+    "competitor": "brightdata",
+    "category": "T8",
+    "round": 30,
+    "latency_ms": 127,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": false,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 1
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 400"
+  }
+]

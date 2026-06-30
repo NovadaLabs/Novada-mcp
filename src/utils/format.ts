@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs";
+import type ExcelJSType from "exceljs";
 
 export type OutputFormat = "markdown" | "json" | "csv" | "html" | "xlsx";
 
@@ -62,6 +62,9 @@ export function formatAsHtml(records: Record<string, unknown>[], title?: string)
 
 /** Convert records to XLSX buffer */
 export async function formatAsXlsx(records: Record<string, unknown>[], sheetName = "Data"): Promise<Buffer> {
+  // NOV-577 cold-start: exceljs is heavy and only needed for the xlsx path. Load it lazily so
+  // importing format.ts (pulled in eagerly via the utils barrel) doesn't pay the cost up front.
+  const { default: ExcelJS } = (await import("exceljs")) as { default: typeof ExcelJSType };
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(sheetName);
 

@@ -13,7 +13,7 @@ import {
   sanitizeSlug,
 } from "../utils/index.js";
 import { detectJsHeavyContent } from "./extract.js";
-import { compilePatterns, shouldCrawlUrl } from "./crawl.js";
+import { compilePatterns, shouldCrawlUrl, type PathMatcher } from "./crawl.js";
 import type { SiteCopyParams } from "./types.js";
 import { SITE_COPY_HARD_MAX } from "./types.js";
 import { TIMEOUTS } from "../config.js";
@@ -149,8 +149,8 @@ async function discoverPages(
   origin: string,
   baseHostname: string,
   maxPages: number,
-  selectPatterns: RegExp[],
-  excludePatterns: RegExp[],
+  selectPatterns: PathMatcher[],
+  excludePatterns: PathMatcher[],
 ): Promise<{ method: DiscoveryMethod; urls: string[]; seedDepths: Map<string, number> }> {
   const includeSub = params.include_subdomains;
   const inScope = (u: string): boolean =>

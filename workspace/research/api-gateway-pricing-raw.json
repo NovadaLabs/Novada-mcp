@@ -1,0 +1,88 @@
+{
+  "generated": "2026-05-28",
+  "sources": [
+    {
+      "url": "https://www.apiable.io/resources/best-api-monetization-platforms/",
+      "title": "Best API Monetization Platforms Compared (2026)",
+      "type": "api_gateway",
+      "quality": "75/100",
+      "key_data": {
+        "platforms": ["Apiable", "Moesif/WSO2", "Apigee", "DigitalAPI", "Zuplo", "Kong", "Tyk"],
+        "pricing_models": ["flat-rate", "per-unit", "volume", "graduated", "contract-based", "prepaid-credit"],
+        "apigee": {
+          "price_per_million_calls": "$20",
+          "environment_cost_monthly": "$365 - $3,431",
+          "tiers": ["Standard", "Enterprise", "Enterprise Plus"]
+        }
+      }
+    },
+    {
+      "url": "https://konghq.com/blog/learning-center/api-gateway-vs--ai-gateway",
+      "title": "API Gateway vs. AI Gateway: Key Differences",
+      "type": "api_gateway",
+      "key_data": {
+        "aws_api_gateway": {
+          "rest_api_per_million": "$3.50",
+          "http_api_per_million_first_300M": "$1.00",
+          "free_tier": "1M calls/month for 12 months"
+        }
+      }
+    },
+    {
+      "url": "https://cloud.tencent.com/developer/article/2657436",
+      "title": "AI API 中转站完全解析",
+      "type": "zhongzhuanzhan",
+      "quality": "70/100",
+      "key_data": {
+        "channel_types": {
+          "official_direct": { "price_multiplier": "1.0", "stability": "★★★★★", "payment": "foreign card required" },
+          "cloud_vendor": { "price_multiplier": "0.8-1.2", "stability": "★★★★★", "payment": "enterprise billing" },
+          "relay_official": { "price_multiplier": "0.8-1.5", "stability": "★★★★☆", "payment": "Alipay/WeChat" },
+          "reverse_engineering": { "price_multiplier": "0.05-0.3", "stability": "★★☆☆☆", "payment": "Alipay/WeChat" }
+        },
+        "billing_unit": "Token (input + output billed separately, output typically 3-5x input price)",
+        "key_platforms": ["poloapi", "OpenRouter", "302.AI", "AiHubMix", "DMXAPI", "API易"],
+        "tech_stack": {
+          "format_standard": "OpenAI-compatible REST API",
+          "streaming": "SSE (Server-Sent Events)",
+          "base_software": "One API (songquanpeng/one-api) or New API"
+        }
+      }
+    },
+    {
+      "url": "https://qianfan.cloud.baidu.com/qianfandev/topic/687184",
+      "title": "2026年度AI中转服务商定价模型深度解析",
+      "type": "zhongzhuanzhan",
+      "quality": "45/100",
+      "key_data": {
+        "platforms": {
+          "poloapi": {
+            "model": "深度折扣模式",
+            "discount": "3-5折 off official",
+            "example": "GPT-4o官方$5/$15 per 1M → poloapi约$1.5/$4.5"
+          },
+          "openrouter": {
+            "model": "动态比价模式",
+            "pricing": "Realtime market pricing, varies by provider"
+          },
+          "openai_official": {
+            "model": "官方统一定价",
+            "gpt4o_input": "$5/1M tokens",
+            "gpt4o_output": "$15/1M tokens"
+          },
+          "baidu_qianfan": {
+            "model": "国产模型定价",
+            "ernie40_input": "30元/百万tokens",
+            "ernie40_output": "60元/百万tokens"
+          }
+        }
+      }
+    }
+  ],
+  "research_summary": {
+    "api_gateway_pricing_models": ["per-call", "per-million-calls", "tiered", "flat-rate/subscription", "usage-based", "prepaid-credits", "graduated-volume"],
+    "zhongzhuanzhan_pricing_models": ["token-based (input+output)", "prepay credit balance", "multiplier/rate (倍率)", "monthly subscription"],
+    "data_formats": ["REST/JSON (dominant)", "GraphQL", "gRPC", "OpenAI-compatible", "SSE for streaming"],
+    "key_insight": "中转站行业标准已统一到OpenAI-compatible REST API格式。底层几乎全部基于One API开源系统。计费单位统一为Token，按输入/输出分别计费，输出约为输入的3-5倍价格。"
+  }
+}

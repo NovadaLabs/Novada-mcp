@@ -188,7 +188,7 @@ By default returns full page content for maximum information. Add clean=true to 
   },
   {
     name: "novada_crawl",
-    description: `Use when you need content from multiple pages of a site and don't have the URLs yet. Crawls BFS or DFS up to 20 pages, extracts content from each. Use select_paths regex to target specific sections (e.g. "/docs/api/.*").
+    description: `Use when you need content from multiple pages of a site and don't have the URLs yet. Crawls BFS or DFS up to 20 pages, extracts content from each. Use select_paths globs to target specific sections (e.g. "/docs/api/**").
 
 **Best for:** Doc site ingestion, competitive content analysis, building knowledge bases from a domain.
 **Not for:** A single page (use novada_extract), URL discovery without content extraction (use novada_map — much faster).

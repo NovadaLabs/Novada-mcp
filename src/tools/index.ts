@@ -26,6 +26,8 @@ export { novadaHealthAll, validateHealthAllParams, HealthAllParamsSchema } from 
 export type { HealthAllParams } from "./health_all.js";
 export { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "./discover.js";
 export type { DiscoverParams } from "./discover.js";
+export { TOOL_REGISTRY, TOOL_CATEGORIES, REGISTERED_TOOL_NAMES } from "./registry.js";
+export type { ToolMeta, ToolCategory, ToolStatus } from "./registry.js";
 export { novadaScraperSubmit, validateScraperSubmitParams, ScraperSubmitParamsSchema } from "./scraper_submit.js";
 export type { ScraperSubmitParams } from "./scraper_submit.js";
 export { novadaScraperStatus, validateScraperStatusParams, ScraperStatusParamsSchema } from "./scraper_status.js";

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractFields } from "../../src/utils/fields.js";
+import { extractFields, isStatValue } from "../../src/utils/fields.js";
 import type { StructuredData } from "../../src/utils/html.js";
 
 describe("extractFields", () => {
@@ -244,5 +244,29 @@ describe("extractFields — finance false-positive guards (review fixes)", () =>
   it("a non-stat field ('author') still resolves prose via multi-space", () => {
     const r = extractFields(["author"], null, "Author     Jane Smith")[0];
     expect(r.value).toBe("Jane Smith");
+  });
+});
+
+describe("isStatValue — NOV-574 prose-with-a-digit rejection", () => {
+  // NOV-574: a STAT_FIELDS value must BE a number (optionally currency / sign / % / K-M-B-T
+  // or a numeric range), not prose that merely CONTAINS a digit. The old `/\d/.test(v)` guard
+  // let a stray digit in a sentence resolve a numeric stat field to that sentence.
+  it("rejects prose that merely contains a digit ('founded in 2009 by 3 people')", () => {
+    expect(isStatValue("founded in 2009 by 3 people")).toBe(false);
+  });
+
+  it("accepts real stat values: currency, percent, and grouped numbers", () => {
+    expect(isStatValue("$1.2B")).toBe(true);
+    expect(isStatValue("42%")).toBe(true);
+    expect(isStatValue("1,234")).toBe(true);
+  });
+
+  it("accepts a numeric range ('60.10 - 88.41') and signed percent ('-5.15%')", () => {
+    expect(isStatValue("60.10 - 88.41")).toBe(true);
+    expect(isStatValue("-5.15%")).toBe(true);
+  });
+
+  it("rejects other prose-with-a-digit ('top 5 holdings')", () => {
+    expect(isStatValue("top 5 holdings")).toBe(false);
   });
 });

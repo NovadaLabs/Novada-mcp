@@ -1,0 +1,499 @@
+{
+  "runDate": "2026-06-24T14:19:58.068Z",
+  "results": [
+    {
+      "url": "https://example.com",
+      "latencyMs": 15781,
+      "chars": 987,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://httpbin.org/get",
+      "latencyMs": 552,
+      "chars": 688,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://docs.python.org/3/tutorial/introduction.html",
+      "latencyMs": 203,
+      "chars": 23444,
+      "qualityScore": 5,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://nodejs.org/en/docs",
+      "latencyMs": 738,
+      "chars": 4716,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+      "latencyMs": 192,
+      "chars": 19452,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://www.paulgraham.com/todo.html",
+      "latencyMs": 15109,
+      "chars": 2194,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://quotes.toscrape.com/",
+      "latencyMs": 19355,
+      "chars": 2572,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://books.toscrape.com/",
+      "latencyMs": 606,
+      "chars": 9182,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://jsonplaceholder.typicode.com/",
+      "latencyMs": 6207,
+      "chars": 2381,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://github.com/trending",
+      "latencyMs": 43792,
+      "chars": 3285,
+      "qualityScore": 3,
+      "success": true,
+      "error": null,
+      "category": "latency"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Web_scraping",
+      "latencyMs": 5689,
+      "chars": 25017,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "content"
+    },
+    {
+      "url": "https://news.ycombinator.com/",
+      "latencyMs": 723,
+      "chars": 14600,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "content"
+    },
+    {
+      "url": "https://www.bbc.com/news",
+      "latencyMs": 318,
+      "chars": 9141,
+      "qualityScore": 3,
+      "success": true,
+      "error": null,
+      "category": "content"
+    },
+    {
+      "url": "https://techcrunch.com/",
+      "latencyMs": 226,
+      "chars": 26328,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "content"
+    },
+    {
+      "url": "https://medium.com/",
+      "latencyMs": 60012,
+      "chars": 523,
+      "qualityScore": 3,
+      "success": false,
+      "error": null,
+      "category": "content"
+    },
+    {
+      "url": "https://stackoverflow.com/questions/tagged/python",
+      "latencyMs": 149,
+      "chars": 642,
+      "qualityScore": 3,
+      "success": false,
+      "error": null,
+      "category": "content"
+    },
+    {
+      "url": "https://css-tricks.com/",
+      "latencyMs": 10126,
+      "chars": 2138,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "content"
+    },
+    {
+      "url": "https://www.smashingmagazine.com/",
+      "latencyMs": 237,
+      "chars": 11428,
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "content"
+    },
+    {
+      "url": "https://quotes.toscrape.com/",
+      "label": "quotes-page",
+      "latencyMs": 10897,
+      "chars": 3178,
+      "fields": [
+        "title",
+        "text",
+        "author"
+      ],
+      "fieldsFound": 3,
+      "fieldsTotal": 3,
+      "fieldsRatio": 1,
+      "fieldDetail": [
+        {
+          "field": "title",
+          "found": true
+        },
+        {
+          "field": "text",
+          "found": true
+        },
+        {
+          "field": "author",
+          "found": true
+        }
+      ],
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "structured"
+    },
+    {
+      "url": "https://books.toscrape.com/",
+      "label": "books-page",
+      "latencyMs": 583,
+      "chars": 9290,
+      "fields": [
+        "title",
+        "price",
+        "rating"
+      ],
+      "fieldsFound": 3,
+      "fieldsTotal": 3,
+      "fieldsRatio": 1,
+      "fieldDetail": [
+        {
+          "field": "title",
+          "found": true
+        },
+        {
+          "field": "price",
+          "found": true
+        },
+        {
+          "field": "rating",
+          "found": true
+        }
+      ],
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "structured"
+    },
+    {
+      "url": "https://jsonplaceholder.typicode.com/posts",
+      "label": "json-api",
+      "latencyMs": 30,
+      "chars": 27806,
+      "fields": [
+        "userId",
+        "id",
+        "title",
+        "body"
+      ],
+      "fieldsFound": 4,
+      "fieldsTotal": 4,
+      "fieldsRatio": 1,
+      "fieldDetail": [
+        {
+          "field": "userId",
+          "found": true
+        },
+        {
+          "field": "id",
+          "found": true
+        },
+        {
+          "field": "title",
+          "found": true
+        },
+        {
+          "field": "body",
+          "found": true
+        }
+      ],
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "structured"
+    },
+    {
+      "url": "https://httpbin.org/json",
+      "label": "httpbin-json",
+      "latencyMs": 880,
+      "chars": 671,
+      "fields": [
+        "slideshow",
+        "title",
+        "date"
+      ],
+      "fieldsFound": 3,
+      "fieldsTotal": 3,
+      "fieldsRatio": 1,
+      "fieldDetail": [
+        {
+          "field": "slideshow",
+          "found": true
+        },
+        {
+          "field": "title",
+          "found": true
+        },
+        {
+          "field": "date",
+          "found": true
+        }
+      ],
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "structured"
+    },
+    {
+      "url": "https://www.goodreads.com/",
+      "label": "goodreads",
+      "latencyMs": 33464,
+      "chars": 6947,
+      "fields": [
+        "title",
+        "author",
+        "rating"
+      ],
+      "fieldsFound": 3,
+      "fieldsTotal": 3,
+      "fieldsRatio": 1,
+      "fieldDetail": [
+        {
+          "field": "title",
+          "found": true
+        },
+        {
+          "field": "author",
+          "found": true
+        },
+        {
+          "field": "rating",
+          "found": true
+        }
+      ],
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "structured"
+    },
+    {
+      "url": "https://news.ycombinator.com/",
+      "label": "hn-structured",
+      "latencyMs": 567,
+      "chars": 15230,
+      "fields": [
+        "title",
+        "score",
+        "comments"
+      ],
+      "fieldsFound": 3,
+      "fieldsTotal": 3,
+      "fieldsRatio": 1,
+      "fieldDetail": [
+        {
+          "field": "title",
+          "found": true
+        },
+        {
+          "field": "score",
+          "found": true
+        },
+        {
+          "field": "comments",
+          "found": true
+        }
+      ],
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "structured"
+    },
+    {
+      "url": "https://quotes.toscrape.com/page/2/",
+      "label": "quotes-page2",
+      "latencyMs": 17796,
+      "chars": 3193,
+      "fields": [
+        "text",
+        "author",
+        "tags"
+      ],
+      "fieldsFound": 3,
+      "fieldsTotal": 3,
+      "fieldsRatio": 1,
+      "fieldDetail": [
+        {
+          "field": "text",
+          "found": true
+        },
+        {
+          "field": "author",
+          "found": true
+        },
+        {
+          "field": "tags",
+          "found": true
+        }
+      ],
+      "qualityScore": 4,
+      "success": true,
+      "error": null,
+      "category": "structured"
+    },
+    {
+      "url": "amazon.com/dp/B07XKX5RM8",
+      "label": "amazon-product",
+      "latencyMs": 1583,
+      "chars": 0,
+      "fields": [
+        "title",
+        "price",
+        "rating",
+        "description"
+      ],
+      "fieldsFound": 0,
+      "fieldsTotal": 4,
+      "fieldsRatio": 0,
+      "fieldDetail": [
+        {
+          "field": "title",
+          "found": false
+        },
+        {
+          "field": "price",
+          "found": false
+        },
+        {
+          "field": "rating",
+          "found": false
+        },
+        {
+          "field": "description",
+          "found": false
+        }
+      ],
+      "qualityScore": 1,
+      "success": false,
+      "error": "Unexpected download response (code 10000): result data not exist",
+      "tool": "novada_scrape",
+      "category": "structured"
+    }
+  ],
+  "stats": {
+    "overall": {
+      "total": 26,
+      "successful": 23,
+      "successRate": 0.8846153846153846,
+      "p50LatencyMs": 880,
+      "p95LatencyMs": 43792,
+      "p50SuccessLatencyMs": 738,
+      "p95SuccessLatencyMs": 33464,
+      "avgChars": 9733,
+      "medianChars": 6947,
+      "avgQualityScore": 3.9565217391304346,
+      "usefulCharsRatio": 1
+    },
+    "latencyCategory": {
+      "total": 10,
+      "successful": 10,
+      "successRate": 1,
+      "p50Ms": 6207,
+      "p95Ms": 43792,
+      "avgChars": 6890
+    },
+    "contentCategory": {
+      "total": 8,
+      "successful": 6,
+      "successRate": 0.75,
+      "p50Ms": 723,
+      "p95Ms": 10126,
+      "avgChars": 14775
+    },
+    "structuredCategory": {
+      "total": 8,
+      "successful": 7,
+      "successRate": 0.875,
+      "p50Ms": 880,
+      "p95Ms": 33464,
+      "avgFieldsRatio": 0.875
+    }
+  },
+  "baselines": {
+    "firecrawl": {
+      "p50LatencyMs": 508,
+      "p95LatencyMs": 844,
+      "avgChars": 15460,
+      "medianChars": 15599,
+      "structuredSuccessRate": 0.75,
+      "overallSuccessRate": 0.925
+    },
+    "tavily": {
+      "p50LatencyMs": 119,
+      "p95LatencyMs": 185,
+      "avgChars": 11417,
+      "medianChars": 8855,
+      "structuredSuccessRate": 0.75,
+      "overallSuccessRate": 0.863
+    },
+    "novadaPrevious": {
+      "p50LatencyMs": 577,
+      "p95LatencyMs": 2589,
+      "avgChars": 10558,
+      "medianChars": 6125,
+      "structuredSuccessRate": 0.9,
+      "overallSuccessRate": 0.913
+    }
+  }
+}

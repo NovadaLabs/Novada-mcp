@@ -1,0 +1,7017 @@
+[
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 1,
+    "latency_ms": 439,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 2,
+    "latency_ms": 433,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 3,
+    "latency_ms": 361,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 4,
+    "latency_ms": 545,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 5,
+    "latency_ms": 381,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 6,
+    "latency_ms": 393,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 7,
+    "latency_ms": 452,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 8,
+    "latency_ms": 442,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 9,
+    "latency_ms": 383,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 10,
+    "latency_ms": 492,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 11,
+    "latency_ms": 381,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 12,
+    "latency_ms": 404,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 13,
+    "latency_ms": 359,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 14,
+    "latency_ms": 358,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 15,
+    "latency_ms": 519,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 16,
+    "latency_ms": 426,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 17,
+    "latency_ms": 369,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 18,
+    "latency_ms": 427,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 19,
+    "latency_ms": 428,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 20,
+    "latency_ms": 440,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 21,
+    "latency_ms": 457,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 22,
+    "latency_ms": 351,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 23,
+    "latency_ms": 417,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 24,
+    "latency_ms": 342,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 25,
+    "latency_ms": 367,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 26,
+    "latency_ms": 488,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 27,
+    "latency_ms": 360,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 28,
+    "latency_ms": 373,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 29,
+    "latency_ms": 433,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 30,
+    "latency_ms": 415,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 31,
+    "latency_ms": 443,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 32,
+    "latency_ms": 547,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 33,
+    "latency_ms": 548,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 34,
+    "latency_ms": 1072,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 35,
+    "latency_ms": 402,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 36,
+    "latency_ms": 393,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 37,
+    "latency_ms": 844,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 38,
+    "latency_ms": 422,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 39,
+    "latency_ms": 391,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 40,
+    "latency_ms": 421,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 41,
+    "latency_ms": 536,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 42,
+    "latency_ms": 443,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 43,
+    "latency_ms": 544,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 44,
+    "latency_ms": 413,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 45,
+    "latency_ms": 455,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 46,
+    "latency_ms": 547,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 47,
+    "latency_ms": 356,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 48,
+    "latency_ms": 442,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 49,
+    "latency_ms": 411,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T1",
+    "round": 50,
+    "latency_ms": 436,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 15599,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 1,
+    "latency_ms": 478,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 2,
+    "latency_ms": 659,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 3,
+    "latency_ms": 453,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 4,
+    "latency_ms": 519,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 5,
+    "latency_ms": 614,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 6,
+    "latency_ms": 624,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 7,
+    "latency_ms": 585,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 8,
+    "latency_ms": 480,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 9,
+    "latency_ms": 448,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 10,
+    "latency_ms": 525,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 11,
+    "latency_ms": 463,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 12,
+    "latency_ms": 447,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 13,
+    "latency_ms": 648,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 14,
+    "latency_ms": 569,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 15,
+    "latency_ms": 528,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 16,
+    "latency_ms": 550,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 17,
+    "latency_ms": 542,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 18,
+    "latency_ms": 592,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 19,
+    "latency_ms": 508,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 20,
+    "latency_ms": 438,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 21,
+    "latency_ms": 441,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 22,
+    "latency_ms": 476,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 23,
+    "latency_ms": 441,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 24,
+    "latency_ms": 4081,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 25,
+    "latency_ms": 453,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 26,
+    "latency_ms": 637,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 27,
+    "latency_ms": 457,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 28,
+    "latency_ms": 677,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 29,
+    "latency_ms": 513,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 30,
+    "latency_ms": 442,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 31,
+    "latency_ms": 549,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 32,
+    "latency_ms": 646,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 33,
+    "latency_ms": 549,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 34,
+    "latency_ms": 453,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 35,
+    "latency_ms": 536,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 36,
+    "latency_ms": 456,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 37,
+    "latency_ms": 546,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 38,
+    "latency_ms": 916,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 39,
+    "latency_ms": 481,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 40,
+    "latency_ms": 592,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 41,
+    "latency_ms": 458,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 42,
+    "latency_ms": 479,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 43,
+    "latency_ms": 668,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 44,
+    "latency_ms": 464,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 45,
+    "latency_ms": 794,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 46,
+    "latency_ms": 689,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 47,
+    "latency_ms": 548,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 48,
+    "latency_ms": 649,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 49,
+    "latency_ms": 550,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T2",
+    "round": 50,
+    "latency_ms": 549,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 14505,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 1,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 2,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 3,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 4,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 5,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 6,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 7,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 8,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 9,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 10,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 11,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 12,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 13,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 14,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 15,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 16,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 17,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 18,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 19,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 20,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 21,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 22,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 23,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 24,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 25,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 26,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 27,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 28,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 29,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 30,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 31,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 32,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 33,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 34,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 35,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 36,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 37,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 38,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 39,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 40,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 41,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 42,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 43,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 44,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 45,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 46,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 47,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 48,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 49,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T3",
+    "round": 50,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 1,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 2,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 3,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 4,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 5,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 6,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 7,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 8,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 9,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 10,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 11,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 12,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 13,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 14,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 15,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 16,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 17,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 18,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 19,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 20,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 21,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 22,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 23,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 24,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 25,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 26,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 27,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 28,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 29,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 30,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 31,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 32,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 33,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 34,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 35,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 36,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 37,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 38,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 39,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 40,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 41,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 42,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 43,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 44,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 45,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 46,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 47,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 48,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 49,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T4",
+    "round": 50,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 1,
+    "latency_ms": 19787,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 2,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 3,
+    "latency_ms": 172,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 4,
+    "latency_ms": 128,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 5,
+    "latency_ms": 2370,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 6,
+    "latency_ms": 190,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 7,
+    "latency_ms": 133,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 8,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 9,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 10,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 11,
+    "latency_ms": 173,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 12,
+    "latency_ms": 129,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 13,
+    "latency_ms": 117,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 14,
+    "latency_ms": 123,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 15,
+    "latency_ms": 108,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 16,
+    "latency_ms": 165,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 17,
+    "latency_ms": 128,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 18,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 19,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 20,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 21,
+    "latency_ms": 181,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 22,
+    "latency_ms": 130,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 23,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 24,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 25,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 26,
+    "latency_ms": 175,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 27,
+    "latency_ms": 132,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 28,
+    "latency_ms": 118,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 29,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 30,
+    "latency_ms": 115,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 31,
+    "latency_ms": 161,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 32,
+    "latency_ms": 134,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 33,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 34,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 35,
+    "latency_ms": 112,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 36,
+    "latency_ms": 6855,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 37,
+    "latency_ms": 3823,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 38,
+    "latency_ms": 128,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 39,
+    "latency_ms": 113,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 40,
+    "latency_ms": 109,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 41,
+    "latency_ms": 113,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 42,
+    "latency_ms": 173,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 43,
+    "latency_ms": 135,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 44,
+    "latency_ms": 114,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 45,
+    "latency_ms": 119,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 46,
+    "latency_ms": 111,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 47,
+    "latency_ms": 162,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 48,
+    "latency_ms": 132,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 49,
+    "latency_ms": 110,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T5",
+    "round": 50,
+    "latency_ms": 117,
+    "success": false,
+    "status": "error",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "Request failed with status code 429"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 1,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 2,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 3,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 4,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 5,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 6,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 7,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 8,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 9,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 10,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 11,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 12,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 13,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 14,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 15,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 16,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 17,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 18,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 19,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 20,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 21,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 22,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 23,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 24,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 25,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 26,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 27,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 28,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 29,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 30,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 31,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 32,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 33,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 34,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 35,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 36,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 37,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 38,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 39,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 40,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 41,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 42,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 43,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 44,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 45,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 46,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 47,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 48,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 49,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T6",
+    "round": 50,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 1,
+    "latency_ms": 532,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 2,
+    "latency_ms": 432,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 3,
+    "latency_ms": 495,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 4,
+    "latency_ms": 484,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 5,
+    "latency_ms": 668,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 6,
+    "latency_ms": 566,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 7,
+    "latency_ms": 471,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 8,
+    "latency_ms": 586,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 9,
+    "latency_ms": 435,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 10,
+    "latency_ms": 443,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 11,
+    "latency_ms": 412,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 12,
+    "latency_ms": 424,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 13,
+    "latency_ms": 412,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 14,
+    "latency_ms": 414,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 15,
+    "latency_ms": 546,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 16,
+    "latency_ms": 548,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 17,
+    "latency_ms": 652,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 18,
+    "latency_ms": 441,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 19,
+    "latency_ms": 551,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 20,
+    "latency_ms": 640,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 21,
+    "latency_ms": 548,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 22,
+    "latency_ms": 443,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 23,
+    "latency_ms": 548,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 24,
+    "latency_ms": 411,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 25,
+    "latency_ms": 545,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 26,
+    "latency_ms": 565,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 27,
+    "latency_ms": 492,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 28,
+    "latency_ms": 593,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 29,
+    "latency_ms": 414,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 30,
+    "latency_ms": 515,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 31,
+    "latency_ms": 416,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 32,
+    "latency_ms": 442,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 33,
+    "latency_ms": 732,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 34,
+    "latency_ms": 575,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 35,
+    "latency_ms": 525,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 36,
+    "latency_ms": 459,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 37,
+    "latency_ms": 2119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 38,
+    "latency_ms": 551,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 39,
+    "latency_ms": 436,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 40,
+    "latency_ms": 547,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 41,
+    "latency_ms": 546,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 42,
+    "latency_ms": 745,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 43,
+    "latency_ms": 588,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 44,
+    "latency_ms": 414,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 45,
+    "latency_ms": 542,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 46,
+    "latency_ms": 546,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 47,
+    "latency_ms": 444,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 48,
+    "latency_ms": 544,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 49,
+    "latency_ms": 1804,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T7",
+    "round": 50,
+    "latency_ms": 534,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 1,
+    "latency_ms": 377,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 2,
+    "latency_ms": 523,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 3,
+    "latency_ms": 449,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 4,
+    "latency_ms": 592,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 5,
+    "latency_ms": 454,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 6,
+    "latency_ms": 503,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 7,
+    "latency_ms": 484,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 8,
+    "latency_ms": 442,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 9,
+    "latency_ms": 439,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 10,
+    "latency_ms": 657,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 11,
+    "latency_ms": 453,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 12,
+    "latency_ms": 474,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 13,
+    "latency_ms": 442,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 14,
+    "latency_ms": 511,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 15,
+    "latency_ms": 460,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 16,
+    "latency_ms": 573,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 17,
+    "latency_ms": 621,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 18,
+    "latency_ms": 621,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 19,
+    "latency_ms": 504,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 20,
+    "latency_ms": 446,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 21,
+    "latency_ms": 490,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 22,
+    "latency_ms": 447,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 23,
+    "latency_ms": 651,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 24,
+    "latency_ms": 441,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 25,
+    "latency_ms": 548,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 26,
+    "latency_ms": 548,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 27,
+    "latency_ms": 546,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 28,
+    "latency_ms": 717,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 29,
+    "latency_ms": 530,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 30,
+    "latency_ms": 918,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 31,
+    "latency_ms": 547,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 32,
+    "latency_ms": 651,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 33,
+    "latency_ms": 546,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 34,
+    "latency_ms": 555,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 35,
+    "latency_ms": 543,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 36,
+    "latency_ms": 607,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 37,
+    "latency_ms": 486,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 38,
+    "latency_ms": 444,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 39,
+    "latency_ms": 742,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 40,
+    "latency_ms": 555,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 41,
+    "latency_ms": 1005,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 42,
+    "latency_ms": 516,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 43,
+    "latency_ms": 543,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 44,
+    "latency_ms": 552,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 45,
+    "latency_ms": 582,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 46,
+    "latency_ms": 623,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 47,
+    "latency_ms": 529,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 48,
+    "latency_ms": 488,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 49,
+    "latency_ms": 514,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "firecrawl",
+    "category": "T8",
+    "round": 50,
+    "latency_ms": 441,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11464,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  }
+]

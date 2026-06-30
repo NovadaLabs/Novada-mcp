@@ -1,0 +1,452 @@
+{
+  "novada": {
+    "T1": {
+      "status": "ok",
+      "success_count": 29,
+      "total_rounds": 30,
+      "success_rate": 0.9666666666666667,
+      "latency_median_ms": 3504,
+      "latency_p95_ms": 9380,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": "Novada unblocker error: {\"code\":0,\"data\":{\"code\":403,\"err_detail\":\"Connect browser failed after retries\",\"msg\":\"Forbidden\",\"msg_detail\":\"Your account is unable to access the resources on the target we"
+    },
+    "T2": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 6331.5,
+      "latency_p95_ms": 16299,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T3": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 2782.5,
+      "latency_p95_ms": 3642,
+      "quality_median": 4,
+      "af_score": 4,
+      "sample_notes": ""
+    },
+    "T4": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 1910,
+      "latency_p95_ms": 2870,
+      "quality_median": 4,
+      "af_score": 4,
+      "sample_notes": ""
+    },
+    "T5": {
+      "status": "ok",
+      "success_count": 28,
+      "total_rounds": 30,
+      "success_rate": 0.9333333333333333,
+      "latency_median_ms": 24738,
+      "latency_p95_ms": 57782,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": "TIMEOUT"
+    },
+    "T6": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 8561.5,
+      "latency_p95_ms": 17627,
+      "quality_median": 4,
+      "af_score": 4,
+      "sample_notes": ""
+    },
+    "T7": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 6628.5,
+      "latency_p95_ms": 17895,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T8": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 4849.5,
+      "latency_p95_ms": 10495,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    }
+  },
+  "brightdata": {
+    "T1": {
+      "status": "failed",
+      "success_count": 0,
+      "total_rounds": 30,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Request failed with status code 400"
+    },
+    "T2": {
+      "status": "failed",
+      "success_count": 0,
+      "total_rounds": 30,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Request failed with status code 400"
+    },
+    "T3": {
+      "status": "failed",
+      "success_count": 0,
+      "total_rounds": 30,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Request failed with status code 400"
+    },
+    "T4": {
+      "status": "failed",
+      "success_count": 0,
+      "total_rounds": 30,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Request failed with status code 400"
+    },
+    "T5": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Not supported by this competitor"
+    },
+    "T6": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Not supported by this competitor"
+    },
+    "T7": {
+      "status": "failed",
+      "success_count": 0,
+      "total_rounds": 30,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Request failed with status code 400"
+    },
+    "T8": {
+      "status": "failed",
+      "success_count": 0,
+      "total_rounds": 30,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Request failed with status code 400"
+    }
+  },
+  "firecrawl": {
+    "T1": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 502,
+      "latency_p95_ms": 675,
+      "quality_median": 5,
+      "af_score": 4,
+      "sample_notes": ""
+    },
+    "T2": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 560.5,
+      "latency_p95_ms": 771,
+      "quality_median": 5,
+      "af_score": 4,
+      "sample_notes": ""
+    },
+    "T3": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Not supported by this competitor"
+    },
+    "T4": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Not supported by this competitor"
+    },
+    "T5": {
+      "status": "ok",
+      "success_count": 1,
+      "total_rounds": 30,
+      "success_rate": 0.03333333333333333,
+      "latency_median_ms": 3786,
+      "latency_p95_ms": 3786,
+      "quality_median": 5,
+      "af_score": 4,
+      "sample_notes": "Request failed with status code 429"
+    },
+    "T6": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Not supported by this competitor"
+    },
+    "T7": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 556,
+      "latency_p95_ms": 719,
+      "quality_median": 5,
+      "af_score": 4,
+      "sample_notes": ""
+    },
+    "T8": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 433.5,
+      "latency_p95_ms": 549,
+      "quality_median": 5,
+      "af_score": 4,
+      "sample_notes": ""
+    }
+  },
+  "tavily": {
+    "T1": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 121.5,
+      "latency_p95_ms": 151,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T2": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 123.5,
+      "latency_p95_ms": 185,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T3": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 109.5,
+      "latency_p95_ms": 189,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T4": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 114,
+      "latency_p95_ms": 186,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T5": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Not supported by this competitor"
+    },
+    "T6": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Not supported by this competitor"
+    },
+    "T7": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 123,
+      "latency_p95_ms": 152,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T8": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 125,
+      "latency_p95_ms": 146,
+      "quality_median": 5,
+      "af_score": 3,
+      "sample_notes": ""
+    }
+  },
+  "oxylabs": {
+    "T1": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 11609,
+      "latency_p95_ms": 17571,
+      "quality_median": 5,
+      "af_score": 2,
+      "sample_notes": ""
+    },
+    "T2": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 12259.5,
+      "latency_p95_ms": 23052,
+      "quality_median": 5,
+      "af_score": 2,
+      "sample_notes": ""
+    },
+    "T3": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 2610,
+      "latency_p95_ms": 4570,
+      "quality_median": 2,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T4": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 2107,
+      "latency_p95_ms": 6904,
+      "quality_median": 2,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T5": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null,
+      "sample_notes": "Not supported by this competitor"
+    },
+    "T6": {
+      "status": "ok",
+      "success_count": 30,
+      "total_rounds": 30,
+      "success_rate": 1,
+      "latency_median_ms": 4118.5,
+      "latency_p95_ms": 26049,
+      "quality_median": 4,
+      "af_score": 3,
+      "sample_notes": ""
+    },
+    "T7": {
+      "status": "ok",
+      "success_count": 28,
+      "total_rounds": 30,
+      "success_rate": 0.9333333333333333,
+      "latency_median_ms": 15556.5,
+      "latency_p95_ms": 43306,
+      "quality_median": 5,
+      "af_score": 2,
+      "sample_notes": "timeout of 55000ms exceeded"
+    },
+    "T8": {
+      "status": "ok",
+      "success_count": 29,
+      "total_rounds": 30,
+      "success_rate": 0.9666666666666667,
+      "latency_median_ms": 13640,
+      "latency_p95_ms": 24958,
+      "quality_median": 5,
+      "af_score": 2,
+      "sample_notes": "timeout of 55000ms exceeded"
+    }
+  }
+}

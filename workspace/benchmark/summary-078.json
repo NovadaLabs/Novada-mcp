@@ -1,0 +1,347 @@
+{
+  "novada": {
+    "T1": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 204,
+      "latency_p95_ms": 271,
+      "quality_median": 5,
+      "af_score": 4
+    },
+    "T2": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 1104,
+      "latency_p95_ms": 1591,
+      "quality_median": 5,
+      "af_score": 4
+    },
+    "T3": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 2193,
+      "latency_p95_ms": 2913,
+      "quality_median": 5,
+      "af_score": 5
+    },
+    "T4": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 2180,
+      "latency_p95_ms": 3388,
+      "quality_median": 5,
+      "af_score": 5
+    },
+    "T5": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 542.5,
+      "latency_p95_ms": 588,
+      "quality_median": 5,
+      "af_score": 5
+    },
+    "T6": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 690.5,
+      "latency_p95_ms": 1172,
+      "quality_median": 4,
+      "af_score": 4
+    },
+    "T7": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 138.5,
+      "latency_p95_ms": 215,
+      "quality_median": 5,
+      "af_score": 4
+    },
+    "T8": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 24.5,
+      "latency_p95_ms": 29,
+      "quality_median": 4,
+      "af_score": 3
+    },
+    "_v078": {
+      "source_field_rate": 0.875,
+      "chainable_output_rate": 0.375,
+      "remember_hint_rate": 0.875,
+      "fast_path_t1": 1,
+      "fast_path_t7": 1
+    }
+  },
+  "firecrawl": {
+    "T1": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 426.5,
+      "latency_p95_ms": 548,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T2": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 539,
+      "latency_p95_ms": 794,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T3": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null
+    },
+    "T4": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null
+    },
+    "T5": {
+      "status": "ok",
+      "success_count": 3,
+      "total_rounds": 50,
+      "success_rate": 0.06,
+      "latency_median_ms": 6855,
+      "latency_p95_ms": 19787,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T6": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null
+    },
+    "T7": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 538,
+      "latency_p95_ms": 745,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T8": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 529.5,
+      "latency_p95_ms": 742,
+      "quality_median": 5,
+      "af_score": 3
+    }
+  },
+  "tavily": {
+    "T1": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 117.5,
+      "latency_p95_ms": 165,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T2": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 121,
+      "latency_p95_ms": 161,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T3": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 110,
+      "latency_p95_ms": 194,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T4": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 110.5,
+      "latency_p95_ms": 192,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T5": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null
+    },
+    "T6": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null
+    },
+    "T7": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 124,
+      "latency_p95_ms": 147,
+      "quality_median": 5,
+      "af_score": 3
+    },
+    "T8": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 119.5,
+      "latency_p95_ms": 160,
+      "quality_median": 5,
+      "af_score": 3
+    }
+  },
+  "oxylabs": {
+    "T1": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 9218.5,
+      "latency_p95_ms": 11869,
+      "quality_median": 5,
+      "af_score": 2
+    },
+    "T2": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 11790,
+      "latency_p95_ms": 24270,
+      "quality_median": 5,
+      "af_score": 2
+    },
+    "T3": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 2175.5,
+      "latency_p95_ms": 4135,
+      "quality_median": 2,
+      "af_score": 3
+    },
+    "T4": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 2198.5,
+      "latency_p95_ms": 6267,
+      "quality_median": 2,
+      "af_score": 3
+    },
+    "T5": {
+      "status": "na",
+      "success_count": 0,
+      "total_rounds": 0,
+      "success_rate": 0,
+      "latency_median_ms": null,
+      "latency_p95_ms": null,
+      "quality_median": null,
+      "af_score": null
+    },
+    "T6": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 3394,
+      "latency_p95_ms": 4424,
+      "quality_median": 4,
+      "af_score": 3
+    },
+    "T7": {
+      "status": "ok",
+      "success_count": 46,
+      "total_rounds": 50,
+      "success_rate": 0.92,
+      "latency_median_ms": 14743.5,
+      "latency_p95_ms": 33074,
+      "quality_median": 5,
+      "af_score": 2
+    },
+    "T8": {
+      "status": "ok",
+      "success_count": 50,
+      "total_rounds": 50,
+      "success_rate": 1,
+      "latency_median_ms": 13115.5,
+      "latency_p95_ms": 21386,
+      "quality_median": 5,
+      "af_score": 2
+    }
+  },
+  "_winners": {
+    "T1": "tavily",
+    "T2": "tavily",
+    "T3": "tavily",
+    "T4": "tavily",
+    "T5": "novada",
+    "T6": "novada",
+    "T7": "tavily",
+    "T8": "tavily"
+  }
+}

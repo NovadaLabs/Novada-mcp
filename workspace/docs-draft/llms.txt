@@ -1,0 +1,33 @@
+# Novada MCP
+
+> Web data API for AI agents. One MCP server, one API key, 40+ tools.
+
+## Docs
+
+- [Introduction](https://novada.com/docs/introduction): What is Novada MCP, capabilities overview, comparison with Firecrawl, Tavily, and Bright Data
+- [Quick Start](https://novada.com/docs/quickstart): Get running in 2 minutes -- API key, install command, first requests, environment variables
+- [MCP Server Configuration](https://novada.com/docs/mcp-server): Setup for Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, and npm global install
+- [Extract + Search](https://novada.com/docs/extract-search): Web extraction from any URL (batch up to 10), search across 5 engines, auto-extract on results
+- [Scrape + Crawl + Map](https://novada.com/docs/scrape-crawl-map): Structured scraping from 13 platforms (~78 operations), BFS/DFS crawl up to 20 pages, URL discovery via sitemap
+- [Research + Verify + Monitor](https://novada.com/docs/research-verify-monitor): Multi-source research reports, fact-checking claims, price and content change tracking
+- [Proxy + Browser](https://novada.com/docs/proxy-browser): 6 proxy types (residential, ISP, static, datacenter, mobile, dedicated) across 195 countries, cloud browser automation
+- [Account Management](https://novada.com/docs/account-advanced): Wallet balance, traffic logs, sub-accounts, capture logs, diagnostics
+- [CLI Reference](https://novada.com/docs/cli-reference): Command-line options, environment variables, tool filtering with NOVADA_TOOLS and NOVADA_GROUPS
+- [Build with AI](https://novada.com/docs/build-with-ai): Integration patterns for AI agents, RAG pipelines, research workflows, competitive intelligence
+- [Advanced Guide](https://novada.com/docs/advanced-guide): Anti-bot escalation (static to JS render to browser CDP), render modes, performance tuning, token efficiency
+- [Platform Quickstarts](https://novada.com/docs/platform-quickstarts): Per-platform setup guides for Amazon, TikTok, LinkedIn, YouTube, Google, and more
+- [Agentic Debugging](https://novada.com/docs/agentic-debugging): Self-help for AI agents -- structured error responses, failure recovery patterns, diagnostic tools
+- [Docs for Agents](https://novada.com/docs/docs-for-agents): How AI agents consume these docs -- llms.txt, tool discovery, MCP resources, error handling
+
+## API
+
+- [Tool Reference](https://novada.com/docs/api/tools): All 40+ MCP tools with parameters, examples, and best-for/not-for guidance
+- [Error Codes](https://novada.com/docs/api/errors): 12 error codes with failure classification (auth, quota, transient, permanent) and agent instructions
+- [MCP Resources](https://novada.com/docs/api/resources): 5 read-only resources -- guide, scraper-platforms, engines, countries, llms-txt
+
+## Optional
+
+- [Changelog](https://novada.com/docs/changelog): Release history and version notes
+- [npm Package](https://www.npmjs.com/package/novada-mcp): Install via npx or npm
+- [GitHub](https://github.com/NovadaLabs/novada-search-mcp): Source code and issue tracker
+- [Dashboard](https://dashboard.novada.com): API key management and product activation

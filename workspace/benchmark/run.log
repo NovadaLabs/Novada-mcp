@@ -1,0 +1,369 @@
+╔══════════════════════════════════════════════════════╗
+║   MCP Web Scraping Benchmark v1.0 — 2026-05-21       ║
+╚══════════════════════════════════════════════════════╝
+
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: NOVADA
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ✅ R0 T1 4609ms Q5 AF3
+    ✅ R1 T1 4429ms Q5 AF3
+    ✅ R2 T1 5135ms Q5 AF3
+    ✅ R3 T1 9596ms Q5 AF3
+    ✅ R4 T1 4229ms Q5 AF3
+    ✅ R5 T1 4219ms Q5 AF3
+    ✅ R6 T1 4459ms Q5 AF3
+    ✅ R7 T1 4860ms Q5 AF3
+    ✅ R8 T1 4365ms Q5 AF3
+    ✅ R9 T1 4277ms Q5 AF3
+    ✅ R10 T1 4105ms Q5 AF3
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ✅ R0 T2 9070ms Q5 AF3
+    ✅ R1 T2 8015ms Q5 AF3
+    ✅ R2 T2 6222ms Q5 AF3
+    ✅ R3 T2 9830ms Q5 AF3
+    ✅ R4 T2 7348ms Q5 AF3
+    ✅ R5 T2 7282ms Q5 AF3
+    ✅ R6 T2 7786ms Q5 AF3
+    ✅ R7 T2 6522ms Q5 AF3
+    ✅ R8 T2 7342ms Q5 AF3
+    ✅ R9 T2 27813ms Q5 AF3
+    ✅ R10 T2 9450ms Q5 AF3
+
+  📊 T3 — Search — Financial
+    [warmup]
+    ❌ R0 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":6362,"data":null,"msg":"suc
+    ❌ R1 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":2590,"data":null,"msg":"suc
+    ❌ R2 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":5951,"data":null,"msg":"suc
+    ❌ R3 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":1896,"data":null,"msg":"suc
+    ❌ R4 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":3866,"data":null,"msg":"suc
+    ❌ R5 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":1649,"data":null,"msg":"suc
+    ❌ R6 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":3251,"data":null,"msg":"suc
+    ❌ R7 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":4681,"data":null,"msg":"suc
+    ❌ R8 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":1722,"data":null,"msg":"suc
+    ❌ R9 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":1985,"data":null,"msg":"suc
+    ❌ R10 T3 error No task_id: {"code":0,"data":{"code":200,"cost_time":6565,"data":null,"msg":"suc
+
+  📊 T4 — Search — AI
+    [warmup]
+    ❌ R0 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":1700,"data":null,"msg":"suc
+    ❌ R1 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":2257,"data":null,"msg":"suc
+    ❌ R2 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":2703,"data":null,"msg":"suc
+    ❌ R3 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":4570,"data":null,"msg":"suc
+    ❌ R4 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":2785,"data":null,"msg":"suc
+    ❌ R5 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":6612,"data":null,"msg":"suc
+    ❌ R6 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":3034,"data":null,"msg":"suc
+    ❌ R7 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":3009,"data":null,"msg":"suc
+    ❌ R8 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":1924,"data":null,"msg":"suc
+    ❌ R9 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":2366,"data":null,"msg":"suc
+    ❌ R10 T4 error No task_id: {"code":0,"data":{"code":200,"cost_time":2212,"data":null,"msg":"suc
+
+  📊 T5 — Crawl (Python Docs)
+    [warmup]
+    ✅ R0 T5 42488ms Q5 AF3
+    ✅ R1 T5 40236ms Q5 AF3
+    ✅ R2 T5 20049ms Q5 AF3
+    ✅ R3 T5 40677ms Q5 AF3
+    ✅ R4 T5 43593ms Q5 AF3
+    ✅ R5 T5 29538ms Q5 AF3
+    ❌ R6 T5 timeout TIMEOUT
+    ✅ R7 T5 43000ms Q5 AF3
+    ✅ R8 T5 22488ms Q5 AF3
+    ✅ R9 T5 21033ms Q5 AF3
+    ✅ R10 T5 23778ms Q5 AF3
+
+  📊 T6 — Structured Data (Amazon)
+    [warmup]
+    ❌ R0 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R1 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R2 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R3 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R4 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R5 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R6 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R7 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R8 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R9 T6 error Novada Amazon submit error (11006): Scraper error
+    ❌ R10 T6 error Novada Amazon submit error (11006): Scraper error
+  💾 Saved 60 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-novada.json
+
+  ✅ novada done — 29 successes
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: BRIGHTDATA
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ❌ R0 T1 error Request failed with status code 400
+    ❌ R1 T1 error Request failed with status code 400
+    ❌ R2 T1 error Request failed with status code 400
+    ❌ R3 T1 error Request failed with status code 400
+    ❌ R4 T1 error Request failed with status code 400
+    ❌ R5 T1 error Request failed with status code 400
+    ❌ R6 T1 error Request failed with status code 400
+    ❌ R7 T1 error Request failed with status code 400
+    ❌ R8 T1 error Request failed with status code 400
+    ❌ R9 T1 error Request failed with status code 400
+    ❌ R10 T1 error Request failed with status code 400
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ❌ R0 T2 error Request failed with status code 400
+    ❌ R1 T2 error Request failed with status code 400
+    ❌ R2 T2 error Request failed with status code 400
+    ❌ R3 T2 error Request failed with status code 400
+    ❌ R4 T2 error Request failed with status code 400
+    ❌ R5 T2 error Request failed with status code 400
+    ❌ R6 T2 error Request failed with status code 400
+    ❌ R7 T2 error Request failed with status code 400
+    ❌ R8 T2 error Request failed with status code 400
+    ❌ R9 T2 error Request failed with status code 400
+    ❌ R10 T2 error Request failed with status code 400
+
+  📊 T3 — Search — Financial
+    [warmup]
+    ❌ R0 T3 error Request failed with status code 400
+    ❌ R1 T3 error Request failed with status code 400
+    ❌ R2 T3 error Request failed with status code 400
+    ❌ R3 T3 error Request failed with status code 400
+    ❌ R4 T3 error Request failed with status code 400
+    ❌ R5 T3 error Request failed with status code 400
+    ❌ R6 T3 error Request failed with status code 400
+    ❌ R7 T3 error Request failed with status code 400
+    ❌ R8 T3 error Request failed with status code 400
+    ❌ R9 T3 error Request failed with status code 400
+    ❌ R10 T3 error Request failed with status code 400
+
+  📊 T4 — Search — AI
+    [warmup]
+    ❌ R0 T4 error Request failed with status code 400
+    ❌ R1 T4 error Request failed with status code 400
+    ❌ R2 T4 error Request failed with status code 400
+    ❌ R3 T4 error Request failed with status code 400
+    ❌ R4 T4 error Request failed with status code 400
+    ❌ R5 T4 error Request failed with status code 400
+    ❌ R6 T4 error Request failed with status code 400
+    ❌ R7 T4 error Request failed with status code 400
+    ❌ R8 T4 error Request failed with status code 400
+    ❌ R9 T4 error Request failed with status code 400
+    ❌ R10 T4 error Request failed with status code 400
+
+  📋 T5 (Crawl (Python Docs)) — N/A for brightdata
+
+  📋 T6 (Structured Data (Amazon)) — N/A for brightdata
+  💾 Saved 60 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-brightdata.json
+
+  ✅ brightdata done — 0 successes
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: FIRECRAWL
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ✅ R0 T1 1046ms Q5 AF4
+    ✅ R1 T1 523ms Q5 AF4
+    ✅ R2 T1 650ms Q5 AF4
+    ✅ R3 T1 443ms Q5 AF4
+    ✅ R4 T1 447ms Q5 AF4
+    ✅ R5 T1 455ms Q5 AF4
+    ✅ R6 T1 503ms Q5 AF4
+    ✅ R7 T1 494ms Q5 AF4
+    ✅ R8 T1 419ms Q5 AF4
+    ✅ R9 T1 547ms Q5 AF4
+    ✅ R10 T1 439ms Q5 AF4
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ✅ R0 T2 628ms Q5 AF4
+    ✅ R1 T2 607ms Q5 AF4
+    ✅ R2 T2 591ms Q5 AF4
+    ✅ R3 T2 587ms Q5 AF4
+    ✅ R4 T2 552ms Q5 AF4
+    ✅ R5 T2 584ms Q5 AF4
+    ✅ R6 T2 575ms Q5 AF4
+    ✅ R7 T2 568ms Q5 AF4
+    ✅ R8 T2 465ms Q5 AF4
+    ✅ R9 T2 567ms Q5 AF4
+    ✅ R10 T2 7386ms Q5 AF4
+
+  📋 T3 (Search — Financial) — N/A for firecrawl
+
+  📋 T4 (Search — AI) — N/A for firecrawl
+
+  📊 T5 — Crawl (Python Docs)
+    [warmup]
+    ✅ R0 T5 3776ms Q5 AF4
+    ✅ R1 T5 3876ms Q5 AF4
+    ❌ R2 T5 error Request failed with status code 429
+    ❌ R3 T5 error Request failed with status code 429
+    ❌ R4 T5 error Request failed with status code 429
+    ❌ R5 T5 error Request failed with status code 429
+    ❌ R6 T5 error Request failed with status code 429
+    ❌ R7 T5 error Request failed with status code 429
+    ❌ R8 T5 error Request failed with status code 429
+    ❌ R9 T5 error Request failed with status code 429
+    ❌ R10 T5 error Request failed with status code 429
+
+  📋 T6 (Structured Data (Amazon)) — N/A for firecrawl
+  💾 Saved 60 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-firecrawl.json
+
+  ✅ firecrawl done — 21 successes
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: TAVILY
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ✅ R0 T1 523ms Q5 AF3
+    ✅ R1 T1 140ms Q5 AF3
+    ✅ R2 T1 123ms Q5 AF3
+    ✅ R3 T1 127ms Q5 AF3
+    ✅ R4 T1 202ms Q5 AF3
+    ✅ R5 T1 144ms Q5 AF3
+    ✅ R6 T1 120ms Q5 AF3
+    ✅ R7 T1 118ms Q5 AF3
+    ✅ R8 T1 121ms Q5 AF3
+    ✅ R9 T1 133ms Q5 AF3
+    ✅ R10 T1 136ms Q5 AF3
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ✅ R0 T2 132ms Q5 AF3
+    ✅ R1 T2 128ms Q5 AF3
+    ✅ R2 T2 171ms Q5 AF3
+    ✅ R3 T2 144ms Q5 AF3
+    ✅ R4 T2 122ms Q5 AF3
+    ✅ R5 T2 128ms Q5 AF3
+    ✅ R6 T2 125ms Q5 AF3
+    ✅ R7 T2 121ms Q5 AF3
+    ✅ R8 T2 144ms Q5 AF3
+    ✅ R9 T2 119ms Q5 AF3
+    ✅ R10 T2 135ms Q5 AF3
+
+  📊 T3 — Search — Financial
+    [warmup]
+    ✅ R0 T3 1360ms Q5 AF3
+    ✅ R1 T3 114ms Q5 AF3
+    ✅ R2 T3 114ms Q5 AF3
+    ✅ R3 T3 109ms Q5 AF3
+    ✅ R4 T3 130ms Q5 AF3
+    ✅ R5 T3 133ms Q5 AF3
+    ✅ R6 T3 111ms Q5 AF3
+    ✅ R7 T3 117ms Q5 AF3
+    ✅ R8 T3 110ms Q5 AF3
+    ✅ R9 T3 168ms Q5 AF3
+    ✅ R10 T3 137ms Q5 AF3
+
+  📊 T4 — Search — AI
+    [warmup]
+    ✅ R0 T4 695ms Q5 AF3
+    ✅ R1 T4 115ms Q5 AF3
+    ✅ R2 T4 148ms Q5 AF3
+    ✅ R3 T4 128ms Q5 AF3
+    ✅ R4 T4 124ms Q5 AF3
+    ✅ R5 T4 114ms Q5 AF3
+    ✅ R6 T4 116ms Q5 AF3
+    ✅ R7 T4 154ms Q5 AF3
+    ✅ R8 T4 136ms Q5 AF3
+    ✅ R9 T4 110ms Q5 AF3
+    ✅ R10 T4 124ms Q5 AF3
+
+  📋 T5 (Crawl (Python Docs)) — N/A for tavily
+
+  📋 T6 (Structured Data (Amazon)) — N/A for tavily
+  💾 Saved 60 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-tavily.json
+
+  ✅ tavily done — 40 successes
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: OXYLABS
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ❌ R0 T1 error Request failed with status code 401
+    ❌ R1 T1 error Request failed with status code 401
+    ❌ R2 T1 error Request failed with status code 401
+    ❌ R3 T1 error Request failed with status code 401
+    ❌ R4 T1 error Request failed with status code 401
+    ❌ R5 T1 error Request failed with status code 401
+    ❌ R6 T1 error Request failed with status code 401
+    ❌ R7 T1 error Request failed with status code 401
+    ❌ R8 T1 error Request failed with status code 401
+    ❌ R9 T1 error Request failed with status code 401
+    ❌ R10 T1 error Request failed with status code 401
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ❌ R0 T2 error Request failed with status code 401
+    ❌ R1 T2 error Request failed with status code 401
+    ❌ R2 T2 error Request failed with status code 401
+    ❌ R3 T2 error Request failed with status code 401
+    ❌ R4 T2 error Request failed with status code 401
+    ❌ R5 T2 error Request failed with status code 401
+    ❌ R6 T2 error Request failed with status code 401
+    ❌ R7 T2 error Request failed with status code 401
+    ❌ R8 T2 error Request failed with status code 401
+    ❌ R9 T2 error Request failed with status code 401
+    ❌ R10 T2 error Request failed with status code 401
+
+  📊 T3 — Search — Financial
+    [warmup]
+    ❌ R0 T3 error Request failed with status code 401
+    ❌ R1 T3 error Request failed with status code 401
+    ❌ R2 T3 error Request failed with status code 401
+    ❌ R3 T3 error Request failed with status code 401
+    ❌ R4 T3 error Request failed with status code 401
+    ❌ R5 T3 error Request failed with status code 401
+    ❌ R6 T3 error Request failed with status code 401
+    ❌ R7 T3 error Request failed with status code 401
+    ❌ R8 T3 error Request failed with status code 401
+    ❌ R9 T3 error Request failed with status code 401
+    ❌ R10 T3 error Request failed with status code 401
+
+  📊 T4 — Search — AI
+    [warmup]
+    ❌ R0 T4 error Request failed with status code 401
+    ❌ R1 T4 error Request failed with status code 401
+    ❌ R2 T4 error Request failed with status code 401
+    ❌ R3 T4 error Request failed with status code 401
+    ❌ R4 T4 error Request failed with status code 401
+    ❌ R5 T4 error Request failed with status code 401
+    ❌ R6 T4 error Request failed with status code 401
+    ❌ R7 T4 error Request failed with status code 401
+    ❌ R8 T4 error Request failed with status code 401
+    ❌ R9 T4 error Request failed with status code 401
+    ❌ R10 T4 error Request failed with status code 401
+
+  📋 T5 (Crawl (Python Docs)) — N/A for oxylabs
+
+  📊 T6 — Structured Data (Amazon)
+    [warmup]
+    ❌ R0 T6 error Request failed with status code 401
+    ❌ R1 T6 error Request failed with status code 401
+    ❌ R2 T6 error Request failed with status code 401
+    ❌ R3 T6 error Request failed with status code 401
+    ❌ R4 T6 error Request failed with status code 401
+    ❌ R5 T6 error Request failed with status code 401
+    ❌ R6 T6 error Request failed with status code 401
+    ❌ R7 T6 error Request failed with status code 401
+    ❌ R8 T6 error Request failed with status code 401
+    ❌ R9 T6 error Request failed with status code 401
+    ❌ R10 T6 error Request failed with status code 401
+  💾 Saved 60 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-oxylabs.json
+
+  ✅ oxylabs done — 0 successes
+
+
+🎉 All competitors done. Generating report...
+  💾 Summary → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/summary.json
+
+BENCHMARK COMPLETE: file:///Users/tongwu/Projects/novada-mcp/workspace/benchmark/report.html

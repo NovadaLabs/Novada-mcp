@@ -1,0 +1,7732 @@
+[
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 1,
+    "latency_ms": 7705,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3789,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 2,
+    "latency_ms": 8822,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3789,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 3,
+    "latency_ms": 8965,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3789,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 4,
+    "latency_ms": 10539,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3789,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 5,
+    "latency_ms": 8780,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3789,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 6,
+    "latency_ms": 9509,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3789,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 7,
+    "latency_ms": 8528,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3789,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 8,
+    "latency_ms": 15165,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 9,
+    "latency_ms": 8659,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 10,
+    "latency_ms": 9800,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 11,
+    "latency_ms": 7604,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 12,
+    "latency_ms": 9607,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 13,
+    "latency_ms": 7663,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 14,
+    "latency_ms": 9709,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 15,
+    "latency_ms": 9807,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 16,
+    "latency_ms": 8907,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 17,
+    "latency_ms": 11869,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 18,
+    "latency_ms": 7314,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 19,
+    "latency_ms": 7776,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3831,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 20,
+    "latency_ms": 9627,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 21,
+    "latency_ms": 9102,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 22,
+    "latency_ms": 7744,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 23,
+    "latency_ms": 9842,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 24,
+    "latency_ms": 7633,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 25,
+    "latency_ms": 9189,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 26,
+    "latency_ms": 9838,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 27,
+    "latency_ms": 9248,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 28,
+    "latency_ms": 9613,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 29,
+    "latency_ms": 9740,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 30,
+    "latency_ms": 9905,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 31,
+    "latency_ms": 7711,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 32,
+    "latency_ms": 11543,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 33,
+    "latency_ms": 11210,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 34,
+    "latency_ms": 9485,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 35,
+    "latency_ms": 8685,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 36,
+    "latency_ms": 9527,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 37,
+    "latency_ms": 8912,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 38,
+    "latency_ms": 42695,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 39,
+    "latency_ms": 9170,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 40,
+    "latency_ms": 9188,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 41,
+    "latency_ms": 11080,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3833,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 42,
+    "latency_ms": 7625,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 43,
+    "latency_ms": 8287,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 44,
+    "latency_ms": 11146,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 45,
+    "latency_ms": 7601,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 46,
+    "latency_ms": 11066,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 47,
+    "latency_ms": 9764,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 48,
+    "latency_ms": 7978,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 49,
+    "latency_ms": 9439,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T1",
+    "round": 50,
+    "latency_ms": 8105,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 3830,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 1,
+    "latency_ms": 11644,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8913,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 2,
+    "latency_ms": 17656,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9088,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 3,
+    "latency_ms": 10555,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 4,
+    "latency_ms": 11295,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8889,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 5,
+    "latency_ms": 9021,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8890,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 6,
+    "latency_ms": 10786,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9087,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 7,
+    "latency_ms": 11689,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8913,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 8,
+    "latency_ms": 10480,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 9,
+    "latency_ms": 9382,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8890,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 10,
+    "latency_ms": 10367,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 11,
+    "latency_ms": 9483,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8914,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 12,
+    "latency_ms": 10683,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 13,
+    "latency_ms": 8673,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8915,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 14,
+    "latency_ms": 11102,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9088,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 15,
+    "latency_ms": 11415,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8913,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 16,
+    "latency_ms": 32664,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9087,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 17,
+    "latency_ms": 9101,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9088,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 18,
+    "latency_ms": 9347,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8914,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 19,
+    "latency_ms": 12514,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9087,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 20,
+    "latency_ms": 13120,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8915,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 21,
+    "latency_ms": 15278,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8895,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 22,
+    "latency_ms": 10597,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8913,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 23,
+    "latency_ms": 13650,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9088,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 24,
+    "latency_ms": 11970,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 25,
+    "latency_ms": 11608,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 26,
+    "latency_ms": 12548,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9087,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 27,
+    "latency_ms": 13948,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8918,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 28,
+    "latency_ms": 11723,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9089,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 29,
+    "latency_ms": 12179,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 30,
+    "latency_ms": 12034,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 31,
+    "latency_ms": 12071,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8915,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 32,
+    "latency_ms": 9880,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8914,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 33,
+    "latency_ms": 11961,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9089,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 34,
+    "latency_ms": 12002,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9087,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 35,
+    "latency_ms": 11909,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8915,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 36,
+    "latency_ms": 12827,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8915,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 37,
+    "latency_ms": 11898,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9089,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 38,
+    "latency_ms": 11922,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9089,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 39,
+    "latency_ms": 24270,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8893,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 40,
+    "latency_ms": 10685,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8889,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 41,
+    "latency_ms": 11857,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8914,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 42,
+    "latency_ms": 15802,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8915,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 43,
+    "latency_ms": 11567,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8891,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 44,
+    "latency_ms": 11198,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9087,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 45,
+    "latency_ms": 8817,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9088,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 46,
+    "latency_ms": 12514,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8915,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 47,
+    "latency_ms": 45093,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8884,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 48,
+    "latency_ms": 9538,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9088,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 49,
+    "latency_ms": 13637,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 9088,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T2",
+    "round": 50,
+    "latency_ms": 12100,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8915,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 1,
+    "latency_ms": 2860,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 2,
+    "latency_ms": 2475,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 3,
+    "latency_ms": 2955,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 4,
+    "latency_ms": 3196,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 5,
+    "latency_ms": 2212,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 6,
+    "latency_ms": 1123,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 7,
+    "latency_ms": 2869,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 8,
+    "latency_ms": 1444,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 9,
+    "latency_ms": 1405,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 10,
+    "latency_ms": 2192,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 11,
+    "latency_ms": 1083,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 12,
+    "latency_ms": 2660,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 13,
+    "latency_ms": 3787,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 14,
+    "latency_ms": 3059,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 15,
+    "latency_ms": 1693,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 16,
+    "latency_ms": 1624,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 17,
+    "latency_ms": 3064,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 18,
+    "latency_ms": 4846,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 19,
+    "latency_ms": 1153,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 20,
+    "latency_ms": 1627,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 21,
+    "latency_ms": 1610,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 22,
+    "latency_ms": 1046,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 23,
+    "latency_ms": 2484,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 24,
+    "latency_ms": 1234,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 25,
+    "latency_ms": 2159,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 26,
+    "latency_ms": 2578,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 27,
+    "latency_ms": 2027,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 28,
+    "latency_ms": 3109,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 29,
+    "latency_ms": 2064,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 30,
+    "latency_ms": 3311,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 31,
+    "latency_ms": 1679,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 32,
+    "latency_ms": 3005,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 33,
+    "latency_ms": 1207,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 34,
+    "latency_ms": 3757,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 35,
+    "latency_ms": 2061,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 36,
+    "latency_ms": 1987,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 37,
+    "latency_ms": 1739,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 38,
+    "latency_ms": 1840,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 39,
+    "latency_ms": 2776,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 40,
+    "latency_ms": 1793,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 41,
+    "latency_ms": 2044,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 42,
+    "latency_ms": 4437,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 43,
+    "latency_ms": 1766,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 44,
+    "latency_ms": 2744,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 45,
+    "latency_ms": 1228,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 46,
+    "latency_ms": 4135,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 47,
+    "latency_ms": 3050,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 48,
+    "latency_ms": 2122,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 49,
+    "latency_ms": 2681,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T3",
+    "round": 50,
+    "latency_ms": 2492,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 1,
+    "latency_ms": 2833,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 2,
+    "latency_ms": 5221,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 3,
+    "latency_ms": 2324,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 4,
+    "latency_ms": 5587,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 5,
+    "latency_ms": 2927,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 6,
+    "latency_ms": 4881,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 7,
+    "latency_ms": 6267,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 8,
+    "latency_ms": 4561,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 9,
+    "latency_ms": 2037,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 10,
+    "latency_ms": 2177,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 11,
+    "latency_ms": 2734,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 12,
+    "latency_ms": 1972,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 13,
+    "latency_ms": 2269,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 14,
+    "latency_ms": 1975,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 15,
+    "latency_ms": 1394,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 16,
+    "latency_ms": 4354,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 17,
+    "latency_ms": 2159,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 18,
+    "latency_ms": 1217,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 19,
+    "latency_ms": 1691,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 20,
+    "latency_ms": 1666,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 21,
+    "latency_ms": 2444,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 22,
+    "latency_ms": 1473,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 23,
+    "latency_ms": 2422,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 24,
+    "latency_ms": 1333,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 25,
+    "latency_ms": 2324,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 26,
+    "latency_ms": 2963,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 27,
+    "latency_ms": 7375,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 28,
+    "latency_ms": 3192,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 29,
+    "latency_ms": 5368,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 30,
+    "latency_ms": 1488,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 31,
+    "latency_ms": 2095,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 32,
+    "latency_ms": 1073,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 33,
+    "latency_ms": 1712,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 34,
+    "latency_ms": 9495,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 35,
+    "latency_ms": 1667,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 36,
+    "latency_ms": 1931,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 37,
+    "latency_ms": 1786,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 38,
+    "latency_ms": 2160,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 39,
+    "latency_ms": 1930,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 40,
+    "latency_ms": 2053,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 41,
+    "latency_ms": 1045,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 42,
+    "latency_ms": 2220,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 43,
+    "latency_ms": 3144,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 44,
+    "latency_ms": 2659,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 45,
+    "latency_ms": 2654,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 46,
+    "latency_ms": 2454,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 47,
+    "latency_ms": 2123,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 48,
+    "latency_ms": 2030,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 49,
+    "latency_ms": 3848,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T4",
+    "round": 50,
+    "latency_ms": 2168,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 2,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": false,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 1,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 2,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 3,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 4,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 5,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 6,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 7,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 8,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 9,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 10,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 11,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 12,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 13,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 14,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 15,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 16,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 17,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 18,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 19,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 20,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 21,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 22,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 23,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 24,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 25,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 26,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 27,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 28,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 29,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 30,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 31,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 32,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 33,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 34,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 35,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 36,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 37,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 38,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 39,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 40,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 41,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 42,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 43,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 44,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 45,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 46,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 47,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 48,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 49,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T5",
+    "round": 50,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 1,
+    "latency_ms": 3344,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 2,
+    "latency_ms": 3792,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 3,
+    "latency_ms": 4137,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 4,
+    "latency_ms": 3263,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 5,
+    "latency_ms": 3633,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 6,
+    "latency_ms": 3972,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 7,
+    "latency_ms": 3849,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 8,
+    "latency_ms": 3056,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 9,
+    "latency_ms": 2861,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 10,
+    "latency_ms": 3180,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 11,
+    "latency_ms": 3281,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 12,
+    "latency_ms": 4424,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 13,
+    "latency_ms": 2847,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 14,
+    "latency_ms": 3767,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 15,
+    "latency_ms": 3754,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 16,
+    "latency_ms": 3484,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 17,
+    "latency_ms": 4267,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 18,
+    "latency_ms": 3775,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 19,
+    "latency_ms": 3906,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 20,
+    "latency_ms": 3170,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 21,
+    "latency_ms": 3348,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 22,
+    "latency_ms": 3922,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 23,
+    "latency_ms": 3590,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 24,
+    "latency_ms": 3125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 25,
+    "latency_ms": 4477,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 26,
+    "latency_ms": 3849,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 27,
+    "latency_ms": 3230,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 28,
+    "latency_ms": 3432,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 29,
+    "latency_ms": 2807,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 30,
+    "latency_ms": 3413,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 31,
+    "latency_ms": 3609,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 32,
+    "latency_ms": 4059,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 33,
+    "latency_ms": 3214,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 34,
+    "latency_ms": 2947,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 35,
+    "latency_ms": 3587,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 36,
+    "latency_ms": 3125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 37,
+    "latency_ms": 3375,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 38,
+    "latency_ms": 3606,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 39,
+    "latency_ms": 3916,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 40,
+    "latency_ms": 2993,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 41,
+    "latency_ms": 3350,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 42,
+    "latency_ms": 3665,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 43,
+    "latency_ms": 2857,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 44,
+    "latency_ms": 26547,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 45,
+    "latency_ms": 2981,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 46,
+    "latency_ms": 2849,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 47,
+    "latency_ms": 3206,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 48,
+    "latency_ms": 2945,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 49,
+    "latency_ms": 3170,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T6",
+    "round": 50,
+    "latency_ms": 3358,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10000,
+    "content_quality": 4,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 1,
+    "latency_ms": 13570,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 2,
+    "latency_ms": 15725,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12290,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 3,
+    "latency_ms": 11632,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 4,
+    "latency_ms": 90000,
+    "success": false,
+    "status": "timeout",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "timeout of 55000ms exceeded"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 5,
+    "latency_ms": 12626,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 6,
+    "latency_ms": 14492,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 7,
+    "latency_ms": 13126,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 8,
+    "latency_ms": 12622,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 9,
+    "latency_ms": 15276,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 10,
+    "latency_ms": 12090,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 11,
+    "latency_ms": 13330,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 12,
+    "latency_ms": 21244,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12385,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 13,
+    "latency_ms": 14899,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 14,
+    "latency_ms": 12431,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 15,
+    "latency_ms": 14968,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 16,
+    "latency_ms": 12628,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 17,
+    "latency_ms": 12862,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 18,
+    "latency_ms": 13605,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 19,
+    "latency_ms": 27881,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 20,
+    "latency_ms": 12208,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 21,
+    "latency_ms": 90000,
+    "success": false,
+    "status": "timeout",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "timeout of 55000ms exceeded"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 22,
+    "latency_ms": 12509,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 11972,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 23,
+    "latency_ms": 14194,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12036,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 24,
+    "latency_ms": 34102,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12036,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 25,
+    "latency_ms": 12227,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12036,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 26,
+    "latency_ms": 90000,
+    "success": false,
+    "status": "timeout",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "timeout of 55000ms exceeded"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 27,
+    "latency_ms": 33074,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12036,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 28,
+    "latency_ms": 14760,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12036,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 29,
+    "latency_ms": 11289,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12036,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 30,
+    "latency_ms": 14829,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12036,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 31,
+    "latency_ms": 15200,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12036,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 32,
+    "latency_ms": 12797,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 33,
+    "latency_ms": 12535,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 34,
+    "latency_ms": 15148,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 35,
+    "latency_ms": 14201,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 36,
+    "latency_ms": 15737,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12129,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 37,
+    "latency_ms": 12197,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 38,
+    "latency_ms": 15137,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 39,
+    "latency_ms": 15206,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 40,
+    "latency_ms": 15381,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 41,
+    "latency_ms": 10858,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 42,
+    "latency_ms": 14916,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 43,
+    "latency_ms": 15085,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 44,
+    "latency_ms": 15769,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 45,
+    "latency_ms": 14769,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 46,
+    "latency_ms": 14935,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 47,
+    "latency_ms": 14727,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 48,
+    "latency_ms": 40061,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 49,
+    "latency_ms": 15075,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 12034,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T7",
+    "round": 50,
+    "latency_ms": 90000,
+    "success": false,
+    "status": "timeout",
+    "content_length_chars": 0,
+    "content_quality": 1,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "timeout of 55000ms exceeded"
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 1,
+    "latency_ms": 9480,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 2,
+    "latency_ms": 11501,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 3,
+    "latency_ms": 19581,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 4,
+    "latency_ms": 9542,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 5,
+    "latency_ms": 9419,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 6,
+    "latency_ms": 10814,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 7,
+    "latency_ms": 18655,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 8,
+    "latency_ms": 9789,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 9,
+    "latency_ms": 9276,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 10,
+    "latency_ms": 16658,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 11,
+    "latency_ms": 17763,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 12,
+    "latency_ms": 18395,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 13,
+    "latency_ms": 18618,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 14,
+    "latency_ms": 9755,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 15,
+    "latency_ms": 25914,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 16,
+    "latency_ms": 21242,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 17,
+    "latency_ms": 15779,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 18,
+    "latency_ms": 17111,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 19,
+    "latency_ms": 10597,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 20,
+    "latency_ms": 10448,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 21,
+    "latency_ms": 11971,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 22,
+    "latency_ms": 10791,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 23,
+    "latency_ms": 12581,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 24,
+    "latency_ms": 13048,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 25,
+    "latency_ms": 13183,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 26,
+    "latency_ms": 9368,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 27,
+    "latency_ms": 14825,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 28,
+    "latency_ms": 14746,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 29,
+    "latency_ms": 9886,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 30,
+    "latency_ms": 12557,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 31,
+    "latency_ms": 13303,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 32,
+    "latency_ms": 9965,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 33,
+    "latency_ms": 9800,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 34,
+    "latency_ms": 21386,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 35,
+    "latency_ms": 17055,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 36,
+    "latency_ms": 11975,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 37,
+    "latency_ms": 10461,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 38,
+    "latency_ms": 12680,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 39,
+    "latency_ms": 11046,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 40,
+    "latency_ms": 10066,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 41,
+    "latency_ms": 9330,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 42,
+    "latency_ms": 14143,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6680,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 43,
+    "latency_ms": 17961,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 44,
+    "latency_ms": 15607,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 45,
+    "latency_ms": 21081,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 46,
+    "latency_ms": 23126,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 47,
+    "latency_ms": 16749,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 48,
+    "latency_ms": 13490,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 49,
+    "latency_ms": 15889,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5304,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "oxylabs",
+    "category": "T8",
+    "round": 50,
+    "latency_ms": 15946,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 2988,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": false,
+      "low_boilerplate": true,
+      "score": 2
+    },
+    "target_content_found": true,
+    "notes": ""
+  }
+]

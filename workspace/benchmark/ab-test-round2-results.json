@@ -1,0 +1,217 @@
+{
+  "round1": [
+    {
+      "label": "R1",
+      "depth": "quick",
+      "success": true,
+      "latency_ms": 5362,
+      "queries": "3/3",
+      "sources": 5,
+      "has_summary": true,
+      "chars": 6285
+    },
+    {
+      "label": "R2",
+      "depth": "deep",
+      "success": true,
+      "latency_ms": 23437,
+      "queries": "4/6",
+      "sources": 5,
+      "has_summary": true,
+      "chars": 7783
+    },
+    {
+      "label": "R3",
+      "depth": "deep",
+      "success": true,
+      "latency_ms": 25425,
+      "queries": "5/6",
+      "sources": 5,
+      "has_summary": true,
+      "chars": 6810
+    },
+    {
+      "label": "R4",
+      "depth": "quick",
+      "success": true,
+      "latency_ms": 4976,
+      "queries": "3/3",
+      "sources": 3,
+      "has_summary": true,
+      "chars": 5611
+    },
+    {
+      "label": "R5",
+      "depth": "comprehensive",
+      "success": true,
+      "latency_ms": 24894,
+      "queries": "8/9",
+      "sources": 4,
+      "has_summary": true,
+      "chars": 8010
+    }
+  ],
+  "round2": [
+    {
+      "label": "HN",
+      "url": "https://news.ycombinator.com",
+      "difficulty": "easy",
+      "success": true,
+      "latency_ms": 783,
+      "quality": 45,
+      "mode": "static",
+      "content_ok": true,
+      "anti_bot": null,
+      "chars": 13991,
+      "has_agent_action": true
+    },
+    {
+      "label": "TechCrunch",
+      "url": "https://techcrunch.com",
+      "difficulty": "easy",
+      "success": true,
+      "latency_ms": 147,
+      "quality": 65,
+      "mode": "static",
+      "content_ok": true,
+      "anti_bot": null,
+      "chars": 24942,
+      "has_agent_action": true
+    },
+    {
+      "label": "GitHub repo",
+      "url": "https://github.com/anthropics/claude-code",
+      "difficulty": "easy",
+      "success": true,
+      "latency_ms": 656,
+      "quality": 50,
+      "mode": "static",
+      "content_ok": true,
+      "anti_bot": null,
+      "chars": 4877,
+      "has_agent_action": true
+    },
+    {
+      "label": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/API_gateway",
+      "difficulty": "easy",
+      "success": true,
+      "latency_ms": 97,
+      "quality": 75,
+      "mode": "static",
+      "content_ok": true,
+      "anti_bot": null,
+      "chars": 8045,
+      "has_agent_action": true
+    },
+    {
+      "label": "Reddit",
+      "url": "https://www.reddit.com/r/webscraping/top/",
+      "difficulty": "medium",
+      "success": true,
+      "latency_ms": 270,
+      "quality": 30,
+      "mode": "static",
+      "content_ok": false,
+      "anti_bot": null,
+      "chars": 526,
+      "has_agent_action": true
+    },
+    {
+      "label": "arXiv paper",
+      "url": "https://arxiv.org/abs/2401.00001",
+      "difficulty": "medium",
+      "success": true,
+      "latency_ms": 80,
+      "quality": 45,
+      "mode": "static",
+      "content_ok": true,
+      "anti_bot": null,
+      "chars": 2434,
+      "has_agent_action": true
+    },
+    {
+      "label": "Python docs",
+      "url": "https://docs.python.org/3/library/asyncio.html",
+      "difficulty": "medium",
+      "success": true,
+      "latency_ms": 45,
+      "quality": 60,
+      "mode": "static",
+      "content_ok": true,
+      "anti_bot": null,
+      "chars": 6057,
+      "has_agent_action": true
+    },
+    {
+      "label": "Amazon product",
+      "url": "https://www.amazon.com/dp/B0FTC2PRVZ",
+      "difficulty": "hard",
+      "success": true,
+      "latency_ms": 1323,
+      "quality": 40,
+      "mode": "render",
+      "content_ok": true,
+      "anti_bot": "datadome",
+      "chars": 2163,
+      "has_agent_action": true
+    },
+    {
+      "label": "LinkedIn company",
+      "url": "https://www.linkedin.com/company/anthropic",
+      "difficulty": "hard",
+      "success": true,
+      "latency_ms": 534,
+      "quality": 60,
+      "mode": "render",
+      "content_ok": true,
+      "anti_bot": "linkedin",
+      "chars": 6942,
+      "has_agent_action": true
+    },
+    {
+      "label": "Linear (JS SPA)",
+      "url": "https://linear.app",
+      "difficulty": "hard",
+      "success": true,
+      "latency_ms": 2046,
+      "quality": 1,
+      "mode": "render",
+      "content_ok": false,
+      "anti_bot": null,
+      "chars": 4502,
+      "has_agent_action": true
+    }
+  ],
+  "round3": [
+    {
+      "label": "M1-baseline",
+      "success": true,
+      "state": "baseline",
+      "expected": "baseline",
+      "correct": true,
+      "latency_ms": 1
+    },
+    {
+      "label": "M2-unchanged",
+      "success": true,
+      "state": "unchanged",
+      "expected": "unchanged",
+      "correct": true,
+      "latency_ms": 0
+    },
+    {
+      "label": "M3-fields",
+      "success": true,
+      "state": "baseline",
+      "expected": "baseline",
+      "correct": true,
+      "latency_ms": 141
+    }
+  ],
+  "meta": {
+    "branch": "improve/final",
+    "round": 2,
+    "timestamp": "2026-05-26T13:53:58.248Z"
+  }
+}

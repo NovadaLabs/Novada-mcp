@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proxy Static & Dedicated — Architectural Redesign</title>
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f4f6f8;
+      color: #222;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ─── Sidebar ──────────────────────────────────────────────── */
+    nav#sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: #1a1a2e;
+      color: #c8d0e0;
+      padding: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    nav#sidebar .sidebar-header {
+      background: #0f3460;
+      padding: 24px 20px 20px;
+      border-bottom: 3px solid #e94560;
+    }
+    nav#sidebar .sidebar-header h1 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.4;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    nav#sidebar .sidebar-header .status-badge {
+      display: inline-block;
+      margin-top: 10px;
+      background: #e94560;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.03em;
+    }
+    nav#sidebar ul {
+      list-style: none;
+      padding: 16px 0;
+    }
+    nav#sidebar ul li a {
+      display: block;
+      color: #a0aec0;
+      text-decoration: none;
+      padding: 8px 20px;
+      font-size: 13px;
+      line-height: 1.5;
+      transition: background 0.15s, color 0.15s;
+      border-left: 3px solid transparent;
+    }
+    nav#sidebar ul li a:hover {
+      background: #16213e;
+      color: #e2e8f0;
+      border-left-color: #e94560;
+    }
+    nav#sidebar ul li.section-label {
+      padding: 14px 20px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #4a5568;
+    }
+
+    /* ─── Main Content ─────────────────────────────────────────── */
+    main {
+      flex: 1;
+      padding: 40px 48px 80px;
+      max-width: 900px;
+    }
+
+    /* ─── Doc Header ───────────────────────────────────────────── */
+    .doc-header {
+      border-bottom: 2px solid #e94560;
+      padding-bottom: 20px;
+      margin-bottom: 40px;
+    }
+    .doc-header .doc-meta {
+      font-size: 12px;
+      color: #718096;
+      margin-bottom: 8px;
+      letter-spacing: 0.04em;
+    }
+    .doc-header h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #1a1a2e;
+      line-height: 1.3;
+    }
+    .doc-header .subtitle {
+      margin-top: 8px;
+      font-size: 15px;
+      color: #4a5568;
+    }
+
+    /* ─── Sections ─────────────────────────────────────────────── */
+    section {
+      margin-bottom: 52px;
+    }
+    section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f3460;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e8edf4;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    section h2 .section-num {
+      background: #e94560;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    section h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin: 20px 0 10px;
+    }
+    section p {
+      font-size: 14px;
+      line-height: 1.75;
+      color: #374151;
+      margin-bottom: 12px;
+    }
+
+    /* ─── Callout Boxes ────────────────────────────────────────── */
+    .callout {
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .callout.error {
+      background: #fff5f5;
+      border-left: 4px solid #e94560;
+      color: #742a2a;
+    }
+    .callout.info {
+      background: #ebf4ff;
+      border-left: 4px solid #3182ce;
+      color: #1a365d;
+    }
+    .callout.success {
+      background: #f0fff4;
+      border-left: 4px solid #38a169;
+      color: #1c4532;
+    }
+    .callout.warning {
+      background: #fffbeb;
+      border-left: 4px solid #d97706;
+      color: #7c2d12;
+    }
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* ─── Code Blocks ──────────────────────────────────────────── */
+    pre {
+      background: #0f1629;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 20px 24px;
+      overflow-x: auto;
+      font-family: "JetBrains Mono", "Fira Code", "Source Code Pro", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.65;
+      margin: 12px 0 20px;
+      position: relative;
+    }
+    pre .comment { color: #4a5568; }
+    pre .keyword { color: #f687b3; }
+    pre .string { color: #68d391; }
+    pre .type { color: #76e4f7; }
+    pre .fn { color: #fbd38d; }
+    pre .var { color: #e2e8f0; }
+    pre .label {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 10px;
+      color: #4a5568;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    code {
+      background: #e8edf4;
+      color: #0f3460;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+
+    /* ─── Comparison Table ─────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 20px;
+      font-size: 13.5px;
+    }
+    table thead tr {
+      background: #16213e;
+      color: #e2e8f0;
+    }
+    table thead th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    table tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    table tbody tr:hover {
+      background: #ebf4ff;
+    }
+    table tbody td {
+      padding: 11px 16px;
+      border-bottom: 1px solid #e8edf4;
+      vertical-align: top;
+      line-height: 1.5;
+    }
+    table .bad { color: #e94560; font-weight: 700; }
+    table .good { color: #38a169; font-weight: 700; }
+
+    /* ─── Phase Timeline ───────────────────────────────────────── */
+    .phase-list {
+      list-style: none;
+      padding: 0;
+      margin: 16px 0;
+    }
+    .phase-list li {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .phase-badge {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #16213e;
+      color: #e2e8f0;
+      font-size: 12px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #0f3460;
+    }
+    .phase-badge.active {
+      background: #e94560;
+      border-color: #e94560;
+      color: #fff;
+    }
+    .phase-content {
+      flex: 1;
+    }
+    .phase-content .phase-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+    }
+    .phase-content .phase-title .phase-version {
+      font-size: 11px;
+      font-weight: 700;
+      background: #0f3460;
+      color: #a0c4ff;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-left: 8px;
+    }
+    .phase-content p {
+      font-size: 13px;
+      color: #4a5568;
+      margin: 0;
+    }
+
+    /* ─── Param Table ──────────────────────────────────────────── */
+    .param-table td:first-child code {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .param-table td:nth-child(2) {
+      color: #6d28d9;
+      font-family: monospace;
+      font-size: 12.5px;
+    }
+
+    /* ─── Print ────────────────────────────────────────────────── */
+    @media print {
+      nav#sidebar { display: none; }
+      main { max-width: 100%; padding: 20px; }
+      pre { white-space: pre-wrap; }
+      .callout, table, pre { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Sidebar ──────────────────────────────────────────────────────────── -->
+<nav id="sidebar">
+  <div class="sidebar-header">
+    <h1>Proxy Static &amp; Dedicated<br>Architectural Redesign</h1>
+    <span class="status-badge">Draft — v1.0</span>
+  </div>
+  <ul>
+    <li class="section-label">Sections</li>
+    <li><a href="#exec-summary">1. Executive Summary</a></li>
+    <li><a href="#current-arch">2. Current Architecture (Wrong)</a></li>
+    <li><a href="#proposed-arch">3. Proposed New Architecture</a></li>
+    <li><a href="#api-design">4. API Design</a></li>
+    <li><a href="#migration">5. Migration Plan</a></li>
+    <li><a href="#code-examples">6. Code Examples</a></li>
+    <li class="section-label">References</li>
+    <li><a href="#env-vars">Env Var Reference</a></li>
+    <li><a href="#appendix">Appendix: Live Test Data</a></li>
+  </ul>
+</nav>
+
+<!-- ─── Main Content ─────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Doc Header -->
+  <div class="doc-header">
+    <div class="doc-meta">novada-mcp &middot; Proxy Module &middot; Status: Draft — v1.0 — 2026-05-20</div>
+    <h1>Proxy Static &amp; Dedicated: Architectural Redesign</h1>
+    <div class="subtitle">Engineering proposal to fix fundamentally wrong proxy credential generation for static and dedicated IP products.</div>
+  </div>
+
+  <!-- ─── 1. Executive Summary ────────────────────────────────────────────── -->
+  <section id="exec-summary">
+    <h2><span class="section-num">1</span>Executive Summary</h2>
+
+    <div class="callout error">
+      <strong>Critical Bug — 100% Failure Rate</strong>
+      Both <code>novada_proxy_static</code> and <code>novada_proxy_dedicated</code> tools generate zone-based proxy URLs (e.g. <code>user-zone-static-country-us-session-demo:pass@endpoint:7777</code>) for products that use a completely different authentication model. Every command produced by these tools will fail when executed against a real static or dedicated IP.
+    </div>
+
+    <p>
+      Static and dedicated proxies are <strong>IP-based products</strong>: each IP address is purchased individually from the Novada dashboard and assigned its own fixed IP, unique port, and per-IP username/password credentials. These IPs do not route through the shared zone gateway and do not accept zone-format usernames.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>Zone-Based (Residential/ISP)</th>
+          <th>IP-Based (Static/Dedicated)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Endpoint</td>
+          <td><span class="bad">Shared gateway</span> (e.g. <code>gate.novada.com:7777</code>)</td>
+          <td><span class="good">Unique IP per proxy</span> (e.g. <code>151.242.47.74:8886</code>)</td>
+        </tr>
+        <tr>
+          <td>Username</td>
+          <td><span class="bad">Zone format</span>: <code>user-zone-static-country-us-session-X</code></td>
+          <td><span class="good">Per-IP credential</span>: <code>ax0kSJ8snE6wF1mR</code></td>
+        </tr>
+        <tr>
+          <td>Password</td>
+          <td>Account master password</td>
+          <td>Per-IP random password (e.g. <code>p3K0rNpsP2iR</code>)</td>
+        </tr>
+        <tr>
+          <td>Provisioning</td>
+          <td>Automatic (zone routing)</td>
+          <td>Manual purchase at dashboard.novada.com</td>
+        </tr>
+        <tr>
+          <td>curl format</td>
+          <td><code>curl --proxy "http://user:pass@gate:7777" URL</code></td>
+          <td><code>curl -x 151.242.47.74:8886 -U "user:pass" URL</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p><strong>Impact:</strong> Any agent or user who calls <code>novada_proxy_static</code> or <code>novada_proxy_dedicated</code> receives a completely invalid proxy configuration. The correct fix is a full architectural redesign of both tools.</p>
+  </section>
+
+  <!-- ─── 2. Current Architecture ─────────────────────────────────────────── -->
+  <section id="current-arch">
+    <h2><span class="section-num">2</span>Current Architecture (What's Wrong)</h2>
+
+    <h3>Current Code Pattern (proxy_static.ts)</h3>
+    <p>Both tools share the same flawed pattern — they call <code>getProxyCredentials()</code> which reads <code>NOVADA_PROXY_USER</code>, <code>NOVADA_PROXY_PASS</code>, and <code>NOVADA_PROXY_ENDPOINT</code>, then construct a zone-format username:</p>
+
+    <pre><span class="label">proxy_static.ts (current — WRONG)</span><span class="comment">// Current username builder — WRONG for static/dedicated</span>
+<span class="keyword">function</span> <span class="fn">buildStaticUsername</span>(<span class="var">user</span>: <span class="type">string</span>, <span class="var">params</span>: <span class="type">ProxyStaticParams</span>): <span class="type">string</span> {
+  <span class="keyword">const</span> <span class="var">parts</span> = [<span class="var">user</span>];
+  <span class="var">parts</span>.push(<span class="string">"zone-static"</span>);
+  <span class="var">parts</span>.push(<span class="string">`country-${params.country.toLowerCase()}`</span>);
+  <span class="var">parts</span>.push(<span class="string">`session-${params.session_id}`</span>);
+  <span class="keyword">return</span> <span class="var">parts</span>.join(<span class="string">"-"</span>);
+}
+<span class="comment">// Produces: "user-zone-static-country-us-session-demo"</span>
+<span class="comment">// Then routes to: NOVADA_PROXY_ENDPOINT (shared zone gateway)</span>
+<span class="comment">// ⚠ This is NEVER the correct format for static/dedicated IPs</span></pre>
+
+    <h3>Why This Is Wrong</h3>
+    <div class="callout warning">
+      <strong>Root Cause</strong>
+      The zone-based credential model (shared gateway + zone routing) only applies to <strong>Residential</strong>, <strong>ISP</strong>, and <strong>Mobile</strong> proxy products. Static and Dedicated IPs are provisioned differently — they are individual IPs purchased outright, each with unique fixed credentials. Using zone routing against these IPs will always result in authentication failure.
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Produced by Current Code</th>
+          <th>What Actually Works</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="bad"><code>curl --proxy "http://user-zone-static-country-us-session-abc:pass@gate.novada.com:7777" https://ipinfo.io</code></td>
+          <td class="good"><code>curl -x 151.242.47.74:8886 -U "ax0kSJ8snE6wF1mR:p3K0rNpsP2iR" https://ipinfo.io</code></td>
+        </tr>
+        <tr>
+          <td>Uses shared gateway</td>
+          <td>Uses unique IP:PORT per proxy</td>
+        </tr>
+        <tr>
+          <td>Zone-format username (incorrect)</td>
+          <td>Per-IP random username</td>
+        </tr>
+        <tr>
+          <td>Account-level password</td>
+          <td>Per-IP unique password</td>
+        </tr>
+        <tr>
+          <td><span class="bad">Result: 407 / auth failure</span></td>
+          <td><span class="good">Result: success + static IP in response</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ─── 3. Proposed New Architecture ────────────────────────────────────── -->
+  <section id="proposed-arch">
+    <h2><span class="section-num">3</span>Proposed New Architecture</h2>
+
+    <h3>Core Concept: IP List Environment Variables</h3>
+    <p>
+      Since static and dedicated IPs are purchased individually and have unique per-IP credentials, the cleanest approach is to let users store their purchased IPs in structured environment variables. The MCP tools then read, parse, and serve the correct IP + credentials on demand.
+    </p>
+
+    <div class="callout info">
+      <strong>New Environment Variables</strong>
+      <code>NOVADA_STATIC_PROXY_LIST</code> — one static ISP IP per line<br>
+      <code>NOVADA_DEDICATED_PROXY_LIST</code> — one dedicated datacenter IP per line<br><br>
+      Format per line: <code>IP:PORT:USERNAME:PASSWORD</code><br>
+      Example: <code>151.242.47.74:8886:ax0kSJ8snE6wF1mR:p3K0rNpsP2iR</code>
+    </div>
+
+    <h3>Static Proxy (NOVADA_STATIC_PROXY_LIST)</h3>
+    <p>
+      Static ISP proxies are organized by country — each purchased IP is associated with a specific country. The list format supports an optional 5th field for the country code:
+    </p>
+
+    <pre><span class="comment"># NOVADA_STATIC_PROXY_LIST format (one per line)</span>
+<span class="comment"># IP:PORT:USER:PASS[:COUNTRY_CODE]</span>
+<span class="string">151.242.47.74:8886:ax0kSJ8snE6wF1mR:p3K0rNpsP2iR:us</span>
+<span class="string">185.220.101.42:8887:bY9nKT3pmR1vW4xJ:q7L2sNqP3jS6:gb</span>
+<span class="string">93.188.167.55:9100:cZ0mLU4qnS2yX5kK:r8M3tOrQ4kT7:de</span></pre>
+
+    <p>
+      When the tool is called with a <code>country</code> parameter, it filters the list to matching entries and returns one. When no country filter is applied or no match found, it falls back to the first entry in the list.
+    </p>
+
+    <h3>Dedicated Proxy (NOVADA_DEDICATED_PROXY_LIST)</h3>
+    <p>
+      Dedicated datacenter proxies do not have country as a primary filter — they are exclusive IPs. The tool can return a specific proxy by index, or return all entries for the agent to choose from:
+    </p>
+
+    <pre><span class="comment"># NOVADA_DEDICATED_PROXY_LIST format (one per line)</span>
+<span class="comment"># IP:PORT:USER:PASS</span>
+<span class="string">45.152.66.201:10801:dA1oMV5rnT3zY6lL:s9N4uPsR5lU8</span>
+<span class="string">185.241.208.72:10802:eB2pNW6soU4aZ7mM:t0O5vQtS6mV9</span></pre>
+
+    <h3>Tool Behavior (New)</h3>
+    <table>
+      <thead>
+        <tr><th>Scenario</th><th>Tool Response</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>List env var not set</td>
+          <td>Return <code>configuration_required</code> JSON with setup instructions</td>
+        </tr>
+        <tr>
+          <td>List set, country match found</td>
+          <td>Return proxy config for matching IP in requested format</td>
+        </tr>
+        <tr>
+          <td>List set, no country match</td>
+          <td>Return first available entry, note country mismatch</td>
+        </tr>
+        <tr>
+          <td>List set, multiple entries</td>
+          <td>Round-robin or index-based selection</td>
+        </tr>
+        <tr>
+          <td>Invalid line format in list</td>
+          <td>Skip malformed lines, log warning in response</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ─── 4. API Design ────────────────────────────────────────────────────── -->
+  <section id="api-design">
+    <h2><span class="section-num">4</span>API Design</h2>
+
+    <h3>proxy_static — Updated Parameters</h3>
+    <table class="param-table">
+      <thead>
+        <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>country</code></td>
+          <td>string (optional)</td>
+          <td>ISO 2-letter country code. Filters <code>NOVADA_STATIC_PROXY_LIST</code> to matching entries. If omitted, returns first available entry.</td>
+        </tr>
+        <tr>
+          <td><code>session_id</code></td>
+          <td>string (optional)</td>
+          <td>Removed as required field — static IPs are always the same IP regardless of session. Retained as optional metadata only.</td>
+        </tr>
+        <tr>
+          <td><code>format</code></td>
+          <td>enum: url | env | curl</td>
+          <td>Output format. <code>url</code>: proxy URL string. <code>env</code>: shell export commands. <code>curl</code>: curl <code>-x</code> + <code>-U</code> flags (NOT <code>--proxy</code>).</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>proxy_dedicated — Updated Parameters</h3>
+    <table class="param-table">
+      <thead>
+        <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>index</code></td>
+          <td>number (optional, default: 0)</td>
+          <td>Which entry from <code>NOVADA_DEDICATED_PROXY_LIST</code> to use (0-indexed). Defaults to first entry.</td>
+        </tr>
+        <tr>
+          <td><code>format</code></td>
+          <td>enum: url | env | curl</td>
+          <td>Output format. <code>curl</code> format uses <code>curl -x IP:PORT -U "USER:PASS"</code> syntax (not <code>--proxy</code>).</td>
+        </tr>
+        <tr>
+          <td><code>list_all</code></td>
+          <td>boolean (optional, default: false)</td>
+          <td>If true, return all dedicated IPs in the list (useful for agents that need to assign different IPs to parallel workflows).</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Output Format: curl</h3>
+    <div class="callout success">
+      <strong>Key Change — curl Format</strong>
+      The current curl format uses <code>--proxy "http://user:pass@host:port"</code> (zone-gateway style).<br>
+      The new curl format MUST use <code>-x IP:PORT -U "USER:PASS"</code> which is the correct syntax for direct IP authentication.
+    </div>
+
+    <pre><span class="comment"># OLD (wrong — zone format)</span>
+curl --proxy <span class="string">"http://user-zone-static-country-us-session-abc:pass@gate.novada.com:7777"</span> https://ipinfo.io
+
+<span class="comment"># NEW (correct — per-IP credentials)</span>
+curl -x <span class="string">151.242.47.74:8886</span> -U <span class="string">"ax0kSJ8snE6wF1mR:p3K0rNpsP2iR"</span> https://ipinfo.io</pre>
+  </section>
+
+  <!-- ─── 5. Migration Plan ────────────────────────────────────────────────── -->
+  <section id="migration">
+    <h2><span class="section-num">5</span>Migration Plan</h2>
+
+    <ul class="phase-list">
+      <li>
+        <div class="phase-badge active">1</div>
+        <div class="phase-content">
+          <div class="phase-title">Phase 1 — Early Return Guard <span class="phase-version">NOW (v0.8.x)</span></div>
+          <p>
+            Add a check at the top of each tool handler: if the relevant env var (<code>NOVADA_STATIC_PROXY_LIST</code> / <code>NOVADA_DEDICATED_PROXY_LIST</code>) is not set, return a structured <code>configuration_required</code> response with setup instructions and dashboard link. The existing zone-based code remains but is unreachable without the env var. This prevents silent failure and gives users/agents clear instructions.<br>
+            <strong>Status: DONE</strong> (implemented in this commit)
+          </p>
+        </div>
+      </li>
+      <li>
+        <div class="phase-badge">2</div>
+        <div class="phase-content">
+          <div class="phase-title">Phase 2 — Full Redesign <span class="phase-version">v0.9</span></div>
+          <p>
+            Parse the env var list. Replace zone-based username/endpoint logic entirely with per-IP credential extraction. Add country-based filtering for static. Add index-based selection for dedicated. Update <code>format=curl</code> output to use <code>-x IP:PORT -U "USER:PASS"</code> syntax. Update tool descriptions and Zod schemas (remove required <code>session_id</code> from static, add <code>index</code> and <code>list_all</code> to dedicated). Write unit tests for list parsing edge cases.
+          </p>
+        </div>
+      </li>
+      <li>
+        <div class="phase-badge">3</div>
+        <div class="phase-content">
+          <div class="phase-title">Phase 3 — Dashboard API Integration <span class="phase-version">v1.0</span></div>
+          <p>
+            Auto-fetch the user's purchased static/dedicated IP list directly from the Novada dashboard API using <code>NOVADA_API_KEY</code>. Remove the need for manual env var population. The tool calls the Novada REST API, retrieves active IP inventory, and uses those credentials on the fly. Fallback to env var list if API unavailable.
+          </p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ─── 6. Code Examples ─────────────────────────────────────────────────── -->
+  <section id="code-examples">
+    <h2><span class="section-num">6</span>Code Examples</h2>
+
+    <h3>proxy_static.ts — Phase 2 Implementation (Before / After)</h3>
+
+    <pre><span class="label">BEFORE (current — generates wrong zone format)</span><span class="keyword">function</span> <span class="fn">buildStaticUsername</span>(<span class="var">user</span>: <span class="type">string</span>, <span class="var">params</span>: <span class="type">ProxyStaticParams</span>): <span class="type">string</span> {
+  <span class="keyword">const</span> <span class="var">parts</span> = [<span class="var">user</span>];
+  <span class="var">parts</span>.push(<span class="string">"zone-static"</span>);
+  <span class="var">parts</span>.push(<span class="string">`country-${params.country.toLowerCase()}`</span>);
+  <span class="var">parts</span>.push(<span class="string">`session-${params.session_id}`</span>);
+  <span class="keyword">return</span> <span class="var">parts</span>.join(<span class="string">"-"</span>);
+}</pre>
+
+    <pre><span class="label">AFTER (Phase 2 — reads per-IP credentials from list)</span><span class="keyword">interface</span> <span class="type">StaticProxyEntry</span> {
+  ip: <span class="type">string</span>;
+  port: <span class="type">number</span>;
+  user: <span class="type">string</span>;
+  pass: <span class="type">string</span>;
+  country?: <span class="type">string</span>;
+}
+
+<span class="keyword">function</span> <span class="fn">parseStaticProxyList</span>(<span class="var">raw</span>: <span class="type">string</span>): <span class="type">StaticProxyEntry</span>[] {
+  <span class="keyword">return</span> <span class="var">raw</span>.split(<span class="string">"\n"</span>)
+    .map(<span class="var">line</span> => <span class="var">line</span>.trim())
+    .filter(<span class="var">line</span> => <span class="var">line</span> && !<span class="var">line</span>.startsWith(<span class="string">"#"</span>))
+    .flatMap(<span class="var">line</span> => {
+      <span class="keyword">const</span> <span class="var">parts</span> = <span class="var">line</span>.split(<span class="string">":"</span>);
+      <span class="keyword">if</span> (<span class="var">parts</span>.length &lt; <span class="string">4</span>) <span class="keyword">return</span> []; <span class="comment">// skip malformed lines</span>
+      <span class="keyword">const</span> [<span class="var">ip</span>, <span class="var">portStr</span>, <span class="var">user</span>, <span class="var">pass</span>, <span class="var">country</span>] = <span class="var">parts</span>;
+      <span class="keyword">return</span> [{ <span class="var">ip</span>, port: parseInt(<span class="var">portStr</span>), <span class="var">user</span>, <span class="var">pass</span>, country: <span class="var">country</span>?.toLowerCase() }];
+    });
+}
+
+<span class="keyword">function</span> <span class="fn">selectStaticProxy</span>(<span class="var">entries</span>: <span class="type">StaticProxyEntry</span>[], <span class="var">country</span>?: <span class="type">string</span>): <span class="type">StaticProxyEntry</span> | <span class="type">null</span> {
+  <span class="keyword">if</span> (!<span class="var">entries</span>.length) <span class="keyword">return</span> <span class="keyword">null</span>;
+  <span class="keyword">if</span> (<span class="var">country</span>) {
+    <span class="keyword">const</span> <span class="var">match</span> = <span class="var">entries</span>.find(<span class="var">e</span> => <span class="var">e</span>.country === <span class="var">country</span>.toLowerCase());
+    <span class="keyword">if</span> (<span class="var">match</span>) <span class="keyword">return</span> <span class="var">match</span>;
+  }
+  <span class="keyword">return</span> <span class="var">entries</span>[<span class="string">0</span>]; <span class="comment">// fallback to first</span>
+}
+
+<span class="comment">// In the handler:</span>
+<span class="keyword">const</span> <span class="var">rawList</span> = process.env.<span class="var">NOVADA_STATIC_PROXY_LIST</span>!;
+<span class="keyword">const</span> <span class="var">entries</span> = <span class="fn">parseStaticProxyList</span>(<span class="var">rawList</span>);
+<span class="keyword">const</span> <span class="var">proxy</span> = <span class="fn">selectStaticProxy</span>(<span class="var">entries</span>, <span class="var">params</span>.country);
+<span class="keyword">if</span> (!<span class="var">proxy</span>) <span class="keyword">return</span> JSON.<span class="fn">stringify</span>({ status: <span class="string">"error"</span>, message: <span class="string">"No valid entries in NOVADA_STATIC_PROXY_LIST"</span> }, <span class="keyword">null</span>, <span class="string">2</span>);
+
+<span class="comment">// curl format (correct):</span>
+<span class="keyword">const</span> <span class="var">curlCmd</span> = <span class="string">`curl -x ${proxy.ip}:${proxy.port} -U "${proxy.user}:${proxy.pass}" &lt;your-url&gt;`</span>;</pre>
+
+    <h3>proxy_dedicated.ts — Phase 2 Implementation</h3>
+
+    <pre><span class="label">AFTER (Phase 2 — dedicated)</span><span class="keyword">interface</span> <span class="type">DedicatedProxyEntry</span> {
+  ip: <span class="type">string</span>;
+  port: <span class="type">number</span>;
+  user: <span class="type">string</span>;
+  pass: <span class="type">string</span>;
+}
+
+<span class="keyword">function</span> <span class="fn">parseDedicatedProxyList</span>(<span class="var">raw</span>: <span class="type">string</span>): <span class="type">DedicatedProxyEntry</span>[] {
+  <span class="keyword">return</span> <span class="var">raw</span>.split(<span class="string">"\n"</span>)
+    .map(<span class="var">line</span> => <span class="var">line</span>.trim())
+    .filter(<span class="var">line</span> => <span class="var">line</span> && !<span class="var">line</span>.startsWith(<span class="string">"#"</span>))
+    .flatMap(<span class="var">line</span> => {
+      <span class="keyword">const</span> [<span class="var">ip</span>, <span class="var">portStr</span>, <span class="var">user</span>, <span class="var">pass</span>] = <span class="var">line</span>.split(<span class="string">":"</span>);
+      <span class="keyword">if</span> (!<span class="var">ip</span> || !<span class="var">portStr</span> || !<span class="var">user</span> || !<span class="var">pass</span>) <span class="keyword">return</span> [];
+      <span class="keyword">return</span> [{ <span class="var">ip</span>, port: parseInt(<span class="var">portStr</span>), <span class="var">user</span>, <span class="var">pass</span> }];
+    });
+}
+
+<span class="comment">// In the handler:</span>
+<span class="keyword">const</span> <span class="var">rawList</span> = process.env.<span class="var">NOVADA_DEDICATED_PROXY_LIST</span>!;
+<span class="keyword">const</span> <span class="var">entries</span> = <span class="fn">parseDedicatedProxyList</span>(<span class="var">rawList</span>);
+<span class="keyword">const</span> <span class="var">idx</span> = <span class="var">params</span>.index ?? <span class="string">0</span>;
+<span class="keyword">const</span> <span class="var">proxy</span> = <span class="var">entries</span>[<span class="var">idx</span>] ?? <span class="var">entries</span>[<span class="string">0</span>];
+
+<span class="comment">// if list_all is true:</span>
+<span class="keyword">if</span> (<span class="var">params</span>.list_all) {
+  <span class="keyword">return</span> JSON.<span class="fn">stringify</span>({
+    status: <span class="string">"ok"</span>,
+    entries: <span class="var">entries</span>.map((<span class="var">e</span>, <span class="var">i</span>) => ({ index: <span class="var">i</span>, ip: <span class="var">e</span>.ip, port: <span class="var">e</span>.port, user: <span class="var">e</span>.user })),
+  }, <span class="keyword">null</span>, <span class="string">2</span>);
+}</pre>
+  </section>
+
+  <!-- ─── Env Var Reference ──────────────────────────────────────────────── -->
+  <section id="env-vars">
+    <h2><span class="section-num"></span>Env Var Reference</h2>
+    <table>
+      <thead>
+        <tr><th>Env Var</th><th>Used By</th><th>Format</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>NOVADA_PROXY_USER</code></td>
+          <td>residential, ISP, mobile</td>
+          <td>string</td>
+          <td><code>myuser123</code></td>
+        </tr>
+        <tr>
+          <td><code>NOVADA_PROXY_PASS</code></td>
+          <td>residential, ISP, mobile</td>
+          <td>string</td>
+          <td><code>mypassword</code></td>
+        </tr>
+        <tr>
+          <td><code>NOVADA_PROXY_ENDPOINT</code></td>
+          <td>residential, ISP, mobile</td>
+          <td>host:port</td>
+          <td><code>gate.novada.com:7777</code></td>
+        </tr>
+        <tr>
+          <td><code>NOVADA_STATIC_PROXY_LIST</code></td>
+          <td><strong>proxy_static</strong> only</td>
+          <td>Newline-separated IP:PORT:USER:PASS[:CC]</td>
+          <td><code>151.242.47.74:8886:ax0k...:p3K0...:us</code></td>
+        </tr>
+        <tr>
+          <td><code>NOVADA_DEDICATED_PROXY_LIST</code></td>
+          <td><strong>proxy_dedicated</strong> only</td>
+          <td>Newline-separated IP:PORT:USER:PASS</td>
+          <td><code>45.152.66.201:10801:dA1o...:s9N4...</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ─── Appendix ──────────────────────────────────────────────────────────── -->
+  <section id="appendix">
+    <h2><span class="section-num"></span>Appendix: Live Test Data</h2>
+    <p>The following data was observed during live testing and confirms the per-IP credential model:</p>
+    <pre><span class="comment"># Confirmed working static proxy (from live test)</span>
+IP:    151.242.47.74
+PORT:  8886
+USER:  ax0kSJ8snE6wF1mR
+PASS:  p3K0rNpsP2iR
+
+<span class="comment"># Correct curl command:</span>
+curl -x 151.242.47.74:8886 -U <span class="string">"ax0kSJ8snE6wF1mR:p3K0rNpsP2iR"</span> ipinfo.novada.pro
+
+<span class="comment"># Expected response confirms static IP:</span>
+{
+  <span class="string">"ip"</span>: <span class="string">"151.242.47.74"</span>,
+  <span class="string">"country"</span>: <span class="string">"US"</span>,
+  <span class="string">"org"</span>: <span class="string">"... ISP ..."</span>
+}</pre>
+
+    <div class="callout success">
+      <strong>Key Verification Test</strong>
+      To verify a static proxy is working correctly, the IP in the response body should match the proxy IP used in the <code>-x</code> flag. If they differ, the proxy is routing through a gateway (wrong).
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

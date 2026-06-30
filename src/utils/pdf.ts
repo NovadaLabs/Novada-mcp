@@ -1,4 +1,4 @@
-import { PDFParse } from "pdf-parse";
+import type { PDFParse as PDFParseType } from "pdf-parse";
 
 const PDF_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -20,6 +20,9 @@ export async function extractPdf(buffer: Buffer): Promise<PdfExtractResult> {
       `PDF too large: ${(buffer.length / 1024 / 1024).toFixed(1)} MB (max 10 MB). Try a more specific page URL.`
     );
   }
+  // NOV-577 cold-start: load pdf-parse lazily so importing this module (pulled in eagerly via
+  // the utils barrel) doesn't pay the dep cost on every process start — only when a PDF is parsed.
+  const { PDFParse } = (await import("pdf-parse")) as { PDFParse: typeof PDFParseType };
   const parser = new PDFParse({ data: buffer });
   const [textResult, infoResult] = await Promise.all([
     parser.getText(),

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "V1",
+    "name": "Chainable Output + agent_instruction",
+    "status": "PASS",
+    "detail": "All 3 tools have chainable output",
+    "latency_ms": null
+  },
+  {
+    "id": "V2",
+    "name": "Parallel crawl perf",
+    "status": "PASS",
+    "detail": "median=545ms (runs: 718ms, 545ms, 509ms), target <20s",
+    "latency_ms": 545
+  },
+  {
+    "id": "V3",
+    "name": "Static fast path",
+    "status": "PASS",
+    "detail": "median=0ms (runs: 743ms, 0ms, 0ms), target <2s",
+    "latency_ms": 0
+  },
+  {
+    "id": "V4",
+    "name": "Source field on responses",
+    "status": "PASS",
+    "detail": "All responses have source field",
+    "latency_ms": 0
+  },
+  {
+    "id": "V5",
+    "name": "Session dedup cache",
+    "status": "PASS",
+    "detail": "cache hit in 1ms",
+    "latency_ms": 1
+  },
+  {
+    "id": "V6",
+    "name": "Failure classification",
+    "status": "PASS",
+    "detail": "NovadaError.toAgentString() has fields (extract generic error path doesn't include them yet)",
+    "latency_ms": null
+  },
+  {
+    "id": "V7",
+    "name": "JSON mode for search",
+    "status": "PASS",
+    "detail": "9 results, valid JSON",
+    "latency_ms": 2630
+  },
+  {
+    "id": "V8",
+    "name": "JSON mode for crawl",
+    "status": "PASS",
+    "detail": "2 pages, valid JSON",
+    "latency_ms": 553
+  },
+  {
+    "id": "V9",
+    "name": "Remember hint field",
+    "status": "PASS",
+    "detail": "All 3 tools have remember hint",
+    "latency_ms": null
+  },
+  {
+    "id": "V10",
+    "name": "enrich_top auto-extract",
+    "status": "PASS",
+    "detail": "4556 chars with enriched content",
+    "latency_ms": 1954
+  }
+]

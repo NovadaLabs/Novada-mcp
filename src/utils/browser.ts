@@ -1,4 +1,3 @@
-import { chromium } from "playwright-core";
 import type { Page } from "playwright-core";
 import { TIMEOUTS } from "../config.js";
 import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
@@ -153,20 +152,33 @@ export async function fetchViaBrowser(
     }
   }
 
+  // NOV-577 cold-start: playwright-core is heavy and only needed when the Browser API path runs.
+  // Load chromium lazily here so importing this module (pulled in eagerly via the utils barrel)
+  // doesn't pay the dep cost on every process start — only on an actual browser fetch.
+  const { chromium } = await import("playwright-core");
+
   let browser;
   try {
-    // Race connection against a timeout — connectOverCDP hangs indefinitely on dead endpoints
-    browser = await Promise.race([
-      chromium.connectOverCDP(wsEndpoint),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(
-          `Browser API connection failed. ` +
-          `agent_instruction: Credentials may be expired or a previous session is blocking new connections (Novada allows one active session per account). ` +
-          `Refresh credentials at dashboard.novada.com/overview/browser/ and update NOVADA_BROWSER_WS env var. ` +
-          `Alternatively, use render="render" mode in novada_extract for JS rendering without browser automation.`
-        )), TIMEOUTS.BROWSER_CONNECT)
-      ),
-    ]);
+    // Race connection against a timeout — connectOverCDP hangs indefinitely on dead endpoints.
+    // NOV-577 review: a naked setTimeout-reject inside Promise.race leaks a pending timer that
+    // rejects ~BROWSER_CONNECT ms after a *successful* connect, surfacing as an unhandledRejection.
+    // Hold the timer id and clear it in finally so it can never reject an already-settled race.
+    let connectTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      browser = await Promise.race([
+        chromium.connectOverCDP(wsEndpoint),
+        new Promise<never>((_, reject) => {
+          connectTimer = setTimeout(() => reject(new Error(
+            `Browser API connection failed. ` +
+            `agent_instruction: Credentials may be expired or a previous session is blocking new connections (Novada allows one active session per account). ` +
+            `Refresh credentials at dashboard.novada.com/overview/browser/ and update NOVADA_BROWSER_WS env var. ` +
+            `Alternatively, use render="render" mode in novada_extract for JS rendering without browser automation.`
+          )), TIMEOUTS.BROWSER_CONNECT);
+        }),
+      ]);
+    } finally {
+      clearTimeout(connectTimer);
+    }
     const context = await browser.newContext({
       userAgent:
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",

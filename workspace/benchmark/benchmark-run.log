@@ -1,0 +1,1149 @@
+╔══════════════════════════════════════════════════════╗
+║   MCP Web Scraping Benchmark v2.0 — 2026-05-22       ║
+╚══════════════════════════════════════════════════════╝
+
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: NOVADA
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ✅ R0 T1 4143ms Q5 AF3
+    ✅ R1 T1 3360ms Q5 AF3
+    ✅ R2 T1 3163ms Q5 AF3
+    ✅ R3 T1 2964ms Q5 AF3
+    ✅ R4 T1 2955ms Q5 AF3
+    ❌ R5 T1 error Novada unblocker error: {"code":0,"data":{"code":403,"err_detail":"Connect brows
+    ✅ R6 T1 6438ms Q5 AF3
+    ✅ R7 T1 3241ms Q5 AF3
+    ✅ R8 T1 3567ms Q5 AF3
+    ✅ R9 T1 2749ms Q5 AF3
+    ✅ R10 T1 8138ms Q5 AF3
+    ✅ R11 T1 3574ms Q5 AF3
+    ✅ R12 T1 3304ms Q5 AF3
+    ✅ R13 T1 5015ms Q5 AF3
+    ✅ R14 T1 8718ms Q5 AF3
+    ✅ R15 T1 7595ms Q5 AF3
+    ✅ R16 T1 14379ms Q5 AF3
+    ✅ R17 T1 3504ms Q5 AF3
+    ✅ R18 T1 3380ms Q5 AF3
+    ✅ R19 T1 3230ms Q5 AF3
+    ✅ R20 T1 3440ms Q5 AF3
+    ✅ R21 T1 6022ms Q5 AF3
+    ✅ R22 T1 5202ms Q5 AF3
+    ✅ R23 T1 8240ms Q5 AF3
+    ✅ R24 T1 3205ms Q5 AF3
+    ✅ R25 T1 3442ms Q5 AF3
+    ✅ R26 T1 9380ms Q5 AF3
+    ✅ R27 T1 3630ms Q5 AF3
+    ✅ R28 T1 2360ms Q5 AF3
+    ✅ R29 T1 3262ms Q5 AF3
+    ✅ R30 T1 3699ms Q5 AF3
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ✅ R0 T2 6371ms Q5 AF3
+    ✅ R1 T2 4567ms Q5 AF3
+    ✅ R2 T2 6155ms Q5 AF3
+    ✅ R3 T2 10847ms Q5 AF3
+    ✅ R4 T2 6613ms Q5 AF3
+    ✅ R5 T2 16299ms Q5 AF3
+    ✅ R6 T2 7158ms Q5 AF3
+    ✅ R7 T2 5942ms Q5 AF3
+    ✅ R8 T2 6876ms Q5 AF3
+    ✅ R9 T2 6689ms Q5 AF3
+    ✅ R10 T2 11087ms Q5 AF3
+    ✅ R11 T2 25030ms Q5 AF3
+    ✅ R12 T2 6343ms Q5 AF3
+    ✅ R13 T2 4794ms Q5 AF3
+    ✅ R14 T2 5624ms Q5 AF3
+    ✅ R15 T2 5872ms Q5 AF3
+    ✅ R16 T2 5691ms Q5 AF3
+    ✅ R17 T2 5421ms Q5 AF3
+    ✅ R18 T2 5896ms Q5 AF3
+    ✅ R19 T2 5830ms Q5 AF3
+    ✅ R20 T2 6320ms Q5 AF3
+    ✅ R21 T2 8229ms Q5 AF3
+    ✅ R22 T2 7207ms Q5 AF3
+    ✅ R23 T2 5751ms Q5 AF3
+    ✅ R24 T2 16042ms Q5 AF3
+    ✅ R25 T2 6307ms Q5 AF3
+    ✅ R26 T2 11366ms Q5 AF3
+    ✅ R27 T2 8368ms Q5 AF3
+    ✅ R28 T2 5451ms Q5 AF3
+    ✅ R29 T2 6284ms Q5 AF3
+    ✅ R30 T2 7553ms Q5 AF3
+
+  📊 T3 — Search — E-commerce Price
+    [warmup]
+    ✅ R0 T3 4871ms Q4 AF4
+    ✅ R1 T3 2328ms Q4 AF4
+    ✅ R2 T3 3013ms Q4 AF4
+    ✅ R3 T3 2677ms Q4 AF4
+    ✅ R4 T3 2027ms Q4 AF4
+    ✅ R5 T3 3029ms Q4 AF4
+    ✅ R6 T3 1963ms Q4 AF4
+    ✅ R7 T3 3517ms Q4 AF4
+    ✅ R8 T3 2042ms Q4 AF4
+    ✅ R9 T3 2771ms Q4 AF4
+    ✅ R10 T3 2553ms Q4 AF4
+    ✅ R11 T3 3371ms Q4 AF4
+    ✅ R12 T3 2954ms Q4 AF4
+    ✅ R13 T3 2163ms Q4 AF4
+    ✅ R14 T3 2794ms Q4 AF4
+    ✅ R15 T3 2423ms Q4 AF4
+    ✅ R16 T3 2874ms Q5 AF4
+    ✅ R17 T3 1998ms Q4 AF4
+    ✅ R18 T3 2226ms Q4 AF4
+    ✅ R19 T3 2850ms Q4 AF4
+    ✅ R20 T3 2513ms Q4 AF4
+    ✅ R21 T3 3686ms Q4 AF4
+    ✅ R22 T3 3642ms Q4 AF4
+    ✅ R23 T3 2837ms Q4 AF4
+    ✅ R24 T3 3244ms Q4 AF4
+    ✅ R25 T3 3006ms Q4 AF4
+    ✅ R26 T3 1997ms Q4 AF4
+    ✅ R27 T3 3374ms Q4 AF4
+    ✅ R28 T3 2035ms Q4 AF4
+    ✅ R29 T3 3351ms Q4 AF4
+    ✅ R30 T3 2365ms Q4 AF4
+
+  📊 T4 — Search — AI Trends
+    [warmup]
+    ✅ R0 T4 1742ms Q4 AF4
+    ✅ R1 T4 2243ms Q5 AF4
+    ✅ R2 T4 2870ms Q4 AF4
+    ✅ R3 T4 2643ms Q4 AF4
+    ✅ R4 T4 1801ms Q4 AF4
+    ✅ R5 T4 2708ms Q4 AF4
+    ✅ R6 T4 1818ms Q4 AF4
+    ✅ R7 T4 1794ms Q4 AF4
+    ✅ R8 T4 1661ms Q5 AF4
+    ✅ R9 T4 1524ms Q4 AF4
+    ✅ R10 T4 1893ms Q4 AF4
+    ✅ R11 T4 2857ms Q4 AF4
+    ✅ R12 T4 1903ms Q4 AF4
+    ✅ R13 T4 2413ms Q4 AF4
+    ✅ R14 T4 1543ms Q4 AF4
+    ✅ R15 T4 1892ms Q4 AF4
+    ✅ R16 T4 1871ms Q4 AF4
+    ✅ R17 T4 1612ms Q4 AF4
+    ✅ R18 T4 2860ms Q4 AF4
+    ✅ R19 T4 2644ms Q4 AF4
+    ✅ R20 T4 2644ms Q4 AF4
+    ✅ R21 T4 1818ms Q4 AF4
+    ✅ R22 T4 1758ms Q5 AF4
+    ✅ R23 T4 1730ms Q4 AF4
+    ✅ R24 T4 1917ms Q4 AF4
+    ✅ R25 T4 2750ms Q4 AF4
+    ✅ R26 T4 2776ms Q4 AF4
+    ✅ R27 T4 2848ms Q4 AF4
+    ✅ R28 T4 1881ms Q4 AF4
+    ✅ R29 T4 2392ms Q4 AF4
+    ✅ R30 T4 4690ms Q4 AF4
+
+  📊 T5 — Crawl (Python Docs)
+    [warmup]
+    ✅ R0 T5 18890ms Q5 AF3
+    ✅ R1 T5 15208ms Q5 AF3
+    ✅ R2 T5 14012ms Q5 AF3
+    ❌ R3 T5 timeout TIMEOUT
+    ✅ R4 T5 15998ms Q5 AF3
+    ✅ R5 T5 57782ms Q5 AF3
+    ✅ R6 T5 52762ms Q5 AF3
+    ✅ R7 T5 18334ms Q5 AF3
+    ✅ R8 T5 21149ms Q5 AF3
+    ✅ R9 T5 30088ms Q5 AF3
+    ✅ R10 T5 50766ms Q5 AF3
+    ✅ R11 T5 22198ms Q5 AF3
+    ✅ R12 T5 26025ms Q5 AF3
+    ✅ R13 T5 37763ms Q5 AF3
+    ✅ R14 T5 18509ms Q5 AF3
+    ✅ R15 T5 21386ms Q5 AF3
+    ✅ R16 T5 33624ms Q5 AF3
+    ✅ R17 T5 19088ms Q5 AF3
+    ✅ R18 T5 23392ms Q5 AF3
+    ✅ R19 T5 23451ms Q5 AF3
+    ✅ R20 T5 26088ms Q5 AF3
+    ✅ R21 T5 31411ms Q5 AF3
+    ✅ R22 T5 26164ms Q5 AF3
+    ✅ R23 T5 29336ms Q5 AF3
+    ✅ R24 T5 26372ms Q5 AF3
+    ✅ R25 T5 33665ms Q5 AF3
+    ✅ R26 T5 23370ms Q5 AF3
+    ✅ R27 T5 59572ms Q5 AF3
+    ❌ R28 T5 timeout TIMEOUT
+    ✅ R29 T5 14746ms Q5 AF3
+    ✅ R30 T5 14127ms Q5 AF3
+
+  📊 T6 — Structured Data (iPhone 17 Pro Max)
+    [warmup]
+    ✅ R0 T6 7865ms Q4 AF4
+    ✅ R1 T6 13416ms Q4 AF4
+    ✅ R2 T6 11724ms Q4 AF4
+    ✅ R3 T6 16651ms Q4 AF4
+    ✅ R4 T6 8972ms Q4 AF4
+    ✅ R5 T6 7450ms Q4 AF4
+    ✅ R6 T6 49234ms Q4 AF4
+    ✅ R7 T6 7139ms Q4 AF4
+    ✅ R8 T6 7167ms Q4 AF4
+    ✅ R9 T6 13595ms Q4 AF4
+    ✅ R10 T6 8618ms Q4 AF4
+    ✅ R11 T6 7320ms Q4 AF4
+    ✅ R12 T6 7543ms Q4 AF4
+    ✅ R13 T6 7826ms Q4 AF4
+    ✅ R14 T6 8505ms Q4 AF4
+    ✅ R15 T6 13063ms Q4 AF4
+    ✅ R16 T6 7108ms Q4 AF4
+    ✅ R17 T6 11684ms Q4 AF4
+    ✅ R18 T6 6652ms Q4 AF4
+    ✅ R19 T6 7830ms Q4 AF4
+    ✅ R20 T6 10691ms Q4 AF4
+    ✅ R21 T6 6033ms Q4 AF3
+    ✅ R22 T6 6560ms Q4 AF4
+    ✅ R23 T6 7114ms Q4 AF4
+    ✅ R24 T6 17627ms Q4 AF4
+    ✅ R25 T6 10227ms Q4 AF4
+    ✅ R26 T6 8139ms Q4 AF4
+    ✅ R27 T6 12851ms Q4 AF4
+    ✅ R28 T6 7468ms Q4 AF4
+    ✅ R29 T6 14162ms Q4 AF4
+    ✅ R30 T6 10359ms Q4 AF4
+
+  📊 T7 — Static Scrape (TechCrunch)
+    [warmup]
+    ✅ R0 T7 15374ms Q5 AF3
+    ✅ R1 T7 9798ms Q5 AF3
+    ✅ R2 T7 5688ms Q5 AF3
+    ✅ R3 T7 6277ms Q5 AF3
+    ✅ R4 T7 10023ms Q5 AF3
+    ✅ R5 T7 10005ms Q5 AF3
+    ✅ R6 T7 10284ms Q5 AF3
+    ✅ R7 T7 6852ms Q5 AF3
+    ✅ R8 T7 6128ms Q5 AF3
+    ✅ R9 T7 14980ms Q5 AF3
+    ✅ R10 T7 17895ms Q5 AF3
+    ✅ R11 T7 5116ms Q5 AF3
+    ✅ R12 T7 5785ms Q5 AF3
+    ✅ R13 T7 6405ms Q5 AF3
+    ✅ R14 T7 8519ms Q5 AF3
+    ✅ R15 T7 9402ms Q5 AF3
+    ✅ R16 T7 12027ms Q5 AF3
+    ✅ R17 T7 11683ms Q5 AF3
+    ✅ R18 T7 6459ms Q5 AF3
+    ✅ R19 T7 6151ms Q5 AF3
+    ✅ R20 T7 5335ms Q5 AF3
+    ✅ R21 T7 6798ms Q5 AF3
+    ✅ R22 T7 5501ms Q5 AF3
+    ✅ R23 T7 4891ms Q5 AF3
+    ✅ R24 T7 5293ms Q5 AF3
+    ✅ R25 T7 12894ms Q5 AF3
+    ✅ R26 T7 5861ms Q5 AF3
+    ✅ R27 T7 6430ms Q5 AF3
+    ✅ R28 T7 9542ms Q5 AF3
+    ✅ R29 T7 4710ms Q5 AF3
+    ✅ R30 T7 19975ms Q5 AF3
+
+  📊 T8 — JS-Heavy Scrape (Vercel)
+    [warmup]
+    ✅ R0 T8 6485ms Q5 AF3
+    ✅ R1 T8 6319ms Q5 AF3
+    ✅ R2 T8 5079ms Q5 AF3
+    ✅ R3 T8 4158ms Q5 AF3
+    ✅ R4 T8 4154ms Q5 AF3
+    ✅ R5 T8 4238ms Q5 AF3
+    ✅ R6 T8 9530ms Q5 AF3
+    ✅ R7 T8 3913ms Q5 AF3
+    ✅ R8 T8 4955ms Q5 AF3
+    ✅ R9 T8 4726ms Q5 AF3
+    ✅ R10 T8 5589ms Q5 AF3
+    ✅ R11 T8 4918ms Q5 AF3
+    ✅ R12 T8 4627ms Q5 AF3
+    ✅ R13 T8 9951ms Q5 AF3
+    ✅ R14 T8 5202ms Q5 AF3
+    ✅ R15 T8 30134ms Q5 AF3
+    ✅ R16 T8 4227ms Q5 AF3
+    ✅ R17 T8 6445ms Q5 AF3
+    ✅ R18 T8 4781ms Q5 AF3
+    ✅ R19 T8 3735ms Q5 AF3
+    ✅ R20 T8 4171ms Q5 AF3
+    ✅ R21 T8 4666ms Q5 AF3
+    ✅ R22 T8 3915ms Q5 AF3
+    ✅ R23 T8 9327ms Q5 AF3
+    ✅ R24 T8 5059ms Q5 AF3
+    ✅ R25 T8 4152ms Q5 AF3
+    ✅ R26 T8 4441ms Q5 AF3
+    ✅ R27 T8 5328ms Q5 AF3
+    ✅ R28 T8 9820ms Q5 AF3
+    ✅ R29 T8 10495ms Q5 AF3
+    ✅ R30 T8 4090ms Q5 AF3
+  💾 Saved 240 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-novada.json
+
+  ✅ novada done — 237 successes
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: BRIGHTDATA
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ❌ R0 T1 error Request failed with status code 400
+    ❌ R1 T1 error Request failed with status code 400
+    ❌ R2 T1 error Request failed with status code 400
+    ❌ R3 T1 error Request failed with status code 400
+    ❌ R4 T1 error Request failed with status code 400
+    ❌ R5 T1 error Request failed with status code 400
+    ❌ R6 T1 error Request failed with status code 400
+    ❌ R7 T1 error Request failed with status code 400
+    ❌ R8 T1 error Request failed with status code 400
+    ❌ R9 T1 error Request failed with status code 400
+    ❌ R10 T1 error Request failed with status code 400
+    ❌ R11 T1 error Request failed with status code 400
+    ❌ R12 T1 error Request failed with status code 400
+    ❌ R13 T1 error Request failed with status code 400
+    ❌ R14 T1 error Request failed with status code 400
+    ❌ R15 T1 error Request failed with status code 400
+    ❌ R16 T1 error Request failed with status code 400
+    ❌ R17 T1 error Request failed with status code 400
+    ❌ R18 T1 error Request failed with status code 400
+    ❌ R19 T1 error Request failed with status code 400
+    ❌ R20 T1 error Request failed with status code 400
+    ❌ R21 T1 error Request failed with status code 400
+    ❌ R22 T1 error Request failed with status code 400
+    ❌ R23 T1 error Request failed with status code 400
+    ❌ R24 T1 error Request failed with status code 400
+    ❌ R25 T1 error Request failed with status code 400
+    ❌ R26 T1 error Request failed with status code 400
+    ❌ R27 T1 error Request failed with status code 400
+    ❌ R28 T1 error Request failed with status code 400
+    ❌ R29 T1 error Request failed with status code 400
+    ❌ R30 T1 error Request failed with status code 400
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ❌ R0 T2 error Request failed with status code 400
+    ❌ R1 T2 error Request failed with status code 400
+    ❌ R2 T2 error Request failed with status code 400
+    ❌ R3 T2 error Request failed with status code 400
+    ❌ R4 T2 error Request failed with status code 400
+    ❌ R5 T2 error Request failed with status code 400
+    ❌ R6 T2 error Request failed with status code 400
+    ❌ R7 T2 error Request failed with status code 400
+    ❌ R8 T2 error Request failed with status code 400
+    ❌ R9 T2 error Request failed with status code 400
+    ❌ R10 T2 error Request failed with status code 400
+    ❌ R11 T2 error Request failed with status code 400
+    ❌ R12 T2 error Request failed with status code 400
+    ❌ R13 T2 error Request failed with status code 400
+    ❌ R14 T2 error Request failed with status code 400
+    ❌ R15 T2 error Request failed with status code 400
+    ❌ R16 T2 error Request failed with status code 400
+    ❌ R17 T2 error Request failed with status code 400
+    ❌ R18 T2 error Request failed with status code 400
+    ❌ R19 T2 error Request failed with status code 400
+    ❌ R20 T2 error Request failed with status code 400
+    ❌ R21 T2 error Request failed with status code 400
+    ❌ R22 T2 error Request failed with status code 400
+    ❌ R23 T2 error Request failed with status code 400
+    ❌ R24 T2 error Request failed with status code 400
+    ❌ R25 T2 error Request failed with status code 400
+    ❌ R26 T2 error Request failed with status code 400
+    ❌ R27 T2 error Request failed with status code 400
+    ❌ R28 T2 error Request failed with status code 400
+    ❌ R29 T2 error Request failed with status code 400
+    ❌ R30 T2 error Request failed with status code 400
+
+  📊 T3 — Search — E-commerce Price
+    [warmup]
+    ❌ R0 T3 error Request failed with status code 400
+    ❌ R1 T3 error Request failed with status code 400
+    ❌ R2 T3 error Request failed with status code 400
+    ❌ R3 T3 error Request failed with status code 400
+    ❌ R4 T3 error Request failed with status code 400
+    ❌ R5 T3 error Request failed with status code 400
+    ❌ R6 T3 error Request failed with status code 400
+    ❌ R7 T3 error Request failed with status code 400
+    ❌ R8 T3 error Request failed with status code 400
+    ❌ R9 T3 error Request failed with status code 400
+    ❌ R10 T3 error Request failed with status code 400
+    ❌ R11 T3 error Request failed with status code 400
+    ❌ R12 T3 error Request failed with status code 400
+    ❌ R13 T3 error Request failed with status code 400
+    ❌ R14 T3 error Request failed with status code 400
+    ❌ R15 T3 error Request failed with status code 400
+    ❌ R16 T3 error Request failed with status code 400
+    ❌ R17 T3 error Request failed with status code 400
+    ❌ R18 T3 error Request failed with status code 400
+    ❌ R19 T3 error Request failed with status code 400
+    ❌ R20 T3 error Request failed with status code 400
+    ❌ R21 T3 error Request failed with status code 400
+    ❌ R22 T3 error Request failed with status code 400
+    ❌ R23 T3 error Request failed with status code 400
+    ❌ R24 T3 error Request failed with status code 400
+    ❌ R25 T3 error Request failed with status code 400
+    ❌ R26 T3 error Request failed with status code 400
+    ❌ R27 T3 error Request failed with status code 400
+    ❌ R28 T3 error Request failed with status code 400
+    ❌ R29 T3 error Request failed with status code 400
+    ❌ R30 T3 error Request failed with status code 400
+
+  📊 T4 — Search — AI Trends
+    [warmup]
+    ❌ R0 T4 error Request failed with status code 400
+    ❌ R1 T4 error Request failed with status code 400
+    ❌ R2 T4 error Request failed with status code 400
+    ❌ R3 T4 error Request failed with status code 400
+    ❌ R4 T4 error Request failed with status code 400
+    ❌ R5 T4 error Request failed with status code 400
+    ❌ R6 T4 error Request failed with status code 400
+    ❌ R7 T4 error Request failed with status code 400
+    ❌ R8 T4 error Request failed with status code 400
+    ❌ R9 T4 error Request failed with status code 400
+    ❌ R10 T4 error Request failed with status code 400
+    ❌ R11 T4 error Request failed with status code 400
+    ❌ R12 T4 error Request failed with status code 400
+    ❌ R13 T4 error Request failed with status code 400
+    ❌ R14 T4 error Request failed with status code 400
+    ❌ R15 T4 error Request failed with status code 400
+    ❌ R16 T4 error Request failed with status code 400
+    ❌ R17 T4 error Request failed with status code 400
+    ❌ R18 T4 error Request failed with status code 400
+    ❌ R19 T4 error Request failed with status code 400
+    ❌ R20 T4 error Request failed with status code 400
+    ❌ R21 T4 error Request failed with status code 400
+    ❌ R22 T4 error Request failed with status code 400
+    ❌ R23 T4 error Request failed with status code 400
+    ❌ R24 T4 error Request failed with status code 400
+    ❌ R25 T4 error Request failed with status code 400
+    ❌ R26 T4 error Request failed with status code 400
+    ❌ R27 T4 error Request failed with status code 400
+    ❌ R28 T4 error Request failed with status code 400
+    ❌ R29 T4 error Request failed with status code 400
+    ❌ R30 T4 error Request failed with status code 400
+
+  📋 T5 (Crawl (Python Docs)) — N/A for brightdata
+
+  📋 T6 (Structured Data (iPhone 17 Pro Max)) — N/A for brightdata
+
+  📊 T7 — Static Scrape (TechCrunch)
+    [warmup]
+    ❌ R0 T7 error Request failed with status code 400
+    ❌ R1 T7 error Request failed with status code 400
+    ❌ R2 T7 error Request failed with status code 400
+    ❌ R3 T7 error Request failed with status code 400
+    ❌ R4 T7 error Request failed with status code 400
+    ❌ R5 T7 error Request failed with status code 400
+    ❌ R6 T7 error Request failed with status code 400
+    ❌ R7 T7 error Request failed with status code 400
+    ❌ R8 T7 error Request failed with status code 400
+    ❌ R9 T7 error Request failed with status code 400
+    ❌ R10 T7 error Request failed with status code 400
+    ❌ R11 T7 error Request failed with status code 400
+    ❌ R12 T7 error Request failed with status code 400
+    ❌ R13 T7 error Request failed with status code 400
+    ❌ R14 T7 error Request failed with status code 400
+    ❌ R15 T7 error Request failed with status code 400
+    ❌ R16 T7 error Request failed with status code 400
+    ❌ R17 T7 error Request failed with status code 400
+    ❌ R18 T7 error Request failed with status code 400
+    ❌ R19 T7 error Request failed with status code 400
+    ❌ R20 T7 error Request failed with status code 400
+    ❌ R21 T7 error Request failed with status code 400
+    ❌ R22 T7 error Request failed with status code 400
+    ❌ R23 T7 error Request failed with status code 400
+    ❌ R24 T7 error Request failed with status code 400
+    ❌ R25 T7 error Request failed with status code 400
+    ❌ R26 T7 error Request failed with status code 400
+    ❌ R27 T7 error Request failed with status code 400
+    ❌ R28 T7 error Request failed with status code 400
+    ❌ R29 T7 error Request failed with status code 400
+    ❌ R30 T7 error Request failed with status code 400
+
+  📊 T8 — JS-Heavy Scrape (Vercel)
+    [warmup]
+    ❌ R0 T8 error Request failed with status code 400
+    ❌ R1 T8 error Request failed with status code 400
+    ❌ R2 T8 error Request failed with status code 400
+    ❌ R3 T8 error Request failed with status code 400
+    ❌ R4 T8 error Request failed with status code 400
+    ❌ R5 T8 error Request failed with status code 400
+    ❌ R6 T8 error Request failed with status code 400
+    ❌ R7 T8 error Request failed with status code 400
+    ❌ R8 T8 error Request failed with status code 400
+    ❌ R9 T8 error Request failed with status code 400
+    ❌ R10 T8 error Request failed with status code 400
+    ❌ R11 T8 error Request failed with status code 400
+    ❌ R12 T8 error Request failed with status code 400
+    ❌ R13 T8 error Request failed with status code 400
+    ❌ R14 T8 error Request failed with status code 400
+    ❌ R15 T8 error Request failed with status code 400
+    ❌ R16 T8 error Request failed with status code 400
+    ❌ R17 T8 error Request failed with status code 400
+    ❌ R18 T8 error Request failed with status code 400
+    ❌ R19 T8 error Request failed with status code 400
+    ❌ R20 T8 error Request failed with status code 400
+    ❌ R21 T8 error Request failed with status code 400
+    ❌ R22 T8 error Request failed with status code 400
+    ❌ R23 T8 error Request failed with status code 400
+    ❌ R24 T8 error Request failed with status code 400
+    ❌ R25 T8 error Request failed with status code 400
+    ❌ R26 T8 error Request failed with status code 400
+    ❌ R27 T8 error Request failed with status code 400
+    ❌ R28 T8 error Request failed with status code 400
+    ❌ R29 T8 error Request failed with status code 400
+    ❌ R30 T8 error Request failed with status code 400
+  💾 Saved 240 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-brightdata.json
+
+  ✅ brightdata done — 0 successes
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: FIRECRAWL
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ✅ R0 T1 942ms Q5 AF4
+    ✅ R1 T1 626ms Q5 AF4
+    ✅ R2 T1 443ms Q5 AF4
+    ✅ R3 T1 553ms Q5 AF4
+    ✅ R4 T1 543ms Q5 AF4
+    ✅ R5 T1 550ms Q5 AF4
+    ✅ R6 T1 744ms Q5 AF4
+    ✅ R7 T1 503ms Q5 AF4
+    ✅ R8 T1 501ms Q5 AF4
+    ✅ R9 T1 549ms Q5 AF4
+    ✅ R10 T1 547ms Q5 AF4
+    ✅ R11 T1 439ms Q5 AF4
+    ✅ R12 T1 546ms Q5 AF4
+    ✅ R13 T1 652ms Q5 AF4
+    ✅ R14 T1 484ms Q5 AF4
+    ✅ R15 T1 359ms Q5 AF4
+    ✅ R16 T1 411ms Q5 AF4
+    ✅ R17 T1 456ms Q5 AF4
+    ✅ R18 T1 401ms Q5 AF4
+    ✅ R19 T1 675ms Q5 AF4
+    ✅ R20 T1 426ms Q5 AF4
+    ✅ R21 T1 419ms Q5 AF4
+    ✅ R22 T1 523ms Q5 AF4
+    ✅ R23 T1 486ms Q5 AF4
+    ✅ R24 T1 468ms Q5 AF4
+    ✅ R25 T1 495ms Q5 AF4
+    ✅ R26 T1 471ms Q5 AF4
+    ✅ R27 T1 543ms Q5 AF4
+    ✅ R28 T1 554ms Q5 AF4
+    ✅ R29 T1 432ms Q5 AF4
+    ✅ R30 T1 549ms Q5 AF4
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ✅ R0 T2 633ms Q5 AF4
+    ✅ R1 T2 538ms Q5 AF4
+    ✅ R2 T2 617ms Q5 AF4
+    ✅ R3 T2 1147ms Q5 AF4
+    ✅ R4 T2 523ms Q5 AF4
+    ✅ R5 T2 438ms Q5 AF4
+    ✅ R6 T2 567ms Q5 AF4
+    ✅ R7 T2 495ms Q5 AF4
+    ✅ R8 T2 561ms Q5 AF4
+    ✅ R9 T2 544ms Q5 AF4
+    ✅ R10 T2 545ms Q5 AF4
+    ✅ R11 T2 535ms Q5 AF4
+    ✅ R12 T2 560ms Q5 AF4
+    ✅ R13 T2 573ms Q5 AF4
+    ✅ R14 T2 603ms Q5 AF4
+    ✅ R15 T2 461ms Q5 AF4
+    ✅ R16 T2 541ms Q5 AF4
+    ✅ R17 T2 771ms Q5 AF4
+    ✅ R18 T2 744ms Q5 AF4
+    ✅ R19 T2 553ms Q5 AF4
+    ✅ R20 T2 541ms Q5 AF4
+    ✅ R21 T2 652ms Q5 AF4
+    ✅ R22 T2 678ms Q5 AF4
+    ✅ R23 T2 571ms Q5 AF4
+    ✅ R24 T2 601ms Q5 AF4
+    ✅ R25 T2 522ms Q5 AF4
+    ✅ R26 T2 617ms Q5 AF4
+    ✅ R27 T2 621ms Q5 AF4
+    ✅ R28 T2 638ms Q5 AF4
+    ✅ R29 T2 545ms Q5 AF4
+    ✅ R30 T2 549ms Q5 AF4
+
+  📋 T3 (Search — E-commerce Price) — N/A for firecrawl
+
+  📋 T4 (Search — AI Trends) — N/A for firecrawl
+
+  📊 T5 — Crawl (Python Docs)
+    [warmup]
+    ✅ R0 T5 3780ms Q5 AF4
+    ✅ R1 T5 3786ms Q5 AF4
+    ❌ R2 T5 error Request failed with status code 429
+    ❌ R3 T5 error Request failed with status code 429
+    ❌ R4 T5 error Request failed with status code 429
+    ❌ R5 T5 error Request failed with status code 429
+    ❌ R6 T5 error Request failed with status code 429
+    ❌ R7 T5 error Request failed with status code 429
+    ❌ R8 T5 error Request failed with status code 429
+    ❌ R9 T5 error Request failed with status code 429
+    ❌ R10 T5 error Request failed with status code 429
+    ❌ R11 T5 error Request failed with status code 429
+    ❌ R12 T5 error Request failed with status code 429
+    ❌ R13 T5 error Request failed with status code 429
+    ❌ R14 T5 error Request failed with status code 429
+    ❌ R15 T5 error Request failed with status code 429
+    ❌ R16 T5 error Request failed with status code 429
+    ❌ R17 T5 error Request failed with status code 429
+    ❌ R18 T5 error Request failed with status code 429
+    ❌ R19 T5 error Request failed with status code 429
+    ❌ R20 T5 error Request failed with status code 429
+    ❌ R21 T5 error Request failed with status code 429
+    ❌ R22 T5 error Request failed with status code 429
+    ❌ R23 T5 error Request failed with status code 429
+    ❌ R24 T5 error Request failed with status code 429
+    ❌ R25 T5 error Request failed with status code 429
+    ❌ R26 T5 error Request failed with status code 429
+    ❌ R27 T5 error Request failed with status code 429
+    ❌ R28 T5 error Request failed with status code 429
+    ❌ R29 T5 error Request failed with status code 429
+    ❌ R30 T5 error Request failed with status code 429
+
+  📋 T6 (Structured Data (iPhone 17 Pro Max)) — N/A for firecrawl
+
+  📊 T7 — Static Scrape (TechCrunch)
+    [warmup]
+    ✅ R0 T7 625ms Q5 AF4
+    ✅ R1 T7 528ms Q5 AF4
+    ✅ R2 T7 586ms Q5 AF4
+    ✅ R3 T7 519ms Q5 AF4
+    ✅ R4 T7 535ms Q5 AF4
+    ✅ R5 T7 535ms Q5 AF4
+    ✅ R6 T7 559ms Q5 AF4
+    ✅ R7 T7 618ms Q5 AF4
+    ✅ R8 T7 545ms Q5 AF4
+    ✅ R9 T7 526ms Q5 AF4
+    ✅ R10 T7 563ms Q5 AF4
+    ✅ R11 T7 622ms Q5 AF4
+    ✅ R12 T7 720ms Q5 AF4
+    ✅ R13 T7 658ms Q5 AF4
+    ✅ R14 T7 648ms Q5 AF4
+    ✅ R15 T7 553ms Q5 AF4
+    ✅ R16 T7 539ms Q5 AF4
+    ✅ R17 T7 653ms Q5 AF4
+    ✅ R18 T7 491ms Q5 AF4
+    ✅ R19 T7 535ms Q5 AF4
+    ✅ R20 T7 650ms Q5 AF4
+    ✅ R21 T7 542ms Q5 AF4
+    ✅ R22 T7 534ms Q5 AF4
+    ✅ R23 T7 496ms Q5 AF4
+    ✅ R24 T7 649ms Q5 AF4
+    ✅ R25 T7 683ms Q5 AF4
+    ✅ R26 T7 546ms Q5 AF4
+    ✅ R27 T7 547ms Q5 AF4
+    ✅ R28 T7 658ms Q5 AF4
+    ✅ R29 T7 639ms Q5 AF4
+    ✅ R30 T7 719ms Q5 AF4
+
+  📊 T8 — JS-Heavy Scrape (Vercel)
+    [warmup]
+    ✅ R0 T8 501ms Q5 AF4
+    ✅ R1 T8 535ms Q5 AF4
+    ✅ R2 T8 435ms Q5 AF4
+    ✅ R3 T8 408ms Q5 AF4
+    ✅ R4 T8 450ms Q5 AF4
+    ✅ R5 T8 428ms Q5 AF4
+    ✅ R6 T8 381ms Q5 AF4
+    ✅ R7 T8 523ms Q5 AF4
+    ✅ R8 T8 398ms Q5 AF4
+    ✅ R9 T8 512ms Q5 AF4
+    ✅ R10 T8 490ms Q5 AF4
+    ✅ R11 T8 583ms Q5 AF4
+    ✅ R12 T8 511ms Q5 AF4
+    ✅ R13 T8 370ms Q5 AF4
+    ✅ R14 T8 427ms Q5 AF4
+    ✅ R15 T8 366ms Q5 AF4
+    ✅ R16 T8 498ms Q5 AF4
+    ✅ R17 T8 396ms Q5 AF4
+    ✅ R18 T8 472ms Q5 AF4
+    ✅ R19 T8 336ms Q5 AF4
+    ✅ R20 T8 459ms Q5 AF4
+    ✅ R21 T8 548ms Q5 AF4
+    ✅ R22 T8 549ms Q5 AF4
+    ✅ R23 T8 412ms Q5 AF4
+    ✅ R24 T8 415ms Q5 AF4
+    ✅ R25 T8 432ms Q5 AF4
+    ✅ R26 T8 406ms Q5 AF4
+    ✅ R27 T8 542ms Q5 AF4
+    ✅ R28 T8 421ms Q5 AF4
+    ✅ R29 T8 397ms Q5 AF4
+    ✅ R30 T8 472ms Q5 AF4
+  💾 Saved 240 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-firecrawl.json
+
+  ✅ firecrawl done — 121 successes
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: TAVILY
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ✅ R0 T1 452ms Q5 AF3
+    ✅ R1 T1 122ms Q5 AF3
+    ✅ R2 T1 117ms Q5 AF3
+    ✅ R3 T1 117ms Q5 AF3
+    ✅ R4 T1 122ms Q5 AF3
+    ✅ R5 T1 132ms Q5 AF3
+    ✅ R6 T1 114ms Q5 AF3
+    ✅ R7 T1 128ms Q5 AF3
+    ✅ R8 T1 112ms Q5 AF3
+    ✅ R9 T1 149ms Q5 AF3
+    ✅ R10 T1 139ms Q5 AF3
+    ✅ R11 T1 118ms Q5 AF3
+    ✅ R12 T1 115ms Q5 AF3
+    ✅ R13 T1 116ms Q5 AF3
+    ✅ R14 T1 151ms Q5 AF3
+    ✅ R15 T1 134ms Q5 AF3
+    ✅ R16 T1 112ms Q5 AF3
+    ✅ R17 T1 122ms Q5 AF3
+    ✅ R18 T1 116ms Q5 AF3
+    ✅ R19 T1 148ms Q5 AF3
+    ✅ R20 T1 139ms Q5 AF3
+    ✅ R21 T1 121ms Q5 AF3
+    ✅ R22 T1 117ms Q5 AF3
+    ✅ R23 T1 120ms Q5 AF3
+    ✅ R24 T1 141ms Q5 AF3
+    ✅ R25 T1 136ms Q5 AF3
+    ✅ R26 T1 113ms Q5 AF3
+    ✅ R27 T1 115ms Q5 AF3
+    ✅ R28 T1 117ms Q5 AF3
+    ✅ R29 T1 159ms Q5 AF3
+    ✅ R30 T1 131ms Q5 AF3
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ✅ R0 T2 130ms Q5 AF3
+    ✅ R1 T2 121ms Q5 AF3
+    ✅ R2 T2 185ms Q5 AF3
+    ✅ R3 T2 164ms Q5 AF3
+    ✅ R4 T2 118ms Q5 AF3
+    ✅ R5 T2 123ms Q5 AF3
+    ✅ R6 T2 208ms Q5 AF3
+    ✅ R7 T2 140ms Q5 AF3
+    ✅ R8 T2 116ms Q5 AF3
+    ✅ R9 T2 119ms Q5 AF3
+    ✅ R10 T2 115ms Q5 AF3
+    ✅ R11 T2 149ms Q5 AF3
+    ✅ R12 T2 136ms Q5 AF3
+    ✅ R13 T2 113ms Q5 AF3
+    ✅ R14 T2 122ms Q5 AF3
+    ✅ R15 T2 124ms Q5 AF3
+    ✅ R16 T2 140ms Q5 AF3
+    ✅ R17 T2 127ms Q5 AF3
+    ✅ R18 T2 114ms Q5 AF3
+    ✅ R19 T2 118ms Q5 AF3
+    ✅ R20 T2 116ms Q5 AF3
+    ✅ R21 T2 159ms Q5 AF3
+    ✅ R22 T2 136ms Q5 AF3
+    ✅ R23 T2 130ms Q5 AF3
+    ✅ R24 T2 122ms Q5 AF3
+    ✅ R25 T2 116ms Q5 AF3
+    ✅ R26 T2 135ms Q5 AF3
+    ✅ R27 T2 142ms Q5 AF3
+    ✅ R28 T2 116ms Q5 AF3
+    ✅ R29 T2 128ms Q5 AF3
+    ✅ R30 T2 118ms Q5 AF3
+
+  📊 T3 — Search — E-commerce Price
+    [warmup]
+    ✅ R0 T3 1327ms Q5 AF3
+    ✅ R1 T3 108ms Q5 AF3
+    ✅ R2 T3 112ms Q5 AF3
+    ✅ R3 T3 179ms Q5 AF3
+    ✅ R4 T3 132ms Q5 AF3
+    ✅ R5 T3 107ms Q5 AF3
+    ✅ R6 T3 109ms Q5 AF3
+    ✅ R7 T3 106ms Q5 AF3
+    ✅ R8 T3 182ms Q5 AF3
+    ✅ R9 T3 125ms Q5 AF3
+    ✅ R10 T3 106ms Q5 AF3
+    ✅ R11 T3 107ms Q5 AF3
+    ✅ R12 T3 109ms Q5 AF3
+    ✅ R13 T3 189ms Q5 AF3
+    ✅ R14 T3 129ms Q5 AF3
+    ✅ R15 T3 108ms Q5 AF3
+    ✅ R16 T3 103ms Q5 AF3
+    ✅ R17 T3 107ms Q5 AF3
+    ✅ R18 T3 847ms Q5 AF3
+    ✅ R19 T3 107ms Q5 AF3
+    ✅ R20 T3 109ms Q5 AF3
+    ✅ R21 T3 106ms Q5 AF3
+    ✅ R22 T3 164ms Q5 AF3
+    ✅ R23 T3 123ms Q5 AF3
+    ✅ R24 T3 110ms Q5 AF3
+    ✅ R25 T3 111ms Q5 AF3
+    ✅ R26 T3 109ms Q5 AF3
+    ✅ R27 T3 183ms Q5 AF3
+    ✅ R28 T3 125ms Q5 AF3
+    ✅ R29 T3 108ms Q5 AF3
+    ✅ R30 T3 112ms Q5 AF3
+
+  📊 T4 — Search — AI Trends
+    [warmup]
+    ✅ R0 T4 770ms Q5 AF3
+    ✅ R1 T4 111ms Q5 AF3
+    ✅ R2 T4 114ms Q5 AF3
+    ✅ R3 T4 110ms Q5 AF3
+    ✅ R4 T4 111ms Q5 AF3
+    ✅ R5 T4 172ms Q5 AF3
+    ✅ R6 T4 125ms Q5 AF3
+    ✅ R7 T4 105ms Q5 AF3
+    ✅ R8 T4 108ms Q5 AF3
+    ✅ R9 T4 106ms Q5 AF3
+    ✅ R10 T4 190ms Q5 AF3
+    ✅ R11 T4 124ms Q5 AF3
+    ✅ R12 T4 115ms Q5 AF3
+    ✅ R13 T4 106ms Q5 AF3
+    ✅ R14 T4 111ms Q5 AF3
+    ✅ R15 T4 182ms Q5 AF3
+    ✅ R16 T4 126ms Q5 AF3
+    ✅ R17 T4 115ms Q5 AF3
+    ✅ R18 T4 110ms Q5 AF3
+    ✅ R19 T4 112ms Q5 AF3
+    ✅ R20 T4 174ms Q5 AF3
+    ✅ R21 T4 122ms Q5 AF3
+    ✅ R22 T4 118ms Q5 AF3
+    ✅ R23 T4 106ms Q5 AF3
+    ✅ R24 T4 106ms Q5 AF3
+    ✅ R25 T4 186ms Q5 AF3
+    ✅ R26 T4 124ms Q5 AF3
+    ✅ R27 T4 105ms Q5 AF3
+    ✅ R28 T4 108ms Q5 AF3
+    ✅ R29 T4 114ms Q5 AF3
+    ✅ R30 T4 182ms Q5 AF3
+
+  📋 T5 (Crawl (Python Docs)) — N/A for tavily
+
+  📋 T6 (Structured Data (iPhone 17 Pro Max)) — N/A for tavily
+
+  📊 T7 — Static Scrape (TechCrunch)
+    [warmup]
+    ✅ R0 T7 128ms Q5 AF3
+    ✅ R1 T7 122ms Q5 AF3
+    ✅ R2 T7 115ms Q5 AF3
+    ✅ R3 T7 202ms Q5 AF3
+    ✅ R4 T7 138ms Q5 AF3
+    ✅ R5 T7 120ms Q5 AF3
+    ✅ R6 T7 119ms Q5 AF3
+    ✅ R7 T7 136ms Q5 AF3
+    ✅ R8 T7 134ms Q5 AF3
+    ✅ R9 T7 117ms Q5 AF3
+    ✅ R10 T7 116ms Q5 AF3
+    ✅ R11 T7 123ms Q5 AF3
+    ✅ R12 T7 123ms Q5 AF3
+    ✅ R13 T7 141ms Q5 AF3
+    ✅ R14 T7 135ms Q5 AF3
+    ✅ R15 T7 122ms Q5 AF3
+    ✅ R16 T7 120ms Q5 AF3
+    ✅ R17 T7 122ms Q5 AF3
+    ✅ R18 T7 134ms Q5 AF3
+    ✅ R19 T7 133ms Q5 AF3
+    ✅ R20 T7 119ms Q5 AF3
+    ✅ R21 T7 123ms Q5 AF3
+    ✅ R22 T7 124ms Q5 AF3
+    ✅ R23 T7 136ms Q5 AF3
+    ✅ R24 T7 137ms Q5 AF3
+    ✅ R25 T7 111ms Q5 AF3
+    ✅ R26 T7 116ms Q5 AF3
+    ✅ R27 T7 120ms Q5 AF3
+    ✅ R28 T7 152ms Q5 AF3
+    ✅ R29 T7 135ms Q5 AF3
+    ✅ R30 T7 119ms Q5 AF3
+
+  📊 T8 — JS-Heavy Scrape (Vercel)
+    [warmup]
+    ✅ R0 T8 121ms Q5 AF3
+    ✅ R1 T8 192ms Q5 AF3
+    ✅ R2 T8 130ms Q5 AF3
+    ✅ R3 T8 116ms Q5 AF3
+    ✅ R4 T8 120ms Q5 AF3
+    ✅ R5 T8 126ms Q5 AF3
+    ✅ R6 T8 141ms Q5 AF3
+    ✅ R7 T8 134ms Q5 AF3
+    ✅ R8 T8 123ms Q5 AF3
+    ✅ R9 T8 122ms Q5 AF3
+    ✅ R10 T8 124ms Q5 AF3
+    ✅ R11 T8 132ms Q5 AF3
+    ✅ R12 T8 146ms Q5 AF3
+    ✅ R13 T8 122ms Q5 AF3
+    ✅ R14 T8 119ms Q5 AF3
+    ✅ R15 T8 131ms Q5 AF3
+    ✅ R16 T8 120ms Q5 AF3
+    ✅ R17 T8 130ms Q5 AF3
+    ✅ R18 T8 127ms Q5 AF3
+    ✅ R19 T8 117ms Q5 AF3
+    ✅ R20 T8 119ms Q5 AF3
+    ✅ R21 T8 142ms Q5 AF3
+    ✅ R22 T8 135ms Q5 AF3
+    ✅ R23 T8 119ms Q5 AF3
+    ✅ R24 T8 118ms Q5 AF3
+    ✅ R25 T8 123ms Q5 AF3
+    ✅ R26 T8 139ms Q5 AF3
+    ✅ R27 T8 137ms Q5 AF3
+    ✅ R28 T8 117ms Q5 AF3
+    ✅ R29 T8 129ms Q5 AF3
+    ✅ R30 T8 114ms Q5 AF3
+  💾 Saved 240 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-tavily.json
+
+  ✅ tavily done — 180 successes
+
+════════════════════════════════════════════════════════════
+  🏁 Competitor: OXYLABS
+════════════════════════════════════════════════════════════
+
+  📊 T1 — Static Scrape (HN)
+    [warmup]
+    ✅ R0 T1 16438ms Q5 AF2
+    ✅ R1 T1 9939ms Q5 AF2
+    ✅ R2 T1 9618ms Q5 AF2
+    ✅ R3 T1 14319ms Q5 AF2
+    ✅ R4 T1 16330ms Q5 AF2
+    ✅ R5 T1 11793ms Q5 AF2
+    ✅ R6 T1 28816ms Q5 AF2
+    ✅ R7 T1 14523ms Q5 AF2
+    ✅ R8 T1 10648ms Q5 AF2
+    ✅ R9 T1 8372ms Q5 AF2
+    ✅ R10 T1 11093ms Q5 AF2
+    ✅ R11 T1 7962ms Q5 AF2
+    ✅ R12 T1 15518ms Q5 AF2
+    ✅ R13 T1 13262ms Q5 AF2
+    ✅ R14 T1 11635ms Q5 AF2
+    ✅ R15 T1 13439ms Q5 AF2
+    ✅ R16 T1 14327ms Q5 AF2
+    ✅ R17 T1 12160ms Q5 AF2
+    ✅ R18 T1 14698ms Q5 AF2
+    ✅ R19 T1 11583ms Q5 AF2
+    ✅ R20 T1 9107ms Q5 AF2
+    ✅ R21 T1 11356ms Q5 AF2
+    ✅ R22 T1 12225ms Q5 AF2
+    ✅ R23 T1 8809ms Q5 AF2
+    ✅ R24 T1 8929ms Q5 AF2
+    ✅ R25 T1 17471ms Q5 AF2
+    ✅ R26 T1 8448ms Q5 AF2
+    ✅ R27 T1 17571ms Q5 AF2
+    ✅ R28 T1 10469ms Q5 AF2
+    ✅ R29 T1 7691ms Q5 AF2
+    ✅ R30 T1 10221ms Q5 AF2
+
+  📊 T2 — JS-Heavy Scrape (Linear)
+    [warmup]
+    ✅ R0 T2 18738ms Q5 AF2
+    ✅ R1 T2 11453ms Q5 AF2
+    ✅ R2 T2 14057ms Q5 AF2
+    ✅ R3 T2 12758ms Q5 AF2
+    ✅ R4 T2 15594ms Q5 AF2
+    ✅ R5 T2 10075ms Q5 AF2
+    ✅ R6 T2 20267ms Q5 AF2
+    ✅ R7 T2 10655ms Q5 AF2
+    ✅ R8 T2 10989ms Q5 AF2
+    ✅ R9 T2 11252ms Q5 AF2
+    ✅ R10 T2 45625ms Q5 AF2
+    ✅ R11 T2 15656ms Q5 AF2
+    ✅ R12 T2 14078ms Q5 AF2
+    ✅ R13 T2 10032ms Q5 AF2
+    ✅ R14 T2 9870ms Q5 AF2
+    ✅ R15 T2 13252ms Q5 AF2
+    ✅ R16 T2 12071ms Q5 AF2
+    ✅ R17 T2 11424ms Q5 AF2
+    ✅ R18 T2 16978ms Q5 AF2
+    ✅ R19 T2 10649ms Q5 AF2
+    ✅ R20 T2 17721ms Q5 AF2
+    ✅ R21 T2 11498ms Q5 AF2
+    ✅ R22 T2 11739ms Q5 AF2
+    ✅ R23 T2 18860ms Q5 AF2
+    ✅ R24 T2 16616ms Q5 AF2
+    ✅ R25 T2 16777ms Q5 AF2
+    ✅ R26 T2 11106ms Q5 AF2
+    ✅ R27 T2 23052ms Q5 AF2
+    ✅ R28 T2 10609ms Q5 AF2
+    ✅ R29 T2 12448ms Q5 AF2
+    ✅ R30 T2 10232ms Q5 AF2
+
+  📊 T3 — Search — E-commerce Price
+    [warmup]
+    ✅ R0 T3 3249ms Q2 AF3
+    ✅ R1 T3 3561ms Q2 AF3
+    ✅ R2 T3 4472ms Q2 AF3
+    ✅ R3 T3 2079ms Q2 AF3
+    ✅ R4 T3 2138ms Q2 AF3
+    ✅ R5 T3 2572ms Q2 AF3
+    ✅ R6 T3 3975ms Q2 AF3
+    ✅ R7 T3 1892ms Q2 AF3
+    ✅ R8 T3 3988ms Q2 AF3
+    ✅ R9 T3 2462ms Q2 AF3
+    ✅ R10 T3 4570ms Q2 AF3
+    ✅ R11 T3 2325ms Q2 AF3
+    ✅ R12 T3 4266ms Q2 AF3
+    ✅ R13 T3 3442ms Q2 AF3
+    ✅ R14 T3 1598ms Q2 AF3
+    ✅ R15 T3 2456ms Q2 AF3
+    ✅ R16 T3 4219ms Q2 AF3
+    ✅ R17 T3 2882ms Q2 AF3
+    ✅ R18 T3 2648ms Q2 AF3
+    ✅ R19 T3 1859ms Q2 AF3
+    ✅ R20 T3 4473ms Q2 AF3
+    ✅ R21 T3 2817ms Q2 AF3
+    ✅ R22 T3 4020ms Q2 AF3
+    ✅ R23 T3 2257ms Q2 AF3
+    ✅ R24 T3 3758ms Q2 AF3
+    ✅ R25 T3 5611ms Q2 AF3
+    ✅ R26 T3 1582ms Q2 AF3
+    ✅ R27 T3 2272ms Q2 AF3
+    ✅ R28 T3 1479ms Q2 AF3
+    ✅ R29 T3 2075ms Q2 AF3
+    ✅ R30 T3 1542ms Q2 AF3
+
+  📊 T4 — Search — AI Trends
+    [warmup]
+    ✅ R0 T4 1696ms Q2 AF3
+    ✅ R1 T4 1682ms Q2 AF3
+    ✅ R2 T4 1527ms Q2 AF3
+    ✅ R3 T4 1930ms Q2 AF3
+    ✅ R4 T4 1734ms Q2 AF3
+    ✅ R5 T4 2063ms Q2 AF3
+    ✅ R6 T4 6063ms Q2 AF3
+    ✅ R7 T4 1877ms Q2 AF3
+    ✅ R8 T4 2094ms Q2 AF3
+    ✅ R9 T4 6904ms Q2 AF3
+    ✅ R10 T4 1498ms Q2 AF3
+    ✅ R11 T4 5234ms Q2 AF3
+    ✅ R12 T4 1751ms Q2 AF3
+    ✅ R13 T4 4818ms Q2 AF3
+    ✅ R14 T4 3003ms Q2 AF3
+    ✅ R15 T4 2133ms Q2 AF3
+    ✅ R16 T4 2120ms Q2 AF3
+    ✅ R17 T4 7956ms Q2 AF3
+    ✅ R18 T4 1433ms Q2 AF3
+    ✅ R19 T4 3042ms Q2 AF3
+    ✅ R20 T4 2054ms Q2 AF3
+    ✅ R21 T4 989ms Q2 AF3
+    ✅ R22 T4 1460ms Q2 AF3
+    ✅ R23 T4 3147ms Q2 AF3
+    ✅ R24 T4 2071ms Q2 AF3
+    ✅ R25 T4 2167ms Q2 AF3
+    ✅ R26 T4 3624ms Q2 AF3
+    ✅ R27 T4 1870ms Q2 AF3
+    ✅ R28 T4 2677ms Q2 AF3
+    ✅ R29 T4 3603ms Q2 AF3
+    ✅ R30 T4 3543ms Q2 AF3
+
+  📋 T5 (Crawl (Python Docs)) — N/A for oxylabs
+
+  📊 T6 — Structured Data (iPhone 17 Pro Max)
+    [warmup]
+    ✅ R0 T6 3424ms Q4 AF3
+    ✅ R1 T6 3822ms Q4 AF3
+    ✅ R2 T6 3694ms Q4 AF3
+    ✅ R3 T6 3563ms Q4 AF3
+    ✅ R4 T6 6142ms Q4 AF3
+    ✅ R5 T6 6095ms Q4 AF3
+    ✅ R6 T6 4261ms Q4 AF3
+    ✅ R7 T6 3716ms Q4 AF3
+    ✅ R8 T6 6896ms Q4 AF3
+    ✅ R9 T6 35727ms Q4 AF3
+    ✅ R10 T6 26049ms Q4 AF3
+    ✅ R11 T6 3976ms Q4 AF3
+    ✅ R12 T6 6132ms Q4 AF3
+    ✅ R13 T6 4918ms Q4 AF3
+    ✅ R14 T6 3521ms Q4 AF3
+    ✅ R15 T6 4304ms Q4 AF3
+    ✅ R16 T6 4663ms Q4 AF3
+    ✅ R17 T6 4904ms Q4 AF3
+    ✅ R18 T6 3738ms Q4 AF3
+    ✅ R19 T6 8107ms Q4 AF3
+    ✅ R20 T6 5053ms Q4 AF3
+    ✅ R21 T6 3134ms Q4 AF3
+    ✅ R22 T6 3373ms Q4 AF3
+    ✅ R23 T6 3256ms Q4 AF3
+    ✅ R24 T6 3966ms Q4 AF3
+    ✅ R25 T6 4964ms Q4 AF3
+    ✅ R26 T6 3698ms Q4 AF3
+    ✅ R27 T6 3695ms Q4 AF3
+    ✅ R28 T6 3136ms Q4 AF3
+    ✅ R29 T6 3972ms Q4 AF3
+    ✅ R30 T6 5515ms Q4 AF3
+
+  📊 T7 — Static Scrape (TechCrunch)
+    [warmup]
+    ✅ R0 T7 16008ms Q5 AF2
+    ✅ R1 T7 38288ms Q5 AF2
+    ✅ R2 T7 15215ms Q5 AF2
+    ✅ R3 T7 21910ms Q5 AF2
+    ✅ R4 T7 15641ms Q5 AF2
+    ✅ R5 T7 15472ms Q5 AF2
+    ✅ R6 T7 22371ms Q5 AF2
+    ✅ R7 T7 15220ms Q5 AF2
+    ✅ R8 T7 23644ms Q5 AF2
+    ✅ R9 T7 15969ms Q5 AF2
+    ✅ R10 T7 17150ms Q5 AF2
+    ✅ R11 T7 14817ms Q5 AF2
+    ✅ R12 T7 45156ms Q5 AF2
+    ✅ R13 T7 15995ms Q5 AF2
+    ✅ R14 T7 14278ms Q5 AF2
+    ✅ R15 T7 16024ms Q5 AF2
+    ✅ R16 T7 43306ms Q5 AF2
+    ✅ R17 T7 17210ms Q5 AF2
+    ✅ R18 T7 14162ms Q5 AF2
+    ✅ R19 T7 15035ms Q5 AF2
+    ✅ R20 T7 16394ms Q5 AF2
+    ❌ R21 T7 error timeout of 55000ms exceeded
+    ✅ R22 T7 15404ms Q5 AF2
+    ✅ R23 T7 14708ms Q5 AF2
+    ✅ R24 T7 13968ms Q5 AF2
+    ❌ R25 T7 error timeout of 55000ms exceeded
+    ✅ R26 T7 14629ms Q5 AF2
+    ✅ R27 T7 12099ms Q5 AF2
+    ✅ R28 T7 14267ms Q5 AF2
+    ✅ R29 T7 15910ms Q5 AF2
+    ✅ R30 T7 15305ms Q5 AF2
+
+  📊 T8 — JS-Heavy Scrape (Vercel)
+    [warmup]
+    ✅ R0 T8 17950ms Q5 AF2
+    ✅ R1 T8 14051ms Q5 AF2
+    ✅ R2 T8 9080ms Q5 AF2
+    ✅ R3 T8 15086ms Q5 AF2
+    ✅ R4 T8 14197ms Q5 AF2
+    ✅ R5 T8 17278ms Q5 AF2
+    ✅ R6 T8 9910ms Q5 AF2
+    ✅ R7 T8 13225ms Q5 AF2
+    ✅ R8 T8 13929ms Q5 AF2
+    ✅ R9 T8 12562ms Q5 AF2
+    ✅ R10 T8 44829ms Q5 AF2
+    ✅ R11 T8 13469ms Q5 AF2
+    ✅ R12 T8 10118ms Q5 AF2
+    ✅ R13 T8 13911ms Q5 AF2
+    ✅ R14 T8 24958ms Q5 AF2
+    ✅ R15 T8 13455ms Q5 AF2
+    ✅ R16 T8 10277ms Q5 AF2
+    ✅ R17 T8 11730ms Q5 AF2
+    ✅ R18 T8 13601ms Q5 AF2
+    ✅ R19 T8 10782ms Q5 AF2
+    ✅ R20 T8 12458ms Q5 AF2
+    ✅ R21 T8 13640ms Q5 AF2
+    ✅ R22 T8 9542ms Q5 AF2
+    ✅ R23 T8 12532ms Q5 AF2
+    ❌ R24 T8 error timeout of 55000ms exceeded
+    ✅ R25 T8 16775ms Q5 AF2
+    ✅ R26 T8 17027ms Q5 AF2
+    ✅ R27 T8 16378ms Q5 AF2
+    ✅ R28 T8 20408ms Q5 AF2
+    ✅ R29 T8 16004ms Q5 AF2
+    ✅ R30 T8 20358ms Q5 AF2
+  💾 Saved 240 records → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/results-oxylabs.json
+
+  ✅ oxylabs done — 207 successes
+
+
+🎉 All competitors done. Generating report...
+  💾 Summary → /Users/tongwu/Projects/novada-mcp/workspace/benchmark/summary.json
+
+BENCHMARK COMPLETE: file:///Users/tongwu/Projects/novada-mcp/workspace/benchmark/report.html

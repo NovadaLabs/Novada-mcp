@@ -151,6 +151,44 @@ describe("extractMainContent", () => {
     expect(result).toContain("long article with meaningful");
   });
 
+  it("strips nested header/footer/aside chrome inside a matched semantic container (NOV-578)", () => {
+    // <main> matches the semantic selector; a plain <header> (no nav/logo) nested inside
+    // used to leak into the cleaned content. footer/aside are caught globally but are also
+    // stripped at the extraction point so the bound holds.
+    const html = `
+      <html><body>
+        <main>
+          <h1>Real Article Heading</h1>
+          <p>This is the genuine article body with plenty of text to clear the two hundred character
+          threshold so the semantic main selector matches and the nested-strip path runs. Lorem ipsum.</p>
+          <header>Breadcrumb-only section label without nav or logo</header>
+          <footer>Nested footer copyright legal</footer>
+          <aside>Nested aside related promo</aside>
+        </main>
+      </body></html>
+    `;
+    const result = extractMainContent(html);
+    expect(result).toContain("genuine article body");
+    expect(result).not.toContain("Breadcrumb-only section label");
+    expect(result).not.toContain("Nested footer");
+    expect(result).not.toContain("Nested aside");
+  });
+
+  it("preserves an article byline header that wraps the content heading (NOV-578 keeps Fix-5)", () => {
+    const html = `
+      <html><body>
+        <article>
+          <header><h1>Article Title Here</h1><p>By Jane Author</p></header>
+          <p>This is the genuine article body with plenty of text to clear the two hundred character
+          threshold so the semantic article selector matches and the nested-strip path runs. Lorem ipsum.</p>
+        </article>
+      </body></html>
+    `;
+    const result = extractMainContent(html);
+    expect(result).toContain("Article Title Here");
+    expect(result).toContain("Jane Author");
+  });
+
   it("density scoring works when no semantic selectors match", () => {
     // No <main>, <article>, [role=main], or *[class*=content] elements
     const html = `

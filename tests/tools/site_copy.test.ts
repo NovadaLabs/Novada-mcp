@@ -158,7 +158,7 @@ describe("novadaSiteCopy — path scope drains queue", () => {
     const result = await novadaSiteCopy({
       ...SiteCopyParamsSchema.parse({
         url: "https://example.com/docs/",
-        select_paths: ["/docs/.*"],
+        select_paths: ["/docs/**"],
         max_depth: 5,
       }),
     });
@@ -265,7 +265,7 @@ describe("novadaSiteCopy — SSRF / path-traversal guard", () => {
     });
 
     const result = await novadaSiteCopy({
-      ...SiteCopyParamsSchema.parse({ url: "https://example.com", select_paths: ["/docs/.*"] }),
+      ...SiteCopyParamsSchema.parse({ url: "https://example.com", select_paths: ["/docs/**"] }),
     });
     expect(result).toContain("pages: 0");
     expect(result).toContain("site_copy_empty");

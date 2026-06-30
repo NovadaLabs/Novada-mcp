@@ -1,20 +1,37 @@
 import * as cheerio from "cheerio";
-import TurndownService from "turndown";
-import { gfm } from "turndown-plugin-gfm";
+import type { CheerioAPI } from "cheerio";
+import { createRequire } from "node:module";
+import type TurndownServiceType from "turndown";
 // detectJsHeavyContent is used by extract.ts for render-escalation decisions,
 // but no longer used in the quality scorer (removed unfair React SPA penalty).
 
-/** Shared Turndown instance configured for agent-friendly markdown */
-const turndown = new TurndownService({
-  headingStyle: "atx",
-  codeBlockStyle: "fenced",
-  bulletListMarker: "-",
-});
-turndown.use(gfm);
+/**
+ * Lazy Turndown singleton (NOV-577 cold-start). Turndown + the GFM plugin are ~heavy and were
+ * previously instantiated at module top, so merely importing html.ts (pulled in eagerly via the
+ * utils barrel) paid that cost on every process start — even for a request that never converts
+ * HTML (e.g. a pure proxy/search call). We now defer the load to first use via createRequire so
+ * the dep stays out of the cold-start path while htmlToMarkdown remains synchronous (no signature
+ * change ripples into extractMainContent's sync callers in crawl.ts / site_copy.ts).
+ */
+let turndownInstance: TurndownServiceType | null = null;
+function getTurndown(): TurndownServiceType {
+  if (turndownInstance) return turndownInstance;
+  const require = createRequire(import.meta.url);
+  const TurndownService = require("turndown") as typeof TurndownServiceType;
+  const { gfm } = require("turndown-plugin-gfm") as { gfm: TurndownServiceType.Plugin };
+  const instance = new TurndownService({
+    headingStyle: "atx",
+    codeBlockStyle: "fenced",
+    bulletListMarker: "-",
+  });
+  instance.use(gfm);
+  turndownInstance = instance;
+  return instance;
+}
 
 /** Convert an HTML string to markdown via Turndown */
 function htmlToMarkdown(html: string): string {
-  return turndown.turndown(html);
+  return getTurndown().turndown(html);
 }
 
 /** Elements to completely remove before content extraction */
@@ -102,11 +119,22 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
     $(tag).remove();
   }
 
-  // Fix 5: Conditional <header> removal — only remove site headers (contain nav or logo),
-  // keep article headers (e.g. <header> wrapping an article's byline)
+  // Fix 5 + NOV-578: Conditional <header> removal. Remove site-banner / chrome headers —
+  // those carrying nav/logo/brand OR (the previously-leaking case) a bare <header> with no
+  // heading of its own (e.g. `<header>Site Header</header>`). Keep an article byline header,
+  // i.e. a <header> that wraps the content's own heading (h1-h6), so article markup survives.
+  // This runs globally so the density/body-fallback paths get the same strip as the semantic one.
   $('header').each((_, el) => {
     const $el = $(el);
-    if ($el.find('nav').length > 0 || $el.find('[class*="logo"], [class*="brand"]').length > 0) {
+    const hasNavOrLogo = $el.find('nav').length > 0 || $el.find('[class*="logo"], [class*="brand"]').length > 0;
+    const hasHeading = $el.find('h1, h2, h3, h4, h5, h6').length > 0;
+    // Remove as chrome only if it carries nav/logo, OR it is an explicit/top-level banner, OR it
+    // is a heading-less header with little text (e.g. `<header>Site Header</header>`). A heading-less
+    // <header> that holds real content (CMS byline/intro) is KEPT — NOV-578 review: strip chrome,
+    // never delete article text.
+    const isBanner = $el.attr('role') === 'banner' || $el.parent().is('body');
+    const isShortChrome = !hasHeading && (isBanner || $el.text().trim().length < 200);
+    if (hasNavOrLogo || isShortChrome) {
       $el.remove();
     }
   });
@@ -131,11 +159,24 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
   for (const selector of CONTENT_SELECTORS) {
     const $el = $(selector).first();
     if ($el.length && ($el.text() || "").trim().length > 200) {
-      // Fix 1: Strip nav/sidebar/header elements nested inside semantic containers
-      // (e.g. <nav> inside <main>, sidebar inside <article>)
-      $el.find('nav, [class*="sidebar"], [class*="nav"], [role="navigation"], [class*="menu"]').remove();
+      // Fix 1: Strip nav/sidebar/footer/aside elements nested inside semantic
+      // containers (e.g. <nav>/<footer>/<aside> inside <main>, sidebar inside
+      // <article>). REMOVE_TAGS already drops top-level nav/footer/aside, but a
+      // copy nested inside the matched container would otherwise survive — keep
+      // footer/aside here too so the strip is bounded at the extraction point.
+      $el.find('nav, footer, aside, [class*="sidebar"], [class*="nav"], [role="navigation"], [class*="menu"]').remove();
+      // NOV-578: drop nested <header> chrome (site/section/breadcrumb headers) that
+      // leaked into main content. Preserve an article byline header — i.e. a <header>
+      // that wraps the content's own heading (h1-h6) — so Fix-5 behaviour is unchanged;
+      // remove only headers carrying nav/logo OR no heading at all (pure boilerplate).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      $el.find('header').filter((_: number, el: any) => $(el).find('nav, [class*="logo"]').length > 0).remove();
+      $el.find('header').filter((_: number, el: any) => {
+        const $h = $(el);
+        const navLogo = $h.find('nav, [class*="logo"]').length > 0;
+        const noHeading = $h.find('h1, h2, h3, h4, h5, h6').length === 0;
+        // Same guard as the global pass: keep a heading-less header that holds real content.
+        return navLogo || (noHeading && $h.text().trim().length < 200);
+      }).remove();
       $content = $el;
       break;
     }
@@ -333,8 +374,15 @@ function extractFields(type: string, obj: Record<string, any>): Record<string, s
  */
 export function extractStructuredData(html: string): StructuredData | null {
   if (!html) return null;
+  return extractStructuredDataFrom(cheerio.load(html));
+}
 
-  const $ = cheerio.load(html);
+/**
+ * $-accepting variant of extractStructuredData (NOV-577): read-only, so extract.ts can share
+ * one parsed document across the title/description/links/structured-data readers instead of
+ * calling cheerio.load four separate times per request.
+ */
+export function extractStructuredDataFrom($: CheerioAPI): StructuredData | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const candidates: Array<{ priority: number; type: string; obj: Record<string, any>; raw: string }> = [];
 
@@ -609,14 +657,22 @@ export function qualityLabel(score: number): string {
 /** Extract page title from HTML */
 export function extractTitle(html: string): string {
   if (!html) return "Untitled";
-  const $ = cheerio.load(html);
+  return extractTitleFrom(cheerio.load(html));
+}
+
+/** $-accepting variant of extractTitle (NOV-577): read-only, shareable across readers. */
+export function extractTitleFrom($: CheerioAPI): string {
   return $("title").first().text().trim() || $("h1").first().text().trim() || "Untitled";
 }
 
 /** Extract meta description from HTML */
 export function extractDescription(html: string): string {
   if (!html) return "";
-  const $ = cheerio.load(html);
+  return extractDescriptionFrom(cheerio.load(html));
+}
+
+/** $-accepting variant of extractDescription (NOV-577): read-only, shareable across readers. */
+export function extractDescriptionFrom($: CheerioAPI): string {
   return (
     $('meta[name="description"]').attr("content") ||
     $('meta[property="og:description"]').attr("content") ||
@@ -641,7 +697,11 @@ function resolveHref(href: string, baseUrl?: string): string | null {
  */
 export function extractLinks(html: string, baseUrl?: string): string[] {
   if (!html) return [];
-  const $ = cheerio.load(html);
+  return extractLinksFrom(cheerio.load(html), baseUrl);
+}
+
+/** $-accepting variant of extractLinks (NOV-577): read-only, shareable across readers. */
+export function extractLinksFrom($: CheerioAPI, baseUrl?: string): string[] {
   const navLinks: string[] = [];
   const bodyLinks: string[] = [];
   const seen = new Set<string>();

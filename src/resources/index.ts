@@ -270,7 +270,7 @@ novada_map competitor.com → novada_crawl with select_paths=['/pricing','/featu
 novada_search with time_range='week' → novada_extract on top results
 
 ### Documentation Ingestion
-novada_map docs.example.com → novada_crawl with select_paths=['/docs/api/.*']
+novada_map docs.example.com → novada_crawl with select_paths=['/docs/api/**']
 
 ### Research Report
 novada_research with depth='deep' → novada_extract on 2–3 most relevant sources
@@ -502,7 +502,7 @@ Example: novada_extract({url: "https://docs.example.com/api", render: "auto"})
 Best for: multi-page content from a site (e.g. all /docs/* pages). BFS or DFS up to 20 pages.
 Not for: single page (use novada_extract), URL discovery only (use novada_map).
 Required: url. Optional: max_pages (default 5), strategy (bfs/dfs), select_paths.
-Example: novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: ["/docs/.*"]})
+Example: novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: ["/docs/**"]})
 
 ## novada_map
 Best for: discovering all URLs on a site before deciding what to read. Fast — tries sitemap first.

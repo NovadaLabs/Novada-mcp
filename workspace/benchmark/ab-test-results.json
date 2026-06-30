@@ -1,0 +1,289 @@
+{
+  "round1": [
+    {
+      "label": "R1-quick",
+      "depth": "quick",
+      "success": true,
+      "latency_ms": 4924,
+      "queries_succeeded": 3,
+      "queries_total": 3,
+      "query_success_rate": "100%",
+      "sources_extracted": 5,
+      "has_summary": true,
+      "has_findings": true,
+      "content_length": 6182,
+      "search_strategy": "racing"
+    },
+    {
+      "label": "R2-deep",
+      "depth": "deep",
+      "success": true,
+      "latency_ms": 37341,
+      "queries_succeeded": 5,
+      "queries_total": 6,
+      "query_success_rate": "83%",
+      "sources_extracted": 5,
+      "has_summary": true,
+      "has_findings": true,
+      "content_length": 7615,
+      "search_strategy": "racing"
+    },
+    {
+      "label": "R3-deep",
+      "depth": "deep",
+      "success": true,
+      "latency_ms": 15678,
+      "queries_succeeded": 6,
+      "queries_total": 6,
+      "query_success_rate": "100%",
+      "sources_extracted": 5,
+      "has_summary": true,
+      "has_findings": true,
+      "content_length": 6999,
+      "search_strategy": "racing"
+    },
+    {
+      "label": "R4-quick",
+      "depth": "quick",
+      "success": true,
+      "latency_ms": 4009,
+      "queries_succeeded": 3,
+      "queries_total": 3,
+      "query_success_rate": "100%",
+      "sources_extracted": 4,
+      "has_summary": true,
+      "has_findings": true,
+      "content_length": 5325,
+      "search_strategy": "racing"
+    },
+    {
+      "label": "R5-comp",
+      "depth": "comprehensive",
+      "success": true,
+      "latency_ms": 17732,
+      "queries_succeeded": 8,
+      "queries_total": 9,
+      "query_success_rate": "89%",
+      "sources_extracted": 5,
+      "has_summary": true,
+      "has_findings": true,
+      "content_length": 7183,
+      "search_strategy": "racing"
+    }
+  ],
+  "round2": [
+    {
+      "label": "Amazon (DataDome)",
+      "url": "https://www.amazon.com/dp/B0FTC2PRVZ",
+      "success": true,
+      "latency_ms": 1263,
+      "quality": 40,
+      "mode": "render",
+      "content_ok": true,
+      "anti_bot_detected": "datadome",
+      "expected_provider": "datadome",
+      "provider_match": true,
+      "content_length": 2163,
+      "has_agent_action": true
+    },
+    {
+      "label": "Zillow (Cloudflare)",
+      "url": "https://www.zillow.com/homedetails/123-Main-St/12345_zpid/",
+      "success": false,
+      "latency_ms": 112,
+      "quality": 0,
+      "mode": "unknown",
+      "content_ok": false,
+      "anti_bot_detected": null,
+      "expected_provider": "cloudflare",
+      "provider_match": false,
+      "content_length": 0,
+      "has_agent_action": false
+    },
+    {
+      "label": "Indeed (Cloudflare)",
+      "url": "https://www.indeed.com/jobs?q=software+engineer",
+      "success": false,
+      "latency_ms": 48,
+      "quality": 0,
+      "mode": "unknown",
+      "content_ok": false,
+      "anti_bot_detected": null,
+      "expected_provider": "cloudflare",
+      "provider_match": false,
+      "content_length": 0,
+      "has_agent_action": false
+    },
+    {
+      "label": "Glassdoor (Cloudflare)",
+      "url": "https://www.glassdoor.com/Reviews/Google-Reviews-E9079.htm",
+      "success": false,
+      "latency_ms": 0,
+      "quality": 0,
+      "mode": "unknown",
+      "content_ok": false,
+      "anti_bot_detected": null,
+      "expected_provider": "cloudflare",
+      "provider_match": false,
+      "content_length": 0,
+      "has_agent_action": false
+    },
+    {
+      "label": "LinkedIn (LinkedIn)",
+      "url": "https://www.linkedin.com/company/anthropic",
+      "success": true,
+      "latency_ms": 582,
+      "quality": 60,
+      "mode": "render",
+      "content_ok": true,
+      "anti_bot_detected": "linkedin",
+      "expected_provider": "linkedin",
+      "provider_match": true,
+      "content_length": 6950,
+      "has_agent_action": true
+    },
+    {
+      "label": "HN (None)",
+      "url": "https://news.ycombinator.com",
+      "success": true,
+      "latency_ms": 720,
+      "quality": 45,
+      "mode": "static",
+      "content_ok": true,
+      "anti_bot_detected": null,
+      "expected_provider": null,
+      "provider_match": true,
+      "content_length": 13834,
+      "has_agent_action": true
+    },
+    {
+      "label": "TechCrunch (None)",
+      "url": "https://techcrunch.com",
+      "success": true,
+      "latency_ms": 149,
+      "quality": 65,
+      "mode": "static",
+      "content_ok": true,
+      "anti_bot_detected": null,
+      "expected_provider": null,
+      "provider_match": true,
+      "content_length": 24942,
+      "has_agent_action": true
+    },
+    {
+      "label": "G2 (Kasada)",
+      "url": "https://www.g2.com/products/slack/reviews",
+      "success": false,
+      "latency_ms": 1,
+      "quality": 0,
+      "mode": "unknown",
+      "content_ok": false,
+      "anti_bot_detected": null,
+      "expected_provider": "kasada",
+      "provider_match": false,
+      "content_length": 0,
+      "has_agent_action": false
+    },
+    {
+      "label": "Walmart (PerimeterX)",
+      "url": "https://www.walmart.com/ip/12345",
+      "success": false,
+      "latency_ms": 1564,
+      "quality": 0,
+      "mode": "unknown",
+      "content_ok": false,
+      "anti_bot_detected": null,
+      "expected_provider": "perimeterx",
+      "provider_match": false,
+      "content_length": 0,
+      "has_agent_action": false
+    },
+    {
+      "label": "Example (None)",
+      "url": "https://example.com",
+      "success": true,
+      "latency_ms": 55,
+      "quality": 1,
+      "mode": "static",
+      "content_ok": false,
+      "anti_bot_detected": null,
+      "expected_provider": null,
+      "provider_match": true,
+      "content_length": 166,
+      "has_agent_action": true
+    }
+  ],
+  "round3": [
+    {
+      "label": "M1-baseline-nofields",
+      "url": "https://news.ycombinator.com",
+      "success": true,
+      "latency_ms": 2,
+      "state": "baseline",
+      "expected_state": "baseline",
+      "state_correct": true,
+      "has_agent_instruction": false,
+      "content_length": 677
+    },
+    {
+      "label": "M2-unchanged-nofields",
+      "url": "https://news.ycombinator.com",
+      "success": true,
+      "latency_ms": 0,
+      "state": "unchanged",
+      "expected_state": "unchanged",
+      "state_correct": true,
+      "has_agent_instruction": false,
+      "content_length": 383
+    },
+    {
+      "label": "M3-baseline-withfields",
+      "url": "https://example.com",
+      "success": true,
+      "latency_ms": 0,
+      "state": "baseline",
+      "expected_state": "baseline",
+      "state_correct": true,
+      "has_agent_instruction": false,
+      "content_length": 700
+    }
+  ],
+  "meta": {
+    "branch": "improve/final",
+    "timestamp": "2026-05-26T13:38:04.601Z",
+    "baseline": "v0.7.8 (summary-078.json)"
+  },
+  "comparison": {
+    "research": {
+      "total_tests": 5,
+      "successes": 5,
+      "avg_query_success": 94.44444444444444,
+      "avg_latency_ms": 15937,
+      "avg_sources": "4.8",
+      "note": "v0.7.8 had no research benchmark (new improvement area)"
+    },
+    "extract_hn": {
+      "baseline_latency": 204,
+      "current_latency": 720,
+      "baseline_quality": 5,
+      "current_quality": 45,
+      "baseline_af": 4,
+      "current_has_agent_action": true
+    },
+    "extract_hard_targets": {
+      "total": 10,
+      "successes": 5,
+      "success_rate": "50%",
+      "anti_bot_detected": 2,
+      "provider_match_rate": "50%",
+      "has_agent_action": 5,
+      "note": "v0.7.8 had no hard target benchmark (new improvement area)"
+    },
+    "monitor": {
+      "total": 3,
+      "successes": 3,
+      "state_correct": 3,
+      "note": "New tool — no baseline exists"
+    }
+  }
+}

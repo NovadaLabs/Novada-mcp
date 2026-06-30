@@ -1,0 +1,37 @@
+{
+  "results": [
+    {
+      "test": "Wikipedia full (no max_chars)",
+      "chars": 51430,
+      "time": 531,
+      "truncated": false,
+      "error": null
+    },
+    {
+      "test": "Wikipedia max_chars=5000",
+      "chars": 7280,
+      "time": 304,
+      "truncated": true,
+      "pass": true,
+      "error": null
+    },
+    {
+      "test": "example.com max_chars=100",
+      "chars": 1303,
+      "time": 102,
+      "truncated": true,
+      "error": null
+    },
+    {
+      "test": "MDN JSON format",
+      "chars": 103041,
+      "time": 172,
+      "jsonValid": true,
+      "error": null
+    }
+  ],
+  "r1_snippet": "📁 /Users/tongwu/Downloads/novada-mcp/2026-06-26/en-wikipedia-org/2026-06-26_182327_en-wikipedia-org.md\n\n## Extracted Content\nurl: https://en.wikipedia.org/wiki/Web_scraping\nmode: static | source: live | quality:80/100 (excellent) | content_ok:true\nfetched_at: 2026-06-26T16:23:26.502Z\nextraction_quality: n/a\ntitle: Web scraping - Wikipedia\nchars:49539 | links:321\n\n---\n\n## Structured Data\ntype: Article\nheadline: data scraping used for extracting data from websites\nauthor: Contributors to Wikimedi",
+  "r2_snippet": "📁 /Users/tongwu/Downloads/novada-mcp/2026-06-26/en-wikipedia-org/2026-06-26_182327_en-wikipedia-org.md\n\n## Extracted Content\nurl: https://en.wikipedia.org/wiki/Python_(programming_language)\nmode: static | source: live | quality:85/100 (excellent) | content_ok:true\nfetched_at: 2026-06-26T16:23:27.032Z\nextraction_quality: n/a\ntitle: Python (programming language) - Wikipedia\nchars:169653 (truncated) | links:1428 | content_truncated:true | total_chars:169653\n\n---\n\n## Structured Data\ntype: Article\nh",
+  "r3_full": "📁 /Users/tongwu/Downloads/novada-mcp/2026-06-26/example-com/2026-06-26_182327_example-com.md\n\n## Extracted Content\nurl: https://example.com\nmode: static | source: live | quality:1/100 (low) | content_ok:false\nfetched_at: 2026-06-26T16:23:27.336Z\nextraction_quality: n/a\ntitle: Example Domain\nchars:166 (truncated) | links:1 | content_truncated:true | total_chars:166\n\n---\n\n# Example Domain\n\nThis domain is for use in documentation examples without needing permission. Avoid\n\n[Content may be truncated — showing first 100 of 166 total characters. Pass max_chars=200 to get more.]\n\n## Agent Memory\nremember: Example Domain at https://example.com — low quality, 166 chars\n\n---\n## Agent Hints\n- Low quality on static mode — try with render=\"render\" for JS-heavy or anti-bot protected pages.\n- Content was truncated at 100 chars (full: 166). Pass max_chars=200 to get more, or use novada_map to find specific subpages.\n- To discover more pages: novada_map with url=\"https://example.com\"\n\n## Agent Action\nagent_instruction: status:low_quality | content_ok:false | suggested_fix: retry with render=\"render\" for JS-heavy or bot-protected pages. If render also returns low quality, try render=\"browser\". For sites like airbnb.com/booking.com, also ensure NOVADA_PROXY_ENDPOINT is set for residential IP routing.",
+  "r4_snippet": "{\n  \"url\": \"https://developer.mozilla.org/en-US/docs/Web/JavaScript\",\n  \"title\": \"JavaScript | MDN\",\n  \"description\": \"JavaScript (JS) is a lightweight interpreted (or just-in-time compiled) programming language with first-class functions. While it is most well-known as the scripting language for Web pages, many non-browser environments also use it, such as Node.js, Apache CouchDB and Adobe Acrobat. JavaScript is a prototype-based, garbage-collected, dynamic language, supporting multiple paradig"
+}

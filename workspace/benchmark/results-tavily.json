@@ -1,0 +1,7502 @@
+[
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 1,
+    "latency_ms": 186,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 2,
+    "latency_ms": 143,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 3,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 4,
+    "latency_ms": 120,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 5,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 6,
+    "latency_ms": 151,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 7,
+    "latency_ms": 136,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 8,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 9,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 10,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 11,
+    "latency_ms": 152,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 12,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 13,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 14,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 15,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 16,
+    "latency_ms": 161,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 17,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 18,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 19,
+    "latency_ms": 110,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 20,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 21,
+    "latency_ms": 165,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 22,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 23,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 24,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 25,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 26,
+    "latency_ms": 155,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 27,
+    "latency_ms": 143,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 28,
+    "latency_ms": 123,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 29,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 30,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 31,
+    "latency_ms": 147,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 32,
+    "latency_ms": 127,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 33,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 34,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 35,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 36,
+    "latency_ms": 165,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 37,
+    "latency_ms": 133,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 38,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 39,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 40,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 41,
+    "latency_ms": 167,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 42,
+    "latency_ms": 136,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 43,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 44,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 45,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 46,
+    "latency_ms": 153,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 47,
+    "latency_ms": 135,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 48,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 49,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T1",
+    "round": 50,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 16449,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 1,
+    "latency_ms": 125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 2,
+    "latency_ms": 120,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 3,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 4,
+    "latency_ms": 128,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 5,
+    "latency_ms": 125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 6,
+    "latency_ms": 139,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 7,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 8,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 9,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 10,
+    "latency_ms": 153,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 11,
+    "latency_ms": 143,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 12,
+    "latency_ms": 122,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 13,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 14,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 15,
+    "latency_ms": 142,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 16,
+    "latency_ms": 137,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 17,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 18,
+    "latency_ms": 122,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 19,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 20,
+    "latency_ms": 142,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 21,
+    "latency_ms": 129,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 22,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 23,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 24,
+    "latency_ms": 111,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 25,
+    "latency_ms": 165,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 26,
+    "latency_ms": 134,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 27,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 28,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 29,
+    "latency_ms": 124,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 30,
+    "latency_ms": 144,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 31,
+    "latency_ms": 138,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 32,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 33,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 34,
+    "latency_ms": 110,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 35,
+    "latency_ms": 162,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 36,
+    "latency_ms": 134,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 37,
+    "latency_ms": 120,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 38,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 39,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 40,
+    "latency_ms": 150,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 41,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 42,
+    "latency_ms": 112,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 43,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 44,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 45,
+    "latency_ms": 161,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 46,
+    "latency_ms": 145,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 47,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 48,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 49,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T2",
+    "round": 50,
+    "latency_ms": 143,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 8855,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 1,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 2,
+    "latency_ms": 107,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 3,
+    "latency_ms": 105,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 4,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 5,
+    "latency_ms": 188,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 6,
+    "latency_ms": 126,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 7,
+    "latency_ms": 109,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 8,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 9,
+    "latency_ms": 111,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 10,
+    "latency_ms": 185,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 11,
+    "latency_ms": 125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 12,
+    "latency_ms": 110,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 13,
+    "latency_ms": 109,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 14,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 15,
+    "latency_ms": 189,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 16,
+    "latency_ms": 127,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 17,
+    "latency_ms": 107,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 18,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 19,
+    "latency_ms": 105,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 20,
+    "latency_ms": 194,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 21,
+    "latency_ms": 127,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 22,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 23,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 24,
+    "latency_ms": 939,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 5170,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 25,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 26,
+    "latency_ms": 107,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 27,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 28,
+    "latency_ms": 151,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 29,
+    "latency_ms": 130,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 30,
+    "latency_ms": 111,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 31,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 32,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 33,
+    "latency_ms": 188,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 34,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 35,
+    "latency_ms": 110,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 36,
+    "latency_ms": 107,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 37,
+    "latency_ms": 112,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 38,
+    "latency_ms": 181,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 39,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 40,
+    "latency_ms": 110,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 41,
+    "latency_ms": 104,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 42,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 43,
+    "latency_ms": 190,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 44,
+    "latency_ms": 196,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 45,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 46,
+    "latency_ms": 109,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 47,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 48,
+    "latency_ms": 120,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 49,
+    "latency_ms": 133,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T3",
+    "round": 50,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 10013,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 1,
+    "latency_ms": 147,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 2,
+    "latency_ms": 125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 3,
+    "latency_ms": 110,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 4,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 5,
+    "latency_ms": 109,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 6,
+    "latency_ms": 189,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 7,
+    "latency_ms": 123,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 8,
+    "latency_ms": 105,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 9,
+    "latency_ms": 109,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 10,
+    "latency_ms": 105,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 11,
+    "latency_ms": 196,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 12,
+    "latency_ms": 125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 13,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 14,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 15,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 16,
+    "latency_ms": 192,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 17,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 18,
+    "latency_ms": 111,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 19,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 20,
+    "latency_ms": 112,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 21,
+    "latency_ms": 180,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 22,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 23,
+    "latency_ms": 104,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 24,
+    "latency_ms": 105,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 25,
+    "latency_ms": 111,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 26,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 27,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 28,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 29,
+    "latency_ms": 111,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 30,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 31,
+    "latency_ms": 109,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 32,
+    "latency_ms": 183,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 33,
+    "latency_ms": 125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 34,
+    "latency_ms": 112,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 35,
+    "latency_ms": 107,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 36,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 37,
+    "latency_ms": 188,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 38,
+    "latency_ms": 126,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 39,
+    "latency_ms": 106,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 40,
+    "latency_ms": 109,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 41,
+    "latency_ms": 107,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 42,
+    "latency_ms": 191,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 43,
+    "latency_ms": 126,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 44,
+    "latency_ms": 105,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 45,
+    "latency_ms": 107,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 46,
+    "latency_ms": 105,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 47,
+    "latency_ms": 193,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 48,
+    "latency_ms": 130,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 49,
+    "latency_ms": 107,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T4",
+    "round": 50,
+    "latency_ms": 108,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6371,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 1,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 2,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 3,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 4,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 5,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 6,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 7,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 8,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 9,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 10,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 11,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 12,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 13,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 14,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 15,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 16,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 17,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 18,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 19,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 20,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 21,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 22,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 23,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 24,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 25,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 26,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 27,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 28,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 29,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 30,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 31,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 32,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 33,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 34,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 35,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 36,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 37,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 38,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 39,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 40,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 41,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 42,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 43,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 44,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 45,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 46,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 47,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 48,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 49,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T5",
+    "round": 50,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 1,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 2,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 3,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 4,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 5,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 6,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 7,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 8,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 9,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 10,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 11,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 12,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 13,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 14,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 15,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 16,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 17,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 18,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 19,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 20,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 21,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 22,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 23,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 24,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 25,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 26,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 27,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 28,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 29,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 30,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 31,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 32,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 33,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 34,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 35,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 36,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 37,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 38,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 39,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 40,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 41,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 42,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 43,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 44,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 45,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 46,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 47,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 48,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 49,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T6",
+    "round": 50,
+    "latency_ms": 0,
+    "success": false,
+    "status": "na",
+    "content_length_chars": 0,
+    "content_quality": 0,
+    "agent_friendliness": {
+      "score": 0
+    },
+    "target_content_found": false,
+    "notes": "N/A for this competitor"
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 1,
+    "latency_ms": 128,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 2,
+    "latency_ms": 139,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 3,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 4,
+    "latency_ms": 125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 5,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 6,
+    "latency_ms": 134,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 7,
+    "latency_ms": 148,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 8,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 9,
+    "latency_ms": 132,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 10,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 11,
+    "latency_ms": 120,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 12,
+    "latency_ms": 134,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 13,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 14,
+    "latency_ms": 125,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 15,
+    "latency_ms": 127,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 16,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 17,
+    "latency_ms": 135,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 18,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 19,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 20,
+    "latency_ms": 123,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 21,
+    "latency_ms": 145,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 22,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 23,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 24,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 25,
+    "latency_ms": 126,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 26,
+    "latency_ms": 141,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 27,
+    "latency_ms": 139,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 28,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 29,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 30,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 31,
+    "latency_ms": 148,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 32,
+    "latency_ms": 134,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 33,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 34,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 35,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 36,
+    "latency_ms": 147,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 37,
+    "latency_ms": 137,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 38,
+    "latency_ms": 126,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 39,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 40,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 41,
+    "latency_ms": 142,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 42,
+    "latency_ms": 136,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 43,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 44,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 45,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 46,
+    "latency_ms": 139,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 47,
+    "latency_ms": 127,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 48,
+    "latency_ms": 111,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 49,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T7",
+    "round": 50,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 20000,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 1,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 2,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 3,
+    "latency_ms": 120,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 4,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 5,
+    "latency_ms": 139,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 6,
+    "latency_ms": 136,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 7,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 8,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 9,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 10,
+    "latency_ms": 151,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 11,
+    "latency_ms": 134,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 12,
+    "latency_ms": 122,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 13,
+    "latency_ms": 124,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 14,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 15,
+    "latency_ms": 141,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 16,
+    "latency_ms": 138,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 17,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 18,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 19,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 20,
+    "latency_ms": 157,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 21,
+    "latency_ms": 142,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 22,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 23,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 24,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 25,
+    "latency_ms": 142,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 26,
+    "latency_ms": 130,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 27,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 28,
+    "latency_ms": 113,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 29,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 30,
+    "latency_ms": 168,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 31,
+    "latency_ms": 132,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 32,
+    "latency_ms": 121,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 33,
+    "latency_ms": 116,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 34,
+    "latency_ms": 122,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 35,
+    "latency_ms": 146,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 36,
+    "latency_ms": 131,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 37,
+    "latency_ms": 119,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 38,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 39,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 40,
+    "latency_ms": 156,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 41,
+    "latency_ms": 132,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 42,
+    "latency_ms": 117,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 43,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 44,
+    "latency_ms": 118,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 45,
+    "latency_ms": 160,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 46,
+    "latency_ms": 132,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 47,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 48,
+    "latency_ms": 115,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 49,
+    "latency_ms": 114,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  },
+  {
+    "competitor": "tavily",
+    "category": "T8",
+    "round": 50,
+    "latency_ms": 162,
+    "success": true,
+    "status": "ok",
+    "content_length_chars": 6916,
+    "content_quality": 5,
+    "agent_friendliness": {
+      "has_agent_instruction": false,
+      "error_is_structured": true,
+      "has_status_field": false,
+      "output_is_chainable": true,
+      "low_boilerplate": true,
+      "score": 3
+    },
+    "target_content_found": true,
+    "notes": ""
+  }
+]

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
-import { novadaCrawl } from "../../src/tools/crawl.js";
+import { novadaCrawl, compilePatterns, shouldCrawlUrl } from "../../src/tools/crawl.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -89,5 +89,61 @@ describe("novadaCrawl", () => {
 
     const pageCount = (result.match(/###/g) || []).length;
     expect(pageCount).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("compilePatterns ReDoS hardening (NOV-570)", () => {
+  it("does not catastrophically backtrack on `*a*a*a…` against a failing run", () => {
+    // The glob→regex rewrite previously compiled `('*a')×N` to `^([^/]*a){N}$`, which
+    // backtracks exponentially against a long run of the literal char ending in a
+    // non-matching char (the overall match must FAIL). N=18 froze the event loop for
+    // ~100s. With the linear matcher this must finish in well under 50ms.
+    const matchers = compilePatterns(["*a".repeat(60)]);
+    expect(matchers).toHaveLength(1);
+
+    const input = "/" + "a".repeat(120) + "/"; // forces a failing match
+    const start = Date.now();
+    const matched = matchers[0](input);
+    const elapsed = Date.now() - start;
+
+    expect(matched).toBe(false);
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  it("does not freeze when the same payload reaches shouldCrawlUrl via the seed URL", () => {
+    // shouldCrawlUrl runs the compiled matcher against the SEED pathname at depth 0,
+    // before any network fetch — this is the remote-DoS entry point in the finding.
+    const selectPatterns = compilePatterns(["*a".repeat(60)]);
+    const seedUrl = "https://x.test/" + "a".repeat(120) + "/";
+
+    const start = Date.now();
+    const allowed = shouldCrawlUrl(seedUrl, selectPatterns, []);
+    const elapsed = Date.now() - start;
+
+    expect(allowed).toBe(false); // run ends in a non-matching char → excluded
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  it("preserves glob semantics (`**`, `*`, `?`) equivalent to the prior anchored regex", () => {
+    const matches = (pattern: string, path: string): boolean => compilePatterns([pattern])[0](path);
+
+    // `*` matches within one segment only (does not cross `/`)
+    expect(matches("/docs/*", "/docs/api")).toBe(true);
+    expect(matches("/docs/*", "/docs/api/users")).toBe(false);
+    expect(matches("/docs/*", "/docs/")).toBe(true); // empty segment, like `[^/]*`
+    // `**` crosses segments
+    expect(matches("/docs/**", "/docs/api/users")).toBe(true);
+    expect(matches("/**/*.json", "/x/y/z.json")).toBe(true);
+    // `?` is exactly one non-`/` char
+    expect(matches("/a/?/b", "/a/x/b")).toBe(true);
+    expect(matches("/a/?/b", "/a/xy/b")).toBe(false);
+    // literal-only and suffix globs
+    expect(matches("*.html", "page.html")).toBe(true);
+    expect(matches("*.html", "page.htm")).toBe(false);
+  });
+
+  it("skips over-long patterns (>1000 chars) instead of compiling them", () => {
+    expect(compilePatterns(["a".repeat(1001)])).toHaveLength(0);
+    expect(compilePatterns(["a".repeat(1000)])).toHaveLength(1);
   });
 });
