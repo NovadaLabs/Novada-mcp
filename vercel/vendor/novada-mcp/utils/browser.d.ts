@@ -1,7 +1,12 @@
 import type { Page } from "playwright-core";
 /**
- * Strip credentials from WSS URLs in error messages.
- * wss://user:pass@host → wss://***:***@host
+ * Strip credentials and internal endpoints from Browser API error messages.
+ *
+ * P0 SECURITY (#2): a raw Playwright/CDP error can leak the full NOVADA_BROWSER_WS
+ * (user:pass@host) and internal hosts like upg-scbr2.novada.com in plaintext.
+ * Run every catch-path message through redactSecrets (strips URL userinfo, the
+ * NOVADA_BROWSER_WS value, and internal *.novada.com hosts), then mask any
+ * residual wss userinfo as a belt-and-braces second pass.
  */
 export declare function sanitizeBrowserError(msg: string): string;
 /** Get existing session page or return null if expired/missing */

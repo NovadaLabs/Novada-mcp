@@ -29,6 +29,14 @@ export declare class NovadaError extends Error {
     /** Formats the error as an agent-readable string with failure classification. */
     toAgentString(): string;
 }
+/**
+ * P0 SECURITY (#2): strip secrets that an upstream error can leak in plaintext —
+ * URL userinfo (`https://user:pass@host` → `https://host`), the literal
+ * NOVADA_BROWSER_WS value, and internal `*.novada.com` host strings that aren't
+ * on the public allowlist. Runs on EVERY error message + agent_instruction
+ * before it reaches the caller.
+ */
+export declare function redactSecrets(msg: string): string;
 /** Strip API keys, sensitive URL params, and injection patterns from any string before surfacing. */
 export declare function sanitizeServerMsg(msg: string): string;
 /**

@@ -140,7 +140,7 @@ import {
 } from "../vendor/novada-mcp/tools/types.js";
 import { MonitorParamsSchema } from "../vendor/novada-mcp/tools/monitor.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
-import { NovadaError } from "../vendor/novada-mcp/_core/errors.js";
+import { NovadaError, NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.js";
 
 // Hosted server version = `<vendored npm version>.<server build tag>-hosted`.
 //   • The npm-version part is DERIVED from the vendored package — NEVER hardcoded.
@@ -161,10 +161,42 @@ const HOSTED_VERSION = HOSTED_BUILD
 // playwright-core, exceljs, pdf-parse, and the MCP SDK uses EventEmitter.
 // Trade-off vs Edge: ~200ms cold start (vs ~50ms) + single-region (vs global edge),
 // but in exchange the entire 25-tool surface works without porting.
+const FUNCTION_MAX_DURATION_S = 60; // novada_research can take 30-45s on deep mode
 export const config = {
   runtime: "nodejs",
-  maxDuration: 60, // novada_research can take 30-45s on deep mode
+  maxDuration: FUNCTION_MAX_DURATION_S,
 };
+
+// #5: per-tool wall-clock budget, set a few seconds UNDER maxDuration. If a tool
+// somehow runs past this (a primitive that ignored its own ceiling, an upstream
+// stall), we throw a structured NovadaError the catch turns into a JSON-RPC error
+// envelope — the client NEVER sees the bare HTTP 504 Vercel emits on a hard kill,
+// which is not valid JSON-RPC and breaks MCP clients. The tool-level config.ts
+// ceilings (≤50s) are the primary guard; this is defense in depth.
+const TOOL_WALL_CLOCK_MS = (FUNCTION_MAX_DURATION_S - 4) * 1000; // ~56s
+
+/**
+ * Race a tool promise against the wall-clock budget. On timeout, reject with a
+ * structured NovadaError (TASK_PENDING — transient + retryable) so the call still
+ * returns a JSON-RPC error envelope instead of being hard-killed into a bare 504.
+ */
+function withWallClock<T>(toolName: string, p: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const guard = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new NovadaError({
+        code: NovadaErrorCode.TASK_PENDING,
+        message: `${toolName} exceeded the hosted ${TOOL_WALL_CLOCK_MS / 1000}s time budget and was stopped before the function timed out.`,
+        agent_instruction:
+          `The hosted endpoint caps each call below the serverless function limit. ` +
+          `Retry with a narrower request (fewer URLs, render="static", a smaller depth/limit), ` +
+          `or run the local MCP server (\`npx novada-mcp\`) which has no per-call wall-clock cap.`,
+        retryable: true,
+      }));
+    }, TOOL_WALL_CLOCK_MS);
+  });
+  return Promise.race([p, guard]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
 
 // ─── Env shape (read from process.env on Vercel) ─────────────────────────────
 // Required env vars:
@@ -475,6 +507,38 @@ function sanitizeHostedOutput(text: string): string {
   return result.trim();
 }
 
+// ─── Credential / internal-host redaction for the hosted error path (#2-hosted) ──
+// A raw upstream error string (axios message, response body, stack) can carry the
+// customer's credential as URL userinfo (`https://user:pass@host`) or an INTERNAL
+// Novada host (e.g. the Browser API CDP host `upg-scbr2.novada.com`). BOTH the
+// NovadaError branch and the NON-NovadaError fallback below route their message
+// through this redactor — the currently vendored errors.js (0.8.2-dev) does NOT
+// self-redact in toAgentString(), so the hosted endpoint must defend itself here
+// regardless of which package version is vendored. This mirrors the source-of-truth
+// redactSecrets() in novada-mcp/_core/errors.ts.
+const PUBLIC_NOVADA_HOSTS = new Set([
+  "novada.com",
+  "www.novada.com",
+  "dashboard.novada.com",
+  "status.novada.com",
+  "mcp.novada.com",
+  "docs.novada.com",
+]);
+
+function redactHostedSecrets(msg: string): string {
+  let out = msg;
+  // 1. Exact NOVADA_BROWSER_WS value (contains user:pass@host) — redact first.
+  const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
+  if (browserWs) out = out.split(browserWs).join("[browser-ws-endpoint]");
+  // 2. URL userinfo in any scheme (http/https/ws/wss): strip `user:pass@`.
+  out = out.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^/@\s:]+(?::[^/@\s]*)?@/gi, "$1");
+  // 3. Internal *.novada.com hosts not on the public allowlist → placeholder.
+  out = out.replace(/\b(?:[a-z0-9-]+\.)+novada\.com\b/gi, (host) =>
+    PUBLIC_NOVADA_HOSTS.has(host.toLowerCase()) ? host : "[novada-internal-host]"
+  );
+  return out;
+}
+
 // ─── MCP server factory ──────────────────────────────────────────────────────
 function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null }): Server {
   const server = new Server(
@@ -564,24 +628,26 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     try {
       let result: string;
       switch (name) {
+        // #5: network-bound tools are wrapped in withWallClock so a stall returns a
+        // structured JSON-RPC error before Vercel hard-kills the function into a bare 504.
         case "novada_search":
-          result = await novadaSearch(validateSearchParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaSearch(validateSearchParams(argsObj), apiKey)); break;
         case "novada_extract":
-          result = await novadaExtract(validateExtractParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaExtract(validateExtractParams(argsObj), apiKey)); break;
         case "novada_crawl":
-          result = await novadaCrawl(validateCrawlParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaCrawl(validateCrawlParams(argsObj), apiKey)); break;
         case "novada_research":
-          result = await novadaResearch(validateResearchParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaResearch(validateResearchParams(argsObj), apiKey)); break;
         case "novada_map":
-          result = await novadaMap(validateMapParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaMap(validateMapParams(argsObj), apiKey)); break;
         case "novada_proxy":
           result = await novadaProxy(validateProxyParams(argsObj)); break;
         case "novada_scrape":
-          result = await novadaScrape(validateScrapeParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaScrape(validateScrapeParams(argsObj), apiKey)); break;
         case "novada_verify":
-          result = await novadaVerify(validateVerifyParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaVerify(validateVerifyParams(argsObj), apiKey)); break;
         case "novada_unblock":
-          result = await novadaUnblock(validateUnblockParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaUnblock(validateUnblockParams(argsObj), apiKey)); break;
         case "novada_browser":
           // 🔴 NOT AVAILABLE ON HOSTED — Playwright native deps don't run in Edge runtime.
           // No work done → refund the pre-decremented quota (NOV-578).
@@ -635,9 +701,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         case "novada_proxy_dedicated":
           result = await novadaProxyDedicated(validateProxyDedicatedParams(argsObj)); break;
         case "novada_ai_monitor":
-          result = await novadaAiMonitor(validateAiMonitorParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaAiMonitor(validateAiMonitorParams(argsObj), apiKey)); break;
         case "novada_monitor":
-          result = await novadaMonitor(validateMonitorParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaMonitor(validateMonitorParams(argsObj), apiKey)); break;
         // ── Account / billing (KR-6) — apiKey is the customer's pass-through key (their own account) ──
         case "novada_wallet_balance":
           result = await novadaWalletBalance(validateWalletBalanceParams(argsObj), apiKey); break;
@@ -689,17 +755,26 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         };
       }
       // NovadaError carries a tailored agent_instruction / failure_class / retry hint —
-      // preserve it verbatim (npm-parity). Only fall through to the hosted substring hints
+      // preserve it (npm-parity). Only fall through to the hosted substring hints
       // below for non-NovadaError errors. (NOV-571: the hosted endpoint was dropping all of
       // this and returning a bare truncated message.)
+      // #2-hosted: the vendored errors.js (0.8.2-dev) does NOT redact inside
+      // toAgentString(), so a NovadaError whose .message interpolates upstream text
+      // (e.g. classifyError's "Domain unreachable: <raw>" on the render path) can carry
+      // `user:pass@host` or an internal *.novada.com host. Route it through the hosted
+      // redactor here — toAgentString()'s newline-collapse keeps the credential on one
+      // line, so the userinfo/host rules still match.
       if (error instanceof NovadaError) {
         return {
-          content: [{ type: "text" as const, text: error.toAgentString() }],
+          content: [{ type: "text" as const, text: redactHostedSecrets(error.toAgentString()) }],
           isError: true,
         };
       }
-      // Hosted-aware error wrapping — translate internal errors to actionable guidance
-      const rawMsg = error instanceof Error ? error.message : String(error);
+      // Hosted-aware error wrapping — translate internal errors to actionable guidance.
+      // #2-hosted: redact credentials / internal hosts from the raw upstream message
+      // BEFORE it touches any branch, so neither the substring match nor the sliced
+      // fallback can leak `user:pass@host` or an internal *.novada.com host.
+      const rawMsg = redactHostedSecrets(error instanceof Error ? error.message : String(error));
       let userMsg = rawMsg;
 
       // Common hosted failure: NOVADA_WEB_UNBLOCKER_KEY not set → extract/unblock render fails
@@ -718,6 +793,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       else {
         userMsg = `Tool error: ${rawMsg.slice(0, 200)}`;
       }
+      // Defense in depth: redact again after assembly (the static templates are clean,
+      // but a future edit that interpolates rawMsg shouldn't be able to leak).
+      userMsg = redactHostedSecrets(userMsg);
       // Cap total length
       if (userMsg.length > 500) {
         userMsg = userMsg.slice(0, 497) + "...";
