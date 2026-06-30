@@ -1,5 +1,5 @@
 import { z } from "zod";
-export declare const SearchParamsSchema: z.ZodObject<{
+export declare const SearchParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     query: z.ZodString;
     engine: z.ZodDefault<z.ZodEnum<{
         google: "google";
@@ -35,7 +35,7 @@ export declare const SearchParamsSchema: z.ZodObject<{
     }>>;
     enrich_top: z.ZodOptional<z.ZodBoolean>;
     project: z.ZodOptional<z.ZodString>;
-    extract_options: z.ZodOptional<z.ZodObject<{
+    extract_options: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         format: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
             json: "json";
             text: "text";
@@ -45,9 +45,9 @@ export declare const SearchParamsSchema: z.ZodObject<{
         fields: z.ZodOptional<z.ZodArray<z.ZodString>>;
         max_chars: z.ZodOptional<z.ZodNumber>;
         top_n: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
-    }, z.core.$strip>>;
-}, z.core.$strip>;
-export declare const ExtractParamsSchema: z.ZodObject<{
+    }, z.core.$strip>>>;
+}, z.core.$strip>>;
+export declare const ExtractParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     url: z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>;
     urls: z.ZodOptional<z.ZodArray<z.ZodString>>;
     format: z.ZodDefault<z.ZodEnum<{
@@ -58,9 +58,9 @@ export declare const ExtractParamsSchema: z.ZodObject<{
     }>>;
     query: z.ZodOptional<z.ZodString>;
     render: z.ZodDefault<z.ZodEnum<{
-        js: "js";
         static: "static";
         render: "render";
+        js: "js";
         browser: "browser";
         auto: "auto";
     }>>;
@@ -70,8 +70,8 @@ export declare const ExtractParamsSchema: z.ZodObject<{
     wait_ms: z.ZodOptional<z.ZodNumber>;
     clean: z.ZodOptional<z.ZodBoolean>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
-export declare const CrawlParamsSchema: z.ZodObject<{
+}, z.core.$strip>>;
+export declare const CrawlParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     url: z.ZodString;
     max_pages: z.ZodDefault<z.ZodNumber>;
     strategy: z.ZodDefault<z.ZodEnum<{
@@ -95,7 +95,7 @@ export declare const CrawlParamsSchema: z.ZodObject<{
         bfs: "bfs";
         dfs: "dfs";
     }>>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export declare const ResearchParamsSchema: z.ZodObject<{
     question: z.ZodOptional<z.ZodString>;
     query: z.ZodOptional<z.ZodString>;
@@ -108,16 +108,16 @@ export declare const ResearchParamsSchema: z.ZodObject<{
     focus: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
-export declare const MapParamsSchema: z.ZodObject<{
+export declare const MapParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     url: z.ZodString;
     search: z.ZodOptional<z.ZodString>;
     limit: z.ZodDefault<z.ZodNumber>;
     include_subdomains: z.ZodDefault<z.ZodBoolean>;
     max_depth: z.ZodDefault<z.ZodNumber>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 /** Hard ceiling on pages a single site_copy run will fetch (safety bound). */
 export declare const SITE_COPY_HARD_MAX = 1000;
-export declare const SiteCopyParamsSchema: z.ZodObject<{
+export declare const SiteCopyParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     url: z.ZodString;
     max_pages: z.ZodDefault<z.ZodNumber>;
     select_paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -130,7 +130,7 @@ export declare const SiteCopyParamsSchema: z.ZodObject<{
         auto: "auto";
     }>>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type SiteCopyParams = z.infer<typeof SiteCopyParamsSchema>;
 export declare function validateSiteCopyParams(args: Record<string, unknown> | undefined): SiteCopyParams;
 export declare const VerifyParamsSchema: z.ZodObject<{
@@ -176,7 +176,7 @@ export interface NovadaApiResponse {
     };
     organic_results?: NovadaSearchResult[];
 }
-export declare const ProxyParamsSchema: z.ZodObject<{
+export declare const ProxyParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     type: z.ZodDefault<z.ZodEnum<{
         residential: "residential";
         datacenter: "datacenter";
@@ -191,7 +191,7 @@ export declare const ProxyParamsSchema: z.ZodObject<{
         env: "env";
         curl: "curl";
     }>>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ProxyParams = z.infer<typeof ProxyParamsSchema>;
 export declare function validateProxyParams(args: Record<string, unknown> | undefined): ProxyParams;
 /** Shared regex for task_id validation across scraper tools (L-2: single source of truth) */
@@ -231,7 +231,7 @@ export type ScrapeParams = z.infer<typeof ScrapeParamsSchema>;
 export type ScrapeParamsFullType = z.infer<typeof ScrapeParamsFullSchema>;
 export declare function validateScrapeParams(args: Record<string, unknown> | undefined): ScrapeParams;
 export declare function validateScrapeParamsFull(args: Record<string, unknown> | undefined): ScrapeParamsFullType;
-export declare const UnblockParamsSchema: z.ZodObject<{
+export declare const UnblockParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     url: z.ZodString;
     method: z.ZodDefault<z.ZodEnum<{
         render: "render";
@@ -241,7 +241,7 @@ export declare const UnblockParamsSchema: z.ZodObject<{
     wait_for: z.ZodOptional<z.ZodString>;
     timeout: z.ZodDefault<z.ZodNumber>;
     max_chars: z.ZodOptional<z.ZodNumber>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type UnblockParams = z.infer<typeof UnblockParamsSchema>;
 export declare function validateUnblockParams(args: Record<string, unknown> | undefined): UnblockParams;
 declare const BrowserActionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
@@ -298,7 +298,14 @@ declare const BrowserActionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     action: z.ZodLiteral<"list_sessions">;
 }, z.core.$strip>], "action">;
 export type BrowserAction = z.infer<typeof BrowserActionSchema>;
-export declare const BrowserParamsSchema: z.ZodObject<{
+/**
+ * Browser params need a bespoke alias step: `BrowserActionSchema` is a
+ * z.discriminatedUnion, which rejects a preprocess-wrapped option (the
+ * discriminator must be statically readable). So the top-level preprocess
+ * both maps `sessionId`→`session_id` AND normalizes each action element's
+ * camelCase keys (e.g. `waitUntil`→`wait_until`) before the union validates.
+ */
+export declare const BrowserParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     actions: z.ZodArray<z.ZodDiscriminatedUnion<[z.ZodObject<{
         action: z.ZodLiteral<"navigate">;
         url: z.ZodString;
@@ -355,7 +362,7 @@ export declare const BrowserParamsSchema: z.ZodObject<{
     country: z.ZodOptional<z.ZodString>;
     timeout: z.ZodDefault<z.ZodNumber>;
     session_id: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type BrowserParams = z.infer<typeof BrowserParamsSchema>;
 export declare function validateBrowserParams(args: Record<string, unknown> | undefined): BrowserParams;
 export declare const AiMonitorParamsSchema: z.ZodObject<{

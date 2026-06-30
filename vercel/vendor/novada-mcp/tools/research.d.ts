@@ -1,3 +1,4 @@
 import type { ResearchParams } from "./types.js";
-export declare function novadaResearch(params: ResearchParams, apiKey: string): Promise<string>;
+import type { ProgressReporter } from "./crawl.js";
+export declare function novadaResearch(params: ResearchParams, apiKey: string, onProgress?: ProgressReporter): Promise<string>;
 //# sourceMappingURL=research.d.ts.map

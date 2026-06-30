@@ -62,7 +62,7 @@ async function discoverViaLlmsTxt(origin, apiKey) {
     ];
     for (const { method, path } of candidates) {
         try {
-            const resp = await fetchViaProxy(`${origin}${path}`, apiKey, { timeout: TIMEOUTS.SITEMAP });
+            const resp = await fetchViaProxy(`${origin}${path}`, apiKey, { tool: "site_copy", timeout: TIMEOUTS.SITEMAP });
             if (typeof resp.data !== "string")
                 continue;
             const body = resp.data;
@@ -82,13 +82,13 @@ async function fetchSitePage(url, apiKey, renderMode) {
     const useRender = renderMode === "render";
     try {
         const resp = useRender
-            ? await fetchWithRender(url, apiKey, { timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
-            : await fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
+            ? await fetchWithRender(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
+            : await fetchViaProxy(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
         let html = typeof resp.data === "string" ? resp.data : null;
         // auto: escalate to render once if the static HTML looks JS-heavy.
         if (html && renderMode === "auto" && detectJsHeavyContent(html)) {
             try {
-                const r = await fetchWithRender(url, apiKey, { timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 });
+                const r = await fetchWithRender(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 });
                 if (typeof r.data === "string")
                     html = r.data;
             }
@@ -156,7 +156,7 @@ async function discoverPages(params, apiKey, origin, baseHostname, maxPages, sel
             break;
         const htmls = await Promise.all(batch.map(({ url, depth }) => depth >= maxDepth
             ? Promise.resolve(null)
-            : fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 })
+            : fetchViaProxy(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 })
                 .then(r => (typeof r.data === "string" ? r.data : null))
                 .catch(() => null)));
         for (let i = 0; i < htmls.length; i++) {

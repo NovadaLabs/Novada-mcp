@@ -1,5 +1,49 @@
 import { z } from "zod";
 import { isBlockedHost } from "../utils/ssrf.js";
+// ─── snake_case Aliasing (NOV-327) ───────────────────────────────────────────
+/**
+ * Copy any present camelCase alias key onto its snake_case canonical key on a
+ * shallow clone of `obj`. Shared by the object-level wrapper and the bespoke
+ * browser preprocess (which also walks the nested `actions[]`).
+ *
+ * Rules:
+ *  - canonical wins: if the snake_case key is already present, the alias is
+ *    ignored — no silent overwrite.
+ *  - non-destructive: input is shallow-cloned; unknown keys are left for Zod
+ *    to strip as usual.
+ *
+ * @param aliases map of camelCaseAlias → snake_case_canonical
+ */
+function remapAliases(obj, aliases) {
+    const out = { ...obj };
+    for (const [camel, snake] of Object.entries(aliases)) {
+        if (camel in out && !(snake in out)) {
+            out[snake] = out[camel];
+            delete out[camel];
+        }
+    }
+    return out;
+}
+/**
+ * Backwards-compat shim: snake_case is the canonical wire format for every tool
+ * param, but older callers (and the legacy SDK shape) sent camelCase keys
+ * (maxChars, waitFor, maxPages, …). This wraps a Zod object in a `z.preprocess`
+ * that maps the camelCase aliases to snake_case BEFORE validation, so those
+ * callers keep working without the camelCase keys ever appearing in the
+ * agent-facing JSON schema (`.toJSONSchema()` reflects only the inner object).
+ * Non-object / nullish input is passed through untouched so Zod reports the
+ * real type error.
+ *
+ * @param aliases map of camelCaseAlias → snake_case_canonical
+ */
+function withCamelCaseAliases(schema, aliases) {
+    return z.preprocess((input) => {
+        if (input === null || typeof input !== "object" || Array.isArray(input)) {
+            return input;
+        }
+        return remapAliases(input, aliases);
+    }, schema);
+}
 // ─── URL Safety ─────────────────────────────────────────────────────────────
 /**
  * Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs.
@@ -23,7 +67,7 @@ const safeUrl = z.string()
 }, "URLs pointing to localhost or private network ranges are not allowed")
     .refine((url) => !url.includes("\n") && !url.includes("\r"), "URL must not contain newline characters");
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
-export const SearchParamsSchema = z.object({
+export const SearchParamsSchema = withCamelCaseAliases(z.object({
     query: z.string().min(1, "Search query is required"),
     engine: z.enum(["google", "bing", "duckduckgo", "yahoo", "yandex"]).default("google")
         .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yahoo': broad index. 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED — may return zero results; avoid."),
@@ -50,19 +94,29 @@ export const SearchParamsSchema = z.object({
         .describe("Auto-extract full content from the top result. Shorthand for extract_options.top_n=1. Adds ~2-4s latency. Default: false."),
     project: z.string().max(30).optional()
         .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
-    extract_options: z.object({
+    extract_options: withCamelCaseAliases(z.object({
         format: z.enum(["text", "markdown", "html", "json"]).optional().default("markdown")
             .describe("Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
         fields: z.array(z.string()).optional(),
         max_chars: z.number().int().min(1000).max(100000).optional(),
         top_n: z.number().int().min(1).max(10).optional().default(3)
             .describe("Number of top search results to auto-extract. Default: 3. Max: 10."),
-    }).optional()
+    }), { maxChars: "max_chars", topN: "top_n" }).optional()
         .describe("When provided, automatically extracts content from the top top_n search result URLs " +
         "and appends it to each result. Eliminates a separate novada_extract call. " +
         "Note: adds latency proportional to top_n * extract_latency. Use top_n=1-3 for most queries."),
+}), {
+    timeRange: "time_range",
+    startDate: "start_date",
+    endDate: "end_date",
+    includeDomains: "include_domains",
+    excludeDomains: "exclude_domains",
+    sourceType: "source_type",
+    excludeSocial: "exclude_social",
+    enrichTop: "enrich_top",
+    extractOptions: "extract_options",
 });
-export const ExtractParamsSchema = z.object({
+export const ExtractParamsSchema = withCamelCaseAliases(z.object({
     url: z.union([
         safeUrl,
         z.array(safeUrl).min(1).max(10),
@@ -92,8 +146,12 @@ export const ExtractParamsSchema = z.object({
         .describe("Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage."),
     project: z.string().max(30).optional()
         .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
+}), {
+    maxChars: "max_chars",
+    waitFor: "wait_for",
+    waitMs: "wait_ms",
 });
-export const CrawlParamsSchema = z.object({
+export const CrawlParamsSchema = withCamelCaseAliases(z.object({
     url: safeUrl,
     max_pages: z.number().int().min(1).max(20).default(5),
     strategy: z.enum(["bfs", "dfs"]).default("bfs")
@@ -112,6 +170,10 @@ export const CrawlParamsSchema = z.object({
         .describe("Alias for max_pages — use max_pages for the canonical name. Max 20."),
     mode: z.enum(["bfs", "dfs"]).optional()
         .describe("Alias for strategy — use strategy for the canonical name."),
+}), {
+    maxPages: "max_pages",
+    selectPaths: "select_paths",
+    excludePaths: "exclude_paths",
 });
 export const ResearchParamsSchema = z.object({
     question: z.string().min(5, "Research question must be at least 5 characters").optional(),
@@ -125,18 +187,21 @@ export const ResearchParamsSchema = z.object({
 }).refine(data => !!(data.question || data.query), {
     message: "Either 'question' or 'query' must be provided",
 });
-export const MapParamsSchema = z.object({
+export const MapParamsSchema = withCamelCaseAliases(z.object({
     url: safeUrl,
     search: z.string().optional(),
     limit: z.number().int().min(1).max(100).default(50),
     include_subdomains: z.boolean().default(false),
     max_depth: z.number().int().min(1).max(5).default(2)
         .describe("Link-hops from root to follow. Default 2. Higher = more pages found but slower."),
+}), {
+    includeSubdomains: "include_subdomains",
+    maxDepth: "max_depth",
 });
 // ─── Site Copy Params ─────────────────────────────────────────────────────────
 /** Hard ceiling on pages a single site_copy run will fetch (safety bound). */
 export const SITE_COPY_HARD_MAX = 1000;
-export const SiteCopyParamsSchema = z.object({
+export const SiteCopyParamsSchema = withCamelCaseAliases(z.object({
     url: safeUrl,
     max_pages: z.number().int().min(1).max(SITE_COPY_HARD_MAX).default(200)
         .describe(`Maximum pages to copy. Default 200, hard max ${SITE_COPY_HARD_MAX}. The run drains the in-scope queue until empty or this ceiling is hit — it is a safety bound, not a target.`),
@@ -152,6 +217,12 @@ export const SiteCopyParamsSchema = z.object({
         .describe("Rendering mode for each page fetch. 'auto' (default): static, escalate to render on JS-heavy detection. 'static': always static. 'render': always render (slower)."),
     project: z.string().max(30).optional()
         .describe("Optional project name to group outputs under ~/Downloads/novada-mcp/<date>/<project>/site-copy/. Defaults to the site domain."),
+}), {
+    maxPages: "max_pages",
+    selectPaths: "select_paths",
+    excludePaths: "exclude_paths",
+    maxDepth: "max_depth",
+    includeSubdomains: "include_subdomains",
 });
 export function validateSiteCopyParams(args) {
     return SiteCopyParamsSchema.parse(args ?? {});
@@ -185,7 +256,7 @@ export function validateVerifyParams(args) {
     return VerifyParamsSchema.parse(args ?? {});
 }
 // ─── Proxy Params ────────────────────────────────────────────────────────────
-export const ProxyParamsSchema = z.object({
+export const ProxyParamsSchema = withCamelCaseAliases(z.object({
     type: z.enum(["residential", "mobile", "isp", "datacenter"]).default("residential")
         .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost."),
     country: z.string().length(2).optional()
@@ -196,7 +267,7 @@ export const ProxyParamsSchema = z.object({
         .describe("Session ID for sticky routing — same session_id returns same IP across requests."),
     format: z.enum(["url", "env", "curl"]).default("url")
         .describe("Output format. 'url': proxy URL string. 'env': shell export commands. 'curl': curl --proxy flag."),
-});
+}), { sessionId: "session_id" });
 export function validateProxyParams(args) {
     return ProxyParamsSchema.parse(args ?? {});
 }
@@ -237,7 +308,7 @@ export function validateScrapeParamsFull(args) {
     return ScrapeParamsFullSchema.parse(args ?? {});
 }
 // ─── Unblock Params ──────────────────────────────────────────────────────────
-export const UnblockParamsSchema = z.object({
+export const UnblockParamsSchema = withCamelCaseAliases(z.object({
     url: safeUrl,
     method: z.enum(["render", "browser"]).default("render")
         .describe("Rendering method. 'render': JS rendering via Web Unblocker (requires NOVADA_WEB_UNBLOCKER_KEY). 'browser': full Chromium CDP (requires NOVADA_BROWSER_WS). Unlike novada_extract which uses 'render=', this tool uses 'method='."),
@@ -251,6 +322,9 @@ export const UnblockParamsSchema = z.object({
         .describe("Maximum characters of raw HTML to return (default: 100000, max: 500000). " +
         "When content exceeds this limit, it is truncated and a notice is appended. " +
         "Raw HTML is typically much larger than extracted text — increase this if you need the full DOM."),
+}), {
+    waitFor: "wait_for",
+    maxChars: "max_chars",
 });
 export function validateUnblockParams(args) {
     return UnblockParamsSchema.parse(args ?? {});
@@ -309,7 +383,27 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
     z.object({ action: z.literal("close_session") }),
     z.object({ action: z.literal("list_sessions") }),
 ]);
-export const BrowserParamsSchema = z.object({
+/** camelCase aliases for keys nested inside a single browser action. */
+const BROWSER_ACTION_ALIASES = { waitUntil: "wait_until" };
+/**
+ * Browser params need a bespoke alias step: `BrowserActionSchema` is a
+ * z.discriminatedUnion, which rejects a preprocess-wrapped option (the
+ * discriminator must be statically readable). So the top-level preprocess
+ * both maps `sessionId`→`session_id` AND normalizes each action element's
+ * camelCase keys (e.g. `waitUntil`→`wait_until`) before the union validates.
+ */
+export const BrowserParamsSchema = z.preprocess((input) => {
+    if (input === null || typeof input !== "object" || Array.isArray(input)) {
+        return input;
+    }
+    const out = remapAliases(input, { sessionId: "session_id" });
+    if (Array.isArray(out.actions)) {
+        out.actions = out.actions.map((a) => a !== null && typeof a === "object" && !Array.isArray(a)
+            ? remapAliases(a, BROWSER_ACTION_ALIASES)
+            : a);
+    }
+    return out;
+}, z.object({
     actions: z.array(BrowserActionSchema).min(1).max(20)
         .describe("Array of browser actions to execute sequentially. Max 20 per call. " +
         "Each action MUST use the discriminated union format: {action: \"<type>\", ...fields}. " +
@@ -327,7 +421,7 @@ export const BrowserParamsSchema = z.object({
         .describe("Total timeout for all actions in ms. Default 60000."),
     session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
         .describe("Optional session ID for persistent browser state across calls. Reuses the same browser page (cookies, localStorage, login state). Warm reuse is ~5x faster (~1.5s vs ~8s cold start). Sessions expire after 10 minutes of inactivity."),
-});
+}));
 export function validateBrowserParams(args) {
     return BrowserParamsSchema.parse(args ?? {});
 }

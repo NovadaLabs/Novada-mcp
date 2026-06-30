@@ -4,6 +4,7 @@ import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import { saveOutput } from "../utils/output.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
+import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
 export { detectJsHeavyContent } from "../utils/index.js";
 /**
@@ -14,6 +15,18 @@ export { detectJsHeavyContent } from "../utils/index.js";
  * path, the PDF slice, and any future call site share one source of truth.
  */
 const MAX_CHARS_DEFAULT = 25000;
+/**
+ * Cross-tool hint map: base domain → the best novada_scrape operation for structured data.
+ * Used by both the JSON and markdown output paths to suggest novada_scrape when extraction
+ * quality is poor (P2-3). Single source of truth so the two hint sites can never drift.
+ */
+const SCRAPER_PLATFORMS = {
+    "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
+    "github.com": "github_repository_repo-url", "tiktok.com": "tiktok_posts_url",
+    "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
+    "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
+    "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
+};
 /** Markdown annotation for a resolved field's source (used in the Requested Fields block). */
 function sourceAnnotation(source) {
     switch (source) {
@@ -268,7 +281,13 @@ async function extractSingleInner(params, apiKey) {
     const useFullPage = params.clean !== true;
     // Domain registry: skip auto-detection probe for known sites
     const domainHint = renderMode === "auto" ? lookupDomain(params.url) : null;
-    const effectiveMode = domainHint ? domainHint.method : renderMode;
+    // NOV-330: session routing memory. Only consulted for "auto" when the hand-curated
+    // DOMAIN_REGISTRY has no entry (registry is authoritative and always wins). If a prior
+    // request this session already found the winning mode for this host, start there and
+    // skip the static→render→browser ladder. Advisory: the escalation/quality checks below
+    // still run, so a stale hint self-corrects (and recordRouteSuccess re-pins the new mode).
+    const routeHint = renderMode === "auto" && !domainHint ? getRouteHint(params.url) : null;
+    const effectiveMode = domainHint ? domainHint.method : (routeHint ?? renderMode);
     // Pre-populate anti-bot provider from domain registry if known
     if (domainHint?.provider) {
         detectedAntiBot = domainHint.provider;
@@ -279,7 +298,7 @@ async function extractSingleInner(params, apiKey) {
         usedMode = "browser";
     }
     else if (effectiveMode === "render") {
-        const response = await fetchWithRender(params.url, apiKey, domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {});
+        const response = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}) });
         const contentType = String(response.headers?.["content-type"] ?? "");
         if (isPdfResponse(params.url, contentType)) {
             const pdfBuffer = Buffer.isBuffer(response.data)
@@ -330,16 +349,16 @@ async function extractSingleInner(params, apiKey) {
         const domainProxyTier = domainHint?.proxyTier;
         const response = await (effectiveMode === "auto"
             ? Promise.any([
-                fetchWithRetry(params.url, { headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
+                fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
                     .then(r => {
                     const body = typeof r.data === "string" ? r.data : null;
                     if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body))
                         return r;
                     throw new Error("not-static");
                 }),
-                fetchViaProxy(params.url, apiKey, domainProxyTier ? { proxyTier: domainProxyTier } : {}),
+                fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }),
             ])
-            : fetchViaProxy(params.url, apiKey, domainProxyTier ? { proxyTier: domainProxyTier } : {}));
+            : fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }));
         const contentType = String(response.headers?.["content-type"] ?? "");
         if (isPdfResponse(params.url, contentType)) {
             const pdfBuffer = Buffer.isBuffer(response.data)
@@ -373,7 +392,7 @@ async function extractSingleInner(params, apiKey) {
             detectedAntiBot = identifyAntiBot(html);
             // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
             try {
-                const renderResponse = await fetchWithRender(params.url, apiKey);
+                const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract" });
                 const renderHtml = String(renderResponse.data);
                 if (detectBotChallenge(renderHtml)) {
                     // Re-check anti-bot on render result (may differ from static)
@@ -443,6 +462,14 @@ async function extractSingleInner(params, apiKey) {
             }
         }
     }
+    // NOV-330: remember the winning mode for this host so the rest of the session can
+    // start there. recordRouteSuccess ignores the "render-failed" pseudo-mode, so only a
+    // genuine static/render/browser success is pinned. Cheap + best-effort.
+    recordRouteSuccess(params.url, usedMode);
+    // NOV-334: request logging now happens centrally in the fetch helpers (fetchViaProxy /
+    // fetchWithRender / fetchWithRetry), so every tool — not just extract — emits one
+    // structured stderr line per upstream request (silent unless NOVADA_LOG=debug). The
+    // per-extract summary line was removed here to avoid double-logging.
     // Detect PDF output from router (prefixed with pdf_pages:N)
     const pdfPageMatch = html.match(/^pdf_pages:(\d+)\n/);
     let pdfPages = null;
@@ -558,7 +585,7 @@ async function extractSingleInner(params, apiKey) {
     if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !quality.content_present && !html.startsWith("pdf_pages:") && !domainHint) {
         escalationAttempted = true;
         try {
-            const renderResponse = await fetchWithRender(params.url, apiKey);
+            const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract" });
             if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
                 const renderHtml = renderResponse.data;
                 // NOV-577: one parse of the re-fetched HTML, shared across the readers in this branch.
@@ -658,7 +685,7 @@ async function extractSingleInner(params, apiKey) {
     if (mainContent.length < 100 && quality.score < 20 && !html.startsWith("pdf_pages:")) {
         try {
             const archiveUrl = `https://web.archive.org/web/2024/${params.url}`;
-            const wbResponse = await fetchViaProxy(archiveUrl, apiKey);
+            const wbResponse = await fetchViaProxy(archiveUrl, apiKey, { tool: "extract" });
             if (typeof wbResponse.data === "string" && wbResponse.data.length > 500) {
                 const wbHtml = wbResponse.data;
                 const wbMain = useFullPage
@@ -806,13 +833,6 @@ async function extractSingleInner(params, apiKey) {
         }
         // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
         if (!contentOk && baseDomain) {
-            const SCRAPER_PLATFORMS = {
-                "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
-                "github.com": "github_repository_repo-url", "tiktok.com": "tiktok_posts_url",
-                "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
-                "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
-                "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
-            };
             const scraperOp = SCRAPER_PLATFORMS[baseDomain];
             if (scraperOp) {
                 hints.push(`For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
@@ -997,13 +1017,6 @@ async function extractSingleInner(params, apiKey) {
     }
     // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
     if (!contentOk && baseDomain) {
-        const SCRAPER_PLATFORMS = {
-            "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
-            "github.com": "github_repository_repo-url", "tiktok.com": "tiktok_posts_url",
-            "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
-            "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
-            "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
-        };
         const scraperOp = SCRAPER_PLATFORMS[baseDomain];
         if (scraperOp) {
             lines.push(`- For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);

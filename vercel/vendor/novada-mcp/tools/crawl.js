@@ -3,11 +3,20 @@ import { detectJsHeavyContent } from "./extract.js";
 import { TIMEOUTS } from "../config.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 const CRAWL_CONCURRENCY = 3;
+/** Invoke a progress reporter without ever letting it break the crawl. */
+async function reportProgress(onProgress, info) {
+    if (!onProgress)
+        return;
+    try {
+        await onProgress(info);
+    }
+    catch { /* progress is best-effort — never surface reporter failures */ }
+}
 async function fetchPage(url, apiKey, useRender = false) {
     try {
         const response = useRender
-            ? await fetchWithRender(url, apiKey, { timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
-            : await fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
+            ? await fetchWithRender(url, apiKey, { tool: "crawl", timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
+            : await fetchViaProxy(url, apiKey, { tool: "crawl", timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
         if (typeof response.data !== "string")
             return null;
         return { html: String(response.data), url };
@@ -123,7 +132,7 @@ export function shouldCrawlUrl(url, selectPatterns, excludePatterns) {
         return false;
     return true;
 }
-export async function novadaCrawl(params, apiKey) {
+export async function novadaCrawl(params, apiKey, onProgress) {
     // Support intuitive alias param names.
     // Hard cap is 20 for normal novada_crawl callers; site_copy raises it via the
     // internal _maxPagesCeiling (the public CrawlParamsSchema still enforces .max(20)).
@@ -204,6 +213,12 @@ export async function novadaCrawl(params, apiKey) {
             }
             const jsContentMissing = jsMissing ? true : undefined;
             results.push({ url: batch[i].url, title, text, depth: batch[i].depth, wordCount, jsContentMissing });
+            // NOV-319: emit a per-page progress notification (no-op when no progressToken).
+            await reportProgress(onProgress, {
+                progress: results.length,
+                total: maxPages,
+                message: `Crawled ${results.length}/${maxPages}: ${batch[i].url}`,
+            });
             // Discover links, applying path filters before queuing
             const links = extractLinks(page.html, batch[i].url);
             for (const link of links) {

@@ -68,6 +68,12 @@ export const TOOL_REGISTRY = [
         category: "Content Retrieval",
         status: "active",
     },
+    {
+        name: "novada_search_feedback",
+        description: "Record search-result quality (search_id/query + useful URLs + rating good/ok/bad) to bias future ranking; in-memory feedback store, returns a thank-you/echo with an agent_instruction",
+        category: "Content Retrieval",
+        status: "active",
+    },
     // ─── Scraping & Verification ────────────────────────────────────────────
     {
         name: "novada_scrape",
@@ -250,6 +256,12 @@ export const TOOL_REGISTRY = [
     {
         name: "novada_setup",
         description: "Check environment configuration and get step-by-step setup instructions for every MCP client; auth-free, works before NOVADA_API_KEY is set",
+        category: "Health & Discovery",
+        status: "active",
+    },
+    {
+        name: "novada_session_stats",
+        description: "Per-process / per-session usage telemetry: tool-call counts, last-N calls, and uptime; in-memory, auth-free, resets on server restart",
         category: "Health & Discovery",
         status: "active",
     },

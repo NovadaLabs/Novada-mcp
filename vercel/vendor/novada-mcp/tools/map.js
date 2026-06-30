@@ -249,7 +249,7 @@ async function parallelBfsCrawl(params, apiKey, maxUrls, baseHostname) {
         const results = await Promise.allSettled(unvisited.map(async ({ url, depth }) => {
             if (depth >= maxDepth)
                 return { links: [] };
-            const response = await fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC });
+            const response = await fetchViaProxy(url, apiKey, { tool: "map", timeout: TIMEOUTS.CRAWL_STATIC });
             if (typeof response.data !== "string")
                 return { links: [] };
             return { links: extractLinks(response.data, url), depth };

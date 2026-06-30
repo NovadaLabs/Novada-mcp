@@ -41,4 +41,7 @@ export { novadaCaptureApikey, validateCaptureApikeyParams, CaptureApikeyParamsSc
 export { novadaScraperTaskMgmt, validateScraperTaskMgmtParams, ScraperTaskMgmtParamsSchema } from "./scraper_task_mgmt.js";
 export { novadaIpWhitelist, validateIpWhitelistParams, IpWhitelistParamsSchema } from "./ip_whitelist.js";
 export { novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema } from "./static_ip_mgmt.js";
+// ─── NOV-321 / NOV-323: session telemetry + search feedback ─────────────────
+export { novadaSessionStats, validateSessionStatsParams, SessionStatsParamsSchema, recordToolCall } from "./session_stats.js";
+export { novadaSearchFeedback, validateSearchFeedbackParams, SearchFeedbackParamsSchema } from "./search_feedback.js";
 //# sourceMappingURL=index.js.map
