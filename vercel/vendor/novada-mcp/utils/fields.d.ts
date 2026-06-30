@@ -1,3 +1,4 @@
+import type { CheerioAPI } from "cheerio";
 import type { StructuredData } from "./html.js";
 /**
  * Where a field value was resolved from, in chain order.
@@ -32,6 +33,7 @@ export interface HeadingSectionResult {
  * Zero impact on existing callers of matchHeadingSection.
  */
 export declare function matchHeadingSectionWithReason(text: string, field: string): HeadingSectionResult;
+export declare function isStatValue(v: string): boolean;
 /**
  * Extract requested fields from structured data + HTML layers + markdown fallback.
  *
@@ -40,10 +42,20 @@ export declare function matchHeadingSectionWithReason(text: string, field: strin
  *   known patterns → generic colon pattern → tolerant labelled-value → number-near-label →
  *   heading section → (llm stub, off) → unresolved
  *
- * cheerio is loaded once per call (shared across fields and layers).
+ * cheerio is loaded once per call AND the DOM is walked once up front (NOV-577): every
+ * label→value candidate the HTML layers need is harvested by collectDomCandidates, then each
+ * field resolves against those in-memory arrays — O(DOM + fields × candidates) instead of the
+ * old O(fields × DOM) where each layer re-queried `$` per requested field.
  * Unresolved fields are NON-SILENT: value=null + agent_instruction explaining the miss.
  */
-export declare function extractFields(fields: string[], structuredData: StructuredData | null, markdown: string, html?: string): FieldResult[];
+export declare function extractFields(fields: string[], structuredData: StructuredData | null, markdown: string, html?: string, 
+/**
+ * NOV-577: optional pre-parsed document. When the caller (extract.ts) already loaded the
+ * same `html` into cheerio for its title/description/links/structured-data readers, it passes
+ * that `$` here so this function skips a redundant cheerio.load. When omitted, `html` is parsed
+ * as before, so the public signature and every existing caller stay unchanged.
+ */
+preloaded$?: CheerioAPI | null): FieldResult[];
 export type DiagnosticMethod = "heading-match" | "pattern-match" | "meta-tag" | "infobox" | "table-header" | "microdata";
 export type DiagnosticReasonCode = "no_heading_match" | "section_empty" | "no_pattern_match" | "page_too_short";
 export interface FieldDiagnostic {
@@ -63,7 +75,10 @@ export interface FieldDiagnostic {
  * Reuses the unified extractFields chain so the two code paths can never drift, then derives
  * diagnostics from each FieldResult's source + attempted list.
  */
-export declare function extractFieldsWithDiagnostics(fields: string[], structuredData: StructuredData | null, markdown: string, htmlLength: number, html?: string): {
+export declare function extractFieldsWithDiagnostics(fields: string[], structuredData: StructuredData | null, markdown: string, htmlLength: number, html?: string, 
+/** NOV-577: forward the caller's pre-parsed document so extractFields skips a redundant
+ *  cheerio.load (mirrors extractFields' own preloaded$ param). */
+preloaded$?: CheerioAPI | null): {
     results: FieldResult[];
     diagnostics: FieldDiagnostic[];
 };

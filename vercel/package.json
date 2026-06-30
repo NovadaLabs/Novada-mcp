@@ -22,6 +22,13 @@
     "turndown-plugin-gfm": "^1.0.2",
     "zod": "^4.3.6"
   },
+  "overrides": {
+    "form-data": "^4.0.6",
+    "undici": "^7.28.0",
+    "@vercel/blob": {
+      "undici": "^6.27.0"
+    }
+  },
   "devDependencies": {
     "@types/node": "^22",
     "typescript": "^5.5.4",

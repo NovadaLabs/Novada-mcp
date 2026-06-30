@@ -341,11 +341,12 @@ async function rateLimitExceeded(ip: string, env: Env): Promise<boolean> {
   const limit = parseInt(env.RATE_LIMIT_PER_MIN || "60", 10);
   const bucket = Math.floor(Date.now() / 60_000);
   const key = `rl:${ip}:${bucket}`;
-  const raw = await kv.get<string | number>(key);
-  const count = raw ? (typeof raw === "number" ? raw : parseInt(String(raw), 10)) : 0;
-  if (count >= limit) return true;
-  await kv.set(key, String(count + 1), { ex: 120 });
-  return false;
+  // Atomic increment — read-modify-write would let concurrent requests in the
+  // same minute bucket each read a stale count and all slip past the limit.
+  const count = await kv.incr(key);
+  // Set the bucket TTL once, on the first hit (count === 1 means we just created it).
+  if (count === 1) await kv.expire(key, 120);
+  return count > limit;
 }
 
 /** Short stable identifier for a token, safe to log (SHA-256 first 12 hex chars). */
@@ -356,22 +357,68 @@ async function tokenFingerprint(token: string): Promise<string> {
   return hex.slice(0, 12);
 }
 
+/**
+ * Full SHA-256 hex of a token, used as the KV key for quota counters. The
+ * plaintext API key must NEVER be a KV key — KV keys can surface in logs,
+ * dashboards, and key-scan output, leaking the customer's credential. The full
+ * 64-char digest (not the 12-char log fingerprint) keeps collisions negligible.
+ */
+async function tokenKvHash(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function monthKey(): string {
   const d = new Date();
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-/** Returns the new remaining count, or -1 if the request must be rejected. */
-async function decrementQuota(token: string, env: Env, plan: "free" | "pro"): Promise<number> {
+/**
+ * Returns the new remaining count, or -1 if the request must be rejected.
+ * `tokenHash` is the SHA-256 hex of the API key — the plaintext key must never
+ * be a KV key (see tokenKvHash). Uses an atomic increment instead of a
+ * get-then-set so concurrent calls can't both read the same stale count and
+ * over-spend the quota (TOCTOU). If the increment pushes a free-plan account
+ * past its cap, the speculative increment is rolled back so an exhausted key's
+ * counter can't drift upward unbounded under load.
+ */
+async function decrementQuota(tokenHash: string, env: Env, plan: "free" | "pro"): Promise<number> {
   const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
-  const key = `${token}:${monthKey()}`;
-  const raw = await kv.get<string | number>(key);
-  const used = raw ? (typeof raw === "number" ? raw : parseInt(String(raw), 10)) : 0;
-  if (plan === "free" && used >= monthlyQuota) return -1;
-  const next = used + 1;
-  // 32-day TTL — KV will GC the key after the month rolls over.
-  await kv.set(key, String(next), { ex: 60 * 60 * 24 * 32 });
-  return Math.max(0, monthlyQuota - next);
+  const key = `${tokenHash}:${monthKey()}`;
+  const used = await kv.incr(key);
+  // Set the 32-day TTL once, on the first hit — KV will GC the key after the
+  // month rolls over. (count === 1 means we just created it.)
+  if (used === 1) await kv.expire(key, 60 * 60 * 24 * 32);
+  if (plan === "free" && used > monthlyQuota) {
+    // Over cap — undo the speculative increment and reject. Guard the rollback: a failed kv.decr
+    // must not throw out of decrementQuota (that would skip the caller's refund path and leave a
+    // phantom over-cap charge). Best-effort, mirroring refundQuota. (NOV-573 review)
+    try { await kv.decr(key); } catch { /* best-effort rollback */ }
+    return -1;
+  }
+  return Math.max(0, monthlyQuota - used);
+}
+
+/**
+ * Reverse one decrementQuota when the tool call did NOT do useful work (NOV-578).
+ * Quota is decremented BEFORE the tool runs (so an abusive loop can't burn free
+ * credits faster than KV updates) — but upstream/transport/validation failures
+ * must not charge the customer. Best-effort: floors at 0 and never throws, so a
+ * refund hiccup can't mask the original tool error. Mirrors decrementQuota's
+ * atomic increment + 32-day TTL. `tokenHash` is the SHA-256 hex of the API key
+ * (the plaintext key is never a KV key — see tokenKvHash).
+ */
+async function refundQuota(tokenHash: string, env: Env): Promise<void> {
+  try {
+    const key = `${tokenHash}:${monthKey()}`;
+    // Atomic decrement, mirroring decrementQuota's incr. Floor at 0: if a
+    // concurrent reset/GC already cleared the counter, undo the over-decrement.
+    const after = await kv.decr(key);
+    if (after < 0) await kv.set(key, "0", { ex: 60 * 60 * 24 * 32 });
+  } catch {
+    /* best-effort — never let a refund failure surface over the tool error */
+  }
 }
 
 function extractToken(req: Request): string | null {
@@ -429,7 +476,7 @@ function sanitizeHostedOutput(text: string): string {
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────
-function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTools?: Set<string> | null }): Server {
+function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null }): Server {
   const server = new Server(
     { name: "novada", version: HOSTED_VERSION },
     { capabilities: { tools: {} } },
@@ -440,6 +487,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
     ? TOOLS.filter((t) => ctx.allowedTools!.has(t.name))
     : TOOLS
   ).filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name));
+  // Names actually exposed on this endpoint — drives both ListTools and the
+  // discover catalog so an agent never sees a tool it can't call. A tool can be
+  // absent here for three reasons: filtered out by ?tools=/?groups=, hidden by
+  // HOSTED_HIDDEN (browser tools on Vercel), or never ported to hosted at all
+  // (e.g. novada_site_copy, novada_ip_whitelist — not in the hosted TOOLS array).
+  const visibleToolNames: ReadonlySet<string> = new Set(visibleTools.map((t) => t.name));
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: visibleTools }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -458,6 +511,21 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
       };
     }
 
+    // Hidden / unwired-on-hosted guard: a tool that isn't in the visible set for this
+    // endpoint (HOSTED_HIDDEN browser tools, or tools never ported to hosted such as
+    // novada_site_copy / novada_ip_whitelist, or an outright unknown name) is rejected
+    // BEFORE quota is touched, with an agent_instruction pointing at the npm package
+    // where the full tool surface is available.
+    if (!visibleToolNames.has(name)) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Error [TOOL_NOT_ENABLED]: '${name}' is not available on the hosted Novada MCP endpoint.\nagent_instruction: Install the local MCP server to use ${name} — \`npx novada-mcp\` (npm package "novada-mcp") with your own NOVADA_API_KEY exposes the full tool surface, including browser automation and disk-writing tools. All other Novada tools (search/extract/crawl/map/research/scrape/verify/unblock/proxy/account) work on the hosted endpoint.`,
+        }],
+        isError: true,
+      };
+    }
+
     // novada_setup is auth-free and never charged against quota.
     if (name === "novada_setup") {
       try {
@@ -471,7 +539,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
     }
 
     // Decrement quota BEFORE the call so abusive loops can't burn free credits.
-    const remaining = await decrementQuota(ctx.token, env, "free");
+    const remaining = await decrementQuota(ctx.tokenHash, env, "free");
     if (remaining < 0) {
       return {
         content: [{
@@ -516,7 +584,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
           result = await novadaUnblock(validateUnblockParams(argsObj), apiKey); break;
         case "novada_browser":
           // 🔴 NOT AVAILABLE ON HOSTED — Playwright native deps don't run in Edge runtime.
+          // No work done → refund the pre-decremented quota (NOV-578).
           logUsage(env, ctx.token, name, false, Date.now() - started);
+          await refundQuota(ctx.tokenHash, env);
           return {
             content: [{
               type: "text" as const,
@@ -531,7 +601,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
           validateHealthAllParams(argsObj);
           result = await novadaHealthAll(apiKey); break;
         case "novada_discover":
-          result = await novadaDiscover(validateDiscoverParams(argsObj)); break;
+          // Scope the catalog to the tools actually exposed on this endpoint so the
+          // hosted discover output never advertises a tool the agent can't call.
+          result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames); break;
         case "novada_scraper_submit":
           result = await novadaScraperSubmit(validateScraperSubmitParams(argsObj), apiKey); break;
         case "novada_scraper_status":
@@ -540,7 +612,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
           result = await novadaScraperResult(validateScraperResultParams(argsObj), apiKey); break;
         case "novada_browser_flow":
           // 🔴 NOT AVAILABLE ON HOSTED — cloud browser WS path needs Edge-compatible WebSocket runtime.
+          // No work done → refund the pre-decremented quota (NOV-578).
           logUsage(env, ctx.token, name, false, Date.now() - started);
+          await refundQuota(ctx.tokenHash, env);
           return {
             content: [{
               type: "text" as const,
@@ -582,7 +656,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
         case "novada_capture_logs":
           result = await novadaCaptureLogs(validateCaptureLogsParams(argsObj), apiKey); break;
         default:
+          // Unknown tool → no work done, refund the pre-decremented quota (NOV-578).
           logUsage(env, ctx.token, name, false, Date.now() - started);
+          await refundQuota(ctx.tokenHash, env);
           return {
             content: [{ type: "text" as const, text: `Unknown tool: ${name}` }],
             isError: true,
@@ -601,6 +677,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; allowedTool
       };
     } catch (error) {
       logUsage(env, ctx.token, name, false, Date.now() - started);
+      // The tool failed (validation / upstream / transport) → no useful work done, so
+      // refund the quota decremented before the call. Failed calls must not burn customer
+      // credits (NOV-578). refundQuota is best-effort and swallows its own errors.
+      await refundQuota(ctx.tokenHash, env);
       if (error instanceof ZodError) {
         const issues = error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
         return {
@@ -670,13 +750,16 @@ function jsonError(status: number, code: string, message: string, agentInstructi
 }
 
 /**
- * Extract client IP. Vercel Edge sets `x-forwarded-for` and `x-real-ip`.
+ * Extract the client IP for rate-limit identity. MUST use a Vercel-trusted
+ * header — `x-vercel-forwarded-for` (set by Vercel's proxy) or `x-real-ip`.
+ * Raw `x-forwarded-for` is client-spoofable (an attacker can forge a fresh IP
+ * per request to defeat the per-IP limit), so it is NEVER trusted here.
  * Falls back to "unknown" — rate limit is then skipped.
  */
 function getClientIp(request: Request): string {
-  const xff = request.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
+  const vff = request.headers.get("x-vercel-forwarded-for");
+  if (vff) {
+    const first = vff.split(",")[0]?.trim();
     if (first) return first;
   }
   const xri = request.headers.get("x-real-ip");
@@ -811,15 +894,8 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
       "Operator: create a KV store in the Vercel dashboard (Storage → Create → KV), connect it to this project, then redeploy.");
   }
 
-  // Per-IP rate limit — slow down token brute-force enumeration.
-  const ip = getClientIp(request);
-  if (await rateLimitExceeded(ip, env)) {
-    return jsonError(429, "RATE_LIMITED",
-      `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
-      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.");
-  }
-
-  // CORS preflight (some MCP clients probe with OPTIONS)
+  // CORS preflight (some MCP clients probe with OPTIONS). Preflight carries no
+  // auth header, so it must short-circuit before the token check below.
   if (request.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -832,7 +908,9 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     });
   }
 
-  // Auth
+  // Auth — validate the token FIRST and reject with 401 BEFORE touching KV.
+  // An unauthenticated request must not be able to spend a KV read/incr (the
+  // rate-limit counter below), so this runs ahead of rateLimitExceeded.
   const token = extractToken(request);
   if (!token) {
     return jsonError(401, "MISSING_TOKEN",
@@ -844,6 +922,15 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     return jsonError(401, "INVALID_TOKEN",
       "Invalid API key. Use your Novada API key (32-char hex string from the dashboard).",
       "Get your API key at https://dashboard.novada.com/overview/scraper/api-playground/");
+  }
+
+  // Per-IP rate limit — slow down abusive loops from an authenticated key.
+  // Identity comes from a Vercel-trusted IP header (never spoofable raw XFF).
+  const ip = getClientIp(request);
+  if (await rateLimitExceeded(ip, env)) {
+    return jsonError(429, "RATE_LIMITED",
+      `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
+      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.");
   }
 
   // Upstream Novada API key — use the customer's own key (pass-through model).
@@ -859,10 +946,14 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // Optional tool-set filter from ?tools= / ?groups= (BrightData-style slim endpoint).
   const allowedTools = resolveAllowedTools(url);
 
+  // SHA-256 of the API key — used as the KV quota key so the plaintext key is
+  // never written to KV (see tokenKvHash). Computed once per request.
+  const tokenHash = await tokenKvHash(token);
+
   // Build a fresh server + transport per request (stateless mode). Edge
   // functions are per-request isolates with no shared memory — same pattern
   // as the CF Worker port.
-  const server = buildServer(apiKey, env, { token, allowedTools });
+  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,

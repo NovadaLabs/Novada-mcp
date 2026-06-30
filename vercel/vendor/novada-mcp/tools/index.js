@@ -18,6 +18,7 @@ export { novadaBrowser } from "./browser.js";
 export { novadaHealth } from "./health.js";
 export { novadaHealthAll, validateHealthAllParams, HealthAllParamsSchema } from "./health_all.js";
 export { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "./discover.js";
+export { TOOL_REGISTRY, TOOL_CATEGORIES, REGISTERED_TOOL_NAMES } from "./registry.js";
 export { novadaScraperSubmit, validateScraperSubmitParams, ScraperSubmitParamsSchema } from "./scraper_submit.js";
 export { novadaScraperStatus, validateScraperStatusParams, ScraperStatusParamsSchema } from "./scraper_status.js";
 export { novadaScraperResult, validateScraperResultParams, ScraperResultParamsSchema } from "./scraper_result.js";
@@ -36,4 +37,8 @@ export { novadaTrafficDaily, validateTrafficDailyParams, TrafficDailyParamsSchem
 export { novadaPlanBalanceAll, validatePlanBalanceAllParams, PlanBalanceAllParamsSchema } from "./plan_balance_all.js";
 export { novadaCaptureLogs, validateCaptureLogsParams, CaptureLogsParamsSchema } from "./capture_logs.js";
 export { novadaAccountSummary, validateAccountSummaryParams, AccountSummaryParamsSchema } from "./account_summary.js";
+export { novadaCaptureApikey, validateCaptureApikeyParams, CaptureApikeyParamsSchema } from "./capture_apikey.js";
+export { novadaScraperTaskMgmt, validateScraperTaskMgmtParams, ScraperTaskMgmtParamsSchema } from "./scraper_task_mgmt.js";
+export { novadaIpWhitelist, validateIpWhitelistParams, IpWhitelistParamsSchema } from "./ip_whitelist.js";
+export { novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema } from "./static_ip_mgmt.js";
 //# sourceMappingURL=index.js.map

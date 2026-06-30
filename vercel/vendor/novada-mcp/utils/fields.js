@@ -236,40 +236,110 @@ export function matchHeadingSectionWithReason(text, field) {
     }
     return { value: firstNonEmpty.trim(), reason: "matched" };
 }
-/** Extract field value from Wikipedia-style infobox tables. Accepts a pre-loaded $ to avoid reparsing. */
-function extractFromInfobox($, fieldName) {
-    const rows = $("table.infobox tr, table.vcard tr");
-    const best = { score: 0, value: null };
-    for (let i = 0; i < rows.length; i++) {
-        const th = $(rows[i]).find("th").text().trim();
-        const td = $(rows[i]).find("td").text().trim();
+/** data-testid / itemprop selectors the hero-stat layer probes — collected once up front. */
+const HERO_ATTR_SELECTORS = [
+    "[data-testid='price']", "[itemprop='price']",
+    "[data-testid='change']",
+    "[data-testid='market-cap']",
+];
+/**
+ * Walk the parsed document ONCE and harvest every candidate the field layers need.
+ * Each field then resolves from these arrays instead of re-querying `$`.
+ */
+function collectDomCandidates($) {
+    const infoboxRows = [];
+    const tables = [];
+    const labelValueRows = [];
+    const microdata = new Map();
+    const classedEls = [];
+    const attrHits = new Map();
+    // Infobox / vcard rows (Wikipedia-style): th = label, td = value.
+    $("table.infobox tr, table.vcard tr").each((_, tr) => {
+        const th = $(tr).find("th").text().trim();
+        const td = $(tr).find("td").text().trim();
         if (!th || !td)
-            continue;
-        const score = labelMatchScore(th, fieldName);
+            return;
+        infoboxRows.push({ label: th, value: td.slice(0, 200) });
+    });
+    // Per-table column headers + first tbody row (for header-column matching).
+    $("table").each((_, table) => {
+        const $table = $(table);
+        const headers = $table.find("th").map((__, th) => $(th).text().trim().toLowerCase()).get();
+        const firstRow = $table.find("tbody tr").first();
+        const firstRowCells = firstRow.find("td").map((__, td) => $(td).text().trim()).get();
+        tables.push({ headers, firstRowCells });
+    });
+    // Row-label pairs: table rows (cell0 = label, cell1 = value) + <dl> dt/dd pairs.
+    // Shape constraint matches extractFromLabelValueRows: skip values > 80 chars (prose, not a stat).
+    const considerRow = (rawLabel, rawValue) => {
+        const label = rawLabel.trim();
+        const value = rawValue.trim();
+        if (!label || !value)
+            return;
+        if (value.length > 80)
+            return;
+        labelValueRows.push({ label, value: value.slice(0, 200) });
+    };
+    $("tr").each((_, tr) => {
+        const cells = $(tr).find("th, td");
+        if (cells.length < 2)
+            return;
+        considerRow($(cells[0]).text(), $(cells[1]).text());
+    });
+    $("dl").each((_, dl) => {
+        $(dl).find("dt").each((__, dt) => {
+            const dd = $(dt).next("dd");
+            if (dd.length)
+                considerRow($(dt).text(), dd.text());
+        });
+    });
+    // Microdata: itemprop → value (content attr or text). First occurrence wins.
+    $("[itemprop]").each((_, el) => {
+        const prop = ($(el).attr("itemprop") ?? "").toLowerCase().trim();
+        if (!prop || microdata.has(prop))
+            return;
+        const val = ($(el).attr("content") || $(el).text().trim()).slice(0, 200);
+        if (val)
+            microdata.set(prop, val);
+    });
+    // Hero-stat candidates: every element with a class, plus exact attr-selector hits.
+    $("[class]").each((_, el) => {
+        const className = $(el).attr("class") ?? "";
+        if (!className)
+            return;
+        classedEls.push({ className, text: $(el).text().trim() });
+    });
+    for (const sel of HERO_ATTR_SELECTORS) {
+        const el = $(sel).first();
+        if (el.length && !attrHits.has(sel))
+            attrHits.set(sel, el.text().trim());
+    }
+    return { infoboxRows, tables, labelValueRows, microdata, classedEls, attrHits };
+}
+/** Extract field value from Wikipedia-style infobox tables. Reads pre-collected rows. */
+function extractFromInfobox(cand, fieldName) {
+    const best = { score: 0, value: null };
+    for (const row of cand.infoboxRows) {
+        const score = labelMatchScore(row.label, fieldName);
         if (score > 0 && score > best.score) {
             best.score = score;
-            best.value = td.slice(0, 200);
+            best.value = row.value;
         }
     }
     return best.value;
 }
-/** Extract field value by matching table column headers. Accepts a pre-loaded $. */
-function extractFromTableHeaders($, fieldName) {
-    let result = null;
-    $("table").each((_, table) => {
-        if (result)
-            return; // already found
-        const headers = $(table).find("th").map((__, th) => $(th).text().trim().toLowerCase()).get();
-        const colIdx = headers.findIndex(h => h.includes(fieldName.toLowerCase()));
+/** Extract field value by matching table column headers. Reads pre-collected tables. */
+function extractFromTableHeaders(cand, fieldName) {
+    const needle = fieldName.toLowerCase();
+    for (const table of cand.tables) {
+        const colIdx = table.headers.findIndex(h => h.includes(needle));
         if (colIdx >= 0) {
-            const firstRow = $(table).find("tbody tr").first();
-            const cell = firstRow.find("td").eq(colIdx).text().trim();
-            if (cell) {
-                result = cell.slice(0, 200);
-            }
+            const cell = table.firstRowCells[colIdx];
+            if (cell)
+                return cell.slice(0, 200);
         }
-    });
-    return result;
+    }
+    return null;
 }
 /**
  * Extract field value from finance/spec row-label tables where the label sits in the
@@ -278,53 +348,22 @@ function extractFromTableHeaders($, fieldName) {
  *  - require >= 2 cells in a <tr>
  *  - reject rows where the "value" cell is itself long prose (> 80 chars) — likely not a stat
  *  - pick the highest fuzzy label-match score across all candidate rows
- * Accepts a pre-loaded $.
+ * Reads pre-collected label/value rows.
  */
-function extractFromLabelValueRows($, fieldName) {
+function extractFromLabelValueRows(cand, fieldName) {
     const best = { score: 0, value: null };
-    const consider = (rawLabel, rawValue) => {
-        const label = rawLabel.trim();
-        const value = rawValue.trim();
-        if (!label || !value)
-            return;
-        // Shape constraint: a stat value is short. Long second cells are prose, not values.
-        if (value.length > 80)
-            return;
-        const score = labelMatchScore(label, fieldName);
+    for (const row of cand.labelValueRows) {
+        const score = labelMatchScore(row.label, fieldName);
         if (score > 0 && score > best.score) {
             best.score = score;
-            best.value = value.slice(0, 200);
+            best.value = row.value;
         }
-    };
-    // Row-label tables: first cell = label, second cell = value.
-    $("tr").each((_, tr) => {
-        const cells = $(tr).find("th, td");
-        if (cells.length < 2)
-            return;
-        const labelCell = $(cells[0]).text();
-        const valueCell = $(cells[1]).text();
-        consider(labelCell, valueCell);
-    });
-    // Definition lists: dt → dd pairs.
-    $("dl").each((_, dl) => {
-        const dts = $(dl).find("dt");
-        dts.each((__, dt) => {
-            const label = $(dt).text();
-            const dd = $(dt).next("dd");
-            if (dd.length)
-                consider(label, dd.text());
-        });
-    });
+    }
     return best.value;
 }
-/** Extract field value from Schema.org microdata (itemprop attributes). Accepts a pre-loaded $. */
-function extractFromMicrodata($, fieldName) {
-    const el = $(`[itemprop="${fieldName}"], [itemprop="${fieldName.toLowerCase()}"]`).first();
-    if (el.length) {
-        const val = (el.attr("content") || el.text().trim()).slice(0, 200);
-        return val || null;
-    }
-    return null;
+/** Extract field value from Schema.org microdata (itemprop attributes). Reads pre-collected map. */
+function extractFromMicrodata(cand, fieldName) {
+    return cand.microdata.get(fieldName.toLowerCase()) ?? null;
 }
 /**
  * Whole-word class-token match. `word` matches a class token only when it appears as a
@@ -359,9 +398,9 @@ function looksLikeStatValue(v) {
  * boundaries, not substrings) plus exact data-testid / itemprop hints, then requires the
  * captured text to look like a numeric stat value. Both gates are needed: `exchange-rate`,
  * `changelog-version`, and `price-disclaimer` widgets are ubiquitous on finance pages and
- * a substring selector would mis-resolve them at high confidence. Accepts a pre-loaded $.
+ * a substring selector would mis-resolve them at high confidence. Reads pre-collected candidates.
  */
-function extractFromAdjacentPairs($, canonical) {
+function extractFromAdjacentPairs(cand, canonical) {
     // class word-tokens to look for, plus exact attribute selectors that are already safe.
     const HINTS = {
         price: { classWords: ["price"], exact: ["[data-testid='price']", "[itemprop='price']"] },
@@ -380,29 +419,24 @@ function extractFromAdjacentPairs($, canonical) {
     };
     // 1. Exact attribute selectors (data-testid / itemprop) — no substring ambiguity.
     for (const sel of hint.exact) {
-        const el = $(sel).first();
-        if (el.length) {
-            const v = accept(el.text());
+        const raw = cand.attrHits.get(sel);
+        if (raw !== undefined) {
+            const v = accept(raw);
             if (v)
                 return v;
         }
     }
-    // 2. Class word-token scan. Pull a candidate set with a cheap substring selector, then
-    //    keep only elements whose className contains the word as a whole token.
+    // 2. Class word-token scan. Iterate the pre-collected classed elements (DOM order) and
+    //    keep only those whose className contains the word as a whole token. classTokenHasWord
+    //    was always the authoritative gate; the old [class*=…] selector was just a pre-filter.
     for (const word of hint.classWords) {
-        let found = null;
-        $(`[class*='${word.split("-")[0]}']`).each((_, el) => {
-            if (found)
-                return;
-            const className = $(el).attr("class") ?? "";
-            if (!classTokenHasWord(className, word))
-                return;
-            const v = accept($(el).text());
+        for (const el of cand.classedEls) {
+            if (!classTokenHasWord(el.className, word))
+                continue;
+            const v = accept(el.text);
             if (v)
-                found = v;
-        });
-        if (found)
-            return found;
+                return v;
+        }
     }
     return null;
 }
@@ -428,7 +462,7 @@ const STAT_FIELDS = new Set([
  * numeric stat field to a sentence.)
  */
 const STAT_VALUE_RE = /^[+\-]?[€$£¥₹]?\s*[\d,]+(?:\.\d+)?\s*[%KkMmBbTt]?(?:\s*[-–—]\s*[+\-]?[€$£¥₹]?\s*[\d,]+(?:\.\d+)?\s*[%KkMmBbTt]?)?$/;
-function isStatValue(v) {
+export function isStatValue(v) {
     return STAT_VALUE_RE.test(v.trim());
 }
 /**
@@ -514,12 +548,24 @@ function resolved(field, value, source, attempted) {
  *   known patterns → generic colon pattern → tolerant labelled-value → number-near-label →
  *   heading section → (llm stub, off) → unresolved
  *
- * cheerio is loaded once per call (shared across fields and layers).
+ * cheerio is loaded once per call AND the DOM is walked once up front (NOV-577): every
+ * label→value candidate the HTML layers need is harvested by collectDomCandidates, then each
+ * field resolves against those in-memory arrays — O(DOM + fields × candidates) instead of the
+ * old O(fields × DOM) where each layer re-queried `$` per requested field.
  * Unresolved fields are NON-SILENT: value=null + agent_instruction explaining the miss.
  */
-export function extractFields(fields, structuredData, markdown, html) {
-    // Load cheerio once per call (not per field, not per layer).
-    const $ = html ? cheerio.load(html) : null;
+export function extractFields(fields, structuredData, markdown, html, 
+/**
+ * NOV-577: optional pre-parsed document. When the caller (extract.ts) already loaded the
+ * same `html` into cheerio for its title/description/links/structured-data readers, it passes
+ * that `$` here so this function skips a redundant cheerio.load. When omitted, `html` is parsed
+ * as before, so the public signature and every existing caller stay unchanged.
+ */
+preloaded$) {
+    // Harvest all DOM candidates in a single pass. Reuse the caller's parsed document when given,
+    // else parse `html` once here.
+    const $ = preloaded$ ?? (html ? cheerio.load(html) : null);
+    const cand = $ ? collectDomCandidates($) : null;
     return fields.map(field => {
         const lower = field.toLowerCase().trim();
         const canonical = canonicalField(field);
@@ -537,31 +583,31 @@ export function extractFields(fields, structuredData, markdown, html) {
                 }
             }
         }
-        if ($) {
+        if (cand) {
             // 2. Infobox (Wikipedia-style)
             attempted.push("infobox");
-            const infoboxValue = extractFromInfobox($, canonical) ?? extractFromInfobox($, field);
+            const infoboxValue = extractFromInfobox(cand, canonical) ?? extractFromInfobox(cand, field);
             if (infoboxValue)
                 return resolved(field, infoboxValue, "infobox", attempted);
             // 3. Table header
             attempted.push("table");
-            const tableValue = extractFromTableHeaders($, canonical) ?? extractFromTableHeaders($, field);
+            const tableValue = extractFromTableHeaders(cand, canonical) ?? extractFromTableHeaders(cand, field);
             if (tableValue)
                 return resolved(field, tableValue, "table", attempted);
             // 4. Label/value rows + definition lists (finance row tables)
             attempted.push("label-rows");
-            const rowValue = extractFromLabelValueRows($, canonical) ?? extractFromLabelValueRows($, field);
+            const rowValue = extractFromLabelValueRows(cand, canonical) ?? extractFromLabelValueRows(cand, field);
             if (rowValue)
                 return resolved(field, rowValue, "table", attempted);
             // 5. Microdata (Schema.org itemprop)
             attempted.push("microdata");
-            const microdataValue = extractFromMicrodata($, canonical) ?? extractFromMicrodata($, field);
+            const microdataValue = extractFromMicrodata(cand, canonical) ?? extractFromMicrodata(cand, field);
             if (microdataValue)
                 return resolved(field, microdataValue, "microdata", attempted);
             // 6. Adjacent hero stat blocks (.price, [class*=change]). Matched by class/attribute
             //    token, not a real table row — score it at the pattern tier, not table confidence.
             attempted.push("adjacent");
-            const adjacentValue = extractFromAdjacentPairs($, canonical);
+            const adjacentValue = extractFromAdjacentPairs(cand, canonical);
             if (adjacentValue)
                 return resolved(field, adjacentValue, "pattern", attempted);
         }
@@ -640,7 +686,10 @@ function sourceToDiagnosticMethod(source) {
  * Reuses the unified extractFields chain so the two code paths can never drift, then derives
  * diagnostics from each FieldResult's source + attempted list.
  */
-export function extractFieldsWithDiagnostics(fields, structuredData, markdown, htmlLength, html) {
+export function extractFieldsWithDiagnostics(fields, structuredData, markdown, htmlLength, html, 
+/** NOV-577: forward the caller's pre-parsed document so extractFields skips a redundant
+ *  cheerio.load (mirrors extractFields' own preloaded$ param). */
+preloaded$) {
     // Short-circuit: page content too short to be real.
     if (htmlLength < 500) {
         const results = [];
@@ -664,7 +713,7 @@ export function extractFieldsWithDiagnostics(fields, structuredData, markdown, h
         }
         return { results, diagnostics };
     }
-    const results = extractFields(fields, structuredData, markdown, html);
+    const results = extractFields(fields, structuredData, markdown, html, preloaded$);
     const diagnostics = results.map(r => {
         if (r.source !== "unresolved") {
             return { field: r.field, matched: true, method: sourceToDiagnosticMethod(r.source), attempted: r.attempted };

@@ -1,4 +1,3 @@
-import ExcelJS from "exceljs";
 /** Convert records to CSV string */
 export function formatAsCsv(records) {
     if (records.length === 0)
@@ -53,6 +52,9 @@ export function formatAsHtml(records, title) {
 }
 /** Convert records to XLSX buffer */
 export async function formatAsXlsx(records, sheetName = "Data") {
+    // NOV-577 cold-start: exceljs is heavy and only needed for the xlsx path. Load it lazily so
+    // importing format.ts (pulled in eagerly via the utils barrel) doesn't pay the cost up front.
+    const { default: ExcelJS } = (await import("exceljs"));
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet(sheetName);
     if (records.length > 0) {

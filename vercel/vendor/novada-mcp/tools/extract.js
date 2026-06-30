@@ -1,4 +1,5 @@
-import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
+import * as cheerio from "cheerio";
+import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitleFrom, extractDescriptionFrom, extractLinksFrom, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredDataFrom, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import { saveOutput } from "../utils/output.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
@@ -402,8 +403,14 @@ async function extractSingleInner(params, apiKey) {
         // Strip the pdf_pages prefix (and optional title line)
         html = html.replace(/^pdf_pages:\d+\n(?:title: [^\n]+\n)?/, "");
     }
-    let title = pdfPages !== null ? (pdfTitle ?? params.url) : extractTitle(html);
-    let description = extractDescription(html);
+    // NOV-577: parse the finalized HTML ONCE and share that read-only document across the
+    // title/description/links/structured-data readers below, instead of each helper calling
+    // cheerio.load(html) again (was 4 redundant parses per request). The content extractors
+    // (extractMainContent/extractFullPageContent) mutate their DOM, so they still load their own.
+    // PDFs have no HTML to parse — $doc stays null and the PDF branches supply values directly.
+    let $doc = pdfPages !== null ? null : cheerio.load(html);
+    let title = pdfPages !== null ? (pdfTitle ?? params.url) : extractTitleFrom($doc);
+    let description = $doc ? extractDescriptionFrom($doc) : "";
     let stillJsHeavy = renderMode === "auto" && (usedMode === "static" || usedMode === "render-failed") && detectJsHeavyContent(html);
     if (params.format === "html") {
         let htmlOutput;
@@ -439,7 +446,7 @@ async function extractSingleInner(params, apiKey) {
         : useFullPage
             ? extractFullPageContent(html, params.url)
             : extractMainContent(html, params.url);
-    let allLinks = pdfPages !== null ? [] : extractLinks(html, params.url);
+    let allLinks = $doc ? extractLinksFrom($doc, params.url) : [];
     let baseDomain;
     try {
         baseDomain = new URL(params.url).hostname.replace(/^www\./, "");
@@ -476,7 +483,7 @@ async function extractSingleInner(params, apiKey) {
         return `${title}\n${description ? description + "\n" : ""}\n${plainContent}${linksText}`;
     }
     // Quality scoring (skip structured data extraction for PDFs — no HTML schema)
-    let structuredData = pdfPages !== null ? null : extractStructuredData(html);
+    let structuredData = $doc ? extractStructuredDataFrom($doc) : null;
     let hasStructuredData = structuredData !== null;
     let quality = scoreExtraction(html, mainContent, usedMode, hasStructuredData);
     // P0-1: Quality floor — never return quality:0 for non-empty content.
@@ -503,16 +510,19 @@ async function extractSingleInner(params, apiKey) {
             const renderResponse = await fetchWithRender(params.url, apiKey);
             if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
                 const renderHtml = renderResponse.data;
+                // NOV-577: one parse of the re-fetched HTML, shared across the readers in this branch.
+                const $render = cheerio.load(renderHtml);
                 const renderMain = useFullPage
                     ? extractFullPageContent(renderHtml, params.url)
                     : extractMainContent(renderHtml, params.url);
-                const renderSD = extractStructuredData(renderHtml);
+                const renderSD = extractStructuredDataFrom($render);
                 const renderQuality = scoreExtraction(renderHtml, renderMain, "render", renderSD !== null);
                 if (renderQuality.score > quality.score) {
                     html = renderHtml;
+                    $doc = $render;
                     usedMode = "render";
                     mainContent = renderMain;
-                    allLinks = extractLinks(renderHtml, params.url);
+                    allLinks = extractLinksFrom($render, params.url);
                     sameDomainLinks = allLinks
                         .filter(link => {
                         try {
@@ -528,8 +538,8 @@ async function extractSingleInner(params, apiKey) {
                     quality = renderQuality;
                     if (quality.score === 0 && mainContent.length > 0)
                         quality.score = 1;
-                    title = extractTitle(renderHtml);
-                    description = extractDescription(renderHtml);
+                    title = extractTitleFrom($render);
+                    description = extractDescriptionFrom($render);
                     stillJsHeavy = false;
                     autoEscalated = true;
                     autoEscalatedTo = "render";
@@ -547,16 +557,19 @@ async function extractSingleInner(params, apiKey) {
         if (quality.score < 40 && !quality.content_present && isBrowserConfigured()) {
             try {
                 const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
+                // NOV-577: one parse of the browser HTML, shared across the readers in this branch.
+                const $browser = cheerio.load(browserHtml);
                 const browserMain = useFullPage
                     ? extractFullPageContent(browserHtml, params.url)
                     : extractMainContent(browserHtml, params.url);
-                const browserSD = extractStructuredData(browserHtml);
+                const browserSD = extractStructuredDataFrom($browser);
                 const browserQuality = scoreExtraction(browserHtml, browserMain, "browser", browserSD !== null);
                 if (browserQuality.score > quality.score) {
                     html = browserHtml;
+                    $doc = $browser;
                     usedMode = "browser";
                     mainContent = browserMain;
-                    allLinks = extractLinks(browserHtml, params.url);
+                    allLinks = extractLinksFrom($browser, params.url);
                     sameDomainLinks = allLinks
                         .filter(link => {
                         try {
@@ -572,8 +585,8 @@ async function extractSingleInner(params, apiKey) {
                     quality = browserQuality;
                     if (quality.score === 0 && mainContent.length > 0)
                         quality.score = 1;
-                    title = extractTitle(browserHtml);
-                    description = extractDescription(browserHtml);
+                    title = extractTitleFrom($browser);
+                    description = extractDescriptionFrom($browser);
                     stillJsHeavy = false;
                     autoEscalated = true;
                     autoEscalatedTo = "browser";
@@ -601,11 +614,14 @@ async function extractSingleInner(params, apiKey) {
                     ? extractFullPageContent(wbHtml, params.url)
                     : extractMainContent(wbHtml, params.url);
                 if (wbMain.length > mainContent.length) {
+                    // NOV-577: one parse of the Wayback HTML, shared across the readers in this branch.
+                    const $wb = cheerio.load(wbHtml);
                     html = wbHtml;
+                    $doc = $wb;
                     mainContent = wbMain;
-                    title = extractTitle(wbHtml);
-                    description = extractDescription(wbHtml);
-                    allLinks = extractLinks(wbHtml, params.url);
+                    title = extractTitleFrom($wb);
+                    description = extractDescriptionFrom($wb);
+                    allLinks = extractLinksFrom($wb, params.url);
                     sameDomainLinks = allLinks
                         .filter(link => {
                         try {
@@ -616,7 +632,7 @@ async function extractSingleInner(params, apiKey) {
                         }
                     })
                         .slice(0, 15);
-                    structuredData = extractStructuredData(wbHtml);
+                    structuredData = extractStructuredDataFrom($wb);
                     hasStructuredData = structuredData !== null;
                     quality = scoreExtraction(wbHtml, wbMain, usedMode, hasStructuredData);
                     if (quality.score === 0 && wbMain.length > 0)
@@ -646,7 +662,9 @@ async function extractSingleInner(params, apiKey) {
     // layers (pattern/generic/tolerant/proximity/heading in fields.ts) get the uncapped text.
     let fieldResults = null;
     if (params.fields && params.fields.length > 0) {
-        fieldResults = extractFields(params.fields, structuredData, mainContent, html);
+        // NOV-577: reuse $doc (the single parse of the finalized html) so the field DOM layers
+        // don't re-parse — $doc tracks every escalation re-fetch (render/browser/wayback) above.
+        fieldResults = extractFields(params.fields, structuredData, mainContent, html, $doc);
     }
     const metaExtra = contentTruncated
         ? ` | content_truncated:true | total_chars:${totalChars}`

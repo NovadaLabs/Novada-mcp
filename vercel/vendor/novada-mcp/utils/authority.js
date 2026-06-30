@@ -118,17 +118,20 @@ const SOCIAL_LEXICON = [
 export function detectIntent(query) {
     if (!query)
         return "default";
-    const q = ` ${query.toLowerCase()} `;
-    // q is space-padded, so ` ${t} ` already matches a term at the start/end of the query.
-    // (NOV-574: the old `${t} ` / ` ${t}` variants substring-matched inside words — e.g.
-    // "profile" inside "userprofile" — mis-classifying factual queries as social.)
-    const hasSocial = SOCIAL_LEXICON.some((t) => q.includes(` ${t} `));
-    if (hasSocial)
+    const lower = query.toLowerCase();
+    // NOV-578: bound the lexicon scan. Single-word terms (the vast majority) are matched
+    // against a tokenized Set — an O(1) whole-word lookup with NO substring scan, so
+    // punctuation-trimmed tokens like "stock?"/"earnings." still match while in-word
+    // substrings ("profile" in "userprofile", "pe" in "tape") never can. Multi-word phrases
+    // ("market cap", "balance sheet") can't be a single token, so they fall back to a
+    // space-anchored `.includes` over the padded query (NOV-574's word-boundary guard).
+    const tokens = new Set(lower.split(/\s+/).map((t) => t.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "")).filter(Boolean));
+    const padded = ` ${lower} `;
+    const lexiconHit = (lex) => lex.some((t) => (t.includes(" ") ? padded.includes(` ${t} `) : tokens.has(t)));
+    // social wins so we never penalize the results the user literally asked for.
+    if (lexiconHit(SOCIAL_LEXICON))
         return "social";
-    // q is space-padded, so wrap every term (single- or multi-word) in spaces to enforce
-    // word-boundary matching and avoid substring false positives (e.g. "pe" inside "tape").
-    const hasFactual = FACTUAL_LEXICON.some((t) => q.includes(` ${t} `));
-    if (hasFactual)
+    if (lexiconHit(FACTUAL_LEXICON))
         return "factual";
     return "default";
 }
