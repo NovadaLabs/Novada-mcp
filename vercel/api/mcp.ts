@@ -26,6 +26,8 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { ZodError } from "zod";
 import { kv } from "@vercel/kv";
@@ -141,6 +143,8 @@ import {
 import { MonitorParamsSchema } from "../vendor/novada-mcp/tools/monitor.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
 import { NovadaError, NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.js";
+// MCP prompts (tool-selection decision trees) — same module the npm server uses (1:1 parity). Static, safe on serverless.
+import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
 
 // Hosted server version = `<vendored npm version>.<server build tag>-hosted`.
 //   • The npm-version part is DERIVED from the vendored package — NEVER hardcoded.
@@ -543,7 +547,7 @@ function redactHostedSecrets(msg: string): string {
 function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null }): Server {
   const server = new Server(
     { name: "novada", version: HOSTED_VERSION },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {}, prompts: {} } },
   );
 
   const isHosted = !!(process.env.VERCEL || process.env.VERCEL_ENV);
@@ -806,6 +810,15 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         isError: true,
       };
     }
+  });
+
+  // MCP prompts — list + get, delegated to the vendored prompts module (npm parity).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  server.setRequestHandler(ListPromptsRequestSchema, async () => listPrompts() as any);
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return getPrompt(name, (args as Record<string, string>) || {}) as any;
   });
 
   return server;
