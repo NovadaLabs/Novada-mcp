@@ -217,6 +217,45 @@ function rewriteRedditUrl(url: string): string | null {
   }
 }
 
+/**
+ * #1/#12: Keep the best result across escalation attempts.
+ *
+ * In render="auto" the static fetch can already hold real content; escalating to the
+ * browser/CDP tier then unconditionally overwrote `html` with the browser response.
+ * When that response is empty or a JS-challenge stub, the good static content was lost
+ * and the request returned near-empty (quality ~1/100, content_present:false).
+ *
+ * This compares the candidate (browser) HTML against the current best by the SAME
+ * extracted-content quality score the formatter uses, and only adopts the candidate
+ * when it is genuinely better. A blank/whitespace candidate is never adopted, so a
+ * non-empty static attempt always survives a failed escalation.
+ *
+ * Returns the winning html + which mode produced it, so callers set usedMode to match
+ * the content they actually kept (not the tier they merely attempted).
+ */
+function pickBetterHtml(
+  current: { html: string; mode: "static" | "render" | "browser" | "render-failed" },
+  candidate: { html: string; mode: "static" | "render" | "browser" },
+  url: string,
+  useFullPage: boolean
+): { html: string; mode: "static" | "render" | "browser" | "render-failed"; adopted: boolean } {
+  // A blank/near-blank candidate can never beat a fetched current result.
+  if (!candidate.html || candidate.html.trim().length === 0) {
+    return { ...current, adopted: false };
+  }
+  const extract = (h: string) =>
+    useFullPage ? extractFullPageContent(h, url) : extractMainContent(h, url);
+  const currentMain = extract(current.html);
+  const candidateMain = extract(candidate.html);
+  const currentScore = scoreExtraction(current.html, currentMain, current.mode, false).score;
+  const candidateScore = scoreExtraction(candidate.html, candidateMain, candidate.mode, false).score;
+  // Strictly-greater: ties keep the cheaper/earlier attempt (mode bonus already favors static).
+  if (candidateScore > currentScore) {
+    return { html: candidate.html, mode: candidate.mode, adopted: true };
+  }
+  return { ...current, adopted: false };
+}
+
 /** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
 async function extractSingleInner(
   params: ExtractParams & { url: string },
@@ -252,6 +291,10 @@ async function extractSingleInner(
   let detectedAntiBot: string | null = null;
   /** Whether anti-bot was resolved via escalation */
   let antiBotResolved = false;
+  // clean=true → main-content only; clean=false (default) → full page for maximum coverage.
+  // Hoisted above the escalation block so pickBetterHtml (#1/#12) can score candidates
+  // with the same extractor the formatter uses below.
+  const useFullPage = params.clean !== true;
 
   // Domain registry: skip auto-detection probe for known sites
   const domainHint = renderMode === "auto" ? lookupDomain(params.url) : null;
@@ -370,9 +413,17 @@ async function extractSingleInner(
           detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
           // Render returned a bot challenge page — escalate to browser if available
           if (isBrowserConfigured()) {
-            html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
-            usedMode = "browser";
-            antiBotResolved = true;
+            // #1/#12: browser can throw or return an empty challenge stub. Keep the
+            // static html (still in `html`) when the browser result isn't better.
+            const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
+            const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+            html = best.html;
+            usedMode = best.mode;
+            antiBotResolved = best.adopted;
+            if (!best.adopted) {
+              usedMode = "render-failed";
+              renderError = "Render returned a bot challenge page; browser fallback returned no better content";
+            }
           } else {
             // No browser available — keep static html, mark as failed
             usedMode = "render-failed";
@@ -384,9 +435,13 @@ async function extractSingleInner(
           antiBotResolved = detectedAntiBot !== null;
         } else if (isBrowserConfigured()) {
           // render also JS-heavy — try full browser
-          html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
-          usedMode = "browser";
-          antiBotResolved = true;
+          // #1/#12: keep the best of {static html, render html, browser html}.
+          const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
+          // Compare browser against render (render is JS-heavy but still better than static here).
+          const best = pickBetterHtml({ html: renderHtml, mode: "render" }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+          html = best.html;
+          usedMode = best.mode;
+          antiBotResolved = best.adopted;
         } else {
           // render worked but still JS-heavy, use it (better than static)
           html = renderHtml;
@@ -402,9 +457,13 @@ async function extractSingleInner(
         // render threw — try Browser API if available
         renderError = err instanceof Error ? err.message : String(err);
         if (isBrowserConfigured()) {
-          html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
-          usedMode = "browser";
-          antiBotResolved = true;
+          // #1/#12: browser can also fail/return empty. Keep the static html (in `html`)
+          // when the browser result isn't better, instead of returning near-empty.
+          const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
+          const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+          html = best.html;
+          usedMode = best.adopted ? best.mode : "render-failed";
+          antiBotResolved = best.adopted;
         } else {
           usedMode = "render-failed";
         }
@@ -461,9 +520,8 @@ async function extractSingleInner(
     return htmlOutput;
   }
 
-  // For PDF content, use the text directly (no HTML parsing needed)
-  // clean=true → main-content only; clean=false (default) → full page for maximum coverage
-  const useFullPage = params.clean !== true;
+  // For PDF content, use the text directly (no HTML parsing needed).
+  // useFullPage is hoisted to the fetch section above (shared with pickBetterHtml).
   let mainContent = pdfPages !== null
     ? html.slice(0, MAX_CHARS_DEFAULT)
     : useFullPage
@@ -803,15 +861,21 @@ async function extractSingleInner(
     return jsonOutput;
   }
 
+  // #22: header rows are single-line `key: value`. title/description come from <title>/<h1>
+  // /meta and can carry embedded newlines or whitespace runs (wrapped nav, multi-line meta);
+  // collapse them to a single line so nav-chrome can't split into fake header rows. JSON output
+  // keeps the raw values untouched (proper JSON strings, no header contract to break).
+  const headerLine = (s: string) => s.replace(/\s+/g, " ").trim();
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
     `mode: ${usedMode} | source: ${waybackFallback ? "wayback" : "live"} | quality:${quality.score}/100 (${qLabel}) | content_present:${quality.content_present} | content_ok:${contentOk}`,
     `quality_reasons: ${quality.quality_reasons.join("; ")}`,
     `fetched_at: ${fetchedAt}`,
-    `extraction_quality: ${extractionQuality}`,
-    `title: ${title}`,
-    ...(description ? [`description: ${description}`] : []),
+    // #22: omit extraction_quality when no fields were requested (n/a is noise).
+    ...(extractionQuality !== "n/a" ? [`extraction_quality: ${extractionQuality}`] : []),
+    `title: ${headerLine(title)}`,
+    ...(description ? [`description: ${headerLine(description)}`] : []),
     `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? ` | auto_escalated:true${autoEscalatedTo ? ` | escalated_to:${autoEscalatedTo}` : ""}` : ""}${detectedAntiBot ? ` | anti_bot:${detectedAntiBot} | resolved:${antiBotResolved}` : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
     ``,
     `---`,
@@ -1007,7 +1071,8 @@ async function extractSingleInner(
       data: mdOutput,
       project: params.project,
     });
-    savePrefix = `📁 ${outputResult.filePath}\n\n`;
+    // #22: drop the stray leading folder emoji; match the batch path's `path: ` prefix.
+    savePrefix = `path: ${outputResult.filePath}\n\n`;
   } catch { /* best-effort */ }
 
   const finalOutput = savePrefix + mdOutput;

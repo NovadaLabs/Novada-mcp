@@ -37,7 +37,7 @@ const safeUrl = z.string()
 export const SearchParamsSchema = z.object({
   query: z.string().min(1, "Search query is required"),
   engine: z.enum(["google", "bing", "duckduckgo", "yahoo", "yandex"]).default("google")
-    .describe("Search engine to use. 'google': best general relevance (default). 'bing': good for news and local. 'duckduckgo': privacy-focused. 'yahoo': broad index. 'yandex': Russian/Eastern European content."),
+    .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yahoo': broad index. 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED — may return zero results; avoid."),
   num: z.number().int().min(1).max(20).default(10),
   country: z.string().default(""),
   language: z.string().default(""),

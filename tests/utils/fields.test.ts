@@ -270,3 +270,63 @@ describe("isStatValue — NOV-574 prose-with-a-digit rejection", () => {
     expect(isStatValue("top 5 holdings")).toBe(false);
   });
 });
+
+describe("extractFields — NOV #13 cart-total is not the product price", () => {
+  // The canonical confidently-wrong answer: an empty-cart running total ($0.00) rendered in a
+  // mini-cart widget gets returned as the product price. The product price lives in its own
+  // product/price container and must win; a cart-only total must yield an explained null.
+  it("prefers the product-container price over a $0.00 cart total", () => {
+    const html = `
+      <html><body>
+        <div class="mini-cart"><span class="cart-total-price">$0.00</span></div>
+        <div class="product-info"><span class="price">$129.99</span></div>
+      </body></html>`;
+    const r = extractFields(["price"], null, "", html)[0];
+    expect(r.value).toBe("$129.99");
+    expect(r.source).toBe("pattern");
+  });
+
+  it("does NOT return a $0.00 cart total when that is the only price-shaped value (null + agent_instruction)", () => {
+    const html = `
+      <html><body>
+        <header class="site-cart"><span class="cart-subtotal">$0.00</span></header>
+        <div class="basket-summary"><span class="price">$0.00</span></div>
+      </body></html>`;
+    const r = extractFields(["price"], null, "", html)[0];
+    expect(r.value).toBeNull();
+    expect(r.source).toBe("unresolved");
+    expect(r.agent_instruction).toBeDefined();
+    expect(r.agent_instruction).toMatch(/cart|order-summary|total/i);
+  });
+
+  it("skips a price nested inside a cart container even when non-zero", () => {
+    // A non-zero subtotal in a cart block is still the cart total, not the item's price.
+    const html = `
+      <html><body>
+        <div class="cart-drawer"><span class="price">$59.98</span></div>
+        <div class="product"><span class="price">$29.99</span></div>
+      </body></html>`;
+    const r = extractFields(["price"], null, "", html)[0];
+    expect(r.value).toBe("$29.99");
+  });
+
+  it("a bare $0.00 in markdown does NOT resolve as the price (falls through to explained null)", () => {
+    // No HTML cart context, but a stray $0.00 in body text must not become the price.
+    const r = extractFields(["price"], null, "Your cart subtotal: $0.00\nFree shipping over $50.")[0];
+    expect(r.value).toBeNull();
+    expect(r.source).toBe("unresolved");
+  });
+
+  it("a legitimate product price in a plain price class still resolves (no cart context)", () => {
+    const html = `<html><body><span class="product-price">$42.50</span></body></html>`;
+    const r = extractFields(["price"], null, "", html)[0];
+    expect(r.value).toBe("$42.50");
+  });
+
+  it("authoritative itemprop=price wins even inside a cart-ish wrapper", () => {
+    // Schema.org product data is authoritative — not cart-guarded.
+    const html = `<html><body><div class="cart"><span itemprop="price">$99.00</span></div></body></html>`;
+    const r = extractFields(["price"], null, "", html)[0];
+    expect(r.value).toBe("$99.00");
+  });
+});

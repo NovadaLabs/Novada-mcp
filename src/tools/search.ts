@@ -340,17 +340,33 @@ const YAHOO_UNAVAILABLE = `## Search Unavailable — Yahoo
 Yahoo Search is not available on this account.
 
 ## Agent Hints
-- Use engine="google" or engine="bing" — same query syntax, equivalent results.
+- Use engine="google" (fast, reliable) — same query syntax, equivalent results. engine="duckduckgo" also works.
 
 ## Agent Notice — Engine Unavailable
-engine: yahoo | status: unsupported | suggested_alternatives: google, bing`;
+engine: yahoo | status: unsupported | suggested_alternatives: google, duckduckgo`;
 
 export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
-  if (!params.query || typeof params.query !== 'string') {
+  // Trim BEFORE the required check so a whitespace-only query ('   ') is rejected
+  // with the same validation error as empty — no live call, no quota burn. The
+  // trimmed value is reused for the rest of the request so we never send padding
+  // upstream or key the cache on it.
+  if (typeof params.query !== 'string') {
     throw new Error('query is required and must be a non-empty string');
   }
+  const query = params.query.trim();
+  if (!query) {
+    throw new Error('query is required and must be a non-empty string');
+  }
+  params = { ...params, query };
 
   const engine = params.engine || "google";
+
+  // num is a hard ceiling AND a best-effort floor. We over-fetch upstream so that
+  // post-dedup + post-exclude_social still yields ~num, then slice to requestedNum
+  // before rendering (see below). overFetchNum is the upstream ask; engines that
+  // honour `num` will return more candidates to absorb dedup/filter shrinkage.
+  const requestedNum = params.num || 10;
+  const overFetchNum = Math.min(requestedNum + 10, 40);
 
   // Yahoo has no scraper-API path — return a clear redirect message immediately.
   if (engine === "yahoo") {
@@ -463,7 +479,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
         engineCfg.scraper_name,
         engineCfg.scraper_id,
         effectiveQuery,
-        params.num || 10,
+        overFetchNum,
         engineCfg.query_param,
         engineCfg.supports_num,
         {
@@ -512,7 +528,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       ``,
       `## Agent Hints`,
       `- Try a broader or rephrased query`,
-      `- Try a different engine: engine="duckduckgo" or engine="bing"`,
+      `- Try a different engine: engine="google" (fast, reliable fallback), or engine="duckduckgo" / "yandex". Avoid engine="bing" — currently degraded.`,
       `- Use novada_research for multi-source investigation`,
       `- Use novada_map + novada_extract if you have a known site`,
     ].join("\n");
@@ -525,8 +541,27 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     return emptyResult;
   }
 
-  // Rerank by relevance to query, with bounded intent-gated domain-authority signal
-  const reranked = rerankResults(results, params.query, effectiveIntent);
+  // Dedup by URL before scoring — upstream SERPs (and over-fetching) can repeat
+  // the same link. Keep first occurrence; results with no URL are kept as-is
+  // (they're skipped later at render time anyway).
+  const seenUrls = new Set<string>();
+  results = results.filter(r => {
+    const u = r.url || r.link;
+    if (!u) return true;
+    const key = u.toLowerCase();
+    if (seenUrls.has(key)) return false;
+    seenUrls.add(key);
+    return true;
+  });
+
+  // Rerank by relevance to query, with bounded intent-gated domain-authority signal,
+  // then enforce num as a hard ceiling (slice). This makes every engine — including
+  // duckduckgo, which can over-return — respect num. When fewer than requested are
+  // genuinely available we surface a scarcity hint (requested:N returned:M) below.
+  const reranked = rerankResults(results, params.query, effectiveIntent).slice(0, requestedNum);
+  const scarcity = reranked.length < requestedNum
+    ? `requested:${requestedNum} returned:${reranked.length}`
+    : "";
 
   // P1-7: Auto-extract content from top N results when extract_options is provided
   // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
@@ -594,6 +629,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       }),
       agent_instruction: "Search complete. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.",
     };
+    // Surface a scarcity signal when fewer than `num` results were genuinely
+    // available, so agents don't assume the ceiling was hit.
+    if (scarcity) (jsonResult as Record<string, unknown>).scarcity = scarcity;
     // Wire output save — best-effort, never breaks the tool.
     // Inject output_saved as a field so JSON remains valid and parseable.
     try {
@@ -627,6 +665,8 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   if (params.exclude_domains?.length) activeFilters.push(`exclude:${params.exclude_domains.join(",")}`);
   if (params.source_type && params.source_type !== "any") activeFilters.push(`source:${params.source_type}`);
   if (params.exclude_social) activeFilters.push(`exclude_social:true`);
+
+  if (scarcity) activeFilters.push(scarcity);
 
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 

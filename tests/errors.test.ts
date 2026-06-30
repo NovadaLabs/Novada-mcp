@@ -3,7 +3,7 @@
  * No network calls. All pure logic.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { ZodError } from "zod";
 import {
   NovadaError,
@@ -11,6 +11,7 @@ import {
   makeNovadaError,
   sanitizeServerMsg,
   classifyError,
+  redactSecrets,
 } from "../src/_core/errors.js";
 import { SearchParamsSchema } from "../src/tools/types.js";
 
@@ -75,9 +76,9 @@ describe("NovadaError.toAgentString", () => {
     expect(s).toContain("bad key");
   });
 
-  it("includes Retryable line", () => {
+  it("includes retry_recommended line", () => {
     const s = makeNovadaError(NovadaErrorCode.API_DOWN, "down").toAgentString();
-    expect(s).toContain("Retryable: yes");
+    expect(s).toContain("retry_recommended: true");
   });
 
   it("includes agent_instruction line", () => {
@@ -109,9 +110,9 @@ describe("NovadaError.toAgentString", () => {
     expect(injected).toBeUndefined();
   });
 
-  it("Retryable is no for non-retryable codes", () => {
+  it("retry_recommended is false for non-retryable codes", () => {
     const s = makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "x").toAgentString();
-    expect(s).toContain("Retryable: no");
+    expect(s).toContain("retry_recommended: false");
   });
 });
 
@@ -247,5 +248,122 @@ describe("classifyError", () => {
     expect(err.code).toBe(NovadaErrorCode.UNKNOWN);
     expect(err.message).toContain("apikey=***");
     expect(err.message).not.toContain("supersecret");
+  });
+
+  // #14 — raw Playwright/CDP strings mapped to user-facing categories
+  it("maps Cloudflare 'Just a moment' challenge to anti-bot category", () => {
+    const err = classifyError(new Error("page text: Just a moment... cf_chl_opt"));
+    expect(err.code).toBe(NovadaErrorCode.URL_UNREACHABLE);
+    expect(err.message.toLowerCase()).toContain("anti-bot");
+    // raw page internals must NOT be surfaced
+    expect(err.message).not.toContain("cf_chl_opt");
+  });
+
+  it("maps CDP connectOverCDP failure to upstream-browser-unavailable category", () => {
+    const err = classifyError(new Error("chromium.connectOverCDP: connection refused"));
+    expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+    expect(err.message.toLowerCase()).toContain("upstream browser unavailable");
+  });
+
+  it("maps 'Target closed' to upstream-browser-unavailable category", () => {
+    const err = classifyError(new Error("Target closed"));
+    expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+    expect(err.message.toLowerCase()).toContain("upstream browser unavailable");
+  });
+
+  it("maps DNS ENOTFOUND to a clear domain-unreachable message", () => {
+    const err = classifyError(new Error("getaddrinfo ENOTFOUND example.invalid"));
+    expect(err.code).toBe(NovadaErrorCode.URL_UNREACHABLE);
+    expect(err.message.toLowerCase()).toContain("domain unreachable");
+  });
+});
+
+// ─── redactSecrets (#2 — credential / internal-host leak) ─────────────────────
+
+describe("redactSecrets", () => {
+  const ORIGINAL_WS = process.env.NOVADA_BROWSER_WS;
+  afterEach(() => {
+    if (ORIGINAL_WS === undefined) delete process.env.NOVADA_BROWSER_WS;
+    else process.env.NOVADA_BROWSER_WS = ORIGINAL_WS;
+  });
+
+  it("strips userinfo from https URLs (https://user:pass@host → https://host)", () => {
+    const out = redactSecrets("failed: https://admin:s3cr3t@internal.example.com/path");
+    expect(out).toContain("https://internal.example.com/path");
+    expect(out).not.toContain("admin");
+    expect(out).not.toContain("s3cr3t");
+  });
+
+  it("strips userinfo from wss URLs", () => {
+    const out = redactSecrets("connect wss://botuser:botpass@host:9222/cdp failed");
+    expect(out).not.toContain("botuser");
+    expect(out).not.toContain("botpass");
+    expect(out).not.toContain("botuser:botpass@");
+  });
+
+  it("redacts the exact NOVADA_BROWSER_WS value when present in env", () => {
+    process.env.NOVADA_BROWSER_WS = "wss://leakuser:leakpass@upg-scbr2.novada.com";
+    const out = redactSecrets("CDP error connecting to wss://leakuser:leakpass@upg-scbr2.novada.com — closed");
+    expect(out).not.toContain("leakuser");
+    expect(out).not.toContain("leakpass");
+    expect(out).not.toContain("upg-scbr2.novada.com");
+  });
+
+  it("masks internal *.novada.com hosts not on the public allowlist", () => {
+    const out = redactSecrets("CDP host upg-scbr2.novada.com unreachable");
+    expect(out).not.toContain("upg-scbr2.novada.com");
+    expect(out).toContain("[novada-internal-host]");
+  });
+
+  it("preserves public novada.com hosts (dashboard, status, www)", () => {
+    const out = redactSecrets("see https://dashboard.novada.com/overview/ and https://status.novada.com");
+    expect(out).toContain("dashboard.novada.com");
+    expect(out).toContain("status.novada.com");
+    expect(out).not.toContain("[novada-internal-host]");
+  });
+
+  it("leaves credential-free messages untouched", () => {
+    expect(redactSecrets("plain error: task not found")).toBe("plain error: task not found");
+  });
+});
+
+// ─── toAgentString credential-leak (#2 end-to-end) ────────────────────────────
+
+describe("toAgentString never leaks Browser API creds or internal hosts", () => {
+  const ORIGINAL_WS = process.env.NOVADA_BROWSER_WS;
+  afterEach(() => {
+    if (ORIGINAL_WS === undefined) delete process.env.NOVADA_BROWSER_WS;
+    else process.env.NOVADA_BROWSER_WS = ORIGINAL_WS;
+  });
+
+  it("strips a creds-bearing Browser API error string from the surfaced output", () => {
+    process.env.NOVADA_BROWSER_WS = "wss://secretuser:secretpass@upg-scbr2.novada.com";
+    // Simulate a raw upstream error that embedded the full WS endpoint + internal host
+    const leaky =
+      "Browser API connection failed: wss://secretuser:secretpass@upg-scbr2.novada.com refused by upg-scbr2.novada.com";
+    const err = makeNovadaError(NovadaErrorCode.API_DOWN, leaky);
+    const surfaced = err.toAgentString();
+    expect(surfaced).not.toContain("secretuser");
+    expect(surfaced).not.toContain("secretpass");
+    expect(surfaced).not.toContain("upg-scbr2.novada.com");
+    expect(surfaced).not.toContain("secretuser:secretpass@");
+  });
+
+  it("classifyError + toAgentString scrubs leaked creds end-to-end", () => {
+    process.env.NOVADA_BROWSER_WS = "wss://u:p@upg-scbr2.novada.com";
+    const err = classifyError(new Error("connectOverCDP failed: wss://u:p@upg-scbr2.novada.com"));
+    const surfaced = err.toAgentString();
+    expect(surfaced).not.toContain("upg-scbr2.novada.com");
+    expect(surfaced).not.toContain("u:p@");
+  });
+});
+
+// ─── install command (#11) ────────────────────────────────────────────────────
+
+describe("INVALID_API_KEY agent_instruction uses correct npm package", () => {
+  it("recommends 'npx -y novada-mcp', never bare 'npx -y novada'", () => {
+    const err = makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "bad key");
+    expect(err.agent_instruction).toContain("npx -y novada-mcp");
+    expect(err.agent_instruction).not.toMatch(/npx -y novada(?!-mcp)/);
   });
 });

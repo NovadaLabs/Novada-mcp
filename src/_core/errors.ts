@@ -69,8 +69,10 @@ export class NovadaError extends Error {
 
   /** Formats the error as an agent-readable string with failure classification. */
   toAgentString(): string {
-    // Sanitize: collapse newlines in message to prevent agent_instruction injection
-    const safeMsg = this.message.replace(/[\r\n]+/g, " ").trim();
+    // Sanitize: collapse newlines in message to prevent agent_instruction injection.
+    // P0 SECURITY (#2): redact any leaked credentials/internal hosts from the message
+    // (a raw upstream string can carry user:pass@host or an internal *.novada.com host).
+    const safeMsg = redactSecrets(this.message).replace(/[\r\n]+/g, " ").trim();
     const failureClass = FAILURE_CLASS[this.code];
     const retryAfter = RETRY_AFTER_MS[this.code];
     const lines = [
@@ -81,9 +83,11 @@ export class NovadaError extends Error {
       `agent_instruction: "${this.agent_instruction}"`,
     ];
     if (this.detail) {
-      lines.push(`detail: "${this.detail}"`);
+      lines.push(`detail: "${redactSecrets(this.detail)}"`);
     }
-    return lines.join("\n");
+    // Defense in depth: redact the fully-assembled output so no secret can slip
+    // through via any field (agent_instruction templates are static, but cheap insurance).
+    return redactSecrets(lines.join("\n"));
   }
 }
 
@@ -94,10 +98,10 @@ const INSTRUCTIONS: Record<NovadaErrorCode, string> = {
 Your API key is missing or invalid. Do not retry until the key is fixed.
 
 Setup (one-time):
-  claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada
+  claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 
 Verify the key is active:
-  Run novada_health — it will confirm which products are accessible.
+  Call novada_health — it will confirm which products are accessible.
 
 Get a key: https://dashboard.novada.com/overview/`,
 
@@ -179,7 +183,7 @@ Proxy authentication failed. Verify your proxy credentials.
 
 Action:
   1. Check NOVADA_PROXY_USER and NOVADA_PROXY_PASS are correctly set.
-  2. Run novada_health to confirm proxy credentials are loaded.
+  2. Call novada_health to confirm proxy credentials are loaded.
   3. Regenerate credentials at https://dashboard.novada.com/overview/proxy/ if expired.`,
 
   [NovadaErrorCode.UNKNOWN]: `\
@@ -190,9 +194,55 @@ Action: Check the error message above for clues. If it persists, contact support
 
 // ─── Sanitization ────────────────────────────────────────────────────────────
 
+/**
+ * Public Novada hosts that are safe to surface in error text. Any other
+ * `*.novada.com` subdomain is treated as an internal endpoint (e.g. the
+ * Browser API CDP host `upg-scbr2.novada.com`) and redacted.
+ */
+const PUBLIC_NOVADA_HOSTS = new Set([
+  "novada.com",
+  "www.novada.com",
+  "dashboard.novada.com",
+  "status.novada.com",
+  "mcp.novada.com",
+  "docs.novada.com",
+]);
+
+/**
+ * P0 SECURITY (#2): strip secrets that an upstream error can leak in plaintext —
+ * URL userinfo (`https://user:pass@host` → `https://host`), the literal
+ * NOVADA_BROWSER_WS value, and internal `*.novada.com` host strings that aren't
+ * on the public allowlist. Runs on EVERY error message + agent_instruction
+ * before it reaches the caller.
+ */
+export function redactSecrets(msg: string): string {
+  let out = msg;
+
+  // 1. Exact NOVADA_BROWSER_WS value (contains user:pass@host) — redact first,
+  //    before host-level rules can partially rewrite it.
+  const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
+  if (browserWs) {
+    out = out.split(browserWs).join("[browser-ws-endpoint]");
+  }
+
+  // 2. URL userinfo in any scheme (http/https/ws/wss): strip the `user:pass@`.
+  //    https://user:pass@host/x → https://host/x ; wss://u:p@h → wss://h
+  out = out.replace(
+    /\b([a-z][a-z0-9+.-]*:\/\/)[^/@\s:]+(?::[^/@\s]*)?@/gi,
+    "$1"
+  );
+
+  // 3. Internal *.novada.com hosts not on the public allowlist → placeholder.
+  out = out.replace(/\b(?:[a-z0-9-]+\.)+novada\.com\b/gi, (host) =>
+    PUBLIC_NOVADA_HOSTS.has(host.toLowerCase()) ? host : "[novada-internal-host]"
+  );
+
+  return out;
+}
+
 /** Strip API keys, sensitive URL params, and injection patterns from any string before surfacing. */
 export function sanitizeServerMsg(msg: string): string {
-  return msg
+  const cleaned = msg
     // URL query-param patterns
     .replace(/api_key=[^&\s"')]+/gi, "api_key=***")
     .replace(/apikey=[^&\s"')]+/gi, "apikey=***")
@@ -209,6 +259,9 @@ export function sanitizeServerMsg(msg: string): string {
     .replace(/\n\s*agent_instruction\s*:/gi, " [agent_instruction]:")
     .replace(/[\r\n]+/g, " ")
     .trim();
+  // P0 SECURITY (#2): final credential/host redaction pass — strips URL userinfo,
+  // the NOVADA_BROWSER_WS value, and internal *.novada.com hosts that survived above.
+  return redactSecrets(cleaned);
 }
 
 /** Strip API keys and sensitive URL params from any string before surfacing. */
@@ -313,18 +366,62 @@ export function classifyError(error: unknown): NovadaError {
       });
     }
 
-    // Network / URL unreachable
+    // Anti-bot wall (#14): map raw Playwright/CDP/Cloudflare strings to a clear
+    // category instead of surfacing internal page text. Goes BEFORE generic
+    // network handling so "Just a moment" / 403 challenges aren't misread.
+    if (
+      msg.includes("cf-challenge") ||
+      msg.includes("cf-turnstile") ||
+      msg.includes("cf_chl_opt") ||
+      msg.includes("just a moment") ||
+      msg.includes("access denied") ||
+      msg.includes("captcha") ||
+      (msg.includes("403") && (msg.includes("forbidden") || msg.includes("blocked")))
+    ) {
+      return new NovadaError({
+        code: NovadaErrorCode.URL_UNREACHABLE,
+        message: "Blocked by anti-bot protection (Cloudflare/CAPTCHA challenge).",
+        agent_instruction: INSTRUCTIONS[NovadaErrorCode.URL_UNREACHABLE],
+        retryable: true,
+      });
+    }
+
+    // Upstream browser unavailable (#14): CDP/Playwright connection failures —
+    // dead WS endpoint, target closed, protocol error. These are an upstream
+    // browser-service problem, not a bad URL.
+    if (
+      msg.includes("connectovercdp") ||
+      msg.includes("browser api connection failed") ||
+      msg.includes("target closed") ||
+      msg.includes("target page, context or browser has been closed") ||
+      msg.includes("browser has been closed") ||
+      msg.includes("websocket") ||
+      msg.includes("protocol error") ||
+      msg.includes("browser.newcontext")
+    ) {
+      return new NovadaError({
+        code: NovadaErrorCode.API_DOWN,
+        message: "Upstream browser unavailable — the cloud browser could not be reached or the session was closed.",
+        agent_instruction: INSTRUCTIONS[NovadaErrorCode.API_DOWN],
+        retryable: true,
+      });
+    }
+
+    // Network / URL unreachable (domain unreachable)
     if (
       msg.includes("timeout") ||
       msg.includes("timed out") ||
       msg.includes("econnrefused") ||
       msg.includes("enotfound") ||
+      msg.includes("eai_again") ||
+      msg.includes("err_name_not_resolved") ||
       msg.includes("network error") ||
-      msg.includes("failed to fetch")
+      msg.includes("failed to fetch") ||
+      msg.includes("net::err")
     ) {
       return new NovadaError({
         code: NovadaErrorCode.URL_UNREACHABLE,
-        message: `URL unreachable: ${sanitizeMessage(error.message)}`,
+        message: `Domain unreachable: ${sanitizeMessage(error.message)}`,
         agent_instruction: INSTRUCTIONS[NovadaErrorCode.URL_UNREACHABLE],
         retryable: true,
       });

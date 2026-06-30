@@ -159,6 +159,64 @@ describe("novadaMap — SPA detection", () => {
   });
 });
 
+describe("novadaMap — tokenized search + sub-path/depth scope (#17)", () => {
+  const TOKEN_SITEMAP = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/docs/user-guide</loc></url>
+  <url><loc>https://example.com/docs/admin_guide</loc></url>
+  <url><loc>https://example.com/docs/api/reference</loc></url>
+  <url><loc>https://example.com/blog/release-notes</loc></url>
+</urlset>`;
+
+  it("matches multi-word search against hyphenated path segments", async () => {
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: TOKEN_SITEMAP, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    // "user guide" (space) must match /docs/user-guide (hyphen) — old literal substring
+    // match would have failed because the URL never contains the literal "user guide".
+    const result = await novadaMap({ url: "https://example.com", limit: 50, search: "user guide" });
+    expect(result).toContain("https://example.com/docs/user-guide");
+    expect(result).not.toContain("https://example.com/docs/admin_guide");
+    expect(result).not.toContain("https://example.com/blog/release-notes");
+  });
+
+  it("normalizes underscore separators in search tokens", async () => {
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: TOKEN_SITEMAP, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    // "admin-guide" (hyphen query) matches "/docs/admin_guide" (underscore path).
+    const result = await novadaMap({ url: "https://example.com", limit: 50, search: "admin-guide" });
+    expect(result).toContain("https://example.com/docs/admin_guide");
+    expect(result).not.toContain("https://example.com/docs/user-guide");
+  });
+
+  it("scopes discovered URLs to the seed's rooted sub-path", async () => {
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: TOKEN_SITEMAP, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    // Seed at /docs ⇒ /blog/* must be excluded entirely (sub-path scope respected).
+    const result = await novadaMap({ url: "https://example.com/docs", limit: 50 });
+    expect(result).toContain("https://example.com/docs/user-guide");
+    expect(result).toContain("https://example.com/docs/api/reference");
+    expect(result).not.toContain("https://example.com/blog/release-notes");
+  });
+
+  it("respects max_depth below the rooted sub-path", async () => {
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: TOKEN_SITEMAP, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    // Seed /docs with max_depth=1 ⇒ /docs/user-guide (1 below) kept, but
+    // /docs/api/reference (2 below) dropped.
+    const result = await novadaMap({ url: "https://example.com/docs", limit: 50, max_depth: 1 });
+    expect(result).toContain("https://example.com/docs/user-guide");
+    expect(result).not.toContain("https://example.com/docs/api/reference");
+  });
+});
+
 describe("novadaMap — output format", () => {
   it("includes agent hints in output", async () => {
     mockedAxios.get

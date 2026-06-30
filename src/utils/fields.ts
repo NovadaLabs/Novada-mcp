@@ -312,8 +312,13 @@ interface DomCandidates {
   labelValueRows: Array<{ label: string; value: string }>;
   /** itemprop → value, keyed by lower-cased prop name (first occurrence wins, value sliced to 200). */
   microdata: Map<string, string>;
-  /** Elements carrying a class attribute, plus their (trimmed) text — for the hero-stat scan. */
-  classedEls: Array<{ className: string; text: string }>;
+  /**
+   * Elements carrying a class attribute, plus their (trimmed) text — for the hero-stat scan.
+   * `context` is the element's own class/id PLUS its ancestors' class/id tokens (lower-cased,
+   * space-joined) so the price layer can tell a product-price node from one nested in a
+   * cart / basket / order-summary container (NOV #13). Collected in the same single pass.
+   */
+  classedEls: Array<{ className: string; text: string; context: string }>;
   /** Exact attribute-selector hits used by the hero-stat layer (data-testid / itemprop). */
   attrHits: Map<string, string>;
 }
@@ -334,7 +339,7 @@ function collectDomCandidates($: CheerioAPI): DomCandidates {
   const tables: Array<{ headers: string[]; firstRowCells: string[] }> = [];
   const labelValueRows: Array<{ label: string; value: string }> = [];
   const microdata = new Map<string, string>();
-  const classedEls: Array<{ className: string; text: string }> = [];
+  const classedEls: Array<{ className: string; text: string; context: string }> = [];
   const attrHits = new Map<string, string>();
 
   // Infobox / vcard rows (Wikipedia-style): th = label, td = value.
@@ -384,10 +389,24 @@ function collectDomCandidates($: CheerioAPI): DomCandidates {
   });
 
   // Hero-stat candidates: every element with a class, plus exact attr-selector hits.
+  // `context` = own class/id + every ancestor's class/id (lower-cased) so the price layer
+  // can detect a value nested in a cart / order-summary container (NOV #13). Built from the
+  // already-parsed parents — no extra DOM walk beyond this single `[class]` iteration.
   $("[class]").each((_, el) => {
     const className = $(el).attr("class") ?? "";
     if (!className) return;
-    classedEls.push({ className, text: $(el).text().trim() });
+    const ctxTokens: string[] = [];
+    // self first, then ancestors (cheerio $(el).parents() returns nearest-first).
+    const selfId = $(el).attr("id");
+    ctxTokens.push(className);
+    if (selfId) ctxTokens.push(selfId);
+    $(el).parents().each((__, p) => {
+      const pc = $(p).attr("class");
+      const pi = $(p).attr("id");
+      if (pc) ctxTokens.push(pc);
+      if (pi) ctxTokens.push(pi);
+    });
+    classedEls.push({ className, text: $(el).text().trim(), context: ctxTokens.join(" ").toLowerCase() });
   });
   for (const sel of HERO_ATTR_SELECTORS) {
     const el = $(sel).first();
@@ -475,6 +494,32 @@ function looksLikeStatValue(v: string): boolean {
 }
 
 /**
+ * NOV #13 — cart/basket/order-summary container tokens. A price-shaped value whose element
+ * context (own + ancestor class/id) carries one of these is a running cart total, NOT the
+ * product price, and must never be returned as the price. Whole-word matched so legitimate
+ * product classes ("price", "product-price", "list-price") are never caught — only
+ * cart/basket/minicart/subtotal/order-total/line-item style containers are.
+ */
+const CART_CONTEXT_RE = /(?:^|[-_ ])(?:cart|minicart|basket|bag|subtotal|grand-?total|order-?total|cart-?total|line-?item|line-?items|checkout)(?:[-_ ]|$)/i;
+
+/** True when the element's class/id context places its value inside a cart/order-summary block. */
+function isCartContext(context: string): boolean {
+  if (!context) return false;
+  return context.split(/\s+/).some((tok) => CART_CONTEXT_RE.test(tok));
+}
+
+/**
+ * A "zero total" money value: currency-prefixed (or bare) all-zero amount such as "$0.00",
+ * "€0,00", "0.00", "$0". Empty carts render these as the running total; returning one as the
+ * product price is the canonical confidently-wrong answer NOV #13 guards against. Used only to
+ * downgrade an otherwise-accepted price candidate, never to accept one.
+ */
+const ZERO_MONEY_RE = /^[+\-]?[€$£¥₹]?\s*0+(?:[.,]0+)?\s*(?:USD|EUR|GBP|JPY|CAD|AUD)?$/i;
+function looksLikeZeroTotal(v: string): boolean {
+  return ZERO_MONEY_RE.test(v.trim());
+}
+
+/**
  * Hero stat blocks: a value sits in a sibling/descendant element flagged by class, with
  * no tabular label — e.g. `<span class="price">$72.13</span>`, `<span class="change">+1.24%</span>`.
  *
@@ -494,6 +539,11 @@ function extractFromAdjacentPairs(cand: DomCandidates, canonical: string): strin
   const hint = HINTS[canonical];
   if (!hint) return null;
 
+  // NOV #13: only the money/price field is at risk of grabbing a cart running-total. Other
+  // hero stats (change / market cap) live on finance pages with no cart, so the cart guard is
+  // scoped to price to avoid touching their behavior.
+  const guardCart = canonical === "price";
+
   const accept = (raw: string): string | null => {
     const val = raw.trim();
     // Hero values are short; ignore containers that swallowed the page, and reject prose.
@@ -502,6 +552,7 @@ function extractFromAdjacentPairs(cand: DomCandidates, canonical: string): strin
   };
 
   // 1. Exact attribute selectors (data-testid / itemprop) — no substring ambiguity.
+  //    [itemprop='price'] is authoritative product data, so it is NOT cart-guarded.
   for (const sel of hint.exact) {
     const raw = cand.attrHits.get(sel);
     if (raw !== undefined) {
@@ -513,14 +564,36 @@ function extractFromAdjacentPairs(cand: DomCandidates, canonical: string): strin
   // 2. Class word-token scan. Iterate the pre-collected classed elements (DOM order) and
   //    keep only those whose className contains the word as a whole token. classTokenHasWord
   //    was always the authoritative gate; the old [class*=…] selector was just a pre-filter.
+  //    For price, skip any candidate whose context is a cart/order-summary block or whose value
+  //    is a $0.00-style running total — those are de-prioritized (see findCartTotalPriceOnly,
+  //    which converts a "cart-total was the only price" case into an explained null).
   for (const word of hint.classWords) {
     for (const el of cand.classedEls) {
       if (!classTokenHasWord(el.className, word)) continue;
       const v = accept(el.text);
-      if (v) return v;
+      if (!v) continue;
+      if (guardCart && (isCartContext(el.context) || looksLikeZeroTotal(v))) continue;
+      return v;
     }
   }
 
+  return null;
+}
+
+/**
+ * NOV #13: was a price-shaped value found ONLY inside a cart/order-summary container (or as a
+ * $0.00-style running total)? Called only after every price layer (including the cart-guarded
+ * adjacent scan) has declined, so a real product price elsewhere always wins first. When this
+ * returns the offending cart value, the chain emits null + an agent_instruction instead of
+ * confidently returning the wrong total. Returns null when no cart-only price exists.
+ */
+function findCartTotalPriceOnly(cand: DomCandidates): string | null {
+  for (const el of cand.classedEls) {
+    if (!classTokenHasWord(el.className, "price")) continue;
+    const val = el.text.trim();
+    if (!val || val.length > 60 || !looksLikeStatValue(val)) continue;
+    if (isCartContext(el.context) || looksLikeZeroTotal(val)) return val.slice(0, 200);
+  }
   return null;
 }
 
@@ -707,12 +780,18 @@ export function extractFields(
       if (adjacentValue) return resolved(field, adjacentValue, "pattern", attempted);
     }
 
+    // NOV #13: for a money/price field, a bare $0.00-style value pulled from markdown is far
+    // likelier a cart running-total than the product price. Skip it in the markdown layers so we
+    // fall through to the cart-only safety net (explained null) rather than confidently emit $0.00.
+    const isPriceField = canonical === "price";
+    const skipAsCartZero = (v: string): boolean => isPriceField && looksLikeZeroTotal(v);
+
     // 7. Known pattern matching in markdown (canonical first, then raw field key).
     attempted.push("pattern");
     const patterns = PATTERN_MAP[canonical] ?? PATTERN_MAP[lower];
     if (patterns) {
       const value = matchPatterns(markdown, patterns);
-      if (value) return resolved(field, value, "pattern", attempted);
+      if (value && !skipAsCartZero(value)) return resolved(field, value, "pattern", attempted);
     }
 
     // 8. Generic "field: value" / "**field**: value" inline match. `[:\s]+` also matches
@@ -726,7 +805,7 @@ export function extractFields(
     const gm = markdown.match(genericPattern);
     if (gm?.[1]) {
       const gv = gm[1].trim().replace(/\*\*/g, "");
-      if (gv && (!isStatField || /\d/.test(gv))) return resolved(field, gv, "pattern", attempted);
+      if (gv && (!isStatField || /\d/.test(gv)) && !skipAsCartZero(gv)) return resolved(field, gv, "pattern", attempted);
     }
 
     // 9. Tolerant labelled-value (GFM pipe, multi-space, =, en-dash). Canonical then raw.
@@ -735,13 +814,13 @@ export function extractFields(
     const tolerant =
       tolerantLabelledValue(markdown, canonical, isStatField) ??
       tolerantLabelledValue(markdown, field, isStatField);
-    if (tolerant) return resolved(field, tolerant, "pattern", attempted);
+    if (tolerant && !skipAsCartZero(tolerant)) return resolved(field, tolerant, "pattern", attempted);
 
     // 10. Number-near-label proximity (finance). Run AFTER table/row layers so the
     //     52-week-range hyphen and similar don't get clipped to a single token first.
     attempted.push("proximity");
     const near = numberNearLabel(markdown, canonical) ?? numberNearLabel(markdown, field);
-    if (near) return resolved(field, near, "pattern", attempted);
+    if (near && !skipAsCartZero(near)) return resolved(field, near, "pattern", attempted);
 
     // 11. Heading section fallback: "## Field\nvalue"
     attempted.push("heading");
@@ -752,6 +831,24 @@ export function extractFields(
     attempted.push("llm");
     const llmValue = llmExtractStub(field, markdown, html);
     if (llmValue) return resolved(field, llmValue, "llm", attempted);
+
+    // NOV #13: price specifically — no real product price resolved above, but a price-shaped
+    // value DID exist inside a cart/order-summary block (or as a $0.00 running total). Surface
+    // an explained null instead of the confidently-wrong cart total. Runs last so any genuine
+    // product price always wins first.
+    if (isPriceField && cand) {
+      const cartOnly = findCartTotalPriceOnly(cand);
+      if (cartOnly) {
+        return {
+          field,
+          value: null,
+          source: "unresolved" as const,
+          confidence: 0,
+          attempted,
+          agent_instruction: `'${field}' only matched a cart/order-summary total (${cartOnly}), not the product price — this is likely a running cart total, not the item's price. Re-read the product/price container, or retry with render="render" to fetch the JS-rendered product price.`,
+        };
+      }
+    }
 
     // Unresolved — NON-SILENT.
     return {

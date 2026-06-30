@@ -37,20 +37,33 @@ export const PROXY_ENDPOINT = process.env.NOVADA_PROXY_ENDPOINT;
 // JS-heavy detection: content shorter than this triggers render escalation
 export const JS_DETECTION_THRESHOLD = 200;
 
+// Hosted Vercel function wall-clock limit (see novada-mcpserver/vercel/api/mcp.ts
+// `config.maxDuration`). When a tool's own time budget exceeds this, Vercel kills
+// the function mid-flight and returns a BARE HTTP 504 that is NOT valid JSON-RPC,
+// which breaks MCP clients (#5). Every long-running tool ceiling below MUST stay
+// under this so the tool returns a structured result/error FIRST. The ~10s margin
+// covers transport flush + serialization before the hard kill.
+export const HOSTED_FUNCTION_LIMIT_MS = 60_000;
+export const HOSTED_SAFE_CEILING_MS = 50_000; // tool budgets must stay <= this
+
 // Timeout configuration (milliseconds)
+// NOTE: long-running ceilings (RENDER, CRAWL_RENDER, TOTAL_REQUEST_CEILING,
+// SEARCH_*) are capped at HOSTED_SAFE_CEILING_MS so the tool emits a structured
+// JSON-RPC result before the hosted 504 kill (#5). Do not raise above 50s without
+// also raising the Vercel function maxDuration.
 export const TIMEOUTS = {
   STATIC_FETCH: 15000,       // was 30000; halved to cut worst-case static time (3 retries = 45s max)
   PROXY_FETCH: 45000,
-  RENDER: 60000,
+  RENDER: 48_000,            // was 60000; under HOSTED_SAFE_CEILING_MS so render returns before the hosted 504
   BROWSER_CONNECT: 10000,
   BROWSER_PAGE: 30000,
   SITEMAP: 8000,
   CRAWL_STATIC: 15000,
-  CRAWL_RENDER: 60000,
-  TOTAL_REQUEST_CEILING: 90000, // hard per-URL ceiling enforced in extractSingle via Promise.race
-  SEARCH_SUBMIT_TIMEOUT: 30_000,
-  SEARCH_POLL_TIMEOUT: 60_000,
-  SEARCH_TOTAL_CEILING: 90_000,
+  CRAWL_RENDER: 48_000,      // was 60000; under HOSTED_SAFE_CEILING_MS (#5)
+  TOTAL_REQUEST_CEILING: 50_000, // was 90000; hard per-URL ceiling in extractSingle via Promise.race — capped for hosted (#5)
+  SEARCH_SUBMIT_TIMEOUT: 25_000, // was 30000; leaves headroom under the 50s total ceiling
+  SEARCH_POLL_TIMEOUT: 45_000,   // was 60000; under HOSTED_SAFE_CEILING_MS (#5)
+  SEARCH_TOTAL_CEILING: 50_000,  // was 90000; capped so search returns before the hosted 504 (#5)
 } as const;
 
 // Excel max sheet name length

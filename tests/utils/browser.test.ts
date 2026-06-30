@@ -1,9 +1,34 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
-import { isBrowserConfigured, fetchViaBrowser, getSession, storeSession, closeSession, listSessions } from "../../src/utils/browser.js";
+import { isBrowserConfigured, fetchViaBrowser, getSession, storeSession, closeSession, listSessions, sanitizeBrowserError } from "../../src/utils/browser.js";
 import type { Page } from "playwright-core";
 
 const originalEnv = { ...process.env };
 afterEach(() => { process.env = { ...originalEnv }; });
+
+// ─── P0 SECURITY (#2): Browser API error must never leak creds / internal host ──
+
+describe("sanitizeBrowserError", () => {
+  it("strips wss userinfo (wss://user:pass@host → wss://host)", () => {
+    const out = sanitizeBrowserError("connect wss://bot:hunter2@upg-scbr2.novada.com/cdp failed");
+    expect(out).not.toContain("bot");
+    expect(out).not.toContain("hunter2");
+    expect(out).not.toContain("bot:hunter2@");
+  });
+
+  it("redacts internal upg-scbr2.novada.com host from a raw playwright error", () => {
+    const out = sanitizeBrowserError("Target page closed: upg-scbr2.novada.com");
+    expect(out).not.toContain("upg-scbr2.novada.com");
+    expect(out).toContain("[novada-internal-host]");
+  });
+
+  it("redacts the exact NOVADA_BROWSER_WS value when set in env", () => {
+    process.env.NOVADA_BROWSER_WS = "wss://leaku:leakp@upg-scbr2.novada.com";
+    const out = sanitizeBrowserError("CDP error: wss://leaku:leakp@upg-scbr2.novada.com closed");
+    expect(out).not.toContain("leaku");
+    expect(out).not.toContain("leakp");
+    expect(out).not.toContain("upg-scbr2.novada.com");
+  });
+});
 
 describe("isBrowserConfigured", () => {
   it("returns false when NOVADA_BROWSER_WS not set", () => {
@@ -20,7 +45,8 @@ describe("isBrowserConfigured", () => {
 describe("fetchViaBrowser", () => {
   it("throws when Browser API not configured", async () => {
     delete process.env.NOVADA_BROWSER_WS;
-    await expect(fetchViaBrowser("https://example.com")).rejects.toThrow("NOVADA_BROWSER_WS not configured");
+    delete process.env.NOVADA_API_KEY;
+    await expect(fetchViaBrowser("https://example.com")).rejects.toThrow("Browser API not available");
   });
 });
 

@@ -159,7 +159,7 @@ const TOOLS = [
 
 **Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.
 **Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).
-**Tip:** engine='duckduckgo' is similar speed to google (both use async scraper API), good for privacy-conscious queries.
+**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yahoo/yandex are fallbacks and can be markedly slower; 'bing' is currently degraded — avoid it.
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
     inputSchema: zodToMcpSchema(SearchParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
@@ -1006,7 +1006,7 @@ Environment (ONE KEY COVERS EVERYTHING):
   NOVADA_PROXY_USER/PASS      Override proxy credentials (optional — auto-provisioned if PROXY_ENDPOINT set)
 
 Connect to Claude Code:
-  claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada
+  claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 
 Tools (${TOOLS.length}):
   novada_search              Search the web via Google, Bing, and 3 more engines

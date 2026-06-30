@@ -3,6 +3,66 @@ import type { MapParams } from "./types.js";
 import { TIMEOUTS } from "../config.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode } from "../_core/errors.js";
 
+/** Split a URL pathname into lowercase non-empty segments. */
+function pathSegments(pathname: string): string[] {
+  return pathname.split("/").map(s => s.toLowerCase()).filter(Boolean);
+}
+
+/** Tokenize a free-text search query: lowercase, split on whitespace AND on the
+ *  hyphen/underscore separators so "user guide", "user-guide" and "user_guide" all
+ *  yield the same tokens. Used to match against URL path segments (finding #17). */
+function tokenizeSearch(query: string): string[] {
+  return query.toLowerCase().split(/[\s\-_]+/).filter(Boolean);
+}
+
+/** Match a URL against tokenized search: every token must appear inside some path
+ *  segment of the URL, where each segment is normalized so hyphen/underscore split
+ *  into sub-tokens (so token "guide" matches segment "user-guide"). Falls back to
+ *  matching against the raw segment string too, so a token like "v2" still matches a
+ *  segment "api-v2". Replaces the old literal full-URL substring match (finding #17). */
+function matchesSearchTokens(url: string, tokens: string[]): boolean {
+  if (tokens.length === 0) return true;
+  let segments: string[];
+  try {
+    segments = pathSegments(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+  // Build the searchable token pool: each segment plus its hyphen/underscore sub-parts.
+  const haystack: string[] = [];
+  for (const seg of segments) {
+    haystack.push(seg);
+    for (const part of seg.split(/[\-_]+/).filter(Boolean)) haystack.push(part);
+  }
+  return tokens.every(tok => haystack.some(h => h.includes(tok)));
+}
+
+/** Rooted sub-path scope derived from the seed URL.
+ *  - basePath: the seed's path segments (e.g. /docs/api → ["docs","api"]). Empty = whole site.
+ *  - A discovered URL is in scope iff its segments start with basePath AND it lies no more
+ *    than `maxDepth` segments BELOW basePath. This makes a seed sub-path actually scope the
+ *    map, and makes max_depth bound discovered URLs even on the sitemap branch (finding #17). */
+interface PathScope {
+  basePath: string[];
+  maxDepth: number;
+}
+
+function inScope(url: string, scope: PathScope): boolean {
+  let segments: string[];
+  try {
+    segments = pathSegments(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+  const { basePath, maxDepth } = scope;
+  if (segments.length < basePath.length) return false;
+  for (let i = 0; i < basePath.length; i++) {
+    if (segments[i] !== basePath[i]) return false;
+  }
+  // Depth = how many segments deeper than the rooted sub-path this URL sits.
+  return segments.length - basePath.length <= maxDepth;
+}
+
 /**
  * Map a website to discover all URLs on the site.
  * Strategy:
@@ -94,22 +154,32 @@ async function novadaMapInner(
     ].join("\n");
   }
 
+  // Rooted sub-path + depth scope derived from the seed. A seed like
+  // https://host/docs scopes the map to /docs/**, bounded by max_depth segments below
+  // the sub-path. Root seed ("/") with default depth ⇒ effectively whole-site (finding #17).
+  const scope: PathScope = {
+    basePath: pathSegments(new URL(params.url).pathname),
+    maxDepth: Math.min(params.max_depth ?? 2, 5),
+  };
+
   // --- Phase 1: Try sitemap discovery ---
   const sitemapUrls = await discoverViaSitemap(origin, apiKey, maxUrls);
 
   let discovered: string[];
 
   if (sitemapUrls.length > 0) {
-    // Filter to same domain
+    // Filter to same domain, then to the rooted sub-path + depth scope.
     discovered = sitemapUrls.filter(u => {
       try {
         const h = new URL(u).hostname.replace(/^www\./, "");
-        return h === baseHostname || (params.include_subdomains && h.endsWith(`.${baseHostname}`));
+        const sameHost = h === baseHostname || (params.include_subdomains && h.endsWith(`.${baseHostname}`));
+        return sameHost && inScope(u, scope);
       } catch { return false; }
     });
   } else {
     // --- Phase 2: Parallel BFS crawl ---
-    discovered = await parallelBfsCrawl(params, apiKey, maxUrls, baseHostname);
+    discovered = (await parallelBfsCrawl(params, apiKey, maxUrls, baseHostname))
+      .filter(u => inScope(u, scope));
   }
 
   // SPA detection — check BEFORE search filter (search should not hide SPA failures)
@@ -124,11 +194,13 @@ async function novadaMapInner(
     );
   }
 
-  // Filter by search term if provided
+  // Filter by search term if provided. Tokenize the query and match tokens against URL
+  // path segments (hyphen/space/underscore normalized) instead of a literal full-URL
+  // substring match, so "user guide" matches /docs/user-guide (finding #17).
   let filtered = discovered;
   if (params.search) {
-    const searchLower = params.search.toLowerCase();
-    filtered = discovered.filter(u => u.toLowerCase().includes(searchLower));
+    const tokens = tokenizeSearch(params.search);
+    filtered = discovered.filter(u => matchesSearchTokens(u, tokens));
   }
 
   if (filtered.length === 0) {

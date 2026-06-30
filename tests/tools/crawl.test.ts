@@ -31,15 +31,15 @@ describe("novadaCrawl", () => {
     expect(mockedAxios.get).toHaveBeenCalled();
   });
 
-  it("returns error message when site is unreachable", async () => {
+  it("throws a URL_UNREACHABLE error when site is unreachable", async () => {
     mockedAxios.get.mockRejectedValue(new Error("ECONNREFUSED"));
 
-    const result = await novadaCrawl(
-      { url: "https://unreachable.example.com", max_pages: 1, strategy: "bfs", render: "static" },
-      "test-key"
-    );
-
-    expect(result).toContain("Failed to crawl");
+    await expect(
+      novadaCrawl(
+        { url: "https://unreachable.example.com", max_pages: 1, strategy: "bfs", render: "static" },
+        "test-key"
+      )
+    ).rejects.toThrow("Failed to crawl");
   });
 
   it("escalates to render mode when auto-detecting JS-heavy content", async () => {
@@ -89,6 +89,72 @@ describe("novadaCrawl", () => {
 
     const pageCount = (result.match(/###/g) || []).length;
     expect(pageCount).toBeLessThanOrEqual(3);
+  });
+
+  it("crawls the seed and discovers children even when select_paths doesn't match the seed (#7)", async () => {
+    // Seed "/" does NOT match select_paths ["/docs/**"], but the seed must still be fetched
+    // and its links discovered. A child under /docs must then be crawled, and an off-path
+    // child (/blog) must be filtered out. Previously the unmatched seed aborted the whole
+    // crawl with a fake URL_UNREACHABLE.
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url === "https://example.com" || url === "https://example.com/") {
+        return Promise.resolve({
+          data: `<html><body><h1>Home</h1><p>${"word ".repeat(30)}</p>
+            <a href="https://example.com/docs/intro">Docs</a>
+            <a href="https://example.com/blog/post">Blog</a></body></html>`,
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        });
+      }
+      return Promise.resolve({
+        data: `<html><body><h1>Docs Intro</h1><p>${"doc ".repeat(30)}</p></body></html>`,
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+    });
+
+    // Use JSON output so we assert on the structured crawled-page list, not body text
+    // (a discovered link is echoed inside the seed's rendered content otherwise).
+    const result = await novadaCrawl(
+      { url: "https://example.com", max_pages: 5, strategy: "bfs", render: "static", format: "json", select_paths: ["/docs/**"] },
+      "test-key"
+    );
+    const parsed = JSON.parse(result) as { status: string; pages: { url: string }[] };
+    const crawledUrls = parsed.pages.map(p => p.url);
+
+    // Did NOT abort — the seed was crawled and the in-path child discovered.
+    expect(parsed.status).toBe("ok");
+    expect(crawledUrls).toContain("https://example.com");
+    expect(crawledUrls).toContain("https://example.com/docs/intro");
+    // Off-path child filtered out by select_paths — never crawled.
+    expect(crawledUrls).not.toContain("https://example.com/blog/post");
+  });
+
+  it("still filters off-path children via exclude_paths while always fetching the seed (#7)", async () => {
+    // exclude_paths still filters discovered children; the seed is always fetched.
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url === "https://example.com" || url === "https://example.com/") {
+        return Promise.resolve({
+          data: `<html><body><h1>Home</h1><p>${"word ".repeat(30)}</p>
+            <a href="https://example.com/blog/post">Blog</a>
+            <a href="https://example.com/docs/intro">Docs</a></body></html>`,
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        });
+      }
+      return Promise.resolve({
+        data: `<html><body><h1>Page</h1><p>${"page ".repeat(30)}</p></body></html>`,
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+    });
+
+    const result = await novadaCrawl(
+      { url: "https://example.com", max_pages: 5, strategy: "bfs", render: "static", format: "json", exclude_paths: ["/blog/**"] },
+      "test-key"
+    );
+    const parsed = JSON.parse(result) as { status: string; pages: { url: string }[] };
+    const crawledUrls = parsed.pages.map(p => p.url);
+
+    expect(crawledUrls).toContain("https://example.com");
+    expect(crawledUrls).toContain("https://example.com/docs/intro");
+    expect(crawledUrls).not.toContain("https://example.com/blog/post");
   });
 });
 

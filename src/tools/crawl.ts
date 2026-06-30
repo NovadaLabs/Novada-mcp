@@ -166,7 +166,6 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   }
 
   let failedCount = 0;
-  let seedExcluded = false;
   let sparsePageCount = 0;
 
   const selectPatterns = compilePatterns(params.select_paths);
@@ -179,9 +178,10 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
       const normalizedUrl = normalizeUrl(item.url);
       if (visited.has(normalizedUrl)) continue;
       visited.add(normalizedUrl);
-      // Apply path filters to every URL, including the seed
-      if (!shouldCrawlUrl(item.url, selectPatterns, excludePatterns)) {
-        if (item.depth === 0) seedExcluded = true;
+      // Path filters apply to DISCOVERED child links only — the seed (depth 0) is always
+      // fetched and its links discovered. A select_paths pattern that doesn't match the seed
+      // must NOT abort the whole crawl (was a fake URL_UNREACHABLE — finding #7).
+      if (item.depth > 0 && !shouldCrawlUrl(item.url, selectPatterns, excludePatterns)) {
         continue;
       }
       batch.push(item);
@@ -328,7 +328,6 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
     `## Crawl Results`,
     `root: ${params.url}`,
     `pages:${results.length} | strategy:${strategy} | source: live | total_words:${totalWords} | failed:${failedCount}${jsMissingSummary}${instructionsNote}`,
-    seedExcluded ? `Note: seed URL excluded by select_paths filter` : "",
     stoppedEarly && stopReason ? `note: Stopped early — ${stopReason}` : "",
     ``,
     `---`,

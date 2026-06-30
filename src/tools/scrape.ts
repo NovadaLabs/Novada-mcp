@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS } from "../config.js";
 import { formatAsMarkdown } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
@@ -7,9 +7,13 @@ import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 
-// How long to wait for a task to complete before giving up
-// Amazon and similar scrapers can take 120-180s; 90s is too short
-const POLL_TIMEOUT_MS = 180_000;
+// How long to wait for a task to complete before giving up.
+// Amazon and similar scrapers can take 120-180s, but the hosted Vercel function
+// is killed at ~60s (see novada-mcpserver config.maxDuration) and returns a BARE
+// 504 that is NOT valid JSON-RPC (#5). Capping the poll at HOSTED_SAFE_CEILING_MS
+// guarantees the tool emits a structured TASK_PENDING result the client can act on
+// (resubmit / poll via novada_scraper_status) before the function is force-killed.
+const POLL_TIMEOUT_MS = HOSTED_SAFE_CEILING_MS;
 const POLL_INTERVAL_MS = 2_000;
 
 interface SubmitApiResponse {
@@ -259,12 +263,214 @@ export const OPERATION_ALIASES: Record<string, string> = Object.assign(
   }
 );
 
+// ─── Pre-flight platform → operation → required-param map ────────────────────
+// #6: validate operation id AND required params BEFORE dispatching. A typo'd op id
+// otherwise hangs ~60s → hosted 504; a missing required param burns a backend call
+// for nothing. This map mirrors novada://scraper-platforms (the 13 active platforms,
+// verified 2026-05-18). Each operation lists the params it needs — at least one of
+// which must be present (most ops take exactly one). Search engines validate via
+// SEARCH_ENGINE_PARAMS because they accept several near-equivalent query keys.
+//
+// H-1 parity: null-prototype objects prevent __proto__/constructor lookup pollution
+// when an attacker-supplied platform/operation collides with Object.prototype keys.
+type OpMap = Record<string, readonly string[]>;
+function freezeOpMap(obj: Record<string, readonly string[]>): OpMap {
+  return Object.assign(Object.create(null) as OpMap, obj);
+}
+
+// For search-engine platforms the query key varies (q / keyword); accept any of these.
+const SEARCH_QUERY_KEYS = ["q", "keyword", "query"] as const;
+
+export const PLATFORM_OPERATIONS: Record<string, OpMap> = Object.assign(
+  Object.create(null) as Record<string, OpMap>,
+  {
+    "amazon.com": freezeOpMap({
+      "amazon_product_asin": ["asin"],
+      "amazon_product_url": ["url"],
+      "amazon_product_keywords": ["keyword"],
+      "amazon_product_category-url": ["url"],
+      "amazon_product_best-sellers": ["url"],
+      "amazon_global-product_url": ["url"],
+      "amazon_global-product_category-url": ["url"],
+      "amazon_global-product_seller-url": ["url"],
+      "amazon_global-product_keywords": ["keyword"],
+      "amazon_global-product_keywords-brand": ["keyword"],
+      "amazon_comment_url": ["url"],
+      "amazon_seller_url": ["url"],
+      "amazon_product-list_keywords-domain": ["keyword"],
+    }),
+    "walmart.com": freezeOpMap({
+      "walmart_product_url": ["url"],
+      "walmart_product_category-url": ["url"],
+      "walmart_product_sku": ["sku"],
+      "walmart_product_keywords": ["keyword"],
+      "walmart_product_zipcodes": ["url"],
+    }),
+    "google.com": freezeOpMap({
+      "google_search": SEARCH_QUERY_KEYS,
+      "google_serp_web": SEARCH_QUERY_KEYS,
+      "google_serp_videos": SEARCH_QUERY_KEYS,
+      "google_serp_hotels": SEARCH_QUERY_KEYS,
+      "google_serp_jobs": SEARCH_QUERY_KEYS,
+      "google_map-details_url": ["url"],
+      "google_map-details_cid": ["cid"],
+      "google_map-details_location": ["location"],
+      "google_map-details_placeid": ["place_id"],
+      "google_shopping_keywords": ["keyword"],
+      "google_comment_url": ["url"],
+    }),
+    "bing.com": freezeOpMap({
+      "bing_search": SEARCH_QUERY_KEYS,
+      "bing_maps": SEARCH_QUERY_KEYS,
+      "bing_images": SEARCH_QUERY_KEYS,
+      "bing_videos": SEARCH_QUERY_KEYS,
+      "bing_news": SEARCH_QUERY_KEYS,
+      "bing_shopping": SEARCH_QUERY_KEYS,
+    }),
+    "duckduckgo.com": freezeOpMap({ "duckduckgo": SEARCH_QUERY_KEYS }),
+    "yandex.com": freezeOpMap({ "yandex": SEARCH_QUERY_KEYS }),
+    "x.com": freezeOpMap({
+      "twitter_profile_profileurl": ["url"],
+      "twitter_profile_username": ["username"],
+      "twitter_post_posturl": ["url"],
+    }),
+    "tiktok.com": freezeOpMap({
+      "tiktok_posts_url": ["url"],
+      "tiktok_posts_profileurl": ["url"],
+      "tiktok_posts_listurl": ["url"],
+      "tiktok_profiles_url": ["url"],
+      "tiktok_profiles_listurl": ["url"],
+    }),
+    "instagram.com": freezeOpMap({
+      "ins_profiles_username": ["username"],
+      "ins_profiles_profileurl": ["url"],
+      "ins_reel_url": ["url"],
+      "ins_allreel_url": ["url"],
+      "ins_posts_profileurl": ["url"],
+      "ins_posts_posturl": ["url"],
+      "ins_comment_posturl": ["url"],
+    }),
+    "facebook.com": freezeOpMap({
+      "facebook_event_eventlist-url": ["url"],
+      "facebook_event_search-url": ["url"],
+      "facebook_event_events-url": ["url"],
+      "facebook_post_posts-url": ["url"],
+      "facebook_comment_comments-url": ["url"],
+      "facebook_profile_profiles-url": ["url"],
+    }),
+    "youtube.com": freezeOpMap({
+      "youtube_video-post_url": ["url"],
+      "youtube_video-post_search_filters": ["keyword"],
+      "youtube_video_search_label": ["label"],
+      "youtube_video-post-podcast-url": ["url"],
+      "youtube_video-post-keyword": ["keyword"],
+      "youtube_video-post_explore": ["keyword"],
+      "youtube_product-videoid": ["video_id"],
+      "youtube_video-url": ["url"],
+      "youtube_audio_url": ["url"],
+      "youtube_comment_id": ["video_id"],
+      "youtube_transcript_id": ["url"],
+      "youtube_profiles_keyword": ["keyword"],
+      "youtube_profiles_url": ["url"],
+    }),
+    "linkedin.com": freezeOpMap({
+      "linkedin_company_information_url": ["url"],
+      "linkedin_job_listings_information_job-listing-url": ["url"],
+      "linkedin_job_listings_information_job-url": ["url"],
+      "linkedin_job_listings_information_keyword": ["keyword"],
+    }),
+    "github.com": freezeOpMap({
+      "github_repository_repo-url": ["url"],
+      "github_repository_search-url": ["url"],
+      "github_repository_url": ["url"],
+    }),
+  }
+);
+
+// x.com is the canonical platform; twitter.com is a common alias agents try.
+const PLATFORM_ALIASES: Record<string, string> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  { "twitter.com": "x.com" }
+);
+
+/** Resolve a platform alias (twitter.com → x.com) with a pollution-safe lookup. */
+function resolvePlatform(platform: string): string {
+  return Object.prototype.hasOwnProperty.call(PLATFORM_ALIASES, platform)
+    ? PLATFORM_ALIASES[platform]
+    : platform;
+}
+
+/**
+ * #6 pre-flight: reject an unknown platform, an unknown operation for a known
+ * platform, or a missing required param BEFORE any backend round-trip. Returns a
+ * structured NovadaError (INVALID_PARAMS) whose agent_instruction lists the valid
+ * operations — so the agent self-corrects without a 60s hang → 504. Returns null
+ * when the platform is not in the active map (unknown/inactive platforms fall
+ * through to the existing 11006/11008 backend handling — the map only covers the
+ * 13 platforms that have live operations).
+ */
+export function preflightScrape(
+  platform: string,
+  operation: string,
+  params: Record<string, unknown>,
+): NovadaError | null {
+  const ops = Object.prototype.hasOwnProperty.call(PLATFORM_OPERATIONS, platform)
+    ? PLATFORM_OPERATIONS[platform]
+    : undefined;
+  // Unknown platform → defer to backend (11008). The map is the active-platform
+  // allowlist, not an exhaustive domain registry, so we don't hard-reject here.
+  if (!ops) return null;
+
+  const validOps = Object.keys(ops);
+  if (!Object.prototype.hasOwnProperty.call(ops, operation)) {
+    const opList = validOps.join(", ");
+    return new NovadaError({
+      code: NovadaErrorCode.INVALID_PARAMS,
+      message: `Unknown operation '${operation}' for platform '${platform}'. Operation IDs are exact and cannot be guessed.`,
+      agent_instruction:
+        `Use one of the valid operations for ${platform}: ${opList}. ` +
+        `Read novada://scraper-platforms for the full list with required params. Do not retry with the same operation id.`,
+      retryable: false,
+      detail: `preflight:unknown_operation`,
+    });
+  }
+
+  // Required-param check: at least one of the operation's accepted keys must be
+  // present and non-empty. (Most ops take exactly one; search ops accept several.)
+  const required = ops[operation];
+  const hasOne = required.some((k) => {
+    const v = params[k];
+    return v !== undefined && v !== null && String(v).trim().length > 0;
+  });
+  if (!hasOne) {
+    const keyList = required.length === 1 ? `'${required[0]}'` : `one of ${required.map((k) => `'${k}'`).join(", ")}`;
+    return new NovadaError({
+      code: NovadaErrorCode.INVALID_PARAMS,
+      message: `Operation '${operation}' on '${platform}' requires ${keyList} in params, but none was provided.`,
+      agent_instruction:
+        `Add ${keyList} to the params object, e.g. novada_scrape({ platform: "${platform}", operation: "${operation}", params: { ${required[0]}: "<value>" } }). ` +
+        `Read novada://scraper-platforms for the exact param shape.`,
+      retryable: false,
+      detail: `preflight:missing_param`,
+    });
+  }
+
+  return null;
+}
+
 export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, apiKey: string): Promise<string> {
   const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
-  const { platform, params: opParams, format } = params;
+  const { params: opParams, format } = params;
+  const platform = resolvePlatform(params.platform);
   // H-1: safe lookup — null-prototype + hasOwnProperty guard
   const hasAlias = Object.prototype.hasOwnProperty.call(OPERATION_ALIASES, params.operation);
   const operation = hasAlias ? OPERATION_ALIASES[params.operation] : params.operation;
+
+  // #6: pre-flight validation — fail fast on a bad op id / missing required param
+  // BEFORE the backend round-trip, so a typo can't hang ~60s and 504. Reuses the
+  // existing 11006-style typed-error contract (NovadaError → index.ts isError:true).
+  const preflightErr = preflightScrape(platform, operation, (opParams ?? {}) as Record<string, unknown>);
+  if (preflightErr) throw preflightErr;
 
   try {
   // Step 1: Submit task

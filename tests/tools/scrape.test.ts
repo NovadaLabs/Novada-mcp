@@ -103,7 +103,7 @@ describe("novadaScrape — output formats", () => {
   it("returns HTML string for format=html", async () => {
     mockSuccess(MOCK_RECORDS);
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "html", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "html", limit: 20 },
       "test-key"
     );
     expect(result).toContain("<table>");
@@ -114,7 +114,7 @@ describe("novadaScrape — output formats", () => {
   it("returns base64 xlsx block for format=xlsx", async () => {
     mockSuccess(MOCK_RECORDS);
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "xlsx", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "xlsx", limit: 20 },
       "test-key"
     );
     expect(result).toContain("base64");
@@ -151,7 +151,7 @@ describe("novadaScrape — request format", () => {
   it("polls the download endpoint with task_id and apikey", async () => {
     mockSuccess(MOCK_RECORDS);
     await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     expect(mockedAxios.get).toHaveBeenCalled();
@@ -166,7 +166,7 @@ describe("novadaScrape — request format", () => {
     const many = Array.from({ length: 50 }, (_, i) => ({ id: i, name: `Product ${i}` }));
     mockSuccess(many);
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "json", limit: 10 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "json", limit: 10 },
       "test-key"
     );
     const jsonMatch = result.match(/```json\n([\s\S]+?)\n```/);
@@ -184,7 +184,7 @@ describe("novadaScrape — request format", () => {
       .mockResolvedValueOnce(makeDownloadOk(MOCK_RECORDS));
 
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     expect(mockedAxios.get).toHaveBeenCalledTimes(2);
@@ -197,7 +197,7 @@ describe("novadaScrape — flattenRecord edge cases", () => {
     const nested = [{ title: "Product", images: [{ url: "http://a.com/1.jpg" }, { url: "http://b.com/2.jpg" }] }];
     mockSuccess(nested);
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     expect(result).toContain("images.0.url");
@@ -208,7 +208,7 @@ describe("novadaScrape — flattenRecord edge cases", () => {
     const nested = [{ title: "X", price: { value: "999", currency: "USD" } }];
     mockSuccess(nested);
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     expect(result).toContain("price.value");
@@ -220,7 +220,7 @@ describe("novadaScrape — error handling", () => {
   it("returns structured error string for code 11006 (account permissions)", async () => {
     mockApiError(11006, "Scraper error");
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     const parsed = JSON.parse(result);
@@ -246,7 +246,7 @@ describe("novadaScrape — error handling", () => {
   it("returns structured error string for code 11000 (invalid API key)", async () => {
     mockApiError(11000, "Invalid ApiKey");
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     const parsed = JSON.parse(result);
@@ -257,7 +257,7 @@ describe("novadaScrape — error handling", () => {
   it("returns no-data message when API returns empty array", async () => {
     mockSuccess([]);
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     expect(result).toContain("No records returned");
@@ -278,7 +278,7 @@ describe("novadaScrape — error handling", () => {
     // Arrange: mock the API call to throw an Error with "11006" in the message
     mockedAxios.post.mockRejectedValue(new Error("Scraper error (code 11006): Scraper API not yet activated on this account."));
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     // Assert: handler does NOT throw; returns string containing status and agent_instruction
@@ -294,7 +294,7 @@ describe("novadaScrape — error handling", () => {
     mockedAxios.post.mockRejectedValue(new Error("ECONNREFUSED network error"));
     // Assert: the handler does NOT throw; it returns a string containing "status" and "agent_instruction"
     const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
       "test-key"
     );
     expect(typeof result).toBe("string");
@@ -302,5 +302,68 @@ describe("novadaScrape — error handling", () => {
     expect(result).toContain("agent_instruction");
     const parsed = JSON.parse(result);
     expect(parsed.agent_instruction).toBeDefined();
+  });
+});
+
+// #6: pre-flight validation — reject a bad op id / missing required param BEFORE
+// any backend round-trip, so a typo can't hang ~60s and 504 on the hosted endpoint.
+describe("novadaScrape — pre-flight (#6)", () => {
+  it("rejects an unknown operation for a known platform without calling the API", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    const err = preflightScrape("amazon.com", "amazon_product_totally-made-up", { keyword: "x" });
+    expect(err).not.toBeNull();
+    expect(err!.code).toBe("INVALID_PARAMS");
+    expect(err!.detail).toBe("preflight:unknown_operation");
+    // agent_instruction lists valid operations so the agent can self-correct
+    expect(err!.agent_instruction).toContain("amazon_product_asin");
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
+  it("rejects a valid operation that is missing its required param", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    const err = preflightScrape("amazon.com", "amazon_product_asin", {});
+    expect(err).not.toBeNull();
+    expect(err!.code).toBe("INVALID_PARAMS");
+    expect(err!.detail).toBe("preflight:missing_param");
+    expect(err!.agent_instruction).toContain("asin");
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
+  it("treats a whitespace-only required param as missing", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    const err = preflightScrape("tiktok.com", "tiktok_posts_url", { url: "   " });
+    expect(err).not.toBeNull();
+    expect(err!.detail).toBe("preflight:missing_param");
+  });
+
+  it("passes a valid operation with its required param", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    expect(preflightScrape("amazon.com", "amazon_product_asin", { asin: "B09XYZ" })).toBeNull();
+  });
+
+  it("defers an unknown/inactive platform to the backend (returns null)", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    // reddit.com is not in the active-platform map → must not hard-reject here
+    expect(preflightScrape("reddit.com", "reddit_posts_subreddit", {})).toBeNull();
+  });
+
+  it("accepts any of q/keyword/query for search-engine operations", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    expect(preflightScrape("google.com", "google_search", { q: "hi" })).toBeNull();
+    expect(preflightScrape("google.com", "google_search", { keyword: "hi" })).toBeNull();
+    expect(preflightScrape("google.com", "google_search", {})).not.toBeNull();
+  });
+
+  it("does not match Object.prototype keys as operations (pollution-safe)", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    const err = preflightScrape("amazon.com", "__proto__", {});
+    expect(err).not.toBeNull();
+    expect(err!.detail).toBe("preflight:unknown_operation");
+  });
+
+  it("resolves twitter.com → x.com so x.com operations validate", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    // preflightScrape itself takes the resolved platform; verify x.com map is correct
+    expect(preflightScrape("x.com", "twitter_profile_username", { username: "jack" })).toBeNull();
   });
 });
