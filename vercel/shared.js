@@ -130,16 +130,9 @@ document.addEventListener('click', function (e) {
 });
 
 /* ── Analytics ─────────────────────────────────────────────────── */
-// NOV-604: Microsoft Clarity — heatmaps + session recordings
-// Replace CLARITY_PROJECT_ID with your 10-char ID from clarity.microsoft.com
-(function(c,l,a,r,i,t,y){
-  c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-  t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-  y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-})(window,document,"clarity","script","CLARITY_PROJECT_ID");
-
-// NOV-605: PostHog — product analytics + funnel tracking
-// Replace POSTHOG_API_KEY with phc_xxxx key from posthog.com
+// NOV-605: PostHog — single platform for events + funnels + heatmaps + session recordings
+// Replace POSTHOG_API_KEY with phc_xxxx key from posthog.com (free at posthog.com)
+// Covers everything: click tracking, funnels, heatmaps (toolbar), session replay
 (function(){
   var POSTHOG_KEY = 'POSTHOG_API_KEY';
   var POSTHOG_HOST = 'https://us.i.posthog.com';
