@@ -164,7 +164,7 @@ const HOSTED_VERSION = HOSTED_BUILD
 const FUNCTION_MAX_DURATION_S = 60; // novada_research can take 30-45s on deep mode
 export const config = {
   runtime: "nodejs",
-  maxDuration: FUNCTION_MAX_DURATION_S,
+  maxDuration: 60, // MUST be a literal — Vercel statically parses this `config` export and cannot resolve an identifier (keep in sync with FUNCTION_MAX_DURATION_S above)
 };
 
 // #5: per-tool wall-clock budget, set a few seconds UNDER maxDuration. If a tool
