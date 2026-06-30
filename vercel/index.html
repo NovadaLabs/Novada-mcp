@@ -235,10 +235,10 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
           <span class="zh">搜索、抓取、提取、爬取、站点地图、研究、验证 — 全部通过一个 MCP 端点。30 秒接入任意 AI 客户端。</span>
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-4">
-          <a href="cursor://anysphere.cursor-deeplink/mcp/install?name=novada&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.novada.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20YOUR_API_KEY%22%7D%7D" class="btn-primary text-sm">
+          <a href="cursor://anysphere.cursor-deeplink/mcp/install?name=novada&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.novada.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20YOUR_API_KEY%22%7D%7D" class="btn-primary text-sm" onclick="_track('install_cursor_clicked')">
             <span class="en">⚡ Install in Cursor</span><span class="zh">⚡ 安装到 Cursor</span>
           </a>
-          <a href="vscode://anysphere.cursor-deeplink/mcp/install?name=novada&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.novada.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20YOUR_API_KEY%22%7D%7D" class="btn-secondary text-sm">
+          <a href="vscode://anysphere.cursor-deeplink/mcp/install?name=novada&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.novada.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20YOUR_API_KEY%22%7D%7D" class="btn-secondary text-sm" onclick="_track('install_vscode_clicked')">
             <span class="en">Install in VS Code</span><span class="zh">安装到 VS Code</span>
           </a>
         </div>
