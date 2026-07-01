@@ -23,8 +23,7 @@
   --font-mono:  "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 }
 
-/* Force dark tokens even when a light theme is requested */
-[data-theme="light"],
+/* Dark mode — full cyberpunk void */
 [data-theme="dark"] {
   --void:   #12002e;
   --violet: #6c40e2;
@@ -33,6 +32,31 @@
   --black:  #0d0d14;
   --white:  #e8e4f5;
 }
+
+/* Light mode — "overworld/day": bright pixel, still Novada violet */
+[data-theme="light"] {
+  --void:        #ede8ff;
+  --violet:      #6c40e2;
+  --vlight:      #4a1fb0;
+  --cyan:        #0a7abf;
+  --black:       #f5f0ff;  /* bg = very light */
+  --white:       #1a0a3d;  /* text = dark */
+  --violet-deep: #9d7bff;
+}
+[data-theme="light"] html,
+[data-theme="light"] body  { background: #f5f0ff; color: #1a0a3d; }
+[data-theme="light"] .nav-bar { background: rgba(237,232,255,0.96) !important; border-color: #6c40e2 !important; }
+[data-theme="light"] .nav-link { color: #4a1fb0 !important; }
+[data-theme="light"] .nav-link:hover { color: #6c40e2 !important; }
+[data-theme="light"] .hero-section { background: #f5f0ff !important; }
+[data-theme="light"] .pixel-card { background: #ede8ff; box-shadow: inset 3px 3px 0 0 #c9b4fb, inset -3px -3px 0 0 #9d7bff, 0 0 0 2px #6c40e2; }
+[data-theme="light"] .hotbar-slot { background: #e3daff; box-shadow: inset 3px 3px 0 0 #c9b4fb, inset -3px -3px 0 0 #9d7bff, 0 0 0 3px #6c40e2; }
+[data-theme="light"] .hotbar-slot:hover { background: #6c40e2; }
+[data-theme="light"] .code-block { background: #1a0a3d; } /* always dark for readability */
+[data-theme="light"] footer { background: #ede8ff; border-top: 2px solid #6c40e2; color: #4a1fb0; }
+[data-theme="light"] .tab-bar { background: #ede8ff; border-color: #6c40e2; }
+[data-theme="light"] .tab-btn { color: #4a1fb0; }
+[data-theme="light"] .tab-btn.active { background: #6c40e2; color: #e8e4f5; }
 
 /* ----------------------------------------------------------------
    1. Global reset / overrides

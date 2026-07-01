@@ -438,6 +438,17 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   }
   .theme-btn:hover { color: #3df0ff; border-color: #6c40e2; }
 
+  /* Icon toggle — dark mode shows moon, light shows sun */
+  .icon-sun { display: none; }
+  .icon-moon { display: block; }
+  [data-theme="light"] .icon-sun { display: block; }
+  [data-theme="light"] .icon-moon { display: none; }
+
+  /* Light mode body override */
+  [data-theme="light"] body { background: #f5f0ff; color: #1a0a3d; }
+  [data-theme="light"] .theme-btn { background: #ede8ff; border-color: #c9b4fb; color: #4a1fb0; }
+  [data-theme="light"] .announcement-bar { background: #6c40e2; color: #e8e4f5; }
+
   body { background: #08060d; }
 </style>
 </head>
