@@ -31,7 +31,17 @@ if (process.env.SENTRY_DSN) {
     dsn: process.env.SENTRY_DSN,
     tracesSampleRate: 0,  // errors only, no performance overhead
     environment: process.env.VERCEL_ENV ?? "development",
+    // Serverless: flush events synchronously before Vercel kills the function.
+    // Without this, buffered events are dropped when the instance terminates.
+    beforeSend: (event) => event,
   });
+}
+
+/** Flush Sentry buffer — must be awaited before returning from a serverless handler. */
+async function sentryFlush(): Promise<void> {
+  if (process.env.SENTRY_DSN) {
+    await Sentry.flush(2000).catch(() => { /* best-effort */ });
+  }
 }
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -763,6 +773,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         scope.setTag("tool", name);
         Sentry.captureException(error);
       });
+      await sentryFlush();
       logUsage(env, ctx.token, name, false, Date.now() - started);
       // The tool failed (validation / upstream / transport) → no useful work done, so
       // refund the quota decremented before the call. Failed calls must not burn customer
@@ -977,6 +988,7 @@ export default async function nodeHandler(req: IncomingMessage, res: ServerRespo
       }
       // Log full error server-side but don't leak internals to client
       Sentry.captureException(err);
+      await sentryFlush();
       console.error("[nodeHandler] Internal error:", (err as Error)?.message ?? String(err));
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
