@@ -823,7 +823,7 @@ footer .footer-heading {
   position: fixed;
   left: 50%;
   bottom: 24px;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(20px);
   z-index: 9000;
   background: var(--void);
   border: 3px solid var(--violet);
@@ -833,6 +833,13 @@ footer .footer-heading {
   line-height: 1.5;
   color: var(--white);
   box-shadow: 0 0 0 3px var(--black), 0 4px 24px rgba(108, 64, 226, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s steps(3), transform 0.2s steps(3);
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* ----------------------------------------------------------------
