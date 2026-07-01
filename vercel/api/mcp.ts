@@ -21,6 +21,19 @@
 // module-init code.
 import "./_polyfills.js";
 
+// ─── Error monitoring (Sentry) ────────────────────────────────────────────────
+// Captures all unhandled errors + tool-call failures so we can see what's
+// breaking for customers and improve. Set SENTRY_DSN in Vercel env vars.
+// Free tier: 5,000 errors/month — enough for monitoring hosted MCP usage.
+import * as Sentry from "@sentry/node";
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    tracesSampleRate: 0,  // errors only, no performance overhead
+    environment: process.env.VERCEL_ENV ?? "development",
+  });
+}
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -746,6 +759,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         _meta: { quota_remaining: remaining },
       };
     } catch (error) {
+      Sentry.withScope(scope => {
+        scope.setTag("tool", name);
+        Sentry.captureException(error);
+      });
       logUsage(env, ctx.token, name, false, Date.now() - started);
       // The tool failed (validation / upstream / transport) → no useful work done, so
       // refund the quota decremented before the call. Failed calls must not burn customer
@@ -876,11 +893,29 @@ interface NodeCtx {
   parsedBody?: unknown;
 }
 
+// NOV-578 #10: hard ceiling on request-body buffering. 4 MB is generous for JSON-RPC /
+// tool arguments and aligns with Vercel's own serverless payload limit.
+const MAX_REQUEST_BODY_BYTES = 4 * 1024 * 1024;
+
 async function readNodeBody(req: IncomingMessage): Promise<Buffer | undefined> {
   const method = (req.method || "GET").toUpperCase();
   if (["GET", "HEAD"].includes(method)) return undefined;
+  // NOV-578 #10: this runs BEFORE auth — without a ceiling an unauthenticated client could
+  // stream an unbounded body and exhaust function memory (pre-auth memory DoS). Reject early
+  // on a declared content-length, and enforce a running-total backstop against a lying/absent one.
+  const declared = Number(req.headers["content-length"]);
+  if (Number.isFinite(declared) && declared > MAX_REQUEST_BODY_BYTES) {
+    throw Object.assign(new Error("Request body exceeds the 4 MB limit."), { statusCode: 413 });
+  }
   const chunks: Buffer[] = [];
-  for await (const chunk of req as AsyncIterable<Buffer>) chunks.push(chunk);
+  let total = 0;
+  for await (const chunk of req as AsyncIterable<Buffer>) {
+    total += chunk.length;
+    if (total > MAX_REQUEST_BODY_BYTES) {
+      throw Object.assign(new Error("Request body exceeds the 4 MB limit."), { statusCode: 413 });
+    }
+    chunks.push(chunk);
+  }
   return chunks.length ? Buffer.concat(chunks) : undefined;
 }
 
@@ -928,7 +963,20 @@ export default async function nodeHandler(req: IncomingMessage, res: ServerRespo
     }
   } catch (err) {
     if (!res.headersSent) {
+      // NOV-578 #10: surface an oversized body as 413 (not a generic 500) so the client
+      // gets an actionable signal.
+      const statusCode = (err as { statusCode?: number } | null)?.statusCode;
+      if (statusCode === 413) {
+        res.statusCode = 413;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({
+          error: "PAYLOAD_TOO_LARGE",
+          message: "Request body exceeds the 4 MB limit. Reduce payload size or split large tool arguments.",
+        }));
+        return;
+      }
       // Log full error server-side but don't leak internals to client
+      Sentry.captureException(err);
       console.error("[nodeHandler] Internal error:", (err as Error)?.message ?? String(err));
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
@@ -1076,6 +1124,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     headers.set("access-control-expose-headers", "mcp-session-id");
     return new Response(response.body, { status: response.status, headers });
   } catch (err) {
+    Sentry.captureException(err);
     const message = err instanceof Error ? err.message : String(err);
     return jsonError(500, "TRANSPORT_ERROR", `MCP transport error: ${message}`);
   } finally {
