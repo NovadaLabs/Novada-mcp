@@ -173,3 +173,120 @@ function initScrollAnimations() {
     { y: 0, opacity: 1, duration: 0.65, ease: 'power2.out', stagger: 0.13, delay: 0.15 }
   );
 }
+
+/* ── Pixel hotbar interactions ─────────────────────────────── */
+
+// Hotbar slot keyboard shortcuts (1-8)
+document.addEventListener('keydown', function(e) {
+  var num = parseInt(e.key);
+  if (num >= 1 && num <= 8) {
+    var slots = document.querySelectorAll('.hotbar-slot');
+    if (slots[num - 1]) {
+      slots.forEach(function(s) { s.classList.remove('active'); });
+      slots[num - 1].classList.add('active');
+      // Show tooltip
+      showPixelTooltip(slots[num - 1]);
+    }
+  }
+});
+
+// Hotbar slot click
+document.addEventListener('click', function(e) {
+  var slot = e.target.closest('.hotbar-slot');
+  if (slot) {
+    document.querySelectorAll('.hotbar-slot').forEach(function(s) { s.classList.remove('active'); });
+    slot.classList.add('active');
+    showPixelTooltip(slot);
+  }
+});
+
+// Minecraft-style tooltip data
+var TOOL_TOOLTIPS = {
+  'novada_search':   { rarity:'rare',     lore:'Queries the overworld. Returns structured loot.', stat:'Cooldown: none · Engines: 5' },
+  'novada_extract':  { rarity:'uncommon', lore:'Mines content from any URL.', stat:'Auto-escalates: static → render → browser' },
+  'novada_crawl':    { rarity:'uncommon', lore:'Explores entire site dungeons (max 20 pages).', stat:'Modes: BFS · DFS' },
+  'novada_scrape':   { rarity:'rare',     lore:'Extracts structured loot from known platforms.', stat:'Platforms: 13 · Ops: ~78' },
+  'novada_research': { rarity:'epic',     lore:'Deep multi-source synthesis with citations.', stat:'Durability: ∞ · Depth: auto' },
+  'novada_verify':   { rarity:'uncommon', lore:'Fact-checks claims via 3 parallel angles.', stat:'Returns: supported/contested/unsupported' },
+  'novada_map':      { rarity:'common',   lore:'Discovers all URLs in a domain dungeon.', stat:'Via: sitemap.xml · BFS crawl' },
+  'novada_monitor':  { rarity:'uncommon', lore:'Watches for page changes over time.', stat:'Tracks: content hash · field diffs' },
+};
+
+var RARITY_COLORS = { common:'#9d9d9d', uncommon:'#3df0ff', rare:'#9d7bff', epic:'#ff5cf0' };
+
+function showPixelTooltip(slot) {
+  var toolName = slot.getAttribute('title');
+  var data = TOOL_TOOLTIPS[toolName];
+  if (!data) return;
+
+  // Remove existing tooltip
+  var old = document.getElementById('pixel-tooltip');
+  if (old) old.remove();
+
+  var tip = document.createElement('div');
+  tip.id = 'pixel-tooltip';
+  tip.style.cssText = [
+    'position:fixed', 'z-index:9999', 'pointer-events:none',
+    'background:#12002e', 'border-left:4px solid ' + (RARITY_COLORS[data.rarity] || '#9d7bff'),
+    'box-shadow:0 0 0 2px #0d0d14,0 4px 20px rgba(108,64,226,0.5)',
+    'padding:12px 16px', 'min-width:240px', 'max-width:320px'
+  ].join(';');
+
+  var rarityColor = RARITY_COLORS[data.rarity] || '#9d7bff';
+  tip.innerHTML =
+    '<div style="font-family:\'Press Start 2P\',monospace;font-size:9px;color:#e8e4f5;margin-bottom:6px">' + toolName + '</div>' +
+    '<div style="font-family:\'Press Start 2P\',monospace;font-size:8px;color:' + rarityColor + ';margin-bottom:8px;text-transform:uppercase">' + data.rarity + '</div>' +
+    '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:#9d7bff;margin-bottom:8px;font-style:italic">' + data.lore + '</div>' +
+    '<div style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:#4a1fb0">' + data.stat + '</div>';
+
+  document.body.appendChild(tip);
+
+  // Position near slot
+  var rect = slot.getBoundingClientRect();
+  var tipTop = rect.top - tip.offsetHeight - 12;
+  if (tipTop < 8) tipTop = rect.bottom + 8;
+  var tipLeft = rect.left + rect.width / 2 - 120;
+  if (tipLeft < 8) tipLeft = 8;
+  if (tipLeft + 320 > window.innerWidth - 8) tipLeft = window.innerWidth - 328;
+
+  tip.style.top = tipTop + 'px';
+  tip.style.left = tipLeft + 'px';
+
+  // Auto-hide after 3s
+  setTimeout(function() {
+    var t = document.getElementById('pixel-tooltip');
+    if (t) t.remove();
+  }, 3000);
+}
+
+/* ── Achievement toast ─────────────────────────────────────── */
+function showAchievement(title, desc) {
+  var el = document.createElement('div');
+  el.className = 'achievement-toast';
+  el.innerHTML =
+    '<div style="font-family:\'Press Start 2P\',monospace;font-size:8px;color:#3df0ff;margin-bottom:4px">ACHIEVEMENT UNLOCKED</div>' +
+    '<div style="font-family:\'Press Start 2P\',monospace;font-size:9px;color:#e8e4f5;margin-bottom:4px">' + title + '</div>' +
+    '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:#9d7bff">' + desc + '</div>';
+  document.body.appendChild(el);
+  setTimeout(function() { el.classList.add('show'); }, 100);
+  setTimeout(function() { el.classList.remove('show'); setTimeout(function() { el.remove(); }, 400); }, 3500);
+}
+
+// Show achievement when user copies endpoint URL
+var _origCopyText = copyText;
+window.copyText = function(text, btn) {
+  _origCopyText(text, btn);
+  if (text && text.includes('mcp.novada.com')) {
+    setTimeout(function() {
+      showAchievement('ENDPOINT COPIED', 'Paste into your MCP client config.');
+    }, 200);
+  }
+};
+
+/* ── Scanlines overlay ─────────────────────────────────────── */
+(function() {
+  var s = document.createElement('div');
+  s.className = 'scanlines';
+  s.style.cssText = 'position:fixed;inset:0;z-index:9998;pointer-events:none';
+  document.body.appendChild(s);
+})();
