@@ -189,16 +189,20 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 
   .pixel-btn-sm {
     font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-    color: #9d7bff;
-    background: #16101f;
-    padding: 9px 12px;
-    border: 2px solid #6c40e2;
+    font-size: 7px;
+    color: #e8e4f5;
+    background: #6c40e2;
+    padding: 8px 14px;
+    border: 2px solid #9d7bff;
     cursor: pointer;
-    transition: color 0.15s, box-shadow 0.15s;
-    letter-spacing: 0.02em;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    transition: background 0.1s steps(2);
+    box-shadow: inset 2px 2px 0 #9d7bff, inset -2px -2px 0 #4a1fb0, 3px 3px 0 #0d0d14;
   }
-  .pixel-btn-sm:hover { color: #3df0ff; box-shadow: 0 0 8px rgba(61,240,255,0.4); }
+  .pixel-btn-sm:hover { background: #4a1fb0; color: #3df0ff; }
 
   /* Hero */
   .hero-section {
@@ -358,20 +362,21 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   .tab-btn, .ftab-btn {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #9d7bff;
-    background: #16101f;
-    border: 2px solid #2a2140;
-    padding: 10px 12px;
+    color: #e8e4f5;        /* bright white — always readable */
+    background: #1a0f35;
+    border: 2px solid #6c40e2;
+    padding: 10px 14px;
     cursor: pointer;
     letter-spacing: 0.02em;
-    transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+    white-space: nowrap;
+    transition: color 0.1s steps(2), border-color 0.1s steps(2);
   }
-  .tab-btn:hover, .ftab-btn:hover { color: #3df0ff; border-color: #6c40e2; }
+  .tab-btn:hover, .ftab-btn:hover { color: #3df0ff; border-color: #3df0ff; }
   .tab-btn.active, .ftab-btn.active {
     color: #0d0d14;
-    background: #3df0ff;
-    border-color: #0d0d14;
-    box-shadow: 3px 3px 0 #6c40e2;
+    background: #6c40e2;
+    border-color: #9d7bff;
+    box-shadow: inset 2px 2px 0 #9d7bff, inset -2px -2px 0 #4a1fb0;
   }
   .tab-panel, .ftab-panel { display: none; }
   .tab-panel.active, .ftab-panel.active { display: block; }
