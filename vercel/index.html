@@ -334,10 +334,10 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   .proof-pill {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #9d7bff;
-    padding: 8px 12px;
-    border: 2px solid #2a2140;
-    background: #16101f;
+    color: #e8e4f5;
+    padding: 8px 14px;
+    border: 2px solid #6c40e2;
+    background: #1a0f35;
     letter-spacing: 0.02em;
   }
 
@@ -449,23 +449,40 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   [data-theme="light"] .icon-sun { display: block; }
   [data-theme="light"] .icon-moon { display: none; }
 
-  /* Light mode — high contrast overrides */
-  [data-theme="light"] body { background: #f0eeff; color: #0d0030; }
-  [data-theme="light"] .theme-btn { background: #ede8ff; border-color: #6c40e2; color: #1a0a3d; }
+  /* ── Dark mode: force logo to white ── */
+  [data-theme="dark"] .logo-img { filter: brightness(0) invert(1) !important; }
+
+  /* ── Light mode overrides ── */
+  /* Background: medium purple (not too light, not too dark) */
+  [data-theme="light"] body { background: #ddd5ff; color: #0d0030; }
+  [data-theme="light"] .hero-section { background: #ddd5ff !important; }
+  [data-theme="light"] .theme-btn { background: #c9b4fb; border-color: #6c40e2; color: #0d0030; }
   [data-theme="light"] .announcement-bar { background: #6c40e2; color: #fff; }
 
-  /* Force dark text on all light-mode copy */
-  [data-theme="light"] .display-headline { color: #0d0030 !important; }
-  [data-theme="light"] .display-headline .accent { color: #6c40e2 !important; text-shadow: none !important; }
-  [data-theme="light"] .hero-section { background: #f0eeff !important; }
-  /* Make grid lines much more subtle in light mode */
-  [data-theme="light"] .hero-section::before,
-  [data-theme="light"] .hero-section::after { opacity: 0.3 !important; }
-  /* Subtitle and small copy */
-  [data-theme="light"] p, [data-theme="light"] span { color: inherit; }
-  [data-theme="light"] .nav-link { color: #1a0a3d !important; }
+  /* Headlines */
+  [data-theme="light"] .display-headline { color: #0d0030 !important; text-shadow: none !important; }
+  [data-theme="light"] .display-headline .accent { color: #4a1fb0 !important; text-shadow: none !important; }
+
+  /* Nav */
+  [data-theme="light"] .nav-link { color: #0d0030 !important; }
   [data-theme="light"] .nav-link:hover { color: #6c40e2 !important; }
-  /* Logo in light mode — keep original colors (don't invert) */
+
+  /* Subtitle */
+  [data-theme="light"] .hero-section p { color: #1a0a3d !important; }
+
+  /* Terminal card on hero: always dark background, brighter text */
+  [data-theme="light"] .pixel-card { background: #1a0a3d !important; }
+  [data-theme="light"] .pixel-card * { color: inherit; }
+  /* Tool names in terminal: use bright white instead of invisible cyan */
+  [data-theme="light"] .pixel-card [style*="color:#3df0ff"] { color: #e8e4f5 !important; }
+  [data-theme="light"] .pixel-card [style*="color:#6c40e2"] { color: #9d7bff !important; }
+  [data-theme="light"] .pixel-card [style*="color:#4a1fb0"] { color: #7a6faa !important; }
+  [data-theme="light"] .pixel-card [style*="color:#9d7bff"] { color: #c9b4fb !important; }
+
+  /* Grid lines very subtle */
+  [data-theme="light"] .hero-section::after { opacity: 0.15 !important; }
+
+  /* Logo in light: show original (don't invert) */
   [data-theme="light"] .logo-img { filter: none !important; }
 
   body { background: #08060d; }
@@ -634,7 +651,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 <div class="social-proof-bar">
   <div class="pixel-container">
     <div class="flex flex-wrap items-center justify-center gap-4">
-      <span class="pixel-font text-[8px]" style="color:#4a1fb0"><span class="en">COMPATIBLE WITH</span><span class="zh">兼容</span></span>
+      <span class="pixel-font text-[8px]" style="color:#9d7bff"><span class="en">COMPATIBLE WITH</span><span class="zh">兼容</span></span>
       <span class="proof-pill">Claude</span>
       <span class="proof-pill">Cursor</span>
       <span class="proof-pill">Codex</span>

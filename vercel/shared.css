@@ -43,8 +43,9 @@
   --white:       #0d0030;   /* text — near black, max contrast */
   --violet-deep: #4a1fb0;
 }
+/* Medium purple — not too light, readable contrast */
 [data-theme="light"] html,
-[data-theme="light"] body { background: #f0eeff; color: #0d0030; }
+[data-theme="light"] body { background: #ddd5ff; color: #0d0030; }
 
 /* Nav */
 [data-theme="light"] .nav-bar { background: rgba(240,238,255,0.97) !important; border-color: #6c40e2 !important; }
