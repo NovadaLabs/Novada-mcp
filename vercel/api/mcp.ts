@@ -321,7 +321,7 @@ const HOSTED_HIDDEN = new Set(["novada_browser", "novada_browser_flow"]);
 // ?tools=novada_search,novada_scrape. Matches BrightData's ?groups= pattern.
 // Fewer tools = less token overhead in the agent's context window.
 const TOOL_GROUPS: Record<string, string[]> = {
-  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_verify", "novada_setup"],
+  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_verify", "novada_setup", "novada_health", "novada_health_all", "novada_monitor", "novada_discover"],
   search: ["novada_search"],
   scrape: ["novada_scrape", "novada_extract", "novada_unblock"],
   crawl: ["novada_crawl", "novada_map"],

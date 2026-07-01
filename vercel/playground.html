@@ -495,14 +495,68 @@ function toggleTheme(){}
     { label: 'Crawl & Map', tools: ['novada_crawl','novada_map'] },
     { label: 'Research', tools: ['novada_research','novada_verify','novada_discover'] },
   ];
+  // ── Scraper operation catalog (platform → operation + required params) ──
+  const SCRAPE_PLATFORMS = [
+    { platform: 'amazon.com', operation: 'amazon_product_keywords', params: [ { key:'keyword', type:'string', default:'AI tools' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'reddit.com',  operation: 'reddit_subreddit_posts',  params: [ { key:'subreddit', type:'string', default:'programming' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'github.com',  operation: 'github_repository_repo-url', params: [ { key:'url', type:'string', default:'https://github.com/NovadaLabs/novada-mcpserver' } ] },
+    { platform: 'youtube.com', operation: 'youtube_video_search_label', params: [ { key:'label', type:'string', default:'web scraping tutorial' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'linkedin.com', operation: 'linkedin_company_information_url', params: [ { key:'url', type:'string', default:'https://www.linkedin.com/company/novada' } ] },
+    { platform: 'tiktok.com',  operation: 'tiktok_posts_url', params: [ { key:'url', type:'string', default:'https://www.tiktok.com/@novada' } ] },
+  ];
+  let extractMode = 'single';
+
   const PG_TOOLS = {
     novada_search: {
       render: () => `<div><label class="pg-label">${isZh()?'查询':'Query'}</label><input id="pg-q" class="pg-input" value="firecrawl vs brightdata pricing"></div>
         <div class="pg-input-row" style="display:flex;gap:8px"><div style="flex:1"><label class="pg-label">Engine</label><select id="pg-engine" class="pg-input"><option>google</option><option>bing</option><option>duckduckgo</option></select></div><div style="width:110px"><label class="pg-label">Num</label><select id="pg-num" class="pg-input"><option>3</option><option selected>5</option><option>10</option></select></div></div>`,
       build: () => ({ query: val('pg-q'), engine: val('pg-engine'), num: parseInt(val('pg-num'),10) }),
     },
-    novada_scrape: { render: () => urlField('https://www.amazon.com/dp/B0DGT8L1FP'), build: () => ({ url: val('pg-url') }) },
-    novada_extract: { render: () => urlField('https://www.firecrawl.dev/pricing'), build: () => ({ url: val('pg-url') }) },
+    novada_scrape: {
+      render: () => {
+        const plat = val('pg-scrape-platform') || SCRAPE_PLATFORMS[0].platform;
+        const cfg = SCRAPE_PLATFORMS.find(p => p.platform === plat) || SCRAPE_PLATFORMS[0];
+        const platOpts = SCRAPE_PLATFORMS.map(p => `<option value="${p.platform}"${p.platform===plat?' selected':''}>${p.platform}</option>`).join('');
+        const paramFields = cfg.params.map(f =>
+          f.type === 'number'
+            ? `<div style="width:110px"><label class="pg-label">${f.key}</label><input id="pg-sp-${f.key}" type="number" class="pg-input" value="${f.default}" min="1" max="50"></div>`
+            : `<div style="flex:1"><label class="pg-label">${f.key}</label><input id="pg-sp-${f.key}" class="pg-input" value="${f.default}"></div>`
+        ).join('');
+        return `<div><label class="pg-label">${isZh()?'平台':'Platform'}</label><select id="pg-scrape-platform" class="pg-input" data-rerender>${platOpts}</select></div>
+          <div style="margin-top:12px"><label class="pg-label">${isZh()?'操作':'Operation'}</label><input id="pg-scrape-op" class="pg-input" value="${cfg.operation}" readonly style="opacity:.75;cursor:not-allowed"></div>
+          <div class="pg-input-row" style="display:flex;gap:8px;margin-top:12px">${paramFields}</div>`;
+      },
+      build: () => {
+        const plat = val('pg-scrape-platform') || SCRAPE_PLATFORMS[0].platform;
+        const cfg = SCRAPE_PLATFORMS.find(p => p.platform === plat) || SCRAPE_PLATFORMS[0];
+        const params = {};
+        let limit = 5;
+        cfg.params.forEach(f => {
+          const raw = val(`pg-sp-${f.key}`);
+          const value = f.type === 'number' ? (parseInt(raw, 10) || f.default) : raw;
+          params[f.key] = value;
+          if (f.key === 'num') limit = value;
+        });
+        return { platform: cfg.platform, operation: cfg.operation, params, limit, format: 'markdown' };
+      },
+    },
+    novada_extract: {
+      render: () => `<div class="seg" id="pg-extract-mode" style="margin-bottom:12px">
+          <button data-emode="single" class="${extractMode==='single'?'on':''}">${isZh()?'单个':'Single'}</button>
+          <button data-emode="batch" class="${extractMode==='batch'?'on':''}">${isZh()?'批量':'Batch'}</button>
+        </div>
+        <div id="pg-extract-single" style="display:${extractMode==='single'?'':'none'}">${urlField('https://www.firecrawl.dev/pricing')}</div>
+        <div id="pg-extract-batch" style="display:${extractMode==='batch'?'':'none'}"><label class="pg-label">${isZh()?'批量 URL(每行一个,最多 10 个)':'Batch URLs (one per line, max 10)'}</label><textarea id="pg-urls" class="pg-input" rows="4" style="resize:vertical">https://www.firecrawl.dev/pricing
+https://www.tavily.com
+https://www.brightdata.com/pricing</textarea></div>`,
+      build: () => {
+        if (extractMode === 'batch') {
+          const list = val('pg-urls').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10);
+          return { url: list };
+        }
+        return { url: val('pg-url') };
+      },
+    },
     novada_crawl: {
       render: () => `${urlField('https://www.tavily.com')}<div class="pg-input-row" style="display:flex;gap:8px;margin-top:12px"><div style="flex:1"><label class="pg-label">Max pages</label><input id="pg-max" type="number" class="pg-input" value="5" min="1" max="20"></div><div style="flex:1"><label class="pg-label">Max depth</label><input id="pg-depth" type="number" class="pg-input" value="2" min="1" max="5"></div></div>`,
       build: () => ({ url: val('pg-url'), max_pages: parseInt(val('pg-max'),10), max_depth: parseInt(val('pg-depth'),10) }),
@@ -533,6 +587,16 @@ function toggleTheme(){}
     current = it.dataset.tool; renderTools(); renderArgs();
   });
   pgArgsEl.addEventListener('input', refreshReqCode);
+  // Re-render the args form when a control marked [data-rerender] changes (e.g. scrape platform).
+  pgArgsEl.addEventListener('change', e => {
+    if (e.target.closest('[data-rerender]')) renderArgs();
+  });
+  // Extract mode toggle (Single / Batch) — restyle segment, swap fields, refresh preview.
+  pgArgsEl.addEventListener('click', e => {
+    const b = e.target.closest('#pg-extract-mode button[data-emode]'); if(!b) return;
+    extractMode = b.dataset.emode;
+    renderArgs();
+  });
 
   // ── request preview (Form / JSON-RPC / cURL) ──
   let reqView = 'form';
