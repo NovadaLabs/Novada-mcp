@@ -55,8 +55,11 @@ export async function novadaProxyDedicated(params) {
             agent_instruction: "Fix NOVADA_DEDICATED_PROXY_LIST format and retry.",
         }, null, 2);
     }
-    const [proxyIp, proxyPort, proxyUser, proxyPass] = entries[0].split(":");
-    const maskedCmd = `curl -x ${proxyIp}:${proxyPort} -U "${proxyUser}:***" ipinfo.novada.pro`;
+    // _proxyPass is read from the env list but never surfaced in output.
+    const [proxyIp, proxyPort, proxyUser, _proxyPass] = entries[0].split(":");
+    // Mask username in output to prevent credential leakage
+    const maskedProxyUser = proxyUser.slice(0, 4) + "***";
+    const maskedCmd = `curl -x ${proxyIp}:${proxyPort} -U "${maskedProxyUser}:***" ipinfo.novada.pro`;
     if (params.format === "curl") {
         return [
             `## Dedicated Proxy Configuration (curl)`,
@@ -64,7 +67,7 @@ export async function novadaProxyDedicated(params) {
             `ip_type: exclusive datacenter (not shared with other users)`,
             `session: ${params.session_id}`,
             ``,
-            `curl -x ${proxyIp}:${proxyPort} -U "${proxyUser}:***" <your-url>`,
+            `curl -x ${proxyIp}:${proxyPort} -U "<PROXY_USER>:***" <your-url>`,
             `# Replace *** with your proxy password`,
             ``,
             `## agent_instruction`,
@@ -78,8 +81,8 @@ export async function novadaProxyDedicated(params) {
             `ip_type: exclusive datacenter (not shared with other users)`,
             ``,
             `export DEDICATED_PROXY_PASS="<your-proxy-password>"  # Set this first`,
-            `export HTTP_PROXY="http://${proxyUser}:\${DEDICATED_PROXY_PASS}@${proxyIp}:${proxyPort}"`,
-            `export HTTPS_PROXY="http://${proxyUser}:\${DEDICATED_PROXY_PASS}@${proxyIp}:${proxyPort}"`,
+            `export HTTP_PROXY="http://<PROXY_USER>:\${DEDICATED_PROXY_PASS}@${proxyIp}:${proxyPort}"`,
+            `export HTTPS_PROXY="http://<PROXY_USER>:\${DEDICATED_PROXY_PASS}@${proxyIp}:${proxyPort}"`,
             ``,
             `## agent_instruction`,
             `Dedicated proxy — exclusive datacenter IP with unique credentials per IP. Not zone-based.`,

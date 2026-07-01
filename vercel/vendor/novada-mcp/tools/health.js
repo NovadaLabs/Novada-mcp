@@ -100,12 +100,13 @@ async function probeScraper(apiKey) {
 function probeProxy() {
     const creds = getProxyCredentials();
     if (creds) {
-        // Validate endpoint format: must contain ":" as a host:port separator
+        // FIX-5: We can only verify credentials are present — no live TCP probe here.
+        // Label as "configured (not verified)" rather than "Active" to avoid false-Active.
         const endpointValid = creds.endpoint.includes(":");
         if (endpointValid) {
-            return { status: "active", label: "Proxy", latency: null };
+            return { status: "active", label: "Proxy", latency: null, note: "configured (not verified — no live probe)" };
         }
-        return { status: "active", label: "Proxy", latency: null, note: "configured — connectivity unverified" };
+        return { status: "active", label: "Proxy", latency: null, note: "configured — endpoint format may be wrong (expected host:port)" };
     }
     return {
         status: "not_configured",
@@ -133,7 +134,9 @@ function probeBrowser() {
     if (ws) {
         const wsValid = ws.startsWith("wss://") && ws.includes("@");
         if (wsValid) {
-            return { status: "active", label: "Browser API", latency: null };
+            // FIX-5: NOVADA_BROWSER_WS is set and well-formed, but we don't do a live WebSocket probe.
+            // Label as "configured (not verified)" to avoid claiming Active without a real connectivity check.
+            return { status: "active", label: "Browser API", latency: null, note: "configured (not verified — no live probe)" };
         }
         return { status: "active", label: "Browser API", latency: null, note: "NOVADA_BROWSER_WS format may be wrong — expected wss://user:pass@host" };
     }
@@ -182,13 +185,15 @@ export async function novadaHealth(apiKey) {
         `api_key: ${maskedKey}`,
         `checked: ${new Date().toISOString()}`,
         "",
-        "| Product | Status | Latency |",
-        "|---------|--------|---------|",
+        "| Product | Status | Latency | Notes |",
+        "|---------|--------|---------|-------|",
     ];
     for (const r of results) {
-        lines.push(`| ${r.label} | ${statusIcon(r)} | ${latencyStr(r)} |`);
+        // FIX-5: Surface notes for all rows (including active) so "not verified" caveat is visible
+        const noteCell = r.note ? r.note : "";
+        lines.push(`| ${r.label} | ${statusIcon(r)} | ${latencyStr(r)} | ${noteCell} |`);
     }
-    lines.push(`| Output Pipeline | ✅ active — ~/Downloads/novada-mcp/ | — |`);
+    lines.push(`| Output Pipeline | ✅ active — ~/Downloads/novada-mcp/ | — | |`);
     lines.push("");
     lines.push("---");
     lines.push("## Summary");

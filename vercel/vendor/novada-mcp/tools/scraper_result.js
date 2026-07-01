@@ -6,6 +6,7 @@ import { saveOutput } from "../utils/output.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { TASK_ID_REGEX, TASK_ID_REGEX_MSG } from "./types.js";
 import { devApiPost } from "../_core/developer_api.js";
+import { checkTaskExists } from "./scraper_status.js";
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 export const ScraperResultParamsSchema = z.object({
     task_id: z
@@ -111,11 +112,47 @@ export async function novadaScraperResult(params, apiKey) {
             fetchedFromEndpoint = "task_download";
         }
         else {
-            // No COS URL returned — task may not be ready yet
+            // No COS URL returned — task_download returned code:0 but empty download URL.
+            // This happens for BOTH:
+            //   (a) bogus/unknown task_ids — API returns {code:0, data:[{download:"", task_id:bogus}]}
+            //   (b) newly-submitted real tasks — for ~30s after submit the status endpoint hasn't
+            //       propagated yet, so checkTaskExists returns "not_found" even though the task exists.
+            // Disambiguate via a lightweight status existence check, but be honest about the
+            // propagation window: "not_found" from checkTaskExists CANNOT definitively distinguish
+            // bogus from just-submitted-and-not-yet-propagated.
+            // NOV-666: this is now the primary disambiguation site for empty-downloadUrl paths.
+            const existence = await checkTaskExists(task_id, apiKey);
+            if (existence === "exists") {
+                // Status endpoint confirms task exists — definitely not_ready (still running).
+                return JSON.stringify({
+                    status: "not_ready",
+                    task_id,
+                    agent_instruction: "Task exists but result is not yet available. " +
+                        "Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again. " +
+                        "Do NOT call novada_scraper_result again until novada_scraper_status returns 'complete'.",
+                }, null, 2);
+            }
+            if (existence === "not_found") {
+                // Status endpoint returned 404 — task is either invalid/expired OR just submitted
+                // and not yet propagated (~30s API lag, live-confirmed). Cannot tell the difference.
+                return JSON.stringify({
+                    status: "not_found",
+                    task_id,
+                    agent_instruction: "Task not found on the status endpoint. Two possibilities: " +
+                        "(1) You JUST submitted this task (within the last ~30 seconds) — this is normal API propagation lag. Wait 30 seconds and retry novada_scraper_status; if it returns pending/running, the task exists. " +
+                        "(2) The task_id is invalid or expired (tasks expire after 24 hours). " +
+                        "If novada_scraper_status still returns not_found after 30s, stop polling and re-submit with novada_scraper_submit.",
+                }, null, 2);
+            }
+            // existence === "unknown": status check failed (network/auth). Be honest.
             return JSON.stringify({
                 status: "not_ready",
                 task_id,
-                agent_instruction: "Task is not yet complete. Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again.",
+                note: "Result not yet available and task existence could not be confirmed (status endpoint unreachable).",
+                agent_instruction: "Could not retrieve result and could not confirm task existence. " +
+                    "Call novada_scraper_status to check task status. " +
+                    "If it returns not_found after ~30s from submission, stop polling and re-submit. " +
+                    "If it returns pending/running/complete, act accordingly.",
             }, null, 2);
         }
     }
@@ -125,10 +162,22 @@ export async function novadaScraperResult(params, apiKey) {
             if (status === 401 || status === 403) {
                 throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "Invalid NOVADA_API_KEY or insufficient permissions for Scraper API.");
             }
-            // COS URL fetch failed — try legacy download endpoint as fallback
+            // NOV-666: HTTP 404 on the COS / task_download endpoint means this task_id
+            // does not exist (never submitted or already expired). Return not_found
+            // immediately rather than falling through to a legacy path that would return
+            // not_ready (misleading the caller into thinking the task is still running).
+            if (status === 404) {
+                return JSON.stringify({
+                    status: "not_found",
+                    task_id,
+                    agent_instruction: "Task not found. The task_id is invalid, was never submitted, or has expired (tasks expire after 24 hours). " +
+                        "Do NOT poll further — re-submit with novada_scraper_submit or use novada_extract as an alternative.",
+                }, null, 2);
+            }
+            // COS URL fetch failed for another reason — try legacy download endpoint as fallback
         }
         else {
-            // NovadaError from devApiPost (e.g. task not ready, code 27202)
+            // NovadaError from devApiPost (e.g. task not ready, non-zero code)
             // Fall through to legacy fallback
         }
         // Legacy fallback: GET /scraper_download?task_id=...&file_type=json&apikey=...
@@ -149,10 +198,38 @@ export async function novadaScraperResult(params, apiKey) {
                     fetchedFromEndpoint = RESULT_DOWNLOAD_ENDPOINT;
                 }
                 if (bObj.code === 27202) {
+                    // NOV-666: code 27202 from the legacy download endpoint is ambiguous — it means
+                    // "result not yet available" for both real pending tasks AND unknown/bogus task_ids.
+                    // Disambiguate by doing a lightweight existence check via the status endpoint
+                    // (which returns HTTP 404 definitively for unknown ids).
+                    const existence = await checkTaskExists(task_id, apiKey);
+                    if (existence === "not_found") {
+                        return JSON.stringify({
+                            status: "not_found",
+                            task_id,
+                            agent_instruction: "Task not found. The task_id is invalid, was never submitted, or has expired (tasks expire after 24 hours). " +
+                                "Do NOT poll further — re-submit with novada_scraper_submit or use novada_extract as an alternative.",
+                        }, null, 2);
+                    }
+                    if (existence === "exists") {
+                        return JSON.stringify({
+                            status: "not_ready",
+                            task_id,
+                            agent_instruction: "Task exists but result is not yet available. " +
+                                "Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again. " +
+                                "Do NOT call novada_scraper_result again until novada_scraper_status returns 'complete'.",
+                        }, null, 2);
+                    }
+                    // existence === "unknown": both checks failed (network/auth issue).
+                    // Be honest — don't fabricate either verdict.
                     return JSON.stringify({
                         status: "not_ready",
                         task_id,
-                        agent_instruction: "Task is not yet complete. Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again.",
+                        note: "Could not confirm task existence — status endpoint unreachable during disambiguation check.",
+                        agent_instruction: "Result not yet available (code 27202) and task existence could not be confirmed. " +
+                            "Call novada_scraper_status to check task status. " +
+                            "If novada_scraper_status returns 'not_found', stop polling and re-submit. " +
+                            "If it returns 'pending'/'running'/'complete', act accordingly.",
                     }, null, 2);
                 }
                 if (bObj.code === 10002 || bObj.code === 10003) {
@@ -163,6 +240,21 @@ export async function novadaScraperResult(params, apiKey) {
                         agent_instruction: "The scraping task failed. Re-submit with novada_scraper_submit or try novada_extract as an alternative.",
                     }, null, 2);
                 }
+                // NOV-666: code 10000 from the legacy download endpoint means "task not exist"
+                // (live-confirmed: msg:"task not exist"). Distinct from 27202 (pending) — this
+                // is an explicit server signal that the task_id is unknown.
+                // Apply the same propagation-aware messaging: a just-submitted task also looks
+                // not-found for ~30s, so we cannot claim "definitely invalid" without that caveat.
+                if (bObj.code === 10000) {
+                    return JSON.stringify({
+                        status: "not_found",
+                        task_id,
+                        agent_instruction: "Task not found (code 10000). Two possibilities: " +
+                            "(1) You JUST submitted this task (within the last ~30 seconds) — this is normal API propagation lag. Wait 30 seconds and check novada_scraper_status; if it returns pending/running, the task exists. " +
+                            "(2) The task_id is invalid or expired (tasks expire after 24 hours). " +
+                            "If novada_scraper_status still returns not_found after 30s, stop polling and re-submit with novada_scraper_submit.",
+                    }, null, 2);
+                }
             }
         }
         catch (legacyErr) {
@@ -170,6 +262,16 @@ export async function novadaScraperResult(params, apiKey) {
                 const status = legacyErr.response?.status;
                 if (status === 401 || status === 403) {
                     throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "Invalid NOVADA_API_KEY or insufficient permissions for Scraper API.");
+                }
+                // NOV-666: HTTP 404 from legacy download endpoint = task_id not found.
+                // Distinct from not_ready — stop polling and inform the agent clearly.
+                if (status === 404) {
+                    return JSON.stringify({
+                        status: "not_found",
+                        task_id,
+                        agent_instruction: "Task not found. The task_id is invalid, was never submitted, or has expired (tasks expire after 24 hours). " +
+                            "Do NOT poll further — re-submit with novada_scraper_submit or use novada_extract as an alternative.",
+                    }, null, 2);
                 }
                 throw makeNovadaError(NovadaErrorCode.API_DOWN, `Download endpoint error (HTTP ${status ?? "network"}): ${legacyErr.message}`);
             }

@@ -4,13 +4,22 @@ import { formatAsMarkdown } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
-// How long to wait for a task to complete before giving up.
-// Amazon and similar scrapers can take 120-180s, but the hosted Vercel function
-// is killed at ~60s (see novada-mcpserver config.maxDuration) and returns a BARE
-// 504 that is NOT valid JSON-RPC (#5). Capping the poll at HOSTED_SAFE_CEILING_MS
-// guarantees the tool emits a structured TASK_PENDING result the client can act on
-// (resubmit / poll via novada_scraper_status) before the function is force-killed.
-const POLL_TIMEOUT_MS = HOSTED_SAFE_CEILING_MS;
+// How long the SYNC novada_scrape path will poll before returning a structured
+// TASK_PENDING result. Set well below HOSTED_SAFE_CEILING_MS (50s) so:
+//   (a) short-running tasks (search/SERP, ~3-8s) still complete inline, and
+//   (b) long-running tasks (Amazon, ~120s) fall through quickly to TASK_PENDING
+//       instead of blocking multi-agent callers or triggering upstream timeouts.
+// 14s is empirically enough for fast scrapers, short enough to avoid agent
+// timeouts in orchestration pipelines (most tool-call timeouts are 30-60s).
+// For tasks that need longer, callers should use the async
+// novada_scraper_submit → novada_scraper_status → novada_scraper_result flow.
+const SYNC_POLL_CEILING_MS = 14_000;
+// NOV-665: expose HOSTED_SAFE_CEILING_MS for the still-needed ceiling comment but
+// do NOT use it as the sync poll cap. HOSTED_SAFE_CEILING_MS is only referenced
+// to document why we are well below it.
+const _HOSTED_SAFE_CEILING_REFERENCE = HOSTED_SAFE_CEILING_MS; // 50s — we stay well under this
+void _HOSTED_SAFE_CEILING_REFERENCE; // suppress unused-var lint
+const POLL_TIMEOUT_MS = SYNC_POLL_CEILING_MS;
 const POLL_INTERVAL_MS = 2_000;
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -144,8 +153,14 @@ async function pollForResult(apiKey, taskId) {
         throw new Error(`Unexpected download response: ${sanitizeServerMsg(JSON.stringify(body).slice(0, 200))}`);
     }
     // H-8: Use NovadaError(TASK_PENDING) instead of generic Error to avoid
-    // classifyError mismatching "timed out" → URL_UNREACHABLE
-    throw makeNovadaError(NovadaErrorCode.TASK_PENDING, `Scraper poll exceeded ${POLL_TIMEOUT_MS / 1000}s for task_id="${taskId}". The task may still be running server-side.`, "poll_timeout");
+    // classifyError mismatching "timed out" → URL_UNREACHABLE.
+    // NOV-665: sync poll cap is intentionally short (14s) so multi-agent and
+    // short-timeout orchestrators aren't blocked. The task continues server-side.
+    throw makeNovadaError(NovadaErrorCode.TASK_PENDING, `Scraper sync poll exceeded ${POLL_TIMEOUT_MS / 1000}s for task_id="${taskId}". ` +
+        `The task is still running server-side — this is expected for slow scrapers (Amazon, etc.). ` +
+        `Use the async flow: call novada_scraper_status with task_id="${taskId}" to poll progress, ` +
+        `then novada_scraper_result once status is 'complete'. ` +
+        `Do NOT retry novada_scrape — that would submit a new duplicate task.`, "poll_timeout");
 }
 /** Flatten a potentially nested object for tabular display.
  *  M-1: depth limit prevents stack overflow on deeply nested server responses. */

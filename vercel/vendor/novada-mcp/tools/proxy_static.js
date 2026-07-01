@@ -58,8 +58,11 @@ export async function novadaProxyStatic(params) {
             agent_instruction: "Fix NOVADA_STATIC_PROXY_LIST format and retry.",
         }, null, 2);
     }
-    const [proxyIp, proxyPort, proxyUser, proxyPass] = entries[0].split(":");
-    const maskedCmd = `curl -x ${proxyIp}:${proxyPort} -U "${proxyUser}:***" ipinfo.novada.pro`;
+    // proxyPass is read from the env list but never surfaced in output.
+    const [proxyIp, proxyPort, proxyUser, _proxyPass] = entries[0].split(":");
+    // Mask username in output to prevent credential leakage
+    const maskedProxyUser = proxyUser.slice(0, 4) + "***";
+    const maskedCmd = `curl -x ${proxyIp}:${proxyPort} -U "${maskedProxyUser}:***" ipinfo.novada.pro`;
     if (params.format === "curl") {
         return [
             `## Static Proxy Configuration (curl)`,
@@ -67,7 +70,7 @@ export async function novadaProxyStatic(params) {
             `targeting: ${params.country.toUpperCase()} (dedicated IP)`,
             `session: ${params.session_id}`,
             ``,
-            `curl -x ${proxyIp}:${proxyPort} -U "${proxyUser}:***" <your-url>`,
+            `curl -x ${proxyIp}:${proxyPort} -U "<PROXY_USER>:***" <your-url>`,
             `# Replace *** with your proxy password`,
             ``,
             `## agent_instruction`,
@@ -81,8 +84,8 @@ export async function novadaProxyStatic(params) {
             `targeting: ${params.country.toUpperCase()} (dedicated IP)`,
             ``,
             `export STATIC_PROXY_PASS="<your-proxy-password>"  # Set this first`,
-            `export HTTP_PROXY="http://${proxyUser}:\${STATIC_PROXY_PASS}@${proxyIp}:${proxyPort}"`,
-            `export HTTPS_PROXY="http://${proxyUser}:\${STATIC_PROXY_PASS}@${proxyIp}:${proxyPort}"`,
+            `export HTTP_PROXY="http://<PROXY_USER>:\${STATIC_PROXY_PASS}@${proxyIp}:${proxyPort}"`,
+            `export HTTPS_PROXY="http://<PROXY_USER>:\${STATIC_PROXY_PASS}@${proxyIp}:${proxyPort}"`,
             ``,
             `## agent_instruction`,
             `Static proxy — dedicated IP with unique credentials per IP. Not zone-based.`,

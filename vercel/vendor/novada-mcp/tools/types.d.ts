@@ -90,11 +90,6 @@ export declare const CrawlParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknow
         render: "render";
         auto: "auto";
     }>>;
-    limit: z.ZodOptional<z.ZodNumber>;
-    mode: z.ZodOptional<z.ZodEnum<{
-        bfs: "bfs";
-        dfs: "dfs";
-    }>>;
 }, z.core.$strip>>;
 export declare const ResearchParamsSchema: z.ZodObject<{
     question: z.ZodOptional<z.ZodString>;

@@ -1,4 +1,20 @@
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
+import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+// FIX-4: Max claim length — prevents excessively long claims from blowing up search queries
+const CLAIM_MAX_LENGTH = 1000;
+/**
+ * FIX-4: Sanitize a claim before embedding it into search query strings.
+ * Strips CRLF, null bytes, and HTML/JS that could cause false 'supported' verdicts
+ * via injection into SERP context, and removes leading javascript: scheme.
+ */
+function sanitizeClaim(claim) {
+    return claim
+        .replace(/[\r\n\0]+/g, " ") // collapse CRLF + null-byte to space
+        .replace(/javascript:/gi, "") // strip javascript: scheme
+        .replace(/<[^>]*>/g, " ") // strip HTML tags that embed context
+        .replace(/\s{2,}/g, " ") // collapse runs of whitespace
+        .trim();
+}
 async function runSearchQuery(query, apiKey) {
     try {
         const submitted = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
@@ -50,9 +66,24 @@ function isRelevant(r, keyTerms) {
 }
 export async function novadaVerify(params, apiKey) {
     if (!params.claim || typeof params.claim !== 'string' || params.claim.trim().length === 0) {
-        return JSON.stringify({ verdict: 'error', message: 'claim is required and must be a non-empty string' });
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "claim is required and must be a non-empty string", "claim: missing or empty");
     }
-    const { claim, context } = params;
+    // FIX-4: Validate and sanitize claim before embedding in search queries.
+    if (params.claim.length > CLAIM_MAX_LENGTH) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `claim exceeds maximum length of ${CLAIM_MAX_LENGTH} characters (got ${params.claim.length}).`, `claim_length:${params.claim.length} max:${CLAIM_MAX_LENGTH}`);
+    }
+    // FIX-4: Reject null bytes and CRLF at input validation level
+    if (/[\0\r\n]/.test(params.claim)) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "claim must not contain null bytes or newline characters.", "claim: contains CRLF or null");
+    }
+    // FIX-4: Reject javascript: scheme in claim
+    if (/^javascript:/i.test(params.claim.trim())) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "claim must not start with the javascript: scheme.", "claim: javascript: scheme");
+    }
+    // FIX-4: Sanitize before embedding in search queries (defense in depth even after above)
+    const claim = sanitizeClaim(params.claim);
+    // Also sanitize context to prevent injection through that field
+    const context = params.context ? sanitizeClaim(params.context) : undefined;
     const ctx = context ? ` ${context}` : "";
     const keyTerms = extractKeyTerms(claim);
     // Generate 3 strategically angled queries

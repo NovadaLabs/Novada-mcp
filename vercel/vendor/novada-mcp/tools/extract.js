@@ -1,8 +1,8 @@
 import * as cheerio from "cheerio";
-import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitleFrom, extractDescriptionFrom, extractLinksFrom, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredDataFrom, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
+import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitleFrom, extractDescriptionFrom, extractLinksFrom, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredDataFrom, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT, detectKuferAvailability, truncatePreservingTable } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import { saveOutput } from "../utils/output.js";
-import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { makeNovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
@@ -54,11 +54,19 @@ function sourceAnnotation(source) {
  */
 function parseItemStats(content) {
     const returnedChars = content.length;
-    // Markdown path exposes `... | content_truncated:true | total_chars:N` on the meta line.
-    // JSON path exposes "content_truncated": true and "total_chars": N.
-    const truncated = /content_truncated"?\s*[:=]\s*true/i.test(content);
+    // NOV-578 #4: match ONLY the extractor's own meta emission, never arbitrary page body.
+    // extractSingle emits truncation exactly two ways:
+    //   - markdown meta line:  `... | content_truncated:true | total_chars:N`  (pipe-separated)
+    //   - JSON field:          `"content_truncated": true, ... "total_chars": N`  (quoted key)
+    // The old loose regex (/content_truncated"?[:=]\s*true/i over the whole body, `=` allowed)
+    // also fired when a SCRAPED PAGE contained the string — e.g. a doc page about this very API,
+    // or a JSON sample — reporting phantom truncation and a wrong total_chars. Anchoring to the
+    // pipe-prefixed markdown token or the quoted-key JSON form decouples it from page content.
+    const truncated = /\|\s*content_truncated:true\b/.test(content) || // markdown meta line
+        /"content_truncated"\s*:\s*true\b/.test(content); // JSON field
     let totalChars = null;
-    const totalMatch = content.match(/total_chars"?\s*[:=]\s*"?(\d+)/i);
+    const totalMatch = content.match(/\|\s*total_chars:(\d+)/) || // markdown meta line
+        content.match(/"total_chars"\s*:\s*(\d+)/); // JSON field
     if (totalMatch)
         totalChars = parseInt(totalMatch[1], 10);
     return { returnedChars, truncated, totalChars };
@@ -86,42 +94,92 @@ export async function novadaExtract(params, apiKey) {
         })));
         const successful = results.filter(r => r.ok).length;
         const failed = results.length - successful;
-        // NOV-563/568: Do NOT re-truncate per page. Each extractSingle already honors
-        // max_chars (default MAX_CHARS_DEFAULT). The old MAX_BATCH_TOTAL block sliced each
-        // page to floor(25000/N) (~3125 chars at 8 URLs), silently ignoring max_chars and
-        // destroying content. Instead we keep every page intact, surface per-item char
-        // flags parsed from the inner block, and persist the whole batch to disk so large
-        // output is recoverable even if the host truncates the inline response.
-        const lines = [
+        // NOV-670: Return a COMPACT inline summary so agents don't drown in 62k+ tokens
+        // from concatenated full pages. Each item gets: url, ok/failed, title (extracted),
+        // availability_status (if present), and a short snippet (~max_chars/N chars).
+        // The full per-page content is still written to disk for recovery.
+        //
+        // NOV-563/568: Each extractSingle already honors max_chars (default MAX_CHARS_DEFAULT).
+        // We no longer re-truncate per page — instead we emit compact summaries inline and
+        // save full content to disk.
+        // Per-item snippet budget: divide max_chars across all URLs (min 500 chars per item)
+        const perItemBudget = Math.max(500, Math.floor((params.max_chars ?? MAX_CHARS_DEFAULT) / urls.length));
+        // Build compact summary table
+        const summaryLines = [
             `## Batch Extract Results`,
+            `urls:${urls.length} | successful:${successful} | failed:${failed}`,
+            ``,
+        ];
+        // Extract title from content block (best-effort)
+        function extractTitleFromBlock(content) {
+            const m = content.match(/^title:\s*(.+)$/m);
+            return m ? m[1].trim() : "(no title)";
+        }
+        // Extract availability_status from Kufer block (if present)
+        function extractAvailabilityFromBlock(content) {
+            const m = content.match(/^availability_status:\s*(.+)$/m);
+            return m ? m[1].trim() : null;
+        }
+        // Build compact per-item rows
+        for (const r of results) {
+            const stats = parseItemStats(r.content);
+            const itemTitle = r.ok ? extractTitleFromBlock(r.content) : "FAILED";
+            const availability = r.ok ? extractAvailabilityFromBlock(r.content) : null;
+            const totalPart = stats.totalChars !== null ? ` | total_chars:${stats.totalChars}` : "";
+            const availPart = availability ? ` | availability:${availability}` : "";
+            const statusPart = r.ok ? "ok" : "failed";
+            summaryLines.push(`### [${r.i + 1}/${urls.length}] ${statusPart.toUpperCase()}: ${r.url}`);
+            summaryLines.push(`title: ${itemTitle}`);
+            summaryLines.push(`chars:${stats.returnedChars} | content_truncated:${stats.truncated}${totalPart}${availPart}`);
+            // Short snippet — strip the header block, take first perItemBudget chars of content
+            if (r.ok) {
+                const contentStart = r.content.indexOf("---\n");
+                const snippetSource = contentStart !== -1 ? r.content.slice(contentStart + 4) : r.content;
+                const snippet = snippetSource.slice(0, perItemBudget).trim();
+                if (snippet) {
+                    summaryLines.push(``);
+                    summaryLines.push(snippet + (snippetSource.length > perItemBudget ? "\n…" : ""));
+                }
+            }
+            else {
+                summaryLines.push(``);
+                summaryLines.push(r.content.slice(0, 500));
+            }
+            summaryLines.push(``);
+            summaryLines.push(`---`);
+            summaryLines.push(``);
+        }
+        summaryLines.push(`## Agent Hints`);
+        if (failed > 0) {
+            summaryLines.push(`- ${failed} URL(s) failed. Re-run failed URLs individually for details.`);
+        }
+        summaryLines.push(`- Inline content is a compact snippet (${perItemBudget} chars/item). Full content per page is saved to disk — see path: line below.`);
+        summaryLines.push(`- To get full content for a specific URL, call novada_extract with that single URL.`);
+        summaryLines.push(`- Use novada_map to discover additional pages on any of these domains.`);
+        // Build the full output for disk (the original full concatenation)
+        const fullLines = [
+            `## Batch Extract Results (Full)`,
             `urls:${urls.length} | successful:${successful} | failed:${failed}`,
             ``,
             `---`,
             ``,
         ];
         for (const r of results) {
-            lines.push(`### [${r.i + 1}/${urls.length}] ${r.url}`);
+            fullLines.push(`### [${r.i + 1}/${urls.length}] ${r.url}`);
             if (!r.ok)
-                lines.push(`status: FAILED`);
+                fullLines.push(`status: FAILED`);
             const stats = parseItemStats(r.content);
             const totalPart = stats.totalChars !== null ? ` | total_chars:${stats.totalChars}` : "";
-            lines.push(`returned_chars:${stats.returnedChars} | content_truncated:${stats.truncated}${totalPart}`);
-            lines.push(``);
-            lines.push(r.content);
-            lines.push(``);
-            lines.push(`---`);
-            lines.push(``);
+            fullLines.push(`returned_chars:${stats.returnedChars} | content_truncated:${stats.truncated}${totalPart}`);
+            fullLines.push(``);
+            fullLines.push(r.content);
+            fullLines.push(``);
+            fullLines.push(`---`);
+            fullLines.push(``);
         }
-        lines.push(`## Agent Hints`);
-        if (failed > 0) {
-            lines.push(`- ${failed} URL(s) failed. Each failure includes a suggested_fix — read the error block above for per-URL guidance.`);
-        }
-        lines.push(`- Per-page content is returned in full (each page honored its own max_chars). Pages flagged content_truncated:true hit max_chars — re-run that URL individually with a higher max_chars for the rest.`);
-        lines.push(`- Use novada_map to discover additional pages on any of these domains.`);
-        const batchOutput = lines.join("\n");
-        // Best-effort: persist the entire batch to disk and put the path at the TOP so
-        // agents that truncate long responses still see where the full result landed.
-        // Removing the per-page cap can blow up inline size — the save + top-path land together.
+        const batchOutput = fullLines.join("\n");
+        // Best-effort: persist the FULL batch to disk; return compact summary inline.
+        // Agents that truncate long responses still see where the full result landed.
         let batchPrefix = "";
         try {
             const firstUrl = urls[0];
@@ -140,10 +198,12 @@ export async function novadaExtract(params, apiKey) {
                 data: batchOutput,
                 project: params.project,
             });
-            batchPrefix = `path: ${outputResult.filePath}\n\n`;
+            // FIX-1: Redact absolute path so home dir doesn't leak to hosted consumers.
+            batchPrefix = `path: ${redactSecrets(outputResult.filePath)}\n\n`;
         }
         catch { /* best-effort */ }
-        return batchPrefix + batchOutput;
+        // Return compact inline summary (NOV-670); full content is on disk at batchPrefix path
+        return batchPrefix + summaryLines.join("\n");
     }
     // Single URL mode
     try {
@@ -167,6 +227,53 @@ export async function novadaExtract(params, apiKey) {
             `agent_instruction: status:failed | ${suggestedFix}`,
         ].join("\n");
     }
+}
+/**
+ * NOV-672: Build a context-aware agent_instruction from the actual extraction outcome.
+ *
+ * Priority order (first matching rule wins):
+ * 1. fields requested & ≥half null → suggest render="render" for JS-rendered values
+ * 2. content_truncated → suggest raising max_chars
+ * 3. listing page (many rows/links, low prose) → suggest drilling into per-item URLs
+ * 4. success with content_ok → minimal success note
+ * 5. low quality → suggest render escalation
+ */
+function buildContextualAgentInstruction(ctx) {
+    const { contentOk, qualityScore, usedMode, renderMode, fieldResults, contentTruncated, maxChars, totalChars, mainContent, params } = ctx;
+    // 1. Fields requested with ≥ half null → JS-rendered values likely missing
+    if (fieldResults && fieldResults.length > 0) {
+        const unresolvedCount = fieldResults.filter(r => r.source === "unresolved").length;
+        if (unresolvedCount >= fieldResults.length / 2) {
+            return `status:partial_fields | ${unresolvedCount}/${fieldResults.length} fields null — values may be JS-rendered; retry with render="render" to fetch dynamic content`;
+        }
+    }
+    // 2. Content truncated → suggest raising max_chars
+    if (contentTruncated) {
+        const suggestedHigher = Math.min(maxChars * 2, 100000);
+        return `status:truncated | showing ${maxChars} of ${totalChars} chars — pass max_chars=${suggestedHigher} to retrieve more content`;
+    }
+    // 3. Listing page detection: many markdown table rows or many list items, short avg line
+    if (contentOk) {
+        const tableRowCount = (mainContent.match(/^\|/gm) ?? []).length;
+        const listItemCount = (mainContent.match(/^- /gm) ?? []).length;
+        const isListingPage = tableRowCount >= 10 || listItemCount >= 15;
+        if (isListingPage) {
+            return `status:success | listing page detected — extract individual item URLs for detailed data on each entry`;
+        }
+    }
+    // 4. Success with good content
+    if (contentOk) {
+        return `status:success quality:${qualityScore}/100`;
+    }
+    // 5. Low quality → suggest render escalation
+    if (qualityScore < 30 && usedMode === "static" && renderMode === "auto") {
+        return `status:low_quality | retry with render="render" for JS-heavy or bot-protected pages`;
+    }
+    // 6. Generic low quality
+    if (usedMode === "static") {
+        return `status:low_quality quality:${qualityScore}/100 | fix: retry with render="render"`;
+    }
+    return `status:low_quality quality:${qualityScore}/100`;
 }
 /** Derive a suggested_fix hint from a URL + error message */
 function getSuggestedFix(url, errorMsg) {
@@ -491,6 +598,9 @@ async function extractSingleInner(params, apiKey) {
     let title = pdfPages !== null ? (pdfTitle ?? params.url) : extractTitleFrom($doc);
     let description = $doc ? extractDescriptionFrom($doc) : "";
     let stillJsHeavy = renderMode === "auto" && (usedMode === "static" || usedMode === "render-failed") && detectJsHeavyContent(html);
+    // NOV-668: Kufer/webbasys availability detection — runs on the raw cheerio DOM
+    // BEFORE markdown conversion strips inline styles and text nodes.
+    const kuferResult = $doc ? detectKuferAvailability($doc, params.url) : null;
     if (params.format === "html") {
         let htmlOutput;
         if (html.length <= 10000) {
@@ -512,7 +622,8 @@ async function extractSingleInner(params, apiKey) {
                 data: html,
                 project: params.project,
             });
-            htmlOutput += `\n<!-- Output saved: ${outputResult.filePath} -->`;
+            // FIX-1: Redact absolute path.
+            htmlOutput += `\n<!-- Output saved: ${redactSecrets(outputResult.filePath)} -->`;
         }
         catch { /* best-effort */ }
         return htmlOutput;
@@ -722,11 +833,13 @@ async function extractSingleInner(params, apiKey) {
         catch { /* Wayback unavailable — keep original result */ }
     }
     // max_chars truncation for markdown format
+    // NOV-671: use table-preserving truncation — when a table sits in the last ~30%
+    // of content and would be cut, we trim boilerplate above and keep the table intact.
     const totalChars = mainContent.length;
     let displayContent = mainContent;
     let contentTruncated = false;
     if (displayContent.length > maxChars) {
-        displayContent = displayContent.slice(0, maxChars);
+        displayContent = truncatePreservingTable(displayContent, maxChars);
         const suggestedHigher = Math.min(maxChars * 2, 100000);
         displayContent += `\n\n[Content may be truncated — showing first ${maxChars} of ${totalChars} total characters. Pass max_chars=${suggestedHigher} to get more.]`;
         contentTruncated = true;
@@ -809,6 +922,17 @@ async function extractSingleInner(params, apiKey) {
             ...(escalationFailed ? { escalation_attempted: true, escalation_failed: true, ...(escalationError ? { escalation_error: escalationError } : {}) } : {}),
             ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
             ...(waybackFallback ? { wayback_fallback: true } : {}),
+            // NOV-668: Kufer availability data
+            ...(kuferResult ? {
+                kufer_availability: {
+                    is_overview_page: kuferResult.is_overview_page,
+                    status: kuferResult.status,
+                    raw_text: kuferResult.raw_text,
+                    ...(kuferResult.is_overview_page ? {
+                        agent_instruction: "Kufer overview page — availability here is NOT reliable (icon alt text is generic). Fetch the individual course detail page for the real status."
+                    } : {}),
+                }
+            } : {}),
             remember: `${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`,
         };
         // Build hints array
@@ -859,7 +983,8 @@ async function extractSingleInner(params, apiKey) {
                 data: jsonResult,
                 project: params.project,
             });
-            jsonResult.output_saved = outputResult.filePath;
+            // FIX-1: Redact absolute path.
+            jsonResult.output_saved = redactSecrets(outputResult.filePath);
         }
         catch { /* best-effort */ }
         const jsonOutput = JSON.stringify(jsonResult, null, 2);
@@ -921,6 +1046,11 @@ async function extractSingleInner(params, apiKey) {
         for (const [key, value] of Object.entries(structuredData.fields)) {
             lines.push(`${key}: ${value}`);
         }
+        lines.push(``, `---`, ``);
+    }
+    // NOV-668: inject Kufer availability block when detected
+    if (kuferResult) {
+        lines.push(kuferResult.markdown_block);
         lines.push(``, `---`, ``);
     }
     lines.push(displayContent);
@@ -1040,25 +1170,23 @@ async function extractSingleInner(params, apiKey) {
     if (params.query) {
         lines.push(`- Query context: "${params.query}". Focus analysis on this topic.`);
     }
-    // Agent Action block — structured next steps for every extraction
-    const nextActions = [];
-    if (contentOk) {
-        nextActions.push(`status:success quality:${quality.score}/100`);
-        nextActions.push(`next: novada_map for related pages`);
-        nextActions.push(`next: novada_research for multi-source analysis`);
-    }
-    else if (quality.score < 30 && usedMode === "static" && renderMode === "auto") {
-        nextActions.push(`status:low_quality | content_ok:false | suggested_fix: retry with render="render" for JS-heavy or bot-protected pages. If render also returns low quality, try render="browser". For sites like airbnb.com/booking.com, also ensure NOVADA_PROXY_ENDPOINT is set for residential IP routing.`);
-    }
-    else {
-        nextActions.push(`status:low_quality quality:${quality.score}/100`);
-        if (usedMode === "static")
-            nextActions.push(`fix: retry with render="render"`);
-        nextActions.push(`alt: novada_scrape for platform data`);
-    }
+    // NOV-672: Context-aware agent_instruction — derive the next action from this call's
+    // actual context rather than emitting a generic tool menu.
+    const agentInstruction = buildContextualAgentInstruction({
+        contentOk,
+        qualityScore: quality.score,
+        usedMode,
+        renderMode,
+        fieldResults,
+        contentTruncated,
+        maxChars,
+        totalChars,
+        mainContent,
+        params,
+    });
     lines.push(``);
     lines.push(`## Agent Action`);
-    lines.push(`agent_instruction: ${nextActions.join(" | ")}`);
+    lines.push(`agent_instruction: ${agentInstruction}`);
     const mdOutput = lines.join("\n");
     // Wire output save — best-effort, never breaks the tool.
     // Prepend the file path to the HEADER so agents that truncate long responses still see it.
@@ -1073,7 +1201,8 @@ async function extractSingleInner(params, apiKey) {
             project: params.project,
         });
         // #22: drop the stray leading folder emoji; match the batch path's `path: ` prefix.
-        savePrefix = `path: ${outputResult.filePath}\n\n`;
+        // FIX-1: Redact absolute path before surfacing to agent.
+        savePrefix = `path: ${redactSecrets(outputResult.filePath)}\n\n`;
     }
     catch { /* best-effort */ }
     const finalOutput = savePrefix + mdOutput;

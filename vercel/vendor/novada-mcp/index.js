@@ -27,12 +27,31 @@ import { resolveProxyCredentials } from "./utils/credentials.js";
 const API_KEY = process.env.NOVADA_API_KEY?.trim();
 /** Convert a Zod v4 schema to MCP-compatible JSON Schema.
  * Uses Zod's native .toJSONSchema() — zod-to-json-schema v3 does not support Zod v4.
+ *
+ * Two contract fixes applied here (single root-cause location):
+ *
+ * 1. required[] accuracy: Zod v4 .toJSONSchema() includes all object keys in required[],
+ *    even those with a .default() (which makes them truly optional at runtime). We strip any
+ *    key from required[] that has a corresponding "default" in its property definition, so
+ *    the declared schema matches what Zod actually enforces. Covers ~25 tools in one fix.
+ *
+ * 2. additionalProperties policy: we previously declared additionalProperties:false but Zod
+ *    strips unknown keys silently rather than rejecting them — so the declaration was a lie.
+ *    We remove additionalProperties entirely; the actual behavior (strip-unknown) is handled
+ *    by Zod's parseUnknown semantics, and we choose NOT to surface a rejection error for
+ *    unknown params (MCP clients may add meta fields). Declare nothing, lie nothing.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function zodToMcpSchema(schema) {
     const jsonSchema = schema.toJSONSchema();
     // Strip meta-schema declarations that MCP clients don't need
-    const { $schema, $defs, ...rest } = jsonSchema;
+    const { $schema, $defs, additionalProperties: _ap, ...rest } = jsonSchema;
+    // Fix 1: strip keys with a .default() from required[] — they are optional at runtime.
+    // Zod v4 .toJSONSchema() does not do this automatically.
+    const props = rest.properties;
+    if (props && Array.isArray(rest.required)) {
+        rest.required = rest.required.filter(key => !(props[key] && "default" in props[key]));
+    }
     return rest;
 }
 // ─── Tool Definitions ────────────────────────────────────────────────────────
@@ -47,33 +66,6 @@ const TOOLS = [
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(SearchParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
-        // outputSchema (MCP 2025-06-18): describes the structured shape returned in format="json" mode.
-        outputSchema: {
-            type: "object",
-            properties: {
-                status: { type: "string", description: "'ok' on success" },
-                query: { type: "string" },
-                engine: { type: "string", description: "Engine that served the results" },
-                source: { type: "string", description: "'live' for fresh results" },
-                result_count: { type: "integer", description: "Number of results returned" },
-                results: {
-                    type: "array",
-                    description: "Ranked search results",
-                    items: {
-                        type: "object",
-                        properties: {
-                            rank: { type: "integer" },
-                            title: { type: "string" },
-                            url: { type: ["string", "null"] },
-                            snippet: { type: "string" },
-                            published: { type: "string", description: "Publish date when available" },
-                        },
-                        required: ["rank", "title", "url", "snippet"],
-                    },
-                },
-            },
-            required: ["query", "engine", "result_count", "results"],
-        },
     },
     {
         name: "novada_extract",
@@ -96,41 +88,6 @@ By default returns full page content for maximum information. Add clean=true to 
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(ExtractParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
-        // outputSchema (MCP 2025-06-18): describes the structured shape returned in format="json" mode (single-URL).
-        outputSchema: {
-            type: "object",
-            properties: {
-                url: { type: "string" },
-                title: { type: "string" },
-                description: { type: ["string", "null"] },
-                mode: { type: "string", description: "How the page was fetched: static | render | browser" },
-                source: { type: "string", description: "'live' or 'wayback'" },
-                fetched_at: { type: "string", description: "ISO timestamp of the fetch" },
-                quality: {
-                    type: "object",
-                    description: "Content quality assessment",
-                    properties: {
-                        score: { type: "number" },
-                        label: { type: "string" },
-                        content_ok: { type: "boolean" },
-                    },
-                },
-                content: { type: "string", description: "Extracted page content (markdown or text)" },
-                content_truncated: { type: "boolean" },
-                returned_chars: { type: "integer" },
-                total_chars: { type: ["integer", "null"] },
-                structured_data: { description: "JSON-LD / structured data when present", type: ["object", "array", "null"] },
-                fields: { description: "Requested field extractions keyed by field name", type: ["object", "null"] },
-                links: {
-                    type: "object",
-                    properties: {
-                        same_domain: { type: "array", items: { type: "string" } },
-                        total: { type: "integer" },
-                    },
-                },
-            },
-            required: ["url", "title", "mode", "content"],
-        },
     },
     {
         name: "novada_crawl",
@@ -175,17 +132,6 @@ Not for:
 **Note:** Limited results on JavaScript SPAs — will flag this in output.`,
         inputSchema: zodToMcpSchema(MapParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
-        // outputSchema (MCP 2025-06-18): the discovered URL set and its count.
-        outputSchema: {
-            type: "object",
-            properties: {
-                root: { type: "string", description: "Root URL the map started from" },
-                count: { type: "integer", description: "Number of URLs returned (after any search filter)" },
-                urls: { type: "array", description: "Discovered URLs", items: { type: "string" } },
-                discovery: { type: "string", description: "How URLs were found: sitemap | crawl" },
-            },
-            required: ["root", "count", "urls"],
-        },
     },
     {
         name: "novada_site_copy",
@@ -311,23 +257,9 @@ Not for:
 **Not for:** Open-ended questions (use novada_research), reading a specific URL (use novada_extract).
 **Note:** Verdict is signal-based (search balance), not a definitive ruling. Confidence 0–100 indicates certainty.`,
         inputSchema: zodToMcpSchema(VerifyParamsSchema),
-        annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
-        // outputSchema (MCP 2025-06-18): the verdict and its supporting evidence.
-        outputSchema: {
-            type: "object",
-            properties: {
-                claim: { type: "string", description: "The claim that was checked" },
-                verdict: {
-                    type: "string",
-                    description: "Signal-based verdict from search balance",
-                    enum: ["supported", "unsupported", "contested", "insufficient_data"],
-                },
-                confidence: { type: "integer", description: "0 = completely uncertain, 100 = all evidence agrees", minimum: 0, maximum: 100 },
-                supporting_evidence_count: { type: "integer", description: "Number of relevant supporting sources" },
-                contradicting_evidence_count: { type: "integer", description: "Number of relevant contradicting sources" },
-            },
-            required: ["claim", "verdict", "confidence"],
-        },
+        // idempotentHint:false — novada_verify runs live web searches; results are non-deterministic
+        // (search index changes between calls). Two identical calls may return different verdicts.
+        annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
     {
         name: "novada_unblock",
@@ -474,7 +406,10 @@ Detect changes on a web page over time. Extracts content, computes a hash, compa
 **How:** First call = baseline. Subsequent calls compare against baseline and report changes. Pass fields=["price","availability"] for field-level diffs with % change.
 **Not for:** One-time extraction (novada_extract), full crawl (novada_crawl).`,
         inputSchema: zodToMcpSchema(MonitorParamsSchema),
-        annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+        // idempotentHint:false — novada_monitor is explicitly stateful: each call may write a new
+        // baseline to monitorStore. Repeated calls on the same URL intentionally produce different
+        // responses (changed vs unchanged). Marking it idempotent would mislead orchestrators.
+        annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
     {
         name: "novada_setup",
@@ -588,7 +523,10 @@ Output pipeline supports optional project folders for grouping related queries.`
 **Required:** action, product (1=Residential, 4=Unlimited, 5=Static ISP).
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
         inputSchema: zodToMcpSchema(IpWhitelistParamsSchema),
-        annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
+        // NOV-578 #5: action:"del" permanently removes whitelist entries → destructiveHint MUST be
+        // true so MCP clients surface a confirmation. (add/remark also write; list is read-only, but
+        // per-tool annotations can't vary by action, so the tool takes its most dangerous posture.)
+        annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
     },
     // ─── NOV-321 / NOV-323: session telemetry + search feedback ───────────────
     {
@@ -934,7 +872,8 @@ class NovadaMCPServer {
                 return { content: [{ type: "text", text: result }] };
             }
             catch (error) {
-                // Zod validation errors → clear message for the agent
+                // Zod validation errors → clear, structured message for the agent including
+                // agent_instruction so the caller has a programmatic, parseable recovery signal.
                 if (error instanceof ZodError) {
                     const issues = error.issues.map(i => {
                         let msg = `  ${i.path.join(".")}: ${i.message}`;
@@ -946,7 +885,11 @@ class NovadaMCPServer {
                     return {
                         content: [{
                                 type: "text",
-                                text: `Invalid parameters for ${name}:\n${issues}\nNext step: Check parameter names and values — see tool description for valid options.`,
+                                text: [
+                                    `Invalid parameters for ${name}:`,
+                                    issues,
+                                    `agent_instruction: Fix the parameter(s) listed above and retry. Check the tool's inputSchema for required fields and valid values. Do NOT retry with identical params — at least one field must change.`,
+                                ].join("\n"),
                             }],
                         isError: true,
                     };

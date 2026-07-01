@@ -133,12 +133,21 @@ export function shouldCrawlUrl(url, selectPatterns, excludePatterns) {
     return true;
 }
 export async function novadaCrawl(params, apiKey, onProgress) {
-    // Support intuitive alias param names.
-    // Hard cap is 20 for normal novada_crawl callers; site_copy raises it via the
-    // internal _maxPagesCeiling (the public CrawlParamsSchema still enforces .max(20)).
+    // NOV-673 fix: remove dead alias fallbacks.
+    //
+    // CrawlParamsSchema gives max_pages a .default(5) and strategy a .default("bfs").
+    // After Zod parsing both fields are ALWAYS present, so `params.max_pages ?? params.limit`
+    // and `params.strategy ?? params.mode` never reach the alias side — the `??` is unreachable
+    // dead code. Keeping it creates a false contract: callers passing `limit` or `mode` get
+    // silently ignored values instead of the alias behavior they expect.
+    //
+    // Decision: DELETE the dead alias fallbacks here (they never fired). The aliases `limit` and
+    // `mode` remain in CrawlParamsSchema (types.ts, not owned by this file) until a separate fix
+    // removes them from the schema or wires them at the pre-parse layer. Any caller using `limit`
+    // or `mode` today receives the silent-ignore behavior they already get — no regression.
     const pageCeiling = params._maxPagesCeiling ?? 20;
-    const maxPages = Math.min(params.max_pages ?? params.limit ?? 5, pageCeiling);
-    const strategy = params.strategy ?? params.mode ?? "bfs";
+    const maxPages = Math.min(params.max_pages, pageCeiling);
+    const strategy = params.strategy;
     const renderMode = params.render ?? "auto";
     let renderDetected = false;
     const visited = new Set();

@@ -1,4 +1,5 @@
 import { routeFetch } from "../utils/router.js";
+import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 /**
  * Force JS rendering on a URL and return raw HTML.
  * Unlike extract (which returns cleaned markdown), unblock returns the full DOM —
@@ -6,16 +7,41 @@ import { routeFetch } from "../utils/router.js";
  * when extract's auto-router hints suggest retrying with render.
  */
 const UNBLOCK_MAX_CHARS_DEFAULT = 100000;
+// FIX-3: Safe ceiling for unblock timeout — routeFetch itself may use 48s internally,
+// so we cap the user-supplied value at 120s and enforce it at the unblock layer via
+// Promise.race so the MCP transport never sees a -32001 (no tool error produced).
+const UNBLOCK_TIMEOUT_CEILING_MS = 120_000;
 export async function novadaUnblock(params, apiKey) {
-    const { url, method, country, wait_for, timeout } = params;
+    const { url, method, country, wait_for } = params;
+    // FIX-3: Honor user timeout (bounded to a safe ceiling). If the user passes a value
+    // >= UNBLOCK_TIMEOUT_CEILING_MS, we cap it and return a structured error (not a
+    // transport-level -32001) when the deadline is hit.
+    const userTimeout = typeof params.timeout === "number" && params.timeout > 0
+        ? Math.min(params.timeout, UNBLOCK_TIMEOUT_CEILING_MS)
+        : UNBLOCK_TIMEOUT_CEILING_MS;
     const renderMode = method === "browser" ? "browser" : "render";
-    const result = await routeFetch(url, {
-        render: renderMode,
-        apiKey,
-        timeout,
-        waitForSelector: wait_for,
-        country,
+    let timeoutHandle;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+            reject(makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, `novada_unblock timed out after ${userTimeout}ms. The page may be too slow or the server is unresponsive.`, `timeout_ms:${userTimeout} method:${method}`));
+        }, userTimeout);
     });
+    let result;
+    try {
+        result = await Promise.race([
+            routeFetch(url, {
+                render: renderMode,
+                apiKey,
+                timeout: userTimeout,
+                waitForSelector: wait_for,
+                country,
+            }),
+            timeoutPromise,
+        ]);
+    }
+    finally {
+        clearTimeout(timeoutHandle);
+    }
     const htmlLength = result.html.length;
     const maxChars = params.max_chars ?? UNBLOCK_MAX_CHARS_DEFAULT;
     const truncated = htmlLength > maxChars;

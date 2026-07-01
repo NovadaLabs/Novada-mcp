@@ -32,9 +32,10 @@ export declare class NovadaError extends Error {
 /**
  * P0 SECURITY (#2): strip secrets that an upstream error can leak in plaintext —
  * URL userinfo (`https://user:pass@host` → `https://host`), the literal
- * NOVADA_BROWSER_WS value, and internal `*.novada.com` host strings that aren't
- * on the public allowlist. Runs on EVERY error message + agent_instruction
- * before it reaches the caller.
+ * NOVADA_BROWSER_WS value, internal `*.novada.com` host strings not on the public
+ * allowlist, proxy usernames (Novada format patterns), and local filesystem paths
+ * (/Users/…, /home/…). Runs on EVERY error message + agent_instruction before it
+ * reaches the caller.
  */
 export declare function redactSecrets(msg: string): string;
 /** Strip API keys, sensitive URL params, and injection patterns from any string before surfacing. */

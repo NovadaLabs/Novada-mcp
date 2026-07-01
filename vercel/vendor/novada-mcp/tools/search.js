@@ -5,7 +5,9 @@ import { cleanParams, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAI
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
-import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg } from "../_core/errors.js";
+import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
+// FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
+const QUERY_MAX_LENGTH = 500;
 const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 const _searchCache = new Map();
 const SEARCH_CACHE_TTL = 60_000;
@@ -270,6 +272,8 @@ Yahoo Search is not available on this account.
 
 ## Agent Notice — Engine Unavailable
 engine: yahoo | status: unsupported | suggested_alternatives: google, duckduckgo`;
+/** Counter incremented on each search call; used as a lightweight search_id seed. */
+let _searchCounter = 0;
 export async function novadaSearch(params, apiKey) {
     // Trim BEFORE the required check so a whitespace-only query ('   ') is rejected
     // with the same validation error as empty — no live call, no quota burn. The
@@ -281,6 +285,11 @@ export async function novadaSearch(params, apiKey) {
     const query = params.query.trim();
     if (!query) {
         throw new Error('query is required and must be a non-empty string');
+    }
+    // FIX-2: Reject over-long queries immediately — prevents submitting huge strings
+    // to the upstream scraper API which can cause 60s+ hangs.
+    if (query.length > QUERY_MAX_LENGTH) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `query exceeds maximum length of ${QUERY_MAX_LENGTH} characters (got ${query.length}). Shorten your query and retry.`, `query_length:${query.length} max:${QUERY_MAX_LENGTH}`);
     }
     params = { ...params, query };
     const engine = params.engine || "google";
@@ -507,12 +516,15 @@ export async function novadaSearch(params, apiKey) {
     }
     // ── JSON output mode ──────────────────────────────────────────────────────
     const engineLabel = `${engine} (via scraper-api)`;
+    // FIX-6: Emit a search_id on every search so novada_search_feedback can reference it
+    const searchId = `search-${Date.now()}-${++_searchCounter}`;
     if (params.format === "json") {
         const jsonResult = {
             status: "ok",
             query: params.query,
             engine: engineLabel,
             source: "live",
+            search_id: searchId,
             result_count: reranked.length,
             results: reranked.map((r, i) => {
                 const url = r.url || r.link;
@@ -532,7 +544,7 @@ export async function novadaSearch(params, apiKey) {
                     result.extract_error = rExt.extract_error;
                 return result;
             }),
-            agent_instruction: "Search complete. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.",
+            agent_instruction: `Search complete. search_id: ${searchId} — pass to novada_search_feedback to record quality. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.`,
         };
         // Surface a scarcity signal when fewer than `num` results were genuinely
         // available, so agents don't assume the ceiling was hit.
@@ -540,6 +552,7 @@ export async function novadaSearch(params, apiKey) {
             jsonResult.scarcity = scarcity;
         // Wire output save — best-effort, never breaks the tool.
         // Inject output_saved as a field so JSON remains valid and parseable.
+        // FIX-1: Redact home path from output_saved before embedding in agent-visible JSON.
         try {
             const outputResult = await saveOutput({
                 tool: "search",
@@ -548,7 +561,7 @@ export async function novadaSearch(params, apiKey) {
                 data: { query: params.query, engine: params.engine, results: reranked },
                 project: params.project,
             });
-            jsonResult.output_saved = outputResult.filePath;
+            jsonResult.output_saved = redactSecrets(outputResult.filePath);
         }
         catch { /* best-effort */ }
         const finalResult = JSON.stringify(jsonResult, null, 2);
@@ -581,7 +594,7 @@ export async function novadaSearch(params, apiKey) {
     const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
     const lines = [
         `## Search Results`,
-        `results:${reranked.length} | engine:${engineLabel} | source: live | reranked:true${filterStr}`,
+        `results:${reranked.length} | engine:${engineLabel} | source: live | reranked:true | search_id:${searchId}${filterStr}`,
         ``,
         `---`,
         ``,
@@ -637,6 +650,7 @@ export async function novadaSearch(params, apiKey) {
     let finalResult = lines.join("\n");
     // Wire output save — best-effort, never breaks the tool.
     // Prepend the file path to the HEADER so agents that truncate long responses still see it.
+    // FIX-1: Redact the absolute path before embedding in agent-visible output.
     let savePrefix = "";
     try {
         const outputResult = await saveOutput({
@@ -646,7 +660,9 @@ export async function novadaSearch(params, apiKey) {
             data: { query: params.query, engine: params.engine, results: reranked },
             project: params.project,
         });
-        savePrefix = `📁 ${outputResult.filePath}\n\n`;
+        // Redact home directory from the path so it doesn't leak /Users/<name>/...
+        const safePath = redactSecrets(outputResult.filePath);
+        savePrefix = `📁 ${safePath}\n\n`;
     }
     catch { /* best-effort */ }
     finalResult = savePrefix + finalResult;

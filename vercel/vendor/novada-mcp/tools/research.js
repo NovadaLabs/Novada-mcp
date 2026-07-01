@@ -2,6 +2,9 @@ import { normalizeUrl } from "../utils/index.js";
 import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
+import { makeNovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
+// FIX-2: Max question length to prevent DoS via over-long inputs hanging upstream searches
+const QUESTION_MAX_LENGTH = 2000;
 /** Invoke a progress reporter without ever letting it break research (NOV-319). */
 async function reportProgress(onProgress, info) {
     if (!onProgress)
@@ -76,6 +79,14 @@ export async function novadaResearch(params, apiKey, onProgress) {
     // Support 'query' as alias for 'question' (matches other tools' param naming)
     if (!params.question && params.query) {
         params = { ...params, question: params.query };
+    }
+    // FIX-2: Reject over-long questions immediately — prevents huge strings causing hangs.
+    const questionText = (params.question ?? "").trim();
+    if (questionText.length > QUESTION_MAX_LENGTH) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `question exceeds maximum length of ${QUESTION_MAX_LENGTH} characters (got ${questionText.length}). Shorten your question and retry.`, `question_length:${questionText.length} max:${QUESTION_MAX_LENGTH}`);
+    }
+    if (questionText !== (params.question ?? "")) {
+        params = { ...params, question: questionText };
     }
     // Resolve depth — 'auto' picks based on question complexity heuristic
     const resolvedDepth = resolveDepth(params.depth || "auto", params.question ?? "");
@@ -268,6 +279,7 @@ export async function novadaResearch(params, apiKey, onProgress) {
         agentHints,
     });
     // Wire output save — best-effort, never breaks the tool
+    // FIX-1: Redact absolute path before embedding in agent-visible output.
     try {
         const outputResult = await saveOutput({
             tool: "research",
@@ -276,7 +288,7 @@ export async function novadaResearch(params, apiKey, onProgress) {
             data: finalReport,
             project: params.project,
         });
-        finalReport += `\n\n---\nResearch saved: ${outputResult.filePath}`;
+        finalReport += `\n\n---\nResearch saved: ${redactSecrets(outputResult.filePath)}`;
     }
     catch { /* best-effort */ }
     return finalReport;

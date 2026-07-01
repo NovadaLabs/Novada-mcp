@@ -662,4 +662,201 @@ export function extractLinksFrom($, baseUrl) {
     });
     return [...navLinks, ...bodyLinks];
 }
+/**
+ * NOV-668: Detect Kufer/webbasys course availability from a parsed cheerio DOM.
+ *
+ * German VHS sites using the Kufer webbasys platform encode availability in a CSS
+ * sprite image whose `alt` is always the generic "Keine Internetanmeldung möglich".
+ * The actual status is in the SIBLING TEXT NODE that follows the <img> element.
+ *
+ * Detection trigger: HTML contains `kursampeln` or `kbs_set12_sprite` in asset paths,
+ * OR `kufer` / `webbasys` appears in the page URL or asset hrefs.
+ *
+ * Must be called with the RAW parsed `$doc` (before markdown conversion strips inline styles).
+ */
+export function detectKuferAvailability($, pageUrl) {
+    const html = $.html() ?? "";
+    // Detection: is this a Kufer page?
+    const isKufer = /kursampeln/i.test(html) ||
+        /kbs_set12_sprite/i.test(html) ||
+        /kufer/i.test(html) ||
+        /webbasys/i.test(html) ||
+        /kufer/i.test(pageUrl) ||
+        /webbasys/i.test(pageUrl);
+    if (!isKufer)
+        return null;
+    // Find all sprite images (the availability traffic lights)
+    const spriteImgs = $('img[src*="kursampeln"], img[style*="kbs_set12_sprite"], img[src*="trans.png"]').filter((_, el) => {
+        const style = $(el).attr("style") ?? "";
+        const src = $(el).attr("src") ?? "";
+        return style.includes("kbs_set12") || src.includes("kursampeln") || style.includes("kursampeln");
+    });
+    // Overview-trap: sprite image(s) present but no sibling status text
+    // (overview/listing pages show icons for many courses without individual text)
+    if (spriteImgs.length === 0) {
+        // No sprite images at all — not a Kufer course page we can parse
+        return null;
+    }
+    const rawTexts = [];
+    const statuses = [];
+    spriteImgs.each((_, el) => {
+        // Walk the sibling nodes within the same parent to find status text
+        const parent = $(el).parent();
+        let siblingText = "";
+        parent.contents().each((_, node) => {
+            if (node.type === "text") {
+                siblingText += (node.data ?? "").trim() + " ";
+            }
+            else if (node.type === "tag" && node.tagName !== "img") {
+                // Capture text in adjacent inline elements (span, b, etc.) but NOT <a> links
+                // — link text is navigation/course-name, not a status keyword
+                if (node.tagName !== "a") {
+                    siblingText += $(node).text().trim() + " ";
+                }
+            }
+        });
+        siblingText = siblingText.trim();
+        rawTexts.push(siblingText);
+        statuses.push(normalizeKuferStatus(siblingText));
+    });
+    // Overview-trap: presence of a RECOGNIZED status keyword in sibling text,
+    // NOT mere presence of any text. Link text ("Spanisch Anfänger") is navigation,
+    // not a status signal — it must NOT suppress the overview-page warning.
+    const hasStatusKeyword = statuses.some(s => s !== "unknown");
+    const isOverviewPage = !hasStatusKeyword;
+    if (isOverviewPage) {
+        const block = [
+            `## Kufer Availability`,
+            `⚠️ agent_instruction: Kufer overview page — availability here is NOT reliable (icon alt text is generic). Fetch the individual course detail page for the real status.`,
+        ].join("\n");
+        return {
+            is_overview_page: true,
+            status: "unknown",
+            raw_text: null,
+            markdown_block: block,
+        };
+    }
+    // For single-course detail pages, pick the first recognized status
+    const primaryIdx = statuses.findIndex(s => s !== "unknown");
+    const primaryStatus = primaryIdx !== -1 ? statuses[primaryIdx] : (statuses[0] ?? "unknown");
+    // Raw text: use the text that matched the status keyword, not arbitrary link text
+    const primaryText = primaryIdx !== -1 ? (rawTexts[primaryIdx] ?? null) : null;
+    const statusLabel = kuferStatusLabel(primaryStatus);
+    const block = [
+        `## Kufer Availability`,
+        `availability_status: ${primaryStatus}`,
+        `status_label: ${statusLabel}`,
+        ...(primaryText ? [`raw_text: ${primaryText}`] : []),
+    ].join("\n");
+    return {
+        is_overview_page: false,
+        status: primaryStatus,
+        raw_text: primaryText,
+        markdown_block: block,
+    };
+}
+/** Normalize raw German VHS sibling text to a typed status token */
+function normalizeKuferStatus(text) {
+    if (!text)
+        return "unknown";
+    const t = text.toLowerCase();
+    if (/ausgebucht/.test(t))
+        return "ausgebucht";
+    if (/warteliste/.test(t))
+        return "waitlist";
+    if (/anmeldung\s+geschlossen/.test(t))
+        return "closed";
+    if (/buchbar/.test(t))
+        return "buchbar";
+    // "N Plätze frei" — extract number
+    const placesMatch = text.match(/(\d+)\s+plät/i);
+    if (placesMatch)
+        return `${parseInt(placesMatch[1], 10)}_places`;
+    return "unknown";
+}
+/** Human-readable label for a normalized Kufer status */
+function kuferStatusLabel(status) {
+    if (status === "ausgebucht")
+        return "fully booked";
+    if (status === "buchbar")
+        return "bookable";
+    if (status === "waitlist")
+        return "waitlist only";
+    if (status === "closed")
+        return "registration closed";
+    if (status === "unknown")
+        return "unknown";
+    if (status.endsWith("_places"))
+        return `${status.replace("_places", "")} places available`;
+    return status;
+}
+// ─── NOV-671: Table-preserving truncation ────────────────────────────────────
+/**
+ * NOV-671: Truncate markdown content at max_chars while preserving any table
+ * that falls in the last ~30% of the content.
+ *
+ * If a table starts within the last 30% of total content and would be cut by
+ * a naive slice, we instead trim boilerplate/prose above it and keep the table intact.
+ * Falls back to standard paragraph-boundary truncation when no table is at risk.
+ */
+export function truncatePreservingTable(content, maxChars) {
+    if (content.length <= maxChars)
+        return content;
+    // Find the last markdown table header row (| col | col |)
+    const tablePattern = /^(\|[^\n]+\|)\n(\|[-: |]+\|)\n/m;
+    const tableStartIdx = findLastTableStart(content);
+    if (tableStartIdx !== -1 && tableStartIdx > content.length * 0.7) {
+        // Table sits in the last 30% — it would be at risk from naive truncation.
+        // Find where the table ends
+        const tableEnd = findTableEnd(content, tableStartIdx);
+        if (tableEnd <= maxChars) {
+            // The full table fits within maxChars: standard truncation is fine
+            // (table won't be cut). Fall through.
+        }
+        else {
+            // Table extends beyond maxChars. Try to keep it by trimming content before it.
+            const tableBlock = content.slice(tableStartIdx, tableEnd);
+            const tableLen = tableBlock.length;
+            if (tableLen <= maxChars) {
+                // We have room to fit the table; trim prefix content to make room
+                const prefixBudget = maxChars - tableLen;
+                const prefix = content.slice(0, tableStartIdx);
+                const trimmedPrefix = prefix.length > prefixBudget
+                    ? prefix.slice(prefix.length - prefixBudget)
+                    : prefix;
+                return (trimmedPrefix + tableBlock).slice(0, maxChars);
+            }
+            // Table itself is larger than maxChars: fall through to standard truncation
+        }
+    }
+    // Standard paragraph-boundary truncation
+    const boundary = content.lastIndexOf("\n\n", maxChars);
+    return (boundary > maxChars * 0.8 ? content.slice(0, boundary) : content.slice(0, maxChars)).trim();
+}
+/** Find the start index of the last markdown table in content, or -1 if none. */
+function findLastTableStart(content) {
+    // A markdown table header row starts with | and is followed by a separator row
+    const tableHeaderRe = /^\|[^\n]+\|\n\|[-: |]+\|/gm;
+    let lastMatch = null;
+    let m;
+    while ((m = tableHeaderRe.exec(content)) !== null) {
+        lastMatch = m;
+    }
+    return lastMatch ? lastMatch.index : -1;
+}
+/** Find the end index of a markdown table starting at tableStartIdx. */
+function findTableEnd(content, tableStartIdx) {
+    const lines = content.slice(tableStartIdx).split("\n");
+    let i = 0;
+    let charCount = tableStartIdx;
+    for (const line of lines) {
+        if (i > 1 && !line.trimStart().startsWith("|")) {
+            // First non-table line after the header + separator
+            break;
+        }
+        charCount += line.length + 1; // +1 for \n
+        i++;
+    }
+    return Math.min(charCount, content.length);
+}
 //# sourceMappingURL=html.js.map

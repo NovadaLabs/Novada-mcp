@@ -235,11 +235,13 @@ function probeProxyAll() {
             activationLink: "https://dashboard.novada.com/overview/proxy/",
         };
     }
+    // FIX-5: Credentials are present and well-formed, but no live TCP probe is done.
+    // Label "configured (not verified)" so agents don't treat this as proof of connectivity.
     return {
         product: "Proxy",
         status: "active",
         latency: null,
-        notes: "Credentials found in env",
+        notes: "Credentials found in env (not verified — no live probe)",
     };
 }
 // INC-195: Detect hosted (Vercel/Lambda) environment
@@ -275,11 +277,13 @@ function probeBrowserAll() {
             activationLink: "https://dashboard.novada.com/overview/browser/",
         };
     }
+    // FIX-5: NOVADA_BROWSER_WS is set and well-formed, but no live WebSocket probe is done.
+    // Label "configured (not verified)" to avoid claiming Active without a real connectivity check.
     return {
         product: "Browser API",
         status: "active",
         latency: null,
-        notes: "NOVADA_BROWSER_WS is set",
+        notes: "NOVADA_BROWSER_WS is set (not verified — no live probe)",
     };
 }
 async function probeUnblockAll(apiKey) {

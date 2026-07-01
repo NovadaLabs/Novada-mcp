@@ -1,7 +1,22 @@
 import { z } from "zod";
 import { submitScrapeTask, OPERATION_ALIASES } from "./scrape.js";
-import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode } from "../_core/errors.js";
 // ─── Schema & Types ──────────────────────────────────────────────────────────
+// FIX-2: Cap the serialized params payload to prevent a 60KB→60s hang on the upstream scraper API.
+// Any individual param value (string) is capped at 2000 chars; total JSON must be under 60KB.
+const PARAMS_MAX_TOTAL_BYTES = 60_000;
+const PARAMS_MAX_STRING_BYTES = 2_000;
+function validateParamsSize(params) {
+    const totalBytes = JSON.stringify(params).length;
+    if (totalBytes > PARAMS_MAX_TOTAL_BYTES) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `params payload is too large (${totalBytes} chars). Maximum is ${PARAMS_MAX_TOTAL_BYTES} chars. Reduce the size of individual param values.`, `params_bytes:${totalBytes} max:${PARAMS_MAX_TOTAL_BYTES}`);
+    }
+    for (const [key, val] of Object.entries(params)) {
+        if (typeof val === "string" && val.length > PARAMS_MAX_STRING_BYTES) {
+            throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `params.${key} is too long (${val.length} chars). Maximum string length is ${PARAMS_MAX_STRING_BYTES} chars.`, `param:${key} length:${val.length} max:${PARAMS_MAX_STRING_BYTES}`);
+        }
+    }
+}
 export const ScraperSubmitParamsSchema = z.object({
     platform: z
         .string().min(1).max(100)
@@ -24,6 +39,8 @@ export function validateScraperSubmitParams(args) {
  */
 export async function novadaScraperSubmit(params, apiKey) {
     const { platform, params: opParams } = params;
+    // FIX-2: Validate params payload size before submitting to prevent upstream hangs.
+    validateParamsSize(opParams);
     // H-6: Apply same alias resolution as novada_scrape for consistent behavior
     const resolvedOp = Object.prototype.hasOwnProperty.call(OPERATION_ALIASES, params.operation)
         ? OPERATION_ALIASES[params.operation]

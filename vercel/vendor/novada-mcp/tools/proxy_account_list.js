@@ -12,7 +12,11 @@ const STATUS_CODES = ["1", "-3"];
 export const ProxyAccountListParamsSchema = z
     .object({
     product: z
-        .enum(PRODUCT_CODES)
+        // NOV-663: Explicitly require a string first so that integer inputs (e.g. product: 1)
+        // are rejected with -32602 INVALID_PARAMS instead of being silently coerced to "1".
+        // z.string() before z.enum() ensures the type error surfaces at the string layer.
+        .string({ error: "product must be a string, not a number — use '1' not 1" })
+        .pipe(z.enum(PRODUCT_CODES))
         .describe("REQUIRED. Product type code as string: 1=Residential, 2=Rotating ISP, 3=Rotating Datacenter, 4=Unlimited, 7=Unblocker, 9=Mobile. Must match a product provisioned on the account."),
     page: z
         .number()

@@ -137,11 +137,12 @@ export async function devApiPost(path, body, opts = {}) {
     // Non-zero business code — map known patterns, otherwise surface as INVALID_PARAMS.
     const serverMsg = sanitizeServerMsg(envelope.msg ?? envelope.message ?? `code=${envelope.code}`);
     // 11000 = invalid API key (definite auth). 10002 = unauthorized / key disabled.
+    // 401  = HTTP-style auth failure sometimes returned as a business code (confirmed in browser_flow).
     // 10001 ("Invalid parameter") is NOT auth — server is telling us the request
     // body is wrong, even when the key works for sibling endpoints. Smoke-verified
     // 2026-06-03: same key works for wallet/* but returns 10001 on proxy_account/list.
-    if (envelope.code === 11000 || envelope.code === 10002) {
-        throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Developer-api auth failure (code=${envelope.code}): ${serverMsg}`);
+    if (envelope.code === 11000 || envelope.code === 10002 || envelope.code === 401) {
+        throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Developer-api auth failure (code=${envelope.code}): ${serverMsg}. Check NOVADA_DEVELOPER_API_KEY or rotate the key at https://developer-api.novada.com/zh.`);
     }
     throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `Developer-api rejected request (code=${envelope.code}): ${serverMsg}`);
 }

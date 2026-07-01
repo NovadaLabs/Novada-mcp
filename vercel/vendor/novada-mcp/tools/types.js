@@ -166,10 +166,11 @@ export const CrawlParamsSchema = withCamelCaseAliases(z.object({
         .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
     render: z.enum(["auto", "static", "render"]).default("auto")
         .describe("Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (slower, handles JS sites)."),
-    limit: z.number().int().min(1).max(20).optional()
-        .describe("Alias for max_pages — use max_pages for the canonical name. Max 20."),
-    mode: z.enum(["bfs", "dfs"]).optional()
-        .describe("Alias for strategy — use strategy for the canonical name."),
+    // NOV-673: `limit` (alias for max_pages) and `mode` (alias for strategy) removed.
+    // Both were dead: Zod's .default() on max_pages/strategy always filled those fields,
+    // making the `??` fallbacks in crawl.ts unreachable. Removing them from the schema
+    // closes the false contract — the schema no longer advertises params that are silently
+    // ignored. Canonical fields: max_pages and strategy.
 }), {
     maxPages: "max_pages",
     selectPaths: "select_paths",
@@ -421,7 +422,14 @@ export const BrowserParamsSchema = z.preprocess((input) => {
         .describe("Total timeout for all actions in ms. Default 60000."),
     session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
         .describe("Optional session ID for persistent browser state across calls. Reuses the same browser page (cookies, localStorage, login state). Warm reuse is ~5x faster (~1.5s vs ~8s cold start). Sessions expire after 10 minutes of inactivity."),
-}));
+}).refine(
+// NOV-664: close_session and list_sessions are session-management actions that must be the
+// sole action in a call — mixing them with other actions causes undefined behaviour.
+(data) => {
+    const SOLE_ACTIONS = new Set(["close_session", "list_sessions"]);
+    const hasSoleAction = data.actions.some((a) => SOLE_ACTIONS.has(a.action));
+    return !hasSoleAction || data.actions.length === 1;
+}, { message: "close_session / list_sessions must be the only action in the call — they cannot be combined with other actions (NOV-664)" }));
 export function validateBrowserParams(args) {
     return BrowserParamsSchema.parse(args ?? {});
 }

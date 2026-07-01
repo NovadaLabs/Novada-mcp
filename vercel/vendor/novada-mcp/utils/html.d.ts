@@ -81,4 +81,38 @@ export declare function extractDescriptionFrom($: CheerioAPI): string;
 export declare function extractLinks(html: string, baseUrl?: string): string[];
 /** $-accepting variant of extractLinks (NOV-577): read-only, shareable across readers. */
 export declare function extractLinksFrom($: CheerioAPI, baseUrl?: string): string[];
+/** Normalized availability status values for Kufer/webbasys VHS sites */
+export type KuferAvailabilityStatus = "ausgebucht" | "buchbar" | "waitlist" | "closed" | `${number}_places` | "unknown";
+export interface KuferAvailabilityResult {
+    /** True when this page looks like a Kufer overview/listing page (no per-course status text). */
+    is_overview_page: boolean;
+    /** Normalized status (only meaningful when is_overview_page is false). */
+    status: KuferAvailabilityStatus;
+    /** Raw sibling text extracted from the DOM (for debugging). */
+    raw_text: string | null;
+    /** Rendered as a markdown block suitable for injection into the extract output. */
+    markdown_block: string;
+}
+/**
+ * NOV-668: Detect Kufer/webbasys course availability from a parsed cheerio DOM.
+ *
+ * German VHS sites using the Kufer webbasys platform encode availability in a CSS
+ * sprite image whose `alt` is always the generic "Keine Internetanmeldung möglich".
+ * The actual status is in the SIBLING TEXT NODE that follows the <img> element.
+ *
+ * Detection trigger: HTML contains `kursampeln` or `kbs_set12_sprite` in asset paths,
+ * OR `kufer` / `webbasys` appears in the page URL or asset hrefs.
+ *
+ * Must be called with the RAW parsed `$doc` (before markdown conversion strips inline styles).
+ */
+export declare function detectKuferAvailability($: CheerioAPI, pageUrl: string): KuferAvailabilityResult | null;
+/**
+ * NOV-671: Truncate markdown content at max_chars while preserving any table
+ * that falls in the last ~30% of the content.
+ *
+ * If a table starts within the last 30% of total content and would be cut by
+ * a naive slice, we instead trim boilerplate/prose above it and keep the table intact.
+ * Falls back to standard paragraph-boundary truncation when no table is at risk.
+ */
+export declare function truncatePreservingTable(content: string, maxChars: number): string;
 //# sourceMappingURL=html.d.ts.map

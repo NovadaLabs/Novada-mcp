@@ -1,13 +1,13 @@
 import { z } from "zod";
 export declare const ProxyAccountListParamsSchema: z.ZodObject<{
-    product: z.ZodEnum<{
+    product: z.ZodPipe<z.ZodString, z.ZodEnum<{
         1: "1";
         7: "7";
         2: "2";
         3: "3";
         4: "4";
         9: "9";
-    }>;
+    }>>;
     page: z.ZodDefault<z.ZodNumber>;
     limit: z.ZodDefault<z.ZodNumber>;
     status: z.ZodOptional<z.ZodEnum<{

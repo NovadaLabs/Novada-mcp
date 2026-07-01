@@ -20,6 +20,19 @@ const WL_PRODUCT_LABELS = {
     "4": "Unlimited",
     "5": "Static ISP",
 };
+// ─── IP-format validation (NOV-578 #10) ──────────────────────────────────────
+// `ip` / `ips` are user strings POSTed to the whitelist API. Bare z.string() lets
+// garbage/injection payloads through (violates the "every z.string() → API MUST be
+// format-validated" rule). Accept IPv4 (octet-bounded, optional CIDR) and basic IPv6;
+// reject anything with spaces, letters (beyond hex), or injection punctuation.
+const IPV4_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}(\/([0-9]|[12]\d|3[0-2]))?$/;
+const IPV6_RE = /^[0-9a-fA-F:]+(\/(\d|[1-9]\d|1[01]\d|12[0-8]))?$/;
+function isValidIp(value) {
+    const v = value.trim();
+    if (!v)
+        return false;
+    return IPV4_RE.test(v) || (v.includes(":") && IPV6_RE.test(v));
+}
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 export const IpWhitelistParamsSchema = z
     .object({
@@ -32,6 +45,8 @@ export const IpWhitelistParamsSchema = z
     // ── "add" params ──
     ip: z
         .string()
+        .trim()
+        .refine(isValidIp, { message: 'ip must be a valid IPv4/IPv6 address (CIDR allowed), e.g. "203.0.113.4" or "203.0.113.0/24".' })
         .optional()
         .describe('IP address to whitelist (required for action="add"). For action="list", optional filter by specific IP.'),
     remark: z
@@ -56,6 +71,8 @@ export const IpWhitelistParamsSchema = z
     // ── "del" params ──
     ips: z
         .string()
+        .trim()
+        .refine(v => { const parts = v.split(",").map(s => s.trim()).filter(Boolean); return parts.length > 0 && parts.every(isValidIp); }, { message: 'ips must be a comma-separated list of valid IPv4/IPv6 addresses, e.g. "203.0.113.4,203.0.113.5".' })
         .optional()
         .describe('Comma-separated list of IPs to remove (required for action="del").'),
     // ── "remark" params ──
