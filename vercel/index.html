@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <script>
-(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();
-function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+/* Light mode only — dark mode backed up in dark-mode-backup.css (not linked) */
+document.documentElement.setAttribute('data-theme','light');
+function toggleTheme(){} /* no-op — light mode only */
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Novada MCP — One URL. 8 core web-data tools. Zero install.</title>
@@ -94,11 +95,11 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
     theme: {
       extend: {
         colors: {
-          violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
-          ink: { DEFAULT: '#0a0818', text: '#0a0818', 800: '#110e24', 700: '#161230' },
-          slate: '#7a6faa',
-          paper: '#faf9ff',
-          'tint-cool': '#f3f0fb',
+          /* Novada official brand palette */
+          violet: { DEFAULT: '#7749F1', dark: '#271472', light: '#9360EF', 50: '#F5F2FF', 100: '#E4DCFD' },
+          ink: { DEFAULT: '#011627', mid: '#424242', muted: '#727082' },
+          green: '#2EBF79',
+          blue: '#45B6EA',
         },
         fontFamily: {
           pixel: ['"Press Start 2P"', 'monospace'],
@@ -112,380 +113,51 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 </script>
 <link rel="stylesheet" href="shared.css">
 <style>
-  .pixel-font { font-family: 'Press Start 2P', monospace; line-height: 1.5; }
-  .pixel-container { max-width: 80rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
+  /* Page-specific only — all component styles in shared.css */
+  body { background: #fff; color: #011627; }
 
-  /* Announcement bar */
-  .announcement-bar {
-    background: #0d0d14;
-    border-bottom: 2px solid #6c40e2;
-    color: #9d7bff;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    text-align: center;
-    padding: 9px 1rem;
-    letter-spacing: 0.02em;
-  }
-  .announcement-bar a { color: #3df0ff; text-decoration: none; font-weight: 600; }
-  .announcement-bar a:hover { text-decoration: underline; }
+  /* Icon toggle — light mode only, always show sun */
+  .icon-sun  { display: block; }
+  .icon-moon { display: none; }
 
-  /* Nav */
-  .nav-bar {
-    background: rgba(13,13,20,0.92);
-    border-bottom: 2px solid #1e1730;
-    backdrop-filter: blur(8px);
-    position: sticky;
-    top: 0;
-    z-index: 50;
-  }
-  .nav-link {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 9px;
-    color: #9d7bff;
-    text-decoration: none;
-    letter-spacing: 0.03em;
-    transition: color 0.15s, text-shadow 0.15s;
-  }
-  .nav-link:hover { color: #3df0ff; text-shadow: 0 0 8px rgba(61,240,255,0.6); }
-  .logo-img { height: 26px; width: auto; }
-  .logo-img-footer { height: 22px; width: auto; }
-
-  /* Pixel buttons */
-  .pixel-btn {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 10px;
-    color: #0d0d14;
-    background: #3df0ff;
-    padding: 14px 20px;
-    border: 2px solid #0d0d14;
-    box-shadow: 4px 4px 0 #6c40e2;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    text-decoration: none;
-    transition: transform 0.08s, box-shadow 0.08s;
-    letter-spacing: 0.02em;
-  }
-  .pixel-btn:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #6c40e2; }
-  .pixel-btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #6c40e2; }
-
-  .pixel-btn-dark {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 10px;
-    color: #9d7bff;
-    background: #16101f;
-    padding: 14px 20px;
-    border: 2px solid #6c40e2;
-    box-shadow: 4px 4px 0 #16101f;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    text-decoration: none;
-    transition: transform 0.08s, box-shadow 0.08s, color 0.15s;
-    letter-spacing: 0.02em;
-  }
-  .pixel-btn-dark:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #6c40e2; color: #3df0ff; }
-  .pixel-btn-dark:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #6c40e2; }
-
-  .pixel-btn-sm {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 7px;
-    color: #e8e4f5;
-    background: #6c40e2;
-    padding: 8px 14px;
-    border: 2px solid #9d7bff;
-    cursor: pointer;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    text-decoration: none;
-    transition: background 0.1s steps(2);
-    box-shadow: inset 2px 2px 0 #9d7bff, inset -2px -2px 0 #4a1fb0, 3px 3px 0 #0d0d14;
-  }
-  .pixel-btn-sm:hover { background: #4a1fb0; color: #3df0ff; }
-
-  /* Hero */
-  .hero-section {
-    background:
-      radial-gradient(circle at 20% 20%, rgba(108,64,226,0.25), transparent 45%),
-      radial-gradient(circle at 85% 70%, rgba(61,240,255,0.12), transparent 40%),
-      #0a0810;
-    position: relative;
-    overflow: hidden;
-  }
-  .hero-section::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(108,64,226,0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(108,64,226,0.08) 1px, transparent 1px);
-    background-size: 32px 32px;
-    pointer-events: none;
-    z-index: 0;
-  }
-  .scanlines::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 2px, transparent 4px);
-    pointer-events: none;
-    z-index: 2;
-    mix-blend-mode: multiply;
-  }
-  [data-particle] {
-    position: absolute;
-    width: 6px;
-    height: 6px;
-    background: #3df0ff;
-    box-shadow: 0 0 8px rgba(61,240,255,0.8);
-    z-index: 1;
-    animation: float-particle 6s ease-in-out infinite;
-  }
-  [data-particle]:nth-child(1){ top:12%; left:8%; background:#9d7bff; animation-delay:0s; }
-  [data-particle]:nth-child(2){ top:70%; left:15%; background:#3df0ff; animation-delay:1.2s; }
-  [data-particle]:nth-child(3){ top:30%; left:90%; background:#6c40e2; animation-delay:2.4s; }
-  [data-particle]:nth-child(4){ top:85%; left:78%; background:#3df0ff; animation-delay:0.6s; }
-  [data-particle]:nth-child(5){ top:50%; left:50%; background:#9d7bff; animation-delay:3s; }
-  [data-particle]:nth-child(6){ top:18%; left:60%; background:#3df0ff; animation-delay:1.8s; }
-  @keyframes float-particle {
-    0%,100% { transform: translateY(0) translateX(0); opacity: 0.4; }
-    50% { transform: translateY(-18px) translateX(6px); opacity: 1; }
-  }
-
-  .display-headline {
-    font-family: 'Press Start 2P', monospace;
-    font-size: clamp(26px, 4.5vw, 52px);
-    line-height: 1.35;
-    color: #f2ecff;
-    text-shadow: 3px 3px 0 #431fd5, 6px 6px 0 rgba(61,240,255,0.25);
-  }
-  .display-headline .accent { color: #3df0ff; text-shadow: 3px 3px 0 #16101f, 0 0 18px rgba(61,240,255,0.6); }
-
-  .live-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    background: #3df0ff;
-    box-shadow: 0 0 8px #3df0ff;
-    animation: blink-dot 1.2s steps(2) infinite;
-  }
-  @keyframes blink-dot { 0%,49%{opacity:1;} 50%,100%{opacity:0.25;} }
-
-  /* Pixel card */
-  .pixel-card {
-    background: #100c1a;
-    border: 2px solid #6c40e2;
-    box-shadow: 6px 6px 0 rgba(67,31,213,0.55);
-  }
-
-  .copy-btn {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-    color: #0d0d14;
-    background: #3df0ff;
-    padding: 8px 12px;
-    border: 2px solid #0d0d14;
-    cursor: pointer;
-    transition: transform 0.08s;
-    letter-spacing: 0.02em;
-  }
-  .copy-btn:hover { transform: translate(-1px,-1px); }
-  .copy-btn:active { transform: translate(1px,1px); }
-
-  /* Hotbar */
-  .hotbar { display: flex; flex-wrap: wrap; gap: 10px; }
-  .hotbar-slot {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 84px;
-    height: 84px;
-    background: #100c1a;
-    border: 2px solid #6c40e2;
-    box-shadow: 3px 3px 0 rgba(67,31,213,0.5);
-    transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s;
-    cursor: pointer;
-  }
-  .hotbar-slot:hover {
-    transform: translateY(-4px);
-    border-color: #3df0ff;
-    box-shadow: 3px 7px 0 rgba(61,240,255,0.4);
-  }
-  .slot-key {
-    position: absolute;
-    top: 3px;
-    left: 4px;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-    color: #4a1fb0;
-  }
-  .slot-icon { font-size: 26px; line-height: 1; filter: drop-shadow(0 0 4px rgba(61,240,255,0.4)); }
-
-  /* Social proof */
-  .social-proof-bar {
-    background: #0d0d14;
-    border-top: 2px solid #1e1730;
-    border-bottom: 2px solid #1e1730;
-    padding: 18px 0;
-  }
-  .proof-pill {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-    color: #e8e4f5;
-    padding: 8px 14px;
-    border: 2px solid #6c40e2;
-    background: #1a0f35;
-    letter-spacing: 0.02em;
-  }
-
-  /* Sections */
-  .pixel-section-dark { background: #0a0810; }
-  .pixel-section-darker { background: #08060d; }
-  .pixel-heading {
-    font-family: 'Press Start 2P', monospace;
-    font-size: clamp(16px, 2.6vw, 24px);
-    color: #f2ecff;
-    text-shadow: 2px 2px 0 #431fd5;
-  }
-  .pixel-eyebrow {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 9px;
-    color: #3df0ff;
-    letter-spacing: 0.04em;
-  }
-
-  /* Tab bar (install + frameworks) */
-  .tab-bar { display: flex; flex-wrap: wrap; gap: 8px; }
-  .tab-btn, .ftab-btn {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-    color: #e8e4f5;        /* bright white — always readable */
-    background: #1a0f35;
-    border: 2px solid #6c40e2;
-    padding: 10px 14px;
-    cursor: pointer;
-    letter-spacing: 0.02em;
-    white-space: nowrap;
-    transition: color 0.1s steps(2), border-color 0.1s steps(2);
-  }
-  .tab-btn:hover, .ftab-btn:hover { color: #3df0ff; border-color: #3df0ff; }
-  .tab-btn.active, .ftab-btn.active {
-    color: #0d0d14;
-    background: #6c40e2;
-    border-color: #9d7bff;
-    box-shadow: inset 2px 2px 0 #9d7bff, inset -2px -2px 0 #4a1fb0;
-  }
-  .tab-panel, .ftab-panel { display: none; }
-  .tab-panel.active, .ftab-panel.active { display: block; }
-
-  /* Code block */
-  .code-block {
-    position: relative;
-    background: #100c1a;
-    border: 2px solid #6c40e2;
-    box-shadow: 4px 4px 0 rgba(67,31,213,0.45);
-    padding: 18px 18px 16px;
-  }
-  .code-block .copy-btn { position: absolute; top: 10px; right: 10px; }
-  .code-block pre.mono {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px;
-    line-height: 1.75;
-    color: #9d7bff;
-    white-space: pre-wrap;
-    word-break: break-word;
-    padding-right: 70px;
-  }
-  .code-block pre.mono .text-violet-100 { color: #c9b4fb; }
-  .code-block pre.mono .text-violet-200 { color: #3df0ff; }
-
-  .pixel-text { font-family: 'JetBrains Mono', monospace; color: #9d7bff; }
-  .pixel-muted { color: #4a1fb0; }
-  .pixel-code-inline { font-family: 'JetBrains Mono', monospace; color: #3df0ff; }
-
-  /* Footer */
+  /* Footer links */
   .footer-link {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #9d7bff;
+    color: #424242;
     text-decoration: none;
     letter-spacing: 0.02em;
-    transition: color 0.15s;
+    transition: color 0.1s steps(2);
   }
-  .footer-link:hover { color: #3df0ff; }
+  .footer-link:hover { color: #7749F1; }
 
+  /* Lang toggle */
   #lang-toggle {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #9d7bff;
-    background: #16101f;
-    border: 2px solid #6c40e2;
+    color: #424242;
+    background: #F5F2FF;
+    border: 2px solid #7749F1;
     padding: 8px 10px;
     cursor: pointer;
-    letter-spacing: 0.02em;
-    transition: color 0.15s;
+    box-shadow: 2px 2px 0 #271472;
   }
-  #lang-toggle:hover { color: #3df0ff; }
-  .theme-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    background: #16101f;
-    border: 2px solid #2a2140;
-    color: #9d7bff;
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .theme-btn:hover { color: #3df0ff; border-color: #6c40e2; }
+  #lang-toggle:hover { background: #E4DCFD; }
 
-  /* Icon toggle — dark mode shows moon, light shows sun */
-  .icon-sun { display: none; }
-  .icon-moon { display: block; }
-  [data-theme="light"] .icon-sun { display: block; }
-  [data-theme="light"] .icon-moon { display: none; }
+  /* Inline text colors in terminal card → use Novada palette */
+  .pixel-text  { color: #424242; }
+  .pixel-muted { color: #727082; }
+  .pixel-code-inline { font-family: 'JetBrains Mono', monospace; color: #7749F1; }
 
-  /* ── Dark mode: force logo to white ── */
-  [data-theme="dark"] .logo-img { filter: brightness(0) invert(1) !important; }
+  /* Section alt backgrounds */
+  .pixel-section-dark   { background: #F5F2FF; }
+  .pixel-section-darker { background: #ffffff; }
+  .pixel-heading { font-family: 'Press Start 2P', monospace; font-size: clamp(14px,2.2vw,22px); color: #011627; }
+  .pixel-eyebrow { font-family: 'Press Start 2P', monospace; font-size: 9px; color: #7749F1; letter-spacing: 0.06em; }
 
-  /* ── Light mode overrides ── */
-  /* Background: medium purple (not too light, not too dark) */
-  [data-theme="light"] body { background: #ddd5ff; color: #0d0030; }
-  [data-theme="light"] .hero-section { background: #ddd5ff !important; }
-  [data-theme="light"] .theme-btn { background: #c9b4fb; border-color: #6c40e2; color: #0d0030; }
-  [data-theme="light"] .announcement-bar { background: #6c40e2; color: #fff; }
-
-  /* Headlines */
-  [data-theme="light"] .display-headline { color: #0d0030 !important; text-shadow: none !important; }
-  [data-theme="light"] .display-headline .accent { color: #4a1fb0 !important; text-shadow: none !important; }
-
-  /* Nav */
-  [data-theme="light"] .nav-link { color: #0d0030 !important; }
-  [data-theme="light"] .nav-link:hover { color: #6c40e2 !important; }
-
-  /* Subtitle */
-  [data-theme="light"] .hero-section p { color: #1a0a3d !important; }
-
-  /* Terminal card on hero: always dark background, brighter text */
-  [data-theme="light"] .pixel-card { background: #1a0a3d !important; }
-  [data-theme="light"] .pixel-card * { color: inherit; }
-  /* Tool names in terminal: use bright white instead of invisible cyan */
-  [data-theme="light"] .pixel-card [style*="color:#3df0ff"] { color: #e8e4f5 !important; }
-  [data-theme="light"] .pixel-card [style*="color:#6c40e2"] { color: #9d7bff !important; }
-  [data-theme="light"] .pixel-card [style*="color:#4a1fb0"] { color: #7a6faa !important; }
-  [data-theme="light"] .pixel-card [style*="color:#9d7bff"] { color: #c9b4fb !important; }
-
-  /* Grid lines very subtle */
-  [data-theme="light"] .hero-section::after { opacity: 0.15 !important; }
-
-  /* Logo in light: show original (don't invert) */
-  [data-theme="light"] .logo-img { filter: none !important; }
-
-  body { background: #08060d; }
+  /* Hero inline colors override */
+  .display-headline { color: #011627; }
+  .display-headline .accent { color: #7749F1; }
 </style>
 </head>
 <body class="lang-en">
@@ -501,14 +173,14 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   <div class="pixel-container h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-3 flex-shrink-0">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[12px] text-white'}))" />
-      <span class="pixel-font text-[10px]" style="color:#9d7bff">MCP</span>
+      <span class="pixel-font text-[10px]" style="color:#424242">MCP</span>
     </a>
     <nav class="hidden md:flex items-center gap-6">
       <a href="#install" class="nav-link"><span class="en">▸ INSTALL</span><span class="zh">▸ 接入</span></a>
       <a href="/tools" class="nav-link"><span class="en">▸ TOOLS</span><span class="zh">▸ 工具</span></a>
       <a href="/pricing" class="nav-link"><span class="en">▸ PRICING</span><span class="zh">▸ 价格</span></a>
       <a href="/faq" class="nav-link">▸ FAQ</a>
-      <a href="/playground" class="nav-link" style="color:#3df0ff"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
+      <a href="/playground" class="nav-link" style="color:#7749F1"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
     </nav>
     <div class="flex items-center gap-2.5">
       <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
@@ -536,7 +208,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 
       <!-- LEFT: headline + CTA -->
       <div>
-        <div class="pixel-font text-[10px] mb-6 flex items-center gap-2" style="color:#3df0ff">
+        <div class="pixel-font text-[10px] mb-6 flex items-center gap-2" style="color:#7749F1">
           <span class="live-dot"></span>
           <span class="en">ONLINE · 8 TOOLS EQUIPPED</span>
           <span class="zh">在线 · 8 个工具已装备</span>
@@ -545,7 +217,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
           <span class="en">GIVE YOUR<br>AGENT A<br><span class="accent">HOTBAR</span><br>FOR THE WEB.</span>
           <span class="zh">给你的<br>AGENT<br><span class="accent">武器栏</span><br>接入网络。</span>
         </h1>
-        <p class="mb-10 leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#9d7bff;font-size:14px;max-width:420px">
+        <p class="mb-10 leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#424242;font-size:14px;max-width:420px">
           <span class="en">8 tools. One MCP endpoint. Your agent stops guessing and starts mining.</span>
           <span class="zh">8 个工具。一个 MCP 端点。你的 agent 不再猜测，开始挖掘。</span>
         </p>
@@ -557,7 +229,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
             <span class="en">GET FREE KEY</span><span class="zh">获取免费密钥</span>
           </a>
         </div>
-        <p class="text-[10px]" style="font-family:'Press Start 2P',monospace;color:#4a1fb0">
+        <p class="text-[10px]" style="font-family:'Press Start 2P',monospace;color:#727082">
           <span class="en">1,000 FREE CALLS/MONTH · NO CREDIT CARD</span>
           <span class="zh">每月 1,000 次免费 · 无需信用卡</span>
         </p>
@@ -566,31 +238,31 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <!-- RIGHT: API response terminal -->
       <div class="pixel-card relative">
         <!-- terminal header -->
-        <div class="flex items-center justify-between px-4 py-3 border-b-2" style="border-color:#6c40e2">
-          <span class="pixel-font text-[9px]" style="color:#9d7bff">tools/list response</span>
+        <div class="flex items-center justify-between px-4 py-3 border-b-2" style="border-color:#7749F1">
+          <span class="pixel-font text-[9px]" style="color:#424242">tools/list response</span>
           <div class="flex items-center gap-2">
             <span class="live-dot"></span>
-            <span class="pixel-font text-[8px]" style="color:#3df0ff">LIVE</span>
+            <span class="pixel-font text-[8px]" style="color:#7749F1">LIVE</span>
           </div>
         </div>
         <!-- response body -->
-        <div class="p-5" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.8;color:#9d7bff">
-          <div style="color:#4a1fb0">// 8 tools equipped</div>
-          <div class="mt-2"><span style="color:#6c40e2">{ "tools": [</span></div>
-          <div class="pl-4 space-y-1" style="color:#3df0ff">
-            <div>"novada_search" <span style="color:#4a1fb0">// web search via 5 engines</span></div>
-            <div>"novada_extract" <span style="color:#4a1fb0">// read content from URL</span></div>
-            <div>"novada_crawl" <span style="color:#4a1fb0">// multi-page crawl</span></div>
-            <div>"novada_scrape" <span style="color:#4a1fb0">// platform structured data</span></div>
-            <div>"novada_research" <span style="color:#4a1fb0">// deep multi-source</span></div>
-            <div>"novada_verify" <span style="color:#4a1fb0">// fact-check claims</span></div>
-            <div>"novada_map" <span style="color:#4a1fb0">// discover site URLs</span></div>
-            <div>"novada_monitor" <span style="color:#4a1fb0">// track page changes</span></div>
+        <div class="p-5" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.8;color:#424242">
+          <div style="color:#727082">// 8 tools equipped</div>
+          <div class="mt-2"><span style="color:#7749F1">{ "tools": [</span></div>
+          <div class="pl-4 space-y-1" style="color:#7749F1">
+            <div>"novada_search" <span style="color:#727082">// web search via 5 engines</span></div>
+            <div>"novada_extract" <span style="color:#727082">// read content from URL</span></div>
+            <div>"novada_crawl" <span style="color:#727082">// multi-page crawl</span></div>
+            <div>"novada_scrape" <span style="color:#727082">// platform structured data</span></div>
+            <div>"novada_research" <span style="color:#727082">// deep multi-source</span></div>
+            <div>"novada_verify" <span style="color:#727082">// fact-check claims</span></div>
+            <div>"novada_map" <span style="color:#727082">// discover site URLs</span></div>
+            <div>"novada_monitor" <span style="color:#727082">// track page changes</span></div>
           </div>
-          <div><span style="color:#6c40e2">] }</span></div>
+          <div><span style="color:#7749F1">] }</span></div>
           <div class="mt-4 pt-3 flex items-center justify-between" style="border-top:2px solid #6c40e2">
             <button onclick="copyText('https://mcp.novada.com/YOUR_API_KEY/mcp',this)" class="copy-btn">COPY ENDPOINT</button>
-            <span class="pixel-font text-[8px]" style="color:#4a1fb0">JSON-RPC 2.0</span>
+            <span class="pixel-font text-[8px]" style="color:#727082">JSON-RPC 2.0</span>
           </div>
         </div>
       </div>
@@ -598,49 +270,49 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 
     <!-- HOTBAR: 8 tool slots -->
     <div class="mt-16">
-      <p class="pixel-font text-center text-[9px] mb-6" style="color:#4a1fb0">
+      <p class="pixel-font text-center text-[9px] mb-6" style="color:#727082">
         <span class="en">[ YOUR AGENT'S HOTBAR ]</span><span class="zh">[ AGENT 武器栏 ]</span>
       </p>
       <div class="hotbar justify-center">
         <div class="hotbar-slot" title="novada_search">
           <span class="slot-key">1</span>
           <span class="slot-icon">🔍</span>
-          <span class="pixel-font text-[7px] mt-1" style="color:#9d7bff">SEARCH</span>
+          <span class="pixel-font text-[7px] mt-1" style="color:#424242">SEARCH</span>
         </div>
         <div class="hotbar-slot" title="novada_extract">
           <span class="slot-key">2</span>
           <span class="slot-icon">⛏️</span>
-          <span class="pixel-font text-[7px] mt-1" style="color:#9d7bff">EXTRACT</span>
+          <span class="pixel-font text-[7px] mt-1" style="color:#424242">EXTRACT</span>
         </div>
         <div class="hotbar-slot" title="novada_crawl">
           <span class="slot-key">3</span>
           <span class="slot-icon">🕸️</span>
-          <span class="pixel-font text-[7px] mt-1" style="color:#9d7bff">CRAWL</span>
+          <span class="pixel-font text-[7px] mt-1" style="color:#424242">CRAWL</span>
         </div>
         <div class="hotbar-slot" title="novada_scrape">
           <span class="slot-key">4</span>
           <span class="slot-icon">📦</span>
-          <span class="pixel-font text-[7px] mt-1" style="color:#9d7bff">SCRAPE</span>
+          <span class="pixel-font text-[7px] mt-1" style="color:#424242">SCRAPE</span>
         </div>
         <div class="hotbar-slot" title="novada_research">
           <span class="slot-key">5</span>
           <span class="slot-icon">🧠</span>
-          <span class="pixel-font text-[7px] mt-1" style="color:#9d7bff">RESEARCH</span>
+          <span class="pixel-font text-[7px] mt-1" style="color:#424242">RESEARCH</span>
         </div>
         <div class="hotbar-slot" title="novada_verify">
           <span class="slot-key">6</span>
           <span class="slot-icon">✅</span>
-          <span class="pixel-font text-[7px] mt-1" style="color:#9d7bff">VERIFY</span>
+          <span class="pixel-font text-[7px] mt-1" style="color:#424242">VERIFY</span>
         </div>
         <div class="hotbar-slot" title="novada_map">
           <span class="slot-key">7</span>
           <span class="slot-icon">🗺️</span>
-          <span class="pixel-font text-[7px] mt-1" style="color:#9d7bff">MAP</span>
+          <span class="pixel-font text-[7px] mt-1" style="color:#424242">MAP</span>
         </div>
         <div class="hotbar-slot" title="novada_monitor">
           <span class="slot-key">8</span>
           <span class="slot-icon">👁️</span>
-          <span class="pixel-font text-[7px] mt-1" style="color:#9d7bff">MONITOR</span>
+          <span class="pixel-font text-[7px] mt-1" style="color:#424242">MONITOR</span>
         </div>
       </div>
     </div>
@@ -651,7 +323,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 <div class="social-proof-bar">
   <div class="pixel-container">
     <div class="flex flex-wrap items-center justify-center gap-4">
-      <span class="pixel-font text-[8px]" style="color:#9d7bff"><span class="en">COMPATIBLE WITH</span><span class="zh">兼容</span></span>
+      <span class="pixel-font text-[8px]" style="color:#424242"><span class="en">COMPATIBLE WITH</span><span class="zh">兼容</span></span>
       <span class="proof-pill">Claude</span>
       <span class="proof-pill">Cursor</span>
       <span class="proof-pill">Codex</span>
@@ -968,24 +640,24 @@ params = {
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="pixel-card p-8">
         <div class="text-3xl mb-5">⚡</div>
-        <h3 class="pixel-font text-[11px] mb-4" style="color:#3df0ff"><span class="en">ZERO INSTALL</span><span class="zh">零安装</span></h3>
-        <p class="text-sm leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#9d7bff">
+        <h3 class="pixel-font text-[11px] mb-4" style="color:#7749F1"><span class="en">ZERO INSTALL</span><span class="zh">零安装</span></h3>
+        <p class="text-sm leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#424242">
           <span class="en">Just paste a URL. No npm, no env vars, no rebuilds. Works on any machine in 30 seconds.</span>
           <span class="zh">只需粘贴一个 URL,无需 npm、无需环境变量。任何机器 30 秒接入。</span>
         </p>
       </div>
       <div class="pixel-card p-8">
         <div class="text-3xl mb-5">🔄</div>
-        <h3 class="pixel-font text-[11px] mb-4" style="color:#3df0ff"><span class="en">ALWAYS LATEST</span><span class="zh">始终最新</span></h3>
-        <p class="text-sm leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#9d7bff">
+        <h3 class="pixel-font text-[11px] mb-4" style="color:#7749F1"><span class="en">ALWAYS LATEST</span><span class="zh">始终最新</span></h3>
+        <p class="text-sm leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#424242">
           <span class="en">Tools update server-side. New features and fixes land without a redeploy on your side.</span>
           <span class="zh">工具在服务端更新,新功能和修复无需你重新部署即可生效。</span>
         </p>
       </div>
       <div class="pixel-card p-8">
         <div class="text-3xl mb-5">🌐</div>
-        <h3 class="pixel-font text-[11px] mb-4" style="color:#3df0ff"><span class="en">EDGE-DEPLOYED</span><span class="zh">边缘部署</span></h3>
-        <p class="text-sm leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#9d7bff">
+        <h3 class="pixel-font text-[11px] mb-4" style="color:#7749F1"><span class="en">EDGE-DEPLOYED</span><span class="zh">边缘部署</span></h3>
+        <p class="text-sm leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#424242">
           <span class="en">Runs on Vercel with global PoPs. Latency tracks the user, not the data center.</span>
           <span class="zh">运行于 Vercel,具备全球节点。延迟随用户位置就近响应。</span>
         </p>
@@ -995,11 +667,11 @@ params = {
 </section>
 
 <!-- FOOTER -->
-<footer class="py-12" style="background:#0d0d14;border-top:2px solid #6c40e2">
+<footer class="py-12" style="background:#011627;border-top:3px solid #7749F1">
   <div class="pixel-container flex flex-col md:flex-row items-center justify-between gap-6">
     <div class="flex items-center gap-3">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img-footer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[11px] text-white'}))" />
-      <span class="pixel-font text-[8px]" style="color:#9d7bff">MCP</span>
+      <span class="pixel-font text-[8px]" style="color:#424242">MCP</span>
     </div>
     <nav class="flex flex-wrap items-center justify-center gap-8">
       <a href="https://www.npmjs.com/package/novada-mcp" class="footer-link">npm</a>
@@ -1007,7 +679,7 @@ params = {
       <a href="https://www.novada.com" class="footer-link">novada.com</a>
       <a href="https://dashboard.novada.com" class="footer-link"><span class="en">API DASHBOARD</span><span class="zh">控制台</span></a>
     </nav>
-    <span class="pixel-font text-[8px]" style="color:#9d7bff">© 2026 NOVADA</span>
+    <span class="pixel-font text-[8px]" style="color:#424242">© 2026 NOVADA</span>
   </div>
 </footer>
 
