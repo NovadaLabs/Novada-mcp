@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <script>
-(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();
-function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+document.documentElement.setAttribute('data-theme','light');
+function toggleTheme(){}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Pricing — Novada MCP</title>
@@ -38,11 +38,9 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
     theme: {
       extend: {
         colors: {
-          violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
-          ink: { DEFAULT: '#0a0818', text: '#0a0818', 800: '#110e24', 700: '#161230' },
-          slate: '#7a6faa',
-          paper: '#faf9ff',
-          'tint-cool': '#f3f0fb',
+          violet: { DEFAULT: '#7749F1', dark: '#271472', light: '#9360EF', 50: '#F5F2FF', 100: '#E4DCFD' },
+          ink: { DEFAULT: '#011627', mid: '#424242', muted: '#727082' },
+          green: '#2EBF79',
         },
         fontFamily: {
           pixel: ['"Press Start 2P"', 'monospace'],
@@ -56,294 +54,149 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 </script>
 <link rel="stylesheet" href="shared.css">
 <style>
+  body { background: #fff; color: #011627; }
   .pixel-font { font-family: 'Press Start 2P', monospace; line-height: 1.5; }
   .pixel-container { max-width: 80rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
-
-  /* Announcement bar */
-  .announcement-bar {
-    background: #0d0d14;
-    border-bottom: 2px solid #6c40e2;
-    color: #9d7bff;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    text-align: center;
-    padding: 9px 1rem;
-    letter-spacing: 0.02em;
+  .icon-sun { display: block; }
+  .icon-moon { display: none; }
+  #lang-toggle {
+    font-family: 'Press Start 2P', monospace; font-size: 8px;
+    color: #424242; background: #F5F2FF; border: 2px solid #7749F1;
+    padding: 8px 10px; cursor: pointer; box-shadow: 2px 2px 0 #271472;
   }
-  .announcement-bar a { color: #3df0ff; text-decoration: none; font-weight: 600; }
-  .announcement-bar a:hover { text-decoration: underline; }
-
-  /* Nav */
-  .nav-bar {
-    background: rgba(13,13,20,0.92);
-    border-bottom: 2px solid #1e1730;
-    backdrop-filter: blur(8px);
-    position: sticky;
-    top: 0;
-    z-index: 50;
+  #lang-toggle:hover { background: #E4DCFD; }
+  .footer-link {
+    font-family: 'Press Start 2P', monospace; font-size: 8px;
+    color: #424242; text-decoration: none; transition: color 0.1s;
   }
-  .nav-link {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 9px;
-    color: #9d7bff;
-    text-decoration: none;
-    letter-spacing: 0.03em;
-    transition: color 0.15s, text-shadow 0.15s;
-  }
-  .nav-link:hover { color: #3df0ff; text-shadow: 0 0 8px rgba(61,240,255,0.6); }
-  .nav-link.active { color: #3df0ff; }
-  .logo-img { height: 26px; width: auto; }
-  .logo-img-footer { height: 22px; width: auto; }
+  .footer-link:hover { color: #7749F1; }
 
-  /* Pixel buttons */
-  .pixel-btn {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 10px;
-    color: #0d0d14;
-    background: #3df0ff;
-    padding: 14px 20px;
-    border: 2px solid #0d0d14;
-    box-shadow: 4px 4px 0 #6c40e2;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    text-decoration: none;
-    transition: transform 0.08s, box-shadow 0.08s;
-    letter-spacing: 0.02em;
-  }
-  .pixel-btn:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #6c40e2; }
-  .pixel-btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #6c40e2; }
+  /* Text + inline code */
+  .pixel-text { font-family: 'JetBrains Mono', monospace; color: #424242; }
+  .pixel-muted { color: #727082; }
+  .pixel-code-inline { font-family: 'JetBrains Mono', monospace; color: #7749F1; background: #F5F2FF; padding: 1px 5px; border: 1px solid #E4DCFD; }
 
-  .pixel-btn-dark {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 10px;
-    color: #9d7bff;
-    background: #16101f;
-    padding: 14px 20px;
-    border: 2px solid #6c40e2;
-    box-shadow: 4px 4px 0 #16101f;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    text-decoration: none;
-    transition: transform 0.08s, box-shadow 0.08s, color 0.15s;
-    letter-spacing: 0.02em;
-  }
-  .pixel-btn-dark:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #6c40e2; color: #3df0ff; }
-  .pixel-btn-dark:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #6c40e2; }
-
-  .pixel-btn-sm {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 7px;
-    color: #e8e4f5;
-    background: #6c40e2;
-    padding: 8px 14px;
-    border: 2px solid #9d7bff;
-    cursor: pointer;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    text-decoration: none;
-    transition: background 0.1s steps(2);
-    box-shadow: inset 2px 2px 0 #9d7bff, inset -2px -2px 0 #4a1fb0, 3px 3px 0 #0d0d14;
-  }
-  .pixel-btn-sm:hover { background: #4a1fb0; color: #3df0ff; }
-
-  /* Page hero (pixel grid + scanlines, matches index.html hero) */
+  /* Hero — light pixel grid, no scanline darkening */
   .pixel-hero {
     background:
-      radial-gradient(circle at 20% 20%, rgba(108,64,226,0.25), transparent 45%),
-      radial-gradient(circle at 85% 70%, rgba(61,240,255,0.12), transparent 40%),
-      #0a0810;
+      radial-gradient(circle at 20% 20%, rgba(119,73,241,0.10), transparent 45%),
+      radial-gradient(circle at 85% 70%, rgba(46,191,121,0.08), transparent 40%),
+      #F5F2FF;
     position: relative;
     overflow: hidden;
-    border-bottom: 2px solid #6c40e2;
+    border-bottom: 2px solid #7749F1;
   }
   .pixel-hero::before {
     content: '';
     position: absolute;
     inset: 0;
     background-image:
-      linear-gradient(rgba(108,64,226,0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(108,64,226,0.08) 1px, transparent 1px);
+      linear-gradient(rgba(119,73,241,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(119,73,241,0.07) 1px, transparent 1px);
     background-size: 32px 32px;
     pointer-events: none;
     z-index: 0;
-  }
-  .scanlines::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 2px, transparent 4px);
-    pointer-events: none;
-    z-index: 2;
-    mix-blend-mode: multiply;
   }
   [data-particle] {
     position: absolute;
     width: 6px;
     height: 6px;
-    background: #3df0ff;
-    box-shadow: 0 0 8px rgba(61,240,255,0.8);
+    background: #7749F1;
     z-index: 1;
     animation: float-particle 6s ease-in-out infinite;
   }
-  [data-particle]:nth-child(1){ top:20%; left:10%; background:#9d7bff; animation-delay:0s; }
-  [data-particle]:nth-child(2){ top:65%; left:18%; background:#3df0ff; animation-delay:1.2s; }
-  [data-particle]:nth-child(3){ top:30%; left:88%; background:#6c40e2; animation-delay:2.4s; }
-  [data-particle]:nth-child(4){ top:75%; left:82%; background:#3df0ff; animation-delay:0.6s; }
+  [data-particle]:nth-child(1){ top:20%; left:10%; background:#9360EF; animation-delay:0s; }
+  [data-particle]:nth-child(2){ top:65%; left:18%; background:#2EBF79; animation-delay:1.2s; }
+  [data-particle]:nth-child(3){ top:30%; left:88%; background:#7749F1; animation-delay:2.4s; }
+  [data-particle]:nth-child(4){ top:75%; left:82%; background:#2EBF79; animation-delay:0.6s; }
   @keyframes float-particle {
-    0%,100% { transform: translateY(0) translateX(0); opacity: 0.4; }
-    50% { transform: translateY(-18px) translateX(6px); opacity: 1; }
+    0%,100% { transform: translateY(0) translateX(0); opacity: 0.35; }
+    50% { transform: translateY(-18px) translateX(6px); opacity: 0.9; }
   }
 
   .pixel-h1 {
     font-family: 'Press Start 2P', monospace;
     font-size: clamp(20px, 3.4vw, 34px);
     line-height: 1.4;
-    color: #f2ecff;
-    text-shadow: 3px 3px 0 #431fd5, 6px 6px 0 rgba(61,240,255,0.25);
+    color: #011627;
+    text-shadow: 3px 3px 0 #E4DCFD;
   }
-  .pixel-h1 .accent { color: #3df0ff; text-shadow: 3px 3px 0 #16101f, 0 0 18px rgba(61,240,255,0.6); }
+  .pixel-h1 .accent { color: #7749F1; }
 
   .live-dot {
     display: inline-block;
-    width: 8px;
-    height: 8px;
-    background: #3df0ff;
-    box-shadow: 0 0 8px #3df0ff;
+    width: 8px; height: 8px;
+    background: #2EBF79;
+    box-shadow: 0 0 8px rgba(46,191,121,0.6);
     animation: blink-dot 1.2s steps(2) infinite;
   }
   @keyframes blink-dot { 0%,49%{opacity:1;} 50%,100%{opacity:0.25;} }
 
-  /* Sections */
-  .pixel-section-dark { background: #0a0810; }
-  .pixel-section-darker { background: #08060d; }
+  /* Sections + headings */
+  .pixel-section-dark { background: #fff; }
+  .pixel-section-darker { background: #F5F2FF; }
   .pixel-heading {
     font-family: 'Press Start 2P', monospace;
     font-size: clamp(15px, 2.4vw, 22px);
-    color: #f2ecff;
-    text-shadow: 2px 2px 0 #431fd5;
+    color: #011627;
+    text-shadow: 2px 2px 0 #E4DCFD;
   }
   .pixel-eyebrow {
     font-family: 'Press Start 2P', monospace;
     font-size: 9px;
-    color: #3df0ff;
+    color: #7749F1;
     letter-spacing: 0.04em;
   }
-  .pixel-text { font-family: 'JetBrains Mono', monospace; color: #9d7bff; }
-  .pixel-muted { color: #4a1fb0; }
-  .pixel-code-inline { font-family: 'JetBrains Mono', monospace; color: #3df0ff; }
 
-  /* Pixel cards — inset bevel + violet outline */
+  /* Cards */
   .pixel-card {
-    background: #100c1a;
-    border: 2px solid #6c40e2;
-    box-shadow: 6px 6px 0 rgba(67,31,213,0.55);
+    background: #fff;
+    border: 2px solid #7749F1;
+    box-shadow: 6px 6px 0 #E4DCFD;
   }
   .pixel-tier {
     position: relative;
-    background: #100c1a;
-    border: 3px solid #6c40e2;
-    box-shadow: inset 3px 3px 0 0 #9d7bff, inset -3px -3px 0 0 #4a1fb0, 0 0 0 3px #6c40e2;
+    background: #fff;
+    border: 3px solid #7749F1;
+    box-shadow: 6px 6px 0 #E4DCFD;
     transition: transform 0.1s, box-shadow 0.1s;
   }
   .pixel-tier:hover {
     transform: translateY(-4px);
-    box-shadow: inset 3px 3px 0 0 #9d7bff, inset -3px -3px 0 0 #4a1fb0, 0 0 0 3px #6c40e2, 0 12px 0 -4px rgba(61,240,255,0.25);
+    box-shadow: 6px 10px 0 #E4DCFD;
   }
-  /* Free tier gets cyan accent border */
   .pixel-tier.tier-free {
-    border-color: #3df0ff;
-    box-shadow: inset 3px 3px 0 0 #7ff6ff, inset -3px -3px 0 0 #1fb0c8, 0 0 0 3px #3df0ff;
+    border-color: #2EBF79;
+    box-shadow: 6px 6px 0 rgba(46,191,121,0.25);
   }
   .pixel-tier.tier-free:hover {
-    box-shadow: inset 3px 3px 0 0 #7ff6ff, inset -3px -3px 0 0 #1fb0c8, 0 0 0 3px #3df0ff, 0 12px 0 -4px rgba(61,240,255,0.35);
+    box-shadow: 6px 10px 0 rgba(46,191,121,0.3);
   }
 
   .pixel-rule-num {
     font-family: 'Press Start 2P', monospace;
     font-size: 14px;
-    color: #0d0d14;
-    background: #3df0ff;
+    color: #fff;
+    background: #7749F1;
     width: 40px; height: 40px;
     display: inline-flex; align-items: center; justify-content: center;
-    border: 2px solid #0d0d14;
-    box-shadow: 3px 3px 0 #6c40e2;
+    border: 2px solid #271472;
+    box-shadow: 3px 3px 0 #E4DCFD;
   }
 
-  /* Quick-reference table (pixel styled) */
-  .pixel-table { border: 2px solid #6c40e2; box-shadow: 6px 6px 0 rgba(67,31,213,0.45); background: #100c1a; }
+  /* Quick-reference table */
+  .pixel-table { border: 2px solid #7749F1; box-shadow: 6px 6px 0 #E4DCFD; background: #fff; }
   .pixel-table .row {
     display: flex; align-items: center; justify-content: space-between;
-    gap: 14px; padding: 14px 18px; border-bottom: 2px solid #1e1730;
+    gap: 14px; padding: 14px 18px; border-bottom: 2px solid #E4DCFD;
   }
   .pixel-table .row:last-child { border-bottom: none; }
-  .pixel-table .row .k { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9d7bff; }
-  .pixel-table .row .v { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #3df0ff; font-weight: 600; text-align: right; }
+  .pixel-table .row .k { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #424242; }
+  .pixel-table .row .v { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #7749F1; font-weight: 600; text-align: right; }
   .pixel-table .thead {
-    padding: 12px 18px; border-bottom: 2px solid #6c40e2; background: #16101f;
-    font-family: 'Press Start 2P', monospace; font-size: 9px; color: #3df0ff; letter-spacing: 0.04em;
+    padding: 12px 18px; border-bottom: 2px solid #7749F1; background: #F5F2FF;
+    font-family: 'Press Start 2P', monospace; font-size: 9px; color: #7749F1; letter-spacing: 0.04em;
   }
-
-  /* Footer */
-  .footer-link {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-    color: #9d7bff;
-    text-decoration: none;
-    letter-spacing: 0.02em;
-    transition: color 0.15s;
-  }
-  .footer-link:hover { color: #3df0ff; }
-
-  #lang-toggle {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-    color: #9d7bff;
-    background: #16101f;
-    border: 2px solid #6c40e2;
-    padding: 8px 10px;
-    cursor: pointer;
-    letter-spacing: 0.02em;
-    transition: color 0.15s;
-  }
-  #lang-toggle:hover { color: #3df0ff; }
-  .theme-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    background: #16101f;
-    border: 2px solid #2a2140;
-    color: #9d7bff;
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .theme-btn:hover { color: #3df0ff; border-color: #6c40e2; }
-
-  /* Icon toggle — dark mode shows moon, light shows sun */
-  .icon-sun { display: none; }
-  .icon-moon { display: block; }
-  [data-theme="light"] .icon-sun { display: block; }
-  [data-theme="light"] .icon-moon { display: none; }
-
-  /* Light mode — high contrast overrides */
-  [data-theme="light"] body { background: #f0eeff; color: #0d0030; }
-  [data-theme="light"] .theme-btn { background: #ede8ff; border-color: #6c40e2; color: #1a0a3d; }
-  [data-theme="light"] .announcement-bar { background: #6c40e2; color: #fff; }
-  [data-theme="light"] .pixel-h1 { color: #0d0030 !important; }
-  [data-theme="light"] .pixel-h1 .accent { color: #6c40e2 !important; text-shadow: none !important; }
-  [data-theme="light"] .pixel-hero { background: #f0eeff !important; }
-  [data-theme="light"] .pixel-hero::before,
-  [data-theme="light"] .pixel-hero::after { opacity: 0.3 !important; }
-  [data-theme="light"] .nav-link { color: #1a0a3d !important; }
-  [data-theme="light"] .nav-link:hover,
-  [data-theme="light"] .nav-link.active { color: #6c40e2 !important; }
-  [data-theme="light"] .logo-img { filter: none !important; }
-
-  body { background: #08060d; }
 </style>
 </head>
 <body class="lang-en">
@@ -359,14 +212,14 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   <div class="pixel-container h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-3 flex-shrink-0">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[12px] text-white'}))" />
-      <span class="pixel-font text-[10px]" style="color:#9d7bff">MCP</span>
+      <span class="pixel-font text-[10px]" style="color:#424242">MCP</span>
     </a>
     <nav class="hidden md:flex items-center gap-6">
       <a href="/#install" class="nav-link"><span class="en">▸ INSTALL</span><span class="zh">▸ 接入</span></a>
       <a href="/tools" class="nav-link"><span class="en">▸ TOOLS</span><span class="zh">▸ 工具</span></a>
       <a href="/pricing" class="nav-link active"><span class="en">▸ PRICING</span><span class="zh">▸ 价格</span></a>
       <a href="/faq" class="nav-link">▸ FAQ</a>
-      <a href="/playground" class="nav-link" style="color:#3df0ff"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
+      <a href="/playground" class="nav-link" style="color:#7749F1"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
     </nav>
     <div class="flex items-center gap-2.5">
       <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
@@ -374,7 +227,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
         <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
       <button id="lang-toggle" onclick="toggleLang()">中 / EN</button>
-      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="pixel-btn-sm hidden sm:inline-flex">
+      <a href="https://www.novada.com" class="pixel-btn-sm hidden sm:inline-flex">
         <span class="en">GET API KEY</span><span class="zh">获取密钥</span>
       </a>
     </div>
@@ -382,13 +235,13 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 </header>
 
 <!-- PAGE HERO -->
-<section class="pixel-hero scanlines">
+<section class="pixel-hero">
   <div data-particle></div>
   <div data-particle></div>
   <div data-particle></div>
   <div data-particle></div>
   <div class="pixel-container relative z-10 text-center" style="padding-top:80px;padding-bottom:64px">
-    <div class="pixel-font text-[10px] mb-6 flex items-center justify-center gap-2" style="color:#3df0ff">
+    <div class="pixel-font text-[10px] mb-6 flex items-center justify-center gap-2" style="color:#7749F1">
       <span class="live-dot"></span>
       <span class="en">SIMPLE · USAGE-BASED · START FREE</span>
       <span class="zh">简单 · 按用量计费 · 免费开始</span>
@@ -413,18 +266,18 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <div id="free" class="pixel-tier tier-free p-8 sm:p-10">
         <!-- Label row -->
         <div class="flex items-center gap-3 mb-5 flex-wrap">
-          <span class="pixel-font text-[10px]" style="color:#3df0ff">
+          <span class="pixel-font text-[10px]" style="color:#7749F1">
             <span class="en">FREE TIER</span><span class="zh">免费额度</span>
           </span>
-          <span class="pixel-font text-[7px]" style="color:#0d0d14;background:#3df0ff;padding:5px 8px;border:2px solid #0d0d14">
+          <span class="pixel-font text-[7px]" style="color:#fff;background:#2EBF79;padding:5px 8px;border:2px solid #271472">
             <span class="en">NO CREDIT CARD</span><span class="zh">无需信用卡</span>
           </span>
         </div>
 
         <!-- Big number -->
-        <div class="pixel-font mb-4" style="font-size:clamp(20px,3vw,30px);color:#f2ecff;text-shadow:2px 2px 0 #1fb0c8;line-height:1.3">
-          <span class="en">1,000 CALLS<br><span style="color:#3df0ff;font-size:0.6em">/ MONTH</span></span>
-          <span class="zh">每月 1,000 次<br><span style="color:#3df0ff;font-size:0.6em">免费</span></span>
+        <div class="pixel-font mb-4" style="font-size:clamp(20px,3vw,30px);color:#011627;text-shadow:2px 2px 0 #271472;line-height:1.3">
+          <span class="en">1,000 CALLS<br><span style="color:#7749F1;font-size:0.6em">/ MONTH</span></span>
+          <span class="zh">每月 1,000 次<br><span style="color:#7749F1;font-size:0.6em">免费</span></span>
         </div>
         <p class="pixel-text mb-7" style="font-size:13px;line-height:1.7">
           <span class="en">One unified Novada key. Same endpoint as paid usage. No credit card to start.</span>
@@ -434,43 +287,43 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
         <!-- Bullet list -->
         <ul class="space-y-3 mb-8" style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6">
           <li class="flex items-start gap-3">
-            <span style="color:#3df0ff;font-weight:700">▸</span>
-            <span style="color:#9d7bff">
-              <span class="en">All 25 tools available — <span style="color:#4a1fb0">browser tools run locally via <code class="pixel-code-inline">npx novada-mcp</code>, don't count against hosted quota</span></span>
-              <span class="zh">25 个工具全部可用 — <span style="color:#4a1fb0">浏览器工具通过 <code class="pixel-code-inline">npx novada-mcp</code> 本地运行，不占用托管额度</span></span>
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en">All 25 tools available — <span style="color:#727082">browser tools run locally via <code class="pixel-code-inline">npx novada-mcp</code>, don't count against hosted quota</span></span>
+              <span class="zh">25 个工具全部可用 — <span style="color:#727082">浏览器工具通过 <code class="pixel-code-inline">npx novada-mcp</code> 本地运行，不占用托管额度</span></span>
             </span>
           </li>
           <li class="flex items-start gap-3">
-            <span style="color:#3df0ff;font-weight:700">▸</span>
-            <span style="color:#9d7bff">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
               <span class="en">60 requests / minute per IP</span>
               <span class="zh">每 IP 60 次/分钟速率限制</span>
             </span>
           </li>
           <li class="flex items-start gap-3">
-            <span style="color:#3df0ff;font-weight:700">▸</span>
-            <span style="color:#9d7bff">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
               <span class="en">Hosted on Vercel Edge — global PoPs, auto-SSL, zero ops</span>
               <span class="zh">运行于 Vercel Edge — 全球节点，自动 SSL，零运维</span>
             </span>
           </li>
           <li class="flex items-start gap-3">
-            <span style="color:#3df0ff;font-weight:700">▸</span>
-            <span style="color:#9d7bff">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
               <span class="en">Same key works with <code class="pixel-code-inline">npx novada-mcp</code> locally — quota shared across hosted + local</span>
               <span class="zh">同一密钥直接用于本地 <code class="pixel-code-inline">npx novada-mcp</code> — 托管与本地共享同一配额</span>
             </span>
           </li>
           <li class="flex items-start gap-3">
-            <span style="color:#3df0ff;font-weight:700">▸</span>
-            <span style="color:#9d7bff">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
               <span class="en">Quota resets monthly, per API token</span>
               <span class="zh">配额按月重置，以 API Token 为单位计算</span>
             </span>
           </li>
         </ul>
 
-        <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="pixel-btn">
+        <a href="https://www.novada.com" class="pixel-btn">
           <span class="en">⚡ GET YOUR API KEY</span><span class="zh">⚡ 获取你的 API 密钥</span>
         </a>
       </div>
@@ -479,18 +332,18 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <div id="more" class="pixel-tier p-8 sm:p-10">
         <!-- Label row -->
         <div class="flex items-center gap-3 mb-5 flex-wrap">
-          <span class="pixel-font text-[10px]" style="color:#9d7bff">
+          <span class="pixel-font text-[10px]" style="color:#424242">
             <span class="en">NEED MORE?</span><span class="zh">需要更多?</span>
           </span>
-          <span class="pixel-font text-[7px]" style="color:#e8e4f5;background:#6c40e2;padding:5px 8px;border:2px solid #9d7bff">
+          <span class="pixel-font text-[7px]" style="color:#fff;background:#7749F1;padding:5px 8px;border:2px solid #271472">
             <span class="en">PRODUCTION</span><span class="zh">生产级</span>
           </span>
         </div>
 
         <!-- Big number -->
-        <div class="pixel-font mb-4" style="font-size:clamp(20px,3vw,30px);color:#f2ecff;text-shadow:2px 2px 0 #431fd5;line-height:1.3">
-          <span class="en">HIGHER<br><span style="color:#3df0ff;font-size:0.6em">LIMITS</span></span>
-          <span class="zh">更高<br><span style="color:#3df0ff;font-size:0.6em">额度</span></span>
+        <div class="pixel-font mb-4" style="font-size:clamp(20px,3vw,30px);color:#011627;text-shadow:2px 2px 0 #271472;line-height:1.3">
+          <span class="en">HIGHER<br><span style="color:#7749F1;font-size:0.6em">LIMITS</span></span>
+          <span class="zh">更高<br><span style="color:#7749F1;font-size:0.6em">额度</span></span>
         </div>
         <p class="pixel-text mb-7" style="font-size:13px;line-height:1.7">
           <span class="en">The free tier gets you moving — production agents and high-volume pipelines need more. Paid tiers with higher monthly quotas and rate limits are available through the Novada dashboard.</span>
@@ -500,24 +353,24 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
         <!-- Bullet list -->
         <ul class="space-y-3 mb-8" style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6">
           <li class="flex items-start gap-3">
-            <span style="color:#3df0ff;font-weight:700">▸</span>
-            <span style="color:#9d7bff">
-              <span class="en"><span style="color:#e8e4f5;font-weight:600">Same key everywhere</span> — hosted MCP, local <code class="pixel-code-inline">npx novada-mcp</code>, and REST API. No separate billing accounts.</span>
-              <span class="zh"><span style="color:#e8e4f5;font-weight:600">一把密钥通用</span> — 托管 MCP、本地 <code class="pixel-code-inline">npx novada-mcp</code> 与 REST API，无需分别注册账单账户。</span>
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en"><span style="color:#011627;font-weight:600">Same key everywhere</span> — hosted MCP, local <code class="pixel-code-inline">npx novada-mcp</code>, and REST API. No separate billing accounts.</span>
+              <span class="zh"><span style="color:#011627;font-weight:600">一把密钥通用</span> — 托管 MCP、本地 <code class="pixel-code-inline">npx novada-mcp</code> 与 REST API，无需分别注册账单账户。</span>
             </span>
           </li>
           <li class="flex items-start gap-3">
-            <span style="color:#3df0ff;font-weight:700">▸</span>
-            <span style="color:#9d7bff">
-              <span class="en"><span style="color:#e8e4f5;font-weight:600">No rollover</span> — free quota resets at the start of each calendar month and does not carry over. Paid plans follow the same cadence unless otherwise specified.</span>
-              <span class="zh"><span style="color:#e8e4f5;font-weight:600">配额不滚存</span> — 免费配额每月初重置，不滚存到下个月。付费方案遵循相同节奏，除非另有说明。</span>
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en"><span style="color:#011627;font-weight:600">No rollover</span> — free quota resets at the start of each calendar month and does not carry over. Paid plans follow the same cadence unless otherwise specified.</span>
+              <span class="zh"><span style="color:#011627;font-weight:600">配额不滚存</span> — 免费配额每月初重置，不滚存到下个月。付费方案遵循相同节奏，除非另有说明。</span>
             </span>
           </li>
           <li class="flex items-start gap-3">
-            <span style="color:#3df0ff;font-weight:700">▸</span>
-            <span style="color:#9d7bff">
-              <span class="en"><span style="color:#e8e4f5;font-weight:600">No vendor lock-in</span> — MCP is an open protocol. Your agent code stays the same if you switch hosts or move to local <code class="pixel-code-inline">npx novada-mcp</code> — same tool names, same key.</span>
-              <span class="zh"><span style="color:#e8e4f5;font-weight:600">无供应商锁定</span> — MCP 是开放协议。切换宿主或移至本地 <code class="pixel-code-inline">npx novada-mcp</code> 时 Agent 代码不变 — 相同工具名、相同密钥。</span>
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en"><span style="color:#011627;font-weight:600">No vendor lock-in</span> — MCP is an open protocol. Your agent code stays the same if you switch hosts or move to local <code class="pixel-code-inline">npx novada-mcp</code> — same tool names, same key.</span>
+              <span class="zh"><span style="color:#011627;font-weight:600">无供应商锁定</span> — MCP 是开放协议。切换宿主或移至本地 <code class="pixel-code-inline">npx novada-mcp</code> 时 Agent 代码不变 — 相同工具名、相同密钥。</span>
             </span>
           </li>
         </ul>
@@ -526,7 +379,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
           <a href="https://www.novada.com/pricing" class="pixel-btn-dark">
             <span class="en">VIEW OPTIONS →</span><span class="zh">查看方案 →</span>
           </a>
-          <a href="https://www.novada.com" class="pixel-btn-dark" style="box-shadow:4px 4px 0 #16101f">
+          <a href="https://www.novada.com" class="pixel-btn-dark" style="box-shadow:4px 4px 0 #271472">
             <span class="en">ABOUT NOVADA</span><span class="zh">了解 NOVADA</span>
           </a>
         </div>
@@ -537,7 +390,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 </section>
 
 <!-- HOW USAGE IS COUNTED -->
-<section id="usage" class="pixel-section-darker py-20" style="border-top:2px solid #1e1730;border-bottom:2px solid #1e1730">
+<section id="usage" class="pixel-section-darker py-20" style="border-top:2px solid #E4DCFD;border-bottom:2px solid #E4DCFD">
   <div class="pixel-container">
     <div class="text-center mb-14">
       <p class="pixel-eyebrow mb-4">[ RULES ]</p>
@@ -555,7 +408,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <!-- Rule 1 -->
       <div class="pixel-card p-6">
         <span class="pixel-rule-num mb-4">1</span>
-        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#f2ecff;line-height:1.5">
+        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
           <span class="en">1 TOOL CALL = 1 UNIT</span>
           <span class="zh">1 次调用 = 1 单位</span>
         </h3>
@@ -568,7 +421,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <!-- Rule 2 -->
       <div class="pixel-card p-6">
         <span class="pixel-rule-num mb-4">2</span>
-        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#f2ecff;line-height:1.5">
+        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
           <span class="en">QUOTA = PER TOKEN, MONTHLY</span>
           <span class="zh">配额按 TOKEN 每月重置</span>
         </h3>
@@ -581,7 +434,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <!-- Rule 3 -->
       <div class="pixel-card p-6">
         <span class="pixel-rule-num mb-4">3</span>
-        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#f2ecff;line-height:1.5">
+        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
           <span class="en">BROWSER TOOLS = 0 QUOTA</span>
           <span class="zh">浏览器工具不占配额</span>
         </h3>
@@ -594,7 +447,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <!-- Rule 4 -->
       <div class="pixel-card p-6">
         <span class="pixel-rule-num mb-4">4</span>
-        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#f2ecff;line-height:1.5">
+        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
           <span class="en">RATE: 60 REQ / MIN / IP</span>
           <span class="zh">速率:每 IP 60 次/分钟</span>
         </h3>
@@ -644,21 +497,21 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 </section>
 
 <!-- FOOTER -->
-<footer class="py-12" style="background:#0d0d14;border-top:2px solid #6c40e2">
+<footer class="py-12" style="background:#011627;border-top:2px solid #7749F1">
   <div class="pixel-container flex flex-col md:flex-row items-center justify-between gap-6">
     <div class="flex items-center gap-3">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img-footer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[11px] text-white'}))" />
-      <span class="pixel-font text-[8px]" style="color:#9d7bff">MCP</span>
+      <span class="pixel-font text-[8px]" style="color:#424242">MCP</span>
     </div>
     <nav class="flex flex-wrap items-center justify-center gap-8">
       <a href="/#install" class="footer-link"><span class="en">INSTALL</span><span class="zh">接入</span></a>
       <a href="/tools" class="footer-link"><span class="en">TOOLS</span><span class="zh">工具</span></a>
-      <a href="/pricing" class="footer-link" style="color:#3df0ff"><span class="en">PRICING</span><span class="zh">价格</span></a>
+      <a href="/pricing" class="footer-link" style="color:#7749F1"><span class="en">PRICING</span><span class="zh">价格</span></a>
       <a href="/faq" class="footer-link">FAQ</a>
       <a href="https://github.com/NovadaLabs/novada-mcpserver" class="footer-link">GitHub</a>
       <a href="https://www.npmjs.com/package/novada-mcp" class="footer-link">npm</a>
     </nav>
-    <span class="pixel-font text-[8px]" style="color:#9d7bff">© 2026 NOVADA</span>
+    <span class="pixel-font text-[8px]" style="color:#424242">© 2026 NOVADA</span>
   </div>
 </footer>
 

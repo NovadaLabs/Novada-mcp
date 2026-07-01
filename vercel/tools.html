@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <script>
-(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();
-function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+try { localStorage.setItem('theme','light'); } catch(e) {}
+document.documentElement.setAttribute('data-theme','light');
+function toggleTheme(){}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Tools — Novada MCP</title>
@@ -37,11 +38,9 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
     theme: {
       extend: {
         colors: {
-          violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
-          ink: { DEFAULT: '#0a0818', text: '#0a0818', 800: '#110e24', 700: '#161230' },
-          slate: '#7a6faa',
-          paper: '#faf9ff',
-          'tint-cool': '#f3f0fb',
+          violet: { DEFAULT: '#7749F1', dark: '#271472', light: '#9360EF', 50: '#F5F2FF', 100: '#E4DCFD' },
+          ink: { DEFAULT: '#011627', mid: '#424242', muted: '#727082' },
+          green: '#2EBF79',
         },
         fontFamily: {
           pixel: ['"Press Start 2P"', 'monospace'],
@@ -55,28 +54,29 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 </script>
 <link rel="stylesheet" href="shared.css">
 <style>
-  /* ─── Shared pixel primitives (mirrored from index.html) ─── */
+  /* ─── Shared pixel primitives ─── */
+  body { background: #fff; color: #011627; }
   .pixel-font { font-family: 'Press Start 2P', monospace; line-height: 1.5; }
   .pixel-container { max-width: 80rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
 
   /* Announcement bar */
   .announcement-bar {
-    background: #0d0d14;
-    border-bottom: 2px solid #6c40e2;
-    color: #9d7bff;
+    background: #011627;
+    border-bottom: 2px solid #7749F1;
+    color: #E4DCFD;
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
     text-align: center;
     padding: 9px 1rem;
     letter-spacing: 0.02em;
   }
-  .announcement-bar a { color: #3df0ff; text-decoration: none; font-weight: 600; }
+  .announcement-bar a { color: #2EBF79; text-decoration: none; font-weight: 600; }
   .announcement-bar a:hover { text-decoration: underline; }
 
   /* Nav */
   .nav-bar {
-    background: rgba(13,13,20,0.92);
-    border-bottom: 2px solid #1e1730;
+    background: rgba(255,255,255,0.92);
+    border-bottom: 2px solid #E4DCFD;
     backdrop-filter: blur(8px);
     position: sticky;
     top: 0;
@@ -85,13 +85,13 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   .nav-link {
     font-family: 'Press Start 2P', monospace;
     font-size: 9px;
-    color: #9d7bff;
+    color: #424242;
     text-decoration: none;
     letter-spacing: 0.03em;
-    transition: color 0.15s, text-shadow 0.15s;
+    transition: color 0.15s;
   }
-  .nav-link:hover { color: #3df0ff; text-shadow: 0 0 8px rgba(61,240,255,0.6); }
-  .nav-link.active { color: #3df0ff; }
+  .nav-link:hover { color: #7749F1; }
+  .nav-link.active { color: #7749F1; }
   .logo-img { height: 26px; width: auto; }
   .logo-img-footer { height: 22px; width: auto; }
 
@@ -99,11 +99,11 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   .pixel-btn {
     font-family: 'Press Start 2P', monospace;
     font-size: 10px;
-    color: #0d0d14;
-    background: #3df0ff;
+    color: #fff;
+    background: #7749F1;
     padding: 14px 20px;
-    border: 2px solid #0d0d14;
-    box-shadow: 4px 4px 0 #6c40e2;
+    border: 2px solid #271472;
+    box-shadow: 4px 4px 0 #271472;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -111,107 +111,99 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
     transition: transform 0.08s, box-shadow 0.08s;
     letter-spacing: 0.02em;
   }
-  .pixel-btn:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #6c40e2; }
-  .pixel-btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #6c40e2; }
+  .pixel-btn:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #271472; }
+  .pixel-btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #271472; }
 
   .pixel-btn-sm {
     font-family: 'Press Start 2P', monospace;
     font-size: 7px;
-    color: #e8e4f5;
-    background: #6c40e2;
+    color: #fff;
+    background: #7749F1;
     padding: 8px 14px;
-    border: 2px solid #9d7bff;
+    border: 2px solid #271472;
     cursor: pointer;
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
     text-decoration: none;
     transition: background 0.1s steps(2);
-    box-shadow: inset 2px 2px 0 #9d7bff, inset -2px -2px 0 #4a1fb0, 3px 3px 0 #0d0d14;
+    box-shadow: 3px 3px 0 #271472;
   }
-  .pixel-btn-sm:hover { background: #4a1fb0; color: #3df0ff; }
+  .pixel-btn-sm:hover { background: #9360EF; }
 
   .display-headline {
     font-family: 'Press Start 2P', monospace;
     font-size: clamp(22px, 3.6vw, 34px);
     line-height: 1.4;
-    color: #f2ecff;
-    text-shadow: 3px 3px 0 #431fd5, 6px 6px 0 rgba(61,240,255,0.25);
+    color: #011627;
+    text-shadow: 3px 3px 0 rgba(119,73,241,0.25);
   }
-  .display-headline .accent { color: #3df0ff; text-shadow: 3px 3px 0 #16101f, 0 0 18px rgba(61,240,255,0.6); }
+  .display-headline .accent { color: #7749F1; text-shadow: none; }
 
   .live-dot {
     display: inline-block;
     width: 8px; height: 8px;
-    background: #3df0ff;
-    box-shadow: 0 0 8px #3df0ff;
+    background: #2EBF79;
+    box-shadow: 0 0 8px #2EBF79;
     animation: blink-dot 1.2s steps(2) infinite;
   }
   @keyframes blink-dot { 0%,49%{opacity:1;} 50%,100%{opacity:0.25;} }
 
-  /* Hero grid + scanlines (from index) */
+  /* Hero grid */
   .hero-section {
-    background:
-      radial-gradient(circle at 20% 20%, rgba(108,64,226,0.25), transparent 45%),
-      radial-gradient(circle at 85% 70%, rgba(61,240,255,0.12), transparent 40%),
-      #0a0810;
+    background: #F5F2FF;
     position: relative;
     overflow: hidden;
-    border-bottom: 2px solid #6c40e2;
+    border-bottom: 2px solid #7749F1;
   }
   .hero-section::before {
     content: '';
     position: absolute; inset: 0;
     background-image:
-      linear-gradient(rgba(108,64,226,0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(108,64,226,0.08) 1px, transparent 1px);
+      linear-gradient(rgba(119,73,241,0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(119,73,241,0.08) 1px, transparent 1px);
     background-size: 32px 32px;
     pointer-events: none; z-index: 0;
   }
-  .scanlines::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 2px, transparent 4px);
-    pointer-events: none; z-index: 2; mix-blend-mode: multiply;
-  }
+  .scanlines::after { content: none; }
 
   /* Sections */
-  .pixel-section-dark { background: #0a0810; }
-  .pixel-section-darker { background: #08060d; }
+  .pixel-section-dark { background: #fff; }
+  .pixel-section-darker { background: #F5F2FF; }
   .pixel-heading {
     font-family: 'Press Start 2P', monospace;
     font-size: clamp(14px, 2.2vw, 20px);
-    color: #f2ecff;
-    text-shadow: 2px 2px 0 #431fd5;
+    color: #011627;
+    text-shadow: 2px 2px 0 rgba(119,73,241,0.25);
   }
   .pixel-eyebrow {
     font-family: 'Press Start 2P', monospace;
     font-size: 9px;
-    color: #3df0ff;
+    color: #7749F1;
     letter-spacing: 0.04em;
   }
-  .pixel-text { font-family: 'JetBrains Mono', monospace; color: #9d7bff; }
-  .pixel-muted { color: #4a1fb0; }
-  .pixel-code-inline { font-family: 'JetBrains Mono', monospace; color: #3df0ff; }
+  .pixel-text { font-family: 'JetBrains Mono', monospace; color: #424242; }
+  .pixel-muted { color: #727082; }
+  .pixel-code-inline { font-family: 'JetBrains Mono', monospace; color: #7749F1; }
 
   /* Pixel card (tool card) */
   .pixel-card {
-    background: #100c1a;
-    border: 2px solid #6c40e2;
-    box-shadow: 6px 6px 0 rgba(67,31,213,0.55);
+    background: #fff;
+    border: 2px solid #7749F1;
+    box-shadow: 4px 4px 0 #271472;
     transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s;
   }
   .pixel-card:hover {
     transform: translate(-3px,-3px);
-    border-color: #3df0ff;
-    box-shadow: 9px 9px 0 rgba(61,240,255,0.35);
+    border-color: #9360EF;
+    box-shadow: 7px 7px 0 #271472;
   }
 
-  /* Tool name — bright cyan pixel label */
+  /* Tool name — violet pixel label */
   .tool-slug {
     font-family: 'Press Start 2P', monospace;
     font-size: 10px;
-    color: #3df0ff;
+    color: #7749F1;
     letter-spacing: 0.01em;
     word-break: break-all;
   }
@@ -225,62 +217,62 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
     border: 2px solid;
     margin-bottom: 12px;
   }
-  .rarity-common   { color: #9d7bff; border-color: #4a1fb0; background: #16101f; }
-  .rarity-rare     { color: #3df0ff; border-color: #1e6a80; background: #0c1a20; }
-  .rarity-epic     { color: #c9b4fb; border-color: #6c40e2; background: #1a0f35; }
-  .rarity-legendary{ color: #ffd76a; border-color: #b45309; background: #221604; }
+  .rarity-common   { color: #727082; border-color: #727082; background: #F5F2FF; }
+  .rarity-rare     { color: #2EBF79; border-color: #2EBF79; background: #EAF9F1; }
+  .rarity-epic     { color: #7749F1; border-color: #7749F1; background: #F5F2FF; }
+  .rarity-legendary{ color: #b45309; border-color: #b45309; background: #FFF7E6; }
 
   /* "Use when" tip line */
   .use-when {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    color: #4a1fb0;
+    color: #727082;
     line-height: 1.5;
   }
-  .use-when b { color: #9d7bff; font-weight: 600; }
+  .use-when b { color: #424242; font-weight: 600; }
 
-  .tool-desc { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #e8e4f5; line-height: 1.6; }
+  .tool-desc { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #011627; line-height: 1.6; }
   .tool-desc code, .pixel-inline-code {
-    font-family: 'JetBrains Mono', monospace; color: #3df0ff;
-    background: rgba(61,240,255,0.08); padding: 1px 5px; border-radius: 3px; font-size: 12px;
+    font-family: 'JetBrains Mono', monospace; color: #7749F1;
+    background: #F5F2FF; padding: 1px 5px; border-radius: 3px; font-size: 12px;
   }
 
-  /* Category eyebrow inside dark sections */
+  /* Category eyebrow */
   .cat-eyebrow {
     font-family: 'Press Start 2P', monospace;
     font-size: 9px;
-    color: #3df0ff;
+    color: #7749F1;
     letter-spacing: 0.05em;
     margin-bottom: 10px;
   }
-  .cat-count { color: #6c40e2; }
+  .cat-count { color: #727082; }
 
   /* Stat pills */
   .proof-pill {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #9d7bff;
+    color: #7749F1;
     padding: 8px 12px;
-    border: 2px solid #2a2140;
-    background: #16101f;
+    border: 2px solid #E4DCFD;
+    background: #F5F2FF;
     letter-spacing: 0.02em;
   }
 
   /* Code block (callout) */
   .code-block {
     position: relative;
-    background: #100c1a;
-    border: 2px solid #6c40e2;
-    box-shadow: 4px 4px 0 rgba(67,31,213,0.45);
+    background: #011627;
+    border: 2px solid #7749F1;
+    box-shadow: 4px 4px 0 #271472;
     padding: 18px 18px 16px;
   }
   .copy-btn {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #0d0d14;
-    background: #3df0ff;
+    color: #fff;
+    background: #7749F1;
     padding: 8px 12px;
-    border: 2px solid #0d0d14;
+    border: 2px solid #271472;
     cursor: pointer;
     transition: transform 0.08s;
     letter-spacing: 0.02em;
@@ -290,28 +282,28 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   .code-block .copy-btn { position: absolute; top: 10px; right: 10px; }
   .code-block pre.mono {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px; line-height: 1.75; color: #9d7bff;
+    font-size: 12.5px; line-height: 1.75; color: #E4DCFD;
     white-space: pre-wrap; word-break: break-word; padding-right: 70px;
   }
-  .code-block pre.mono .text-violet-200 { color: #3df0ff; }
+  .code-block pre.mono .text-violet-200 { color: #2EBF79; }
 
   /* Local-only warning card */
   .warn-card {
-    background: #221604;
+    background: #FFF7E6;
     border: 2px solid #b45309;
-    box-shadow: 6px 6px 0 rgba(180,83,9,0.35);
+    box-shadow: 6px 6px 0 rgba(180,83,9,0.2);
   }
 
   /* Inventory table (summary) */
   .inv-cell {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
-    color: #e8e4f5;
+    color: #011627;
   }
   .inv-head {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #3df0ff;
+    color: #7749F1;
     letter-spacing: 0.04em;
     margin-bottom: 12px;
   }
@@ -320,74 +312,30 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   .footer-link {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #9d7bff;
+    color: #424242;
     text-decoration: none;
     letter-spacing: 0.02em;
     transition: color 0.15s;
   }
-  .footer-link:hover { color: #3df0ff; }
+  .footer-link:hover { color: #7749F1; }
 
   #lang-toggle {
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #9d7bff;
-    background: #16101f;
-    border: 2px solid #6c40e2;
+    color: #424242;
+    background: #F5F2FF;
+    border: 2px solid #7749F1;
     padding: 8px 10px;
     cursor: pointer;
     letter-spacing: 0.02em;
-    transition: color 0.15s;
+    box-shadow: 2px 2px 0 #271472;
+    transition: background 0.15s;
   }
-  #lang-toggle:hover { color: #3df0ff; }
-  .theme-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px; height: 34px;
-    background: #16101f;
-    border: 2px solid #2a2140;
-    color: #9d7bff;
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .theme-btn:hover { color: #3df0ff; border-color: #6c40e2; }
+  #lang-toggle:hover { background: #E4DCFD; }
+  .theme-btn { display: none; }
 
-  .icon-sun { display: none; }
-  .icon-moon { display: block; }
-  [data-theme="light"] .icon-sun { display: block; }
-  [data-theme="light"] .icon-moon { display: none; }
-
-  /* Light mode overrides */
-  [data-theme="light"] body { background: #f0eeff; color: #0d0030; }
-  [data-theme="light"] .theme-btn { background: #ede8ff; border-color: #6c40e2; color: #1a0a3d; }
-  [data-theme="light"] .announcement-bar { background: #6c40e2; color: #fff; }
-  [data-theme="light"] .hero-section { background: #f0eeff !important; }
-  [data-theme="light"] .hero-section::before,
-  [data-theme="light"] .hero-section::after { opacity: 0.3 !important; }
-  [data-theme="light"] .display-headline { color: #0d0030 !important; }
-  [data-theme="light"] .display-headline .accent { color: #6c40e2 !important; text-shadow: none !important; }
-  [data-theme="light"] .nav-link { color: #1a0a3d !important; }
-  [data-theme="light"] .nav-link:hover, [data-theme="light"] .nav-link.active { color: #6c40e2 !important; }
-  [data-theme="light"] .logo-img { filter: none !important; }
-  [data-theme="light"] .pixel-section-dark,
-  [data-theme="light"] .pixel-section-darker { background: #f0eeff !important; }
-  [data-theme="light"] .pixel-heading,
-  [data-theme="light"] .display-headline { color: #1a0a3d !important; text-shadow: 2px 2px 0 rgba(108,64,226,0.25) !important; }
-  [data-theme="light"] .pixel-card { background: #fff; border-color: #6c40e2; box-shadow: 6px 6px 0 rgba(108,64,226,0.18); }
-  [data-theme="light"] .pixel-card:hover { border-color: #431fd5; box-shadow: 9px 9px 0 rgba(108,64,226,0.28); }
-  [data-theme="light"] .tool-slug { color: #431fd5; }
-  [data-theme="light"] .tool-desc { color: #241448; }
-  [data-theme="light"] .tool-desc code, [data-theme="light"] .pixel-inline-code { color: #431fd5; background: rgba(108,64,226,0.1); }
-  [data-theme="light"] .use-when { color: #6c40e2; }
-  [data-theme="light"] .use-when b { color: #241448; }
-  [data-theme="light"] .cat-eyebrow { color: #431fd5; }
-  [data-theme="light"] .pixel-text { color: #241448; }
-  [data-theme="light"] .proof-pill { background: #ede8ff; border-color: #c9b4fb; color: #431fd5; }
-  [data-theme="light"] .inv-cell { color: #241448; }
-  [data-theme="light"] .inv-head { color: #431fd5; }
-  [data-theme="light"] .warn-card { background: #fff7e6; border-color: #b45309; box-shadow: 6px 6px 0 rgba(180,83,9,0.2); }
-
-  body { background: #08060d; }
+  .icon-sun { display: block; }
+  .icon-moon { display: none; }
 </style>
 </head>
 <body class="lang-en">
@@ -403,14 +351,14 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   <div class="pixel-container h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-3 flex-shrink-0">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[12px] text-white'}))" />
-      <span class="pixel-font text-[10px]" style="color:#9d7bff">MCP</span>
+      <span class="pixel-font text-[10px]" style="color:#7749F1">MCP</span>
     </a>
     <nav class="hidden md:flex items-center gap-6">
       <a href="/#install" class="nav-link"><span class="en">▸ INSTALL</span><span class="zh">▸ 接入</span></a>
       <a href="/tools" class="nav-link active"><span class="en">▸ TOOLS</span><span class="zh">▸ 工具</span></a>
       <a href="/pricing" class="nav-link"><span class="en">▸ PRICING</span><span class="zh">▸ 价格</span></a>
       <a href="/faq" class="nav-link">▸ FAQ</a>
-      <a href="/playground" class="nav-link" style="color:#3df0ff"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
+      <a href="/playground" class="nav-link" style="color:#2EBF79"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
     </nav>
     <div class="flex items-center gap-2.5">
       <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
@@ -418,7 +366,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
         <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
       <button id="lang-toggle" onclick="toggleLang()">中 / EN</button>
-      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="pixel-btn-sm hidden sm:inline-flex">
+      <a href="https://www.novada.com" class="pixel-btn-sm hidden sm:inline-flex">
         <span class="en">GET API KEY</span><span class="zh">获取密钥</span>
       </a>
     </div>
@@ -428,7 +376,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 <!-- HERO -->
 <section class="hero-section scanlines">
   <div class="pixel-container py-16 relative z-10 text-center">
-    <div class="pixel-font text-[9px] mb-6 flex items-center justify-center gap-2" style="color:#3df0ff">
+    <div class="pixel-font text-[9px] mb-6 flex items-center justify-center gap-2" style="color:#2EBF79">
       <span class="live-dot"></span>
       <span class="en">26 TOOLS · ONE ENDPOINT · ONE KEY</span>
       <span class="zh">26 个工具 · 一个端点 · 一把密钥</span>
@@ -437,16 +385,16 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <span class="en">[ TOOL <span class="accent">INVENTORY</span> ]</span>
       <span class="zh">[ 工具 <span class="accent">库存</span> ]</span>
     </h1>
-    <p class="mx-auto mb-8 leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#9d7bff;font-size:14px;max-width:560px">
-      <span class="en">26 tools. Each one a weapon for your agent. All callable through one endpoint — <span class="pixel-code-inline">https://mcp.novada.com/mcp</span> with your API key. See <a href="/#install" style="color:#3df0ff;text-decoration:underline">Install</a>.</span>
-      <span class="zh">26 个工具，每一个都是你的 agent 的武器。全部通过同一端点调用 — <span class="pixel-code-inline">https://mcp.novada.com/mcp</span>，搭配你的 API 密钥。查看<a href="/#install" style="color:#3df0ff;text-decoration:underline">接入指南</a>。</span>
+    <p class="mx-auto mb-8 leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#424242;font-size:14px;max-width:560px">
+      <span class="en">26 tools. Each one a weapon for your agent. All callable through one endpoint — <span class="pixel-code-inline">https://mcp.novada.com/mcp</span> with your API key. See <a href="/#install" style="color:#7749F1;text-decoration:underline">Install</a>.</span>
+      <span class="zh">26 个工具，每一个都是你的 agent 的武器。全部通过同一端点调用 — <span class="pixel-code-inline">https://mcp.novada.com/mcp</span>，搭配你的 API 密钥。查看<a href="/#install" style="color:#7749F1;text-decoration:underline">接入指南</a>。</span>
     </p>
     <!-- stat pills -->
     <div class="flex flex-wrap justify-center gap-3">
       <span class="proof-pill">9 DATA</span>
       <span class="proof-pill">3 ASYNC</span>
       <span class="proof-pill">7 PROXY</span>
-      <span class="proof-pill" style="color:#ffd76a;border-color:#b45309">2 LOCAL</span>
+      <span class="proof-pill" style="color:#b45309;border-color:#b45309">2 LOCAL</span>
     </div>
   </div>
 </section>
@@ -831,8 +779,8 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       </div>
     </div>
     <!-- proxy product pills -->
-    <div class="flex flex-wrap gap-2 items-center" style="border:2px solid #2a2140;background:#16101f;padding:16px">
-      <span class="pixel-font text-[8px]" style="color:#3df0ff;margin-right:6px">
+    <div class="flex flex-wrap gap-2 items-center" style="border:2px solid #E4DCFD;background:#F5F2FF;padding:16px">
+      <span class="pixel-font text-[8px]" style="color:#7749F1;margin-right:6px">
         <span class="en">PRODUCTS:</span><span class="zh">产品:</span>
       </span>
       <span class="proof-pill">residential</span>
@@ -841,7 +789,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <span class="proof-pill">dedicated</span>
       <span class="proof-pill">static</span>
       <span class="proof-pill">mobile</span>
-      <span class="proof-pill" style="color:#3df0ff;border-color:#1e6a80">universal</span>
+      <span class="proof-pill" style="color:#2EBF79;border-color:#2EBF79">universal</span>
     </div>
   </div>
 </section>
@@ -849,7 +797,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 <!-- ═══ BROWSER (LOCAL-ONLY) ═══ -->
 <section class="pixel-section-darker py-16">
   <div class="pixel-container">
-    <div class="cat-eyebrow" style="color:#ffd76a">▸ BROWSER — LOCAL MCP ONLY <span class="cat-count" style="color:#b45309">×2</span></div>
+    <div class="cat-eyebrow" style="color:#b45309">▸ BROWSER — LOCAL MCP ONLY <span class="cat-count" style="color:#b45309">×2</span></div>
     <h2 class="pixel-heading mb-3">
       <span class="en">Browser</span><span class="zh">浏览器工具</span>
     </h2>
@@ -861,7 +809,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <!-- novada_browser -->
       <div class="pixel-card" style="padding:24px;border-color:#b45309;box-shadow:6px 6px 0 rgba(180,83,9,0.35)">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-          <div class="tool-slug" style="color:#ffd76a">novada_browser</div>
+          <div class="tool-slug" style="color:#b45309">novada_browser</div>
           <span class="rarity rarity-legendary" style="margin:0;flex-shrink:0">LOCAL ONLY</span>
         </div>
         <p class="tool-desc" style="margin-top:12px">
@@ -876,7 +824,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <!-- novada_browser_flow -->
       <div class="pixel-card" style="padding:24px;border-color:#b45309;box-shadow:6px 6px 0 rgba(180,83,9,0.35)">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-          <div class="tool-slug" style="color:#ffd76a">novada_browser_flow</div>
+          <div class="tool-slug" style="color:#b45309">novada_browser_flow</div>
           <span class="rarity rarity-legendary" style="margin:0;flex-shrink:0">LOCAL ONLY</span>
         </div>
         <p class="tool-desc" style="margin-top:12px">
@@ -894,11 +842,11 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
     <div class="warn-card p-6 sm:p-7 flex flex-col sm:flex-row items-start gap-5">
       <div class="text-2xl">⚠️</div>
       <div class="flex-1">
-        <h3 class="pixel-font text-[11px] mb-3" style="color:#ffd76a;line-height:1.6">
+        <h3 class="pixel-font text-[11px] mb-3" style="color:#b45309;line-height:1.6">
           <span class="en">NEED HEADLESS BROWSER TOOLS? INSTALL THE LOCAL MCP.</span>
           <span class="zh">需要无头浏览器工具？请安装本地 MCP。</span>
         </h3>
-        <p class="tool-desc mb-4" style="color:#e8b96a">
+        <p class="tool-desc mb-4" style="color:#92400e">
           <span class="en"><code>novada_browser</code> and <code>novada_browser_flow</code> return <code>501 NOT_AVAILABLE_ON_HOSTED</code> with an <code>agent_instruction</code> pointing here — Playwright doesn't run on serverless edge. Everything else runs on the hosted endpoint.</span>
           <span class="zh"><code>novada_browser</code> 与 <code>novada_browser_flow</code> 在托管端返回 <code>501 NOT_AVAILABLE_ON_HOSTED</code>，并附带 <code>agent_instruction</code> 指引到本地 — Playwright 无法在 serverless edge 运行。其他工具均可直接在托管端使用。</span>
         </p>
@@ -973,18 +921,18 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
           </ul>
         </div>
         <div>
-          <div class="inv-head" style="color:#ffd76a"><span class="en">BROWSER (LOCAL)</span><span class="zh">浏览器（本地）</span></div>
+          <div class="inv-head" style="color:#b45309"><span class="en">BROWSER (LOCAL)</span><span class="zh">浏览器（本地）</span></div>
           <ul class="space-y-2">
-            <li class="inv-cell" style="color:#e8b96a">▸ novada_browser</li>
-            <li class="inv-cell" style="color:#e8b96a">▸ novada_browser_flow</li>
+            <li class="inv-cell" style="color:#92400e">▸ novada_browser</li>
+            <li class="inv-cell" style="color:#92400e">▸ novada_browser_flow</li>
           </ul>
         </div>
         <div class="flex flex-col justify-center">
-          <div class="pixel-font" style="font-size:40px;color:#3df0ff;text-shadow:3px 3px 0 #431fd5;line-height:1;margin-bottom:10px">26</div>
+          <div class="pixel-font" style="font-size:40px;color:#7749F1;text-shadow:3px 3px 0 rgba(119,73,241,0.25);line-height:1;margin-bottom:10px">26</div>
           <div class="pixel-text" style="font-size:12px;margin-bottom:16px">
             <span class="en">TOTAL TOOLS</span><span class="zh">个工具总计</span>
           </div>
-          <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="pixel-btn" style="font-size:8px;padding:10px 14px">
+          <a href="https://www.novada.com" class="pixel-btn" style="font-size:8px;padding:10px 14px">
             <span class="en">GET API KEY →</span><span class="zh">获取密钥 →</span>
           </a>
         </div>
@@ -994,19 +942,19 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 </section>
 
 <!-- FOOTER -->
-<footer class="py-12" style="background:#0d0d14;border-top:2px solid #6c40e2">
+<footer class="py-12" style="background:#011627;border-top:2px solid #7749F1">
   <div class="pixel-container flex flex-col md:flex-row items-center justify-between gap-6">
     <div class="flex items-center gap-3">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img-footer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[11px] text-white'}))" />
-      <span class="pixel-font text-[8px]" style="color:#9d7bff">MCP</span>
+      <span class="pixel-font text-[8px]" style="color:#E4DCFD">MCP</span>
     </div>
     <nav class="flex flex-wrap items-center justify-center gap-8">
-      <a href="https://www.npmjs.com/package/novada-mcp" class="footer-link">npm</a>
-      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="footer-link">GitHub</a>
-      <a href="https://www.novada.com" class="footer-link">novada.com</a>
-      <a href="https://dashboard.novada.com" class="footer-link"><span class="en">API DASHBOARD</span><span class="zh">控制台</span></a>
+      <a href="https://www.npmjs.com/package/novada-mcp" class="footer-link" style="color:#E4DCFD">npm</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="footer-link" style="color:#E4DCFD">GitHub</a>
+      <a href="https://www.novada.com" class="footer-link" style="color:#E4DCFD">novada.com</a>
+      <a href="https://www.novada.com" class="footer-link" style="color:#E4DCFD"><span class="en">API DASHBOARD</span><span class="zh">控制台</span></a>
     </nav>
-    <span class="pixel-font text-[8px]" style="color:#9d7bff">© 2026 NOVADA</span>
+    <span class="pixel-font text-[8px]" style="color:#E4DCFD">© 2026 NOVADA</span>
   </div>
 </footer>
 
