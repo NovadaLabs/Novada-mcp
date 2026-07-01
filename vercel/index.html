@@ -444,10 +444,24 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
   [data-theme="light"] .icon-sun { display: block; }
   [data-theme="light"] .icon-moon { display: none; }
 
-  /* Light mode body override */
-  [data-theme="light"] body { background: #f5f0ff; color: #1a0a3d; }
-  [data-theme="light"] .theme-btn { background: #ede8ff; border-color: #c9b4fb; color: #4a1fb0; }
-  [data-theme="light"] .announcement-bar { background: #6c40e2; color: #e8e4f5; }
+  /* Light mode — high contrast overrides */
+  [data-theme="light"] body { background: #f0eeff; color: #0d0030; }
+  [data-theme="light"] .theme-btn { background: #ede8ff; border-color: #6c40e2; color: #1a0a3d; }
+  [data-theme="light"] .announcement-bar { background: #6c40e2; color: #fff; }
+
+  /* Force dark text on all light-mode copy */
+  [data-theme="light"] .display-headline { color: #0d0030 !important; }
+  [data-theme="light"] .display-headline .accent { color: #6c40e2 !important; text-shadow: none !important; }
+  [data-theme="light"] .hero-section { background: #f0eeff !important; }
+  /* Make grid lines much more subtle in light mode */
+  [data-theme="light"] .hero-section::before,
+  [data-theme="light"] .hero-section::after { opacity: 0.3 !important; }
+  /* Subtitle and small copy */
+  [data-theme="light"] p, [data-theme="light"] span { color: inherit; }
+  [data-theme="light"] .nav-link { color: #1a0a3d !important; }
+  [data-theme="light"] .nav-link:hover { color: #6c40e2 !important; }
+  /* Logo in light mode — keep original colors (don't invert) */
+  [data-theme="light"] .logo-img { filter: none !important; }
 
   body { background: #08060d; }
 </style>

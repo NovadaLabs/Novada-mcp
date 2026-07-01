@@ -33,30 +33,60 @@
   --white:  #e8e4f5;
 }
 
-/* Light mode — "overworld/day": bright pixel, still Novada violet */
+/* Light mode — high contrast pixel "overworld/day" */
 [data-theme="light"] {
-  --void:        #ede8ff;
-  --violet:      #6c40e2;
-  --vlight:      #4a1fb0;
-  --cyan:        #0a7abf;
-  --black:       #f5f0ff;  /* bg = very light */
-  --white:       #1a0a3d;  /* text = dark */
-  --violet-deep: #9d7bff;
+  --void:        #e8e0ff;   /* card bg */
+  --violet:      #6c40e2;   /* primary — same */
+  --vlight:      #431fd5;   /* darker violet for contrast */
+  --cyan:        #0066cc;   /* dark blue for readability */
+  --black:       #f0eeff;   /* page bg — very light */
+  --white:       #0d0030;   /* text — near black, max contrast */
+  --violet-deep: #4a1fb0;
 }
 [data-theme="light"] html,
-[data-theme="light"] body  { background: #f5f0ff; color: #1a0a3d; }
-[data-theme="light"] .nav-bar { background: rgba(237,232,255,0.96) !important; border-color: #6c40e2 !important; }
-[data-theme="light"] .nav-link { color: #4a1fb0 !important; }
+[data-theme="light"] body { background: #f0eeff; color: #0d0030; }
+
+/* Nav */
+[data-theme="light"] .nav-bar { background: rgba(240,238,255,0.97) !important; border-color: #6c40e2 !important; }
+[data-theme="light"] .nav-link { color: #0d0030 !important; }
 [data-theme="light"] .nav-link:hover { color: #6c40e2 !important; }
-[data-theme="light"] .hero-section { background: #f5f0ff !important; }
-[data-theme="light"] .pixel-card { background: #ede8ff; box-shadow: inset 3px 3px 0 0 #c9b4fb, inset -3px -3px 0 0 #9d7bff, 0 0 0 2px #6c40e2; }
-[data-theme="light"] .hotbar-slot { background: #e3daff; box-shadow: inset 3px 3px 0 0 #c9b4fb, inset -3px -3px 0 0 #9d7bff, 0 0 0 3px #6c40e2; }
+
+/* Hero */
+[data-theme="light"] .hero-section { background: #f0eeff !important; }
+/* Reduce grid opacity in light mode */
+[data-theme="light"] .hero-section::after { opacity: 0.15 !important; }
+
+/* Headlines — dark for max contrast */
+[data-theme="light"] .display-headline { color: #0d0030 !important; text-shadow: none !important; }
+[data-theme="light"] .display-headline .accent { color: #6c40e2 !important; text-shadow: none !important; }
+
+/* Hotbar */
+[data-theme="light"] .hotbar-slot { background: #ddd5ff; box-shadow: inset 3px 3px 0 0 #c9b4fb, inset -3px -3px 0 0 #9d7bff, 0 0 0 3px #6c40e2; }
+[data-theme="light"] .hotbar-slot .slot-key { color: #1a0a3d; }
 [data-theme="light"] .hotbar-slot:hover { background: #6c40e2; }
-[data-theme="light"] .code-block { background: #1a0a3d; } /* always dark for readability */
-[data-theme="light"] footer { background: #ede8ff; border-top: 2px solid #6c40e2; color: #4a1fb0; }
-[data-theme="light"] .tab-bar { background: #ede8ff; border-color: #6c40e2; }
-[data-theme="light"] .tab-btn { color: #4a1fb0; }
-[data-theme="light"] .tab-btn.active { background: #6c40e2; color: #e8e4f5; }
+
+/* Cards */
+[data-theme="light"] .pixel-card { background: #e8e0ff; box-shadow: inset 2px 2px 0 0 #c9b4fb, inset -2px -2px 0 0 #9d7bff, 0 0 0 2px #6c40e2; }
+[data-theme="light"] .glow-card  { background: #e8e0ff; border-color: #6c40e2; }
+
+/* Code blocks — always dark */
+[data-theme="light"] .code-block { background: #0d0030; }
+
+/* Tabs */
+[data-theme="light"] .tab-bar   { background: #ddd5ff; border-bottom-color: #6c40e2; }
+[data-theme="light"] .tab-btn   { color: #1a0a3d; }
+[data-theme="light"] .tab-btn.active { background: #6c40e2; color: #fff; }
+[data-theme="light"] .ftab-btn  { color: #1a0a3d; }
+[data-theme="light"] .ftab-btn.active { background: #6c40e2; color: #fff; }
+
+/* Footer */
+[data-theme="light"] footer { background: #e8e0ff !important; border-top: 2px solid #6c40e2; }
+[data-theme="light"] .footer-link { color: #1a0a3d !important; }
+[data-theme="light"] .footer-link:hover { color: #6c40e2 !important; }
+
+/* Logo — show original in light mode (don't invert) */
+[data-theme="light"] .logo-img { filter: none !important; }
+[data-theme="light"] .logo-img-footer { filter: brightness(0) !important; opacity: 0.8; }
 
 /* ----------------------------------------------------------------
    1. Global reset / overrides
