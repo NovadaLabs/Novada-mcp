@@ -114,28 +114,28 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 <body class="lang-en">
 
 <!-- HEADER -->
-<header class="sticky top-0 z-50 backdrop-blur" style="background:var(--th-nav);border-bottom:1px solid var(--th-nav-border)">
-  <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-    <a href="/" class="flex items-center gap-2.5">
-      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
-      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+<header class="nav-bar">
+  <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2.5 flex-shrink-0">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold'}))" />
+      <span class="text-[11px] font-bold tracking-wider px-2 py-1 rounded-md" style="background:rgba(108,64,226,0.1);color:var(--v)">MCP</span>
     </a>
-    <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate">
-      <a href="#install" class="hover:text-ink transition"><span class="en">Install</span><span class="zh">接入</span></a>
-      <a href="/tools" class="hover:text-ink transition"><span class="en">Tools</span><span class="zh">工具</span></a>
-      <a href="/pricing" class="hover:text-ink transition"><span class="en">Pricing</span><span class="zh">价格</span></a>
-      <a href="/faq" class="hover:text-ink transition"><span class="en">FAQ</span><span class="zh">常见问题</span></a>
-      <a href="/playground" class="text-violet font-semibold hover:text-violet-600 transition">
+    <nav class="hidden md:flex items-center gap-6 text-sm font-semibold" style="color:var(--th-ink-muted)">
+      <a href="#install" class="hover:text-ink transition-colors" style="color:inherit"><span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools" class="hover:text-ink transition-colors" style="color:inherit"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-ink transition-colors" style="color:inherit"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="hover:text-ink transition-colors" style="color:inherit"><span class="en">FAQ</span><span class="zh">常见问题</span></a>
+      <a href="/playground" class="font-bold transition-colors" style="color:var(--v)">
         <span class="en">Playground</span><span class="zh">试玩</span>
       </a>
     </nav>
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2">
       <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
         <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <button id="lang-toggle" onclick="toggleLang()" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
-      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-lg transition">
+      <button id="lang-toggle" onclick="toggleLang()" class="text-xs font-bold border px-3 py-1.5 rounded-full transition-colors" style="border-color:var(--th-card-border);color:var(--th-ink-muted)">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="btn-primary text-sm hidden sm:inline-flex">
         <span class="en">Get API key</span><span class="zh">获取密钥</span>
       </a>
     </div>
@@ -329,7 +329,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       </p>
     </div>
 
-    <div id="tabs" class="flex flex-wrap gap-2 justify-center mb-10 border border-violet/20 bg-violet/5 p-2 rounded-xl max-w-2xl mx-auto">
+    <div id="tabs" class="tab-bar justify-center mb-10 max-w-2xl mx-auto">
       <button class="tab-btn active" data-tab="claude-desktop">Claude Desktop</button>
       <button class="tab-btn" data-tab="claude-code">Claude Code</button>
       <button class="tab-btn" data-tab="cursor">Cursor</button>
@@ -498,7 +498,7 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
       </p>
     </div>
 
-    <div id="ftabs" class="flex flex-wrap gap-2 justify-center mb-10 border border-violet/20 bg-violet/5 p-2 rounded-xl max-w-xl mx-auto">
+    <div id="ftabs" class="tab-bar justify-center mb-10 max-w-xl mx-auto">
       <button class="ftab-btn active" data-ftab="langchain">LangChain</button>
       <button class="ftab-btn" data-ftab="llamaindex">LlamaIndex</button>
       <button class="ftab-btn" data-ftab="openai">OpenAI Agents</button>
@@ -663,7 +663,7 @@ params = {
   <div class="max-w-6xl mx-auto px-6">
     <div class="flex flex-col md:flex-row items-center justify-between gap-8">
       <div class="flex items-center gap-3">
-        <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-6 brightness-0 invert opacity-80" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-lg font-bold text-white'}))" />
+        <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img-footer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-lg font-bold text-white'}))" />
         <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet/10 px-2 py-1 rounded border border-violet/20">MCP</span>
       </div>
       <nav class="flex flex-wrap items-center gap-8 text-sm text-white/50">
