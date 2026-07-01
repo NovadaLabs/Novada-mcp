@@ -113,223 +113,141 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 </head>
 <body class="lang-en">
 
+<!-- ANNOUNCEMENT BAR -->
+<div class="announcement-bar">
+  <span class="en">✦ Novada MCP v0.8.9 — 8 core tools, hosted at mcp.novada.com. <a href="#install">Install in 30 seconds →</a></span>
+  <span class="zh">✦ Novada MCP v0.8.9 — 8 个核心工具,托管于 mcp.novada.com。<a href="#install">30 秒接入 →</a></span>
+</div>
+
 <!-- HEADER -->
 <header class="nav-bar">
-  <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+  <div class="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2.5 flex-shrink-0">
       <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold'}))" />
-      <span class="text-[11px] font-bold tracking-wider px-2 py-1 rounded-md" style="background:rgba(108,64,226,0.1);color:var(--v)">MCP</span>
+      <span class="text-[11px] font-bold tracking-wider px-2 py-1 rounded-md" style="background:rgba(108,64,226,0.1);color:var(--accent)">MCP</span>
     </a>
-    <nav class="hidden md:flex items-center gap-6 text-sm font-semibold" style="color:var(--th-ink-muted)">
-      <a href="#install" class="hover:text-ink transition-colors" style="color:inherit"><span class="en">Install</span><span class="zh">接入</span></a>
-      <a href="/tools" class="hover:text-ink transition-colors" style="color:inherit"><span class="en">Tools</span><span class="zh">工具</span></a>
-      <a href="/pricing" class="hover:text-ink transition-colors" style="color:inherit"><span class="en">Pricing</span><span class="zh">价格</span></a>
-      <a href="/faq" class="hover:text-ink transition-colors" style="color:inherit"><span class="en">FAQ</span><span class="zh">常见问题</span></a>
-      <a href="/playground" class="font-bold transition-colors" style="color:var(--v)">
-        <span class="en">Playground</span><span class="zh">试玩</span>
-      </a>
+    <nav class="hidden md:flex items-center gap-7">
+      <a href="#install" class="nav-link">🔧 <span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools" class="nav-link">🛠 <span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="nav-link">💰 <span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="nav-link">❓ <span class="en">FAQ</span><span class="zh">常见问题</span></a>
+      <a href="/playground" class="nav-link" style="color:var(--accent)">▶ <span class="en">Playground</span><span class="zh">试玩</span></a>
     </nav>
     <div class="flex items-center gap-2">
       <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
         <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <button id="lang-toggle" onclick="toggleLang()" class="text-xs font-bold border px-3 py-1.5 rounded-full transition-colors" style="border-color:var(--th-card-border);color:var(--th-ink-muted)">中 / EN</button>
-      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="btn-primary text-sm hidden sm:inline-flex">
+      <button id="lang-toggle" onclick="toggleLang()" class="text-xs font-bold border px-3 py-1.5 rounded-full transition-colors" style="border-color:var(--border);color:var(--ink-muted)">中 / EN</button>
+      <a href="https://www.novada.com/contact" class="btn-dark text-sm hidden lg:inline-flex" style="padding:9px 18px">
+        <span class="en">Contact Sales</span><span class="zh">联系销售</span>
+      </a>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="btn-accent text-sm hidden sm:inline-flex" style="padding:9px 18px">
         <span class="en">Get API key</span><span class="zh">获取密钥</span>
       </a>
     </div>
   </div>
 </header>
 
-<!-- HERO — full-width with side data flow panels -->
-<section class="grad-hero grid-bg" style="min-height:90vh;display:flex;align-items:center">
-  <!-- Data flow particles -->
-  <div class="data-particle"></div><div class="data-particle"></div><div class="data-particle"></div>
-  <div class="data-particle"></div><div class="data-particle"></div><div class="data-particle"></div>
-
-  <!-- Left data flow panel — floating tool names -->
-  <div class="hidden lg:block absolute left-0 top-0 bottom-0 w-64 overflow-hidden pointer-events-none z-0" style="opacity:0.4">
-    <div class="hero-side-scroll" style="animation:scroll-up 25s linear infinite">
-      <div class="font-mono text-xs leading-loose text-violet-200/40 pl-8 pt-20">
-        <div>novada_search <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ reranked: true</div>
-        <div class="mt-3">novada_extract <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ quality: 92/100</div>
-        <div class="mt-3">novada_crawl <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ pages: 12/20</div>
-        <div class="mt-3">novada_research <span class="text-yellow-400/40">→ running</span></div>
-        <div class="text-violet/30">│ sources: 8</div>
-        <div class="mt-3">novada_scrape <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ records: 47</div>
-        <div class="mt-3">novada_verify <span class="text-green-400/40">→ supported</span></div>
-        <div class="text-violet/30">│ confidence: 94</div>
-        <div class="mt-3">novada_map <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ urls: 156</div>
-        <div class="mt-3">novada_monitor <span class="text-blue-400/40">→ changed</span></div>
-        <div class="text-violet/30">│ fields: 3 diff</div>
-        <div class="mt-6">novada_search <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ reranked: true</div>
-        <div class="mt-3">novada_extract <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ quality: 88/100</div>
-        <div class="mt-3">novada_crawl <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ pages: 8/20</div>
-        <div class="mt-3">novada_research <span class="text-green-400/40">→ 200</span></div>
-        <div class="text-violet/30">│ cited: 12</div>
+<!-- HERO — Greptile-style editorial, warm gray, left-aligned -->
+<section class="hero-section">
+  <div class="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-[85vh] py-20">
+    <!-- Left: headline + copy + CTAs -->
+    <div>
+      <h1 class="display-headline">
+        <span class="en">One URL.<br><span class="grad-text">8 web-data<br>tools.</span><br>Zero install.</span>
+        <span class="zh">一个 URL。<br><span class="grad-text">8 个网络<br>数据工具。</span><br>零安装。</span>
+      </h1>
+      <p class="subtitle mt-8 mb-10">
+        <span class="en">Search, scrape, extract, crawl, research — through a single MCP endpoint. Drop into Claude, Cursor, or Codex in 30 seconds.</span>
+        <span class="zh">搜索、抓取、提取、爬取、研究 — 全部通过一个 MCP 端点。30 秒接入 Claude、Cursor、Codex。</span>
+      </p>
+      <div class="flex gap-3 flex-wrap">
+        <a href="https://www.novada.com/contact" class="btn-dark">
+          <span class="en">Contact Sales</span><span class="zh">联系销售</span>
+        </a>
+        <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="btn-accent" onclick="_track('hero_start_clicked')">
+          <span class="en">⚡ Start now — free</span><span class="zh">⚡ 立即开始 — 免费</span>
+        </a>
       </div>
+      <p class="text-xs mt-4 text-muted">
+        <span class="en">1,000 free calls/month · No credit card</span>
+        <span class="zh">每月 1,000 次免费调用 · 无需信用卡</span>
+      </p>
     </div>
-  </div>
 
-  <!-- Right data flow panel — JSON response fragments -->
-  <div class="hidden lg:block absolute right-0 top-0 bottom-0 w-64 overflow-hidden pointer-events-none z-0" style="opacity:0.35">
-    <div class="hero-side-scroll" style="animation:scroll-down 30s linear infinite">
-      <div class="font-mono text-xs leading-loose text-violet-200/40 pr-8 pt-12 text-right">
-        <div>{</div>
-        <div>&nbsp;&nbsp;"url": "example.com"</div>
-        <div>&nbsp;&nbsp;"quality": <span class="text-green-400/40">92</span></div>
-        <div>&nbsp;&nbsp;"chars": <span class="text-violet/50">47919</span></div>
-        <div>}</div>
-        <div class="mt-4">{</div>
-        <div>&nbsp;&nbsp;"verdict": "<span class="text-green-400/40">supported</span>"</div>
-        <div>&nbsp;&nbsp;"confidence": <span class="text-violet/50">94</span></div>
-        <div>}</div>
-        <div class="mt-4">{</div>
-        <div>&nbsp;&nbsp;"records": <span class="text-violet/50">47</span></div>
-        <div>&nbsp;&nbsp;"platform": "amazon"</div>
-        <div>&nbsp;&nbsp;"format": "json"</div>
-        <div>}</div>
-        <div class="mt-4">{</div>
-        <div>&nbsp;&nbsp;"urls_found": <span class="text-violet/50">156</span></div>
-        <div>&nbsp;&nbsp;"sitemap": <span class="text-green-400/40">true</span></div>
-        <div>}</div>
-        <div class="mt-4">{</div>
-        <div>&nbsp;&nbsp;"results": <span class="text-violet/50">10</span></div>
-        <div>&nbsp;&nbsp;"engine": "google"</div>
-        <div>&nbsp;&nbsp;"reranked": <span class="text-green-400/40">true</span></div>
-        <div>}</div>
-        <div class="mt-4">{</div>
-        <div>&nbsp;&nbsp;"sources": <span class="text-violet/50">8</span></div>
-        <div>&nbsp;&nbsp;"report": "ready"</div>
-        <div>&nbsp;&nbsp;"citations": <span class="text-violet/50">12</span></div>
-        <div>}</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Center content -->
-  <div class="w-full max-w-6xl mx-auto px-6 py-24 relative z-10">
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-      <!-- Left: headline + buttons -->
-      <div class="lg:col-span-7 text-center lg:text-left">
-        <div class="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full border border-violet/20 bg-violet/5 text-xs font-semibold text-violet-200">
+    <!-- Right: clean terminal card — tools/list response -->
+    <div class="terminal-card">
+      <div class="terminal-head">
+        <div class="flex items-center gap-3">
+          <div class="flex gap-1.5">
+            <div class="w-2.5 h-2.5 rounded-full bg-white/15"></div>
+            <div class="w-2.5 h-2.5 rounded-full bg-white/15"></div>
+            <div class="w-2.5 h-2.5 rounded-full bg-white/15"></div>
+          </div>
+          <span class="text-[11px] font-mono tracking-wide" style="color:rgba(201,180,251,0.7)">tools/list response</span>
+        </div>
+        <div class="flex items-center gap-2">
           <span class="live-dot"></span>
-          <span class="en">Live on Vercel · 8 core tools</span>
-          <span class="zh">Vercel 部署 · 8 个核心工具</span>
+          <span class="text-[10px] font-mono" style="color:rgba(34,197,94,0.75)">LIVE</span>
         </div>
-        <h1 class="text-4xl sm:text-5xl lg:text-[3.5rem] font-extrabold tracking-tight leading-[1.08] mb-6">
-          <span class="en">One URL.<br><span class="grad-text">8 core data tools.</span><br>Zero install.</span>
-          <span class="zh">一个 URL。<br><span class="grad-text">8 个核心数据工具。</span><br>零安装。</span>
-        </h1>
-        <p class="text-lg text-slate mb-8 leading-relaxed max-w-xl">
-          <span class="en">Search, scrape, extract, crawl, map, research, verify — through a single MCP endpoint. Drop into any AI client in 30 seconds.</span>
-          <span class="zh">搜索、抓取、提取、爬取、站点地图、研究、验证 — 全部通过一个 MCP 端点。30 秒接入任意 AI 客户端。</span>
-        </p>
-        <div class="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-4">
-          <a href="cursor://anysphere.cursor-deeplink/mcp/install?name=novada&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.novada.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20YOUR_API_KEY%22%7D%7D" class="btn-primary text-sm" onclick="_track('install_cursor_clicked')">
-            <span class="en">⚡ Install in Cursor</span><span class="zh">⚡ 安装到 Cursor</span>
-          </a>
-          <a href="vscode://anysphere.cursor-deeplink/mcp/install?name=novada&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.novada.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20YOUR_API_KEY%22%7D%7D" class="btn-secondary text-sm" onclick="_track('install_vscode_clicked')">
-            <span class="en">Install in VS Code</span><span class="zh">安装到 VS Code</span>
-          </a>
-        </div>
-        <p class="text-xs text-slate/60">
-          <span class="en">1,000 free calls/month · No credit card · Claude, Cursor, Codex, Cline, Windsurf</span>
-          <span class="zh">每月 1,000 次免费调用 · 无需信用卡 · Claude、Cursor、Codex、Cline、Windsurf</span>
-        </p>
       </div>
-
-      <!-- Right: API response preview — shows what the endpoint actually returns -->
-      <div class="lg:col-span-5">
-        <div class="glow-card overflow-hidden">
-          <!-- IDE-style header bar -->
-          <div class="flex items-center justify-between px-5 py-3 border-b border-violet/25" style="background:rgba(108,64,226,0.12)">
-            <div class="flex items-center gap-3">
-              <div class="flex gap-1.5">
-                <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
-                <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
-                <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
-              </div>
-              <span class="text-[11px] font-mono text-violet/60 tracking-wide">tools/list response</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="live-dot"></span>
-              <span class="text-[10px] font-mono text-green-400/60">LIVE</span>
-            </div>
-          </div>
-          <!-- Response body — looks like real JSON-RPC output -->
-          <div class="p-5 font-mono text-[12.5px] leading-[1.8]" style="background:#161230">
-            <div class="text-slate/40">// 8 core tools available</div>
-            <div class="mt-2">
-              <span class="text-violet/50">{</span> <span class="text-violet-200/70">"tools"</span><span class="text-slate/40">:</span> <span class="text-violet/50">[</span>
-            </div>
-            <div class="pl-4 mt-1 space-y-0.5">
-              <div><span class="text-green-400/70">"novada_search"</span> <span class="text-slate/30">— web search via 5 engines</span></div>
-              <div><span class="text-green-400/70">"novada_extract"</span> <span class="text-slate/30">— read content from URL</span></div>
-              <div><span class="text-green-400/70">"novada_crawl"</span> <span class="text-slate/30">— multi-page site crawl</span></div>
-              <div><span class="text-green-400/70">"novada_scrape"</span> <span class="text-slate/30">— structured platform data</span></div>
-              <div><span class="text-green-400/70">"novada_research"</span> <span class="text-slate/30">— deep multi-source analysis</span></div>
-              <div><span class="text-green-400/70">"novada_verify"</span> <span class="text-slate/30">— fact-check claims</span></div>
-              <div><span class="text-green-400/70">"novada_map"</span> <span class="text-slate/30">— discover site URLs</span></div>
-              <div><span class="text-green-400/70">"novada_monitor"</span> <span class="text-slate/30">— track page changes</span></div>
-            </div>
-            <div class="mt-1"><span class="text-violet/50">] }</span></div>
-            <div class="mt-4 pt-3 border-t border-violet/10 flex items-center justify-between">
-              <button onclick="copyText('https://mcp.novada.com/YOUR_API_KEY/mcp', this)" class="text-[11px] bg-violet/15 hover:bg-violet/30 text-violet-200/80 px-3 py-1.5 rounded-lg transition border border-violet/20 hover:border-violet/40 font-semibold">
-                <span class="en">Copy endpoint</span><span class="zh">复制端点</span>
-              </button>
-              <span class="text-[10px] text-slate/30">Streamable HTTP · JSON-RPC 2.0</span>
-            </div>
-          </div>
+      <div class="terminal-body">
+        <div style="color:rgba(226,217,255,0.35)">// 8 core tools available</div>
+        <div class="mt-2">
+          <span style="color:rgba(201,180,251,0.6)">{</span> <span style="color:rgba(201,180,251,0.85)">"tools"</span><span style="color:rgba(226,217,255,0.4)">:</span> <span style="color:rgba(201,180,251,0.6)">[</span>
         </div>
-        <!-- Stats row below -->
-        <div class="grid grid-cols-3 gap-3 mt-4">
-          <div class="text-center px-3 py-2.5 rounded-lg border border-violet/10 bg-violet/5">
-            <div class="text-lg font-bold text-violet">8</div>
-            <div class="text-[10px] text-slate/50 font-mono"><span class="en">core tools</span><span class="zh">核心工具</span></div>
-          </div>
-          <div class="text-center px-3 py-2.5 rounded-lg border border-violet/10 bg-violet/5">
-            <div class="text-lg font-bold text-violet">195+</div>
-            <div class="text-[10px] text-slate/50 font-mono"><span class="en">countries</span><span class="zh">国家覆盖</span></div>
-          </div>
-          <div class="text-center px-3 py-2.5 rounded-lg border border-violet/10 bg-violet/5">
-            <div class="text-lg font-bold text-violet">100M+</div>
-            <div class="text-[10px] text-slate/50 font-mono"><span class="en">proxy IPs</span><span class="zh">代理 IP</span></div>
-          </div>
+        <div class="pl-4 mt-1 space-y-0.5">
+          <div><span style="color:rgba(74,222,128,0.85)">"novada_search"</span> <span style="color:rgba(226,217,255,0.4)">— web search via 5 engines</span></div>
+          <div><span style="color:rgba(74,222,128,0.85)">"novada_extract"</span> <span style="color:rgba(226,217,255,0.4)">— read content from URL</span></div>
+          <div><span style="color:rgba(74,222,128,0.85)">"novada_crawl"</span> <span style="color:rgba(226,217,255,0.4)">— multi-page site crawl</span></div>
+          <div><span style="color:rgba(74,222,128,0.85)">"novada_scrape"</span> <span style="color:rgba(226,217,255,0.4)">— structured platform data</span></div>
+          <div><span style="color:rgba(74,222,128,0.85)">"novada_research"</span> <span style="color:rgba(226,217,255,0.4)">— deep multi-source analysis</span></div>
+          <div><span style="color:rgba(74,222,128,0.85)">"novada_verify"</span> <span style="color:rgba(226,217,255,0.4)">— fact-check claims</span></div>
+          <div><span style="color:rgba(74,222,128,0.85)">"novada_map"</span> <span style="color:rgba(226,217,255,0.4)">— discover site URLs</span></div>
+          <div><span style="color:rgba(74,222,128,0.85)">"novada_monitor"</span> <span style="color:rgba(226,217,255,0.4)">— track page changes</span></div>
+        </div>
+        <div class="mt-1"><span style="color:rgba(201,180,251,0.6)">] }</span></div>
+        <div class="mt-4 pt-3 flex items-center justify-between" style="border-top:1px solid rgba(108,64,226,0.15)">
+          <button onclick="copyText('https://mcp.novada.com/YOUR_API_KEY/mcp', this)" class="text-[11px] px-3 py-1.5 rounded-lg transition font-semibold" style="background:rgba(108,64,226,0.2);color:rgba(201,180,251,0.9);border:1px solid rgba(108,64,226,0.35)">
+            <span class="en">Copy endpoint</span><span class="zh">复制端点</span>
+          </button>
+          <span class="text-[10px]" style="color:rgba(226,217,255,0.3)">Streamable HTTP · JSON-RPC 2.0</span>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- NEON DIVIDER -->
-<hr class="neon-line">
+<!-- SOCIAL PROOF BAR -->
+<div class="social-proof-bar">
+  <div class="max-w-7xl mx-auto px-8 social-proof-inner">
+    <span class="label"><span class="en">Works with</span><span class="zh">兼容</span></span>
+    <span class="client-pill">Claude Desktop</span>
+    <span class="client-pill">Claude Code</span>
+    <span class="client-pill">Cursor</span>
+    <span class="client-pill">Codex</span>
+    <span class="client-pill">Cline</span>
+    <span class="client-pill">Windsurf</span>
+  </div>
+</div>
 
 <!-- INSTALL TABS -->
 <section id="install" class="py-24">
-  <div class="max-w-6xl mx-auto px-6">
-    <div class="text-center mb-14">
-      <div class="section-divider mb-6"></div>
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">
-        <span class="en"><span class="grad-text">Install in 30 seconds</span></span>
-        <span class="zh"><span class="grad-text">30 秒接入</span></span>
+  <div class="max-w-7xl mx-auto px-8">
+    <div class="mb-14 max-w-2xl">
+      <div class="section-divider mb-6" style="margin:0 0 1.5rem 0"></div>
+      <h2 class="text-3xl sm:text-4xl font-black mb-3 tracking-tight">
+        <span class="en">Install in 30 seconds</span>
+        <span class="zh">30 秒接入</span>
       </h2>
-      <p class="text-slate max-w-xl mx-auto">
-        <span class="en">Pick your client. Copy the snippet. Replace <code class="mono text-violet">YOUR_API_KEY</code> with your real key.</span>
-        <span class="zh">选择客户端,复制片段,把 <code class="mono text-violet">YOUR_API_KEY</code> 替换为你的真实密钥。</span>
+      <p style="color:var(--ink-mid)">
+        <span class="en">Pick your client. Copy the snippet. Replace <code class="mono" style="color:var(--accent)">YOUR_API_KEY</code> with your real key.</span>
+        <span class="zh">选择客户端,复制片段,把 <code class="mono" style="color:var(--accent)">YOUR_API_KEY</code> 替换为你的真实密钥。</span>
       </p>
     </div>
 
-    <div id="tabs" class="tab-bar justify-center mb-10 max-w-2xl mx-auto">
+    <div id="tabs" class="tab-bar mb-10 max-w-2xl">
       <button class="tab-btn active" data-tab="claude-desktop">Claude Desktop</button>
       <button class="tab-btn" data-tab="claude-code">Claude Code</button>
       <button class="tab-btn" data-tab="cursor">Cursor</button>
@@ -338,7 +256,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
       <button class="tab-btn" data-tab="windsurf">Windsurf</button>
     </div>
 
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-4xl">
       <!-- Claude Desktop -->
       <div class="tab-panel active" data-panel="claude-desktop">
         <p class="text-sm text-slate mb-3">
@@ -480,25 +398,23 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
   </div>
 </section>
 
-<!-- NEON DIVIDER -->
-<hr class="neon-line">
 
 <!-- AGENT FRAMEWORKS -->
-<section id="frameworks" class="py-24">
-  <div class="max-w-6xl mx-auto px-6">
-    <div class="text-center mb-14">
-      <div class="section-divider mb-6"></div>
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">
-        <span class="en"><span class="grad-text">Agent frameworks</span></span>
-        <span class="zh"><span class="grad-text">Agent 框架集成</span></span>
+<section id="frameworks" class="py-24" style="background:var(--bg-alt)">
+  <div class="max-w-7xl mx-auto px-8">
+    <div class="mb-14 max-w-2xl">
+      <div class="section-divider mb-6" style="margin:0 0 1.5rem 0"></div>
+      <h2 class="text-3xl sm:text-4xl font-black mb-3 tracking-tight">
+        <span class="en">Agent frameworks</span>
+        <span class="zh">Agent 框架集成</span>
       </h2>
-      <p class="text-slate max-w-xl mx-auto">
+      <p style="color:var(--ink-mid)">
         <span class="en">Point any MCP-aware framework at the same endpoint.</span>
         <span class="zh">让任意支持 MCP 的框架指向同一端点。</span>
       </p>
     </div>
 
-    <div id="ftabs" class="tab-bar justify-center mb-10 max-w-xl mx-auto">
+    <div id="ftabs" class="tab-bar mb-10 max-w-xl">
       <button class="ftab-btn active" data-ftab="langchain">LangChain</button>
       <button class="ftab-btn" data-ftab="llamaindex">LlamaIndex</button>
       <button class="ftab-btn" data-ftab="openai">OpenAI Agents</button>
@@ -506,7 +422,7 @@ url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_K
       <button class="ftab-btn" data-ftab="n8n">n8n</button>
     </div>
 
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-4xl">
       <!-- LangChain -->
       <div class="ftab-panel active" data-fpanel="langchain">
         <p class="text-sm text-slate mb-3">
@@ -607,46 +523,44 @@ params = {
   </div>
 </section>
 
-<!-- NEON DIVIDER -->
-<hr class="neon-line">
 
 <!-- WHY HOSTED -->
 <section class="py-24">
-  <div class="max-w-6xl mx-auto px-6">
-    <div class="text-center mb-14">
-      <div class="section-divider mb-6"></div>
-      <h2 class="text-3xl sm:text-4xl font-bold mb-3">
-        <span class="en"><span class="grad-text">Why hosted MCP?</span></span>
-        <span class="zh"><span class="grad-text">为什么用托管 MCP?</span></span>
+  <div class="max-w-7xl mx-auto px-8">
+    <div class="mb-14 max-w-2xl">
+      <div class="section-divider mb-6" style="margin:0 0 1.5rem 0"></div>
+      <h2 class="text-3xl sm:text-4xl font-black mb-3 tracking-tight">
+        <span class="en">Why hosted MCP?</span>
+        <span class="zh">为什么用托管 MCP?</span>
       </h2>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="glow-card p-8">
-        <div class="w-11 h-11 rounded-xl bg-violet/10 text-violet flex items-center justify-center mb-5" style="box-shadow:0 0 12px rgba(108,64,226,0.2)">
+      <div class="card p-8">
+        <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-5" style="background:rgba(108,64,226,0.1);color:var(--accent)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
         </div>
         <h3 class="font-bold text-lg mb-2"><span class="en">Zero install</span><span class="zh">零安装</span></h3>
-        <p class="text-sm text-slate leading-relaxed">
+        <p class="text-sm leading-relaxed" style="color:var(--ink-mid)">
           <span class="en">Just paste a URL. No npm, no env vars, no rebuilds. Works on any machine in 30 seconds.</span>
           <span class="zh">只需粘贴一个 URL,无需 npm、无需环境变量。任何机器 30 秒接入。</span>
         </p>
       </div>
-      <div class="glow-card p-8">
-        <div class="w-11 h-11 rounded-xl bg-violet/10 text-violet flex items-center justify-center mb-5" style="box-shadow:0 0 12px rgba(108,64,226,0.2)">
+      <div class="card p-8">
+        <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-5" style="background:rgba(108,64,226,0.1);color:var(--accent)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
         </div>
         <h3 class="font-bold text-lg mb-2"><span class="en">Always latest</span><span class="zh">始终最新</span></h3>
-        <p class="text-sm text-slate leading-relaxed">
+        <p class="text-sm leading-relaxed" style="color:var(--ink-mid)">
           <span class="en">Tools update server-side. New features and fixes land without a redeploy on your side.</span>
           <span class="zh">工具在服务端更新,新功能和修复无需你重新部署即可生效。</span>
         </p>
       </div>
-      <div class="glow-card p-8">
-        <div class="w-11 h-11 rounded-xl bg-violet/10 text-violet flex items-center justify-center mb-5" style="box-shadow:0 0 12px rgba(108,64,226,0.2)">
+      <div class="card p-8">
+        <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-5" style="background:rgba(108,64,226,0.1);color:var(--accent)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m13 2-3 7h7l-9 13 3-8H4l9-12Z"/></svg>
         </div>
         <h3 class="font-bold text-lg mb-2"><span class="en">Edge-deployed</span><span class="zh">边缘部署</span></h3>
-        <p class="text-sm text-slate leading-relaxed">
+        <p class="text-sm leading-relaxed" style="color:var(--ink-mid)">
           <span class="en">Runs on Vercel with global PoPs. Latency tracks the user, not the data center.</span>
           <span class="zh">运行于 Vercel,具备全球节点。延迟随用户位置就近响应。</span>
         </p>
@@ -655,26 +569,23 @@ params = {
   </div>
 </section>
 
-<!-- NEON DIVIDER -->
-<hr class="neon-line">
-
 <!-- FOOTER -->
-<footer class="py-16" style="background:#08061a">
-  <div class="max-w-6xl mx-auto px-6">
+<footer class="py-16" style="background:#0E1117">
+  <div class="max-w-7xl mx-auto px-8">
     <div class="flex flex-col md:flex-row items-center justify-between gap-8">
       <div class="flex items-center gap-3">
         <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img-footer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-lg font-bold text-white'}))" />
-        <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet/10 px-2 py-1 rounded border border-violet/20">MCP</span>
+        <span class="text-[11px] font-semibold tracking-wider px-2 py-1 rounded border" style="color:#c9b4fb;background:rgba(108,64,226,0.12);border-color:rgba(108,64,226,0.25)">MCP</span>
       </div>
-      <nav class="flex flex-wrap items-center gap-8 text-sm text-white/50">
-        <a href="https://www.npmjs.com/package/novada-mcp" class="hover:text-violet transition font-mono text-xs">npm</a>
-        <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet transition font-mono text-xs">GitHub</a>
-        <a href="https://www.novada.com" class="hover:text-violet transition font-mono text-xs">novada.com</a>
-        <a href="https://dashboard.novada.com" class="hover:text-violet transition font-mono text-xs">
+      <nav class="flex flex-wrap items-center gap-8 text-sm">
+        <a href="https://www.npmjs.com/package/novada-mcp" class="transition font-mono text-xs" style="color:rgba(255,255,255,0.55)" onmouseover="this.style.color='#9863f0'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">npm</a>
+        <a href="https://github.com/NovadaLabs/novada-mcpserver" class="transition font-mono text-xs" style="color:rgba(255,255,255,0.55)" onmouseover="this.style.color='#9863f0'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">GitHub</a>
+        <a href="https://www.novada.com" class="transition font-mono text-xs" style="color:rgba(255,255,255,0.55)" onmouseover="this.style.color='#9863f0'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">novada.com</a>
+        <a href="https://dashboard.novada.com" class="transition font-mono text-xs" style="color:rgba(255,255,255,0.55)" onmouseover="this.style.color='#9863f0'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">
           <span class="en">dashboard</span><span class="zh">控制台</span>
         </a>
       </nav>
-      <div class="text-xs text-white/25 font-mono">
+      <div class="text-xs font-mono" style="color:rgba(255,255,255,0.28)">
         &copy; 2026 Novada · <span class="en">Streamable HTTP</span><span class="zh">Streamable HTTP</span>
       </div>
     </div>
