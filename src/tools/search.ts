@@ -643,9 +643,12 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
             return { url, content: null, extract_error: rawText.slice(0, 300), ok: false, sentinel: true };
           }
 
-          // F6a: When extract_options.format==="json", JSON.parse the content and
-          // assign the parsed object (fall back to raw string if parse fails).
-          if (opts.format === "json") {
+          // F6a: When BOTH extract_options.format==="json" AND the outer params.format==="json",
+          // JSON.parse the content so extracted_content is a nested object in the JSON output.
+          // When the outer format is markdown, keep rawText as a string so the markdown renderer
+          // can push it into lines[] without producing "[object Object]" — the raw JSON text is
+          // still re-parseable by callers who want it.
+          if (opts.format === "json" && params.format === "json") {
             try {
               const parsed = JSON.parse(rawText) as unknown;
               return { url, content: parsed as Record<string, unknown>, ok: true, sentinel: false };
@@ -847,7 +850,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
     if (r.published || r.date) lines.push(`published: ${r.published || r.date}`);
     lines.push(cleanSnippet);
-    const rExt = r as NovadaSearchResult & { extracted_content?: string | null; extract_error?: string };
+    // extracted_content is always a string here (markdown path): either raw text, raw JSON string,
+    // or null. The cast reflects this — the object case only arises in the JSON output path above.
+    const rExt = r as NovadaSearchResult & { extracted_content?: string | null; extract_error?: string; within_time_range?: boolean | null };
     if (rExt.extracted_content != null) {
       lines.push(`extracted_content:`);
       lines.push(rExt.extracted_content);
@@ -855,7 +860,17 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     if (rExt.extract_error) {
       lines.push(`extract_error: ${rExt.extract_error}`);
     }
+    // F15: render per-result freshness annotation in markdown when time_range is active
+    if (params.time_range && rExt.within_time_range !== undefined) {
+      lines.push(`within_time_range: ${rExt.within_time_range}`);
+    }
     lines.push("");
+  }
+
+  // F15: surface time_range_warning in markdown output when stale results were returned
+  if (outOfWindowCount > 0) {
+    lines.push(`time_range_warning: ${outOfWindowCount} of ${reranked.length} results fall outside the requested time_range — upstream freshness filter is best-effort`);
+    lines.push(``);
   }
 
   lines.push(`---`);
