@@ -335,3 +335,181 @@ describe("D1: full-trailer realistic mock — trailer changes must not affect ha
     expect(r2.status).toBe("changed");
   });
 });
+
+// ─── D1-followon: body-internal `---` must not spoof the header/body boundary ──
+
+/**
+ * Build extract output where the body contains a fenced code block that embeds
+ * a bare `---` line (e.g. YAML front-matter style). Turndown preserves code
+ * fences, so this is a realistic docs-page / GitHub README scenario.
+ */
+function makeExtractWithBodyInternalSeparator(opts: {
+  fetchedAt?: string;
+  aboveSection?: string;
+  belowSection?: string;
+}): string {
+  const fetchedAt = opts.fetchedAt ?? "2026-07-02T10:00:00.000Z";
+  const aboveSection = opts.aboveSection ?? "# Configuration Guide\n\nHere is the config example:";
+  const belowSection = opts.belowSection ?? "## Usage\n\nAfter configuring, run the server.";
+
+  // Body contains a fenced code block with bare --- inside (YAML front-matter style)
+  const body = [
+    aboveSection,
+    ``,
+    "```yaml",
+    `---`,
+    `title: My Project`,
+    `version: 1.0`,
+    "```",
+    ``,
+    belowSection,
+  ].join("\n");
+
+  return [
+    `## Extracted Content`,
+    `url: https://docs.example.com/config`,
+    `mode: static | source: live | quality:72/100 (ok) | content_present:true | content_ok:true`,
+    `quality_reasons: sufficient_text_length; has_title`,
+    `fetched_at: ${fetchedAt}`,
+    `title: Configuration Guide`,
+    `chars:${body.length} | links:2`,
+    ``,
+    `---`,
+    ``,
+    `## Requested Fields`,
+    `title: Configuration Guide *(json-ld)* *(conf:0.90)*`,
+    ``,
+    `---`,
+    ``,
+    body,
+    ``,
+    `---`,
+    `## Same-Domain Links (1 of 2)`,
+    `- https://docs.example.com/usage`,
+    ``,
+    `## Agent Memory`,
+    `remember: Configuration Guide at https://docs.example.com/config — ok quality, ${body.length} chars`,
+    ``,
+    `---`,
+    `## Agent Hints`,
+    `- To discover more pages: novada_map with url="https://docs.example.com"`,
+    ``,
+    `## Agent Action`,
+    `agent_instruction: status:ok | content_ready | read_body`,
+  ].join("\n");
+}
+
+describe("D1-followon: body-internal `---` in fenced code block must not spoof header/body boundary", () => {
+  it("[axis-c] changed when content ABOVE body-internal `---` changes but below-section and trailer are identical", async () => {
+    const first = makeExtractWithBodyInternalSeparator({
+      fetchedAt: "2026-07-02T10:00:00.000Z",
+      aboveSection: "# Configuration Guide\n\nHere is the ORIGINAL config example:",
+      belowSection: "## Usage\n\nAfter configuring, run the server.",
+    });
+    const second = makeExtractWithBodyInternalSeparator({
+      fetchedAt: "2026-07-02T10:05:00.000Z",
+      aboveSection: "# Configuration Guide\n\nHere is the UPDATED config example with new details:",
+      belowSection: "## Usage\n\nAfter configuring, run the server.",
+    });
+
+    mockedExtract
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+
+    const params = validateMonitorParams({ url: "https://docs.example.com/config", fields: ["title"], format: "json" });
+
+    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r1.status).toBe("baseline_recorded");
+
+    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r2.status).toBe("changed");
+  });
+
+  it("[axis-d] unchanged when neither above-section nor below-section changes (only timestamps change)", async () => {
+    const first = makeExtractWithBodyInternalSeparator({
+      fetchedAt: "2026-07-02T10:00:00.000Z",
+      aboveSection: "# Configuration Guide\n\nHere is the config example:",
+      belowSection: "## Usage\n\nAfter configuring, run the server.",
+    });
+    const second = makeExtractWithBodyInternalSeparator({
+      fetchedAt: "2026-07-02T10:05:00.000Z",
+      aboveSection: "# Configuration Guide\n\nHere is the config example:",
+      belowSection: "## Usage\n\nAfter configuring, run the server.",
+    });
+
+    mockedExtract
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+
+    const params = validateMonitorParams({ url: "https://docs.example.com/config", fields: ["title"], format: "json" });
+
+    await novadaMonitor(params, "test-key");
+    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r2.status).toBe("unchanged");
+  });
+});
+
+describe("D1-followon-generalize: multiple body-internal `---` lines must not prevent change detection", () => {
+  it("[axis-e] changed when content between two body-internal `---` lines changes", async () => {
+    const makeBodyWith2Separators = (middleContent: string) => [
+      `# Multi-Section Doc`,
+      ``,
+      "```yaml",
+      `---`,
+      `section: first`,
+      "```",
+      ``,
+      middleContent,
+      ``,
+      "```yaml",
+      `---`,
+      `section: second`,
+      "```",
+      ``,
+      `## Conclusion`,
+      `The end.`,
+    ].join("\n");
+
+    const bodyA = makeBodyWith2Separators("Middle content: original text here.");
+    const bodyB = makeBodyWith2Separators("Middle content: CHANGED text between the two fences.");
+
+    const makeExtractWithDoubleBodySep = (body: string, fetchedAt: string) => [
+      `## Extracted Content`,
+      `url: https://docs.example.com/multi`,
+      `mode: static | source: live | quality:72/100 (ok) | content_present:true | content_ok:true`,
+      `quality_reasons: sufficient_text_length; has_title`,
+      `fetched_at: ${fetchedAt}`,
+      `title: Multi-Section Doc`,
+      `chars:${body.length} | links:1`,
+      ``,
+      `---`,
+      ``,
+      body,
+      ``,
+      `## Agent Memory`,
+      `remember: Multi-Section Doc at https://docs.example.com/multi — ok quality, ${body.length} chars`,
+      ``,
+      `---`,
+      `## Agent Hints`,
+      `- To discover more pages: novada_map with url="https://docs.example.com"`,
+      ``,
+      `## Agent Action`,
+      `agent_instruction: status:ok | content_ready | read_body`,
+    ].join("\n");
+
+    const first = makeExtractWithDoubleBodySep(bodyA, "2026-07-02T10:00:00.000Z");
+    const second = makeExtractWithDoubleBodySep(bodyB, "2026-07-02T10:05:00.000Z");
+
+    mockedExtract
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+
+    const params = validateMonitorParams({ url: "https://docs.example.com/multi", format: "json" });
+
+    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r1.status).toBe("baseline_recorded");
+
+    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r2.status).toBe("changed");
+  });
+});

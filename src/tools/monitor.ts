@@ -62,64 +62,92 @@ const TRAILER_HEADINGS = [
   "## Agent Action",
 ] as const;
 
+// Known annotation block headings that occupy the header zone of extract output.
+// A `---`-separated block is part of the header/annotation region IFF its
+// trimmed content starts with one of these headings. Once a block is found
+// whose content does NOT start with one of these, the header zone has ended
+// and the body begins right there.
+//
+// Matches (all sourced from extract.ts):
+//   ## Extracted Content  — always the first block
+//   ## Requested Fields   — optional, when fields: param is set
+//   ## Structured Data    — optional, when JSON-LD/microdata found
+// Kufer blocks (NOV-668) have no stable heading prefix and are treated as body
+// content intentionally — they appear after the last annotation --- separator
+// and before the body in practice, but their heading is dynamic. Including them
+// would over-engineer the guard; they are stable between calls.
+const ANNOTATION_BLOCK_HEADINGS = [
+  "## Extracted Content",
+  "## Requested Fields",
+  "## Structured Data",
+] as const;
+
 function stripVolatileMetadataHeader(content: string): string {
   // Strip the legacy path: /abs/path header from FIX-1
   const withoutPathHeader = content.replace(/^(?:path|📁)[^\n]*\n\n?/, "");
 
-  // Step 1 — find the end of the header/annotation section (last header-side
-  // `\n---\n` separator, i.e. the one right before the page body starts).
-  // We use `indexOf` on the HEADER side: the header always ends with a `---`
-  // followed by the first non-annotation line (the body). To handle optional
-  // blocks (## Requested Fields, ## Structured Data, Kufer), we scan from the
-  // beginning for each `---` separator and stop at the last one that is
-  // immediately followed by something that is NOT a known trailer heading.
+  // ── Step 1: anchor bodyStart to the end of the known header/annotation region ──
   //
-  // Practically: find all `\n---\n` positions and pick the last one whose
-  // content immediately after is NOT a trailer heading — that position is the
-  // header/body boundary.
+  // Strategy: walk `---`-separated blocks from the start of the string. Each
+  // block is the content between two consecutive `\n---\n` separators (or
+  // between the start and the first separator). A block is an "annotation
+  // block" if its trimmed content STARTS WITH a known ANNOTATION_BLOCK_HEADING.
+  // Advance bodyStart past each annotation-block separator. Stop at the first
+  // block that is NOT an annotation block (= the body starts there) OR at the
+  // first separator whose following content is a known trailer heading (body is
+  // empty or absent).
+  //
+  // This is robust against body-internal `---` lines (e.g. bare `---` inside
+  // a fenced code block representing YAML front-matter) because we look at the
+  // PRECEDING block's heading, not the content that follows the separator.
+  // Body content can never satisfy ANNOTATION_BLOCK_HEADINGS, so once we enter
+  // the body the scan stops — regardless of how many `---` the body contains.
   const SEP = "\n---\n";
   let bodyStart = -1;
-  let searchPos = 0;
-  while (true) {
-    const sepIdx = withoutPathHeader.indexOf(SEP, searchPos);
-    if (sepIdx === -1) break;
-    const afterSep = withoutPathHeader.slice(sepIdx + SEP.length).replace(/^\n+/, "");
-    const isTrailer = TRAILER_HEADINGS.some(h => afterSep.startsWith(h));
-    if (!isTrailer) {
-      // This separator precedes actual content (could be body or another header block)
+  let blockStart = 0; // start of the current block (character index)
+  let sepIdx = withoutPathHeader.indexOf(SEP, 0);
+
+  while (sepIdx !== -1) {
+    // Content of the block that ENDS at this separator
+    const blockContent = withoutPathHeader.slice(blockStart, sepIdx).replace(/^\n+/, "");
+    const isAnnotationBlock = ANNOTATION_BLOCK_HEADINGS.some(h => blockContent.startsWith(h));
+
+    if (isAnnotationBlock) {
+      // This separator closes an annotation block → body starts after it
       bodyStart = sepIdx + SEP.length;
+      blockStart = bodyStart;
+      sepIdx = withoutPathHeader.indexOf(SEP, blockStart);
+    } else {
+      // First non-annotation block found → the body starts at blockStart.
+      // bodyStart was already set to the correct position by the previous
+      // iteration (or remains -1 if there were no annotation separators at all).
+      break;
     }
-    searchPos = sepIdx + 1;
   }
 
-  // Step 2 — find the beginning of the trailer (first trailer heading or its
-  // preceding `---` separator). We look for the earliest `\n---\n` whose
-  // immediate successor IS a trailer heading, OR for `\n## Agent Memory\n`
-  // which is not preceded by `---` in all code paths.
+  // ── Step 2: anchor trailerStart to the FIRST known trailer heading ──
+  //
+  // Look for the earliest occurrence of any trailer heading (with or without a
+  // preceding `---` separator). We check the headings directly to avoid any
+  // dependency on separator scanning inside the body region.
   let trailerStart = withoutPathHeader.length; // default: no trailer found
 
-  // Scan `---` separators for trailer boundaries
-  searchPos = 0;
-  while (true) {
-    const sepIdx = withoutPathHeader.indexOf(SEP, searchPos);
-    if (sepIdx === -1) break;
-    const afterSep = withoutPathHeader.slice(sepIdx + SEP.length).replace(/^\n+/, "");
-    const isTrailer = TRAILER_HEADINGS.some(h => afterSep.startsWith(h));
-    if (isTrailer && sepIdx < trailerStart) {
-      trailerStart = sepIdx;
+  for (const heading of TRAILER_HEADINGS) {
+    // Headings that appear after a `---\n` separator (## Same-Domain Links,
+    // ## Extraction Diagnostics, ## Agent Hints, ## Agent Action)
+    const withSep = withoutPathHeader.indexOf(`\n---\n${heading}`);
+    if (withSep !== -1 && withSep < trailerStart) {
+      trailerStart = withSep;
     }
-    searchPos = sepIdx + 1;
-  }
-
-  // Also check for `## Agent Memory` which appears inline (no preceding `---`
-  // in all extract.ts code paths after the Extraction Diagnostics block).
-  const agentMemoryIdx = withoutPathHeader.indexOf("\n## Agent Memory\n");
-  if (agentMemoryIdx !== -1 && agentMemoryIdx < trailerStart) {
-    trailerStart = agentMemoryIdx;
+    // Headings that appear inline without a preceding separator (## Agent Memory)
+    const inline = withoutPathHeader.indexOf(`\n${heading}\n`);
+    if (inline !== -1 && inline < trailerStart) {
+      trailerStart = inline;
+    }
   }
 
   if (bodyStart !== -1) {
-    // Slice out the body: from bodyStart to trailerStart, stripping leading blank lines
+    // Slice out the body: from bodyStart to trailerStart, stripping leading/trailing blanks
     return withoutPathHeader.slice(bodyStart, trailerStart).replace(/^\n+/, "").replace(/\n+$/, "");
   }
 
