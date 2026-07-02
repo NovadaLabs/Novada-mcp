@@ -236,7 +236,10 @@ async function novadaMapInner(
     // When the underlying discovery pool is suspiciously small (< 10 URLs) AND we came
     // from sitemap discovery, the lack of search matches may be due to incomplete sitemap
     // parsing rather than the site having no matching pages. Warn accordingly. (F9 fix)
-    const discoveryLikelyIncomplete = sitemapUrls.length > 0 && discovered.length < 10;
+    // Key on sitemapScopedTotal (pre-limit) rather than discovered.length (post-limit).
+    // discovered.length may be < 10 because caller set a low limit, not because the
+    // sitemap is sparse — sitemapScopedTotal reflects the actual sitemap pool size. (F9 fix)
+    const discoveryLikelyIncomplete = sitemapUrls.length > 0 && sitemapScopedTotal < 10;
     const hints: string[] = [
       `- Remove the 'search' filter to see all ${discovered.length} discovered URLs.`,
       `- Try a broader search term or check the URL spelling.`,
@@ -290,7 +293,7 @@ async function novadaMapInner(
     lines.push(``, `## Agent Notice — Under-delivery`);
     lines.push(`requested: ${maxUrls} | returned: ${filtered.length} | shortfall: ${maxUrls - filtered.length}`);
     if (limitCappedFromSitemap) {
-      lines.push(`reason: Results capped at the requested limit (${maxUrls}); sitemap has ${sitemapScopedTotal} matching URLs in scope.`);
+      lines.push(`reason: Results capped at the requested limit (${maxUrls}); sitemap has ${sitemapScopedTotal} URLs in scope (${params.search ? `${filtered.length} match the search filter "${params.search}"` : "all in scope"}).`);
       lines.push(`next_steps: ${params.search ? `Remove 'search' filter or i` : "I"}ncrease the \`limit\` parameter to retrieve more URLs.`);
     } else {
       lines.push(`reason: Site has fewer crawlable links${params.search ? ` matching "${params.search}"` : ""} than requested.`);
@@ -301,7 +304,15 @@ async function novadaMapInner(
 
   lines.push(``);
   lines.push(`## Agent Action`);
-  lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
+  // F3 spec: only emit map_complete when the returned set is NOT a limit-capped subset of a
+  // larger discovered pool. If sitemapScopedTotal > maxUrls, we truncated; omit map_complete
+  // so agents do not incorrectly assume the full site has been enumerated.
+  const limitCappedFromSitemap = sitemapScopedTotal > maxUrls;
+  if (!limitCappedFromSitemap) {
+    lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
+  } else {
+    lines.push(`agent_instruction: map_partial urls:${filtered.length} discovered:${sitemapScopedTotal} | increase \`limit\` to retrieve more URLs | next: novada_extract to read pages`);
+  }
   return lines.join("\n");
 }
 

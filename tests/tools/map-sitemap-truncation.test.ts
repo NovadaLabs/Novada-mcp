@@ -181,6 +181,26 @@ describe("F3: sitemap — deep URLs not truncated by max_depth on sitemap branch
 
     // Should NOT say "Site has fewer crawlable links than requested" (that implies site only has 10)
     expect(result).not.toContain("Site has fewer crawlable links than requested");
+    // F3 spec: map_complete must NOT be emitted when returned (10) < discovered_total (100)
+    expect(result).not.toContain("map_complete");
+  });
+
+  it("claims map_complete when returned == discovered_total (genuinely complete small site)", async () => {
+    // Only 5 URLs in sitemap — site genuinely has 5 pages; returned=5 == discovered=5
+    const childSitemap = makeDeepUrlset("https://docs.example.com", 5);
+    const sitemapIndex = makeSitemapIndex("https://docs.example.com/sitemap-api.xml");
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: sitemapIndex, status: 200, headers: {}, config: {} as never, statusText: "OK" })
+      .mockResolvedValueOnce({ data: childSitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    const result = await novadaMap({ url: "https://docs.example.com", limit: 30, max_depth: 2 });
+
+    const numbered = result.match(/^\d+\. /gm) ?? [];
+    expect(numbered.length).toBe(5);
+    // Genuine completion: returned == discovered, so map_complete MUST be present
+    expect(result).toContain("map_complete");
   });
 });
 
@@ -221,5 +241,49 @@ describe("F9: search filter with suspiciously small discovered pool — honest h
 
     expect(result).toContain("Remove");
     expect(result).toContain("12");
+  });
+
+  it("Veto-4: under-delivery reason with search active does not say 'matching URLs' (scope vs search ambiguity)", async () => {
+    // 20 URLs in sitemap, 5 match search "endpoint", limit=3 → limitCappedFromSitemap path.
+    // The old message "sitemap has N matching URLs in scope" is ambiguous: "matching" could mean
+    // search-matched; it should read "in scope" (not "matching") to avoid confusing agents.
+    const urls20 = Array.from({ length: 15 }, (_, i) => `<url><loc>https://docs.example.com/api/endpoint/op${i}</loc></url>`)
+      .concat(Array.from({ length: 5 }, (_, i) => `<url><loc>https://docs.example.com/guides/page${i}</loc></url>`))
+      .join("\n");
+    const sitemap20 = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls20}
+</urlset>`;
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: sitemap20, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    const result = await novadaMap({ url: "https://docs.example.com", limit: 3, max_depth: 2, search: "endpoint" });
+
+    // "matching" must not appear in the under-delivery reason when search is active
+    // (it conflates scope-matched vs search-matched)
+    expect(result).not.toMatch(/sitemap has \d+ matching URLs in scope/);
+  });
+
+  it("F9 false-positive: large sitemap (100 URLs) with limit=5 should NOT warn incomplete discovery", async () => {
+    // Site has 100 URLs in sitemap, but caller only wants 5 (limit=5).
+    // The guard must key on sitemapScopedTotal (100), not discovered.length (5).
+    // discovered.length would be 5 (limit-capped), which is < 10 — old code would
+    // emit a false-positive "discovery may be incomplete" warning.
+    const childSitemap = makeDeepUrlset("https://docs.example.com", 100);
+    const sitemapIndex = makeSitemapIndex("https://docs.example.com/sitemap-api.xml");
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: sitemapIndex, status: 200, headers: {}, config: {} as never, statusText: "OK" })
+      .mockResolvedValueOnce({ data: childSitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    // Add a search that will return 0 results (all URLs are /api-reference/endpoint/opN,
+    // none match "contact")
+    const result = await novadaMap({ url: "https://docs.example.com", limit: 5, max_depth: 2, search: "contact" });
+
+    // sitemapScopedTotal=100 (>=10), so NO false-positive incomplete warning
+    expect(result).not.toMatch(/discovery.*incomplete|incomplete.*discovery|may not have found all|discovery may be limited/i);
   });
 });
