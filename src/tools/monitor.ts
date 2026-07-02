@@ -5,11 +5,12 @@ import { redactSecrets } from "../_core/errors.js";
 
 /**
  * Strip volatile metadata emitted by extract.ts before hashing so that
- * source: live→cache flips, fetched_at timestamp changes, and quality score
- * fluctuations do not produce false "changed" reports on byte-identical page bodies.
+ * source: live→cache flips, fetched_at timestamp changes, quality score
+ * fluctuations, and Requested Fields conf:/source annotation variations
+ * do not produce false "changed" reports on byte-identical page bodies.
  *
- * The extract output header block looks like:
- *   ## Extracted Content
+ * The extract output structure when fields are requested:
+ *   ## Extracted Content                       ← header block (volatile)
  *   url: <url>
  *   mode: static | source: live | quality:72/100 ...
  *   quality_reasons: ...
@@ -19,13 +20,19 @@ import { redactSecrets } from "../_core/errors.js";
  *   description: ...            (optional)
  *   chars:1234 | links:1
  *
- *   ---
+ *   ---                                        ← first separator
  *
- *   <stable page body>
+ *   ## Requested Fields                        ← annotation block (volatile:
+ *   title: Example *(json-ld)* *(conf:0.80)*     conf and source tag flip)
  *
- * We strip everything up to and including the `---` separator line so only
- * the stable page body contributes to the content hash. The same stripping
- * is also applied to the preview stored in MonitorEntry (FIX-1 extended).
+ *   ---                                        ← second separator (last)
+ *
+ *   <stable page body>                         ← only this contributes to hash
+ *
+ * C7 Fix: strip to the LAST `\n---\n` separator (not the first) so that both
+ * the header metadata AND the Requested Fields annotation block are excluded
+ * from the hashed region. Without fields, there is only one separator, and
+ * lastIndexOf behaves identically to indexOf.
  *
  * Also strips the legacy `path: /abs/path` prefix (FIX-1 original).
  */
@@ -33,14 +40,14 @@ function stripVolatileMetadataHeader(content: string): string {
   // Strip the leading path: /abs/path header from FIX-1
   const withoutPathHeader = content.replace(/^(?:path|📁)[^\n]*\n\n?/, "");
 
-  // Strip the ## Extracted Content header block up to and including `---\n`
-  // Pattern: optional `## Extracted Content\n` followed by any number of
-  // key: value header lines, then a blank line + `---` separator.
-  // We match up to the first `\n---\n` to find the separator.
-  const separatorIdx = withoutPathHeader.indexOf("\n---\n");
-  if (separatorIdx !== -1) {
-    // Return everything after the `---\n` separator (skip leading blank lines)
-    return withoutPathHeader.slice(separatorIdx + 5).replace(/^\n+/, "");
+  // C7 Fix: strip to the LAST `\n---\n` separator so the ## Requested Fields
+  // annotation block (with volatile conf: and source: tags) is also excluded.
+  // When no fields are requested there is only one separator, so lastIndexOf
+  // behaves identically to indexOf — no regression for the no-fields case.
+  const lastSepIdx = withoutPathHeader.lastIndexOf("\n---\n");
+  if (lastSepIdx !== -1) {
+    // Return everything after the last `---\n` separator (skip leading blank lines)
+    return withoutPathHeader.slice(lastSepIdx + 5).replace(/^\n+/, "");
   }
 
   // Fallback: strip individual volatile lines if no separator was found
@@ -231,12 +238,26 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
     }, apiKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return formatError(params.url, now, message);
+    return formatError(params.url, now, message, params.format);
+  }
+
+  // C8 Fix: Detect extraction failure sentinels BEFORE baselining.
+  // novadaExtract returns "## Extract Failed" / "## Extraction Error" as a
+  // string (not a throw) for certain failure modes (DNS failure, timeout, etc.).
+  // Without this guard, the error string gets hashed and stored as a baseline;
+  // a varying error message on the next call falsely reports "changed".
+  if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
+    // Surface the error text directly. The extraction already formatted a full
+    // agent-oriented error block; re-use it rather than duplicating the message.
+    const firstLine = content.split("\n").find((l) => l.startsWith("Error:") || l.startsWith("error:")) ?? "";
+    const errorMsg = firstLine ? firstLine.replace(/^[Ee]rror:\s*/, "") : "extraction returned a failure sentinel";
+    return formatError(params.url, now, errorMsg, params.format);
   }
 
   // F5: Strip volatile metadata header (mode:/source:/quality:/fetched_at: lines) from
   // extract output before hashing. Without stripping, source:live→cache flips and
   // fetched_at timestamp changes produce false "changed" reports on identical page bodies.
+  // C7 Fix: uses lastIndexOf to also strip the ## Requested Fields annotation block.
   // Also strips the legacy path: /abs/path prefix (FIX-1 original).
   const cleanContent = stripVolatileMetadataHeader(content);
 
@@ -376,7 +397,16 @@ function formatChanged(
   return lines.join("\n");
 }
 
-function formatError(url: string, timestamp: string, message: string): string {
+function formatError(url: string, timestamp: string, message: string, format: "markdown" | "json" = "markdown"): string {
+  if (format === "json") {
+    return JSON.stringify({
+      url,
+      status: "error",
+      timestamp,
+      error: message,
+      agent_instruction: "status:error | action: retry_later_or_check_url — failed to extract content from the URL. Check if the URL is accessible, then retry.",
+    }, null, 2);
+  }
   return [
     `## Monitor: Error`,
     `url: ${url}`,
