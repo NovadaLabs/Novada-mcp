@@ -34,6 +34,12 @@ export interface FieldResult {
   attempted?: string[];
   /** Non-silent guidance set only when source === "unresolved". */
   agent_instruction?: string;
+  /**
+   * Per-field health warning — set when a low-confidence pattern match was used
+   * (e.g. boilerplate text like "Category:…" was the best available match). The
+   * whole-page quality banner must not imply this field is trustworthy.
+   */
+  warning?: string;
 }
 
 /** Confidence per source — single source of truth so callers don't re-derive. */
@@ -92,6 +98,46 @@ const DESCRIPTION_PATTERNS = [
   /^(?!#)([A-Z][^.!?\n]{30,250}[.!?])\s*$/m,
   /^(?!#)([A-Z][^.!?\n]{15,200})$/m,
 ];
+
+/**
+ * Semantic fields where we look up HTML meta tags BEFORE any pattern/regex fallback.
+ * These map a requested field name (lower-cased) to the meta source key to look up.
+ */
+const SEMANTIC_META_FIELDS = new Set([
+  "description",
+  "meta description",
+]);
+
+/**
+ * Boilerplate fragments that must NEVER be returned as a description — these are category
+ * navigation links, maintenance tags, and other MediaWiki/CMS artefacts that pattern
+ * matching picks up when real meta content is absent.
+ */
+const DESCRIPTION_BOILERPLATE_RE = /^(Category:|Wikipedia:|Help:|Portal:|Template:|Special:|Talk:|User:|File:|MediaWiki:|Module:)/i;
+
+/**
+ * Additional boilerplate heuristics: nav-style short fragments that start with a link text.
+ * A real description never starts with a bare wiki-category-style "Category:..." token.
+ */
+function isDescriptionBoilerplate(value: string): boolean {
+  const trimmed = value.trim();
+  if (DESCRIPTION_BOILERPLATE_RE.test(trimmed)) return true;
+  // Also reject very short (< 20 chars) fragments that start with a category/tag-like prefix
+  if (trimmed.length < 20 && /^[A-Z][^.!?]+:/.test(trimmed)) return true;
+  return false;
+}
+
+/**
+ * Extract <meta name="description"> or <meta property="og:description"> from a parsed
+ * cheerio document. Returns an empty string when neither is present.
+ */
+function extractMetaDescriptionFrom($: CheerioAPI): string {
+  return (
+    $('meta[name="description"]').attr("content") ||
+    $('meta[property="og:description"]').attr("content") ||
+    ""
+  ).trim();
+}
 
 /** Stars/watchers — GitHub link-wrapped counts and inline formats */
 const STARS_PATTERNS = [
@@ -812,6 +858,11 @@ function resolved(field: string, value: string, source: FieldSource, attempted: 
   return { field, value, source, confidence: SOURCE_CONFIDENCE[source], attempted };
 }
 
+/** Make a resolved result with a per-field health warning (low-confidence pattern match). */
+function resolvedWithWarning(field: string, value: string, source: FieldSource, attempted: string[], warning: string): FieldResult {
+  return { field, value, source, confidence: SOURCE_CONFIDENCE[source], attempted, warning };
+}
+
 /**
  * Extract requested fields from structured data + HTML layers + markdown fallback.
  *
@@ -851,6 +902,8 @@ export function extractFields(
 
     // 1. Structured data (jsonld/meta) — exact then fuzzy key match. Try both the raw
     //    field and its canonical alias so "stock price" can hit a "price" key.
+    //    For description/meta description: also look for JSON-LD "headline" as a fallback
+    //    (e.g. Article type has headline but not description).
     attempted.push("jsonld");
     if (structuredData?.fields) {
       const sdKeys = Object.keys(structuredData.fields);
@@ -860,6 +913,28 @@ export function extractFields(
         if (fuzzy) {
           return resolved(field, structuredData.fields[fuzzy], "jsonld", attempted);
         }
+      }
+      // For description fields: also check "headline" in JSON-LD (Article type)
+      if (SEMANTIC_META_FIELDS.has(lower) && structuredData.fields["headline"]) {
+        return resolved(field, structuredData.fields["headline"], "jsonld", attempted);
+      }
+    }
+
+    // 1.5. Semantic meta-tag layer — for description/meta-description fields ONLY.
+    //
+    //  JSON-LD for some page types (e.g. WebPage, software articles, Wikipedia) does NOT
+    //  include a "description" key in extractStructuredDataFrom's output even when the HTML
+    //  carries a rich <meta name="description"> or <meta property="og:description"> tag.
+    //  Without this layer the field falls all the way to DESCRIPTION_PATTERNS which can
+    //  grab navigation/category boilerplate at the same confidence (0.60) as real content.
+    //
+    //  This layer fires BEFORE the DOM-structural layers (infobox/table/rows/microdata)
+    //  because a curated meta-description tag is always more authoritative than an infobox
+    //  value that happens to fuzzy-match "description".
+    if (SEMANTIC_META_FIELDS.has(lower) && $) {
+      const metaDesc = extractMetaDescriptionFrom($);
+      if (metaDesc) {
+        return resolved(field, metaDesc, "jsonld", attempted);
       }
     }
 
@@ -897,12 +972,33 @@ export function extractFields(
     const isPriceField = canonical === "price";
     const skipAsCartZero = (v: string): boolean => isPriceField && looksLikeZeroTotal(v);
 
+    // Whether this field is a semantic description field (description/meta description).
+    const isDescriptionField = SEMANTIC_META_FIELDS.has(lower);
+
     // 7. Known pattern matching in markdown (canonical first, then raw field key).
+    //    For description fields: reject boilerplate matches (Category:, nav text, etc.) —
+    //    emit a warning + low-confidence result rather than confidently returning garbage.
     attempted.push("pattern");
     const patterns = PATTERN_MAP[canonical] ?? PATTERN_MAP[lower];
     if (patterns) {
       const value = matchPatterns(markdown, patterns);
-      if (value && !skipAsCartZero(value)) return resolved(field, value, "pattern", attempted);
+      if (value && !skipAsCartZero(value)) {
+        if (isDescriptionField && isDescriptionBoilerplate(value)) {
+          // Boilerplate detected — do NOT return this as the description value.
+          // Fall through to let subsequent layers try; if nothing better exists,
+          // we will emit a warning-annotated low-confidence result at the bottom.
+        } else {
+          if (isDescriptionField) {
+            // Pattern-matched description without meta tags — emit a health warning so
+            // the whole-page quality banner does not imply this field is trustworthy.
+            return resolvedWithWarning(
+              field, value, "pattern", attempted,
+              `'${field}' resolved from a regex pattern match, not a structured meta source. The value may not be the canonical page description. Consider retrying with render="render" or checking the HTML <meta name="description"> tag.`
+            );
+          }
+          return resolved(field, value, "pattern", attempted);
+        }
+      }
     }
 
     // 8. Generic "field: value" / "**field**: value" inline match. `[:\s]+` also matches
@@ -916,7 +1012,13 @@ export function extractFields(
     const gm = markdown.match(genericPattern);
     if (gm?.[1]) {
       const gv = gm[1].trim().replace(/\*\*/g, "");
-      if (gv && (!isStatField || /\d/.test(gv)) && !skipAsCartZero(gv)) return resolved(field, gv, "pattern", attempted);
+      if (gv && (!isStatField || /\d/.test(gv)) && !skipAsCartZero(gv)) {
+        if (isDescriptionField && isDescriptionBoilerplate(gv)) {
+          // Boilerplate — skip, fall through
+        } else {
+          return resolved(field, gv, "pattern", attempted);
+        }
+      }
     }
 
     // 9. Tolerant labelled-value (GFM pipe, multi-space, =, en-dash). Canonical then raw.
