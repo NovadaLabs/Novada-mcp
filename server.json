@@ -6,7 +6,7 @@
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
   },
-  "version": "0.9.0",
+  "version": "0.9.1",
   "tools": [
     {
       "name": "novada_search",
@@ -110,7 +110,7 @@
     {
       "registryType": "npm",
       "identifier": "novada-mcp",
-      "version": "0.9.0",
+      "version": "0.9.1",
       "transport": {
         "type": "stdio"
       },

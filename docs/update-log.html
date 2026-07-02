@@ -146,15 +146,15 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">npm v0.9.0 · hosted v0.9.0 · 2026-07-01 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
+    <div class="sub">npm v0.9.1 · hosted v0.9.0 · 2026-07-02 · 38 tools · 14-chapter docs · 100% Firecrawl coverage</div>
     <div class="pills">
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;"><span class="zh">结构化 100%</span><span class="en">Structured 100%</span></span>
-      <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">40+ <span class="zh">工具</span><span class="en">tools</span></span>
+      <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">38 <span class="zh">工具</span><span class="en">tools</span></span>
       <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
       <span class="pill">30+ bug fixes</span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.9.0</span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.9.1</span>
       <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.9.0</span>
     </div>
   </div>
@@ -169,9 +169,33 @@
   <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
   <!-- ============================================================ -->
   <!-- ============================================================ -->
+  <!-- v0.9.1 AVAILABILITY + CONFIG + DOCS CONSISTENCY — 2026-07-02 -->
+  <!-- ============================================================ -->
+  <details class="card" open style="border-left: 4px solid var(--blue);">
+    <summary>
+      <span class="date">2026-07-02</span>
+      <span class="tag tag-fix"><span class="zh">修复 + 文档</span><span class="en">Fix + Docs</span></span>
+      <span>
+        <span class="zh">v0.9.1 — 可用性 / 配置准确性 / 安全修复 + 客户文档一致性梳理</span>
+        <span class="en">v0.9.1 — availability / config-accuracy / safety fixes + customer-docs consistency pass</span>
+      </span>
+      <span class="chip" style="background:var(--blue-light);color:var(--blue);">v0.9.1</span>
+    </summary>
+    <div class="body">
+      <ul>
+        <li><b><span class="zh">搜索</span><span class="en">Search</span></b> <span class="zh"><code>novada_search</code> 默认引擎 <code>−32001</code> 修复(两处 60s 提交超时改用 <code>TIMEOUTS.SEARCH_TOTAL_CEILING</code>)· 缓存键加入 <code>country</code>+<code>language</code>(地域/语言变体不再串用同一缓存)· 无 task_id 分支 <code>throw new Error</code> → <code>makeNovadaError(API_DOWN)</code>(带 agent_instruction)</span><span class="en"> <code>novada_search</code> default-engine <code>−32001</code> fix (two 60s submit timeouts → <code>TIMEOUTS.SEARCH_TOTAL_CEILING</code>) · cache key now includes <code>country</code>+<code>language</code> (geo/locale variants no longer collide) · no-task_id branch <code>throw new Error</code> → <code>makeNovadaError(API_DOWN)</code> (carries agent_instruction)</span></li>
+        <li><b>🔒 SSRF</b> <span class="zh"><code>novada_browser_flow</code> 手写主机正则 → 复用共享 <code>isBlockedHost</code> 白名单,堵住绕过缺口</span><span class="en"> <code>novada_browser_flow</code> hand-rolled host regex → shared <code>isBlockedHost</code> allowlist, closing a bypass gap</span></li>
+        <li><b><span class="zh">配置措辞</span><span class="en">Config wording</span></b> <span class="zh">仪表盘链接 <code>/overview/</code>(403)→ <code>/api-key/</code>(200)· <code>novada_health</code> 未激活提示改真实 URL · <code>novada_setup</code> “Status: Ready” 弱化避免过度声称</span><span class="en"> dashboard link <code>/overview/</code> (403) → <code>/api-key/</code> (200) · <code>novada_health</code> not-activated line uses a real URL · <code>novada_setup</code> “Status: Ready” softened</span></li>
+        <li><b><span class="zh">文档一致性</span><span class="en">Docs consistency</span></b> <span class="zh">移除不存在的 <code>/sse</code> 托管路由(实测 404)—— 托管鉴权统一为同一 <code>/mcp</code> 端点上的 Bearer header 或 <code>?token=</code> · 工具数全站校正为 <b>38</b> · <code>novada_unblock</code> 标注为未分组(用 <code>NOVADA_TOOLS</code> 选择)· 版本 pin 对齐已发布版</span><span class="en"> removed the non-existent <code>/sse</code> hosted route (404 in prod) — hosted auth is a Bearer header or <code>?token=</code> on the same <code>/mcp</code> endpoint · tool count corrected to <b>38</b> everywhere · <code>novada_unblock</code> documented as ungrouped (select via <code>NOVADA_TOOLS</code>) · version pins aligned to the published release</span></li>
+      </ul>
+      <div class="note"><span class="zh">承接 v0.9.0(NOV-673/674)。npm 已发布 0.9.1;托管端点版本另行部署。</span><span class="en">Follows v0.9.0 (NOV-673/674). Published to npm as 0.9.1; hosted endpoint versioned separately.</span></div>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
   <!-- v0.9.0 HARDENING + RED-TEAM CONSOLIDATION — 2026-07-01       -->
   <!-- ============================================================ -->
-  <details class="card" open style="border-left: 4px solid var(--red);">
+  <details class="card" style="border-left: 4px solid var(--red);">
     <summary>
       <span class="date">2026-07-01</span>
       <span class="tag tag-fix"><span class="zh">安全 + 契约</span><span class="en">Security + Contract</span></span>

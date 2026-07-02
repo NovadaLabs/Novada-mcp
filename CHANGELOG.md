@@ -4,6 +4,25 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.1] — 2026-07-02
+
+Availability, config-accuracy, and safety fixes (NOV-673/674 follow-up), plus a customer-docs consistency pass.
+
+### Fixed
+- **`novada_search` default-engine `-32001`**: two submit timeouts hard-coded to `60000` now use `TIMEOUTS.SEARCH_TOTAL_CEILING`, so the default engine no longer times out under the transport ceiling.
+- **`novada_search` cache correctness**: cache key now includes `country` + `language` — geo/locale variants no longer collide on a shared cached result.
+- **`novada_search` no-task_id path**: a raw `throw new Error(rawJSON)` is now `makeNovadaError(API_DOWN, …)`, so failures surface as a classified error carrying `agent_instruction`.
+- **`novada_browser_flow` SSRF guard**: replaced a hand-rolled host regex with the shared `isBlockedHost` allowlist used elsewhere, closing a bypass gap.
+
+### Changed
+- **Error / health / setup wording**: dashboard link `dashboard.novada.com/overview/` (403) → `/api-key/` (200); `novada_health` not-activated line reworded with a real activation URL; `novada_setup` "Status: Ready" softened to avoid over-claiming.
+
+### Docs
+- Removed the non-existent `/sse` hosted route from every client guide (it 404s) — hosted auth is a **Bearer header or `?token=` on the same `/mcp` endpoint**.
+- Version pins aligned to the published release; tool count corrected to **38** across all pages; `novada_unblock` documented as ungrouped (select via `NOVADA_TOOLS`).
+
+---
+
 ## [0.9.0] — 2026-07-01
 
 Consolidation release. Merges the red-team hardening campaign into a single version and supersedes the 0.8.5–0.8.10 line (NOV-578 series), which shipped to npm without individual changelog entries.
