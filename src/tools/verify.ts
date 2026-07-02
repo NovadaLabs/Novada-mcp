@@ -355,8 +355,13 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   // F7-D: Classify authority of all evidence sources for the low-authority warning.
   // A "scientific" claim is one that has hedge language (associated with / may / correlated)
   // or explicitly invokes research/study/clinical evidence language.
-  const SCIENTIFIC_CLAIM_PATTERN = /\b(study|studies|research|trial|clinical|evidence|risk|association|correlation|data|published|journal|peer[- ]review)\b/i;
-  const isScientificClaim = isHedgedClaim(claim) || SCIENTIFIC_CLAIM_PATTERN.test(claim);
+  // NOTE: bare "data" is intentionally excluded — it appears in policy/tech claims like
+  // "TikTok collects user data" which are NOT scientific and should not get the primary-
+  // literature nudge. Research-context phrases ("data shows", "the data suggest") are
+  // matched instead via the explicit SCIENTIFIC_DATA_CONTEXT_PATTERN below.
+  const SCIENTIFIC_CLAIM_PATTERN = /\b(study|studies|research|trial|clinical|evidence|risk|association|correlation|published|journal|peer[- ]review|meta[- ]analysis)\b/i;
+  const SCIENTIFIC_DATA_CONTEXT_PATTERN = /\bdata\s+(shows?|suggests?|indicates?|demonstrate|reveal|support)\b|\bthe\s+data\s+(suggest|show|indicate)\b/i;
+  const isScientificClaim = isHedgedClaim(claim) || SCIENTIFIC_CLAIM_PATTERN.test(claim) || SCIENTIFIC_DATA_CONTEXT_PATTERN.test(claim);
   const allEvidenceSources = [...relevantSupportSources, ...relevantContradictSources];
   const hasHighAuthority = allEvidenceSources.some(r =>
     classifyAuthority(r.url || r.link) === "authoritative"
