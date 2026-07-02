@@ -23,7 +23,7 @@ import {
   TOOL_CATEGORIES,
   REGISTERED_TOOL_NAMES,
 } from "../../src/tools/registry.js";
-import { novadaDiscover, validateDiscoverParams } from "../../src/tools/discover.js";
+import { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "../../src/tools/discover.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -112,5 +112,40 @@ describe("novadaDiscover output ⊆ registry (no ghosts)", () => {
 
   it("rejects an unknown category", () => {
     expect(() => validateDiscoverParams({ category: "Bogus" })).toThrow();
+  });
+});
+
+// ─── Round-3f gap tests: Auth must not appear in enum or description ──────────
+
+describe("DiscoverParamsSchema must exclude Auth (zero-entry category)", () => {
+  it("the Zod enum does NOT include Auth", () => {
+    // Extract the enum values from the Zod schema definition
+    const categoryField = DiscoverParamsSchema.shape.category;
+    // unwrap Optional → ZodEnum
+    const inner = (categoryField as unknown as { _def: { innerType: { options: string[] } } })._def.innerType;
+    const enumValues: string[] = inner.options;
+    expect(enumValues, "Auth must not be in the Zod enum — it has zero registry entries").not.toContain("Auth");
+  });
+
+  it("the .describe() string does NOT mention Auth", () => {
+    const categoryField = DiscoverParamsSchema.shape.category;
+    const description: string = (categoryField as unknown as { description: string }).description;
+    expect(description, ".describe() string must not list Auth").not.toContain("Auth");
+  });
+
+  it("Zod validation error for an invalid category does NOT hint Auth in valid values", () => {
+    let errorMsg = "";
+    try {
+      validateDiscoverParams({ category: "proxy" }); // lowercase — invalid
+    } catch (e: unknown) {
+      if (e && typeof e === "object" && "issues" in e) {
+        const issues = (e as { issues: Array<{ values?: string[] }> }).issues;
+        const validValues = issues.flatMap((i) => i.values ?? []);
+        errorMsg = validValues.join(", ");
+      }
+    }
+    expect(errorMsg, "valid-values hint in Zod error must not contain Auth").not.toContain("Auth");
+    // Must still contain at least one real category (e.g. Proxy)
+    expect(errorMsg).toContain("Proxy");
   });
 });

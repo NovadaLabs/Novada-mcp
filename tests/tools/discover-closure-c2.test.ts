@@ -1,16 +1,22 @@
 /**
- * Closure C2 — Auth circular suggestion test.
+ * Closure C2 / Round-3f — Auth must be completely absent from the Zod enum.
  *
- * When a TOOL_CATEGORIES entry ("Auth") has zero TOOL_REGISTRY entries and is
- * requested, the "valid categories" list in the response must NOT include "Auth"
- * (since retrying it will always return the same empty result — infinite loop).
+ * The root-cause fix (Round-3f): derive the DiscoverParamsSchema Zod enum from
+ * POPULATED_TOOL_CATEGORIES (categories with >= 1 registry entry), so Auth never
+ * enters the enum at all. This means:
+ *   - validateDiscoverParams({ category: "Auth" }) throws ZodError (Zod rejects it)
+ *   - The inputSchema enum does NOT contain "Auth"
+ *   - The Zod validation-error "valid values" hint does NOT contain "Auth"
+ *   - All three surfaces (enum, description, validation hint) are clean at the source.
  *
- * The fix: build the valid-categories list from TOOL_CATEGORIES filtered to
- * categories that have >= 1 registry entry.
+ * The earlier C2 runtime fix (filtering the "valid categories" string in novadaDiscover)
+ * remains intact as defence-in-depth, but is now unreachable for "Auth" since Zod
+ * rejects it before the function is ever invoked.
  */
 import { describe, it, expect } from "vitest";
-import { TOOL_REGISTRY, TOOL_CATEGORIES } from "../../src/tools/registry.js";
-import { novadaDiscover, validateDiscoverParams } from "../../src/tools/discover.js";
+import { ZodError } from "zod";
+import { TOOL_REGISTRY, TOOL_CATEGORIES, POPULATED_TOOL_CATEGORIES } from "../../src/tools/registry.js";
+import { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "../../src/tools/discover.js";
 
 describe("C2: zero-entry category (Auth) must not appear in valid-categories retry list", () => {
   it("TOOL_CATEGORIES includes Auth with 0 registry entries (pre-condition)", () => {
@@ -19,33 +25,46 @@ describe("C2: zero-entry category (Auth) must not appear in valid-categories ret
     expect(authCount).toBe(0);
   });
 
-  it("novadaDiscover(Auth) valid-categories list does NOT include 'Auth'", async () => {
-    // Auth has 0 registry entries and 0 visible entries — it falls through to the
-    // "truly empty" branch (fullRegistryCount === 0) at discover.ts:81.
-    // Before the fix, TOOL_CATEGORIES.join includes "Auth" in that message.
-    const out = await novadaDiscover(validateDiscoverParams({ category: "Auth" }));
-
-    // The message must not advertise Auth as a valid retry target
-    // Pattern: "Valid categories are: ..., Auth, ..." or ends with ", Auth."
-    expect(out).not.toMatch(/valid categories are:.*\bAuth\b/i);
+  it("POPULATED_TOOL_CATEGORIES does NOT include Auth (root-cause fix)", () => {
+    expect(POPULATED_TOOL_CATEGORIES).not.toContain("Auth");
+    // Must still include all non-empty categories
+    expect(POPULATED_TOOL_CATEGORIES).toContain("Proxy");
+    expect(POPULATED_TOOL_CATEGORIES).toContain("Content Retrieval");
   });
 
-  it("novadaDiscover(Auth) still returns the gated-vs-unknown distinction intact", async () => {
-    // It should NOT look like a gated message (Auth has 0 entries in full registry)
-    const out = await novadaDiscover(validateDiscoverParams({ category: "Auth" }));
-    expect(out).not.toMatch(/registered tool.*but none are exposed/i);
+  it("validateDiscoverParams rejects Auth — Zod throws since Auth is not in the enum", () => {
+    // Root-cause fix: Auth is no longer in the Zod enum, so it is rejected here,
+    // not at the novadaDiscover runtime layer.
+    expect(() => validateDiscoverParams({ category: "Auth" })).toThrow(ZodError);
   });
 
-  it("novadaDiscover(Auth) valid-categories list includes non-empty categories like Proxy", async () => {
-    const out = await novadaDiscover(validateDiscoverParams({ category: "Auth" }));
-    // Should still list non-empty categories
-    expect(out).toMatch(/valid categories are:.*\bProxy\b/i);
+  it("Zod validation error for 'Auth' does NOT list Auth in valid values hint", () => {
+    let validValues: string[] = [];
+    try {
+      validateDiscoverParams({ category: "Auth" });
+    } catch (e: unknown) {
+      if (e instanceof ZodError) {
+        validValues = e.issues.flatMap((i) => ("values" in i ? (i.values as string[]) : []));
+      }
+    }
+    expect(validValues, "Zod error valid-values hint must not contain Auth").not.toContain("Auth");
+    // Must still advertise real categories
+    expect(validValues).toContain("Proxy");
   });
 
-  it("novadaDiscover(Bananas) valid-categories list also does NOT include Auth", () => {
-    // validateDiscoverParams rejects unknown categories via Zod before novadaDiscover
-    // so this tests the Zod schema describe string (less critical but useful)
-    // Just verify Zod throws for truly unknown categories
-    expect(() => validateDiscoverParams({ category: "Bananas" })).toThrow();
+  it("novadaDiscover still returns the gated-vs-unknown distinction for a category that is gated", async () => {
+    // This tests the runtime branch (fullRegistryCount > 0 but no visible tools).
+    // We simulate by passing a visible set that excludes all Proxy tools, then
+    // calling novadaDiscover directly (bypassing Zod) with a Proxy params object.
+    const proxyParams = { category: "Proxy" as const };
+    const proxyTools = TOOL_REGISTRY.filter((t) => t.category === "Proxy").map((t) => t.name);
+    expect(proxyTools.length).toBeGreaterThan(0);
+    // Pass an empty visible set — Proxy tools exist in full registry but are not visible
+    const out = await novadaDiscover(proxyParams, new Set<string>());
+    expect(out).toMatch(/registered tool.*but none are exposed/i);
+  });
+
+  it("novadaDiscover(Bananas) rejects via Zod for truly unknown categories", () => {
+    expect(() => validateDiscoverParams({ category: "Bananas" })).toThrow(ZodError);
   });
 });

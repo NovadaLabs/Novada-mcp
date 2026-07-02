@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   TOOL_REGISTRY,
   TOOL_CATEGORIES,
+  POPULATED_TOOL_CATEGORIES,
   type ToolMeta,
   type ToolCategory,
 } from "./registry.js";
@@ -15,10 +16,13 @@ import {
 
 export const DiscoverParamsSchema = z.object({
   category: z
-    .enum(TOOL_CATEGORIES)
+    // Use POPULATED_TOOL_CATEGORIES (categories with >=1 registry entry) so that
+    // zero-entry placeholders like "Auth" never appear in the enum, the inputSchema
+    // description, or Zod validation-error hints shown to callers.
+    .enum(POPULATED_TOOL_CATEGORIES)
     .optional()
     .describe(
-      `Optional category filter. One of: ${TOOL_CATEGORIES.map((c) => `'${c}'`).join(", ")}. Omit to list all tools.`
+      `Optional category filter. One of: ${POPULATED_TOOL_CATEGORIES.map((c) => `'${c}'`).join(", ")}. Omit to list all tools.`
     ),
 });
 
