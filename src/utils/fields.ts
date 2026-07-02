@@ -119,12 +119,24 @@ const DESCRIPTION_BOILERPLATE_RE = /^(Category:|Wikipedia:|Help:|Portal:|Templat
 /**
  * Additional boilerplate heuristics: nav-style short fragments that start with a link text.
  * A real description never starts with a bare wiki-category-style "Category:..." token.
+ *
+ * C13: Also reject markdown-link-shaped / bracket-paren fragment values. These arise when
+ * DESCRIPTION_PATTERNS[0] matches "description" inside hyperlink text in body prose and
+ * captures the tail of a markdown link: e.g.
+ *   "[Description logic](/wiki/…)"  → captured: "logic](/wiki/…)"
+ * Any value that contains the "](" sequence is a partial markdown link fragment, not a
+ * real description. Reject it so it falls through to unresolved.
  */
 function isDescriptionBoilerplate(value: string): boolean {
   const trimmed = value.trim();
   if (DESCRIPTION_BOILERPLATE_RE.test(trimmed)) return true;
   // Also reject very short (< 20 chars) fragments that start with a category/tag-like prefix
   if (trimmed.length < 20 && /^[A-Z][^.!?]+:/.test(trimmed)) return true;
+  // C13: reject markdown link fragment values — a value with "](" is a partial link, not prose.
+  if (trimmed.includes("](")) return true;
+  // Also reject values that start with "[" (start of a link) or end with ")" following a URL
+  // pattern — these are whole markdown links that slipped through as "descriptions".
+  if (/^\[/.test(trimmed)) return true;
   return false;
 }
 
