@@ -415,17 +415,17 @@ export async function novadaResearch(
 //  STRONG_CHROME_PATTERNS — always chrome regardless of line length (no risk of false-positives
 //    on substantive text because these exact phrases never appear mid-sentence in research content)
 //  CONTEXT_SENSITIVE_PATTERNS — chrome ONLY when the line is short (< CONTEXT_LENGTH_THRESHOLD).
-//    These phrases ("sign in", "privacy policy", "terms of service") can also appear as SUBJECT
-//    MATTER in substantive sentences (OAuth docs, GDPR compliance, legal analysis). A standalone
-//    short link/list item is ≤ CONTEXT_LENGTH_THRESHOLD chars; a substantive sentence is longer.
+//    These phrases ("sign in", "privacy policy", "terms of service", "cookie consent",
+//    "cookie policy") can also appear as SUBJECT MATTER in substantive sentences
+//    (OAuth docs, GDPR compliance, ePrivacy legal analysis). A standalone short
+//    link/list item is ≤ CONTEXT_LENGTH_THRESHOLD chars; a substantive sentence is longer.
 
-const CONTEXT_LENGTH_THRESHOLD = 80; // chars; short enough to catch "Sign in", "Privacy Policy", etc.
+const CONTEXT_LENGTH_THRESHOLD = 80; // chars; short enough to catch "Sign in", "Cookie policy", etc.
 
 const STRONG_CHROME_PATTERNS: RegExp[] = [
   /\[?skip\s+to\s+(main\s+)?content\]?/i,
   /\btoggle\s+navigation\b/i,
-  /\b(cookie|cookies)\s+(settings|preferences|policy|consent|notice|banner)\b/i,
-  /\baccept\s+(all\s+)?(cookies|tracking)\b/i,
+  /\baccept\s+(all\s+)?(cookies|tracking)\b/i,  // "Accept all cookies" is purely a UI affordance
   /\bnavigation\s+menu\b/i,
   /\bopen\s+menu\b/i,
   /\bclose\s+menu\b/i,
@@ -436,6 +436,10 @@ const CONTEXT_SENSITIVE_PATTERNS: RegExp[] = [
   /\bsign\s+(in|up)\b/i,       // nav affordance on short lines; OAuth/SSO subject on long lines
   /\bprivacy\s+policy\b/i,     // footer link on short lines; GDPR subject on long lines
   /\bterms\s+(of\s+)?(service|use)\b/i, // footer link on short lines; legal subject on long lines
+  // C5 fix: cookie-consent / cookie-policy moved from STRONG_CHROME to CONTEXT_SENSITIVE so
+  // substantive GDPR/ePrivacy sentences (> CONTEXT_LENGTH_THRESHOLD chars) survive stripping,
+  // while short nav links like "Cookie settings" / "Cookie policy" are still removed.
+  /\b(cookie|cookies)\s+(settings|preferences|policy|consent|notice|banner)\b/i,
 ];
 
 /** Returns true if a line/sentence is nav or header chrome */
@@ -448,8 +452,11 @@ function isNavChromeLine(text: string): boolean {
 }
 
 /** Returns the fraction of lines in a text that match nav-chrome patterns (0–1) */
+// C14 fix: split on "\n" (same as stripNavChrome) so the 80-char CONTEXT_SENSITIVE length guard
+// is evaluated per logical line, not per sentence fragment. Splitting on /[\n.!?]+/ broke
+// multi-sentence paragraphs into sub-80-char pieces that falsely scored as chrome.
 function chromeFraction(text: string): number {
-  const lines = text.split(/[\n.!?]+/).map(l => l.trim()).filter(l => l.length > 0);
+  const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
   if (lines.length === 0) return 0;
   const chromeLines = lines.filter(isNavChromeLine).length;
   return chromeLines / lines.length;
