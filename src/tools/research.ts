@@ -409,25 +409,42 @@ export async function novadaResearch(
 }
 
 // ─── Nav-Chrome Detection ──────────────────────────────────────────────────
-// Patterns that indicate page navigation/header chrome (not substantive content)
+// Patterns that indicate page navigation/header chrome (not substantive content).
+//
+// Two classes:
+//  STRONG_CHROME_PATTERNS — always chrome regardless of line length (no risk of false-positives
+//    on substantive text because these exact phrases never appear mid-sentence in research content)
+//  CONTEXT_SENSITIVE_PATTERNS — chrome ONLY when the line is short (< CONTEXT_LENGTH_THRESHOLD).
+//    These phrases ("sign in", "privacy policy", "terms of service") can also appear as SUBJECT
+//    MATTER in substantive sentences (OAuth docs, GDPR compliance, legal analysis). A standalone
+//    short link/list item is ≤ CONTEXT_LENGTH_THRESHOLD chars; a substantive sentence is longer.
 
-const NAV_CHROME_PATTERNS: RegExp[] = [
+const CONTEXT_LENGTH_THRESHOLD = 80; // chars; short enough to catch "Sign in", "Privacy Policy", etc.
+
+const STRONG_CHROME_PATTERNS: RegExp[] = [
   /\[?skip\s+to\s+(main\s+)?content\]?/i,
-  /\bsign\s+(in|up)\b/i,
   /\btoggle\s+navigation\b/i,
   /\b(cookie|cookies)\s+(settings|preferences|policy|consent|notice|banner)\b/i,
   /\baccept\s+(all\s+)?(cookies|tracking)\b/i,
-  /\bprivacy\s+policy\b/i,
-  /\bterms\s+(of\s+)?(service|use)\b/i,
   /\bnavigation\s+menu\b/i,
   /\bopen\s+menu\b/i,
   /\bclose\s+menu\b/i,
   /^\[.*?\]\s*$/,           // lines that are entirely "[something]"
 ];
 
+const CONTEXT_SENSITIVE_PATTERNS: RegExp[] = [
+  /\bsign\s+(in|up)\b/i,       // nav affordance on short lines; OAuth/SSO subject on long lines
+  /\bprivacy\s+policy\b/i,     // footer link on short lines; GDPR subject on long lines
+  /\bterms\s+(of\s+)?(service|use)\b/i, // footer link on short lines; legal subject on long lines
+];
+
 /** Returns true if a line/sentence is nav or header chrome */
 function isNavChromeLine(text: string): boolean {
-  return NAV_CHROME_PATTERNS.some(re => re.test(text));
+  if (STRONG_CHROME_PATTERNS.some(re => re.test(text))) return true;
+  // Context-sensitive patterns: only treat as chrome when the line is a short affordance,
+  // not when the phrase is embedded in a substantive sentence.
+  if (text.length < CONTEXT_LENGTH_THRESHOLD && CONTEXT_SENSITIVE_PATTERNS.some(re => re.test(text))) return true;
+  return false;
 }
 
 /** Returns the fraction of lines in a text that match nav-chrome patterns (0–1) */
@@ -593,9 +610,11 @@ function formatResearchOutput(args: {
     ? [`**generated_queries**:`, ...args.generatedQueries.map((q, i) => `  ${i + 1}. ${q}`)]
     : [];
 
-  // F14-3: emit requested_depth and resolved_depth as separate fields for provenance
+  // F14-3: emit requested_depth and resolved_depth as separate provenance fields.
+  // Always emit both so callers can programmatically distinguish "user asked for X, got Y".
+  // When they differ (auto resolved to a concrete depth), annotate the resolution explicitly.
   const depthProvenanceLine = args.requestedDepth !== args.depth
-    ? `**requested_depth**: ${args.requestedDepth} | **resolved_depth**: ${args.depth}`
+    ? `**requested_depth**: ${args.requestedDepth} | **resolved_depth**: ${args.depth} *(auto-resolved)*`
     : `**requested_depth**: ${args.requestedDepth} | **resolved_depth**: ${args.depth}`;
 
   const lines: string[] = [

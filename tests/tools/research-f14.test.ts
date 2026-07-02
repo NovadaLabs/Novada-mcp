@@ -79,7 +79,10 @@ describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
     }
   });
 
-  it("RED: summary starting with nav chrome gets synthesis:weak status", async () => {
+  it("RED: nav-chrome-only fragment gets synthesis:weak or synthesis:failed (never synthesis:ok)", async () => {
+    // After stripping all nav-chrome lines, the fragment is empty → quality:"failed" → synthesis:failed.
+    // If somehow a non-empty but entirely chrome fragment survives, quality:"weak" → synthesis:weak.
+    // Either is correct; synthesis:ok is wrong for a nav-chrome-only source.
     const navOnlyContent = `[Skip to main content]\nSign up\nSign in\nToggle navigation\nCookie preferences`;
 
     mockedAxios.post.mockResolvedValue(
@@ -92,8 +95,6 @@ describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
       API_KEY
     );
 
-    // When fragment is >60% chrome-like, synthesis:weak must be emitted
-    // Currently emits synthesis:ok which is wrong
     expect(result).toMatch(/synthesis:(weak|failed)/);
   });
 
@@ -302,7 +303,4 @@ function extractGeneratedQueries(output: string): string[] {
   return match[1].trim().split("\n").map(line => line.replace(/^\s*\d+\.\s*/, "").trim()).filter(Boolean);
 }
 
-function extractAgentActionSection(output: string): string {
-  const match = output.match(/## Agent Action\n([\s\S]*?)(?=\n##|$)/);
-  return match ? match[1].trim() : "";
-}
+
