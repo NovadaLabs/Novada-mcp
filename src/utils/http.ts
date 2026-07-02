@@ -378,6 +378,15 @@ export async function fetchWithRender(
           }
         );
         // Response format: { code: 0, data: { code: 200, html: "...", msg, msg_detail } }
+        // F10: outer code=5001 → PRODUCT_UNAVAILABLE — short-circuit immediately, no retries.
+        // Retrying will not help: the product must be activated in the dashboard first.
+        if (resp.data?.code === 5001 || resp.data?.data?.code === 5001) {
+          throw new Error(
+            `Web Unblocker not activated (code=5001) — render/js modes unavailable on this account. ` +
+            `Activate at https://dashboard.novada.com/overview/web-unblocker/ or use render=static. ` +
+            `Retrying will not help.`
+          );
+        }
         if (resp.data?.code === 0 && resp.data?.data?.html) {
           if (!__noLog) logRequest({ tool: tool ?? "unknown", url, status: resp.data.data.code ?? resp.status, ms: Date.now() - _renderStartMs, mode: "render" });
           return { ...resp, data: resp.data.data.html };
