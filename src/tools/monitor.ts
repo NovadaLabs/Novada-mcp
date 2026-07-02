@@ -4,61 +4,137 @@ import { novadaExtract } from "./extract.js";
 import { redactSecrets } from "../_core/errors.js";
 
 /**
- * Strip volatile metadata emitted by extract.ts before hashing so that
- * source: live→cache flips, fetched_at timestamp changes, quality score
- * fluctuations, and Requested Fields conf:/source annotation variations
- * do not produce false "changed" reports on byte-identical page bodies.
+ * Extract the stable page body from novadaExtract output for change detection.
  *
- * The extract output structure when fields are requested:
- *   ## Extracted Content                       ← header block (volatile)
+ * Real extract.ts output structure (abbreviated):
+ *
+ *   ## Extracted Content                       ← volatile header block
  *   url: <url>
  *   mode: static | source: live | quality:72/100 ...
  *   quality_reasons: ...
- *   fetched_at: 2026-07-02T12:34:56.789Z
- *   extraction_quality: ...     (optional)
+ *   fetched_at: 2026-07-02T12:34:56.789Z      ← volatile
  *   title: ...
- *   description: ...            (optional)
- *   chars:1234 | links:1
+ *   chars:1234 | links:3
  *
- *   ---                                        ← first separator
+ *   ---                                        ← separator 1 (after header)
  *
- *   ## Requested Fields                        ← annotation block (volatile:
- *   title: Example *(json-ld)* *(conf:0.80)*     conf and source tag flip)
+ *   ## Requested Fields                        ← volatile (conf: / source: flip)
+ *   title: Example Domain *(json-ld)* *(conf:0.80)*
  *
- *   ---                                        ← second separator (last)
+ *   ---                                        ← separator 2 (after Req. Fields)
  *
- *   <stable page body>                         ← only this contributes to hash
+ *   <STABLE PAGE BODY>                         ← only this is hashed
  *
- * C7 Fix: strip to the LAST `\n---\n` separator (not the first) so that both
- * the header metadata AND the Requested Fields annotation block are excluded
- * from the hashed region. Without fields, there is only one separator, and
- * lastIndexOf behaves identically to indexOf.
+ *   ---                                        ← separator 3 (trailer starts)
+ *   ## Same-Domain Links                       ← trailer (volatile / structural)
+ *   ...
+ *   ---
+ *   ## Extraction Diagnostics                  ← volatile (conf: changes)
+ *   ...
+ *   ## Agent Memory                            ← volatile
+ *   ...
+ *   ---
+ *   ## Agent Hints                             ← volatile (changes per call)
+ *   ...
+ *   ## Agent Action                            ← volatile
+ *   ...
+ *
+ * D1 Fix: isolate the page body by finding the region BETWEEN the last
+ * header-side separator (after ## Requested Fields / ## Structured Data) and
+ * the first trailer section marker. The trailer is identified by the first
+ * occurrence of any of these lines: `## Same-Domain Links`, `## Extraction
+ * Diagnostics`, `## Agent Memory`, `## Agent Hints`, `## Agent Action`.
+ *
+ * When there are no trailer sections (simple/truncated output), the body
+ * extends to the end of the string — this handles the no-fields, no-links
+ * edge case correctly.
  *
  * Also strips the legacy `path: /abs/path` prefix (FIX-1 original).
  */
+
+// Trailer section headings that begin the volatile tail of extract output.
+// Order matters: check all of them to find the earliest occurrence.
+const TRAILER_HEADINGS = [
+  "## Same-Domain Links",
+  "## Extraction Diagnostics",
+  "## Agent Memory",
+  "## Agent Hints",
+  "## Agent Action",
+] as const;
+
 function stripVolatileMetadataHeader(content: string): string {
-  // Strip the leading path: /abs/path header from FIX-1
+  // Strip the legacy path: /abs/path header from FIX-1
   const withoutPathHeader = content.replace(/^(?:path|📁)[^\n]*\n\n?/, "");
 
-  // C7 Fix: strip to the LAST `\n---\n` separator so the ## Requested Fields
-  // annotation block (with volatile conf: and source: tags) is also excluded.
-  // When no fields are requested there is only one separator, so lastIndexOf
-  // behaves identically to indexOf — no regression for the no-fields case.
-  const lastSepIdx = withoutPathHeader.lastIndexOf("\n---\n");
-  if (lastSepIdx !== -1) {
-    // Return everything after the last `---\n` separator (skip leading blank lines)
-    return withoutPathHeader.slice(lastSepIdx + 5).replace(/^\n+/, "");
+  // Step 1 — find the end of the header/annotation section (last header-side
+  // `\n---\n` separator, i.e. the one right before the page body starts).
+  // We use `indexOf` on the HEADER side: the header always ends with a `---`
+  // followed by the first non-annotation line (the body). To handle optional
+  // blocks (## Requested Fields, ## Structured Data, Kufer), we scan from the
+  // beginning for each `---` separator and stop at the last one that is
+  // immediately followed by something that is NOT a known trailer heading.
+  //
+  // Practically: find all `\n---\n` positions and pick the last one whose
+  // content immediately after is NOT a trailer heading — that position is the
+  // header/body boundary.
+  const SEP = "\n---\n";
+  let bodyStart = -1;
+  let searchPos = 0;
+  while (true) {
+    const sepIdx = withoutPathHeader.indexOf(SEP, searchPos);
+    if (sepIdx === -1) break;
+    const afterSep = withoutPathHeader.slice(sepIdx + SEP.length).replace(/^\n+/, "");
+    const isTrailer = TRAILER_HEADINGS.some(h => afterSep.startsWith(h));
+    if (!isTrailer) {
+      // This separator precedes actual content (could be body or another header block)
+      bodyStart = sepIdx + SEP.length;
+    }
+    searchPos = sepIdx + 1;
   }
 
-  // Fallback: strip individual volatile lines if no separator was found
-  // (handles edge cases like truncated output)
+  // Step 2 — find the beginning of the trailer (first trailer heading or its
+  // preceding `---` separator). We look for the earliest `\n---\n` whose
+  // immediate successor IS a trailer heading, OR for `\n## Agent Memory\n`
+  // which is not preceded by `---` in all code paths.
+  let trailerStart = withoutPathHeader.length; // default: no trailer found
+
+  // Scan `---` separators for trailer boundaries
+  searchPos = 0;
+  while (true) {
+    const sepIdx = withoutPathHeader.indexOf(SEP, searchPos);
+    if (sepIdx === -1) break;
+    const afterSep = withoutPathHeader.slice(sepIdx + SEP.length).replace(/^\n+/, "");
+    const isTrailer = TRAILER_HEADINGS.some(h => afterSep.startsWith(h));
+    if (isTrailer && sepIdx < trailerStart) {
+      trailerStart = sepIdx;
+    }
+    searchPos = sepIdx + 1;
+  }
+
+  // Also check for `## Agent Memory` which appears inline (no preceding `---`
+  // in all extract.ts code paths after the Extraction Diagnostics block).
+  const agentMemoryIdx = withoutPathHeader.indexOf("\n## Agent Memory\n");
+  if (agentMemoryIdx !== -1 && agentMemoryIdx < trailerStart) {
+    trailerStart = agentMemoryIdx;
+  }
+
+  if (bodyStart !== -1) {
+    // Slice out the body: from bodyStart to trailerStart, stripping leading blank lines
+    return withoutPathHeader.slice(bodyStart, trailerStart).replace(/^\n+/, "").replace(/\n+$/, "");
+  }
+
+  // Fallback: no `---` separators found (truncated / summary output).
+  // Strip individual volatile metadata lines and trailer headings.
   return withoutPathHeader
     .replace(/^## Extracted Content\n/m, "")
     .replace(/^mode:.*$/m, "")
     .replace(/^quality_reasons:.*$/m, "")
     .replace(/^fetched_at:.*$/m, "")
     .replace(/^extraction_quality:.*$/m, "")
-    .replace(/^source:.*$/m, "");
+    .replace(/^source:.*$/m, "")
+    // Strip trailer headings and everything after
+    .replace(/\n## (?:Same-Domain Links|Extraction Diagnostics|Agent Memory|Agent Hints|Agent Action)[\s\S]*$/, "")
+    .trim();
 }
 
 /** @deprecated Alias kept for internal callers that only needed the old path-strip. */

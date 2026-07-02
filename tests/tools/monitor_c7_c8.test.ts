@@ -218,3 +218,120 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
     expect(output.toLowerCase()).toMatch(/error|unavailable|failed/);
   });
 });
+
+// ─── D1: Trailer sections after body must NOT be hashed ──────────────────────
+
+/**
+ * Real extract.ts output structure — includes the full trailer after the body.
+ * lastIndexOf("\n---\n") finds the LAST separator (before ## Agent Hints), so it
+ * only hashes the trailer, missing body changes entirely.
+ *
+ * Real structure (abbreviated):
+ *   Header → --- → ## Requested Fields → --- → body → --- → ## Same-Domain Links
+ *   → --- → ## Extraction Diagnostics → ## Agent Memory → --- → ## Agent Hints
+ *   → ## Agent Action
+ */
+function makeExtractWithFullTrailer(opts: {
+  source?: "live" | "cache";
+  fetchedAt?: string;
+  confScore?: number;
+  body?: string;
+  agentHints?: string;
+  diagnosticsFetchedAt?: string;
+}): string {
+  const source = opts.source ?? "live";
+  const fetchedAt = opts.fetchedAt ?? "2026-07-02T10:00:00.000Z";
+  const conf = opts.confScore ?? 0.80;
+  const body = opts.body ?? "# Example Domain\n\nThis domain is for use in illustrative examples.";
+  const agentHints = opts.agentHints ?? "- To discover more pages: novada_map with url=\"https://example.com\"";
+  // Diagnostics include fetched_at which changes per call
+  const diagFetchedAt = opts.diagnosticsFetchedAt ?? fetchedAt;
+
+  return [
+    `## Extracted Content`,
+    `url: https://example.com`,
+    `mode: static | source: ${source} | quality:72/100 (ok) | content_present:true | content_ok:true`,
+    `quality_reasons: sufficient_text_length; has_title`,
+    `fetched_at: ${fetchedAt}`,
+    `title: Example Domain`,
+    `chars:${body.length} | links:3`,
+    ``,
+    `---`,
+    ``,
+    `## Requested Fields`,
+    `title: Example Domain *(json-ld)* *(conf:${conf.toFixed(2)})*`,
+    ``,
+    `---`,
+    ``,
+    body,
+    ``,
+    `---`,
+    `## Same-Domain Links (2 of 3)`,
+    `- https://example.com/page1`,
+    `- https://example.com/page2`,
+    ``,
+    `---`,
+    `## Extraction Diagnostics`,
+    `- title: matched ✓ (via json-ld, conf:${conf.toFixed(2)})`,
+    `- last_checked: ${diagFetchedAt}`,
+    ``,
+    `## Agent Memory`,
+    `remember: Example Domain at https://example.com — ok quality, ${body.length} chars`,
+    ``,
+    `---`,
+    `## Agent Hints`,
+    agentHints,
+    `- To discover more pages: novada_map with url="https://example.com"`,
+    ``,
+    `## Agent Action`,
+    `agent_instruction: status:ok | content_ready | read_body`,
+  ].join("\n");
+}
+
+describe("D1: full-trailer realistic mock — trailer changes must not affect hash", () => {
+  it("[axis-a] unchanged when only trailer (Agent Hints / Diagnostics timestamp) changes but body is identical", async () => {
+    const first = makeExtractWithFullTrailer({
+      fetchedAt: "2026-07-02T10:00:00.000Z",
+      agentHints: "- To discover more pages: novada_map with url=\"https://example.com\"",
+      diagnosticsFetchedAt: "2026-07-02T10:00:00.000Z",
+    });
+    const second = makeExtractWithFullTrailer({
+      fetchedAt: "2026-07-02T10:05:00.000Z",
+      agentHints: "- To discover more pages: novada_map with url=\"https://example.com\"\n- Low quality on static mode",
+      diagnosticsFetchedAt: "2026-07-02T10:05:00.000Z",
+    });
+
+    mockedExtract
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+
+    const params = validateMonitorParams({ url: "https://example.com", fields: ["title"], format: "json" });
+
+    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r1.status).toBe("baseline_recorded");
+
+    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r2.status).toBe("unchanged");
+  });
+
+  it("[axis-b] changed when body changes but trailer is identical (the C7-regression axis)", async () => {
+    const first = makeExtractWithFullTrailer({
+      body: "# Example Domain\n\nThis domain is for use in illustrative examples in documents.",
+      fetchedAt: "2026-07-02T10:00:00.000Z",
+    });
+    const second = makeExtractWithFullTrailer({
+      body: "# Example Domain\n\nThis domain has been UPDATED with new content for testing purposes.",
+      fetchedAt: "2026-07-02T10:00:00.000Z", // same timestamp, only body differs
+    });
+
+    mockedExtract
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+
+    const params = validateMonitorParams({ url: "https://example.com", fields: ["title"], format: "json" });
+
+    await novadaMonitor(params, "test-key");
+    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r2.status).toBe("changed");
+  });
+});
