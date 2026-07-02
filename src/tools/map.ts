@@ -316,8 +316,13 @@ async function novadaMapInner(
   // F3 spec: only emit map_complete when the returned set is NOT a limit-capped subset of a
   // larger discovered pool. If sitemapScopedTotal > maxUrls, we truncated; omit map_complete
   // so agents do not incorrectly assume the full site has been enumerated.
+  //
+  // Round-3f fix: also gate on !sitemapFetchCapped. When the sitemap fetch hit the budget,
+  // the true site total is unknown (>=budget), so map_complete must never be claimed even
+  // if scope-filtering narrows the in-scope set to a number <= maxUrls (e.g. a deep sub-path
+  // on a large site returns 3 in-scope URLs from 500 fetched, with 100s more un-fetched).
   const limitCappedFromSitemap = sitemapScopedTotal > maxUrls;
-  if (!limitCappedFromSitemap) {
+  if (!limitCappedFromSitemap && !sitemapFetchCapped) {
     lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
   } else {
     // C6 fix: when the sitemap fetch hit the budget (sitemapFetchCapped), sitemapScopedTotal

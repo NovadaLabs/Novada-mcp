@@ -456,3 +456,79 @@ ${fewUrls}
     expect(result).toMatch(/sitemap has 20 URLs in scope/);
   });
 });
+
+// ---- Round-3f test ---------------------------------------------------------------
+// Finding: when sitemapFetchCapped=true but scope-filtering yields sitemapScopedTotal <= maxUrls,
+// the old guard `limitCappedFromSitemap = sitemapScopedTotal > maxUrls` evaluated to false
+// and map_complete was emitted despite the fetch being budget-truncated (true total unknown).
+//
+// Fix: gate map_complete on (!limitCappedFromSitemap && !sitemapFetchCapped).
+
+describe("Round-3f: fetch-capped + small scoped set must NOT emit map_complete", () => {
+  it("fetch-capped large site with deep sub-path scope that narrows to 3 URLs emits map_partial, not map_complete", async () => {
+    // Setup:
+    //   limit=50 → sitemapFetchBudget = 50*10 = 500.
+    //   Sitemap has 600 URLs total, so discoverViaSitemap returns exactly 500 (budget hit) → sitemapFetchCapped=true.
+    //   Only 3 of those 500 are under /docs/internal/ (the requested sub-path).
+    //   sitemapScopedTotal = 3, which is <= maxUrls=50.
+    //   Old code: limitCappedFromSitemap = 3 > 50 = false → emits map_complete ← BUG.
+    //   New code: gate on (!limitCappedFromSitemap && !sitemapFetchCapped) → false → emits map_partial.
+
+    // 500 URLs: 3 in /docs/internal/, 497 elsewhere (to simulate a large site)
+    const docUrls = Array.from({ length: 3 }, (_, i) =>
+      `<url><loc>https://bigsite.example.com/docs/internal/page-${i}</loc></url>`
+    );
+    const otherUrls = Array.from({ length: 497 }, (_, i) =>
+      `<url><loc>https://bigsite.example.com/blog/post-${i}</loc></url>`
+    );
+    const bigSitemap = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${[...docUrls, ...otherUrls].join("\n")}
+</urlset>`;
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404")) // robots.txt
+      .mockResolvedValueOnce({ data: bigSitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" }); // sitemap.xml
+
+    // Request scoped to /docs/internal/ on the large site
+    const result = await novadaMap({
+      url: "https://bigsite.example.com/docs/internal/",
+      limit: 50,
+      max_depth: 2,
+    });
+
+    // 3 URLs must be returned (all that are in scope)
+    const numbered = result.match(/^\d+\. /gm) ?? [];
+    expect(numbered.length).toBe(3);
+
+    // CRITICAL: map_complete must NOT be emitted — fetch was budget-capped, true total unknown
+    expect(result).not.toContain("map_complete");
+
+    // map_partial MUST be present with >=N floor notation (fetch-capped)
+    expect(result).toContain("map_partial");
+    expect(result).toMatch(/map_partial.*discovered:>=\d+/);
+  });
+
+  it("genuinely small complete site (fetch NOT capped) still emits map_complete", async () => {
+    // Baseline must not regress: 5 URLs in sitemap, limit=50, no budget hit → map_complete.
+    const tinyUrls = Array.from({ length: 5 }, (_, i) =>
+      `<url><loc>https://tiny2.example.com/page-${i}</loc></url>`
+    ).join("\n");
+    const tinySitemap = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${tinyUrls}
+</urlset>`;
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: tinySitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    const result = await novadaMap({ url: "https://tiny2.example.com", limit: 50, max_depth: 2 });
+
+    const numbered = result.match(/^\d+\. /gm) ?? [];
+    expect(numbered.length).toBe(5);
+    // Genuine completion — map_complete must fire
+    expect(result).toContain("map_complete");
+    expect(result).not.toContain("map_partial");
+  });
+});
