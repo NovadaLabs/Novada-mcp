@@ -88,8 +88,12 @@ function tokenizeGlob(pattern: string): GlobToken[] {
  *
  *  Glob semantics follow standard path-glob conventions:
  *  - `**` matches zero or more path segments (including the parent path itself)
- *  - A literal `/` immediately preceding `**` is treated as optional so that
- *    `/foo/**` matches `/foo` (the parent), `/foo/`, and `/foo/anything` (F4)
+ *  - A literal "/" immediately preceding "**" is optional so that:
+ *      - "/foo/**" matches "/foo" (trailing parent, no trailing slash) — F4
+ *      - "/a/**\/b" matches "/a/b" (mid-pattern zero-segment) — C3
+ *    In both cases the "/" before "**" collapses when the globstar contributes
+ *    zero path characters. Boundary correctness is preserved: "/introductionX"
+ *    never matches "/introduction/**".
  *  - `*` matches within one segment; `?` matches one non-`/` char */
 function globToMatcher(pattern: string): PathMatcher {
   const toks = tokenizeGlob(pattern);
@@ -100,9 +104,32 @@ function globToMatcher(pattern: string): PathMatcher {
     // each row depending only on the previous (ti+1) row. Two rolling rows = O(m) space.
     let next = new Array<boolean>(m + 1).fill(false);
     next[m] = true; // empty token list matches only the empty remainder
+
+    // For each globstar token at index ti, we need to know whether the tokens AFTER the
+    // globstar (i.e. toks[ti+1:]) can match from position si WITHOUT the globstar consuming
+    // any characters. This is exactly the `next` row that exists just before the globstar
+    // is processed (the row computed for toks[ti+1:]). We save it keyed by token index so
+    // that the preceding `lit:/` token can use it for the zero-cost skip branch.
+    //
+    // This is safe with the DP's bottom-up order: globstar (ti=k) is processed before
+    // lit:/ (ti=k-1), so when we reach lit:/ the saved row is already populated.
+    //
+    // Space: one array of (m+1) booleans per globstar token in the pattern. Since pattern
+    // length is capped at 1000 chars (MAX_PATTERN_LENGTH), the number of globstars is at
+    // most 500 (`**` is 2 chars), so worst-case is 500 x 1001 booleans ~ 500 KB. In
+    // practice patterns are short.
+    const afterGlobstarRow = new Map<number, boolean[]>();
+
     for (let ti = n - 1; ti >= 0; ti--) {
       const tok = toks[ti];
       const cur = new Array<boolean>(m + 1).fill(false);
+
+      if (tok.t === "globstar") {
+        // Save the row that was `next` BEFORE globstar consumed anything.
+        // This row encodes "can toks[ti+1:] match s[si:] with zero globstar chars".
+        afterGlobstarRow.set(ti, next.slice());
+      }
+
       for (let si = m; si >= 0; si--) {
         switch (tok.t) {
           case "globstar":
@@ -118,18 +145,28 @@ function globToMatcher(pattern: string): PathMatcher {
             break;
           default: { // lit
             // Standard: literal char must match at position si.
-            // Special case (F4): a literal `/` immediately before `**` is optional when
-            // the path has NO more characters at this position (i.e. si === m, end of string).
-            // This makes `/foo/**` match `/foo` (no trailing slash) in addition to
-            // `/foo/` and `/foo/anything`, without incorrectly matching `/fooX`.
-            // The "skip" branch (next[si]) is only taken when si === m so that we
-            // only skip the trailing `/<globstar>` at the exact end of the path.
+            // Special case: a literal "/" immediately before "**" is optional — the "/"
+            // can be "skipped" (not consumed from the path) when the globstar contributes
+            // zero characters. This supports:
+            //   (a) Trailing: "/foo/**" matches "/foo" (si === m, end of path)
+            //   (b) Mid-pattern: "/a/**\/b" matches "/a/b" (globstar zero-segment)
+            //
+            // The skip is valid iff the tokens AFTER the globstar (toks[ti+2:]) can match
+            // the path from position si without the globstar consuming anything. This is
+            // exactly afterGlobstarRow.get(ti+1)[si] — the "zero-cost globstar" value.
+            //
+            // Boundary guard: for "/introductionX" vs "/introduction/**", when si is at 'X'
+            // the afterGlobstarRow for a terminal "**" is all-false except si===m, so the
+            // skip never fires at non-boundary positions. This preserves the F4 correctness.
             const nextTokIsGlobstar = ti + 1 < n && toks[ti + 1].t === "globstar";
             const consumeMatch = si < m && s[si] === tok.c && next[si + 1];
-            // nextGlobstarCanMatchEmpty: the globstar row at si===m is always true
-            // (globstar matches zero chars), so next[m] === true after globstar is computed.
-            // We only allow the skip when si === m (consumed entire path up to this `/`).
-            cur[si] = consumeMatch || (tok.c === "/" && nextTokIsGlobstar && si === m && next[si]);
+            let skipBranch = false;
+            if (tok.c === "/" && nextTokIsGlobstar) {
+              // zeroGlobstar[si]: can toks[ti+2:] match s[si:] with the globstar eating nothing?
+              const zeroGlobstar = afterGlobstarRow.get(ti + 1)!;
+              skipBranch = zeroGlobstar[si];
+            }
+            cur[si] = consumeMatch || skipBranch;
             break;
           }
         }
