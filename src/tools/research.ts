@@ -249,8 +249,11 @@ export async function novadaResearch(
             { url: source.url, format: "markdown", query: params.question, render: "auto" },
             apiKey
           );
-          // Skip failed extractions (extract.ts returns "## Extract Failed" on error)
-          if (content.startsWith("## Extract Failed")) {
+          // Skip failed extractions.
+          // extract.ts returns "## Extract Failed" on generic errors (extract.ts:242)
+          // and "## Extraction Error" on TOTAL_REQUEST_CEILING timeout (extract.ts:1294).
+          // Both must be caught here so timeout error text never reaches synthesizeAnswer.
+          if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
             return { ok: false as const, title: source.title, url: source.url, snippet: source.snippet };
           }
           // Strip all extract-output metadata — only keep the page body content
@@ -425,7 +428,6 @@ const CONTEXT_LENGTH_THRESHOLD = 80; // chars; short enough to catch "Sign in", 
 const STRONG_CHROME_PATTERNS: RegExp[] = [
   /\[?skip\s+to\s+(main\s+)?content\]?/i,
   /\btoggle\s+navigation\b/i,
-  /\baccept\s+(all\s+)?(cookies|tracking)\b/i,  // "Accept all cookies" is purely a UI affordance
   /\bnavigation\s+menu\b/i,
   /\bopen\s+menu\b/i,
   /\bclose\s+menu\b/i,
@@ -440,6 +442,11 @@ const CONTEXT_SENSITIVE_PATTERNS: RegExp[] = [
   // substantive GDPR/ePrivacy sentences (> CONTEXT_LENGTH_THRESHOLD chars) survive stripping,
   // while short nav links like "Cookie settings" / "Cookie policy" are still removed.
   /\b(cookie|cookies)\s+(settings|preferences|policy|consent|notice|banner)\b/i,
+  // Round-3f fix P1: "accept cookies/tracking" moved from STRONG_CHROME to CONTEXT_SENSITIVE.
+  // Short nav buttons ("Accept all cookies", "Accept tracking") are still stripped.
+  // Substantive GDPR/ePrivacy sentences (>80 chars) that use these phrases as subject matter
+  // (e.g. "websites must allow users to accept cookies on a purpose-by-purpose basis") survive.
+  /\baccept\s+(all\s+)?(cookies|tracking)\b/i,
 ];
 
 /** Returns true if a line/sentence is nav or header chrome */
