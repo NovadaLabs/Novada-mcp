@@ -132,7 +132,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   },
   {
     name: "novada_monitor",
-    description: "Detect changes on a web page over time by comparing content hashes; first call sets a baseline, subsequent calls report changed/unchanged plus optional field-level diffs",
+    description: "Session-scoped only / no durable state — baseline lost on server restart; schedule from your own job runner for persistence. Detect changes on a web page over time by comparing content hashes; first call sets a baseline, subsequent calls report changed/unchanged plus optional field-level diffs",
     category: "Scraping & Verification",
     status: "active",
   },
