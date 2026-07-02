@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { z } from "zod";
-import { classifyError, makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { classifyError, makeNovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
 import { isBlockedHost } from "../utils/ssrf.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ function formatApiError(
     `url: ${url}`,
     `actions_requested: ${actions.length}${sessionId ? ` | session_id: ${sessionId}` : ""}`,
     ``,
-    `Error: ${message}`,
+    `Error: ${redactSecrets(message)}`,
     ``,
     `---`,
     `## Agent Hints`,

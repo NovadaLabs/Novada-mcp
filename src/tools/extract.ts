@@ -106,8 +106,9 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
         extractSingle({ ...params, url }, apiKey)
           .then(content => ({ i, url, content, ok: true }))
           .catch(err => {
-            const message = err instanceof Error ? err.message : String(err);
-            const fix = getSuggestedFix(url, message);
+            const rawMessage = err instanceof Error ? err.message : String(err);
+            const message = redactSecrets(rawMessage);
+            const fix = getSuggestedFix(url, rawMessage);
             return { i, url, content: `Error: ${message}\n${fix}`, ok: false };
           })
       )
@@ -236,8 +237,9 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
   try {
     return await extractSingle({ ...params, url: urlList[0] }, apiKey);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const suggestedFix = getSuggestedFix(urlList[0], message);
+    const rawMessage = err instanceof Error ? err.message : String(err);
+    const message = redactSecrets(rawMessage);
+    const suggestedFix = getSuggestedFix(urlList[0], rawMessage);
     return [
       `## Extract Failed`,
       `url: ${urlList[0]}`,

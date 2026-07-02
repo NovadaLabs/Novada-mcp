@@ -177,8 +177,8 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
       render: "auto",
     }, apiKey);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return formatError(params.url, now, message);
+    const rawMessage = err instanceof Error ? err.message : String(err);
+    return formatError(params.url, now, redactSecrets(rawMessage));
   }
 
   // FIX-1: Strip absolute path header that extract prepends — prevents path leakage
