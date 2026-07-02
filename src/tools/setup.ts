@@ -63,7 +63,7 @@ export function novadaSetup(_params: SetupParams): string {
   // ─── Summary ──────────────────────────────────────────────────────────────
 
   if (allCoreReady) {
-    lines.push("**Status: Ready.** Core tools are active.");
+    lines.push("**Status: Ready** (configuration OK). Core tools are configured — run `novada_health_all` to confirm which products are activated on your account.");
     const missing: string[] = [];
     if (!browserWs) missing.push("novada_browser, novada_browser_flow (need NOVADA_BROWSER_WS)");
     if (!proxyConfigured) missing.push("novada_proxy_* routing (set NOVADA_PROXY_ENDPOINT — user/pass auto-fetched from your account via NOVADA_API_KEY)");

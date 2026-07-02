@@ -1,6 +1,7 @@
 import axios, { AxiosError } from "axios";
 import { z } from "zod";
 import { classifyError, makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { isBlockedHost } from "../utils/ssrf.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 
@@ -33,11 +34,11 @@ export const BrowserFlowParamsSchema = z.object({
     .url("A valid URL is required")
     .refine((url) => /^https?:\/\//i.test(url), "Only HTTP and HTTPS URLs are supported")
     .refine((url) => {
+      // Delegate to the shared isBlockedHost guard (single source of truth) rather than a
+      // hand-rolled regex — the previous inline regex missed 0.0.0.0/8, CGNAT 100.64/10, and
+      // ULA fc00::/7, which isBlockedHost covers. Do not reintroduce a per-tool host regex.
       try {
-        let host = new URL(url).hostname;
-        if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
-        if (/^\d+$/.test(host) || /^0x[0-9a-f]+$/i.test(host)) return false;
-        return !/^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|::1|::ffff:.+|fe80:.*)$/i.test(host);
+        return !isBlockedHost(new URL(url).hostname);
       } catch { return false; }
     }, "URLs pointing to localhost or private network ranges are not allowed")
     .describe("The URL to open in the cloud browser. Must be a publicly accessible HTTP/HTTPS URL."),

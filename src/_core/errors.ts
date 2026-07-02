@@ -103,7 +103,7 @@ Setup (one-time):
 Verify the key is active:
   Call novada_health — it will confirm which products are accessible.
 
-Get a key: https://dashboard.novada.com/overview/`,
+Get a key: https://dashboard.novada.com/api-key/`,
 
   [NovadaErrorCode.RATE_LIMITED]: `\
 You have hit the Novada API rate limit. This is temporary and retryable.

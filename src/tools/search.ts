@@ -85,7 +85,7 @@ async function submitBingSearch(apiKey: string, query: string): Promise<NovadaSe
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      timeout: 60000,
+      timeout: TIMEOUTS.SEARCH_TOTAL_CEILING,
       httpsAgent: keepAliveAgent,
     });
 
@@ -223,7 +223,13 @@ export async function submitSearchScrapeTask(
     (innerData?.task_id as string | undefined)
   );
   if (!taskId) {
-    throw new Error(`Scraper search submit: no task_id in response: ${JSON.stringify(body)}`);
+    // Do not embed raw upstream JSON in the error — it leaked internal API response shape
+    // (e.g. yandex "serp returned failure"). Route through the classified NovadaError
+    // envelope so the caller gets a clean, structured, retryable API_DOWN instead.
+    throw makeNovadaError(
+      NovadaErrorCode.API_DOWN,
+      "Search provider returned no task_id (upstream SERP failure).",
+    );
   }
   return { taskId };
 }
@@ -404,6 +410,11 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     params.time_range ?? "",
     params.start_date ?? "",
     params.end_date ?? "",
+    // NOV-676 #3: country/language change the upstream result set but were absent from
+    // the key, so two searches differing only by locale collided within the 60s TTL and
+    // returned the wrong region's cached results.
+    params.country ?? "",
+    params.language ?? "",
   ].join("|");
   const cached = _searchCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
