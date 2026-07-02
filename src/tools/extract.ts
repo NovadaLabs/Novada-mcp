@@ -493,15 +493,33 @@ async function extractSingleInner(
       }
       html = response.data;
     }
-    // QW-4: If rendered content is suspiciously short, it may be a bot-challenge page
-    // that passed detectBotChallenge — attempt browser escalation before accepting
-    if (typeof html === "string" && html.length < 2000 && detectBotChallenge(html) && isBrowserConfigured()) {
-      const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => null);
-      if (browserHtml && browserHtml.length > html.length) {
-        html = browserHtml;
-        usedMode = "browser";
+    // F2 / QW-4: Detect bot-challenge pages returned by the Web Unblocker (any size).
+    // A full-size Cloudflare interstitial (e.g., "Attention Required! | Cloudflare", "Sorry,
+    // you have been blocked") is several KB — the old html.length < 2000 guard missed it.
+    // Fix: run detectBotChallenge unconditionally; attempt browser escalation when available,
+    // otherwise surface a concrete error instead of silently returning interstitial text.
+    if (typeof html === "string" && detectBotChallenge(html)) {
+      if (isBrowserConfigured()) {
+        const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => null);
+        if (browserHtml && browserHtml.length > html.length) {
+          html = browserHtml;
+          usedMode = "browser";
+        } else {
+          // Browser also returned challenge / nothing better — surface as error
+          throw makeNovadaError(
+            NovadaErrorCode.URL_UNREACHABLE,
+            "Render returned a bot challenge page",
+            `url:${params.url} render=render returned a bot challenge page; browser escalation also failed`
+          );
+        }
       } else {
-        usedMode = "render";
+        // No browser configured — throw so the caller surfaces an honest error
+        throw makeNovadaError(
+          NovadaErrorCode.URL_UNREACHABLE,
+          "Render returned a bot challenge page",
+          `url:${params.url} render=render returned a bot challenge page (Cloudflare/anti-bot interstitial). ` +
+          `Use render=browser with NOVADA_BROWSER_WS configured, or try a different URL.`
+        );
       }
     } else {
       usedMode = "render";
