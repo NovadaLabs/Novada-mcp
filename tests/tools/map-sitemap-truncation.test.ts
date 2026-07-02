@@ -375,3 +375,84 @@ ${tinyUrls}
     expect(result).toContain("map_complete");
   });
 });
+
+// ---- D2 tests ---------------------------------------------------------------
+// D2 was introduced by the C6 commit (75d4a89): the "## Agent Notice — Under-delivery"
+// prose block used raw sitemapScopedTotal even when sitemapFetchCapped=true, so it
+// could say "sitemap has 50 URLs in scope" when the true count is >=50 (fetch-capped).
+// The fix must propagate the same ">=" qualifier from agent_instruction into the prose.
+
+describe("D2: Under-delivery prose must carry >=N qualifier when fetch-capped", () => {
+  it("fetch-capped + limit-capped + search-filtered: prose reason says >=N, not a precise false N", async () => {
+    // Setup: limit=5 → sitemapFetchBudget = 5*10 = 50.
+    // Sitemap has 200 URLs, so fetch hits the 50-entry budget → sitemapFetchCapped=true.
+    // sitemapScopedTotal=50 (not the true total of 200).
+    // search="article" matches only 3 of the 50 fetched URLs → filtered.length=3 < maxUrls=5
+    //   → limitCappedFromSitemap = (50 > 5) = true → Under-delivery notice fires.
+    //
+    // The prose at line ~302 must say ">=" before 50, NOT just "50", because sitemapFetchCapped=true.
+    const manyUrls = [
+      ...Array.from({ length: 3 }, (_, i) =>
+        `<url><loc>https://www.bbc.com/news/article-${i}</loc></url>`
+      ),
+      ...Array.from({ length: 197 }, (_, i) =>
+        `<url><loc>https://www.bbc.com/sport/page-${i}</loc></url>`
+      ),
+    ].join("\n");
+    const bigSitemap = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${manyUrls}
+</urlset>`;
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404")) // robots.txt
+      .mockResolvedValueOnce({ data: bigSitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" }); // sitemap.xml
+
+    const result = await novadaMap({ url: "https://www.bbc.com", limit: 5, max_depth: 2, search: "article" });
+
+    // Under-delivery notice must be present (filtered < maxUrls)
+    expect(result).toContain("## Agent Notice — Under-delivery");
+
+    // D2 core assertion: the prose "reason:" line must NOT say a bare precise number like
+    // "sitemap has 50 URLs" — it must carry the ">=" qualifier because sitemapFetchCapped=true.
+    // Match the specific pattern: "sitemap has <digits> URLs" without ">=".
+    expect(result).not.toMatch(/sitemap has \d+ URLs in scope/);
+
+    // Positive assertion: the prose reason must show ">=" before the count
+    expect(result).toMatch(/sitemap has >=\d+ URLs in scope/);
+
+    // C6 agent_instruction must also still be >=N (not regressed)
+    expect(result).toMatch(/map_partial.*discovered:>=\d+/);
+  });
+
+  it("NOT fetch-capped: prose uses exact count (no >= needed)", async () => {
+    // limit=5 → budget=50. Sitemap has only 20 URLs (< budget) → sitemapFetchCapped=false.
+    // search="page" matches 3 of 20 → filtered=3 < maxUrls=5 → Under-delivery fires.
+    // sitemapScopedTotal=20 is the true total → prose must say "20" (exact), NOT ">=20".
+    const fewUrls = [
+      ...Array.from({ length: 3 }, (_, i) =>
+        `<url><loc>https://example.com/page-${i}</loc></url>`
+      ),
+      ...Array.from({ length: 17 }, (_, i) =>
+        `<url><loc>https://example.com/other-${i}</loc></url>`
+      ),
+    ].join("\n");
+    const smallSitemap = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${fewUrls}
+</urlset>`;
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: smallSitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    const result = await novadaMap({ url: "https://example.com", limit: 5, max_depth: 2, search: "page" });
+
+    expect(result).toContain("## Agent Notice — Under-delivery");
+
+    // Not fetch-capped → count is exact → prose must NOT use >= prefix
+    expect(result).not.toMatch(/sitemap has >=\d+ URLs in scope/);
+    // Must use the exact count 20
+    expect(result).toMatch(/sitemap has 20 URLs in scope/);
+  });
+});

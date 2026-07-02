@@ -299,7 +299,10 @@ async function novadaMapInner(
     lines.push(``, `## Agent Notice — Under-delivery`);
     lines.push(`requested: ${maxUrls} | returned: ${filtered.length} | shortfall: ${maxUrls - filtered.length}`);
     if (limitCappedFromSitemap) {
-      lines.push(`reason: Results capped at the requested limit (${maxUrls}); sitemap has ${sitemapScopedTotal} URLs in scope (${params.search ? `${filtered.length} match the search filter "${params.search}"` : "all in scope"}).`);
+      // D2 fix: when sitemapFetchCapped=true, sitemapScopedTotal is bounded by the fetch budget,
+      // not the true sitemap size. Use ">=" floor notation consistent with agent_instruction.
+      const sitemapScopedStr = sitemapFetchCapped ? `>=${sitemapScopedTotal}` : `${sitemapScopedTotal}`;
+      lines.push(`reason: Results capped at the requested limit (${maxUrls}); sitemap has ${sitemapScopedStr} URLs in scope (${params.search ? `${filtered.length} match the search filter "${params.search}"` : "all in scope"}).`);
       lines.push(`next_steps: ${params.search ? `Remove 'search' filter or i` : "I"}ncrease the \`limit\` parameter to retrieve more URLs.`);
     } else {
       lines.push(`reason: Site has fewer crawlable links${params.search ? ` matching "${params.search}"` : ""} than requested.`);
