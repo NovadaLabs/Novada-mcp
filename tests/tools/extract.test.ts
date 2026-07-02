@@ -730,3 +730,98 @@ describe("F2: Cloudflare interstitial on render path → must NOT succeed silent
     expect(result).not.toContain("content_ok:false");
   });
 });
+
+// ─── Round-3 veto gap tests ───────────────────────────────────────────────────
+
+describe("Round-3 CRITICAL: getSuggestedFix must not recommend render=render after 5001", () => {
+  // F10 (round-1) correctly throws a 5001 message in fetchWithRender.
+  // The outer novadaExtract catch passes that message to getSuggestedFix,
+  // which must NOT match the "js" substring in "render/JS modes" and return
+  // "retry with render=render" — that would re-invite the mode that just failed.
+  it("5001 error → agent_instruction points to dashboard activation, NOT retry with render=render", async () => {
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+
+    // Mock fetchWithRender (axios.post) to return code=5001 (product unavailable)
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 5001, msg: "Product unavailable", data: null },
+      status: 200,
+      headers: {},
+      config: {} as never,
+      statusText: "OK",
+    });
+
+    const result = await novadaExtract(
+      { url: "https://5001-test.example/page", render: "render", format: "markdown" },
+      API_KEY
+    );
+
+    // Must surface as an extraction failure
+    expect(result).toContain("## Extract Failed");
+
+    // agent_instruction must NOT recommend render="render" (self-defeating)
+    expect(result).not.toMatch(/retry with render="render"/);
+    expect(result).not.toMatch(/suggested_fix: retry with render/);
+
+    // Must point to dashboard activation or render=static
+    const hasActivationHint = result.includes("dashboard") || result.includes("activate") || result.includes("not activated") || result.includes("render=static");
+    expect(hasActivationHint).toBe(true);
+
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+  });
+});
+
+describe("Round-3 HIGH: F2 browser escalation should use pickBetterHtml, not raw byte length", () => {
+  // When render=render returns a bot-challenge page, and a browser is configured,
+  // the code should use quality-score comparison (pickBetterHtml) not raw byte length.
+  // Bug: a genuine page shorter than a padded Cloudflare interstitial gets discarded.
+  // Fix: use pickBetterHtml for consistency with the auto-escalation paths.
+  it("F2: browser result shorter-but-better-quality than bot-challenge interstitial is NOT discarded", async () => {
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+    // A long Cloudflare challenge interstitial (large byte length, low quality content)
+    const cfInterstitial = `<html><head><title>Just a moment...</title></head><body>
+      <div id="challenge-stage">Checking your browser before allowing you access to this site.
+        Cloudflare Ray ID: abc123def456 &bull; Your IP: 1.2.3.4
+      </div>
+    </body></html>`.padEnd(8000, "<!-- cloudflare padding -->");
+
+    // Real content page — shorter bytes but high quality prose
+    const realContent = `<html><head><title>Web Scraping Tools</title></head><body><main>
+      ${"<p>This is a real article about web scraping tools and techniques. It contains rich prose content that passes quality checks.</p>".repeat(8)}
+    </main></body></html>`;
+
+    // fetchWithRender (POST) returns the Cloudflare interstitial
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html: cfInterstitial, msg: "", msg_detail: "" } },
+      status: 200,
+      headers: { "content-type": "text/html" },
+      config: {} as never,
+      statusText: "OK",
+    });
+
+    // Set NOVADA_BROWSER_WS so isBrowserConfigured() returns true
+    process.env.NOVADA_BROWSER_WS = "wss://fake-browser.example.com";
+
+    // Spy on fetchViaBrowser via module mock
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://g2-f2-round3.example/categories/web-scraping", render: "render", format: "markdown" },
+      API_KEY
+    );
+
+    fetchViaBrowserSpy.mockRestore();
+
+    // The result must NOT contain interstitial text
+    expect(result).not.toContain("Cloudflare Ray ID");
+    expect(result).not.toContain("Just a moment");
+    expect(result).not.toContain("Checking your browser before allowing");
+
+    // Must use the real content (even though it was shorter in bytes)
+    expect(result).toContain("Web Scraping Tools");
+
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    delete process.env.NOVADA_BROWSER_WS;
+  });
+});
