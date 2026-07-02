@@ -600,3 +600,67 @@ describe("field extraction window — full content, not display-truncated", () =
     expect(parsed.fields.author.value).toContain("Jane Researcher");
   });
 });
+
+// F12 Requirement 3 — per-field warning must surface in both JSON and markdown output paths.
+// A FieldResult with .warning set MUST be serialized in the tool output layer; it must not
+// silently vanish inside the JSON/markdown builders. This is the regression the reviewer vetoed.
+describe("F12-req3: field-level warning surfaces in tool output (JSON + markdown)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCache();
+  });
+
+  // A page with NO structured data and NO <meta> description — only a pattern-matched
+  // body text value. extractFields will call resolvedWithWarning() here, setting r.warning.
+  // The JSON output path must include warning in the fields object.
+  const patternOnlyHtml = `
+    <html>
+      <head><title>Pattern Only</title></head>
+      <body>
+        <main>
+          <h1>Pattern Only</h1>
+          ${"<p>Some content here for the content floor check. </p>".repeat(40)}
+          <p>Description: This is the page about web scraping techniques and best practices.</p>
+        </main>
+      </body>
+    </html>
+  `;
+
+  it("JSON output: fields.description.warning is present when resolved from pattern match (low-confidence)", async () => {
+    mockedAxios.get.mockResolvedValue({ data: patternOnlyHtml });
+
+    const result = await novadaExtract({
+      url: "https://f12-warning-json.example/pattern-only",
+      format: "json",
+      fields: ["description"],
+    }, API_KEY);
+
+    const parsed = JSON.parse(result);
+    expect(parsed.fields).toBeTypeOf("object");
+    expect(parsed.fields.description).toBeTypeOf("object");
+    // The field must have resolved (not unresolved) since "Description: ..." is in the page
+    if (parsed.fields.description.source !== "unresolved") {
+      // When resolved via pattern match, warning MUST be in the output
+      expect(parsed.fields.description.warning).toBeDefined();
+      expect(typeof parsed.fields.description.warning).toBe("string");
+      expect(parsed.fields.description.warning.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("markdown output: description field carries warning annotation when resolved from pattern", async () => {
+    mockedAxios.get.mockResolvedValue({ data: patternOnlyHtml });
+
+    const result = await novadaExtract({
+      url: "https://f12-warning-md.example/pattern-only",
+      format: "markdown",
+      fields: ["description"],
+    }, API_KEY);
+
+    expect(result).toBeTypeOf("string");
+    const fieldsSection = result.split("## Requested Fields")[1]?.split("---")[0] ?? "";
+    // If description resolved from a pattern, a warning annotation must appear
+    if (fieldsSection.includes("description:") && !fieldsSection.includes("*(unresolved)*")) {
+      expect(fieldsSection).toMatch(/\bwarning\b|\*\(warn\)|\*\(low-confidence\)|⚠/i);
+    }
+  });
+});

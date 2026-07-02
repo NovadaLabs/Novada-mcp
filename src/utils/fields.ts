@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import type { StructuredData } from "./html.js";
+import { extractDescriptionFrom } from "./html.js";
 
 /**
  * Where a field value was resolved from, in chain order.
@@ -127,17 +128,6 @@ function isDescriptionBoilerplate(value: string): boolean {
   return false;
 }
 
-/**
- * Extract <meta name="description"> or <meta property="og:description"> from a parsed
- * cheerio document. Returns an empty string when neither is present.
- */
-function extractMetaDescriptionFrom($: CheerioAPI): string {
-  return (
-    $('meta[name="description"]').attr("content") ||
-    $('meta[property="og:description"]').attr("content") ||
-    ""
-  ).trim();
-}
 
 /** Stars/watchers — GitHub link-wrapped counts and inline formats */
 const STARS_PATTERNS = [
@@ -932,7 +922,7 @@ export function extractFields(
     //  because a curated meta-description tag is always more authoritative than an infobox
     //  value that happens to fuzzy-match "description".
     if (SEMANTIC_META_FIELDS.has(lower) && $) {
-      const metaDesc = extractMetaDescriptionFrom($);
+      const metaDesc = extractDescriptionFrom($);
       if (metaDesc) {
         return resolved(field, metaDesc, "jsonld", attempted);
       }
@@ -986,7 +976,7 @@ export function extractFields(
         if (isDescriptionField && isDescriptionBoilerplate(value)) {
           // Boilerplate detected — do NOT return this as the description value.
           // Fall through to let subsequent layers try; if nothing better exists,
-          // we will emit a warning-annotated low-confidence result at the bottom.
+          // the field will remain unresolved (no synthetic fallback).
         } else {
           if (isDescriptionField) {
             // Pattern-matched description without meta tags — emit a health warning so
@@ -1027,7 +1017,13 @@ export function extractFields(
     const tolerant =
       tolerantLabelledValue(markdown, canonical, isStatField) ??
       tolerantLabelledValue(markdown, field, isStatField);
-    if (tolerant && !skipAsCartZero(tolerant)) return resolved(field, tolerant, "pattern", attempted);
+    if (tolerant && !skipAsCartZero(tolerant)) {
+      if (isDescriptionField && isDescriptionBoilerplate(tolerant)) {
+        // Boilerplate — skip, fall through
+      } else {
+        return resolved(field, tolerant, "pattern", attempted);
+      }
+    }
 
     // 10. Number-near-label proximity (finance). Run AFTER table/row layers so the
     //     52-week-range hyphen and similar don't get clipped to a single token first.
