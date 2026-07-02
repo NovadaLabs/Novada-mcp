@@ -186,6 +186,12 @@ async function novadaMapInner(
   const sitemapFetchBudget = maxUrls * 10;
   const sitemapUrls = await discoverViaSitemap(origin, apiKey, sitemapFetchBudget);
 
+  // When discoverViaSitemap returns exactly sitemapFetchBudget URLs, the true sitemap
+  // count is unknown — the budget was the binding constraint, not the sitemap's actual size.
+  // This flag is used downstream to emit ">=" floor notation in discovered counts so agents
+  // are never told a precise-but-false total. (C6 fix)
+  const sitemapFetchCapped = sitemapUrls.length >= sitemapFetchBudget;
+
   let discovered: string[];
   // Total URLs in the sitemap's scoped set before the caller limit is applied.
   // Used to produce honest under-delivery messages: "returned X of Y sitemap entries"
@@ -311,7 +317,12 @@ async function novadaMapInner(
   if (!limitCappedFromSitemap) {
     lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
   } else {
-    lines.push(`agent_instruction: map_partial urls:${filtered.length} discovered:${sitemapScopedTotal} | increase \`limit\` to retrieve more URLs | next: novada_extract to read pages`);
+    // C6 fix: when the sitemap fetch hit the budget (sitemapFetchCapped), sitemapScopedTotal
+    // is bounded by the fetch budget (maxUrls*10), not the true sitemap size. Use ">=" floor
+    // notation so agents are never told a precise-but-false total. When not fetch-capped, the
+    // count is the true scoped total and can be reported exactly.
+    const discoveredStr = sitemapFetchCapped ? `>=${sitemapScopedTotal}` : `${sitemapScopedTotal}`;
+    lines.push(`agent_instruction: map_partial urls:${filtered.length} discovered:${discoveredStr} | increase \`limit\` to retrieve more URLs | next: novada_extract to read pages`);
   }
   return lines.join("\n");
 }

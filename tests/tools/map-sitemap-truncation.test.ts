@@ -287,3 +287,91 @@ ${urls20}
     expect(result).not.toMatch(/discovery.*incomplete|incomplete.*discovery|may not have found all|discovery may be limited/i);
   });
 });
+
+// ---- C6 tests ---------------------------------------------------------------
+
+describe("C6: map_partial discovered count must not be a precise-but-false fetch-budget total", () => {
+  it("when sitemap has more URLs than fetch budget (maxUrls*10), discovered in map_partial must be >=N not a precise N", async () => {
+    // limit=5 → sitemapFetchBudget=50. Sitemap has 200 URLs, but discoverViaSitemap
+    // only fetches 50 (budget cap). sitemapScopedTotal=50 is NOT the true sitemap size.
+    // The agent_instruction must NOT say "discovered:50" (implies exactly 50 in sitemap).
+    // It must say "discovered:>=50" to signal it is a floor, not a precise count.
+    const manyUrls = Array.from({ length: 200 }, (_, i) =>
+      `<url><loc>https://www.bbc.com/news/article-${i}</loc></url>`
+    ).join("\n");
+    const bigSitemap = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${manyUrls}
+</urlset>`;
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404")) // robots.txt
+      .mockResolvedValueOnce({ data: bigSitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" }); // sitemap.xml
+
+    const result = await novadaMap({ url: "https://www.bbc.com", limit: 5, max_depth: 2 });
+
+    // Must return 5 URLs (limit capped)
+    const numbered = result.match(/^\d+\. /gm) ?? [];
+    expect(numbered.length).toBe(5);
+
+    // map_partial must be present (returned < discovered), not map_complete
+    expect(result).not.toContain("map_complete");
+    expect(result).toContain("map_partial");
+
+    // C6: the discovered count in map_partial must signal it is a floor, not a precise count.
+    // When the fetch budget (50) is hit, the true sitemap size is unknown — must use >=N notation.
+    // Specifically: "discovered:50" (no >=) must NOT appear — the fetch budget value is misleading.
+    expect(result).not.toMatch(/agent_instruction:.*map_partial.*discovered:50[^+]/);
+    // Instead it should show discovered:>=50 (an explicit floor)
+    expect(result).toMatch(/map_partial.*discovered:>=\d+/);
+  });
+
+  it("when sitemap returns fewer than fetch budget, discovered count is exact (no >= needed)", async () => {
+    // limit=5 → sitemapFetchBudget=50. Sitemap has only 20 URLs → not budget-capped.
+    // sitemapScopedTotal=20 is the TRUE total, so agent_instruction shows discovered:20 (exact).
+    const fewUrls = Array.from({ length: 20 }, (_, i) =>
+      `<url><loc>https://example.com/page-${i}</loc></url>`
+    ).join("\n");
+    const smallSitemap = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${fewUrls}
+</urlset>`;
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: smallSitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    const result = await novadaMap({ url: "https://example.com", limit: 5, max_depth: 2 });
+
+    const numbered = result.match(/^\d+\. /gm) ?? [];
+    expect(numbered.length).toBe(5);
+
+    // Not budget-capped: discovered count should be exact (20), without >= prefix
+    expect(result).toMatch(/map_partial.*discovered:20\b/);
+    // Must NOT use the floor notation when count is exact
+    expect(result).not.toMatch(/map_partial.*discovered:>=20/);
+  });
+
+  it("C6 map_complete still fires when returned == discovered (genuinely complete small site)", async () => {
+    // limit=30, sitemap has 8 URLs → all returned, no capping at all.
+    // sitemapScopedTotal=8 == returned=8 → map_complete must fire.
+    const tinyUrls = Array.from({ length: 8 }, (_, i) =>
+      `<url><loc>https://tiny.example.com/page-${i}</loc></url>`
+    ).join("\n");
+    const tinySitemap = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${tinyUrls}
+</urlset>`;
+
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: tinySitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+    const result = await novadaMap({ url: "https://tiny.example.com", limit: 30, max_depth: 2 });
+
+    const numbered = result.match(/^\d+\. /gm) ?? [];
+    expect(numbered.length).toBe(8);
+    // Genuine completion — map_complete must be present
+    expect(result).toContain("map_complete");
+  });
+});
