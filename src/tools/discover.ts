@@ -58,7 +58,31 @@ export async function novadaDiscover(
     : visible;
 
   if (entries.length === 0) {
-    return `No tools found for category: ${category}`;
+    // Determine why the result is empty:
+    //   (a) the category exists in the full registry but is filtered out of the
+    //       visible set → gated message with count + novada_health pointer
+    //   (b) the category has zero entries in the full registry itself → truly
+    //       unknown / empty category message
+    const fullRegistryCount = TOOL_REGISTRY.filter(
+      (t) => t.category === category
+    ).length;
+    if (fullRegistryCount > 0) {
+      // Category is real but gated in this session
+      const toolWord = fullRegistryCount === 1 ? "tool" : "tools";
+      return (
+        `Category "${category}" has ${fullRegistryCount} registered ${toolWord} ` +
+        `but none are exposed in this session. ` +
+        `Call \`novada_health\` to check which products are active on your API key ` +
+        `and whether this category is available to you.`
+      );
+    }
+    // Truly empty or unknown category (future-proofing: if a TOOL_CATEGORIES
+    // entry has no registry entries yet)
+    const validCategories = TOOL_CATEGORIES.join(", ");
+    return (
+      `No tools found for category: ${category}. ` +
+      `Valid categories are: ${validCategories}.`
+    );
   }
 
   // Group by category
@@ -106,6 +130,9 @@ export async function novadaDiscover(
     lines.push("");
   }
 
+  // Derive which Next Steps bullets to include based on the visible tool set.
+  const visibleNames = new Set(visible.map((t) => t.name));
+
   lines.push("---");
   lines.push("## Next Steps");
   lines.push("");
@@ -121,12 +148,16 @@ export async function novadaDiscover(
   lines.push(
     "- **Full research:** Use `novada_research` for multi-source synthesis."
   );
-  lines.push(
-    "- **Proxy access:** Use `novada_proxy` for geo-targeted IP rotation."
-  );
-  lines.push(
-    "- **Browser automation:** Use `novada_browser` for interactive flows (login, click, screenshot)."
-  );
+  if (visibleNames.has("novada_proxy")) {
+    lines.push(
+      "- **Proxy access:** Use `novada_proxy` for geo-targeted IP rotation."
+    );
+  }
+  if (visibleNames.has("novada_browser")) {
+    lines.push(
+      "- **Browser automation:** Use `novada_browser` for interactive flows (login, click, screenshot)."
+    );
+  }
 
   return lines.join("\n");
 }
