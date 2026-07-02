@@ -1,16 +1,46 @@
 /**
  * novada-mcp v0.8.1 — Live Integration Test
  * Runs all 13 tests against real Novada API endpoints.
- * Credentials are set from environment variables or defaults below.
+ *
+ * Usage:
+ *   NOVADA_API_KEY=<key> \
+ *   NOVADA_PROXY_USER=<user> \
+ *   NOVADA_PROXY_PASS=<pass> \
+ *   NOVADA_PROXY_ENDPOINT=<host:port> \
+ *   NOVADA_BROWSER_WS=<wss://...> \
+ *   NOVADA_WEB_UNBLOCKER_KEY=<key> \
+ *   node tests/live/integration.mjs
+ *
+ * All credentials are read from environment variables. The script exits with
+ * a clear message naming any missing variables — no defaults are embedded.
  */
 
-// Set credentials before any imports so config.js picks them up
-process.env.NOVADA_PROXY_USER = 'tongwu_TRDI7X';
-process.env.NOVADA_PROXY_PASS = '_Asd1644asd_';
-process.env.NOVADA_PROXY_ENDPOINT = '1b9b0a2b9011e022.vtv.na.novada.pro:7777';
-process.env.NOVADA_API_KEY = '1f35b477c9e1802778ec64aee2a6adfa';
-process.env.NOVADA_BROWSER_WS = 'wss://novada529MUW_2Q8WuZ-zone-browser:Dz0vkMW4Wkil@upg-scbr2.novada.com';
-process.env.NOVADA_WEB_UNBLOCKER_KEY = 'b27ad6e6834dd36407b00f4e502e055e';
+// ---- Credential validation — fast-fail before any imports ----
+
+const REQUIRED_ENV_VARS = [
+  'NOVADA_API_KEY',
+  'NOVADA_PROXY_USER',
+  'NOVADA_PROXY_PASS',
+  'NOVADA_PROXY_ENDPOINT',
+  'NOVADA_BROWSER_WS',
+  'NOVADA_WEB_UNBLOCKER_KEY',
+];
+
+const missing = REQUIRED_ENV_VARS.filter(v => !process.env[v]);
+if (missing.length > 0) {
+  console.error('ERROR: Missing required environment variables:');
+  for (const v of missing) {
+    console.error(`  ${v}`);
+  }
+  console.error('\nSet them before running this script. Example:');
+  console.error('  export NOVADA_API_KEY=<key>');
+  console.error('  export NOVADA_PROXY_USER=<user>');
+  console.error('  export NOVADA_PROXY_PASS=<pass>');
+  console.error('  export NOVADA_PROXY_ENDPOINT=<host:port>');
+  console.error('  export NOVADA_BROWSER_WS=<wss://...>');
+  console.error('  export NOVADA_WEB_UNBLOCKER_KEY=<key>');
+  process.exit(1);
+}
 
 import { novadaSearch } from '../../build/tools/search.js';
 import { novadaExtract } from '../../build/tools/extract.js';
