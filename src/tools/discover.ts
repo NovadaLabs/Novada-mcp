@@ -77,8 +77,14 @@ export async function novadaDiscover(
       );
     }
     // Truly empty or unknown category (future-proofing: if a TOOL_CATEGORIES
-    // entry has no registry entries yet)
-    const validCategories = TOOL_CATEGORIES.join(", ");
+    // entry has no registry entries yet).
+    // Only advertise categories that actually have >= 1 registry entry so that
+    // a zero-entry placeholder (e.g. "Auth") is never listed as a retry target
+    // — an agent retrying category=Auth would loop forever.
+    const nonEmptyCategories = TOOL_CATEGORIES.filter(
+      (c) => TOOL_REGISTRY.some((t) => t.category === c)
+    );
+    const validCategories = nonEmptyCategories.join(", ");
     return (
       `No tools found for category: ${category}. ` +
       `Valid categories are: ${validCategories}.`
