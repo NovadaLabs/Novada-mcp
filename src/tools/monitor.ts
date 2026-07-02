@@ -330,11 +330,12 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
     return formatError(params.url, now, errorMsg, params.format);
   }
 
-  // F5: Strip volatile metadata header (mode:/source:/quality:/fetched_at: lines) from
-  // extract output before hashing. Without stripping, source:live→cache flips and
-  // fetched_at timestamp changes produce false "changed" reports on identical page bodies.
-  // C7 Fix: uses lastIndexOf to also strip the ## Requested Fields annotation block.
-  // Also strips the legacy path: /abs/path prefix (FIX-1 original).
+  // F5+C7+D1: Strip volatile metadata header AND trailer sections, keeping only the
+  // stable page body. stripVolatileMetadataHeader uses a two-pass scan to isolate
+  // the body between the last header-side separator and the first trailer heading
+  // (## Same-Domain Links / ## Extraction Diagnostics / ## Agent Memory / etc.).
+  // This prevents fetched_at, conf: annotations, and Agent Hints from causing false
+  // "changed" reports on identical page bodies.
   const cleanContent = stripVolatileMetadataHeader(content);
 
   // 2. Hash the content (use cleanContent so path changes don't cause false change detection)
