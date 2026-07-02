@@ -3,6 +3,10 @@
  * F6  (P0) — extract_options.format="json": double-encoding + "## Extract Failed" sentinel handling
  * F15 (P1) — time_range="week" should flag / drop out-of-window results
  * F16 (P1) — empty results branch must honour format="json"
+ *
+ * Closure-round additions:
+ * C4  (P1) — "## Extraction Error" timeout-ceiling sentinel must also be detected as a failure
+ * C9  (P2) — F15 per-result within_time_range lines must appear for start_date/end_date callers too
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -318,5 +322,148 @@ describe("F16 — empty results branch honours format=json", () => {
     expect(raw).toContain("No results found for:");
     // Must NOT be valid JSON (it's markdown)
     expect(() => JSON.parse(raw)).toThrow();
+  });
+});
+
+// ─── C4: "## Extraction Error" timeout-ceiling sentinel ───────────────────────
+
+describe("C4 — '## Extraction Error' timeout-ceiling sentinel must be treated like '## Extract Failed'", () => {
+  it("when extraction returns '## Extraction Error', outer status is partial and extract_error is set (format=json)", async () => {
+    mockGoogleResults([
+      { title: "Good", url: "https://example.com/good-c4", description: "Good page" },
+      { title: "TimedOut", url: "https://example.com/timeout-c4", description: "Slow page" },
+    ]);
+
+    vi.spyOn(extractModule, "novadaExtract").mockImplementation(async (params) => {
+      const url = (params as { url: string }).url;
+      if (url.includes("timeout-c4")) {
+        // This is what extract.ts emits from the TOTAL_REQUEST_CEILING path
+        return "## Extraction Error\nurl: https://example.com/timeout-c4\nerror: Request exceeded the 60s total ceiling and was aborted.\n\n## Agent Action\nagent_instruction: This URL took too long.";
+      }
+      return "Good page content";
+    });
+
+    const raw = await novadaSearch(
+      {
+        query: "test-c4-extraction-error-unique",
+        engine: "google",
+        num: 5,
+        country: "",
+        language: "",
+        format: "json",
+        extract_options: { format: "markdown", top_n: 2 },
+      },
+      API_KEY
+    );
+
+    const outer = JSON.parse(raw);
+
+    // Outer status must be downgraded to partial
+    expect(outer.status).toBe("partial");
+
+    const goodResult = outer.results.find((r: { url: string }) => r.url === "https://example.com/good-c4");
+    const timedOut   = outer.results.find((r: { url: string }) => r.url === "https://example.com/timeout-c4");
+
+    // Good result unaffected
+    expect(goodResult.extracted_content).toBe("Good page content");
+    expect(goodResult).not.toHaveProperty("extract_error");
+
+    // Timed-out result: sentinel must NOT land in extracted_content
+    expect(timedOut.extracted_content).toBeUndefined();
+    // extract_error must be set
+    expect(timedOut.extract_error).toBeDefined();
+    // The raw sentinel text must NOT appear in extracted_content
+    const timedOutExtracted = timedOut.extracted_content;
+    if (timedOutExtracted !== undefined && timedOutExtracted !== null) {
+      expect(String(timedOutExtracted)).not.toContain("## Extraction Error");
+    }
+  });
+
+  it("'## Extraction Error' sentinel in format=markdown output: no raw sentinel in output, extract_error line present", async () => {
+    mockGoogleResults([
+      { title: "Slow", url: "https://example.com/slow-md-c4", description: "Slow" },
+    ]);
+
+    vi.spyOn(extractModule, "novadaExtract").mockResolvedValue(
+      "## Extraction Error\nurl: https://example.com/slow-md-c4\nerror: Request exceeded the 60s total ceiling."
+    );
+
+    const raw = await novadaSearch(
+      {
+        query: "test-c4-md-sentinel-unique",
+        engine: "google",
+        num: 5,
+        country: "",
+        language: "",
+        format: "markdown",
+        extract_options: { format: "markdown", top_n: 1 },
+      },
+      API_KEY
+    );
+
+    // The raw "## Extraction Error" heading must NOT appear verbatim as extracted_content body
+    // (it must be re-routed to extract_error: line)
+    const lines = raw.split("\n");
+    const extractedContentIdx = lines.findIndex(l => l.startsWith("extracted_content:"));
+    // If extracted_content: line exists, the next line must not be the sentinel heading
+    if (extractedContentIdx !== -1) {
+      const nextLine = lines[extractedContentIdx + 1] ?? "";
+      expect(nextLine.trim()).not.toBe("## Extraction Error");
+    }
+    // extract_error: line must be present
+    expect(raw).toContain("extract_error:");
+  });
+});
+
+// ─── C9: F15 per-result within_time_range lines for start_date/end_date callers ─
+
+describe("C9 — F15 per-result within_time_range annotation in markdown for start_date/end_date callers", () => {
+  it("start_date/end_date out-of-window results show within_time_range:false in markdown output", async () => {
+    // Result published 2021-06-01 — within 2020-01-01..2022-12-31 window
+    // Result published 2019-01-01 — outside the window (before start_date)
+    mockGoogleResults([
+      { title: "InWindow",  url: "https://example.com/in-window-c9",  description: "In",  published: "2021-06-01" },
+      { title: "OutWindow", url: "https://example.com/out-window-c9", description: "Out", published: "2019-01-01" },
+    ]);
+
+    const raw = await novadaSearch(
+      {
+        query: "test-c9-startdate-unique",
+        engine: "google",
+        num: 5,
+        country: "",
+        language: "",
+        format: "markdown",
+        start_date: "2020-01-01",
+        end_date: "2022-12-31",
+      },
+      API_KEY
+    );
+
+    // The out-of-window result must have a within_time_range:false annotation line
+    expect(raw).toContain("within_time_range: false");
+  });
+
+  it("start_date/end_date in-window result shows within_time_range:true in markdown output", async () => {
+    mockGoogleResults([
+      { title: "InWindow", url: "https://example.com/in-c9b", description: "In", published: "2021-06-01" },
+    ]);
+
+    const raw = await novadaSearch(
+      {
+        query: "test-c9-inwindow-unique",
+        engine: "google",
+        num: 5,
+        country: "",
+        language: "",
+        format: "markdown",
+        start_date: "2020-01-01",
+        end_date: "2022-12-31",
+      },
+      API_KEY
+    );
+
+    // The in-window result must have a within_time_range:true annotation line
+    expect(raw).toContain("within_time_range: true");
   });
 });

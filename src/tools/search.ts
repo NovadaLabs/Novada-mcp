@@ -613,9 +613,11 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   // P1-7: Auto-extract content from top N results when extract_options is provided
   // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
-  // Sentinel string used by novadaExtract (and novadaResearch) to signal a fetch failure.
-  // INVARIANT: do NOT change this string — src/tools/research.ts:214-215 depends on the same text.
+  // Sentinel strings emitted by novadaExtract to signal a fetch failure.
+  // INVARIANT: do NOT change EXTRACT_FAILED_SENTINEL — src/tools/research.ts:214-215 depends on it.
+  // EXTRACT_ERROR_SENTINEL is the timeout-ceiling path (extract.ts ~1294).
   const EXTRACT_FAILED_SENTINEL = "## Extract Failed";
+  const EXTRACT_ERROR_SENTINEL  = "## Extraction Error";
 
   if (params.extract_options || params.enrich_top) {
     const opts = params.extract_options ?? { top_n: 1, format: "markdown" as const };
@@ -637,9 +639,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
           // Strip the output-save prefix that novadaExtract prepends (📁 ...)
           const rawText = content.replace(/^📁[^\n]*\n\n/, "");
 
-          // F6b: Detect the "## Extract Failed" sentinel — treat as a soft failure.
-          // Do NOT propagate the raw failure markdown into extracted_content.
-          if (rawText.trimStart().startsWith(EXTRACT_FAILED_SENTINEL)) {
+          // F6b / C4: Detect failure sentinels — treat as a soft failure.
+          // "## Extract Failed" = caught exception path (research.ts depends on this string — do NOT rename).
+          // "## Extraction Error" = TOTAL_REQUEST_CEILING timeout path (extract.ts ~1294).
+          // Neither sentinel must propagate into extracted_content.
+          const trimmed = rawText.trimStart();
+          if (
+            trimmed.startsWith(EXTRACT_FAILED_SENTINEL) ||
+            trimmed.startsWith(EXTRACT_ERROR_SENTINEL)
+          ) {
             return { url, content: null, extract_error: rawText.slice(0, 300), ok: false, sentinel: true };
           }
 
@@ -860,8 +868,10 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     if (rExt.extract_error) {
       lines.push(`extract_error: ${rExt.extract_error}`);
     }
-    // F15: render per-result freshness annotation in markdown when time_range is active
-    if (params.time_range && rExt.within_time_range !== undefined) {
+    // F15 / C9: render per-result freshness annotation in markdown when any time filter is active.
+    // Previously gated on time_range only; start_date/end_date callers also compute within_time_range
+    // annotations but the gate suppressed the per-result lines for them.
+    if ((params.time_range || params.start_date || params.end_date) && rExt.within_time_range !== undefined) {
       lines.push(`within_time_range: ${rExt.within_time_range}`);
     }
     lines.push("");
