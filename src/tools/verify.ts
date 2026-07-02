@@ -89,6 +89,18 @@ function isRedirectPoisonedUrl(rawUrl: string | undefined): boolean {
   }
 }
 
+/**
+ * F7-C: Extract URLs from search result objects, stripping any redirect-poisoned URLs.
+ * Hoisted to module level so it can be used from any context without closing over
+ * outer variables.
+ */
+function sanitizeEvidenceUrls(sources: NovadaSearchResult[]): string[] {
+  return sources
+    .map(r => r.url || r.link)
+    .filter((u): u is string => Boolean(u))
+    .filter(u => !isRedirectPoisonedUrl(u));
+}
+
 interface QueryResult {
   results: NovadaSearchResult[];
   failed: boolean;
@@ -357,15 +369,7 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
     }) &&
     allEvidenceSources.some(r => classifyAuthority(r.url || r.link) === "social");
 
-  // F7-C: Filter redirect-poisoned URLs from the evidence URL lists.
-  // The source objects are used for display (title/snippet) but their URLs must
-  // not appear in agent-facing URL hints if they contain redirect indicators.
-  function sanitizeEvidenceUrls(sources: NovadaSearchResult[]): string[] {
-    return sources
-      .map(r => r.url || r.link)
-      .filter((u): u is string => Boolean(u))
-      .filter(u => !isRedirectPoisonedUrl(u));
-  }
+  // F7-C: sanitizeEvidenceUrls is a module-level helper (above). No closure needed here.
 
   // Build output
   const lines: string[] = [
@@ -443,21 +447,28 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   }
 
   // Top URLs from claim-matching sources (relevant only) — F7-C: strip redirect-poisoned URLs.
+  // Labels match the provenance-honest section headers above (not stance assertions).
   const supportUrls = sanitizeEvidenceUrls(relevantSupportSources).slice(0, 3);
-  lines.push(`- Supporting URLs: ${supportUrls.length > 0 ? supportUrls.join(", ") : "none"}`);
+  lines.push(`- Claim-matching URLs: ${supportUrls.length > 0 ? supportUrls.join(", ") : "none"}`);
 
   // INC-196: Use FILTERED contradicting sources (only items with genuine dispute markers),
   // not the raw skepticalResult.results. Also dedup against supporting URLs.
   // F7-C: strip redirect-poisoned URLs.
+  // Labels match the provenance-honest section headers above (not stance assertions).
   const supportUrlSet = new Set(supportUrls);
   const contradictUrls = sanitizeEvidenceUrls(relevantContradictSources)
     .filter(u => !supportUrlSet.has(u))
     .slice(0, 3);
-  lines.push(`- Contradicting URLs: ${contradictUrls.length > 0 ? contradictUrls.join(", ") : "none"}`);
+  lines.push(`- Negation-matching URLs: ${contradictUrls.length > 0 ? contradictUrls.join(", ") : "none"}`);
 
   lines.push(``);
   lines.push(`## Agent Action`);
   // F7-A: keyword-match caveat in the agent_instruction field for machine consumers.
-  lines.push(`agent_instruction: verdict=${verdict} confidence=${confidence} | bucket_labels=keyword_match_provenance_not_stance | next: novada_research for deeper investigation | next: novada_extract on source URLs for full context${hasOnlyLowAuthority && isScientificClaim ? " | warning: verify_against_primary_literature" : ""}${!hasHighAuthority && isScientificClaim && !hasOnlyLowAuthority ? " | note: no_authoritative_sources_found" : ""}`);
+  // F7-D: no_authoritative_sources_found only when there ARE sources but none are high-authority.
+  // Must not fire on empty evidence (allEvidenceSources.length === 0 → insufficient_data path).
+  const noAuthNote = allEvidenceSources.length > 0 && !hasHighAuthority && isScientificClaim && !hasOnlyLowAuthority
+    ? " | note: no_authoritative_sources_found"
+    : "";
+  lines.push(`agent_instruction: verdict=${verdict} confidence=${confidence} | bucket_labels=keyword_match_provenance_not_stance | next: novada_research for deeper investigation | next: novada_extract on source URLs for full context${hasOnlyLowAuthority && isScientificClaim ? " | warning: verify_against_primary_literature" : ""}${noAuthNote}`);
   return lines.join("\n");
 }

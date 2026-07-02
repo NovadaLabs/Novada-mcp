@@ -104,6 +104,25 @@ describe("F7-A: Provenance-honest bucket labels", () => {
     // Must contain keyword-match caveat in agent hints or instruction
     expect(out).toMatch(/keyword[_\-\s]match|keyword match|provenance|retrieval[_\-\s]query|query keyword/i);
   });
+
+  it("Agent-Hints URL label lines use provenance-honest wording, not stance-asserting labels", async () => {
+    // HIGH veto: section headers are provenance-honest but the machine-readable
+    // URL hint lines still read "Supporting URLs:" / "Contradicting URLs:"  — direct
+    // contradiction that agents parse. This test asserts the LABEL TEXT itself.
+    mockQueries(
+      [src("Eiffel Tower", "The Eiffel Tower in Paris is 330 meters tall.", "a1"),
+       src("Paris facts", "Paris landmark Eiffel reaches 330 meters.", "a2")],
+      [src("Eiffel doubt", "Some question the exact height of the Eiffel Tower.", "a3")],
+      [],
+    );
+    const out = await novadaVerify({ claim: "The Eiffel Tower is 330 meters tall" }, API_KEY);
+    // Old stance-asserting URL label lines must NOT appear
+    expect(out).not.toMatch(/^- Supporting URLs:/m);
+    expect(out).not.toMatch(/^- Contradicting URLs:/m);
+    // Provenance-honest URL label lines MUST appear
+    expect(out).toMatch(/^- Claim-matching URLs:/m);
+    expect(out).toMatch(/^- Negation-matching URLs:/m);
+  });
 });
 
 // ─── F7-B: Hedged/association claim confidence cap ─────────────────────────
@@ -125,10 +144,7 @@ describe("F7-B: Hedged claim confidence capping", () => {
     const verdict = getVerdict(out);
     // Confidence must be capped below 71 for a hedged/association claim
     expect(conf).toBeLessThanOrEqual(70);
-    // Verdict must NOT be "supported" at high confidence for a hedged claim
-    if (verdict === "supported") {
-      expect(conf).toBeLessThanOrEqual(70);
-    }
+    // Dead inner if-guard removed: the assertion above already covers the supported+high-conf case.
   });
 
   it("'may' hedge language + zero contradicting → verdict is not 'supported' at >70 confidence", async () => {
