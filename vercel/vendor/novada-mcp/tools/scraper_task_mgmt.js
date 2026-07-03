@@ -27,12 +27,16 @@ export const ScraperTaskMgmtParamsSchema = z
     task_ids: z
         .string()
         .min(1)
+        // SECURITY (L3 review): flows into the HTTP request body — allowlist chars.
+        .regex(/^[a-zA-Z0-9,_-]+$/)
         .optional()
         .describe("Comma-separated task IDs for 'status' action. Max 200 IDs. E.g. 'abc123,def456'."),
     // Used by "download" action
     task_id: z
         .string()
         .min(1)
+        // SECURITY (L3 review): flows into the HTTP request body — allowlist chars.
+        .regex(/^[a-zA-Z0-9,_-]+$/)
         .optional()
         .describe("Single task ID for 'download' action."),
     // Used by "download" action — output format

@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.8.0",
+  "version": "0.9.3",
   "type": "module",
-  "description": "Vendored shim — provides version metadata + ESM module type for vendored novada-mcp build. CRITICAL: type:module is required — without it Node treats the vendored .js files as CommonJS and ESM exports become invisible to importers (the 'does not provide an export named X' runtime error). Sync 'version' when vendor refresh happens. Real package source lives at ~/Projects/novada-mcp/."
+  "description": "Vendored shim \u2014 provides version metadata + ESM module type for vendored novada-mcp build. CRITICAL: type:module is required \u2014 without it Node treats the vendored .js files as CommonJS and ESM exports become invisible to importers (the 'does not provide an export named X' runtime error). Sync 'version' when vendor refresh happens. Real package source lives at ~/Projects/novada-mcp/."
 }

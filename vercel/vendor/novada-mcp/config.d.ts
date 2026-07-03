@@ -1,9 +1,15 @@
 export declare const VERSION: string;
 export declare const SCRAPER_API_BASE = "https://scraper.novada.com";
 export declare const SCRAPER_DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
-export declare const SCRAPERAPI_BASE = "https://scraperapi.novada.com";
 export declare const WEB_UNBLOCKER_BASE = "https://webunlocker.novada.com";
-export declare const SCRAPER_STATUS_BASE = "https://api-m.novada.com/v1/scraper";
+/**
+ * True on serverless hosts (Vercel / AWS Lambda) that cannot hold a persistent
+ * WebSocket. The Browser API is CDP-over-WebSocket, so `render="browser"` can
+ * never run there — callers use this to fail fast with a clear error and to keep
+ * `render="auto"` from escalating into an impossible tier. (health.ts /
+ * health_all.ts carry local copies; dedupe to this in a follow-up.)
+ */
+export declare function isHostedEnvironment(): boolean;
 export declare const BROWSER_WS_ENDPOINT: string | undefined;
 export declare const PROXY_USER: string | undefined;
 export declare const PROXY_PASS: string | undefined;

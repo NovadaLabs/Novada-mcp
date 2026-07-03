@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z, ZodError } from "zod";
 // ─── NOV-321: novada_session_stats ───────────────────────────────────────────
 // Per-process / per-session usage telemetry: tool-call counts, the last-N calls,
 // and process uptime. Everything lives in module-scoped memory — nothing is
@@ -19,7 +19,22 @@ export const SessionStatsParamsSchema = z.object({
         .describe("Output format. 'markdown' (default): human-readable report. 'json': structured object for programmatic agent use."),
 });
 export function validateSessionStatsParams(args) {
-    return SessionStatsParamsSchema.parse(args ?? {});
+    try {
+        return SessionStatsParamsSchema.parse(args ?? {});
+    }
+    catch (e) {
+        if (e instanceof ZodError) {
+            const issues = e.issues.map(i => {
+                let msg = `  ${i.path.join(".")}: ${i.message}`;
+                if (i.code === "invalid_value" && "values" in i) {
+                    msg += ` (valid values: ${i.values.map((v) => `'${v}'`).join(", ")})`;
+                }
+                return msg;
+            }).join("\n");
+            throw new Error(`Invalid parameters for novada_session_stats:\n${issues}\nagent_instruction: Fix the parameter(s) listed above and retry. Check the tool's inputSchema for required fields and valid values. Do NOT retry with identical params — at least one field must change.`);
+        }
+        throw e;
+    }
 }
 /** Wall-clock time the process / session started, in epoch ms. */
 const SESSION_STARTED_MS = Date.now();

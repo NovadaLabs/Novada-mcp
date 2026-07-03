@@ -1,4 +1,6 @@
 export interface ToolCredentials {
+    /** Caller's API key — used as fallback for webUnblockerKey, proxy auto-fetch, and browser auto-provision. */
+    apiKey?: string;
     webUnblockerKey?: string;
     browserWs?: string;
     proxyUser?: string;
@@ -10,9 +12,20 @@ export interface ToolCredentials {
  * Used by NovadaClient SDK to isolate credentials per-request.
  */
 export declare function withCredentials<T>(creds: ToolCredentials, fn: () => T): T;
-/** Active web unblocker key: SDK-scoped > NOVADA_WEB_UNBLOCKER_KEY > NOVADA_API_KEY (unified). */
+/** Active web unblocker key: SDK-scoped webUnblockerKey > SDK-scoped apiKey > NOVADA_WEB_UNBLOCKER_KEY > NOVADA_API_KEY (unified). */
 export declare function getWebUnblockerKey(): string | undefined;
-/** Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var > auto-provisioned. */
+/**
+ * Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var.
+ *
+ * TENANT SAFETY: this reader is synchronous and has no apiKey to match against,
+ * so it MUST NOT consult the per-key auto-fetch cache (_browserWsCache). On the
+ * multi-tenant hosted server, returning any cached wsUrl here would serve one
+ * caller's browser credentials to another. The cache is only read inside
+ * fetchBrowserSubAccountCredentials(apiKey) / resolveBrowserWs(apiKey), where the
+ * requesting key is known and the entry is matched by its fingerprint.
+ * The store path is request-scoped and the env path is single-tenant config —
+ * both are safe.
+ */
 export declare function getBrowserWs(): string | undefined;
 /** Active proxy credentials: SDK-scoped > NOVADA_PROXY_* env vars. */
 export declare function getProxyCredentials(): {
@@ -31,19 +44,21 @@ export declare function getResidentialProxyCredentials(): {
     endpoint: string;
 } | null;
 /**
- * Fetch the first active proxy sub-account using NOVADA_API_KEY as a Bearer token.
+ * Fetch the first active proxy sub-account using the caller's apiKey as a Bearer token.
  * Calls POST /v1/proxy_account/list directly — no OAuth2 exchange required.
- * Result is cached 6h in memory.
+ * Result is cached 6h in memory, keyed by the fingerprint of the fetching apiKey so
+ * one caller's credentials are never returned to another (see keyFingerprint).
  */
 export declare function fetchProxySubAccountCredentials(apiKey: string): Promise<{
     account: string;
     password: string;
 } | null>;
 /**
- * Fetch Browser API WSS endpoint using NOVADA_API_KEY as Bearer token.
+ * Fetch Browser API WSS endpoint using the caller's apiKey as a Bearer token.
  * Calls POST /v1/proxy_account/list with product=10 (Browser API).
  * Returns wss://{account}:{password}@upg-scbr2.novada.com
- * Cached 6h in memory.
+ * Cached 6h in memory, keyed by the fingerprint of the fetching apiKey so one
+ * caller's browser WSS endpoint is never returned to another (see keyFingerprint).
  */
 export declare function fetchBrowserSubAccountCredentials(apiKey: string): Promise<string | null>;
 /**
@@ -56,14 +71,23 @@ export declare function resolveBrowserWs(apiKey?: string): Promise<string | null
 /**
  * Resolve proxy credentials with priority:
  * 1. Explicit env vars (NOVADA_PROXY_USER + NOVADA_PROXY_PASS + NOVADA_PROXY_ENDPOINT) — no API call.
- * 2. Auto-fetch via NOVADA_API_KEY Bearer token when only NOVADA_PROXY_ENDPOINT is set.
+ * 2. Auto-fetch via caller-supplied apiKey (or NOVADA_API_KEY) when only NOVADA_PROXY_ENDPOINT is set.
  *
  * NOVADA_PROXY_ENDPOINT is required in both cases.
  * Returns null if NOVADA_PROXY_ENDPOINT is not set (proxy tools disabled).
+ *
+ * @param apiKey - Caller's API key. Takes priority over NOVADA_API_KEY for the auto-fetch call.
+ *   Pass the per-request key here so hosted-server requests are billed to the caller, not the server account.
  */
-export declare function resolveProxyCredentials(): Promise<{
+export declare function resolveProxyCredentials(apiKey?: string): Promise<{
     user: string;
     pass: string;
     endpoint: string;
 } | null>;
+/**
+ * Redact a secret string to a last-4 fingerprint for safe logging.
+ * Example: "abc123xyz" → "****xyz"
+ * Never logs the full value.
+ */
+export declare function redactSecret(value: string | undefined): string;
 //# sourceMappingURL=credentials.d.ts.map

@@ -78,13 +78,14 @@ async function probeSearchAll(apiKey) {
     }
 }
 async function probeExtractAll(_apiKey) {
+    // NOVADA_API_KEY covers Web Unblocker (unified key) — no separate key needed.
     const unblockerKey = getWebUnblockerKey();
     if (!unblockerKey) {
         return {
             product: "Extract / Web Unblocker",
             status: "not_configured",
             latency: null,
-            notes: "NOVADA_WEB_UNBLOCKER_KEY env var not set",
+            notes: "NOVADA_API_KEY env var not set (covers Web Unblocker — no separate key needed)",
             activationLink: "https://dashboard.novada.com/overview/unblocker/",
         };
     }
@@ -101,7 +102,8 @@ async function probeExtractAll(_apiKey) {
             body: JSON.stringify({
                 target_url: "https://example.com",
                 response_format: "html",
-                js_render: false,
+                // js_render:true is required — js_render:false returns code=5001 (false-negative)
+                js_render: true,
                 country: "",
             }),
             signal: controller.signal,
@@ -118,15 +120,25 @@ async function probeExtractAll(_apiKey) {
                 product: "Extract / Web Unblocker",
                 status: "active",
                 latency,
-                notes: "Static fetch probe OK",
+                notes: "JS-render probe OK",
             };
         }
+        // code=5001 is the definitive "product not activated" signal
+        if (code === 5001) {
+            return {
+                product: "Extract / Web Unblocker",
+                status: "not_activated",
+                latency,
+                notes: "code=5001 — product not activated",
+                activationLink: "https://dashboard.novada.com/overview/unblocker/",
+            };
+        }
+        // Any other non-zero code is an error (auth failure, quota, etc.) — not "not_activated"
         return {
             product: "Extract / Web Unblocker",
-            status: "not_activated",
+            status: "error",
             latency,
             notes: `code=${code ?? res.status}`,
-            activationLink: "https://dashboard.novada.com/overview/unblocker/",
         };
     }
     catch (err) {

@@ -35,6 +35,8 @@ export const StaticIpMgmtParamsSchema = z
         .describe('Required for "open". IP type: "normal" (Standard) or "premium" (Premium).'),
     region: z
         .string()
+        // SECURITY (L3 review): flows into the HTTP request body — allowlist chars.
+        .regex(/^[a-zA-Z0-9_-]{1,64}$/)
         .optional()
         .describe('Required for "open". Area/region code. Also optional filter for "list" and "export".'),
     duration: z
@@ -50,6 +52,8 @@ export const StaticIpMgmtParamsSchema = z
     // ── "renew" action fields ─────────────────────────────────────────────
     renew_ip_list: z
         .string()
+        // SECURITY (L3 review): flows into the HTTP request body — restrict to IP list chars (digits, dots, commas).
+        .regex(/^[\d.,]+$/)
         .optional()
         .describe('Required for "renew". Comma-separated list of IPs to renew.'),
     // ── "list" action fields ──────────────────────────────────────────────
@@ -73,6 +77,8 @@ export const StaticIpMgmtParamsSchema = z
         .describe('Filter for "list"/"export". ""=All, "1"=In use, "2"=Expired, "3"=Released.'),
     key_word: z
         .string()
+        // SECURITY (L3 review): flows into the HTTP request body — bound the length.
+        .max(200)
         .optional()
         .describe('Search filter for "list"/"export". Searches remarks, order number, or IP.'),
     is_auto_renew: z

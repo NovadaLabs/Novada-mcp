@@ -1,4 +1,4 @@
-import { getBrowserWs } from "../utils/credentials.js";
+import { resolveBrowserWs } from "../utils/credentials.js";
 import { getSession, storeSession, closeSession, listSessions, sanitizeBrowserError } from "../utils/browser.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 /**
@@ -13,7 +13,7 @@ import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
  * - close_session: explicitly close a named session and release resources
  * - list_sessions: list all currently active session IDs
  */
-export async function novadaBrowser(params) {
+export async function novadaBrowser(params, apiKey) {
     const { actions, timeout, session_id: sessionId } = params;
     // Handle session management actions that don't need a browser connection
     if (actions.length === 1) {
@@ -48,12 +48,15 @@ export async function novadaBrowser(params) {
             ].join("\n");
         }
     }
-    const wsEndpoint = getBrowserWs();
+    // resolveBrowserWs prefers: store.browserWs > NOVADA_BROWSER_WS > auto-fetch via apiKey.
+    // Passing apiKey here ensures the caller's account is billed on the hosted server.
+    const wsEndpoint = await resolveBrowserWs(apiKey);
     if (!wsEndpoint) {
         return [
             `## Browser API — Not Configured`,
             ``,
-            `Set the NOVADA_BROWSER_WS environment variable to enable browser automation.`,
+            `Set the NOVADA_BROWSER_WS environment variable to enable browser automation,`,
+            `or provide a NOVADA_API_KEY with Browser API access (product=10) to auto-provision.`,
             ``,
             `Example:`,
             `  claude mcp add novada \\`,
@@ -63,7 +66,7 @@ export async function novadaBrowser(params) {
             ``,
             `Get credentials at: https://dashboard.novada.com/overview/browser/`,
             ``,
-            `agent_instruction: Set NOVADA_BROWSER_WS or ensure NOVADA_API_KEY has Browser API access (product=10). Auto-provisioning is available.`,
+            `agent_instruction: Set NOVADA_BROWSER_WS or ensure NOVADA_API_KEY has Browser API access (product=10). Auto-provisioning will retry with the caller's key.`,
         ].join("\n");
     }
     // Dynamic import to avoid forcing playwright-core on users who don't need browser

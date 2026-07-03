@@ -1,4 +1,4 @@
-import { getBrowserWs, getProxyCredentials, getWebUnblockerKey } from "../utils/credentials.js";
+import { getBrowserWs, getWebUnblockerKey, resolveProxyCredentials } from "../utils/credentials.js";
 import { SCRAPER_API_BASE, WEB_UNBLOCKER_BASE } from "../config.js";
 const PROBE_TIMEOUT_MS = 8000;
 async function probeHttp(url) {
@@ -21,9 +21,10 @@ async function probeHttp(url) {
 }
 async function probeExtract(_apiKey) {
     // Extract uses Web Unblocker: POST webunlocker.novada.com/request
+    // NOVADA_API_KEY covers Web Unblocker (unified key) — no separate key needed.
     const unblockerKey = getWebUnblockerKey();
     if (!unblockerKey) {
-        return { status: "not_configured", label: "Web Unblocker / Extract", latency: null, note: "set NOVADA_WEB_UNBLOCKER_KEY env var" };
+        return { status: "not_configured", label: "Web Unblocker / Extract", latency: null, note: "set NOVADA_API_KEY env var (covers Web Unblocker)" };
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
@@ -32,7 +33,8 @@ async function probeExtract(_apiKey) {
         const res = await fetch(`${WEB_UNBLOCKER_BASE}/request`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${unblockerKey}` },
-            body: JSON.stringify({ target_url: "https://example.com", response_format: "html", js_render: false, country: "" }),
+            // js_render:true is required — js_render:false returns code=5001 (false-negative)
+            body: JSON.stringify({ target_url: "https://example.com", response_format: "html", js_render: true, country: "" }),
             signal: controller.signal,
         });
         const latency = Date.now() - start;
@@ -44,7 +46,11 @@ async function probeExtract(_apiKey) {
         const code = body?.code;
         if (code === 0)
             return { status: "active", label: "Web Unblocker / Extract", latency };
-        return { status: "not_activated", label: "Web Unblocker / Extract", latency, note: `code=${code ?? res.status}` };
+        // code=5001 is the definitive "product not activated" signal
+        if (code === 5001)
+            return { status: "not_activated", label: "Web Unblocker / Extract", latency, note: "code=5001 — activate at dashboard.novada.com/overview/unblocker/" };
+        // Any other non-zero code is an error (auth failure, quota, etc.) — not "not_activated"
+        return { status: "error", label: "Web Unblocker / Extract", latency, note: `code=${code ?? res.status}` };
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -97,10 +103,12 @@ async function probeScraper(apiKey) {
         clearTimeout(timer);
     }
 }
-function probeProxy() {
-    const creds = getProxyCredentials();
+async function probeProxy() {
+    // resolveProxyCredentials: checks env vars first, then auto-fetches via NOVADA_API_KEY
+    // so users who rely on auto-fetch are not shown a false "not_configured".
+    const creds = await resolveProxyCredentials();
     if (creds) {
-        // FIX-5: We can only verify credentials are present — no live TCP probe here.
+        // We can only verify credentials are present — no live TCP probe here.
         // Label as "configured (not verified)" rather than "Active" to avoid false-Active.
         const endpointValid = creds.endpoint.includes(":");
         if (endpointValid) {
@@ -165,15 +173,16 @@ function latencyStr(r) {
  */
 export async function novadaHealth(apiKey) {
     const maskedKey = apiKey.length >= 4 ? `****${apiKey.slice(-4)}` : "****";
-    // Run HTTP probes in parallel; env checks are synchronous
-    const [extractSettled, scraperSettled] = await Promise.allSettled([
+    // Run all probes in parallel (probeProxy is now async — resolveProxyCredentials path)
+    const [extractSettled, scraperSettled, proxySettled] = await Promise.allSettled([
         probeExtract(apiKey),
         probeScraper(apiKey),
+        probeProxy(),
     ]);
     const results = [
         extractSettled.status === "fulfilled" ? extractSettled.value : { status: "error", label: "Web Unblocker / Extract", latency: null, note: "probe threw unexpectedly" },
         scraperSettled.status === "fulfilled" ? scraperSettled.value : { status: "error", label: "Scraper API (search + 13 active platforms)", latency: null, note: "probe threw unexpectedly" },
-        probeProxy(),
+        proxySettled.status === "fulfilled" ? proxySettled.value : { status: "error", label: "Proxy", latency: null, note: "probe threw unexpectedly" },
         probeBrowser(),
     ];
     const activeCount = results.filter(r => r.status === "active").length;

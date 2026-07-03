@@ -1,4 +1,4 @@
-import { TIMEOUTS } from "../config.js";
+import { TIMEOUTS, isHostedEnvironment } from "../config.js";
 import { redactSecrets } from "../_core/errors.js";
 import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
 import { assertUrlSafe, isUrlSafe } from "./ssrf.js";
@@ -77,8 +77,13 @@ export function listSessions() {
     return active;
 }
 // ─── Browser API ───────────────────────────────────────────────────────────
-/** Check if Browser API credentials are available */
+/** Check if Browser API credentials are available (and the runtime can run CDP at all). */
 export function isBrowserConfigured() {
+    // Serverless (Vercel/Lambda) cannot hold the CDP WebSocket, so auto-mode must not
+    // even attempt the browser tier there — otherwise the gate's error text leaks into
+    // the render-failed response. Local runs are unaffected.
+    if (isHostedEnvironment())
+        return false;
     return !!getBrowserWs();
 }
 /**
@@ -110,6 +115,17 @@ export async function fetchViaBrowser(url, options = {}) {
     // and the enrich_top/render="browser" paths can feed it a non-Zod-validated URL
     // (scraped SERP result, or a forced browser mode). Validate before any page.goto.
     assertUrlSafe(url, "browser navigate");
+    // Serverless capability gate. Browser mode is CDP-over-WebSocket; on a hosted
+    // serverless runtime (Vercel/Lambda) connectOverCDP cannot hold the WS and fails
+    // with a raw "AuthorizationError" that looks like a credential problem. Fail fast
+    // with a clear, actionable error instead. auto-mode callers catch this and fall
+    // back to the render (Web Unblocker) tier; forced render="browser" gets the message.
+    if (isHostedEnvironment()) {
+        throw new Error('Browser mode (render="browser") is not available on the hosted Novada MCP endpoint — ' +
+            "it needs a persistent WebSocket (CDP) transport that serverless (Vercel) cannot provide. " +
+            'agent_instruction: Use render="render" (Web Unblocker) for JS rendering, or run the MCP server ' +
+            "locally (npx -y novada-mcp@latest) where Browser mode works.");
+    }
     // Auto-resolve: NOVADA_BROWSER_WS env var OR auto-provision via NOVADA_API_KEY (product=10)
     const wsEndpoint = await resolveBrowserWs(process.env.NOVADA_API_KEY);
     if (!wsEndpoint) {

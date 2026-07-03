@@ -11,5 +11,5 @@ import type { BrowserParams } from "./types.js";
  * - close_session: explicitly close a named session and release resources
  * - list_sessions: list all currently active session IDs
  */
-export declare function novadaBrowser(params: BrowserParams): Promise<string>;
+export declare function novadaBrowser(params: BrowserParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=browser.d.ts.map

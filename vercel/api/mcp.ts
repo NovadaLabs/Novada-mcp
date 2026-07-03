@@ -166,6 +166,10 @@ import {
 import { MonitorParamsSchema } from "../vendor/novada-mcp/tools/monitor.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
 import { NovadaError, NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.js";
+// L3 unified-key: populate the request-scoped credential store with the caller's key so
+// store-reading resolvers (getWebUnblockerKey → store.apiKey, resolveProxyCredentials,
+// resolveBrowserWs) use the CALLER's key on hosted instead of falling back to server env.
+import { withCredentials } from "../vendor/novada-mcp/utils/credentials.js";
 // MCP prompts (tool-selection decision trees) — same module the npm server uses (1:1 parity). Static, safe on serverless.
 import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
 
@@ -342,9 +346,11 @@ function resolveAllowedTools(url: URL): Set<string> | null {
   const toolsParam = url.searchParams.get("tools");
   const groupsParam = url.searchParams.get("groups");
   if (!toolsParam && !groupsParam) {
-    // Default to core tools for first-time users — reduces cognitive overload from 40+ tools
-    // Users can pass ?groups=all or ?groups=core,advanced,account to see more
-    return new Set([...TOOL_GROUPS["core"], "novada_setup"]);
+    // Default: expose ALL tools (minus HOSTED_HIDDEN, filtered in buildServer) so a first-time
+    // chatbox user can discover + use every product — Web Unblocker (novada_unblock), proxy,
+    // scraper, account — without knowing to pass ?groups=. Slim with ?groups=core or ?tools=…
+    // when a smaller context window is preferred.
+    return null;
   }
   const allowed = new Set<string>(["novada_setup"]);
   if (groupsParam) {
@@ -652,6 +658,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       };
     }
 
+    // Wrap the whole dispatch so the caller's apiKey populates the AsyncLocalStorage
+    // credential store for every store-reading resolver underneath (Web Unblocker / proxy /
+    // browser). store.run() transparently propagates the inner return values and rejections.
+    return await withCredentials({ apiKey }, async () => {
     try {
       let result: string;
       switch (name) {
@@ -838,6 +848,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         isError: true,
       };
     }
+    }); // end withCredentials
   });
 
   // MCP prompts — list + get, delegated to the vendored prompts module (npm parity).

@@ -1,7 +1,16 @@
-import { z } from "zod";
+import { z, ZodError } from "zod";
 export const SetupParamsSchema = z.object({}).strict();
 export function validateSetupParams(raw) {
-    return SetupParamsSchema.parse(raw);
+    try {
+        return SetupParamsSchema.parse(raw);
+    }
+    catch (e) {
+        if (e instanceof ZodError) {
+            const issues = e.issues.map(i => `  ${i.path.join(".")}: ${i.message}`).join("\n");
+            throw new Error(`Invalid parameters for novada_setup:\n${issues}\nagent_instruction: Fix the parameter(s) listed above and retry. Check the tool's inputSchema for required fields and valid values.`);
+        }
+        throw e;
+    }
 }
 /**
  * Check environment configuration and return step-by-step setup instructions.
@@ -11,6 +20,7 @@ export function novadaSetup(_params) {
     const apiKey = process.env.NOVADA_API_KEY?.trim();
     const devApiKey = process.env.NOVADA_DEVELOPER_API_KEY?.trim();
     const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
+    const webUnblockerKey = process.env.NOVADA_WEB_UNBLOCKER_KEY?.trim();
     const proxyUser = process.env.NOVADA_PROXY_USER?.trim();
     const proxyPass = process.env.NOVADA_PROXY_PASS?.trim();
     const proxyEndpoint = process.env.NOVADA_PROXY_ENDPOINT?.trim();
@@ -41,6 +51,9 @@ export function novadaSetup(_params) {
     lines.push(check("NOVADA_BROWSER_WS", browserWs, browserWs
         ? "enables novada_browser and novada_browser_flow"
         : "optional — needed for novada_browser / novada_browser_flow"));
+    lines.push(check("NOVADA_WEB_UNBLOCKER_KEY", webUnblockerKey, webUnblockerKey
+        ? "overrides the unblocker key (optional — NOVADA_API_KEY is used as fallback)"
+        : "optional — NOVADA_API_KEY already covers Web Unblocker; set this only to use a separate unblocker key"));
     lines.push(check("NOVADA_PROXY_USER/PASS/ENDPOINT", proxyConfigured, proxyConfigured
         ? "enables novada_proxy_* credential tools"
         : "optional — needed for novada_proxy_* credential generation"));

@@ -9,16 +9,19 @@ export const SCRAPER_API_BASE = "https://scraper.novada.com";
 // GET /scraper_download?task_id=...&file_type=json&apikey=...
 // Returns {"code":27202} when pending, or JSON array when complete.
 export const SCRAPER_DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
-// SERP / Search API — correct domain per official Novada docs.
-// Endpoint: POST /search with JSON body { serpapi_query: { engine, q, api_key, num, ... } }
-// Returns code 402 when account lacks SERP quota (separate plan from Scraper/Unblocker).
-export const SCRAPERAPI_BASE = "https://scraperapi.novada.com";
 // Web Unblocker — JS-rendered pages, POST /request with Bearer token auth.
 // Response: { code: 0, data: { code: 200, html: "...", use_balance: N } }
 export const WEB_UNBLOCKER_BASE = "https://webunlocker.novada.com";
-// Scraper status/result polling — async scraper task status endpoint.
-// GET /v1/scraper/{task_id} with Bearer token auth.
-export const SCRAPER_STATUS_BASE = "https://api-m.novada.com/v1/scraper";
+/**
+ * True on serverless hosts (Vercel / AWS Lambda) that cannot hold a persistent
+ * WebSocket. The Browser API is CDP-over-WebSocket, so `render="browser"` can
+ * never run there — callers use this to fail fast with a clear error and to keep
+ * `render="auto"` from escalating into an impossible tier. (health.ts /
+ * health_all.ts carry local copies; dedupe to this in a follow-up.)
+ */
+export function isHostedEnvironment() {
+    return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
 // Optional: Browser API WebSocket endpoint (CDP)
 // Format: wss://username:password@upg-scbr2.novada.com
 export const BROWSER_WS_ENDPOINT = process.env.NOVADA_BROWSER_WS;

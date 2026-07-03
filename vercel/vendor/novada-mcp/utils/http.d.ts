@@ -13,7 +13,7 @@ type FetchExtras = {
 export declare const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 /** HTTP GET with exponential backoff retry on 429/503/network errors */
 export declare function fetchWithRetry(url: string, options?: Partial<AxiosRequestConfig> & FetchExtras, retries?: number): Promise<AxiosResponse>;
-export declare function fetchViaProxy(url: string, _apiKey: string | undefined, options?: Partial<AxiosRequestConfig> & {
+export declare function fetchViaProxy(url: string, apiKey: string | undefined, options?: Partial<AxiosRequestConfig> & {
     proxyTier?: "residential" | "datacenter";
 } & FetchExtras): Promise<AxiosResponse>;
 /**

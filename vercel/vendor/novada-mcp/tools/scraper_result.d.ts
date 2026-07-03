@@ -11,7 +11,9 @@ export type ScraperResultParams = z.infer<typeof ScraperResultParamsSchema>;
 export declare function validateScraperResultParams(args: Record<string, unknown> | undefined): ScraperResultParams;
 /**
  * Fetch completed results for a scraping task by task_id.
- * Tries the confirmed download endpoint first; falls back to api-m.novada.com.
+ * Primary: 2-step COS download via POST /v1/scraper/task_download.
+ * Fallback: legacy GET download endpoint (api.novada.com/g/api/proxy/scraper_download).
+ * (The old api-m.novada.com status route was removed — it was a dead 404 route.)
  */
 export declare function novadaScraperResult(params: ScraperResultParams, apiKey: string): Promise<string>;
 //# sourceMappingURL=scraper_result.d.ts.map

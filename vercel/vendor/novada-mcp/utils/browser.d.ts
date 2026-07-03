@@ -17,7 +17,7 @@ export declare function storeSession(sessionId: string, page: Page, browser?: im
 export declare function closeSession(sessionId: string): Promise<boolean>;
 /** List all active (non-expired) session IDs, cleaning up expired ones */
 export declare function listSessions(): string[];
-/** Check if Browser API credentials are available */
+/** Check if Browser API credentials are available (and the runtime can run CDP at all). */
 export declare function isBrowserConfigured(): boolean;
 /**
  * Fetch a URL using Novada Browser API via CDP WebSocket.

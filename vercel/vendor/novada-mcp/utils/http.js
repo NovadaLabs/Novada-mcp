@@ -2,7 +2,7 @@ import https from "https";
 import crypto from "crypto";
 import axios, { AxiosError } from "axios";
 import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS, VERSION } from "../config.js";
-import { getProxyCredentials, getResidentialProxyCredentials, getWebUnblockerKey } from "./credentials.js";
+import { getResidentialProxyCredentials, resolveProxyCredentials, getWebUnblockerKey } from "./credentials.js";
 import { assertUrlSafe, safeLookup } from "./ssrf.js";
 import { logRequest } from "../_core/request-log.js";
 const _sharedHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
@@ -168,7 +168,7 @@ function getCircuit(tier, endpoint) {
     }
     return state;
 }
-export async function fetchViaProxy(url, _apiKey, options = {}) {
+export async function fetchViaProxy(url, apiKey, options = {}) {
     // SSRF chokepoint (also guards runtime-discovered URLs: sitemap/robots/llms.txt/BFS).
     assertUrlSafe(url);
     const { proxyTier, tool, __noLog, ...axiosOptionsRaw } = options;
@@ -182,7 +182,9 @@ export async function fetchViaProxy(url, _apiKey, options = {}) {
         logRequest({ tool: tool ?? "unknown", url, status: resp.status, ms: Date.now() - _proxyStartMs, mode: "proxy" });
         return resp;
     };
-    // Credentials: use residential creds if proxyTier === "residential", else standard proxy creds
+    // Credentials: use residential creds if proxyTier === "residential", else resolve via apiKey.
+    // resolveProxyCredentials(apiKey) prefers caller-supplied key for auto-fetch so on the hosted
+    // server the caller's account is billed, not the server account.
     let effectiveTier = proxyTier ?? "datacenter";
     const proxyCreds = proxyTier === "residential"
         ? (() => {
@@ -197,7 +199,7 @@ export async function fetchViaProxy(url, _apiKey, options = {}) {
             }
             return getResidentialProxyCredentials();
         })()
-        : getProxyCredentials();
+        : await resolveProxyCredentials(apiKey);
     const proxyUser = proxyCreds?.user;
     const proxyPass = proxyCreds?.pass;
     const proxyEndpoint = proxyCreds?.endpoint;
@@ -283,6 +285,12 @@ export async function fetchWithRender(url, scraperApiKey, options = {}) {
     // SSRF chokepoint: validate the target before it is handed to the unblocker or the
     // proxy fallback. The unblocker POST itself targets Novada's own endpoint.
     assertUrlSafe(url);
+    // Resolve web unblocker key via the credential store/env chain:
+    //   store.webUnblockerKey → store.apiKey → NOVADA_WEB_UNBLOCKER_KEY → NOVADA_API_KEY
+    // The store.apiKey path is the L3 unified-key fix: on the hosted server, withCredentials()
+    // populates store.apiKey with the caller's key, so getWebUnblockerKey() returns it
+    // without requiring a separate NOVADA_WEB_UNBLOCKER_KEY per-caller.
+    // NOTE: scraperApiKey is the scraper-API key (different service) — never use it as the unblocker key.
     const unblockerKey = getWebUnblockerKey();
     const { country, proxyTier, tool, __noLog, ...axiosOptions } = options;
     const _renderStartMs = Date.now();
