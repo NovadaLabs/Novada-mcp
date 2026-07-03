@@ -1,12 +1,12 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.NovadaLabs/novada-mcp",
-  "description": "Search the web (5 engines), extract content from any URL, crawl websites, map site structure, run multi-step research, scrape 129 platforms, verify factual claims, unblock anti-bot pages, automate browser workflows, and check API health — routed through 100M+ proxy IPs across 195 countries.",
+  "description": "Search the web (5 engines), extract content from any URL, crawl websites, map site structure, run multi-step research, scrape 129 platforms, verify factual claims, unblock anti-bot pages, automate browser workflows, and check API health \u2014 routed through 100M+ proxy IPs across 195 countries.",
   "repository": {
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
   },
-  "version": "0.9.2",
+  "version": "0.9.3",
   "tools": [
     {
       "name": "novada_search",
@@ -34,11 +34,11 @@
     },
     {
       "name": "novada_scrape",
-      "description": "Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 129 platforms: Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more. Best for: E-commerce product data, social posts/comments, job listings, reviews, real estate, market data. Output formats: \"markdown\" (default, agent-optimized table), \"json\" (structured, for programmatic use)."
+      "description": "Use when you need structured data from a specific platform \u2014 not raw HTML, but clean tabular records. Supports 129 platforms: Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more. Best for: E-commerce product data, social posts/comments, job listings, reviews, real estate, market data. Output formats: \"markdown\" (default, agent-optimized table), \"json\" (structured, for programmatic use)."
     },
     {
       "name": "novada_verify",
-      "description": "Use when you have a factual claim and need to check if it's supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data. Best for: Checking claims before citing them, cross-validating research findings, detecting misinformation. Confidence 0–100 indicates certainty."
+      "description": "Use when you have a factual claim and need to check if it's supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data. Best for: Checking claims before citing them, cross-validating research findings, detecting misinformation. Confidence 0\u2013100 indicates certainty."
     },
     {
       "name": "novada_unblock",
@@ -46,11 +46,11 @@
     },
     {
       "name": "novada_browser",
-      "description": "Use when you need to interact with a web page — click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Chain multiple actions in one call for efficiency. Best for: Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions. Actions: navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call."
+      "description": "Use when you need to interact with a web page \u2014 click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Chain multiple actions in one call for efficiency. Best for: Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions. Actions: navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select \u2014 up to 20 per call."
     },
     {
       "name": "novada_health",
-      "description": "Check which Novada API products are active on your API key. Best for: First-time setup, diagnosing why a tool is failing, confirming your account has the right products activated. Returns: Status table for Search, Extract, Scraper API, Proxy, and Browser API — with activation links for anything not yet enabled."
+      "description": "Check which Novada API products are active on your API key. Best for: First-time setup, diagnosing why a tool is failing, confirming your account has the right products activated. Returns: Status table for Search, Extract, Scraper API, Proxy, and Browser API \u2014 with activation links for anything not yet enabled."
     }
   ],
   "prompts": [
@@ -100,7 +100,7 @@
   "skills": [
     {
       "name": "novada-agent",
-      "description": "Tool selection guide for 11 Novada MCP tools — decision tree, key parameters, common workflows (research+extract, competitive analysis, full site docs, fresh news, proxy setup), and when NOT to use each tool.",
+      "description": "Tool selection guide for 11 Novada MCP tools \u2014 decision tree, key parameters, common workflows (research+extract, competitive analysis, full site docs, fresh news, proxy setup), and when NOT to use each tool.",
       "path": "skills/novada-agent/SKILL.md"
     }
   ],
@@ -126,7 +126,7 @@
     {
       "registryType": "npm",
       "identifier": "novada-mcp",
-      "version": "0.9.2",
+      "version": "0.9.3",
       "transport": {
         "type": "stdio"
       },

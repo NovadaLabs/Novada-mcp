@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "One MCP server for all web data. Search, scrape, crawl, proxy, and AI research in one install.",
   "mcpName": "novada",
   "type": "module",
@@ -35,7 +35,7 @@
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "benchmark": "tsx benchmark/run.ts",
     "test:bing-live": "node tests/live/bing-reliability.mjs",
-    "prepublishOnly": "if [ -f .env ]; then echo 'ERROR: .env file present — delete test credentials before publishing'; exit 1; fi && npm run build && npm test -- tests/tools/search.test.ts"
+    "prepublishOnly": "if [ -f .env ]; then echo 'ERROR: .env file present \u2014 delete test credentials before publishing'; exit 1; fi && npm run build && npm test -- tests/tools/search.test.ts"
   },
   "keywords": [
     "mcp",
