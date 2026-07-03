@@ -600,3 +600,228 @@ describe("field extraction window — full content, not display-truncated", () =
     expect(parsed.fields.author.value).toContain("Jane Researcher");
   });
 });
+
+// F2: Cloudflare interstitial on forced render= path must NOT return status:success.
+// A Cloudflare block page is several KB (well above the old 2000-char guard), so the
+// old code set usedMode="render" and passed it to quality scoring → quality:40, content_ok:true.
+// After the fix: detectBotChallenge runs regardless of html.length → blocked outcome.
+describe("F2: Cloudflare interstitial on render path → must NOT succeed silently", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearCache();
+  });
+
+  // A realistic Cloudflare "Attention Required" interstitial — well above 2000 chars.
+  const cfInterstitialHtml = `<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <title>Attention Required! | Cloudflare</title>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" id="cf_styles-css" href="/cdn-cgi/styles/cf.errors.css" type="text/css" media="screen,projection" />
+  <style>body{margin:0;padding:0}</style>
+</head>
+<body>
+  <div id="cf-wrapper">
+    <div class="cf-alert cf-alert-error cf-cookie-error" id="cookie-alert" data-translate="allow_cookies">
+      Please enable cookies.
+    </div>
+    <div id="cf-error-details" class="p-0">
+      <header class="mx-auto pt-10 lg:pt-6 lg:px-8 w-240 xl:w-full max-w-240">
+        <h1 class="inline-block sm:block sm:mb-2 font-light text-60 lg:text-4xl text-black-dark leading-tight mr-4">
+          <span data-translate="error">Sorry, you have been blocked</span>
+        </h1>
+        <span class="inline-block font-normal text-gray-600 text-3xl lg:text-2xl leading-tight">
+          You are unable to access this website
+        </span>
+      </header>
+      <div class="my-8 bg-gradient-to-b from-white to-gray-100 border border-gray-200 rounded-2xl overflow-hidden shadow-sm mx-auto p-8 w-240 xl:w-full max-w-240">
+        <div>
+          <p>The owner of this website (g2.com) has banned your access based on your browser's signature.</p>
+          <ul>
+            <li data-translate="error_1009_why_1">You visited this page with an IP address or browser that is associated with a bot or automated tool.</li>
+          </ul>
+        </div>
+        <div>
+          <h2 data-translate="what_can_i_do">What can I do?</h2>
+          <p data-translate="error_1009_what_1">If you believe you are being blocked in error, contact the owner of this site for assistance.</p>
+        </div>
+      </div>
+      <div class="cf-error-footer cf-wrapper w-240 lg:w-full py-10 sm:py-4 sm:px-8 mx-auto text-center sm:text-left border-solid border-0 border-t border-gray-300 opacity-50">
+        <p class="text-black-dark text-sm font-semibold leading-relaxed">
+          Performance &amp; security by
+          <a rel="noopener noreferrer" href="https://www.cloudflare.com?utm_source=challenge&amp;utm_campaign=l" class="cf-footer-item">Cloudflare</a>
+        </p>
+        <p class="text-black-dark text-sm cf-footer-item sm:block">
+          <span>Ray ID: 8abc123def456789</span>
+          &nbsp;&bull;&nbsp;
+          <span>Your IP: 1.2.3.4</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`.padEnd(5000, "<!-- padding -->");  // ensure well above 2000 chars
+
+  it("F2a: render=render with Cloudflare interstitial (>2000 chars) must NOT return status:success", async () => {
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+
+    // Mock the POST to web unblocker — returns the interstitial as "rendered" content
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html: cfInterstitialHtml, msg: "", msg_detail: "" } },
+      status: 200,
+      headers: { "content-type": "text/html" },
+      config: {} as never,
+      statusText: "OK",
+    });
+
+    const result = await novadaExtract(
+      { url: "https://g2-f2-test.example/categories/web-scraping", render: "render", format: "markdown" },
+      API_KEY
+    );
+
+    // Must NOT be a silent success containing the interstitial copy
+    expect(result).not.toContain("Sorry, you have been blocked");
+    expect(result).not.toContain("Attention Required");
+
+    // Must surface a blocked/error outcome — either an error string or content_ok:false
+    const isError = result.includes("## Extract Failed") || result.includes("content_ok:false") || result.includes("blocked");
+    expect(isError).toBe(true);
+
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+  });
+
+  it("F2b: normal rich page discussing CDN/bot protection must still succeed (no false positive)", async () => {
+    // A real page about web scraping — no challenge-page markers (no "ray id", no "just a moment", etc.)
+    // It mentions Cloudflare in prose but does NOT contain any definitive challenge strings.
+    const normalPageHtml = `
+      <html>
+        <head><title>Web Scraping Guide</title></head>
+        <body>
+          <main>
+            <h1>How to Bypass Anti-Scraping Protection</h1>
+            ${"<p>Many websites use CDN-level bot management services to protect their content from automated access. Legitimate scraping tools use techniques like rotating proxies and realistic user-agent strings to work around these protections while respecting the site terms of service.</p>".repeat(15)}
+            <p>Understanding how bot management systems work can help developers build more robust scraping tools.</p>
+          </main>
+        </body>
+      </html>
+    `;
+
+    mockedAxios.get.mockResolvedValue({
+      data: normalPageHtml,
+      status: 200,
+      headers: { "content-type": "text/html" },
+      config: {} as never,
+      statusText: "OK",
+    });
+
+    const result = await novadaExtract(
+      { url: "https://normalpage-f2.example/web-scraping-guide", format: "markdown" },
+      API_KEY
+    );
+
+    // A page discussing bot protection must NOT be misidentified as a bot challenge
+    expect(result).not.toContain("## Extract Failed");
+    expect(result).toContain("Web Scraping Guide");
+    // content_ok must be true (not false)
+    expect(result).not.toContain("content_ok:false");
+  });
+});
+
+// ─── Round-3 veto gap tests ───────────────────────────────────────────────────
+
+describe("Round-3 CRITICAL: getSuggestedFix must not recommend render=render after 5001", () => {
+  // F10 (round-1) correctly throws a 5001 message in fetchWithRender.
+  // The outer novadaExtract catch passes that message to getSuggestedFix,
+  // which must NOT match the "js" substring in "render/JS modes" and return
+  // "retry with render=render" — that would re-invite the mode that just failed.
+  it("5001 error → agent_instruction points to dashboard activation, NOT retry with render=render", async () => {
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+
+    // Mock fetchWithRender (axios.post) to return code=5001 (product unavailable)
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 5001, msg: "Product unavailable", data: null },
+      status: 200,
+      headers: {},
+      config: {} as never,
+      statusText: "OK",
+    });
+
+    const result = await novadaExtract(
+      { url: "https://5001-test.example/page", render: "render", format: "markdown" },
+      API_KEY
+    );
+
+    // Must surface as an extraction failure
+    expect(result).toContain("## Extract Failed");
+
+    // agent_instruction must NOT recommend render="render" (self-defeating)
+    expect(result).not.toMatch(/retry with render="render"/);
+    expect(result).not.toMatch(/suggested_fix: retry with render/);
+
+    // Must point to dashboard activation or render=static
+    const hasActivationHint = result.includes("dashboard") || result.includes("activate") || result.includes("not activated") || result.includes("render=static");
+    expect(hasActivationHint).toBe(true);
+
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+  });
+});
+
+describe("Round-3 HIGH: F2 browser escalation should use pickBetterHtml, not raw byte length", () => {
+  // When render=render returns a bot-challenge page, and a browser is configured,
+  // the code should use quality-score comparison (pickBetterHtml) not raw byte length.
+  // Bug: a genuine page shorter than a padded Cloudflare interstitial gets discarded.
+  // Fix: use pickBetterHtml for consistency with the auto-escalation paths.
+  it("F2: browser result shorter-but-better-quality than bot-challenge interstitial is NOT discarded", async () => {
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+    // A long Cloudflare challenge interstitial (large byte length, low quality content)
+    const cfInterstitial = `<html><head><title>Just a moment...</title></head><body>
+      <div id="challenge-stage">Checking your browser before allowing you access to this site.
+        Cloudflare Ray ID: abc123def456 &bull; Your IP: 1.2.3.4
+      </div>
+    </body></html>`.padEnd(8000, "<!-- cloudflare padding -->");
+
+    // Real content page — shorter bytes but high quality prose
+    const realContent = `<html><head><title>Web Scraping Tools</title></head><body><main>
+      ${"<p>This is a real article about web scraping tools and techniques. It contains rich prose content that passes quality checks.</p>".repeat(8)}
+    </main></body></html>`;
+
+    // fetchWithRender (POST) returns the Cloudflare interstitial
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html: cfInterstitial, msg: "", msg_detail: "" } },
+      status: 200,
+      headers: { "content-type": "text/html" },
+      config: {} as never,
+      statusText: "OK",
+    });
+
+    // Set NOVADA_BROWSER_WS so isBrowserConfigured() returns true
+    process.env.NOVADA_BROWSER_WS = "wss://fake-browser.example.com";
+
+    // Spy on fetchViaBrowser via module mock
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://g2-f2-round3.example/categories/web-scraping", render: "render", format: "markdown" },
+      API_KEY
+    );
+
+    fetchViaBrowserSpy.mockRestore();
+
+    // The result must NOT contain interstitial text
+    expect(result).not.toContain("Cloudflare Ray ID");
+    expect(result).not.toContain("Just a moment");
+    expect(result).not.toContain("Checking your browser before allowing");
+
+    // Must use the real content (even though it was shorter in bytes)
+    expect(result).toContain("Web Scraping Tools");
+
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    delete process.env.NOVADA_BROWSER_WS;
+  });
+});

@@ -237,8 +237,8 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
       render: "auto",
     }, apiKey);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return formatError(params.url, now, message, params.format);
+    const rawMessage = err instanceof Error ? err.message : String(err);
+    return formatError(params.url, now, redactSecrets(rawMessage), params.format);
   }
 
   // C8 Fix: Detect extraction failure sentinels BEFORE baselining.

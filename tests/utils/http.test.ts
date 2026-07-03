@@ -142,6 +142,43 @@ describe("fetchWithRender", () => {
     await expect(fetchWithRender("https://example.com", undefined)).rejects.toThrow();
     delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
   });
+
+  // F10: outer code=5001 (PRODUCT_UNAVAILABLE) must short-circuit immediately with a
+  // specific actionable message — NOT burn 3 × TIMEOUTS.RENDER in retries.
+  it("F10: short-circuits immediately on outer code=5001 with actionable message", async () => {
+    vi.mock("axios");
+    const mockedAxios = vi.mocked(axios);
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 5001, msg: "Product unavailable", data: null },
+      status: 200,
+      headers: {},
+      config: {} as never,
+      statusText: "OK",
+    });
+
+    const start = Date.now();
+    await expect(fetchWithRender("https://example.com", "test-key"))
+      .rejects.toThrow(/5001/);
+
+    // Must short-circuit: no 3x retry with delays (would be >> 3000ms)
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(3000);
+
+    // Error message must be actionable
+    let thrown: Error | null = null;
+    try {
+      await fetchWithRender("https://example.com", "test-key");
+    } catch (e) {
+      thrown = e as Error;
+    }
+    expect(thrown?.message).toMatch(/not activated|unavailable/i);
+    expect(thrown?.message).toMatch(/5001/);
+    expect(thrown?.message).toMatch(/retrying will not help/i);
+
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+  });
 });
 
 describe("fetchViaProxy — circuit breaker TTL", () => {

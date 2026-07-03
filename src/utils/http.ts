@@ -378,6 +378,15 @@ export async function fetchWithRender(
           }
         );
         // Response format: { code: 0, data: { code: 200, html: "...", msg, msg_detail } }
+        // F10: outer code=5001 → PRODUCT_UNAVAILABLE — short-circuit immediately, no retries.
+        // Retrying will not help: the product must be activated in the dashboard first.
+        if (resp.data?.code === 5001 || resp.data?.data?.code === 5001) {
+          throw new Error(
+            `Web Unblocker not activated (code=5001) — render/js modes unavailable on this account. ` +
+            `Activate at https://dashboard.novada.com/overview/web-unblocker/ or use render=static. ` +
+            `Retrying will not help.`
+          );
+        }
         if (resp.data?.code === 0 && resp.data?.data?.html) {
           if (!__noLog) logRequest({ tool: tool ?? "unknown", url, status: resp.data.data.code ?? resp.status, ms: Date.now() - _renderStartMs, mode: "render" });
           return { ...resp, data: resp.data.data.html };
@@ -477,14 +486,19 @@ export function detectBotChallenge(html: string): boolean {
   // ONLY strings that unambiguously indicate a bot challenge page.
   // Short/ambiguous patterns (ips.js, cd.js, _px, press & hold, akamaized)
   // moved to heuristic section below to avoid false positives.
+  //
+  // IMPORTANT — three patterns require STRUCTURAL context, not bare substring:
+  //   "just a moment"  → only when it is the <title> AND a CF challenge element is present
+  //   "ray id"         → only via class="ray-id" or "Ray ID: <hex>" inside a CF challenge block
+  //                      (NOT in prose, NOT in CF error-page error sections)
+  //   "datadome"       → only via challenge markers (dd_challenge div, /datadome/captcha/ action,
+  //                      "powered by datadome" text); NOT the passive SDK <script src="js.datadome.co">
   const knownChallengeStrings = [
-    // Cloudflare
-    "just a moment",
+    // Cloudflare — structural tokens (unambiguous)
     "cf-browser-verification",
     "__cf_chl_opt",
     "cf_chl_",
     "__cf_bm",
-    "ray id",
     "checking your browser",
     // Akamai (specific bot-management cookies only — NOT "akamaized" which matches CDN asset URLs)
     "_abck",
@@ -494,13 +508,11 @@ export function detectBotChallenge(html: string): boolean {
     "incap_ses_",
     "visid_incap_",
     "_incap_",
-    // DataDome
-    "datadome",
     // Generic (unambiguous)
     "please wait while we verify",
     "human verification",
     "human-challenge",
-    // DataDome challenge page markers (not just the cookie name)
+    // DataDome challenge page markers (not just the cookie name or SDK script src)
     "robot check",
     "enter the characters you see below",
     "sorry, we just need to make sure",
@@ -514,6 +526,64 @@ export function detectBotChallenge(html: string): boolean {
       // A single known challenge string is sufficient to declare a challenge
       return true;
     }
+  }
+
+  // --- Structural context checks for ambiguous strings ---
+  // These strings appear in both legitimate content AND challenge pages; require
+  // co-presence of structural challenge markers to avoid false positives.
+
+  // "just a moment" — only a challenge when it is the page <title> AND a CF challenge
+  // element/script is co-present. Prose that mentions the phrase must not trigger.
+  const titleLower = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").trim().toLowerCase();
+  const hasCfChallengeStructure =
+    lower.includes("cf-browser-verification") ||
+    lower.includes("__cf_chl_opt") ||
+    lower.includes("cf_chl_") ||
+    lower.includes("__cf_bm") ||
+    lower.includes("cf-im-under-attack") ||
+    lower.includes("cf-hcaptcha-container") ||
+    /window\.__cf\b/.test(lower);
+  if (titleLower.includes("just a moment") && hasCfChallengeStructure) {
+    return true;
+  }
+
+  // "ray id" — only a challenge when it appears as a CSS class `ray-id` on a
+  // CF challenge page, NOT in prose text, NOT in CF error pages (5xx).
+  // CF bot-challenge pages don't use "Ray ID" prominently — it appears as a
+  // footer diagnostic on error pages.  We skip this pattern entirely as a
+  // standalone definitive signal; the CF challenge is always caught by
+  // __cf_chl_opt / cf-browser-verification / cf_chl_ above.
+  // (No action needed here — "ray id" is removed from the definitive list above.)
+
+  // "datadome" — only a challenge via explicit DataDome challenge-page structures.
+  // The passive SDK script (src="js.datadome.co/tags.js") is present on allowed
+  // pages and must NOT trigger detection.
+  const hasDataDomeChallengeStructure =
+    lower.includes("dd_challenge") ||
+    lower.includes("/datadome/captcha/") ||
+    lower.includes("powered by datadome") ||
+    lower.includes("datadome-captcha");
+  if (hasDataDomeChallengeStructure) {
+    return true;
+  }
+
+  // Cloudflare hard-block pages (error 1009 "you have been blocked" / banned IP).
+  // These are not JS challenge pages but ARE bot-detection blocks — they must NOT
+  // be returned as successful content.
+  // Detection: "sorry, you have been blocked" co-present with CF error layout markers.
+  // The CF error footer / error-details IDs are specific to CF error/block pages.
+  // A 5xx error page (522, 524) won't contain "sorry, you have been blocked" so
+  // this does NOT trigger on pure network error pages.
+  const hasCfBlockLayout =
+    lower.includes("cf-error-footer") ||
+    (lower.includes("cf-error-details") && lower.includes("cf-wrapper"));
+  if (lower.includes("sorry, you have been blocked") && hasCfBlockLayout) {
+    return true;
+  }
+  // Also catch Cloudflare "Attention Required" hard-block pages regardless of the
+  // exact blocked-message variant — the CF error layout is the key structural signal.
+  if (lower.includes("attention required") && hasCfBlockLayout) {
+    return true;
   }
 
   // --- Heuristic signals (need 2+ to trigger) ---

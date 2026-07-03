@@ -139,11 +139,16 @@ export const SearchParamsSchema = withCamelCaseAliases(z.object({
   extractOptions: "extract_options",
 });
 
-export const ExtractParamsSchema = withCamelCaseAliases(z.object({
+// Inner schema — validated after preprocess
+const _ExtractParamsInner = z.object({
   url: z.union([
     safeUrl,
     z.array(safeUrl).min(1).max(10),
-  ]).describe("URL or array of URLs (max 10) to extract. Batch mode processes in parallel. For multiple URLs, use the urls array param instead."),
+  ]).describe(
+    "URL or array of URLs (max 10) to extract. " +
+    "Batch mode processes in parallel. " +
+    "Accepted shapes: single string, array of strings, or use the urls alias."
+  ),
   urls: z.array(safeUrl).min(1).max(10).optional()
     .describe(
       "Array of URLs to extract in parallel (max 10). " +
@@ -173,11 +178,41 @@ export const ExtractParamsSchema = withCamelCaseAliases(z.object({
     .describe("Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage."),
   project: z.string().max(30).optional()
     .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
-}), {
-  maxChars: "max_chars",
-  waitFor: "wait_for",
-  waitMs: "wait_ms",
 });
+
+/**
+ * Public ExtractParamsSchema — wraps the inner schema with two preprocess layers:
+ *
+ * 1. urls → url promotion (F11): when `urls` is present and `url` is absent,
+ *    copy `urls` into `url` so the required `url` field is satisfied. This lets
+ *    callers pass ONLY `urls=[...]` as the documented alias without hitting a
+ *    ZodError on the `url` required field.
+ *
+ * 2. camelCase → snake_case aliasing (NOV-327): maxChars → max_chars, etc.
+ *
+ * Both layers run inside a single z.preprocess so Zod sees the normalised input.
+ */
+export const ExtractParamsSchema = z.preprocess((input) => {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+  const obj = input as Record<string, unknown>;
+
+  // Layer 1: urls → url promotion — copy urls into url when url is missing
+  let out: Record<string, unknown> = { ...obj };
+  if ("urls" in out && !("url" in out)) {
+    out = { ...out, url: out["urls"] };
+  }
+
+  // Layer 2: camelCase → snake_case (NOV-327) aliases
+  out = remapAliases(out, {
+    maxChars: "max_chars",
+    waitFor: "wait_for",
+    waitMs: "wait_ms",
+  });
+
+  return out;
+}, _ExtractParamsInner);
 
 export const CrawlParamsSchema = withCamelCaseAliases(z.object({
   url: safeUrl,
