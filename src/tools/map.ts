@@ -191,7 +191,24 @@ async function novadaMapInner(
   // A sub-path seed (e.g. /docs) may discard many sitemap URLs that are outside
   // the scoped prefix — over-fetch by a generous multiple so the result list is full.
   const sitemapFetchBudget = maxUrls * 10;
-  const sitemapUrls = await discoverViaSitemap(origin, apiKey, sitemapFetchBudget);
+
+  // ONE overall deadline for ALL network work in this tool (sitemap probe + BFS).
+  // The sitemap phase (discoverViaSitemap) is a network call that can itself hang under
+  // concurrency/slow-proxy — guarding only the BFS loop left this phase able to blow the
+  // hosted 56s wall-clock (observed: map OK isolated, 58s TOOL_ERR under a concurrent sweep).
+  // Racing both phases against a single deadline makes the whole tool bounded. (0.9.6 fix.)
+  const mapDeadline = Date.now() + MAP_BFS_DEADLINE_MS;
+  const DEADLINE = Symbol("map-deadline");
+  const sitemapUrls = await (async (): Promise<string[]> => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const raced = await Promise.race([
+      discoverViaSitemap(origin, apiKey, sitemapFetchBudget),
+      new Promise<typeof DEADLINE>((r) => { t = setTimeout(() => r(DEADLINE), Math.max(0, mapDeadline - Date.now())); }),
+    ]);
+    if (t) clearTimeout(t);
+    // On sitemap-phase timeout, fall through to BFS (which shares mapDeadline) with an empty set.
+    return raced === DEADLINE ? [] : raced;
+  })();
 
   // When discoverViaSitemap returns exactly sitemapFetchBudget URLs, the true sitemap
   // count is unknown — the budget was the binding constraint, not the sitemap's actual size.
@@ -224,9 +241,9 @@ async function novadaMapInner(
   } else {
     // --- Phase 2: Parallel BFS crawl ---
     // BFS respects max_depth (each hop = one depth level) — depth IS meaningful here.
-    // Pass a deadline so BFS never exceeds the hosted wall-clock limit.
-    const bfsDeadline = Date.now() + MAP_BFS_DEADLINE_MS;
-    const bfsResult = await parallelBfsCrawl(params, apiKey, maxUrls, baseHostname, bfsDeadline);
+    // Share the ONE overall map deadline (already partly consumed by the sitemap phase)
+    // so sitemap-probe + BFS together never exceed the hosted wall-clock.
+    const bfsResult = await parallelBfsCrawl(params, apiKey, maxUrls, baseHostname, mapDeadline);
     discovered = bfsResult.urls.filter(u => inScope(u, scope));
     bfsHitDeadline = bfsResult.hitDeadline;
   }
