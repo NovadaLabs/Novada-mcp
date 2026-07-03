@@ -1,5 +1,7 @@
 import type { ProxyParams } from "./types.js";
 import { resolveProxyCredentials } from "../utils/credentials.js";
+import { novadaProxyStatic } from "./proxy_static.js";
+import { novadaProxyDedicated } from "./proxy_dedicated.js";
 
 /**
  * Build Novada proxy username with targeting options.
@@ -29,6 +31,8 @@ const TYPE_LABELS: Record<string, string> = {
   mobile: "Mobile proxy (4G/5G IPs, best for app automation)",
   isp: "ISP proxy (stable, best for long sessions)",
   datacenter: "Datacenter proxy (fastest, highest volume)",
+  static: "Static ISP proxy (dedicated IP, same IP every request)",
+  dedicated: "Dedicated datacenter proxy (exclusive IP, not shared)",
 };
 
 /**
@@ -38,6 +42,14 @@ const TYPE_LABELS: Record<string, string> = {
  * bypass geo-restrictions, or maintain IP consistency across a session.
  */
 export async function novadaProxy(params: ProxyParams): Promise<string> {
+  // 0.9.4: static/dedicated are per-IP products with their own credential model —
+  // delegate to their specialized handlers instead of the zone-based path.
+  if (params.type === "static") {
+    return novadaProxyStatic({ country: params.country ?? "us", session_id: params.session_id ?? "default", format: params.format ?? "url" });
+  }
+  if (params.type === "dedicated") {
+    return novadaProxyDedicated({ session_id: params.session_id ?? "default", format: params.format ?? "url" });
+  }
   // INC-198: Use resolveProxyCredentials() which auto-fetches via account API
   // when only NOVADA_PROXY_ENDPOINT is set (no user/pass).
   const proxyCreds = await resolveProxyCredentials();

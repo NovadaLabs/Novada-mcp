@@ -380,9 +380,9 @@ export interface NovadaApiResponse {
 // ─── Proxy Params ────────────────────────────────────────────────────────────
 
 export const ProxyParamsSchema = withCamelCaseAliases(z.object({
-  type: z.enum(["residential", "mobile", "isp", "datacenter"]).default("residential")
-    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost."),
-  country: z.string().length(2).optional()
+  type: z.enum(["residential", "isp", "datacenter", "mobile", "static", "dedicated"]).default("residential")
+    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static' for a dedicated ISP IP (same IP every request, requires session_id), 'dedicated' for an exclusive datacenter IP (not shared, requires session_id)."),
+  country: z.string().regex(/^[a-zA-Z]{2}$/, "country must be a 2-letter ISO code (e.g. 'us', 'gb', 'de')").optional()
     .describe("ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country."),
   city: z.string().max(50).regex(/^[a-zA-Z\s\-]+$/, "city must contain only letters, spaces, or hyphens").optional()
     .describe("City name for city-level targeting. Requires country to be set."),
@@ -393,6 +393,17 @@ export const ProxyParamsSchema = withCamelCaseAliases(z.object({
 }), { sessionId: "session_id" });
 
 export type ProxyParams = z.infer<typeof ProxyParamsSchema>;
+
+/** Backward-compat: old typed-proxy tool name → the `type` value to inject into novada_proxy.
+ * The 6 typed tools were merged into one novada_proxy(type=...) in 0.9.4; old names still route here. */
+export const PROXY_ALIAS_MAP: Record<string, ProxyParams["type"]> = {
+  novada_proxy_residential: "residential",
+  novada_proxy_isp: "isp",
+  novada_proxy_datacenter: "datacenter",
+  novada_proxy_mobile: "mobile",
+  novada_proxy_static: "static",
+  novada_proxy_dedicated: "dedicated",
+};
 
 export function validateProxyParams(args: Record<string, unknown> | undefined): ProxyParams {
   return ProxyParamsSchema.parse(args ?? {});

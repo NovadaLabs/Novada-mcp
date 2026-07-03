@@ -24,6 +24,7 @@ import {
   REGISTERED_TOOL_NAMES,
 } from "../../src/tools/registry.js";
 import { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "../../src/tools/discover.js";
+import { PROXY_ALIAS_MAP } from "../../src/tools/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -56,15 +57,21 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
   });
 
   it("registry names EXACTLY match the wired TOOLS names (fails loudly on drift)", () => {
-    const wiredSet = new Set(wiredNames);
+    // 0.9.4: backward-compat aliases are intentionally WIRED (old callers still work)
+    // but NOT registered (removed from tools/list to shrink the surface). Exclude them.
+    const ALIAS_NAMES = new Set<string>([
+      ...Object.keys(PROXY_ALIAS_MAP),  // novada_proxy_residential/isp/datacenter/mobile/static/dedicated
+      "novada_health_all",              // → novada_health(mode=full)
+    ]);
+    const wiredSet = new Set(wiredNames.filter((n) => !ALIAS_NAMES.has(n)));
     const registrySet = new Set(registryNames);
 
-    const ghosts = registryNames.filter((n) => !wiredSet.has(n)); // in registry, not wired
-    const missing = wiredNames.filter((n) => !registrySet.has(n)); // wired, not in registry
+    const ghosts = [...registrySet].filter((n) => !wiredSet.has(n)); // in registry, not wired
+    const missing = [...wiredSet].filter((n) => !registrySet.has(n)); // wired (non-alias), not in registry
 
     expect(ghosts, `registry lists tools that are NOT wired in src/index.ts TOOLS: ${ghosts.join(", ")}`).toEqual([]);
     expect(missing, `src/index.ts wires tools missing from TOOL_REGISTRY: ${missing.join(", ")}`).toEqual([]);
-    // Exact set equality (order-independent).
+    // Exact set equality (order-independent), aliases excluded.
     expect([...registrySet].sort()).toEqual([...wiredSet].sort());
   });
 

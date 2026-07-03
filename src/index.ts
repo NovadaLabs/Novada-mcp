@@ -38,6 +38,7 @@ import {
   validateMapParams,
   validateSiteCopyParams,
   validateProxyParams,
+  PROXY_ALIAS_MAP,
   validateScrapeParams,
   validateVerifyParams,
   validateUnblockParams,
@@ -1003,24 +1004,18 @@ class NovadaMCPServer {
           case "novada_browser_flow":
             result = await novadaBrowserFlow(validateBrowserFlowParams(args as Record<string, unknown>), API_KEY!);
             break;
+          // 0.9.4: the 6 typed proxy tools merged into novada_proxy(type=...).
+          // Old names still work as aliases — inject the type and route to novadaProxy. No error for old callers.
           case "novada_proxy_residential":
-            result = await novadaProxyResidential(validateProxyResidentialParams(args as Record<string, unknown>));
-            break;
           case "novada_proxy_isp":
-            result = await novadaProxyIsp(validateProxyIspParams(args as Record<string, unknown>));
-            break;
           case "novada_proxy_datacenter":
-            result = await novadaProxyDatacenter(validateProxyDatacenterParams(args as Record<string, unknown>));
-            break;
           case "novada_proxy_mobile":
-            result = await novadaProxyMobile(validateProxyMobileParams(args as Record<string, unknown>));
-            break;
           case "novada_proxy_static":
-            result = await novadaProxyStatic(validateProxyStaticParams(args as Record<string, unknown>));
+          case "novada_proxy_dedicated": {
+            const aliasType = PROXY_ALIAS_MAP[name];
+            result = await novadaProxy(validateProxyParams({ ...(args as Record<string, unknown>), type: aliasType }));
             break;
-          case "novada_proxy_dedicated":
-            result = await novadaProxyDedicated(validateProxyDedicatedParams(args as Record<string, unknown>));
-            break;
+          }
           case "novada_ai_monitor":
             result = await novadaAiMonitor(validateAiMonitorParams(args as Record<string, unknown>), API_KEY!);
             break;

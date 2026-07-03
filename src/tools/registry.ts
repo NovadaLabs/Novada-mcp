@@ -139,43 +139,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   // ─── Proxy ──────────────────────────────────────────────────────────────
   {
     name: "novada_proxy",
-    description: "Get residential/mobile/ISP/datacenter proxy configuration (legacy generic fallback); returns proxy URL, shell export commands, or curl --proxy flag",
-    category: "Proxy",
-    status: "active",
-  },
-  {
-    name: "novada_proxy_residential",
-    description: "Residential proxy (100M+ real home IPs); supports country/city/session targeting. Best anti-bot bypass. Use format='env' for shell exports or format='curl' for curl commands.",
-    category: "Proxy",
-    status: "active",
-  },
-  {
-    name: "novada_proxy_isp",
-    description: "ISP proxy (rotating ISP-assigned IPs); cleaner than residential, faster than mobile. Good balance of trust-score and speed for social platforms.",
-    category: "Proxy",
-    status: "active",
-  },
-  {
-    name: "novada_proxy_datacenter",
-    description: "Datacenter proxy (fast, cost-effective IP rotation); best for high-volume scraping of sites without strict bot detection. Lowest latency.",
-    category: "Proxy",
-    status: "active",
-  },
-  {
-    name: "novada_proxy_mobile",
-    description: "Mobile carrier proxy (3G/4G/5G IPs); highest trust score. Use for mobile-specific content, carrier-gated pages, or apps that detect non-mobile IPs.",
-    category: "Proxy",
-    status: "active",
-  },
-  {
-    name: "novada_proxy_static",
-    description: "Static ISP proxy (dedicated IP per session_id); same IP every request. Essential for accounts where IP changes trigger security alerts (social media, banking).",
-    category: "Proxy",
-    status: "active",
-  },
-  {
-    name: "novada_proxy_dedicated",
-    description: "Dedicated datacenter proxy (exclusive IP, never shared); maximum control for sensitive workflows. Combines datacenter speed with static IP stability.",
+    description: "Get proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Supports country/city/session_id targeting. Returns proxy URL, shell exports (format='env'), or curl flag (format='curl').",
     category: "Proxy",
     status: "active",
   },
@@ -269,12 +233,6 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   {
     name: "novada_health",
     description: "Check which Novada API products are active on your key. mode='quick' (default): fast activation check. mode='full': live parallel latency probes across all 6 products (= former novada_health_all).",
-    category: "Health & Discovery",
-    status: "active",
-  },
-  {
-    name: "novada_health_all",
-    description: "[ALIAS] novada_health(mode=full) — extended health check with latency probes across all 6 products; prefer novada_health with mode=full",
     category: "Health & Discovery",
     status: "active",
   },
