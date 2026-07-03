@@ -1,6 +1,12 @@
 import { fetchViaProxy, extractLinks, normalizeUrl, isContentLink, discoverViaSitemap } from "../utils/index.js";
-import { TIMEOUTS } from "../config.js";
+import { TIMEOUTS, HOSTED_SAFE_CEILING_MS } from "../config.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode } from "../_core/errors.js";
+// Internal deadline for the BFS fallback path: stop crawling and return whatever
+// was found so far rather than letting the hosted 56s wall-clock kill the tool.
+// 45s keeps us well under the 50s HOSTED_SAFE_CEILING_MS, leaving ~5s for
+// serialization and transport. The sitemap fast-path is unaffected — this guard
+// is only entered when no sitemap is found and BFS is used.
+const MAP_BFS_DEADLINE_MS = Math.min(45_000, HOSTED_SAFE_CEILING_MS);
 /** Split a URL pathname into lowercase non-empty segments. */
 function pathSegments(pathname) {
     return pathname.split("/").map(s => s.toLowerCase()).filter(Boolean);
@@ -171,6 +177,10 @@ async function novadaMapInner(params, apiKey, maxUrls, baseHostname, origin) {
     // Used to produce honest under-delivery messages: "returned X of Y sitemap entries"
     // vs "site has fewer links than requested." (F3 fix)
     let sitemapScopedTotal = 0;
+    // Set to true when the BFS fallback path hit the internal deadline and returned
+    // a partial result rather than a complete crawl. Used downstream to annotate
+    // the output so the caller knows the result is partial.
+    let bfsHitDeadline = false;
     if (sitemapUrls.length > 0) {
         // Filter to same domain, then to the rooted sub-path (no depth limit on sitemap branch).
         const scoped = sitemapUrls.filter(u => {
@@ -190,11 +200,17 @@ async function novadaMapInner(params, apiKey, maxUrls, baseHostname, origin) {
     else {
         // --- Phase 2: Parallel BFS crawl ---
         // BFS respects max_depth (each hop = one depth level) — depth IS meaningful here.
-        discovered = (await parallelBfsCrawl(params, apiKey, maxUrls, baseHostname))
-            .filter(u => inScope(u, scope));
+        // Pass a deadline so BFS never exceeds the hosted wall-clock limit.
+        const bfsDeadline = Date.now() + MAP_BFS_DEADLINE_MS;
+        const bfsResult = await parallelBfsCrawl(params, apiKey, maxUrls, baseHostname, bfsDeadline);
+        discovered = bfsResult.urls.filter(u => inScope(u, scope));
+        bfsHitDeadline = bfsResult.hitDeadline;
     }
-    // SPA detection — check BEFORE search filter (search should not hide SPA failures)
-    const isSpaLikely = discovered.length <= 1 &&
+    // SPA detection — check BEFORE search filter (search should not hide SPA failures).
+    // Skip SPA detection when the BFS hit the internal deadline: a sparse result is due
+    // to the time budget, NOT an SPA — the caller gets a partial result, not an error.
+    const isSpaLikely = !bfsHitDeadline &&
+        discovered.length <= 1 &&
         (discovered.length === 0 || discovered[0] === normalizeUrl(params.url));
     if (isSpaLikely) {
         // Throw a machine-readable SPA_NO_URLS_FOUND error; catch block below formats
@@ -210,6 +226,32 @@ async function novadaMapInner(params, apiKey, maxUrls, baseHostname, origin) {
         filtered = discovered.filter(u => matchesSearchTokens(u, tokens));
     }
     if (filtered.length === 0) {
+        // BFS hit the deadline before finding any URLs (or before any survived the scope
+        // filter). Return a clean "no URLs discovered" result — NOT an error — with a note
+        // that the crawl was partial. The caller can retry with a shallower max_depth.
+        if (bfsHitDeadline) {
+            return [
+                `## Site Map`,
+                `root: ${params.url}`,
+                `urls:0`,
+                `discovery:crawl:partial`,
+                ``,
+                `---`,
+                ``,
+                `partial: deadline reached, 0 URLs found — BFS crawl stopped at ${MAP_BFS_DEADLINE_MS / 1000}s to avoid timeout.`,
+                ``,
+                `## Agent Hints`,
+                `- The site may be slow or have very few crawlable HTML links.`,
+                `- Try \`novada_extract\` on ${params.url} to read the page content directly.`,
+                `- Try \`novada_map\` with max_depth=1 for a shallower crawl.`,
+                `- Use \`novada_search\` with \`site:${new URL(params.url).hostname}\` to find indexed pages.`,
+                ``,
+                `## Agent Notice — Under-delivery`,
+                `requested: ${maxUrls} | returned: 0 | shortfall: ${maxUrls}`,
+                `reason: BFS crawl stopped at ${MAP_BFS_DEADLINE_MS / 1000}s internal deadline — 0 URLs discovered in time.`,
+                `next_steps: Use novada_extract to read the page, or novada_search with site: operator.`,
+            ].join("\n");
+        }
         // When the underlying discovery pool is suspiciously small (< 10 URLs) AND we came
         // from sitemap discovery, the lack of search matches may be due to incomplete sitemap
         // parsing rather than the site having no matching pages. Warn accordingly. (F9 fix)
@@ -238,7 +280,7 @@ async function novadaMapInner(params, apiKey, maxUrls, baseHostname, origin) {
             ...hints,
         ].join("\n");
     }
-    const discoveryMethod = sitemapUrls.length > 0 ? "sitemap" : "crawl";
+    const discoveryMethod = sitemapUrls.length > 0 ? "sitemap" : (bfsHitDeadline ? "crawl:partial" : "crawl");
     const lines = [
         `## Site Map`,
         `root: ${params.url}`,
@@ -265,7 +307,11 @@ async function novadaMapInner(params, apiKey, maxUrls, baseHostname, origin) {
         const limitCappedFromSitemap = sitemapScopedTotal > maxUrls;
         lines.push(``, `## Agent Notice — Under-delivery`);
         lines.push(`requested: ${maxUrls} | returned: ${filtered.length} | shortfall: ${maxUrls - filtered.length}`);
-        if (limitCappedFromSitemap) {
+        if (bfsHitDeadline) {
+            lines.push(`reason: BFS crawl stopped at ${MAP_BFS_DEADLINE_MS / 1000}s internal deadline — partial result, ${filtered.length} URL${filtered.length === 1 ? "" : "s"} found before deadline.`);
+            lines.push(`next_steps: Use novada_crawl for deeper extraction, or novada_search with site: operator.`);
+        }
+        else if (limitCappedFromSitemap) {
             // D2 fix: when sitemapFetchCapped=true, sitemapScopedTotal is bounded by the fetch budget,
             // not the true sitemap size. Use ">=" floor notation consistent with agent_instruction.
             const sitemapScopedStr = sitemapFetchCapped ? `>=${sitemapScopedTotal}` : `${sitemapScopedTotal}`;
@@ -287,8 +333,13 @@ async function novadaMapInner(params, apiKey, maxUrls, baseHostname, origin) {
     // the true site total is unknown (>=budget), so map_complete must never be claimed even
     // if scope-filtering narrows the in-scope set to a number <= maxUrls (e.g. a deep sub-path
     // on a large site returns 3 in-scope URLs from 500 fetched, with 100s more un-fetched).
+    //
+    // BFS deadline: when bfsHitDeadline=true the crawl was cut short — always emit map_partial.
     const limitCappedFromSitemap = sitemapScopedTotal > maxUrls;
-    if (!limitCappedFromSitemap && !sitemapFetchCapped) {
+    if (bfsHitDeadline) {
+        lines.push(`agent_instruction: map_partial urls:${filtered.length} reason:deadline_reached | BFS crawl stopped at ${MAP_BFS_DEADLINE_MS / 1000}s internal limit to avoid timeout — ${filtered.length} URL${filtered.length === 1 ? "" : "s"} found | next: novada_extract to read pages | next: novada_crawl for deeper coverage`);
+    }
+    else if (!limitCappedFromSitemap && !sitemapFetchCapped) {
         lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
     }
     else {
@@ -301,8 +352,16 @@ async function novadaMapInner(params, apiKey, maxUrls, baseHostname, origin) {
     }
     return lines.join("\n");
 }
-/** Parallel BFS crawl — fetches up to CONCURRENCY pages at once */
-async function parallelBfsCrawl(params, apiKey, maxUrls, baseHostname) {
+/**
+ * Parallel BFS crawl — fetches up to CONCURRENCY pages at once.
+ *
+ * `deadline` is an absolute timestamp (Date.now() + MAP_BFS_DEADLINE_MS). Before
+ * dispatching each batch the function checks the clock: if the deadline has passed,
+ * crawling stops immediately and whatever was discovered so far is returned with
+ * hitDeadline=true. This prevents the hosted 56s wall-clock from killing the tool
+ * mid-flight and producing an isError TOOL_ERR instead of a clean partial result.
+ */
+async function parallelBfsCrawl(params, apiKey, maxUrls, baseHostname, deadline) {
     const CONCURRENCY = 5;
     const maxDepth = Math.min(params.max_depth ?? 2, 5);
     const visited = new Set();
@@ -312,6 +371,11 @@ async function parallelBfsCrawl(params, apiKey, maxUrls, baseHostname) {
     const MAX_PER_PREFIX = Math.max(3, Math.floor(maxUrls / 5));
     discovered.add(normalizeUrl(params.url));
     while (queue.length > 0 && discovered.size < maxUrls) {
+        // Deadline check: if we are at or past the deadline, stop immediately and
+        // return whatever we have as a graceful partial result (never throw).
+        if (Date.now() >= deadline) {
+            return { urls: [...discovered], hitDeadline: true };
+        }
         // Take up to CONCURRENCY items from queue
         const batch = queue.splice(0, CONCURRENCY);
         const unvisited = batch.filter(item => {
@@ -364,6 +428,6 @@ async function parallelBfsCrawl(params, apiKey, maxUrls, baseHostname) {
             }
         }
     }
-    return [...discovered];
+    return { urls: [...discovered], hitDeadline: false };
 }
 //# sourceMappingURL=map.js.map
