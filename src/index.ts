@@ -23,7 +23,6 @@ import {
   novadaUnblock,
   novadaBrowser,
   novadaHealth,
-  novadaHealthAll,
   novadaDiscover,
   novadaScraperSubmit,
   novadaScraperStatus,
@@ -44,7 +43,6 @@ import {
   validateUnblockParams,
   validateBrowserParams,
   validateHealthParams,
-  validateHealthAllParams,
   validateDiscoverParams,
   validateScraperSubmitParams,
   validateScraperStatusParams,
@@ -71,7 +69,6 @@ import {
   AiMonitorParamsSchema,
   validateAiMonitorParams,
 } from "./tools/types.js";
-import { HealthAllParamsSchema } from "./tools/health_all.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
 import { ScraperSubmitParamsSchema } from "./tools/scraper_submit.js";
 import { ScraperStatusParamsSchema } from "./tools/scraper_status.js";
@@ -447,21 +444,16 @@ Not for:
     description: `Check which Novada API products are active on your API key.
 
 **Best for:** First-time setup, diagnosing why a tool is failing, confirming your account has the right products activated.
-**Returns:** Status table for Search, Extract, Scraper API, Proxy, and Browser API — with activation links for anything not yet enabled.`,
+**Returns:** Status table for all products — with activation links for anything not yet enabled.
+**mode="quick" (default):** Product-activation check, no live latency probes. Fast, ~100ms.
+**mode="full":** Deep parallel probes with latency across all 6 products (Search, Extract, Scraper, Proxy, Browser, Unblock). Equivalent to former novada_health_all.`,
     inputSchema: zodToMcpSchema(HealthParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "novada_health_all",
-    description: `Extended health check that tests ALL Novada product endpoints in parallel and returns detailed per-product status.
-
-**agent_instruction:** Call this when novada_health shows an issue and you need per-product details, or when setting up Novada for the first time and want to confirm every product is reachable.
-**Returns:** Per-product table — product | status | latency | notes — covering Search, Extract, Scraper, Proxy, Browser, and Unblock APIs.
-**Degraded mode:** If one product probe fails, all others still return — never hard-fails.
-**Activation links:** Any PRODUCT_UNAVAILABLE result includes a direct link to activate that product on your dashboard.
-**Difference from novada_health:** This tool tests 6 products (vs 5), includes the Unblock API probe, and provides richer notes per product.
-**Auth:** NOVADA_API_KEY (the single key for all Novada products). NOVADA_WEB_UNBLOCKER_KEY is OPTIONAL — NOVADA_API_KEY is used as fallback if it is not set.`,
-    inputSchema: zodToMcpSchema(HealthAllParamsSchema),
+    description: `[ALIAS] Equivalent to novada_health(mode="full"). Kept for backward compatibility — prefer novada_health with mode="full". Extended health check that tests ALL Novada product endpoints in parallel and returns detailed per-product status with latency.`,
+    inputSchema: zodToMcpSchema(HealthParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
@@ -987,13 +979,14 @@ class NovadaMCPServer {
           case "novada_browser":
             result = await novadaBrowser(validateBrowserParams(args as Record<string, unknown>));
             break;
-          case "novada_health":
-            validateHealthParams(args as Record<string, unknown>);
-            result = await novadaHealth(API_KEY!);
+          case "novada_health": {
+            const hParams = validateHealthParams(args as Record<string, unknown>);
+            result = await novadaHealth(API_KEY!, hParams.mode);
             break;
+          }
           case "novada_health_all":
-            validateHealthAllParams(args as Record<string, unknown>);
-            result = await novadaHealthAll(API_KEY!);
+            // Alias: novada_health_all → novada_health(mode="full") for back-compat
+            result = await novadaHealth(API_KEY!, "full");
             break;
           case "novada_discover":
             result = await novadaDiscover(validateDiscoverParams(args as Record<string, unknown>));

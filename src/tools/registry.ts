@@ -268,13 +268,13 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   // ─── Health & Discovery ─────────────────────────────────────────────────
   {
     name: "novada_health",
-    description: "Check which Novada API products are active on the current API key; parallelized probes for Search, Extract, Scraper, Proxy, Browser; returns status table with latency",
+    description: "Check which Novada API products are active on your key. mode='quick' (default): fast activation check. mode='full': live parallel latency probes across all 6 products (= former novada_health_all).",
     category: "Health & Discovery",
     status: "active",
   },
   {
     name: "novada_health_all",
-    description: "Extended health check returning detailed status and usage metrics for all Novada products; includes activation links for inactive products",
+    description: "[ALIAS] novada_health(mode=full) — extended health check with latency probes across all 6 products; prefer novada_health with mode=full",
     category: "Health & Discovery",
     status: "active",
   },

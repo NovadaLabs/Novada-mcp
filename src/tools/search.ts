@@ -905,17 +905,13 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   }
 
   lines.push(`---`);
-  lines.push(`## Agent Hints`);
-  lines.push(`- Results are reranked by relevance (title + snippet keyword scoring) plus a bounded source-authority signal: authoritative sources (*.gov, *.edu, sec.gov, arxiv.org, reuters.com, wikipedia.org, nature.com …) are boosted and social/PR sources de-emphasized for factual/finance/research queries. Override via source_type or pass exclude_social=true to drop social/PR entirely.`);
-  lines.push(`- To read any result in full: \`novada_extract\` with its url`);
-  lines.push(`- To batch-read multiple results: \`novada_extract\` with \`url=[url1, url2, ...]\``);
-  lines.push(`- For deeper multi-source research: \`novada_research\``);
-
-  lines.push(``);
-  lines.push(`## Chainable Output`);
+  lines.push(`## Next Steps`);
   lines.push(`result_count: ${reranked.length}`);
   const topUrls = reranked.slice(0, 5).map((r, i) => `  [${i + 1}] ${r.url || r.link}`).join("\n");
   lines.push(`top_urls:\n${topUrls}`);
+  lines.push(`- Reranked by relevance + bounded authority signal (*.gov, *.edu, arxiv.org, reuters.com …). Override: source_type or exclude_social=true.`);
+  lines.push(`- Read a result in full: novada_extract with its url`);
+  lines.push(`- Deeper multi-source research: novada_research`);
   lines.push(`agent_instruction: Search complete. Call novada_extract with any url above to read the full page. Call novada_research for deeper multi-source investigation.`);
 
   lines.push(``);
@@ -939,9 +935,11 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       data: { query: params.query, engine: params.engine, results: reranked },
       project: params.project,
     });
-    // Redact home directory from the path so it doesn't leak /Users/<name>/...
-    const safePath = redactSecrets(outputResult.filePath);
-    savePrefix = `📁 ${safePath}\n\n`;
+    // Only emit prefix when a file was actually written (filePath is empty on hosted)
+    if (outputResult.filePath) {
+      const safePath = redactSecrets(outputResult.filePath);
+      savePrefix = `📁 ${safePath}\n\n`;
+    }
   } catch { /* best-effort */ }
   finalResult = savePrefix + finalResult;
 

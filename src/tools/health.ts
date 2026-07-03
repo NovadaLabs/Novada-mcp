@@ -172,7 +172,12 @@ function latencyStr(r: ProbeResult): string {
  * Check which Novada API products are active on the given API key.
  * Runs probes in parallel via Promise.allSettled.
  */
-export async function novadaHealth(apiKey: string): Promise<string> {
+export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "quick"): Promise<string> {
+  if (mode === "full") {
+    const { novadaHealthAll } = await import("./health_all.js");
+    return novadaHealthAll(apiKey);
+  }
+
   const maskedKey = apiKey.length >= 4 ? `****${apiKey.slice(-4)}` : "****";
 
   // Run all probes in parallel (probeProxy is now async — resolveProxyCredentials path)

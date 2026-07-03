@@ -307,7 +307,10 @@ export const VerifyParamsSchema = z.object({
 
 // ─── Health Params ────────────────────────────────────────────────────────────
 
-export const HealthParamsSchema = z.object({});
+export const HealthParamsSchema = z.object({
+  mode: z.enum(["quick", "full"]).default("quick")
+    .describe("'quick' (default): product-activation check only, no live latency probes. 'full': deep parallel probes with latency across all 6 products (equivalent to the former novada_health_all)."),
+});
 export type HealthParams = z.infer<typeof HealthParamsSchema>;
 export function validateHealthParams(args: Record<string, unknown> | undefined): HealthParams {
   return HealthParamsSchema.parse(args ?? {});
