@@ -144,7 +144,12 @@ export declare const VerifyParamsSchema: z.ZodObject<{
     claim: z.ZodString;
     context: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
-export declare const HealthParamsSchema: z.ZodObject<{}, z.core.$strip>;
+export declare const HealthParamsSchema: z.ZodObject<{
+    mode: z.ZodDefault<z.ZodEnum<{
+        quick: "quick";
+        full: "full";
+    }>>;
+}, z.core.$strip>;
 export type HealthParams = z.infer<typeof HealthParamsSchema>;
 export declare function validateHealthParams(args: Record<string, unknown> | undefined): HealthParams;
 export type SearchParams = z.infer<typeof SearchParamsSchema>;
@@ -185,10 +190,12 @@ export interface NovadaApiResponse {
 }
 export declare const ProxyParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     type: z.ZodDefault<z.ZodEnum<{
+        static: "static";
         residential: "residential";
         datacenter: "datacenter";
-        mobile: "mobile";
         isp: "isp";
+        mobile: "mobile";
+        dedicated: "dedicated";
     }>>;
     country: z.ZodOptional<z.ZodString>;
     city: z.ZodOptional<z.ZodString>;
@@ -200,6 +207,9 @@ export declare const ProxyParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknow
     }>>;
 }, z.core.$strip>>;
 export type ProxyParams = z.infer<typeof ProxyParamsSchema>;
+/** Backward-compat: old typed-proxy tool name → the `type` value to inject into novada_proxy.
+ * The 6 typed tools were merged into one novada_proxy(type=...) in 0.9.4; old names still route here. */
+export declare const PROXY_ALIAS_MAP: Record<string, ProxyParams["type"]>;
 export declare function validateProxyParams(args: Record<string, unknown> | undefined): ProxyParams;
 /** Shared regex for task_id validation across scraper tools (L-2: single source of truth) */
 export declare const TASK_ID_REGEX: RegExp;

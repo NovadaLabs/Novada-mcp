@@ -6,8 +6,8 @@ export declare const TrafficDailyParamsSchema: z.ZodObject<{
         static: "static";
         residential: "residential";
         datacenter: "datacenter";
-        mobile: "mobile";
         isp: "isp";
+        mobile: "mobile";
     }>>>;
 }, z.core.$strict>;
 export type TrafficDailyParams = z.infer<typeof TrafficDailyParamsSchema>;

@@ -90,6 +90,7 @@ import {
   validateResearchParams,
   validateMapParams,
   validateProxyParams,
+  PROXY_ALIAS_MAP,
   validateScrapeParams,
   validateVerifyParams,
   validateUnblockParams,
@@ -278,20 +279,9 @@ const TOOLS = [
   { name: "novada_verify",              title: "Claim Verifier",             schema: VerifyParamsSchema,              description: "Fact-check a claim by searching from 3 angles (supporting, skeptical, fact-check). Use when you need to validate a statement before citing it. Returns verdict (supported/unsupported/contested) + confidence 0-100." },
   { name: "novada_unblock",             title: "Anti-Bot Unblocking",        schema: UnblockParamsSchema,             description: "Get raw HTML from bot-protected pages via JS rendering or headless browser. Use only when extract fails on a protected page and you need the raw HTML." },
   { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key." },
-  { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Generate proxy credentials (URL/env/curl format) for your own HTTP clients. Not needed for extract/crawl — those handle proxies internally." },
-  { name: "novada_proxy_residential",   title: "Residential Proxy",          schema: ProxyResidentialParamsSchema,    description: "Residential proxy credentials — real home ISP IPs, best for anti-bot bypass. For web extraction, use extract instead." },
-  { name: "novada_proxy_isp",           title: "ISP Proxy",                  schema: ProxyIspParamsSchema,            description: "ISP proxy credentials — looks like home users. For web extraction, use extract instead." },
-  { name: "novada_proxy_datacenter",    title: "Datacenter Proxy",           schema: ProxyDatacenterParamsSchema,     description: "Datacenter proxy credentials — fastest, cheapest. For web extraction, use extract instead." },
-  { name: "novada_proxy_mobile",        title: "Mobile Proxy",               schema: ProxyMobileParamsSchema,         description: "Mobile 4G/5G proxy credentials. For web extraction, use extract instead." },
-  { name: "novada_proxy_static",        title: "Static ISP Proxy",           schema: ProxyStaticParamsSchema,         description: "Static ISP proxy — same IP every request for a session_id+country pair. For web extraction, use extract instead." },
-  { name: "novada_proxy_dedicated",     title: "Dedicated Proxy",            schema: ProxyDedicatedParamsSchema,      description: "Exclusive datacenter IP, not shared with other users. For web extraction, use extract instead." },
-  { name: "novada_health",              title: "Health Check",               schema: HealthParamsSchema,              description: "Quick health check — which Novada API products are active on your key." },
-  { name: "novada_health_all",          title: "Extended Health Check",      schema: HealthAllParamsSchema,           description: "Detailed health check across all 6 Novada product endpoints with latency." },
+  { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Not needed for extract/crawl — those handle proxies internally." },
+  { name: "novada_health",              title: "Health Check",               schema: HealthParamsSchema,              description: "Health check — which Novada products are active. mode='quick' (default) or mode='full' (live latency probes across all 6 products)." },
   { name: "novada_discover",            title: "Tool Discovery",             schema: DiscoverParamsSchema,            description: "List all available Novada tools grouped by category." },
-  { name: "novada_scraper_submit",      title: "Async Scraper Submit",       schema: ScraperSubmitParamsSchema,       description: "Start an async scraping task. Returns task_id. Step 1 of 3: submit → status → result." },
-  { name: "novada_scraper_status",      title: "Async Scraper Status",       schema: ScraperStatusParamsSchema,       description: "Check async scraping task progress. Step 2 of 3: submit → status → result." },
-  { name: "novada_scraper_result",      title: "Async Scraper Result",       schema: ScraperResultParamsSchema,       description: "Get completed async scraping results. Step 3 of 3: submit → status → result." },
-  { name: "novada_browser_flow",        title: "Browser Flow Automation",    schema: BrowserFlowParamsSchema,         description: "Multi-step browser automation with persistent sessions. Local MCP only (not available on hosted)." },
   { name: "novada_ai_monitor",          title: "AI Brand Monitor",           schema: AiMonitorParamsSchema,           description: "Check how AI models (ChatGPT, Perplexity, Grok, etc.) reference a brand or product." },
   { name: "novada_monitor",             title: "Page Change Monitor",        schema: MonitorParamsSchema,             description: "Track changes on a web page over time. Compares content hash and field-level diffs." },
   { name: "novada_setup",               title: "Setup & Configuration",      schema: SetupParamsSchema,               description: "Check your API key and environment configuration. Use when you want to verify setup or see which Novada products are active. Auth-free, no quota used." },
@@ -328,13 +318,12 @@ const HOSTED_HIDDEN = new Set(["novada_browser_flow"]);
 // ?tools=novada_search,novada_scrape. Matches BrightData's ?groups= pattern.
 // Fewer tools = less token overhead in the agent's context window.
 const TOOL_GROUPS: Record<string, string[]> = {
-  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_verify", "novada_setup", "novada_health", "novada_health_all", "novada_monitor", "novada_discover"],
+  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_verify", "novada_setup", "novada_health", "novada_monitor", "novada_discover"],
   search: ["novada_search"],
   scrape: ["novada_scrape", "novada_extract", "novada_unblock"],
   crawl: ["novada_crawl", "novada_map"],
   research: ["novada_research", "novada_verify", "novada_discover", "novada_ai_monitor", "novada_monitor"],
-  scraper: ["novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
-  proxy: ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
+  proxy: ["novada_proxy"],
   account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_plan_balance_all", "novada_proxy_account_list", "novada_proxy_account_create", "novada_traffic_daily", "novada_account_summary", "novada_capture_logs"],
   browser: ["novada_browser", "novada_browser_flow"],
 };
@@ -700,18 +689,23 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
           validateHealthParams(argsObj);
           result = await novadaHealth(apiKey); break;
         case "novada_health_all":
-          validateHealthAllParams(argsObj);
-          result = await novadaHealthAll(apiKey); break;
+          // 0.9.4 alias: merged into novada_health(mode="full").
+          result = await novadaHealth(apiKey, "full"); break;
         case "novada_discover":
           // Scope the catalog to the tools actually exposed on this endpoint so the
           // hosted discover output never advertises a tool the agent can't call.
           result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames); break;
+        // 0.9.4: async scraper trio removed from tools/list (upstream returns results INLINE;
+        // poll endpoints never tracked /request tasks — NOV-697). Old names still work with no error.
         case "novada_scraper_submit":
-          result = await novadaScraperSubmit(validateScraperSubmitParams(argsObj), apiKey); break;
+          result = await withWallClock(name, novadaScrape(validateScrapeParams(argsObj), apiKey)); break;
         case "novada_scraper_status":
-          result = await novadaScraperStatus(validateScraperStatusParams(argsObj), apiKey); break;
         case "novada_scraper_result":
-          result = await novadaScraperResult(validateScraperResultParams(argsObj), apiKey); break;
+          result = JSON.stringify({
+            status: "ok",
+            message: "The async scraper flow was replaced in 0.9.4 — novada_scrape returns results inline in one call.",
+            agent_instruction: "Call novada_scrape with { platform, operation, params } to get records directly. No polling needed.",
+          }, null, 2); break;
         case "novada_browser_flow":
           // 🔴 NOT AVAILABLE ON HOSTED — cloud browser WS path needs Edge-compatible WebSocket runtime.
           // No work done → refund the pre-decremented quota (NOV-578).
@@ -724,18 +718,14 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
             }],
             isError: true,
           };
+        // 0.9.4: 6 typed proxy tools merged into novada_proxy(type=...). Old names alias-route, no error.
         case "novada_proxy_residential":
-          result = await novadaProxyResidential(validateProxyResidentialParams(argsObj)); break;
         case "novada_proxy_isp":
-          result = await novadaProxyIsp(validateProxyIspParams(argsObj)); break;
         case "novada_proxy_datacenter":
-          result = await novadaProxyDatacenter(validateProxyDatacenterParams(argsObj)); break;
         case "novada_proxy_mobile":
-          result = await novadaProxyMobile(validateProxyMobileParams(argsObj)); break;
         case "novada_proxy_static":
-          result = await novadaProxyStatic(validateProxyStaticParams(argsObj)); break;
         case "novada_proxy_dedicated":
-          result = await novadaProxyDedicated(validateProxyDedicatedParams(argsObj)); break;
+          result = await novadaProxy(validateProxyParams({ ...argsObj, type: PROXY_ALIAS_MAP[name] })); break;
         case "novada_ai_monitor":
           result = await withWallClock(name, novadaAiMonitor(validateAiMonitorParams(argsObj), apiKey)); break;
         case "novada_monitor":

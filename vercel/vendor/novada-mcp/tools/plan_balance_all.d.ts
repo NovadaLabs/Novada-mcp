@@ -4,8 +4,8 @@ export declare const PlanBalanceAllParamsSchema: z.ZodObject<{
         static: "static";
         residential: "residential";
         datacenter: "datacenter";
-        mobile: "mobile";
         isp: "isp";
+        mobile: "mobile";
         capture: "capture";
     }>>>;
 }, z.core.$strict>;

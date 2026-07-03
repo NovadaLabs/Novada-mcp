@@ -2,22 +2,21 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
-import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaUnblock, novadaBrowser, novadaHealth, novadaHealthAll, novadaDiscover, novadaScraperSubmit, novadaScraperStatus, novadaScraperResult, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, validateScrapeParams, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams, validateHealthAllParams, validateDiscoverParams, validateScraperSubmitParams, validateScraperStatusParams, validateScraperResultParams, validateBrowserFlowParams, } from "./tools/index.js";
+import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaUnblock, novadaBrowser, novadaHealth, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams, validateDiscoverParams, validateBrowserFlowParams, } from "./tools/index.js";
 import { classifyError } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, UnblockParamsSchema, BrowserParamsSchema, HealthParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, } from "./tools/types.js";
-import { HealthAllParamsSchema } from "./tools/health_all.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
 import { ScraperSubmitParamsSchema } from "./tools/scraper_submit.js";
 import { ScraperStatusParamsSchema } from "./tools/scraper_status.js";
 import { ScraperResultParamsSchema } from "./tools/scraper_result.js";
 import { BrowserFlowParamsSchema } from "./tools/browser_flow.js";
 import { MonitorParamsSchema } from "./tools/monitor.js";
-import { novadaProxyResidential, validateProxyResidentialParams, ProxyResidentialParamsSchema, novadaProxyIsp, validateProxyIspParams, ProxyIspParamsSchema, novadaProxyDatacenter, validateProxyDatacenterParams, ProxyDatacenterParamsSchema, novadaProxyMobile, validateProxyMobileParams, ProxyMobileParamsSchema, novadaProxyStatic, validateProxyStaticParams, ProxyStaticParamsSchema, novadaProxyDedicated, validateProxyDedicatedParams, ProxyDedicatedParamsSchema, novadaSetup, validateSetupParams, SetupParamsSchema, 
+import { ProxyResidentialParamsSchema, ProxyIspParamsSchema, ProxyDatacenterParamsSchema, ProxyMobileParamsSchema, ProxyStaticParamsSchema, ProxyDedicatedParamsSchema, novadaSetup, validateSetupParams, SetupParamsSchema, 
 // KR-6: developer-api account-management tools
 novadaWalletBalance, validateWalletBalanceParams, WalletBalanceParamsSchema, novadaWalletUsageRecord, validateWalletUsageRecordParams, WalletUsageRecordParamsSchema, novadaProxyAccountCreate, validateProxyAccountCreateParams, ProxyAccountCreateParamsSchema, novadaProxyAccountList, validateProxyAccountListParams, ProxyAccountListParamsSchema, novadaTrafficDaily, validateTrafficDailyParams, TrafficDailyParamsSchema, novadaPlanBalanceAll, validatePlanBalanceAllParams, PlanBalanceAllParamsSchema, novadaCaptureLogs, validateCaptureLogsParams, CaptureLogsParamsSchema, novadaAccountSummary, validateAccountSummaryParams, AccountSummaryParamsSchema, novadaIpWhitelist, validateIpWhitelistParams, IpWhitelistParamsSchema, 
 // Ghost tools — complete implementations wired in L3 fix
-novadaCaptureApikey, validateCaptureApikeyParams, CaptureApikeyParamsSchema, novadaScraperTaskMgmt, validateScraperTaskMgmtParams, ScraperTaskMgmtParamsSchema, novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema, 
+novadaCaptureApikey, validateCaptureApikeyParams, CaptureApikeyParamsSchema, ScraperTaskMgmtParamsSchema, novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema, 
 // NOV-321 / NOV-323: session telemetry + search feedback (in-memory, auth-free)
 novadaSessionStats, validateSessionStatsParams, SessionStatsParamsSchema, recordToolCall, novadaSearchFeedback, validateSearchFeedbackParams, SearchFeedbackParamsSchema, } from "./tools/index.js";
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -310,21 +309,16 @@ Not for:
         description: `Check which Novada API products are active on your API key.
 
 **Best for:** First-time setup, diagnosing why a tool is failing, confirming your account has the right products activated.
-**Returns:** Status table for Search, Extract, Scraper API, Proxy, and Browser API — with activation links for anything not yet enabled.`,
+**Returns:** Status table for all products — with activation links for anything not yet enabled.
+**mode="quick" (default):** Product-activation check, no live latency probes. Fast, ~100ms.
+**mode="full":** Deep parallel probes with latency across all 6 products (Search, Extract, Scraper, Proxy, Browser, Unblock). Equivalent to former novada_health_all.`,
         inputSchema: zodToMcpSchema(HealthParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },
     {
         name: "novada_health_all",
-        description: `Extended health check that tests ALL Novada product endpoints in parallel and returns detailed per-product status.
-
-**agent_instruction:** Call this when novada_health shows an issue and you need per-product details, or when setting up Novada for the first time and want to confirm every product is reachable.
-**Returns:** Per-product table — product | status | latency | notes — covering Search, Extract, Scraper, Proxy, Browser, and Unblock APIs.
-**Degraded mode:** If one product probe fails, all others still return — never hard-fails.
-**Activation links:** Any PRODUCT_UNAVAILABLE result includes a direct link to activate that product on your dashboard.
-**Difference from novada_health:** This tool tests 6 products (vs 5), includes the Unblock API probe, and provides richer notes per product.
-**Auth:** NOVADA_API_KEY (the single key for all Novada products). NOVADA_WEB_UNBLOCKER_KEY is OPTIONAL — NOVADA_API_KEY is used as fallback if it is not set.`,
-        inputSchema: zodToMcpSchema(HealthAllParamsSchema),
+        description: `[ALIAS] Equivalent to novada_health(mode="full"). Kept for backward compatibility — prefer novada_health with mode="full". Extended health check that tests ALL Novada product endpoints in parallel and returns detailed per-product status with latency.`,
+        inputSchema: zodToMcpSchema(HealthParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },
     {
@@ -821,47 +815,49 @@ class NovadaMCPServer {
                     case "novada_browser":
                         result = await novadaBrowser(validateBrowserParams(args));
                         break;
-                    case "novada_health":
-                        validateHealthParams(args);
-                        result = await novadaHealth(API_KEY);
+                    case "novada_health": {
+                        const hParams = validateHealthParams(args);
+                        result = await novadaHealth(API_KEY, hParams.mode);
                         break;
+                    }
                     case "novada_health_all":
-                        validateHealthAllParams(args);
-                        result = await novadaHealthAll(API_KEY);
+                        // Alias: novada_health_all → novada_health(mode="full") for back-compat
+                        result = await novadaHealth(API_KEY, "full");
                         break;
                     case "novada_discover":
                         result = await novadaDiscover(validateDiscoverParams(args));
                         break;
+                    // 0.9.4: async scraper trio removed from tools/list (upstream returns results INLINE;
+                    // the poll endpoints never tracked /request tasks — NOV-697). Old names still work:
+                    // submit runs the sync scrape and returns real records; status/result return a benign
+                    // ok pointing to novada_scrape. No error status for old callers.
                     case "novada_scraper_submit":
-                        result = await novadaScraperSubmit(validateScraperSubmitParams(args), API_KEY);
+                        result = await novadaScrape(validateScrapeParams(args), API_KEY);
                         break;
                     case "novada_scraper_status":
-                        result = await novadaScraperStatus(validateScraperStatusParams(args), API_KEY);
-                        break;
                     case "novada_scraper_result":
-                        result = await novadaScraperResult(validateScraperResultParams(args), API_KEY);
+                    case "novada_scraper_task_mgmt":
+                        result = JSON.stringify({
+                            status: "ok",
+                            message: "The async scraper flow was replaced in 0.9.4 — novada_scrape now returns results inline in one call.",
+                            agent_instruction: "Call novada_scrape with { platform, operation, params } to get the records directly. No polling needed.",
+                        }, null, 2);
                         break;
                     case "novada_browser_flow":
                         result = await novadaBrowserFlow(validateBrowserFlowParams(args), API_KEY);
                         break;
+                    // 0.9.4: the 6 typed proxy tools merged into novada_proxy(type=...).
+                    // Old names still work as aliases — inject the type and route to novadaProxy. No error for old callers.
                     case "novada_proxy_residential":
-                        result = await novadaProxyResidential(validateProxyResidentialParams(args));
-                        break;
                     case "novada_proxy_isp":
-                        result = await novadaProxyIsp(validateProxyIspParams(args));
-                        break;
                     case "novada_proxy_datacenter":
-                        result = await novadaProxyDatacenter(validateProxyDatacenterParams(args));
-                        break;
                     case "novada_proxy_mobile":
-                        result = await novadaProxyMobile(validateProxyMobileParams(args));
-                        break;
                     case "novada_proxy_static":
-                        result = await novadaProxyStatic(validateProxyStaticParams(args));
+                    case "novada_proxy_dedicated": {
+                        const aliasType = PROXY_ALIAS_MAP[name];
+                        result = await novadaProxy(validateProxyParams({ ...args, type: aliasType }));
                         break;
-                    case "novada_proxy_dedicated":
-                        result = await novadaProxyDedicated(validateProxyDedicatedParams(args));
-                        break;
+                    }
                     case "novada_ai_monitor":
                         result = await novadaAiMonitor(validateAiMonitorParams(args), API_KEY);
                         break;
@@ -898,9 +894,6 @@ class NovadaMCPServer {
                         break;
                     case "novada_capture_apikey":
                         result = await novadaCaptureApikey(validateCaptureApikeyParams(args), API_KEY);
-                        break;
-                    case "novada_scraper_task_mgmt":
-                        result = await novadaScraperTaskMgmt(validateScraperTaskMgmtParams(args), API_KEY);
                         break;
                     case "novada_static_ip_mgmt":
                         result = await novadaStaticIpMgmt(validateStaticIpMgmtParams(args), API_KEY);

@@ -262,7 +262,10 @@ export const VerifyParamsSchema = z.object({
     context: z.string().optional().describe("Optional context to narrow the search (e.g. 'as of 2024', 'in the US')"),
 });
 // ─── Health Params ────────────────────────────────────────────────────────────
-export const HealthParamsSchema = z.object({});
+export const HealthParamsSchema = z.object({
+    mode: z.enum(["quick", "full"]).default("quick")
+        .describe("'quick' (default): product-activation check only, no live latency probes. 'full': deep parallel probes with latency across all 6 products (equivalent to the former novada_health_all)."),
+});
 export function validateHealthParams(args) {
     return HealthParamsSchema.parse(args ?? {});
 }
@@ -287,9 +290,9 @@ export function validateVerifyParams(args) {
 }
 // ─── Proxy Params ────────────────────────────────────────────────────────────
 export const ProxyParamsSchema = withCamelCaseAliases(z.object({
-    type: z.enum(["residential", "mobile", "isp", "datacenter"]).default("residential")
-        .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost."),
-    country: z.string().length(2).optional()
+    type: z.enum(["residential", "isp", "datacenter", "mobile", "static", "dedicated"]).default("residential")
+        .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static' for a dedicated ISP IP (same IP every request, requires session_id), 'dedicated' for an exclusive datacenter IP (not shared, requires session_id)."),
+    country: z.string().regex(/^[a-zA-Z]{2}$/, "country must be a 2-letter ISO code (e.g. 'us', 'gb', 'de')").optional()
         .describe("ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country."),
     city: z.string().max(50).regex(/^[a-zA-Z\s\-]+$/, "city must contain only letters, spaces, or hyphens").optional()
         .describe("City name for city-level targeting. Requires country to be set."),
@@ -298,6 +301,16 @@ export const ProxyParamsSchema = withCamelCaseAliases(z.object({
     format: z.enum(["url", "env", "curl"]).default("url")
         .describe("Output format. 'url': proxy URL string. 'env': shell export commands. 'curl': curl --proxy flag."),
 }), { sessionId: "session_id" });
+/** Backward-compat: old typed-proxy tool name → the `type` value to inject into novada_proxy.
+ * The 6 typed tools were merged into one novada_proxy(type=...) in 0.9.4; old names still route here. */
+export const PROXY_ALIAS_MAP = {
+    novada_proxy_residential: "residential",
+    novada_proxy_isp: "isp",
+    novada_proxy_datacenter: "datacenter",
+    novada_proxy_mobile: "mobile",
+    novada_proxy_static: "static",
+    novada_proxy_dedicated: "dedicated",
+};
 export function validateProxyParams(args) {
     return ProxyParamsSchema.parse(args ?? {});
 }

@@ -94,24 +94,6 @@ export const TOOL_REGISTRY = [
         status: "active",
     },
     {
-        name: "novada_scraper_submit",
-        description: "Submit an async scraping task; returns task_id for status polling. Use when novada_scrape doesn't support the platform. Follow with novada_scraper_status to poll, then novada_scraper_result to retrieve data.",
-        category: "Scraping & Verification",
-        status: "active",
-    },
-    {
-        name: "novada_scraper_status",
-        description: "Poll async scraping task status by task_id; returns pending/running/complete/failed with per-state agent_instruction. Poll every 5–10s with exponential backoff.",
-        category: "Scraping & Verification",
-        status: "active",
-    },
-    {
-        name: "novada_scraper_result",
-        description: "Retrieve completed scraping results by task_id; returns markdown table, JSON, or raw API response. Call only after novada_scraper_status reports status='complete'.",
-        category: "Scraping & Verification",
-        status: "active",
-    },
-    {
         name: "novada_ai_monitor",
         description: "Check how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand or product; returns per-model sentiment, key claims, competitor mentions, and source URLs",
         category: "Scraping & Verification",
@@ -126,43 +108,7 @@ export const TOOL_REGISTRY = [
     // ─── Proxy ──────────────────────────────────────────────────────────────
     {
         name: "novada_proxy",
-        description: "Get residential/mobile/ISP/datacenter proxy configuration (legacy generic fallback); returns proxy URL, shell export commands, or curl --proxy flag",
-        category: "Proxy",
-        status: "active",
-    },
-    {
-        name: "novada_proxy_residential",
-        description: "Residential proxy (100M+ real home IPs); supports country/city/session targeting. Best anti-bot bypass. Use format='env' for shell exports or format='curl' for curl commands.",
-        category: "Proxy",
-        status: "active",
-    },
-    {
-        name: "novada_proxy_isp",
-        description: "ISP proxy (rotating ISP-assigned IPs); cleaner than residential, faster than mobile. Good balance of trust-score and speed for social platforms.",
-        category: "Proxy",
-        status: "active",
-    },
-    {
-        name: "novada_proxy_datacenter",
-        description: "Datacenter proxy (fast, cost-effective IP rotation); best for high-volume scraping of sites without strict bot detection. Lowest latency.",
-        category: "Proxy",
-        status: "active",
-    },
-    {
-        name: "novada_proxy_mobile",
-        description: "Mobile carrier proxy (3G/4G/5G IPs); highest trust score. Use for mobile-specific content, carrier-gated pages, or apps that detect non-mobile IPs.",
-        category: "Proxy",
-        status: "active",
-    },
-    {
-        name: "novada_proxy_static",
-        description: "Static ISP proxy (dedicated IP per session_id); same IP every request. Essential for accounts where IP changes trigger security alerts (social media, banking).",
-        category: "Proxy",
-        status: "active",
-    },
-    {
-        name: "novada_proxy_dedicated",
-        description: "Dedicated datacenter proxy (exclusive IP, never shared); maximum control for sensitive workflows. Combines datacenter speed with static IP stability.",
+        description: "Get proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Supports country/city/session_id targeting. Returns proxy URL, shell exports (format='env'), or curl flag (format='curl').",
         category: "Proxy",
         status: "active",
     },
@@ -241,12 +187,6 @@ export const TOOL_REGISTRY = [
         status: "active",
     },
     {
-        name: "novada_scraper_task_mgmt",
-        description: "Manage async scraper tasks: list, check status, download results, or get last task status via the developer-api scraper management endpoints.",
-        category: "Account & Billing",
-        status: "active",
-    },
-    {
         name: "novada_static_ip_mgmt",
         description: "Manage static ISP IPs: open (WRITE, confirm gate), renew (WRITE, confirm gate), export, or list; wraps /v1/static_house/* developer-api endpoints.",
         category: "Account & Billing",
@@ -255,13 +195,7 @@ export const TOOL_REGISTRY = [
     // ─── Health & Discovery ─────────────────────────────────────────────────
     {
         name: "novada_health",
-        description: "Check which Novada API products are active on the current API key; parallelized probes for Search, Extract, Scraper, Proxy, Browser; returns status table with latency",
-        category: "Health & Discovery",
-        status: "active",
-    },
-    {
-        name: "novada_health_all",
-        description: "Extended health check returning detailed status and usage metrics for all Novada products; includes activation links for inactive products",
+        description: "Check which Novada API products are active on your key. mode='quick' (default): fast activation check. mode='full': live parallel latency probes across all 6 products (= former novada_health_all).",
         category: "Health & Discovery",
         status: "active",
     },

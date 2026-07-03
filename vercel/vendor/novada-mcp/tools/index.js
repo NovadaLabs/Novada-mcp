@@ -26,7 +26,7 @@ export { novadaBrowserFlow, validateBrowserFlowParams, BrowserFlowParamsSchema }
 export { novadaAiMonitor } from "./ai_monitor.js";
 export { novadaMonitor, validateMonitorParams, MonitorParamsSchema } from "./monitor.js";
 export { novadaSetup, validateSetupParams, SetupParamsSchema } from "./setup.js";
-export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
+export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
 export { classifyError, NovadaErrorCode } from "../_core/errors.js";
 // ─── KR-6: Novada developer-api account-management tools ────────────────────
 export { novadaWalletBalance, validateWalletBalanceParams, WalletBalanceParamsSchema } from "./wallet_balance.js";
