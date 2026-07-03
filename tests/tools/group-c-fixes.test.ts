@@ -216,7 +216,11 @@ describe("FIX-5: health tools don't claim Active without live probe", () => {
   });
 
   it("health_all.ts: proxy with valid credentials says 'not verified'", async () => {
+    // Full env-var config (user + pass + endpoint) → local mode → "configured (not verified)".
+    // Without a live probe the tool must not claim Active. When env vars are ABSENT the tool
+    // instead probes the key-based auto-provision path (covered by hosted verification).
     process.env.NOVADA_PROXY_USER = "testuser";
+    process.env.NOVADA_PROXY_PASS = "testpass";
     process.env.NOVADA_PROXY_ENDPOINT = "proxy.novada.com:10000";
 
     const fetchSpy = vi.spyOn(global, "fetch").mockRejectedValue(new Error("probe blocked"));
@@ -226,6 +230,7 @@ describe("FIX-5: health tools don't claim Active without live probe", () => {
     } finally {
       fetchSpy.mockRestore();
       delete process.env.NOVADA_PROXY_USER;
+      delete process.env.NOVADA_PROXY_PASS;
       delete process.env.NOVADA_PROXY_ENDPOINT;
     }
   });
