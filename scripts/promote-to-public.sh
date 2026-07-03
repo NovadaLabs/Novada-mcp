@@ -95,7 +95,11 @@ fi
 # ===== EXECUTE PATH ==========================================================
 [ -n "$NEW_VERSION" ] || die "--execute requires --version X.Y.Z"
 echo "$NEW_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$' || die "bad version: $NEW_VERSION"
-[ "$NEW_VERSION" != "$CUR_VERSION" ] || die "version $NEW_VERSION == current; bump it."
+# The real guard: npm versions are IMMUTABLE — refuse to target one already published
+# (0.9.1 taught us this; staging may legitimately already carry the target version).
+if npm view "$PKG_NAME@$NEW_VERSION" version >/dev/null 2>&1; then
+  die "$PKG_NAME@$NEW_VERSION is already published on npm — pick a higher version."
+fi
 [ -z "$(git status --porcelain)" ] || die "working tree not clean — commit/stash first."
 
 say ""
@@ -123,16 +127,21 @@ trap cleanup EXIT
   say "${c_grn}✓ build clean · tests: $fails failed (baseline $BASELINE_FAILURES, no new regressions)${c_off}"
 )
 
-# ---- version bump on staging ------------------------------------------------
-say "${c_dim}bumping version $CUR_VERSION → $NEW_VERSION on $STAGING...${c_off}"
+# ---- ensure version == target on staging (idempotent) ----------------------
 git checkout -q "$STAGING"
-node -e "const f='package.json',p=require('./'+f);p.version='$NEW_VERSION';require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
-[ -f server.json ] && node -e "const f='server.json',p=require('./'+f);if(p.version){p.version='$NEW_VERSION';require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')}" || true
-if [ -f CHANGELOG.md ]; then
-  { printf '## %s — %s\n\n- Promoted from staging. See NOV-680 / NOV-684 for the change set.\n\n' "$NEW_VERSION" "$(date +%Y-%m-%d)"; cat CHANGELOG.md; } > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
+STAGE_VERSION="$(node -p "require('./package.json').version")"
+if [ "$STAGE_VERSION" = "$NEW_VERSION" ]; then
+  say "${c_grn}✓ $STAGING already at $NEW_VERSION — no bump needed${c_off}"
+else
+  say "${c_dim}bumping $STAGE_VERSION → $NEW_VERSION on $STAGING...${c_off}"
+  node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version='$NEW_VERSION';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+  [ -f server.json ] && node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('server.json'));if(s.version)s.version='$NEW_VERSION';if(Array.isArray(s.packages))s.packages.forEach(x=>{if(x.version)x.version='$NEW_VERSION'});fs.writeFileSync('server.json',JSON.stringify(s,null,2)+'\n')" || true
+  if [ -f CHANGELOG.md ]; then
+    { printf '## %s — %s\n\n- Promoted from staging. See NOV-680 / NOV-684 for the change set.\n\n' "$NEW_VERSION" "$(date +%Y-%m-%d)"; cat CHANGELOG.md; } > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
+  fi
+  git add package.json server.json CHANGELOG.md 2>/dev/null || git add package.json
+  git commit -q -m "chore: release $NEW_VERSION" && say "${c_grn}✓ version bumped + committed on $STAGING${c_off}"
 fi
-git add package.json server.json CHANGELOG.md 2>/dev/null || git add package.json
-git commit -q -m "chore: release $NEW_VERSION" && say "${c_grn}✓ version bumped + committed on $STAGING${c_off}"
 
 # ---- merge staging → main (local) -------------------------------------------
 git checkout -q "$RELEASE_BRANCH"
