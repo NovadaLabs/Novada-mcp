@@ -225,7 +225,7 @@ export async function novadaHealth(apiKey) {
                 lines.push(`- ${r.label}: ${r.note} — connectivity not confirmed, but should work if credentials are valid`);
             }
             else if (r.status === "not_activated") {
-                lines.push(`- ${r.label}: Visit ${r.note} to activate`);
+                lines.push(`- ${r.label}: not activated on your account (${r.note}). Activate it at https://dashboard.novada.com/api-key/`);
             }
             else if (r.status === "not_configured") {
                 if (r.label === "Proxy") {

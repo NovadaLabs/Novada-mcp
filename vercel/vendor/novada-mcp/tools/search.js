@@ -8,6 +8,30 @@ import { novadaExtract } from "./extract.js";
 import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
 const QUERY_MAX_LENGTH = 500;
+/**
+ * NOV-682: Bound an over-long query by truncating at a word boundary instead of
+ * rejecting it. Google only ranks on the first ~32 words, so cutting at 500 chars
+ * loses no relevance while keeping the upstream payload bounded (huge strings
+ * caused 60s+ scraper hangs). Throwing wasted the calling agent's turn on a
+ * recoverable condition. Returns the bounded query plus a `truncated` marker
+ * (e.g. "query_truncated:812→497") for surfacing in the tool response, or null
+ * when the query was already within bounds.
+ */
+export function boundQuery(query) {
+    if (query.length <= QUERY_MAX_LENGTH) {
+        return { query, truncated: null };
+    }
+    let cut = query.slice(0, QUERY_MAX_LENGTH);
+    // slice() counts UTF-16 code units — don't leave a lone high surrogate at the
+    // cut point (corrupts emoji / non-BMP CJK characters).
+    const lastCode = cut.charCodeAt(cut.length - 1);
+    if (lastCode >= 0xd800 && lastCode <= 0xdbff)
+        cut = cut.slice(0, -1);
+    const lastSpace = cut.lastIndexOf(" ");
+    // Cut at a word boundary unless it would drop more than half the budget.
+    const bounded = (lastSpace > QUERY_MAX_LENGTH / 2 ? cut.slice(0, lastSpace) : cut).trim();
+    return { query: bounded, truncated: `query_truncated:${query.length}→${bounded.length}` };
+}
 const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 const _searchCache = new Map();
 const SEARCH_CACHE_TTL = 60_000;
@@ -63,7 +87,7 @@ async function submitBingSearch(apiKey, query) {
                 "Authorization": `Bearer ${apiKey}`,
                 "Content-Type": "application/x-www-form-urlencoded",
             },
-            timeout: 60000,
+            timeout: TIMEOUTS.SEARCH_TOTAL_CEILING,
             httpsAgent: keepAliveAgent,
         });
         const body = resp.data;
@@ -166,7 +190,10 @@ export async function submitSearchScrapeTask(apiKey, scraperName, scraperId, que
     const taskId = (inner?.task_id ??
         innerData?.task_id);
     if (!taskId) {
-        throw new Error(`Scraper search submit: no task_id in response: ${JSON.stringify(body)}`);
+        // Do not embed raw upstream JSON in the error — it leaked internal API response shape
+        // (e.g. yandex "serp returned failure"). Route through the classified NovadaError
+        // envelope so the caller gets a clean, structured, retryable API_DOWN instead.
+        throw makeNovadaError(NovadaErrorCode.API_DOWN, "Search provider returned no task_id (upstream SERP failure).");
     }
     return { taskId };
 }
@@ -286,12 +313,8 @@ export async function novadaSearch(params, apiKey) {
     if (!query) {
         throw new Error('query is required and must be a non-empty string');
     }
-    // FIX-2: Reject over-long queries immediately — prevents submitting huge strings
-    // to the upstream scraper API which can cause 60s+ hangs.
-    if (query.length > QUERY_MAX_LENGTH) {
-        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `query exceeds maximum length of ${QUERY_MAX_LENGTH} characters (got ${query.length}). Shorten your query and retry.`, `query_length:${query.length} max:${QUERY_MAX_LENGTH}`);
-    }
-    params = { ...params, query };
+    const { query: boundedQuery, truncated: queryTruncated } = boundQuery(query);
+    params = { ...params, query: boundedQuery };
     const engine = params.engine || "google";
     // num is a hard ceiling AND a best-effort floor. We over-fetch upstream so that
     // post-dedup + post-exclude_social still yields ~num, then slice to requestedNum
@@ -319,6 +342,11 @@ export async function novadaSearch(params, apiKey) {
         params.time_range ?? "",
         params.start_date ?? "",
         params.end_date ?? "",
+        // NOV-676 #3: country/language change the upstream result set but were absent from
+        // the key, so two searches differing only by locale collided within the 60s TTL and
+        // returned the wrong region's cached results.
+        params.country ?? "",
+        params.language ?? "",
     ].join("|");
     const cached = _searchCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
@@ -436,18 +464,45 @@ export async function novadaSearch(params, apiKey) {
         results = results.filter(r => !isSocialOrPr(r.url || r.link));
     }
     if (results.length === 0) {
-        const emptyResult = [
-            `## Search Results`,
-            `results:0 | engine:${engine}`,
-            ``,
-            `No results found for: "${params.query}"`,
-            ``,
-            `## Agent Hints`,
-            `- Try a broader or rephrased query`,
-            `- Try a different engine: engine="google" (fast, reliable fallback), or engine="duckduckgo" / "yandex". Avoid engine="bing" — currently degraded.`,
-            `- Use novada_research for multi-source investigation`,
-            `- Use novada_map + novada_extract if you have a known site`,
-        ].join("\n");
+        // F16: honour format="json" in the empty-results branch — previously always emitted
+        // markdown which caused JSON.parse to throw on the caller side.
+        // NOV-682: surface truncation on the zero-result path too — otherwise an
+        // agent retrying the same over-long query never learns it was modified.
+        let emptyResult;
+        if (params.format === "json") {
+            const emptyJson = {
+                status: "ok",
+                result_count: 0,
+                results: [],
+                query: params.query,
+                engine: `${engine} (via scraper-api)`,
+                search_id: `search-${Date.now()}-${++_searchCounter}`,
+                hints: [
+                    "Try a broader or rephrased query",
+                    "Try a different engine: engine=\"google\" (fast, reliable fallback), or engine=\"duckduckgo\" / \"yandex\". Avoid engine=\"bing\" — currently degraded.",
+                    "Use novada_research for multi-source investigation",
+                    "Use novada_map + novada_extract if you have a known site",
+                ],
+                agent_instruction: "No results found. Try rephrasing the query, switching engine, or using novada_research for multi-source investigation.",
+            };
+            if (queryTruncated)
+                emptyJson.query_truncated = queryTruncated;
+            emptyResult = JSON.stringify(emptyJson, null, 2);
+        }
+        else {
+            emptyResult = [
+                `## Search Results`,
+                `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}`,
+                ``,
+                `No results found for: "${params.query}"`,
+                ``,
+                `## Agent Hints`,
+                `- Try a broader or rephrased query`,
+                `- Try a different engine: engine="google" (fast, reliable fallback), or engine="duckduckgo" / "yandex". Avoid engine="bing" — currently degraded.`,
+                `- Use novada_research for multi-source investigation`,
+                `- Use novada_map + novada_extract if you have a known site`,
+            ].join("\n");
+        }
         // Cache empty results too so repeated calls don't re-poll the API
         _searchCache.set(cacheKey, { result: emptyResult, ts: Date.now() });
         if (_searchCache.size > 100) {
@@ -480,6 +535,11 @@ export async function novadaSearch(params, apiKey) {
         : "";
     // P1-7: Auto-extract content from top N results when extract_options is provided
     // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
+    // Sentinel strings emitted by novadaExtract to signal a fetch failure.
+    // INVARIANT: do NOT change EXTRACT_FAILED_SENTINEL — src/tools/research.ts:214-215 depends on it.
+    // EXTRACT_ERROR_SENTINEL is the timeout-ceiling path (extract.ts ~1294).
+    const EXTRACT_FAILED_SENTINEL = "## Extract Failed";
+    const EXTRACT_ERROR_SENTINEL = "## Extraction Error";
     if (params.extract_options || params.enrich_top) {
         const opts = params.extract_options ?? { top_n: 1, format: "markdown" };
         const topN = opts.top_n ?? (params.enrich_top ? 1 : 3);
@@ -495,11 +555,36 @@ export async function novadaSearch(params, apiKey) {
                     fields: opts.fields,
                     max_chars: opts.max_chars,
                 }, apiKey);
-                const extractedText = content.replace(/^📁[^\n]*\n\n/, "");
-                return { url, content: extractedText, ok: true };
+                // Strip the output-save prefix that novadaExtract prepends (📁 ...)
+                const rawText = content.replace(/^📁[^\n]*\n\n/, "");
+                // F6b / C4: Detect failure sentinels — treat as a soft failure.
+                // "## Extract Failed" = caught exception path (research.ts depends on this string — do NOT rename).
+                // "## Extraction Error" = TOTAL_REQUEST_CEILING timeout path (extract.ts ~1294).
+                // Neither sentinel must propagate into extracted_content.
+                const trimmed = rawText.trimStart();
+                if (trimmed.startsWith(EXTRACT_FAILED_SENTINEL) ||
+                    trimmed.startsWith(EXTRACT_ERROR_SENTINEL)) {
+                    return { url, content: null, extract_error: rawText.slice(0, 300), ok: false, sentinel: true };
+                }
+                // F6a: When BOTH extract_options.format==="json" AND the outer params.format==="json",
+                // JSON.parse the content so extracted_content is a nested object in the JSON output.
+                // When the outer format is markdown, keep rawText as a string so the markdown renderer
+                // can push it into lines[] without producing "[object Object]" — the raw JSON text is
+                // still re-parseable by callers who want it.
+                if (opts.format === "json" && params.format === "json") {
+                    try {
+                        const parsed = JSON.parse(rawText);
+                        return { url, content: parsed, ok: true, sentinel: false };
+                    }
+                    catch {
+                        // Fallback: return raw string if it's not valid JSON
+                        return { url, content: rawText, ok: true, sentinel: false };
+                    }
+                }
+                return { url, content: rawText, ok: true, sentinel: false };
             }
             catch (err) {
-                return { url, content: null, extract_error: String(err), ok: false };
+                return { url, content: null, extract_error: String(err), ok: false, sentinel: false };
             }
         }));
         for (const er of extractResults) {
@@ -514,13 +599,69 @@ export async function novadaSearch(params, apiKey) {
             }
         }
     }
+    // ── F15: time_range / date-window annotation ──────────────────────────────
+    // After receiving upstream results, when time_range or start/end_date is set,
+    // parse each result's published date and annotate within_time_range.
+    // Results with unparseable dates get within_time_range:null (not false).
+    // Out-of-window results are flagged but kept — the caller decides whether to drop.
+    let outOfWindowCount = 0;
+    if (params.time_range || params.start_date || params.end_date) {
+        const now = Date.now();
+        // Build the window boundaries (ms)
+        let windowStart = null;
+        let windowEnd = null;
+        if (params.time_range) {
+            const MS = {
+                day: 24 * 60 * 60 * 1000,
+                week: 7 * 24 * 60 * 60 * 1000,
+                month: 30 * 24 * 60 * 60 * 1000,
+                year: 365 * 24 * 60 * 60 * 1000,
+            };
+            windowStart = now - (MS[params.time_range] ?? 0);
+            windowEnd = now;
+        }
+        if (params.start_date) {
+            const t = Date.parse(params.start_date);
+            if (!isNaN(t))
+                windowStart = t;
+        }
+        if (params.end_date) {
+            const t = Date.parse(params.end_date);
+            // end_date is inclusive — set to end of that day
+            if (!isNaN(t))
+                windowEnd = t + 24 * 60 * 60 * 1000 - 1;
+        }
+        for (const r of reranked) {
+            const dateStr = r.published || r.date;
+            if (!dateStr)
+                continue; // no date — leave unset (treated as null implicitly)
+            const ts = Date.parse(dateStr);
+            if (isNaN(ts)) {
+                // Unparseable date — within_time_range:null (never false)
+                r.within_time_range = null;
+                continue;
+            }
+            const inWindow = (windowStart === null || ts >= windowStart) &&
+                (windowEnd === null || ts <= windowEnd);
+            r.within_time_range = inWindow ? true : false;
+            if (!inWindow)
+                outOfWindowCount++;
+        }
+    }
     // ── JSON output mode ──────────────────────────────────────────────────────
     const engineLabel = `${engine} (via scraper-api)`;
     // FIX-6: Emit a search_id on every search so novada_search_feedback can reference it
     const searchId = `search-${Date.now()}-${++_searchCounter}`;
     if (params.format === "json") {
+        // F6b: Count sentinel-triggered extract failures to determine outer status
+        const enrichFailedCount = reranked.reduce((acc, r) => {
+            const rExt = r;
+            // A result has a sentinel failure if it has extract_error but no extracted_content
+            return acc + (rExt.extract_error !== undefined && rExt.extracted_content === undefined ? 1 : 0);
+        }, 0);
         const jsonResult = {
-            status: "ok",
+            // F6b: status is "partial" when any enrichment extraction failed via sentinel
+            status: enrichFailedCount > 0 ? "partial" : "ok",
             query: params.query,
             engine: engineLabel,
             source: "live",
@@ -536,9 +677,14 @@ export async function novadaSearch(params, apiKey) {
                 };
                 if (r.published || r.date)
                     result.published = r.published || r.date;
+                // F15: include within_time_range annotation when present
+                const rAnnot = r;
+                if (rAnnot.within_time_range !== undefined) {
+                    result.within_time_range = rAnnot.within_time_range;
+                }
                 // Include extracted content if present (from extract_options or enrich_top)
                 const rExt = r;
-                if (rExt.extracted_content)
+                if (rExt.extracted_content !== undefined)
                     result.extracted_content = rExt.extracted_content;
                 if (rExt.extract_error)
                     result.extract_error = rExt.extract_error;
@@ -546,10 +692,20 @@ export async function novadaSearch(params, apiKey) {
             }),
             agent_instruction: `Search complete. search_id: ${searchId} — pass to novada_search_feedback to record quality. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.`,
         };
+        // F6b: surface the count of enrichment failures when non-zero
+        if (enrichFailedCount > 0) {
+            jsonResult.enrich_failed_count = enrichFailedCount;
+        }
+        // F15: add a top-level warning when any results fall outside the requested window
+        if (outOfWindowCount > 0) {
+            jsonResult.time_range_warning = `${outOfWindowCount} of ${reranked.length} results fall outside the requested time_range — upstream freshness filter is best-effort`;
+        }
         // Surface a scarcity signal when fewer than `num` results were genuinely
         // available, so agents don't assume the ceiling was hit.
         if (scarcity)
             jsonResult.scarcity = scarcity;
+        if (queryTruncated)
+            jsonResult.query_truncated = queryTruncated;
         // Wire output save — best-effort, never breaks the tool.
         // Inject output_saved as a field so JSON remains valid and parseable.
         // FIX-1: Redact home path from output_saved before embedding in agent-visible JSON.
@@ -591,6 +747,8 @@ export async function novadaSearch(params, apiKey) {
         activeFilters.push(`exclude_social:true`);
     if (scarcity)
         activeFilters.push(scarcity);
+    if (queryTruncated)
+        activeFilters.push(queryTruncated);
     const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
     const lines = [
         `## Search Results`,
@@ -619,6 +777,8 @@ export async function novadaSearch(params, apiKey) {
         if (r.published || r.date)
             lines.push(`published: ${r.published || r.date}`);
         lines.push(cleanSnippet);
+        // extracted_content is always a string here (markdown path): either raw text, raw JSON string,
+        // or null. The cast reflects this — the object case only arises in the JSON output path above.
         const rExt = r;
         if (rExt.extracted_content != null) {
             lines.push(`extracted_content:`);
@@ -627,7 +787,18 @@ export async function novadaSearch(params, apiKey) {
         if (rExt.extract_error) {
             lines.push(`extract_error: ${rExt.extract_error}`);
         }
+        // F15 / C9: render per-result freshness annotation in markdown when any time filter is active.
+        // Previously gated on time_range only; start_date/end_date callers also compute within_time_range
+        // annotations but the gate suppressed the per-result lines for them.
+        if ((params.time_range || params.start_date || params.end_date) && rExt.within_time_range !== undefined) {
+            lines.push(`within_time_range: ${rExt.within_time_range}`);
+        }
         lines.push("");
+    }
+    // F15: surface time_range_warning in markdown output when stale results were returned
+    if (outOfWindowCount > 0) {
+        lines.push(`time_range_warning: ${outOfWindowCount} of ${reranked.length} results fall outside the requested time_range — upstream freshness filter is best-effort`);
+        lines.push(``);
     }
     lines.push(`---`);
     lines.push(`## Agent Hints`);

@@ -1,4 +1,17 @@
 import type { SearchParams, NovadaSearchResult } from "./types.js";
+/**
+ * NOV-682: Bound an over-long query by truncating at a word boundary instead of
+ * rejecting it. Google only ranks on the first ~32 words, so cutting at 500 chars
+ * loses no relevance while keeping the upstream payload bounded (huge strings
+ * caused 60s+ scraper hangs). Throwing wasted the calling agent's turn on a
+ * recoverable condition. Returns the bounded query plus a `truncated` marker
+ * (e.g. "query_truncated:812→497") for surfacing in the tool response, or null
+ * when the query was already within bounds.
+ */
+export declare function boundQuery(query: string): {
+    query: string;
+    truncated: string | null;
+};
 interface SearchFilterParams {
     time_range?: string;
     start_date?: string;

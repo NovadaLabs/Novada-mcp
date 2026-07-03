@@ -74,6 +74,34 @@ const DOMAIN_SUFFIXES = {
     howto: ["tutorial step by step", "implementation example", "best practices guide"],
     general: ["overview explained", "analysis", "expert opinion"],
 };
+// ─── Comparand Detection ─────────────────────────────────────────────────────
+// F14-2: For comparison questions, detect named proper-noun comparands and check
+// whether any sources mention them — emit a warning when a comparand has zero hits.
+/** Extract candidate proper-noun comparands from a comparison question.
+ * Comparands are capitalized tokens adjacent to comparison keywords. */
+function extractComparands(question) {
+    // Match tokens that start with uppercase (proper nouns) in comparison questions
+    const comparisonMatch = /\b(?:vs\.?|versus|compared?\s+to|compare|difference between|alternative(?:s)?\s+to|between)\b/i.test(question);
+    if (!comparisonMatch)
+        return [];
+    // Extract CamelCase / Uppercase-starting words (length ≥ 3, not sentence-start heuristic)
+    const tokens = question.split(/\s+/);
+    const properNouns = [];
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i].replace(/[?!.,]/g, "");
+        if (t.length >= 3 && /^[A-Z]/.test(t) && !/^(What|How|Why|When|Where|Who|Which|Is|Are|The|A|An|For|What|Compare|Between|And|Or|With|From|In|On|At|To)\b/.test(t)) {
+            properNouns.push(t);
+        }
+    }
+    return [...new Set(properNouns)];
+}
+/** Check whether a comparand appears in any of the collected sources */
+function comparandHasHits(comparand, sources) {
+    const lower = comparand.toLowerCase();
+    return sources.some(s => s.title.toLowerCase().includes(lower) ||
+        s.url.toLowerCase().includes(lower) ||
+        s.snippet.toLowerCase().includes(lower));
+}
 // ─── Main Research Function ────────────────────────────────────────────────
 export async function novadaResearch(params, apiKey, onProgress) {
     // Support 'query' as alias for 'question' (matches other tools' param naming)
@@ -89,7 +117,9 @@ export async function novadaResearch(params, apiKey, onProgress) {
         params = { ...params, question: questionText };
     }
     // Resolve depth — 'auto' picks based on question complexity heuristic
-    const resolvedDepth = resolveDepth(params.depth || "auto", params.question ?? "");
+    // F14-3: Track requested vs resolved depth separately for provenance
+    const requestedDepth = params.depth || "auto";
+    const resolvedDepth = resolveDepth(requestedDepth, params.question ?? "");
     const isDeep = resolvedDepth === "deep" || resolvedDepth === "comprehensive";
     const isComprehensive = resolvedDepth === "comprehensive";
     const queries = generateSearchQueries(params.question ?? "", isDeep, isComprehensive, params.focus);
@@ -159,8 +189,11 @@ export async function novadaResearch(params, apiKey, onProgress) {
         const extractResults = await Promise.allSettled(topSources.map(async (source) => {
             try {
                 const content = await novadaExtract({ url: source.url, format: "markdown", query: params.question, render: "auto" }, apiKey);
-                // Skip failed extractions (extract.ts returns "## Extract Failed" on error)
-                if (content.startsWith("## Extract Failed")) {
+                // Skip failed extractions.
+                // extract.ts returns "## Extract Failed" on generic errors (extract.ts:242)
+                // and "## Extraction Error" on TOTAL_REQUEST_CEILING timeout (extract.ts:1294).
+                // Both must be caught here so timeout error text never reaches synthesizeAnswer.
+                if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
                     return { ok: false, title: source.title, url: source.url, snippet: source.snippet };
                 }
                 // Strip all extract-output metadata — only keep the page body content
@@ -213,6 +246,8 @@ export async function novadaResearch(params, apiKey, onProgress) {
     const topic = params.question ?? "";
     const queryValue = params.query ?? params.question ?? "";
     const depthValue = resolvedDepth;
+    // F14-3: keep requested depth for provenance (auto → deep/quick is a lossy transform without this)
+    const requestedDepthValue = requestedDepth;
     // All searches failed or returned 0 results — Scraper API not activated
     if (failedCount === queries.length || totalResults === 0) {
         return [
@@ -241,7 +276,8 @@ export async function novadaResearch(params, apiKey, onProgress) {
         message: "Synthesizing cited report",
     });
     // Build structured synthesis from extracted contents + snippet fallbacks
-    const summaryText = synthesizeAnswer(topic, extractedContents, extractFailedSources, sources);
+    // F14-1: synthesizeAnswer now returns quality signal alongside text
+    const { text: summaryText, quality: synthesisQuality } = synthesizeAnswer(topic, extractedContents, extractFailedSources, sources);
     // Build Key Findings bullets from sources with snippets
     const findingBullets = sources.length > 0
         ? sources.map(s => `- **${s.title}** (${s.url})${s.snippet ? ` — ${s.snippet}` : ""}`)
@@ -263,10 +299,20 @@ export async function novadaResearch(params, apiKey, onProgress) {
     if (failedCount > 0) {
         agentHints.push(`- ${failedCount} of ${queries.length} search queries failed; results may be incomplete.`);
     }
+    // F14-2: Check for comparison questions where a named comparand has zero hits across all sources
+    if (detectDomain(topic) === "comparison") {
+        const comparands = extractComparands(topic);
+        for (const comparand of comparands) {
+            if (!comparandHasHits(comparand, sources)) {
+                agentHints.push(`- Warning: no results found for comparand "${comparand}" — coverage may be one-sided. Try searching for "${comparand}" directly.`);
+            }
+        }
+    }
     let finalReport = formatResearchOutput({
         topic,
         query: queryValue,
         depth: depthValue,
+        requestedDepth: requestedDepthValue,
         queriesSucceeded: succeededCount,
         queriesTotal: queries.length,
         generatedQueries: queries,
@@ -274,6 +320,7 @@ export async function novadaResearch(params, apiKey, onProgress) {
         sourcesFetchedCount: extractedContents.length,
         snippetOnlyCount: extractFailedSources.length,
         summaryText,
+        synthesisQuality,
         findingBullets,
         sourceRows,
         agentHints,
@@ -293,15 +340,78 @@ export async function novadaResearch(params, apiKey, onProgress) {
     catch { /* best-effort */ }
     return finalReport;
 }
-// ─── Synthesis ─────────────────────────────────────────────────────────────
-// Build a structured synthesis: direct answer + contrasting points + common finding
+// ─── Nav-Chrome Detection ──────────────────────────────────────────────────
+// Patterns that indicate page navigation/header chrome (not substantive content).
+//
+// Two classes:
+//  STRONG_CHROME_PATTERNS — always chrome regardless of line length (no risk of false-positives
+//    on substantive text because these exact phrases never appear mid-sentence in research content)
+//  CONTEXT_SENSITIVE_PATTERNS — chrome ONLY when the line is short (< CONTEXT_LENGTH_THRESHOLD).
+//    These phrases ("sign in", "privacy policy", "terms of service", "cookie consent",
+//    "cookie policy") can also appear as SUBJECT MATTER in substantive sentences
+//    (OAuth docs, GDPR compliance, ePrivacy legal analysis). A standalone short
+//    link/list item is ≤ CONTEXT_LENGTH_THRESHOLD chars; a substantive sentence is longer.
+const CONTEXT_LENGTH_THRESHOLD = 80; // chars; short enough to catch "Sign in", "Cookie policy", etc.
+const STRONG_CHROME_PATTERNS = [
+    /\[?skip\s+to\s+(main\s+)?content\]?/i,
+    /\btoggle\s+navigation\b/i,
+    /\bnavigation\s+menu\b/i,
+    /\bopen\s+menu\b/i,
+    /\bclose\s+menu\b/i,
+    /^\[.*?\]\s*$/, // lines that are entirely "[something]"
+];
+const CONTEXT_SENSITIVE_PATTERNS = [
+    /\bsign\s+(in|up)\b/i, // nav affordance on short lines; OAuth/SSO subject on long lines
+    /\bprivacy\s+policy\b/i, // footer link on short lines; GDPR subject on long lines
+    /\bterms\s+(of\s+)?(service|use)\b/i, // footer link on short lines; legal subject on long lines
+    // C5 fix: cookie-consent / cookie-policy moved from STRONG_CHROME to CONTEXT_SENSITIVE so
+    // substantive GDPR/ePrivacy sentences (> CONTEXT_LENGTH_THRESHOLD chars) survive stripping,
+    // while short nav links like "Cookie settings" / "Cookie policy" are still removed.
+    /\b(cookie|cookies)\s+(settings|preferences|policy|consent|notice|banner)\b/i,
+    // Round-3f fix P1: "accept cookies/tracking" moved from STRONG_CHROME to CONTEXT_SENSITIVE.
+    // Short nav buttons ("Accept all cookies", "Accept tracking") are still stripped.
+    // Substantive GDPR/ePrivacy sentences (>80 chars) that use these phrases as subject matter
+    // (e.g. "websites must allow users to accept cookies on a purpose-by-purpose basis") survive.
+    /\baccept\s+(all\s+)?(cookies|tracking)\b/i,
+];
+/** Returns true if a line/sentence is nav or header chrome */
+function isNavChromeLine(text) {
+    if (STRONG_CHROME_PATTERNS.some(re => re.test(text)))
+        return true;
+    // Context-sensitive patterns: only treat as chrome when the line is a short affordance,
+    // not when the phrase is embedded in a substantive sentence.
+    if (text.length < CONTEXT_LENGTH_THRESHOLD && CONTEXT_SENSITIVE_PATTERNS.some(re => re.test(text)))
+        return true;
+    return false;
+}
+/** Returns the fraction of lines in a text that match nav-chrome patterns (0–1) */
+// C14 fix: split on "\n" (same as stripNavChrome) so the 80-char CONTEXT_SENSITIVE length guard
+// is evaluated per logical line, not per sentence fragment. Splitting on /[\n.!?]+/ broke
+// multi-sentence paragraphs into sub-80-char pieces that falsely scored as chrome.
+function chromeFraction(text) {
+    const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0)
+        return 0;
+    const chromeLines = lines.filter(isNavChromeLine).length;
+    return chromeLines / lines.length;
+}
+/** Strip nav-chrome lines from a fragment text. Returns cleaned text. */
+function stripNavChrome(text) {
+    return text
+        .split("\n")
+        .filter(line => !isNavChromeLine(line.trim()))
+        .join("\n")
+        .replace(/\n{2,}/g, "\n")
+        .trim();
+}
 function synthesizeAnswer(question, extracted, failedSources, allSources) {
     const fallback = "Synthesis unavailable — see raw findings below.";
     // Collect all available text fragments for synthesis
     const fragments = [];
     // Full extracted content — take first ~600 chars of each
+    // F14-1: strip nav-chrome lines before collecting fragments
     for (const src of extracted) {
-        const cleaned = src.content.replace(/^#+.*$/gm, "").replace(/\n{2,}/g, " ").trim();
+        const cleaned = stripNavChrome(src.content.replace(/^#+.*$/gm, "").replace(/\n{2,}/g, " ").trim());
         const sentences = cleaned.match(/[^.!?]+[.!?]+/g) ?? [];
         const fragment = sentences.slice(0, 4).join(" ").trim() || cleaned.slice(0, 600).trim();
         if (fragment) {
@@ -323,15 +433,16 @@ function synthesizeAnswer(question, extracted, failedSources, allSources) {
         }
     }
     if (fragments.length === 0)
-        return fallback;
+        return { text: fallback, quality: "failed" };
     // Rank fragments by keyword overlap with the question — most relevant first
+    // F14-1: also penalise chrome-heavy fragments (chrome fraction > 0.4)
     const questionKeywords = question.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !STOP_WORDS.has(w));
     if (questionKeywords.length > 0) {
         fragments.sort((a, b) => {
             const aText = a.text.toLowerCase();
             const bText = b.text.toLowerCase();
-            const scoreA = questionKeywords.filter(kw => aText.includes(kw)).length;
-            const scoreB = questionKeywords.filter(kw => bText.includes(kw)).length;
+            const scoreA = questionKeywords.filter(kw => aText.includes(kw)).length - (chromeFraction(a.text) > 0.4 ? 100 : 0);
+            const scoreB = questionKeywords.filter(kw => bText.includes(kw)).length - (chromeFraction(b.text) > 0.4 ? 100 : 0);
             return scoreB - scoreA;
         });
     }
@@ -352,7 +463,14 @@ function synthesizeAnswer(question, extracted, failedSources, allSources) {
         }
     }
     const synthesis = parts.join("\n");
-    return synthesis || fallback;
+    if (!synthesis)
+        return { text: fallback, quality: "failed" };
+    // F14-1: Determine synthesis quality — weak if the primary fragment is chrome-heavy
+    // or shares fewer than 1 keyword with the question
+    const primaryChromeFraction = chromeFraction(primary.text);
+    const primaryKeywordMatches = questionKeywords.filter(kw => primary.text.toLowerCase().includes(kw)).length;
+    const isWeak = primaryChromeFraction > 0.6 || (questionKeywords.length > 0 && primaryKeywordMatches < 1);
+    return { text: synthesis, quality: isWeak ? "weak" : "ok" };
 }
 // ─── Output Formatting ─────────────────────────────────────────────────────
 function formatResearchOutput(args) {
@@ -360,7 +478,8 @@ function formatResearchOutput(args) {
     const timestamp = new Date().toISOString();
     const summaryText = args.summaryText.trim();
     const hasSynthesis = summaryText.length > 0 && summaryText !== fallbackSummary;
-    const synthesisStatus = hasSynthesis ? "ok" : "failed";
+    // F14-1: use synthesisQuality from synthesizeAnswer (ok | weak | failed)
+    const synthesisStatus = hasSynthesis ? args.synthesisQuality : "failed";
     const summary = hasSynthesis ? summaryText : fallbackSummary;
     const findingBullets = args.findingBullets.length > 0 ? args.findingBullets : [`- No structured findings extracted.`];
     const agentHints = args.agentHints.length > 0 ? args.agentHints : [`- Try a narrower query or provide known source URLs to inspect directly.`];
@@ -387,10 +506,17 @@ function formatResearchOutput(args) {
     const generatedQueriesLines = args.generatedQueries && args.generatedQueries.length > 0
         ? [`**generated_queries**:`, ...args.generatedQueries.map((q, i) => `  ${i + 1}. ${q}`)]
         : [];
+    // F14-3: emit requested_depth and resolved_depth as separate provenance fields.
+    // Always emit both so callers can programmatically distinguish "user asked for X, got Y".
+    // When they differ (auto resolved to a concrete depth), annotate the resolution explicitly.
+    const depthProvenanceLine = args.requestedDepth !== args.depth
+        ? `**requested_depth**: ${args.requestedDepth} | **resolved_depth**: ${args.depth} *(auto-resolved)*`
+        : `**requested_depth**: ${args.requestedDepth} | **resolved_depth**: ${args.depth}`;
     const lines = [
         `## Research: ${args.topic}`,
         ``,
         `**Query**: ${args.query} | **top_sources**: ${totalSources} | **depth**: ${args.depth}`,
+        depthProvenanceLine,
         `**queries**: ${args.queriesSucceeded}/${args.queriesTotal} succeeded`,
         ...failedQueriesLine,
         ...generatedQueriesLines,
@@ -414,7 +540,7 @@ function formatResearchOutput(args) {
         ...agentHints,
         ``,
         `## Agent Action`,
-        `agent_instruction: status:${synthesisStatus === "ok" ? "success" : "partial"} | depth:${args.depth} | queries:${args.queriesSucceeded}/${args.queriesTotal} | sources:${args.sourcesFetchedCount} | synthesis:${synthesisStatus}`,
+        `agent_instruction: status:${(synthesisStatus === "ok" || synthesisStatus === "weak") ? "success" : "partial"} | requested_depth:${args.requestedDepth} | resolved_depth:${args.depth} | queries:${args.queriesSucceeded}/${args.queriesTotal} | sources:${args.sourcesFetchedCount} | synthesis:${synthesisStatus}`,
         `next: novada_extract on specific source URLs for full content`,
         `next: novada_research with focus="<subtopic>" to narrow coverage`,
         ...(args.failedQueries && args.failedQueries.length > 0
@@ -447,12 +573,20 @@ const STOP_WORDS = new Set([
     "does", "the", "a", "an", "in", "on", "at", "to", "for", "of", "with",
     "and", "or", "but", "can", "will", "should", "would", "could",
 ]);
-/** Generate diverse search queries for broader research coverage */
+/** Generate diverse search queries for broader research coverage.
+ *
+ * F14-2: Use the full `topic` string (not a truncated 4-word keyPhrase) as the
+ * base for all derived sub-queries so that named entities (proper nouns at word
+ * positions 5+) survive into search sub-queries.  The keyPhrase is still derived
+ * for the reddit/hn social queries where shorter phrases work better.
+ */
 function generateSearchQueries(question, deep, comprehensive, focus) {
     const queries = [question];
     const words = question.toLowerCase().split(/\s+/);
+    // F14-2: use full topic (without trailing punctuation) as base for sub-queries
     const topic = question.replace(/[?!.]+$/, "").trim();
     const keywords = words.filter(w => !STOP_WORDS.has(w) && w.length > 2);
+    // keyPhrase retained for social/fallback queries only (shorter is better there)
     const keyPhrase = keywords.slice(0, 4).join(" ") || topic;
     // Apply focus to sub-queries if provided
     const focusSuffix = focus ? ` ${focus}` : "";
@@ -460,23 +594,24 @@ function generateSearchQueries(question, deep, comprehensive, focus) {
     const domain = detectDomain(question);
     const domainSuffixes = DOMAIN_SUFFIXES[domain];
     if (keywords.length > 2) {
-        // Domain-specific queries instead of generic "overview explained"
-        queries.push(`${keyPhrase} ${domainSuffixes[0]}${focusSuffix}`);
-        queries.push(`${keyPhrase} ${domainSuffixes[1]}${focusSuffix}`);
+        // F14-2: Use full `topic` so named entities (e.g. "Novada", "TypeScript", "Model Context Protocol")
+        // are preserved in derived sub-queries, not truncated by a 4-word slice.
+        queries.push(`${topic} ${domainSuffixes[0]}${focusSuffix}`);
+        queries.push(`${topic} ${domainSuffixes[1]}${focusSuffix}`);
         if (deep || comprehensive) {
-            queries.push(`${keyPhrase} ${domainSuffixes[2]}${focusSuffix}`);
-            queries.push(`${keyPhrase} challenges limitations${focusSuffix}`);
-            // Natural language instead of site: operators
+            queries.push(`${topic} ${domainSuffixes[2]}${focusSuffix}`);
+            queries.push(`${topic} challenges limitations${focusSuffix}`);
+            // Social queries use short keyPhrase (better signal-to-noise for reddit/hn)
             if (keywords.length >= 2) {
-                queries.push(`${keywords[0]} ${keywords[1]} reddit discussion opinions`);
+                queries.push(`${keyPhrase} reddit discussion opinions`);
             }
             else {
                 queries.push(`${topic} reddit discussion opinions`);
             }
         }
         if (comprehensive) {
-            queries.push(`${keyPhrase} case study examples${focusSuffix}`);
-            queries.push(`${keyPhrase} 2024 2025 trends${focusSuffix}`);
+            queries.push(`${topic} case study examples${focusSuffix}`);
+            queries.push(`${topic} 2024 2025 trends${focusSuffix}`);
             queries.push(`${keyPhrase} hacker news discussion`);
         }
     }

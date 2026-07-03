@@ -23,6 +23,12 @@ export interface FieldResult {
     attempted?: string[];
     /** Non-silent guidance set only when source === "unresolved". */
     agent_instruction?: string;
+    /**
+     * Per-field health warning — set when a low-confidence pattern match was used
+     * (e.g. boilerplate text like "Category:…" was the best available match). The
+     * whole-page quality banner must not imply this field is trustworthy.
+     */
+    warning?: string;
 }
 export interface HeadingSectionResult {
     value: string | null;

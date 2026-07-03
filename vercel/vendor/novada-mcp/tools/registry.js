@@ -119,7 +119,7 @@ export const TOOL_REGISTRY = [
     },
     {
         name: "novada_monitor",
-        description: "Detect changes on a web page over time by comparing content hashes; first call sets a baseline, subsequent calls report changed/unchanged plus optional field-level diffs",
+        description: "Session-scoped only / no durable state — baseline lost on server restart; schedule from your own job runner for persistence. Detect changes on a web page over time by comparing content hashes; first call sets a baseline, subsequent calls report changed/unchanged plus optional field-level diffs",
         category: "Scraping & Verification",
         status: "active",
     },
@@ -268,4 +268,21 @@ export const TOOL_REGISTRY = [
 ];
 /** Tool names in the canonical registry, as a Set for fast membership checks. */
 export const REGISTERED_TOOL_NAMES = new Set(TOOL_REGISTRY.map((t) => t.name));
+/**
+ * The subset of TOOL_CATEGORIES that have at least one entry in TOOL_REGISTRY.
+ * Categories with zero entries (e.g. "Auth") are intentionally excluded so they
+ * never appear in the Zod enum, the inputSchema description, or Zod validation
+ * error hints shown to callers.
+ *
+ * Guaranteed non-empty at runtime because the registry always has tools.
+ * Type is `[ToolCategory, ...ToolCategory[]]` to satisfy z.enum() which requires
+ * a non-empty tuple.
+ */
+const _populatedCategories = TOOL_CATEGORIES.filter((c) => TOOL_REGISTRY.some((t) => t.category === c));
+// z.enum() requires a non-empty tuple — assert at module load time so a
+// misconfigured empty registry surfaces as a startup error, not a type error.
+if (_populatedCategories.length === 0) {
+    throw new Error("TOOL_REGISTRY is empty — cannot derive populated categories for Zod enum");
+}
+export const POPULATED_TOOL_CATEGORIES = _populatedCategories;
 //# sourceMappingURL=registry.js.map

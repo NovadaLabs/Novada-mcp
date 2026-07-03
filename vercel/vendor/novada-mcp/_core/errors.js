@@ -84,7 +84,7 @@ Setup (one-time):
 Verify the key is active:
   Call novada_health — it will confirm which products are accessible.
 
-Get a key: https://dashboard.novada.com/overview/`,
+Get a key: https://dashboard.novada.com/api-key/`,
     [NovadaErrorCode.RATE_LIMITED]: `\
 You have hit the Novada API rate limit. This is temporary and retryable.
 
@@ -202,6 +202,11 @@ export function redactSecrets(msg) {
     // 5. Local filesystem paths: /Users/… and /home/… — strip to avoid leaking
     //    the operator's username or directory structure in error messages.
     out = out.replace(/\/(?:Users|home)\/[^\s"')]+/g, "[local-path]");
+    // 6. Prose-format credentials: "Account: value", "Password：value", etc.
+    //    Matches both ASCII colon (:) and full-width colon (U+FF1A ：) so that
+    //    non-ASCII API error messages (e.g. Chinese proxy responses) are also covered.
+    //    Keywords: Account, Password, Passwd, Pwd, User, Username (case-insensitive).
+    out = out.replace(/(Account|Password|Passwd|Pwd|User(?:name)?)\s*[:：]\s*\S+/gi, "$1: ***");
     return out;
 }
 /** Strip API keys, sensitive URL params, and injection patterns from any string before surfacing. */

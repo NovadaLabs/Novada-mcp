@@ -88,8 +88,9 @@ export async function novadaExtract(params, apiKey) {
         const results = await Promise.all(urls.map((url, i) => extractSingle({ ...params, url }, apiKey)
             .then(content => ({ i, url, content, ok: true }))
             .catch(err => {
-            const message = err instanceof Error ? err.message : String(err);
-            const fix = getSuggestedFix(url, message);
+            const rawMessage = err instanceof Error ? err.message : String(err);
+            const message = redactSecrets(rawMessage);
+            const fix = getSuggestedFix(url, rawMessage);
             return { i, url, content: `Error: ${message}\n${fix}`, ok: false };
         })));
         const successful = results.filter(r => r.ok).length;
@@ -210,8 +211,9 @@ export async function novadaExtract(params, apiKey) {
         return await extractSingle({ ...params, url: urlList[0] }, apiKey);
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        const suggestedFix = getSuggestedFix(urlList[0], message);
+        const rawMessage = err instanceof Error ? err.message : String(err);
+        const message = redactSecrets(rawMessage);
+        const suggestedFix = getSuggestedFix(urlList[0], rawMessage);
         return [
             `## Extract Failed`,
             `url: ${urlList[0]}`,
@@ -278,6 +280,18 @@ function buildContextualAgentInstruction(ctx) {
 /** Derive a suggested_fix hint from a URL + error message */
 function getSuggestedFix(url, errorMsg) {
     const lower = errorMsg.toLowerCase();
+    // P0: 5001 / PRODUCT_UNAVAILABLE — Web Unblocker not activated.
+    // Must be checked FIRST: the 5001 message contains "render/JS modes" which would
+    // otherwise match the generic "js" branch below and incorrectly suggest re-using
+    // render="render" — the very mode that just triggered the 5001.
+    if (lower.includes("5001") || lower.includes("retrying will not help")) {
+        return `suggested_fix: Web Unblocker not activated on this account. Activate at https://dashboard.novada.com/overview/web-unblocker/ or retry with render="static" (no unblocker needed)`;
+    }
+    // P1: render mode itself returned a bot-challenge page — do NOT suggest render="render"
+    // again (it was just tried and returned the challenge). Escalate to browser or unblock.
+    if (lower.includes("render returned a bot challenge") || lower.includes("bot challenge page")) {
+        return `suggested_fix: render mode returned a bot-challenge page — do not retry with render="render". Try: render="browser" with NOVADA_BROWSER_WS configured, or novada_unblock(url="${url}") for raw HTML via stealth browser`;
+    }
     // Known anti-bot / access-denial patterns
     if (lower.includes("bot") || lower.includes("challenge") || lower.includes("captcha") ||
         lower.includes("cloudflare") || lower.includes("403") || lower.includes("forbidden") ||
@@ -431,16 +445,32 @@ async function extractSingleInner(params, apiKey) {
             }
             html = response.data;
         }
-        // QW-4: If rendered content is suspiciously short, it may be a bot-challenge page
-        // that passed detectBotChallenge — attempt browser escalation before accepting
-        if (typeof html === "string" && html.length < 2000 && detectBotChallenge(html) && isBrowserConfigured()) {
-            const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => null);
-            if (browserHtml && browserHtml.length > html.length) {
-                html = browserHtml;
-                usedMode = "browser";
+        // F2 / QW-4: Detect bot-challenge pages returned by the Web Unblocker (any size).
+        // A full-size Cloudflare interstitial (e.g., "Attention Required! | Cloudflare", "Sorry,
+        // you have been blocked") is several KB — the old html.length < 2000 guard missed it.
+        // Fix: run detectBotChallenge unconditionally; attempt browser escalation when available,
+        // otherwise surface a concrete error instead of silently returning interstitial text.
+        if (typeof html === "string" && detectBotChallenge(html)) {
+            if (isBrowserConfigured()) {
+                const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => null);
+                // F2/R3: Use pickBetterHtml (quality-score comparison) instead of raw byte
+                // length to decide whether to accept the browser result. Raw length is
+                // unreliable because a padded Cloudflare interstitial (several KB) can be
+                // longer than a short-but-real page, causing good content to be discarded.
+                const best = pickBetterHtml({ html, mode: "render" }, { html: browserHtml ?? "", mode: "browser" }, params.url, useFullPage);
+                if (best.adopted) {
+                    html = best.html;
+                    usedMode = "browser";
+                }
+                else {
+                    // Browser also returned challenge / nothing better — surface as error
+                    throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, "Render returned a bot challenge page", `url:${params.url} render=render returned a bot challenge page; browser escalation also failed`);
+                }
             }
             else {
-                usedMode = "render";
+                // No browser configured — throw so the caller surfaces an honest error
+                throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, "Render returned a bot challenge page", `url:${params.url} render=render returned a bot challenge page (Cloudflare/anti-bot interstitial). ` +
+                    `Use render=browser with NOVADA_BROWSER_WS configured, or try a different URL.`);
             }
         }
         else {
@@ -912,6 +942,7 @@ async function extractSingleInner(params, apiKey) {
                         source: r.source,
                         confidence: r.confidence,
                         ...(r.source === "unresolved" && r.agent_instruction ? { agent_instruction: r.agent_instruction } : {}),
+                        ...(r.warning ? { warning: r.warning } : {}),
                     },
                 ]))
                 : null,
@@ -1033,7 +1064,8 @@ async function extractSingleInner(params, apiKey) {
                     const cleanValue = typeof r.value === "string"
                         ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
                         : r.value;
-                    lines.push(`${r.field}: ${cleanValue}${sourceTag} *(conf:${r.confidence.toFixed(2)})*`);
+                    const warningTag = r.warning ? ` *(warning: ${r.warning})*` : "";
+                    lines.push(`${r.field}: ${cleanValue}${sourceTag} *(conf:${r.confidence.toFixed(2)})*${warningTag}`);
                 }
             }
         }

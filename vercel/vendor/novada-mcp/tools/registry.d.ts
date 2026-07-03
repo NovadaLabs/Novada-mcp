@@ -33,4 +33,5 @@ export interface ToolMeta {
 export declare const TOOL_REGISTRY: readonly ToolMeta[];
 /** Tool names in the canonical registry, as a Set for fast membership checks. */
 export declare const REGISTERED_TOOL_NAMES: ReadonlySet<string>;
+export declare const POPULATED_TOOL_CATEGORIES: [ToolCategory, ...ToolCategory[]];
 //# sourceMappingURL=registry.d.ts.map

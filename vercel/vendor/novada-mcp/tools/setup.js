@@ -50,7 +50,7 @@ export function novadaSetup(_params) {
     lines.push("");
     // ─── Summary ──────────────────────────────────────────────────────────────
     if (allCoreReady) {
-        lines.push("**Status: Ready.** Core tools are active.");
+        lines.push("**Status: Ready** (configuration OK). Core tools are configured — run `novada_health_all` to confirm which products are activated on your account.");
         const missing = [];
         if (!browserWs)
             missing.push("novada_browser, novada_browser_flow (need NOVADA_BROWSER_WS)");

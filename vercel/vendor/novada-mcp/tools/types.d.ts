@@ -47,6 +47,18 @@ export declare const SearchParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unkno
         top_n: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
     }, z.core.$strip>>>;
 }, z.core.$strip>>;
+/**
+ * Public ExtractParamsSchema — wraps the inner schema with two preprocess layers:
+ *
+ * 1. urls → url promotion (F11): when `urls` is present and `url` is absent,
+ *    copy `urls` into `url` so the required `url` field is satisfied. This lets
+ *    callers pass ONLY `urls=[...]` as the documented alias without hitting a
+ *    ZodError on the `url` required field.
+ *
+ * 2. camelCase → snake_case aliasing (NOV-327): maxChars → max_chars, etc.
+ *
+ * Both layers run inside a single z.preprocess so Zod sees the normalised input.
+ */
 export declare const ExtractParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     url: z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>;
     urls: z.ZodOptional<z.ZodArray<z.ZodString>>;
