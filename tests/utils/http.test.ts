@@ -100,8 +100,10 @@ describe("fetchWithRender", () => {
     expect(mockedAxios.post).toHaveBeenCalled();
     const [url, body] = mockedAxios.post.mock.calls[0];
     expect(url).toContain("webunlocker.novada.com");
-    expect((body as Record<string, unknown>).js_render).toBe(true);
-    expect((body as Record<string, unknown>).target_url).toBe("https://example.com");
+    // Body is a URLSearchParams string — parse it before asserting field values.
+    const parsed = new URLSearchParams(body as string);
+    expect(parsed.get("js_render")).toBe("true");
+    expect(parsed.get("target_url")).toBe("https://example.com");
 
     process.env.NOVADA_WEB_UNBLOCKER_KEY = originalKey;
   });

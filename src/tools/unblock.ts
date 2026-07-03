@@ -3,10 +3,16 @@ import type { UnblockParams } from "./types.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 /**
- * Force JS rendering on a URL and return raw HTML.
- * Unlike extract (which returns cleaned markdown), unblock returns the full DOM —
- * useful when agents need to parse specific elements, inspect structure, or
- * when extract's auto-router hints suggest retrying with render.
+ * Force JS rendering on a URL and return raw HTML (full DOM source).
+ *
+ * Distinction from novada_extract:
+ *   - novada_unblock  → raw HTML for custom parsing, CSS-selector workflows, or inspecting full DOM structure.
+ *                       Use when you need the actual page source, not cleaned prose.
+ *   - novada_extract  → readable/structured content (markdown, JSON fields, summaries) for agent consumption.
+ *                       Use when you want the page content in a digestible form.
+ *
+ * Choose unblock when extract's auto-router hints suggest the page is bot-protected/JS-heavy
+ * and you need the full rendered source rather than processed text.
  */
 const UNBLOCK_MAX_CHARS_DEFAULT = 100000;
 
