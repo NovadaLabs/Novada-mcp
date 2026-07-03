@@ -35,7 +35,11 @@ export function extractSitemapUrls(xml: string, out: string[], max: number, base
  * Strategy:
  *   1. Read robots.txt and prefer any `Sitemap:` declarations found there.
  *   2. Fall back to /sitemap.xml and /sitemap_index.xml.
- *   3. Recurse one level into sitemap indexes (up to 5 child sitemaps).
+ *   3. Recurse one level into sitemap indexes — ALL children up to a safety cap of 50
+ *      (previously limited to 5, which silently discarded most of large sites' sitemaps).
+ *
+ * Callers pass a generous over-fetch budget (e.g. caller_limit * 10) so that upstream
+ * sub-path filtering still leaves enough URLs after scope reduction.
  *
  * Shared by novada_map and novada_site_copy so both use identical discovery logic.
  */
@@ -91,7 +95,10 @@ export async function discoverViaSitemap(
         const childSitemaps = [...xml.matchAll(/<loc>\s*(.*?)\s*<\/loc>/gs)]
           .map(m => m[1].trim())
           .filter(u => u.startsWith("http") && isSameSite(u, baseHostname));
-        for (const childUrl of childSitemaps.slice(0, 5)) {
+        // Fetch ALL child sitemaps up to a safety cap of 50 (SSRF is already guarded
+        // above by the isSameSite filter — only same-host children are fetched).
+        // Old cap of 5 silently discarded most children on large sites.
+        for (const childUrl of childSitemaps.slice(0, 50)) {
           if (urls.length >= maxUrls) break;
           try {
             const childResp = await fetchViaProxy(childUrl, apiKey, { timeout: TIMEOUTS.SITEMAP });

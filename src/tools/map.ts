@@ -162,22 +162,57 @@ async function novadaMapInner(
     maxDepth: Math.min(params.max_depth ?? 2, 5),
   };
 
+  // Scope for sitemap branch: same sub-path prefix, but depth is only applied
+  // when the seed has a non-root sub-path.
+  //
+  // Rationale: when the seed is the site root (basePath = []), applying max_depth
+  // to sitemap URLs is wrong — a sitemap is an authoritative index listing ALL
+  // site pages, so /api-reference/endpoint/x (depth 3) must be returned even with
+  // the default max_depth=2. max_depth as a BFS hop count makes no sense for sitemaps
+  // when the seed is the root.
+  //
+  // When the seed is a sub-path (basePath = ["docs"]), max_depth still usefully
+  // scopes the result to within N segments of that sub-tree — e.g. max_depth=1
+  // with /docs keeps /docs/guide but drops /docs/api/reference. (F3 fix)
+  const sitemapScope: PathScope = {
+    basePath: scope.basePath,
+    maxDepth: scope.basePath.length === 0 ? Infinity : scope.maxDepth,
+  };
+
   // --- Phase 1: Try sitemap discovery ---
-  const sitemapUrls = await discoverViaSitemap(origin, apiKey, maxUrls);
+  // Fetch enough raw URLs to fill the caller limit AFTER sub-path filtering.
+  // A sub-path seed (e.g. /docs) may discard many sitemap URLs that are outside
+  // the scoped prefix — over-fetch by a generous multiple so the result list is full.
+  const sitemapFetchBudget = maxUrls * 10;
+  const sitemapUrls = await discoverViaSitemap(origin, apiKey, sitemapFetchBudget);
+
+  // When discoverViaSitemap returns exactly sitemapFetchBudget URLs, the true sitemap
+  // count is unknown — the budget was the binding constraint, not the sitemap's actual size.
+  // This flag is used downstream to emit ">=" floor notation in discovered counts so agents
+  // are never told a precise-but-false total. (C6 fix)
+  const sitemapFetchCapped = sitemapUrls.length >= sitemapFetchBudget;
 
   let discovered: string[];
+  // Total URLs in the sitemap's scoped set before the caller limit is applied.
+  // Used to produce honest under-delivery messages: "returned X of Y sitemap entries"
+  // vs "site has fewer links than requested." (F3 fix)
+  let sitemapScopedTotal = 0;
 
   if (sitemapUrls.length > 0) {
-    // Filter to same domain, then to the rooted sub-path + depth scope.
-    discovered = sitemapUrls.filter(u => {
+    // Filter to same domain, then to the rooted sub-path (no depth limit on sitemap branch).
+    const scoped = sitemapUrls.filter(u => {
       try {
         const h = new URL(u).hostname.replace(/^www\./, "");
         const sameHost = h === baseHostname || (params.include_subdomains && h.endsWith(`.${baseHostname}`));
-        return sameHost && inScope(u, scope);
+        return sameHost && inScope(u, sitemapScope);
       } catch { return false; }
     });
+    sitemapScopedTotal = scoped.length;
+    // Apply caller limit after scope filtering so the output count matches the request.
+    discovered = scoped.slice(0, maxUrls);
   } else {
     // --- Phase 2: Parallel BFS crawl ---
+    // BFS respects max_depth (each hop = one depth level) — depth IS meaningful here.
     discovered = (await parallelBfsCrawl(params, apiKey, maxUrls, baseHostname))
       .filter(u => inScope(u, scope));
   }
@@ -204,6 +239,21 @@ async function novadaMapInner(
   }
 
   if (filtered.length === 0) {
+    // When the underlying discovery pool is suspiciously small (< 10 URLs) AND we came
+    // from sitemap discovery, the lack of search matches may be due to incomplete sitemap
+    // parsing rather than the site having no matching pages. Warn accordingly. (F9 fix)
+    // Key on sitemapScopedTotal (pre-limit) rather than discovered.length (post-limit).
+    // discovered.length may be < 10 because caller set a low limit, not because the
+    // sitemap is sparse — sitemapScopedTotal reflects the actual sitemap pool size. (F9 fix)
+    const discoveryLikelyIncomplete = sitemapUrls.length > 0 && sitemapScopedTotal < 10;
+    const hints: string[] = [
+      `- Remove the 'search' filter to see all ${discovered.length} discovered URLs.`,
+      `- Try a broader search term or check the URL spelling.`,
+      `- Use \`novada_search\` with \`site:${new URL(params.url).hostname} ${params.search ?? ""}\` to find indexed pages.`,
+    ];
+    if (discoveryLikelyIncomplete) {
+      hints.push(`- Note: discovery may be incomplete — only ${discovered.length} URL${discovered.length === 1 ? "" : "s"} found in sitemap. The site may have more pages not listed in the sitemap, or the sitemap may not have loaded completely.`);
+    }
     return [
       `## Site Map`,
       `root: ${params.url}`,
@@ -214,9 +264,7 @@ async function novadaMapInner(
       `No URLs found matching "${params.search ?? ""}" on ${params.url}.`,
       ``,
       `## Agent Hints`,
-      `- Remove the 'search' filter to see all ${discovered.length} discovered URLs.`,
-      `- Try a broader search term or check the URL spelling.`,
-      `- Use \`novada_search\` with \`site:${new URL(params.url).hostname} ${params.search ?? ""}\` to find indexed pages.`,
+      ...hints,
     ].join("\n");
   }
 
@@ -244,16 +292,46 @@ async function novadaMapInner(
   }
 
   if (filtered.length < maxUrls) {
+    // Determine whether we are genuinely limit-capping from a larger sitemap pool, or whether
+    // the site itself has fewer pages than requested.
+    // sitemapScopedTotal > maxUrls means we had more sitemap entries but truncated to caller limit.
+    const limitCappedFromSitemap = sitemapScopedTotal > maxUrls;
     lines.push(``, `## Agent Notice — Under-delivery`);
     lines.push(`requested: ${maxUrls} | returned: ${filtered.length} | shortfall: ${maxUrls - filtered.length}`);
-    lines.push(`reason: Site has fewer crawlable links${params.search ? ` matching "${params.search}"` : ""} than requested.`);
-    lines.push(`next_steps: ${params.search ? `Remove 'search' filter to see all ${discovered.length} URLs, or t` : "T"}ry max_depth=3 or increase limit.`);
+    if (limitCappedFromSitemap) {
+      // D2 fix: when sitemapFetchCapped=true, sitemapScopedTotal is bounded by the fetch budget,
+      // not the true sitemap size. Use ">=" floor notation consistent with agent_instruction.
+      const sitemapScopedStr = sitemapFetchCapped ? `>=${sitemapScopedTotal}` : `${sitemapScopedTotal}`;
+      lines.push(`reason: Results capped at the requested limit (${maxUrls}); sitemap has ${sitemapScopedStr} URLs in scope (${params.search ? `${filtered.length} match the search filter "${params.search}"` : "all in scope"}).`);
+      lines.push(`next_steps: ${params.search ? `Remove 'search' filter or i` : "I"}ncrease the \`limit\` parameter to retrieve more URLs.`);
+    } else {
+      lines.push(`reason: Site has fewer crawlable links${params.search ? ` matching "${params.search}"` : ""} than requested.`);
+      lines.push(`next_steps: ${params.search ? `Remove 'search' filter to see all ${discovered.length} URLs, or t` : "T"}ry max_depth=3 or increase limit.`);
+    }
   }
 
 
   lines.push(``);
   lines.push(`## Agent Action`);
-  lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
+  // F3 spec: only emit map_complete when the returned set is NOT a limit-capped subset of a
+  // larger discovered pool. If sitemapScopedTotal > maxUrls, we truncated; omit map_complete
+  // so agents do not incorrectly assume the full site has been enumerated.
+  //
+  // Round-3f fix: also gate on !sitemapFetchCapped. When the sitemap fetch hit the budget,
+  // the true site total is unknown (>=budget), so map_complete must never be claimed even
+  // if scope-filtering narrows the in-scope set to a number <= maxUrls (e.g. a deep sub-path
+  // on a large site returns 3 in-scope URLs from 500 fetched, with 100s more un-fetched).
+  const limitCappedFromSitemap = sitemapScopedTotal > maxUrls;
+  if (!limitCappedFromSitemap && !sitemapFetchCapped) {
+    lines.push(`agent_instruction: map_complete urls:${filtered.length} | next: novada_extract to read pages | next: novada_crawl for bulk extraction`);
+  } else {
+    // C6 fix: when the sitemap fetch hit the budget (sitemapFetchCapped), sitemapScopedTotal
+    // is bounded by the fetch budget (maxUrls*10), not the true sitemap size. Use ">=" floor
+    // notation so agents are never told a precise-but-false total. When not fetch-capped, the
+    // count is the true scoped total and can be reported exactly.
+    const discoveredStr = sitemapFetchCapped ? `>=${sitemapScopedTotal}` : `${sitemapScopedTotal}`;
+    lines.push(`agent_instruction: map_partial urls:${filtered.length} discovered:${discoveredStr} | increase \`limit\` to retrieve more URLs | next: novada_extract to read pages`);
+  }
   return lines.join("\n");
 }
 
