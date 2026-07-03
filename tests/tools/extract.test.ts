@@ -823,6 +823,9 @@ describe("Round-3 HIGH: F2 browser escalation should use pickBetterHtml, not raw
 
     delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
     delete process.env.NOVADA_BROWSER_WS;
+  });
+});
+
 // F12 Requirement 3 — per-field warning must surface in both JSON and markdown output paths.
 // A FieldResult with .warning set MUST be serialized in the tool output layer; it must not
 // silently vanish inside the JSON/markdown builders. This is the regression the reviewer vetoed.
