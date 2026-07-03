@@ -150,7 +150,7 @@ describe("P0-1: quality floor", () => {
     mockedAxios.get.mockResolvedValue({ data: smallPageHtml });
 
     const result = await novadaExtract({ url: "https://example.com/small", format: "markdown" }, API_KEY);
-    const match = result.match(/quality:(\d+)/);
+    const match = result.match(/score:(\d+)/); // R4: score surfaced as `score:N/100`, not a leading `quality:N` verdict
     expect(match).not.toBeNull();
     const score = parseInt(match![1], 10);
     expect(score).toBeGreaterThanOrEqual(1);
@@ -163,7 +163,7 @@ describe("P0-1: quality floor", () => {
 
     // Bot challenge pages have near-zero content — quality should be very low (≤ 10)
     const result = await novadaExtract({ url: "https://example.com", format: "markdown" }, API_KEY);
-    const match = result.match(/quality:(\d+)/);
+    const match = result.match(/score:(\d+)/); // R4: score surfaced as `score:N/100`, not a leading `quality:N` verdict
     expect(match).not.toBeNull();
     const score = parseInt(match![1], 10);
     // Bot challenge = extremely low quality (floor doesn't apply if content is truly empty)
@@ -476,7 +476,7 @@ describe("quality score", () => {
     mockedAxios.get.mockResolvedValue({ data: richHtmlWithJsonLd });
 
     const result = await novadaExtract({ url: "https://example.com/product", format: "markdown" }, API_KEY);
-    expect(result).toMatch(/quality:\d+/);
+    expect(result).toMatch(/score:\d+/); // R4: score surfaced as `score:N/100`
   });
 
   it("quality score is low (≤10) when bot challenge is detected", async () => {
@@ -484,7 +484,7 @@ describe("quality score", () => {
     mockedAxios.get.mockResolvedValue({ data: botHtml });
 
     const result = await novadaExtract({ url: "https://example.com", format: "markdown" }, API_KEY);
-    const match = result.match(/quality:(\d+)/);
+    const match = result.match(/score:(\d+)/); // R4: score surfaced as `score:N/100`, not a leading `quality:N` verdict
     expect(match).not.toBeNull();
     const score = parseInt(match![1], 10);
     expect(score).toBeLessThanOrEqual(10);

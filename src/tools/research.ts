@@ -256,8 +256,13 @@ export async function novadaResearch(
           if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
             return { ok: false as const, title: source.title, url: source.url, snippet: source.snippet };
           }
-          // Strip all extract-output metadata — only keep the page body content
-          const strippedContent = content.replace(/^📁[^\n]*\n\n/, "");
+          // Strip all extract-output metadata — only keep the page body content.
+          // R1/R9: extract prepends a save-header — `📁 ...` (local) or `path: ...`
+          // (hosted, often EMPTY as `path: `). Both must be removed or the dangling
+          // `path:` label leaks in as the first "sentence" of the synthesis.
+          const strippedContent = content
+            .replace(/^📁[^\n]*\n\n/, "")
+            .replace(/^path:[^\n]*\n\n/, "");
           // Strip the ## Extracted Content metadata block (url: ... | mode: ... | quality: ...)
           let cleaned = strippedContent.replace(/^## Extracted Content\n(?:.*\n)*?---\n\n?/m, "");
           // Strip ## Structured Data block (JSON-LD: type, headline, author, datePublished etc.)
@@ -405,7 +410,12 @@ export async function novadaResearch(
       data: finalReport,
       project: params.project,
     });
-    finalReport += `\n\n---\nResearch saved: ${redactSecrets(outputResult.filePath)}`;
+    // R1: only surface the save line when a file was actually written. On hosted
+    // (Vercel) saveOutput returns an empty filePath — a dangling "Research saved:"
+    // with no path was leaking into every response tail.
+    if (outputResult.filePath) {
+      finalReport += `\n\n---\nResearch saved: ${redactSecrets(outputResult.filePath)}`;
+    }
   } catch { /* best-effort */ }
 
   return finalReport;
@@ -479,9 +489,55 @@ function stripNavChrome(text: string): string {
     .trim();
 }
 
+// ─── Fragment scrubbing (R9) ─────────────────────────────────────────────────
+// The nav-chrome line filter removes whole boilerplate LINES, but markdown link/
+// image syntax, bracket/paren debris and bare URLs survive INSIDE otherwise-kept
+// lines — and the sentence splitter then treats "](/support)" or "[![logo](url)]"
+// as a "sentence", polluting the Summary. This scrubber strips that inline debris
+// so only human-readable prose reaches the synthesis.
+
+/** Strip markdown/HTML/URL debris from a text fragment, leaving readable prose. */
+function scrubFragmentText(text: string): string {
+  return text
+    // images: ![alt](url) → drop entirely (alt text is rarely useful prose)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    // links: [label](url) → keep the label only
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    // orphaned link/image syntax left by line-wrapped markdown: "](/path)", "[", "!["
+    .replace(/!?\]\([^)]*\)/g, " ")
+    .replace(/!?\[[^\]]*$/gm, " ")
+    .replace(/^\s*\]\S*/gm, " ")
+    // bare URLs
+    .replace(/https?:\/\/\S+/g, " ")
+    // leftover markdown emphasis / list / table markup
+    .replace(/[*_`>|]+/g, " ")
+    .replace(/^\s*[-+]\s+/gm, " ")
+    // collapse whitespace runs (incl. the wrapped-nav newlines)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Heuristic: does this fragment read as prose (vs residual link/nav debris)?
+ *  Prose has enough words AND a healthy ratio of letters to punctuation/symbols. */
+function looksLikeProse(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 40) return false;
+  const words = t.split(/\s+/).filter(w => /[a-zA-Z]/.test(w));
+  if (words.length < 8) return false;
+  const letters = (t.match(/[a-zA-Z]/g) ?? []).length;
+  // At least 60% of characters should be letters — debris (brackets, slashes,
+  // punctuation runs) drags this ratio down.
+  if (letters / t.length < 0.6) return false;
+  // Reject fragments dominated by residual bracket/paren/slash debris.
+  const debris = (t.match(/[[\]()/\\|]/g) ?? []).length;
+  if (debris > words.length) return false;
+  return true;
+}
+
 // ─── Synthesis ─────────────────────────────────────────────────────────────
 // Build a structured synthesis: direct answer + contrasting points + common finding
-// F14-1: Returns { text, quality } where quality is "ok" | "weak" | "failed"
+// R9: Summary must be clean synthesized prose or an honest "could not synthesize" —
+// never raw scraped DOM/nav debris. F14-1: Returns { text, quality }.
 
 type SynthesisQuality = "ok" | "weak" | "failed";
 
@@ -491,63 +547,85 @@ function synthesizeAnswer(
   failedSources: { title: string; url: string; snippet: string }[],
   allSources: { title: string; url: string; snippet: string }[],
 ): { text: string; quality: SynthesisQuality } {
-  const fallback = "Synthesis unavailable — see raw findings below.";
+  // R9: honest failure sentinel — the formatter renders a "summary unavailable"
+  // note (status:partial) rather than dumping debris when nothing clean survives.
+  const fallback = "Synthesis unavailable — see Key Findings below for the source snippets.";
 
-  // Collect all available text fragments for synthesis
-  const fragments: { source: string; text: string }[] = [];
+  // Build a clean prose fragment from one text blob: strip nav-chrome LINES, then
+  // scrub inline markdown/URL debris, split into sentences, and keep only the ones
+  // that actually read as prose. Returns "" when nothing usable remains.
+  const proseFragment = (raw: string): string => {
+    const deChromed = stripNavChrome(raw.replace(/^#+.*$/gm, ""));
+    const scrubbed = scrubFragmentText(deChromed);
+    const sentences = (scrubbed.match(/[^.!?]+[.!?]+/g) ?? [scrubbed])
+      .map(x => x.trim())
+      .filter(x => x.length >= 20 && /[a-zA-Z]/.test(x));
+    // Prefer 1-4 real sentences; fall back to the scrubbed blob if the splitter
+    // produced nothing (e.g. snippet without terminal punctuation).
+    const candidate = sentences.slice(0, 4).join(" ").trim() || scrubbed;
+    return looksLikeProse(candidate) ? candidate : "";
+  };
 
-  // Full extracted content — take first ~600 chars of each
-  // F14-1: strip nav-chrome lines before collecting fragments
+  // Tier 1: full extracted content (richest, but most debris-prone).
+  const extractedFragments: { source: string; text: string }[] = [];
   for (const src of extracted) {
-    const cleaned = stripNavChrome(
-      src.content.replace(/^#+.*$/gm, "").replace(/\n{2,}/g, " ").trim()
-    );
-    const sentences = cleaned.match(/[^.!?]+[.!?]+/g) ?? [];
-    const fragment = sentences.slice(0, 4).join(" ").trim() || cleaned.slice(0, 600).trim();
-    if (fragment) {
-      fragments.push({ source: src.title, text: fragment });
-    }
+    const fragment = proseFragment(src.content);
+    if (fragment) extractedFragments.push({ source: src.title, text: fragment });
   }
 
-  // Snippet fallbacks — include snippets from extraction-failed sources
+  // Tier 2: search snippets (already clean — this is what Key Findings uses).
+  const snippetFragments: { source: string; text: string }[] = [];
   for (const src of failedSources) {
     if (src.snippet) {
-      fragments.push({ source: src.title, text: src.snippet });
+      const t = scrubFragmentText(src.snippet);
+      if (looksLikeProse(t) || t.length >= 20) snippetFragments.push({ source: src.title, text: t });
+    }
+  }
+  for (const src of allSources) {
+    if (snippetFragments.some(f => f.source === src.title)) continue;
+    if (src.snippet) {
+      const t = scrubFragmentText(src.snippet);
+      if (looksLikeProse(t) || t.length >= 20) snippetFragments.push({ source: src.title, text: t });
     }
   }
 
-  // If we have nothing from extracted or failed, use top snippets from all sources
-  if (fragments.length === 0) {
-    for (const src of allSources.slice(0, 5)) {
-      if (src.snippet) {
-        fragments.push({ source: src.title, text: src.snippet });
+  // R9: build from extracted prose when we have it; otherwise fall back to the clean
+  // snippets. Snippets are short but coherent — far better than nav debris. Only when
+  // BOTH tiers are empty do we honestly report failure.
+  let fragments = extractedFragments.length > 0 ? extractedFragments : snippetFragments;
+  let usedSnippetFallback = extractedFragments.length === 0;
+
+  if (fragments.length === 0) return { text: fallback, quality: "failed" };
+
+  // Rank fragments by keyword overlap with the question — most relevant first.
+  const questionKeywords = question.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !STOP_WORDS.has(w));
+  const scoreFrag = (text: string): number => {
+    const lower = text.toLowerCase();
+    return questionKeywords.filter(kw => lower.includes(kw)).length - (chromeFraction(text) > 0.4 ? 100 : 0);
+  };
+  if (questionKeywords.length > 0) {
+    fragments = [...fragments].sort((a, b) => scoreFrag(b.text) - scoreFrag(a.text));
+  }
+
+  // If the best EXTRACTED fragment still shares no keyword with the question, the
+  // extraction was off-topic (nav/boilerplate that slipped the prose gate) — prefer
+  // clean snippets instead of leading with irrelevant text.
+  if (!usedSnippetFallback && questionKeywords.length > 0 && snippetFragments.length > 0) {
+    const bestExtractedScore = scoreFrag(fragments[0].text);
+    if (bestExtractedScore < 1) {
+      const rankedSnippets = [...snippetFragments].sort((a, b) => scoreFrag(b.text) - scoreFrag(a.text));
+      if (scoreFrag(rankedSnippets[0].text) >= 1) {
+        fragments = rankedSnippets;
+        usedSnippetFallback = true;
       }
     }
   }
 
-  if (fragments.length === 0) return { text: fallback, quality: "failed" };
-
-  // Rank fragments by keyword overlap with the question — most relevant first
-  // F14-1: also penalise chrome-heavy fragments (chrome fraction > 0.4)
-  const questionKeywords = question.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !STOP_WORDS.has(w));
-  if (questionKeywords.length > 0) {
-    fragments.sort((a, b) => {
-      const aText = a.text.toLowerCase();
-      const bText = b.text.toLowerCase();
-      const scoreA = questionKeywords.filter(kw => aText.includes(kw)).length - (chromeFraction(a.text) > 0.4 ? 100 : 0);
-      const scoreB = questionKeywords.filter(kw => bText.includes(kw)).length - (chromeFraction(b.text) > 0.4 ? 100 : 0);
-      return scoreB - scoreA;
-    });
-  }
-
-  // Build structured synthesis
+  // Build structured synthesis.
   const parts: string[] = [];
-
-  // 1. Lead with the most question-relevant fragment
   const primary = fragments[0];
   parts.push(primary.text);
 
-  // 2. Add contrasting/supplementary points from other sources
   if (fragments.length > 1) {
     const supplementary = fragments.slice(1, 4)
       .filter(f => f.text.length > 30)
@@ -559,14 +637,26 @@ function synthesizeAnswer(
     }
   }
 
-  const synthesis = parts.join("\n");
-  if (!synthesis) return { text: fallback, quality: "failed" };
+  const synthesis = parts.join("\n").trim();
+  if (!synthesis || !looksLikeProse(primary.text)) {
+    // Nothing coherent survived — be honest rather than emit debris (R9).
+    return { text: fallback, quality: "failed" };
+  }
 
-  // F14-1: Determine synthesis quality — weak if the primary fragment is chrome-heavy
-  // or shares fewer than 1 keyword with the question
-  const primaryChromeFraction = chromeFraction(primary.text);
+  // R9: if the question has keywords but the ENTIRE candidate set shares none of
+  // them, the "prose" we have is off-topic (link-flattened nav text that reads like
+  // sentences but answers nothing). Leading the Summary with it is the exact failure
+  // the audit flagged — report honest failure instead of a plausible-looking non-answer.
   const primaryKeywordMatches = questionKeywords.filter(kw => primary.text.toLowerCase().includes(kw)).length;
-  const isWeak = primaryChromeFraction > 0.6 || (questionKeywords.length > 0 && primaryKeywordMatches < 1);
+  if (questionKeywords.length > 0) {
+    const anyFragmentOnTopic = fragments.some(f => scoreFrag(f.text) >= 1);
+    if (!anyFragmentOnTopic) {
+      return { text: fallback, quality: "failed" };
+    }
+  }
+
+  // Quality: weak if snippet-only fallback (thinner) or the primary shares no keyword.
+  const isWeak = usedSnippetFallback || (questionKeywords.length > 0 && primaryKeywordMatches < 1);
 
   return { text: synthesis, quality: isWeak ? "weak" : "ok" };
 }
@@ -590,13 +680,15 @@ function formatResearchOutput(args: {
   sourceRows: { label: string; url: string; note: string }[];
   agentHints: string[];
 }): string {
-  const fallbackSummary = "Synthesis unavailable — see raw findings below.";
   const timestamp = new Date().toISOString();
   const summaryText = args.summaryText.trim();
-  const hasSynthesis = summaryText.length > 0 && summaryText !== fallbackSummary;
-  // F14-1: use synthesisQuality from synthesizeAnswer (ok | weak | failed)
-  const synthesisStatus = hasSynthesis ? args.synthesisQuality : "failed";
-  const summary = hasSynthesis ? summaryText : fallbackSummary;
+  // R9: synthesis quality (not string-matching) decides whether we have a real
+  // summary. On "failed", show an HONEST note pointing at Key Findings — never
+  // dump raw scraped debris as the headline deliverable.
+  const synthesisStatus = args.synthesisQuality;
+  const hasSynthesis = synthesisStatus !== "failed" && summaryText.length > 0;
+  const failNote = "_Could not synthesize a coherent summary from the extracted pages — see **Key Findings** below for the source snippets, which are clean and citable._";
+  const summary = hasSynthesis ? summaryText : failNote;
   const findingBullets = args.findingBullets.length > 0 ? args.findingBullets : [`- No structured findings extracted.`];
   const agentHints = args.agentHints.length > 0 ? args.agentHints : [`- Try a narrower query or provide known source URLs to inspect directly.`];
   const totalSources = args.sourceRows.length;

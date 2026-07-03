@@ -283,6 +283,11 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
 function buildContextualAgentInstruction(ctx: {
   contentOk: boolean;
   qualityScore: number;
+  /** R4: display-level presence — true whenever usable content is in the payload
+   *  (incl. short-but-complete pages), independent of the numeric score threshold. */
+  contentPresent: boolean;
+  /** R4: page returned complete-but-brief prose (below the substantive threshold). */
+  shortButComplete: boolean;
   usedMode: string;
   renderMode: string;
   fieldResults: import("../utils/index.js").FieldResult[] | null;
@@ -292,7 +297,7 @@ function buildContextualAgentInstruction(ctx: {
   mainContent: string;
   params: ExtractParams & { url: string };
 }): string {
-  const { contentOk, qualityScore, usedMode, renderMode, fieldResults, contentTruncated, maxChars, totalChars, mainContent, params } = ctx;
+  const { contentOk, qualityScore, contentPresent, shortButComplete, usedMode, renderMode, fieldResults, contentTruncated, maxChars, totalChars, mainContent, params } = ctx;
 
   // 1. Fields requested with ≥ half null → JS-rendered values likely missing
   if (fieldResults && fieldResults.length > 0) {
@@ -318,22 +323,27 @@ function buildContextualAgentInstruction(ctx: {
     }
   }
 
-  // 4. Success with good content
+  // 4. Success with good content. R4: a short-but-complete page is a success, not
+  // a low-quality verdict — emit an informational note, never a "retry render" fix.
   if (contentOk) {
-    return `status:success quality:${qualityScore}/100`;
+    if (shortButComplete) {
+      return `status:success | note: short page (${mainContent.trim() ? mainContent.trim().split(/\s+/).length : 0} words) — complete but brief; retry render="render" only if you expected more`;
+    }
+    return `status:success`;
   }
 
-  // 5. Low quality → suggest render escalation
-  if (qualityScore < 30 && usedMode === "static" && renderMode === "auto") {
-    return `status:low_quality | retry with render="render" for JS-heavy or bot-protected pages`;
+  // 5. Content genuinely absent (empty / bot-challenge / JS-empty) → escalation helps.
+  // R4: only reached when content is NOT present, so "retry render" is honest here.
+  if (!contentPresent && usedMode === "static" && renderMode === "auto") {
+    return `status:no_content | page returned no usable content — retry with render="render" for JS-heavy or bot-protected pages`;
   }
 
-  // 6. Generic low quality
-  if (usedMode === "static") {
-    return `status:low_quality quality:${qualityScore}/100 | fix: retry with render="render"`;
+  // 6. Generic no-content on static.
+  if (!contentPresent && usedMode === "static") {
+    return `status:no_content | retry with render="render"`;
   }
 
-  return `status:low_quality quality:${qualityScore}/100`;
+  return `status:no_content quality:${qualityScore}/100`;
 }
 
 /** Derive a suggested_fix hint from a URL + error message */
@@ -974,10 +984,39 @@ async function extractSingleInner(
     ? ` | content_truncated:true | total_chars:${totalChars}`
     : "";
 
-  // NOV-565: content_ok is driven by content_present (substantive prose detected on the
+  // R4: Quality signal, not quality verdict. A page that returned clean, real prose
+  // is PRESENT even when it is short (example.com: 20 words, complete + correct).
+  // `quality.content_present` (utils/html.ts) uses a 200char/50word "substantive"
+  // threshold — good for ranking, wrong as a presence verdict: a short-but-complete
+  // page fails it and used to render `content_present:false` next to the very text it
+  // denies. Here we compute a display-level presence judgment that rescues the
+  // short-but-complete case WITHOUT overclaiming on empty / bot-challenge / JS-empty
+  // pages. Used only for FRAMING (header line, hints, agent_instruction) — the raw
+  // numeric score is still reported for callers that want it.
+  const fetchSucceeded = usedMode !== "render-failed" && !stillJsHeavy;
+  const wordCount = mainContent.trim() ? mainContent.trim().split(/\s+/).length : 0;
+  // A page whose returned HTML is a bot-challenge / anti-bot interstitial is NOT
+  // "complete but short" — it is an absence dressed as content. Exclude it so the
+  // rescue below never green-lights "Checking your browser…" style stubs.
+  const isChallengePage = detectedAntiBot !== null || (typeof html === "string" && detectBotChallenge(html));
+  // Short-but-complete: real prose returned on a successful, non-challenge fetch,
+  // just under the "substantive" bar. Word floor (12) + length floor (80) keep
+  // genuinely thin/challenge stubs (e.g. a 7-word "checking your browser" page) OUT,
+  // while a complete brief page like example.com (~29 words) is correctly rescued.
+  const isShortButComplete =
+    fetchSucceeded &&
+    !isChallengePage &&
+    !quality.content_present &&
+    wordCount >= 12 &&
+    mainContent.trim().length >= 80;
+  // Display-level presence: true whenever there is usable content in THIS payload.
+  const contentPresentDisplay = quality.content_present || isShortButComplete;
+
+  // NOV-565: content_ok is driven by content presence (substantive prose detected on the
   // CLEANED markdown), not the cleanliness score. Docs pages with full text but link-heavy
   // markup used to fail the old `score >= 40` gate; now a page with real content passes.
-  const contentOk = quality.content_present && mainContent.length > 100 && usedMode !== "render-failed" && !stillJsHeavy;
+  // R4: a short-but-complete page (example.com) is also content_ok — it is not a failure.
+  const contentOk = contentPresentDisplay && fetchSucceeded && mainContent.length > 0;
 
   // Compute extraction_quality label from fill-rate (resolved fields / requested fields)
   let extractionQuality: "high" | "partial" | "low" | "none" | "n/a" = "n/a";
@@ -996,6 +1035,15 @@ async function extractSingleInner(
   }
 
   const qLabel = qualityLabel(quality.score);
+  // R4: label used in agent-facing "remember" lines — reflects display-level presence
+  // so a short-but-complete page is not memorised as "low quality".
+  const displayQualityLabel = contentPresentDisplay ? (isShortButComplete ? "ok (brief)" : "ok") : qLabel;
+  // R4: don't surface the raw "content_present:false … below threshold" reason next to
+  // a page we are reporting as present — rewrite it to match the framing. Absent pages
+  // keep the original diagnostic reasons untouched.
+  const displayQualityReasons = isShortButComplete
+    ? [`content_present:true (${contentLen} chars, ${wordCount} words — complete but below the 200char/50word "substantive" bar)`]
+    : quality.quality_reasons;
 
   // JSON structured output — return early
   if (params.format === "json") {
@@ -1006,13 +1054,18 @@ async function extractSingleInner(
       mode: usedMode,
       source: waybackFallback ? "wayback" : "live",
       fetched_at: fetchedAt,
+      // R4/R7: quality is a signal, not a verdict. `content_present` is the
+      // display-level presence (true whenever real content is in this payload,
+      // including short-but-complete pages). The raw heuristic score + reasons are
+      // kept for callers that want them, but never contradict a successful fetch.
       quality: {
         score: quality.score,
         cleanliness_score: quality.cleanliness_score,
-        content_present: quality.content_present,
-        label: qLabel,
+        content_present: contentPresentDisplay,
+        label: contentPresentDisplay ? "ok" : qLabel,
         content_ok: contentOk,
-        reasons: quality.quality_reasons,
+        ...(isShortButComplete ? { note: `short page (${contentLen} chars, ${wordCount} words) — complete but brief` } : {}),
+        reasons: displayQualityReasons,
       },
       content: displayContent,
       content_truncated: contentTruncated,
@@ -1049,7 +1102,7 @@ async function extractSingleInner(
           } : {}),
         }
       } : {}),
-      remember: `${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`,
+      remember: `${title} at ${params.url} — ${displayQualityLabel} quality, ${contentLen} chars`,
     };
     // Build hints array
     const hints = jsonResult.hints as string[];
@@ -1104,11 +1157,25 @@ async function extractSingleInner(
   // collapse them to a single line so nav-chrome can't split into fake header rows. JSON output
   // keeps the raw values untouched (proper JSON strings, no header contract to break).
   const headerLine = (s: string) => s.replace(/\s+/g, " ").trim();
+  // R4: frame quality as a signal, not a verdict. When content is present, the
+  // header reports `quality:ok` (with the numeric score kept as informational
+  // detail) and never says `content_present:false` next to real content. Only a
+  // genuine absence (empty / bot-challenge / JS-empty fetch) is labelled low.
+  const qualityFraming = contentPresentDisplay
+    ? `quality:ok (score:${quality.score}/100) | content_present:true | content_ok:${contentOk}`
+    : `quality:low (score:${quality.score}/100) | content_present:false | content_ok:false`;
+  // A present-but-short page gets ONE informational note instead of a "low"/reasons
+  // line that contradicts the body. Absent pages keep the diagnostic reasons.
+  const qualityDetailLine = contentPresentDisplay
+    ? (isShortButComplete
+        ? `note: short page (${contentLen} chars, ${wordCount} words) — complete but brief; retry render="render" only if you expected more`
+        : null)
+    : `quality_reasons: ${quality.quality_reasons.join("; ")}`;
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
-    `mode: ${usedMode} | source: ${waybackFallback ? "wayback" : "live"} | quality:${quality.score}/100 (${qLabel}) | content_present:${quality.content_present} | content_ok:${contentOk}`,
-    `quality_reasons: ${quality.quality_reasons.join("; ")}`,
+    `mode: ${usedMode} | source: ${waybackFallback ? "wayback" : "live"} | ${qualityFraming}`,
+    ...(qualityDetailLine ? [qualityDetailLine] : []),
     `fetched_at: ${fetchedAt}`,
     // #22: omit extraction_quality when no fields were requested (n/a is noise).
     ...(extractionQuality !== "n/a" ? [`extraction_quality: ${extractionQuality}`] : []),
@@ -1195,7 +1262,7 @@ async function extractSingleInner(
 
   lines.push(``);
   lines.push(`## Agent Memory`);
-  lines.push(`remember: ${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`);
+  lines.push(`remember: ${title} at ${params.url} — ${displayQualityLabel} quality, ${contentLen} chars`);
 
   lines.push(``, `---`, `## Agent Hints`);
   if (redditUrl) {
@@ -1264,9 +1331,10 @@ async function extractSingleInner(
       lines.push(`- Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
     }
   }
-  // Low quality on static+auto — guide agent to escalate rendering and/or add proxy
-  if (qLabel === "low" && usedMode === "static" && renderMode === "auto") {
-    lines.push(`- Low quality on static mode — try with render="render" for JS-heavy or anti-bot protected pages.`);
+  // R4: only suggest a render retry when content is genuinely ABSENT, not merely
+  // short. A complete-but-brief page (example.com) must not trigger a slow render retry.
+  if (!contentPresentDisplay && usedMode === "static" && renderMode === "auto") {
+    lines.push(`- No usable content on static mode — try render="render" for JS-heavy or anti-bot protected pages.`);
   }
   if (isTruncated) {
     lines.push(`- Content was truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more, or use novada_map to find specific subpages.`);
@@ -1284,6 +1352,8 @@ async function extractSingleInner(
   const agentInstruction = buildContextualAgentInstruction({
     contentOk,
     qualityScore: quality.score,
+    contentPresent: contentPresentDisplay,
+    shortButComplete: isShortButComplete,
     usedMode,
     renderMode,
     fieldResults,
@@ -1312,7 +1382,12 @@ async function extractSingleInner(
     });
     // #22: drop the stray leading folder emoji; match the batch path's `path: ` prefix.
     // FIX-1: Redact absolute path before surfacing to agent.
-    savePrefix = `path: ${redactSecrets(outputResult.filePath)}\n\n`;
+    // R1: only emit the `path:` header when a file was ACTUALLY written. On hosted
+    // (Vercel) saveOutput returns an empty filePath — a dangling `path: ` label was
+    // the first thing every response opened with. No file → no prefix.
+    if (outputResult.filePath) {
+      savePrefix = `path: ${redactSecrets(outputResult.filePath)}\n\n`;
+    }
   } catch { /* best-effort */ }
 
   const finalOutput = savePrefix + mdOutput;
