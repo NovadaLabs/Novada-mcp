@@ -5,26 +5,27 @@ import { saveOutput } from "../utils/output.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 // How long the SYNC novada_scrape path will poll before returning a structured
-// TASK_PENDING result. Set well below HOSTED_SAFE_CEILING_MS (50s) so:
-//   (a) short-running tasks (search/SERP, ~3-8s) still complete inline, and
-//   (b) long-running tasks (Amazon, ~120s) fall through quickly to TASK_PENDING
-//       instead of blocking multi-agent callers or triggering upstream timeouts.
-// 14s is empirically enough for fast scrapers, short enough to avoid agent
-// timeouts in orchestration pipelines (most tool-call timeouts are 30-60s).
-// For tasks that need longer, callers should use the async
-// novada_scraper_submit → novada_scraper_status → novada_scraper_result flow.
-const SYNC_POLL_CEILING_MS = 14_000;
-// NOV-665: expose HOSTED_SAFE_CEILING_MS for the still-needed ceiling comment but
-// do NOT use it as the sync poll cap. HOSTED_SAFE_CEILING_MS is only referenced
-// to document why we are well below it.
-const _HOSTED_SAFE_CEILING_REFERENCE = HOSTED_SAFE_CEILING_MS; // 50s — we stay well under this
-void _HOSTED_SAFE_CEILING_REFERENCE; // suppress unused-var lint
-const POLL_TIMEOUT_MS = SYNC_POLL_CEILING_MS;
+// (non-error) "still processing" result. 0.9.5: raised from 14s → 45s so slow
+// platforms (Amazon, Walmart, LinkedIn) COMPLETE inside one synchronous call —
+// the hosted function has a ~56s wall-clock, and staying at/under
+// HOSTED_SAFE_CEILING_MS (50s) keeps us clear of the Vercel 504 kill while giving
+// slow scrapers the time they actually need. For the rare task that runs longer
+// than 45s, we return a CLEAN status (isError:false) telling the caller to retry —
+// NOT a hard error — because a slow-but-valid task is not a failure.
+const SYNC_POLL_CEILING_MS = 45_000;
+// Guard: never exceed the hosted safe ceiling (50s). If the constant above is ever
+// bumped past the ceiling, clamp so the tool always returns before the 504 kill.
+const POLL_TIMEOUT_MS = Math.min(SYNC_POLL_CEILING_MS, HOSTED_SAFE_CEILING_MS);
 const POLL_INTERVAL_MS = 2_000;
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-/** Submit a scraper task and return the task_id */
+/**
+ * Submit a scraper task. Returns a discriminated SubmitOutcome:
+ *   - inline records (skip poll), empty serp (graceful no-results), or a task_id to poll.
+ * 0.9.5 (NOV-697): previously returned only a task_id and ALWAYS polled; that both
+ * wasted a round-trip on inline-result platforms and threw isError on empty serps.
+ */
 export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params) {
     const file_name = `novada_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const form = new URLSearchParams();
@@ -91,16 +92,40 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
         const msg = errorMessages[body.code] ?? body.msg ?? "Unknown scraper error";
         throw new Error(`Scraper error (code ${body.code}): ${sanitizeServerMsg(msg)}`);
     }
-    // Accept both flat { code:0, data: { task_id: "..." } } and nested { code:0, data: { data: { task_id: "..." } } }
+    // Real upstream shapes (verified live 2026-07-04 against scraper.novada.com/request):
+    //   Normal search : body.data = { code:200, msg:"success", data:{ json:[{spider_code:200, rest:{...}}], task_id:"..." } }
+    //   Empty serp    : body.data = { code:400, msg:"serp returns empty", data:null }
+    //   Slow platform : body.data = { code:200, msg:"success", data:{ task_id:"..." } }  (no json)
     const inner = body.data;
-    const taskId = (inner?.task_id ??
-        inner?.data?.task_id);
-    if (!taskId) {
-        throw new Error(`Scraper submit succeeded but no task_id in response: ${sanitizeServerMsg(JSON.stringify(body))}`);
+    const innerData = inner?.data;
+    // (1) Empty serp / no-results — inner.code 400 with msg "serp returns empty",
+    //     or a null inner.data payload. This is a GRACEFUL outcome, not an error.
+    const innerCode = inner?.code;
+    const innerMsg = typeof inner?.msg === "string" ? inner.msg : "";
+    const isEmptySerp = innerCode === 400 ||
+        /serp\s+returns?\s+empty|empty\s+serp|no\s+results?/i.test(innerMsg);
+    if (isEmptySerp || (inner != null && "data" in inner && innerData == null)) {
+        return { kind: "empty", message: innerMsg || "serp returns empty" };
     }
-    return taskId;
+    // (2) Inline results — data.data.json is a non-empty array of result items.
+    //     Skip the poll round-trip entirely and use these records directly.
+    const inlineJson = innerData?.json;
+    if (Array.isArray(inlineJson) && inlineJson.length > 0) {
+        return { kind: "inline", items: inlineJson };
+    }
+    // (3) task_id only (slow platforms) — poll the download endpoint.
+    //     Accept both flat { data:{task_id} } and legacy nested shapes.
+    const taskId = (inner?.task_id ??
+        innerData?.task_id);
+    if (taskId) {
+        return { kind: "task", taskId };
+    }
+    // No inline json, no task_id, not an empty serp → treat as graceful no-results
+    // rather than a hard error. Some platforms legitimately return an empty payload
+    // for a valid-but-unmatched query; surfacing isError:true here misleads agents.
+    return { kind: "empty", message: innerMsg || "no results returned" };
 }
-/** Poll the download endpoint until the task completes or times out */
+/** Poll the download endpoint until the task completes or the sync ceiling elapses. */
 async function pollForResult(apiKey, taskId) {
     const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
     // H3: safe version of URL for error messages — strips the apikey value to prevent key exposure
@@ -119,7 +144,7 @@ async function pollForResult(apiKey, taskId) {
         }
         // Complete: array of result items
         if (Array.isArray(body)) {
-            return body;
+            return { kind: "done", items: body };
         }
         // Known error codes from the download endpoint
         if (body !== null &&
@@ -146,21 +171,18 @@ async function pollForResult(apiKey, taskId) {
             }
             // Direct result object — Google SERP and similar formats return organic/search_metadata at top level
             if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {
-                return [{ spider_code: 200, rest: bErr }];
+                return { kind: "done", items: [{ spider_code: 200, rest: bErr }] };
             }
             throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${sanitizeServerMsg(errMsg || JSON.stringify(bErr).slice(0, 150))}`);
         }
         throw new Error(`Unexpected download response: ${sanitizeServerMsg(JSON.stringify(body).slice(0, 200))}`);
     }
-    // H-8: Use NovadaError(TASK_PENDING) instead of generic Error to avoid
-    // classifyError mismatching "timed out" → URL_UNREACHABLE.
-    // NOV-665: sync poll cap is intentionally short (14s) so multi-agent and
-    // short-timeout orchestrators aren't blocked. The task continues server-side.
-    throw makeNovadaError(NovadaErrorCode.TASK_PENDING, `Scraper sync poll exceeded ${POLL_TIMEOUT_MS / 1000}s for task_id="${taskId}". ` +
-        `The task is still running server-side — this is expected for slow scrapers (Amazon, etc.). ` +
-        `Use the async flow: call novada_scraper_status with task_id="${taskId}" to poll progress, ` +
-        `then novada_scraper_result once status is 'complete'. ` +
-        `Do NOT retry novada_scrape — that would submit a new duplicate task.`, "poll_timeout");
+    // 0.9.5: sync ceiling elapsed and the task is still running server-side. This is
+    // NOT an error — return a clean "pending" outcome so novadaScrape renders a
+    // non-error status. The task continues server-side; the caller should simply
+    // retry novada_scrape shortly (the download is idempotent by task_id, so no
+    // duplicate work is triggered on the completed side).
+    return { kind: "pending", taskId };
 }
 /** Flatten a potentially nested object for tabular display.
  *  M-1: depth limit prevents stack overflow on deeply nested server responses. */
@@ -401,10 +423,10 @@ export async function novadaScrape(params, apiKey) {
     if (preflightErr)
         throw preflightErr;
     try {
-        // Step 1: Submit task
-        let taskId;
+        // Step 1: Submit task — resolves to inline records, an empty-serp signal, or a task_id.
+        let submitOutcome;
         try {
-            taskId = await submitScrapeTask(apiKey, platform, operation, opParams);
+            submitOutcome = await submitScrapeTask(apiKey, platform, operation, opParams);
         }
         catch (error) {
             if (error instanceof AxiosError) {
@@ -417,16 +439,58 @@ export async function novadaScrape(params, apiKey) {
             }
             throw error;
         }
-        // Step 2: Poll for result
-        let resultItems;
-        try {
-            resultItems = await pollForResult(apiKey, taskId);
+        // Empty serp / no-results → GRACEFUL success (status ok, NOT isError). The query
+        // was valid; it simply matched nothing. Returning a plain string keeps isError:false.
+        if (submitOutcome.kind === "empty") {
+            return [
+                `## Scrape Results`,
+                `platform: ${platform} | operation: ${operation} | records: 0 | source: live`,
+                ``,
+                `status: ok`,
+                `_No results found for this query._ (upstream: ${sanitizeServerMsg(submitOutcome.message)})`,
+                ``,
+                `---`,
+                `## Agent Hints`,
+                `- This is not an error — the query returned zero results. Try a broader or differently-worded query.`,
+                `- Verify the parameter value (keyword/url/asin) is spelled correctly and is a real, indexable target.`,
+                `- Read novada://scraper-platforms to confirm the operation matches your intent.`,
+            ].join("\n");
         }
-        catch (error) {
-            if (error instanceof AxiosError) {
-                throw new Error(`Failed to retrieve scraper results: ${sanitizeServerMsg(error.message)}`);
+        // Step 2: Obtain result items — inline (skip poll) or by polling the task_id.
+        let resultItems;
+        if (submitOutcome.kind === "inline") {
+            // NOV-697: results were already in the submit response — no poll round-trip.
+            resultItems = submitOutcome.items;
+        }
+        else {
+            let pollOutcome;
+            try {
+                pollOutcome = await pollForResult(apiKey, submitOutcome.taskId);
             }
-            throw error;
+            catch (error) {
+                if (error instanceof AxiosError) {
+                    throw new Error(`Failed to retrieve scraper results: ${sanitizeServerMsg(error.message)}`);
+                }
+                throw error;
+            }
+            // Still processing after the sync ceiling → CLEAN pending status (NOT isError).
+            // A slow-but-valid task is not a failure; the caller just retries shortly.
+            if (pollOutcome.kind === "pending") {
+                return [
+                    `## Scrape Results`,
+                    `platform: ${platform} | operation: ${operation} | records: 0 | source: live`,
+                    ``,
+                    `status: processing`,
+                    `_The scraper is still running (task_id="${pollOutcome.taskId}") after ${POLL_TIMEOUT_MS / 1000}s._`,
+                    `This is expected for slow platforms (Amazon, Walmart, LinkedIn) and is NOT an error.`,
+                    ``,
+                    `---`,
+                    `## Agent Hints`,
+                    `- Retry novada_scrape with the SAME params in ~10-20s; the completed result is cached server-side by task, so retrying does not duplicate billable work.`,
+                    `- Do not treat this as a failure — the task succeeded in starting and is finishing server-side.`,
+                ].join("\n");
+            }
+            resultItems = pollOutcome.items;
         }
         // Step 3: Extract records — handle two response formats from the download endpoint:
         //   Format A (flat): array of direct record objects, e.g. [{title:"...", error:null, success:true}, ...]

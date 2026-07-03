@@ -45,9 +45,9 @@ export async function novadaScraperSubmit(params, apiKey) {
     const resolvedOp = Object.prototype.hasOwnProperty.call(OPERATION_ALIASES, params.operation)
         ? OPERATION_ALIASES[params.operation]
         : params.operation;
-    let taskId;
+    let outcome;
     try {
-        taskId = await submitScrapeTask(apiKey, platform, resolvedOp, opParams);
+        outcome = await submitScrapeTask(apiKey, platform, resolvedOp, opParams);
     }
     catch (err) {
         // Enrich 11006 errors with alias context (same pattern as novada_scrape)
@@ -68,13 +68,41 @@ export async function novadaScraperSubmit(params, apiKey) {
     const aliasInfo = resolvedOp !== params.operation
         ? { alias_resolved: `${params.operation} → ${resolvedOp}` }
         : {};
+    // 0.9.5 (NOV-697): submitScrapeTask now returns a discriminated outcome. The
+    // upstream frequently resolves inline (no task_id to poll) or with an empty serp.
+    // This exported helper is retained for back-compat; the live novada_scraper_submit
+    // tool routes to novadaScrape (index.ts). Normalize each outcome to a benign,
+    // parseable status so no caller sees an error for a valid submit.
+    if (outcome.kind === "empty") {
+        return JSON.stringify({
+            status: "ok",
+            records: 0,
+            platform,
+            operation: resolvedOp,
+            ...aliasInfo,
+            message: `No results found (upstream: ${outcome.message}).`,
+            agent_instruction: "This is not an error — the query matched nothing. Retry with a broader query or verify the param value.",
+        }, null, 2);
+    }
+    if (outcome.kind === "inline") {
+        return JSON.stringify({
+            status: "complete",
+            records: outcome.items.length,
+            platform,
+            operation: resolvedOp,
+            ...aliasInfo,
+            message: "Results returned inline in the submit response — no polling needed.",
+            agent_instruction: "Call novada_scrape with the same { platform, operation, params } to receive the parsed records directly.",
+        }, null, 2);
+    }
+    const taskId = outcome.taskId;
     return JSON.stringify({
         status: "submitted",
         task_id: taskId,
         platform,
         operation: resolvedOp,
         ...aliasInfo,
-        agent_instruction: `Use novada_scraper_status with task_id="${taskId}" to check progress. Poll every 5–10 seconds until status is 'complete', then call novada_scraper_result with the same task_id to retrieve results.`,
+        agent_instruction: `Call novada_scrape with the same { platform, operation, params } to get results in one synchronous call (recommended). The async status/result flow was retired in 0.9.4.`,
     }, null, 2);
 }
 //# sourceMappingURL=scraper_submit.js.map

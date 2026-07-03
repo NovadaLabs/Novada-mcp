@@ -1,7 +1,29 @@
 import { NovadaError } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
-/** Submit a scraper task and return the task_id */
-export declare function submitScrapeTask(apiKey: string, scraper_name: string, scraper_id: string, params: Record<string, unknown>): Promise<string>;
+type DownloadResultItem = {
+    spider_code: 200;
+    rest: Record<string, unknown>;
+} | {
+    error: string;
+    error_code?: number;
+};
+type SubmitOutcome = {
+    kind: "inline";
+    items: DownloadResultItem[];
+} | {
+    kind: "empty";
+    message: string;
+} | {
+    kind: "task";
+    taskId: string;
+};
+/**
+ * Submit a scraper task. Returns a discriminated SubmitOutcome:
+ *   - inline records (skip poll), empty serp (graceful no-results), or a task_id to poll.
+ * 0.9.5 (NOV-697): previously returned only a task_id and ALWAYS polled; that both
+ * wasted a round-trip on inline-result platforms and threw isError on empty serps.
+ */
+export declare function submitScrapeTask(apiKey: string, scraper_name: string, scraper_id: string, params: Record<string, unknown>): Promise<SubmitOutcome>;
 export declare const OPERATION_ALIASES: Record<string, string>;
 type OpMap = Record<string, readonly string[]>;
 export declare const PLATFORM_OPERATIONS: Record<string, OpMap>;
