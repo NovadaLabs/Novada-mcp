@@ -4,61 +4,165 @@ import { novadaExtract } from "./extract.js";
 import { redactSecrets } from "../_core/errors.js";
 
 /**
- * Strip volatile metadata emitted by extract.ts before hashing so that
- * source: live→cache flips, fetched_at timestamp changes, quality score
- * fluctuations, and Requested Fields conf:/source annotation variations
- * do not produce false "changed" reports on byte-identical page bodies.
+ * Extract the stable page body from novadaExtract output for change detection.
  *
- * The extract output structure when fields are requested:
- *   ## Extracted Content                       ← header block (volatile)
+ * Real extract.ts output structure (abbreviated):
+ *
+ *   ## Extracted Content                       ← volatile header block
  *   url: <url>
  *   mode: static | source: live | quality:72/100 ...
  *   quality_reasons: ...
- *   fetched_at: 2026-07-02T12:34:56.789Z
- *   extraction_quality: ...     (optional)
+ *   fetched_at: 2026-07-02T12:34:56.789Z      ← volatile
  *   title: ...
- *   description: ...            (optional)
- *   chars:1234 | links:1
+ *   chars:1234 | links:3
  *
- *   ---                                        ← first separator
+ *   ---                                        ← separator 1 (after header)
  *
- *   ## Requested Fields                        ← annotation block (volatile:
- *   title: Example *(json-ld)* *(conf:0.80)*     conf and source tag flip)
+ *   ## Requested Fields                        ← volatile (conf: / source: flip)
+ *   title: Example Domain *(json-ld)* *(conf:0.80)*
  *
- *   ---                                        ← second separator (last)
+ *   ---                                        ← separator 2 (after Req. Fields)
  *
- *   <stable page body>                         ← only this contributes to hash
+ *   <STABLE PAGE BODY>                         ← only this is hashed
  *
- * C7 Fix: strip to the LAST `\n---\n` separator (not the first) so that both
- * the header metadata AND the Requested Fields annotation block are excluded
- * from the hashed region. Without fields, there is only one separator, and
- * lastIndexOf behaves identically to indexOf.
+ *   ---                                        ← separator 3 (trailer starts)
+ *   ## Same-Domain Links                       ← trailer (volatile / structural)
+ *   ...
+ *   ---
+ *   ## Extraction Diagnostics                  ← volatile (conf: changes)
+ *   ...
+ *   ## Agent Memory                            ← volatile
+ *   ...
+ *   ---
+ *   ## Agent Hints                             ← volatile (changes per call)
+ *   ...
+ *   ## Agent Action                            ← volatile
+ *   ...
+ *
+ * D1 Fix: isolate the page body by finding the region BETWEEN the last
+ * header-side separator (after ## Requested Fields / ## Structured Data) and
+ * the first trailer section marker. The trailer is identified by the first
+ * occurrence of any of these lines: `## Same-Domain Links`, `## Extraction
+ * Diagnostics`, `## Agent Memory`, `## Agent Hints`, `## Agent Action`.
+ *
+ * When there are no trailer sections (simple/truncated output), the body
+ * extends to the end of the string — this handles the no-fields, no-links
+ * edge case correctly.
  *
  * Also strips the legacy `path: /abs/path` prefix (FIX-1 original).
  */
+
+// Trailer section headings that begin the volatile tail of extract output.
+// Order matters: check all of them to find the earliest occurrence.
+const TRAILER_HEADINGS = [
+  "## Same-Domain Links",
+  "## Extraction Diagnostics",
+  "## Agent Memory",
+  "## Agent Hints",
+  "## Agent Action",
+] as const;
+
+// Known annotation block headings that occupy the header zone of extract output.
+// A `---`-separated block is part of the header/annotation region IFF its
+// trimmed content starts with one of these headings. Once a block is found
+// whose content does NOT start with one of these, the header zone has ended
+// and the body begins right there.
+//
+// Matches (all sourced from extract.ts):
+//   ## Extracted Content  — always the first block
+//   ## Requested Fields   — optional, when fields: param is set
+//   ## Structured Data    — optional, when JSON-LD/microdata found
+// Kufer blocks (NOV-668) have no stable heading prefix and are treated as body
+// content intentionally — they appear after the last annotation --- separator
+// and before the body in practice, but their heading is dynamic. Including them
+// would over-engineer the guard; they are stable between calls.
+const ANNOTATION_BLOCK_HEADINGS = [
+  "## Extracted Content",
+  "## Requested Fields",
+  "## Structured Data",
+] as const;
+
 function stripVolatileMetadataHeader(content: string): string {
-  // Strip the leading path: /abs/path header from FIX-1
+  // Strip the legacy path: /abs/path header from FIX-1
   const withoutPathHeader = content.replace(/^(?:path|📁)[^\n]*\n\n?/, "");
 
-  // C7 Fix: strip to the LAST `\n---\n` separator so the ## Requested Fields
-  // annotation block (with volatile conf: and source: tags) is also excluded.
-  // When no fields are requested there is only one separator, so lastIndexOf
-  // behaves identically to indexOf — no regression for the no-fields case.
-  const lastSepIdx = withoutPathHeader.lastIndexOf("\n---\n");
-  if (lastSepIdx !== -1) {
-    // Return everything after the last `---\n` separator (skip leading blank lines)
-    return withoutPathHeader.slice(lastSepIdx + 5).replace(/^\n+/, "");
+  // ── Step 1: anchor bodyStart to the end of the known header/annotation region ──
+  //
+  // Strategy: walk `---`-separated blocks from the start of the string. Each
+  // block is the content between two consecutive `\n---\n` separators (or
+  // between the start and the first separator). A block is an "annotation
+  // block" if its trimmed content STARTS WITH a known ANNOTATION_BLOCK_HEADING.
+  // Advance bodyStart past each annotation-block separator. Stop at the first
+  // block that is NOT an annotation block (= the body starts there) OR at the
+  // first separator whose following content is a known trailer heading (body is
+  // empty or absent).
+  //
+  // This is robust against body-internal `---` lines (e.g. bare `---` inside
+  // a fenced code block representing YAML front-matter) because we look at the
+  // PRECEDING block's heading, not the content that follows the separator.
+  // Body content can never satisfy ANNOTATION_BLOCK_HEADINGS, so once we enter
+  // the body the scan stops — regardless of how many `---` the body contains.
+  const SEP = "\n---\n";
+  let bodyStart = -1;
+  let blockStart = 0; // start of the current block (character index)
+  let sepIdx = withoutPathHeader.indexOf(SEP, 0);
+
+  while (sepIdx !== -1) {
+    // Content of the block that ENDS at this separator
+    const blockContent = withoutPathHeader.slice(blockStart, sepIdx).replace(/^\n+/, "");
+    const isAnnotationBlock = ANNOTATION_BLOCK_HEADINGS.some(h => blockContent.startsWith(h));
+
+    if (isAnnotationBlock) {
+      // This separator closes an annotation block → body starts after it
+      bodyStart = sepIdx + SEP.length;
+      blockStart = bodyStart;
+      sepIdx = withoutPathHeader.indexOf(SEP, blockStart);
+    } else {
+      // First non-annotation block found → the body starts at blockStart.
+      // bodyStart was already set to the correct position by the previous
+      // iteration (or remains -1 if there were no annotation separators at all).
+      break;
+    }
   }
 
-  // Fallback: strip individual volatile lines if no separator was found
-  // (handles edge cases like truncated output)
+  // ── Step 2: anchor trailerStart to the FIRST known trailer heading ──
+  //
+  // Look for the earliest occurrence of any trailer heading (with or without a
+  // preceding `---` separator). We check the headings directly to avoid any
+  // dependency on separator scanning inside the body region.
+  let trailerStart = withoutPathHeader.length; // default: no trailer found
+
+  for (const heading of TRAILER_HEADINGS) {
+    // Headings that appear after a `---\n` separator (## Same-Domain Links,
+    // ## Extraction Diagnostics, ## Agent Hints, ## Agent Action)
+    const withSep = withoutPathHeader.indexOf(`\n---\n${heading}`);
+    if (withSep !== -1 && withSep < trailerStart) {
+      trailerStart = withSep;
+    }
+    // Headings that appear inline without a preceding separator (## Agent Memory)
+    const inline = withoutPathHeader.indexOf(`\n${heading}\n`);
+    if (inline !== -1 && inline < trailerStart) {
+      trailerStart = inline;
+    }
+  }
+
+  if (bodyStart !== -1) {
+    // Slice out the body: from bodyStart to trailerStart, stripping leading/trailing blanks
+    return withoutPathHeader.slice(bodyStart, trailerStart).replace(/^\n+/, "").replace(/\n+$/, "");
+  }
+
+  // Fallback: no `---` separators found (truncated / summary output).
+  // Strip individual volatile metadata lines and trailer headings.
   return withoutPathHeader
     .replace(/^## Extracted Content\n/m, "")
     .replace(/^mode:.*$/m, "")
     .replace(/^quality_reasons:.*$/m, "")
     .replace(/^fetched_at:.*$/m, "")
     .replace(/^extraction_quality:.*$/m, "")
-    .replace(/^source:.*$/m, "");
+    .replace(/^source:.*$/m, "")
+    // Strip trailer headings and everything after
+    .replace(/\n## (?:Same-Domain Links|Extraction Diagnostics|Agent Memory|Agent Hints|Agent Action)[\s\S]*$/, "")
+    .trim();
 }
 
 /** @deprecated Alias kept for internal callers that only needed the old path-strip. */
@@ -237,8 +341,8 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
       render: "auto",
     }, apiKey);
   } catch (err) {
-    const rawMessage = err instanceof Error ? err.message : String(err);
-    return formatError(params.url, now, redactSecrets(rawMessage), params.format);
+    const message = err instanceof Error ? err.message : String(err);
+    return formatError(params.url, now, redactSecrets(message), params.format);
   }
 
   // C8 Fix: Detect extraction failure sentinels BEFORE baselining.
@@ -251,14 +355,15 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
     // agent-oriented error block; re-use it rather than duplicating the message.
     const firstLine = content.split("\n").find((l) => l.startsWith("Error:") || l.startsWith("error:")) ?? "";
     const errorMsg = firstLine ? firstLine.replace(/^[Ee]rror:\s*/, "") : "extraction returned a failure sentinel";
-    return formatError(params.url, now, errorMsg, params.format);
+    return formatError(params.url, now, redactSecrets(errorMsg), params.format);
   }
 
-  // F5: Strip volatile metadata header (mode:/source:/quality:/fetched_at: lines) from
-  // extract output before hashing. Without stripping, source:live→cache flips and
-  // fetched_at timestamp changes produce false "changed" reports on identical page bodies.
-  // C7 Fix: uses lastIndexOf to also strip the ## Requested Fields annotation block.
-  // Also strips the legacy path: /abs/path prefix (FIX-1 original).
+  // F5+C7+D1: Strip volatile metadata header AND trailer sections, keeping only the
+  // stable page body. stripVolatileMetadataHeader uses a two-pass scan to isolate
+  // the body between the last header-side separator and the first trailer heading
+  // (## Same-Domain Links / ## Extraction Diagnostics / ## Agent Memory / etc.).
+  // This prevents fetched_at, conf: annotations, and Agent Hints from causing false
+  // "changed" reports on identical page bodies.
   const cleanContent = stripVolatileMetadataHeader(content);
 
   // 2. Hash the content (use cleanContent so path changes don't cause false change detection)
