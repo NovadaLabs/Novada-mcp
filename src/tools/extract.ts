@@ -81,6 +81,18 @@ function parseItemStats(content: string): { returnedChars: number; truncated: bo
   return { returnedChars, truncated, totalChars };
 }
 
+/**
+ * Extract readable/structured content from a URL.
+ * Returns cleaned markdown, JSON fields, or summaries — content processed for agent consumption.
+ *
+ * Distinction from novada_unblock:
+ *   - novada_extract  → readable/structured content (markdown, JSON, fields, summaries).
+ *                       Best for: articles, docs, product pages, any page where you want processed text.
+ *   - novada_unblock  → raw HTML (full DOM source) for custom parsing or inspecting page structure.
+ *                       Best for: when you need the actual source, CSS-selector workflows, or debugging DOM.
+ *
+ * Handles Cloudflare, DataDome, JS-heavy SPAs automatically via auto-escalation.
+ */
 export async function novadaExtract(params: ExtractParams, apiKey?: string): Promise<string> {
   // P1-6: Normalize url/urls into a list
   const urlList: string[] = params.urls

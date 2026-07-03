@@ -8,6 +8,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 export interface ToolCredentials {
+  /** Caller's API key — used as fallback for webUnblockerKey, proxy auto-fetch, and browser auto-provision. */
+  apiKey?: string;
   webUnblockerKey?: string;
   browserWs?: string;
   proxyUser?: string;
@@ -25,9 +27,10 @@ export function withCredentials<T>(creds: ToolCredentials, fn: () => T): T {
   return store.run(creds, fn);
 }
 
-/** Active web unblocker key: SDK-scoped > NOVADA_WEB_UNBLOCKER_KEY > NOVADA_API_KEY (unified). */
+/** Active web unblocker key: SDK-scoped webUnblockerKey > SDK-scoped apiKey > NOVADA_WEB_UNBLOCKER_KEY > NOVADA_API_KEY (unified). */
 export function getWebUnblockerKey(): string | undefined {
-  return store.getStore()?.webUnblockerKey ?? process.env.NOVADA_WEB_UNBLOCKER_KEY ?? process.env.NOVADA_API_KEY;
+  const ctx = store.getStore();
+  return ctx?.webUnblockerKey ?? ctx?.apiKey ?? process.env.NOVADA_WEB_UNBLOCKER_KEY ?? process.env.NOVADA_API_KEY;
 }
 
 /** Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var > auto-provisioned. */
@@ -186,24 +189,39 @@ export async function resolveBrowserWs(apiKey?: string): Promise<string | null> 
 /**
  * Resolve proxy credentials with priority:
  * 1. Explicit env vars (NOVADA_PROXY_USER + NOVADA_PROXY_PASS + NOVADA_PROXY_ENDPOINT) — no API call.
- * 2. Auto-fetch via NOVADA_API_KEY Bearer token when only NOVADA_PROXY_ENDPOINT is set.
+ * 2. Auto-fetch via caller-supplied apiKey (or NOVADA_API_KEY) when only NOVADA_PROXY_ENDPOINT is set.
  *
  * NOVADA_PROXY_ENDPOINT is required in both cases.
  * Returns null if NOVADA_PROXY_ENDPOINT is not set (proxy tools disabled).
+ *
+ * @param apiKey - Caller's API key. Takes priority over NOVADA_API_KEY for the auto-fetch call.
+ *   Pass the per-request key here so hosted-server requests are billed to the caller, not the server account.
  */
-export async function resolveProxyCredentials(): Promise<{ user: string; pass: string; endpoint: string } | null> {
+export async function resolveProxyCredentials(apiKey?: string): Promise<{ user: string; pass: string; endpoint: string } | null> {
   const direct = getProxyCredentials();
   if (direct) return direct;
 
   const endpoint = process.env.NOVADA_PROXY_ENDPOINT;
   if (!endpoint) return null;
 
-  // NOVADA_PROXY_ENDPOINT is set but user/pass are missing — try auto-fetch
-  const apiKey = process.env.NOVADA_API_KEY;
-  if (!apiKey) return null;
+  // NOVADA_PROXY_ENDPOINT is set but user/pass are missing — try auto-fetch.
+  // Prefer the caller-supplied key; fall back to the server-level env var.
+  const effectiveApiKey = apiKey ?? process.env.NOVADA_API_KEY;
+  if (!effectiveApiKey) return null;
 
-  const fetched = await fetchProxySubAccountCredentials(apiKey);
+  const fetched = await fetchProxySubAccountCredentials(effectiveApiKey);
   if (!fetched) return null;
 
   return { user: fetched.account, pass: fetched.password, endpoint };
+}
+
+/**
+ * Redact a secret string to a last-4 fingerprint for safe logging.
+ * Example: "abc123xyz" → "****xyz"
+ * Never logs the full value.
+ */
+export function redactSecret(value: string | undefined): string {
+  if (!value) return "(not set)";
+  if (value.length <= 4) return "****";
+  return `****${value.slice(-4)}`;
 }

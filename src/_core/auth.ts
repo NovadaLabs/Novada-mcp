@@ -89,11 +89,11 @@ export function getBrowserWsUrl(): string | undefined {
 
 /**
  * Returns the Web Unblocker API key.
- * Returns undefined if NOVADA_WEB_UNBLOCKER_KEY is not set (non-throwing).
+ * Delegates to utils/credentials.ts which reads the AsyncLocalStorage store first
+ * (SDK-scoped apiKey / webUnblockerKey), then falls back to env vars.
+ * Single source of truth — do NOT re-implement the fallback chain here.
  */
-export function getWebUnblockerKey(): string | undefined {
-  return process.env.NOVADA_WEB_UNBLOCKER_KEY?.trim() || undefined;
-}
+export { getWebUnblockerKey } from "../utils/credentials.js";
 
 // ─── Auth Token Support ───────────────────────────────────────────────────────
 
