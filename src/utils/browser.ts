@@ -93,8 +93,12 @@ export function listSessions(): string[] {
 
 // ─── Browser API ───────────────────────────────────────────────────────────
 
-/** Check if Browser API credentials are available */
+/** Check if Browser API credentials are available (and the runtime can run CDP at all). */
 export function isBrowserConfigured(): boolean {
+  // Serverless (Vercel/Lambda) cannot hold the CDP WebSocket, so auto-mode must not
+  // even attempt the browser tier there — otherwise the gate's error text leaks into
+  // the render-failed response. Local runs are unaffected.
+  if (isHostedEnvironment()) return false;
   return !!getBrowserWs();
 }
 
