@@ -8,12 +8,13 @@ vi.stubGlobal("fetch", mockFetch);
 vi.mock("../../src/utils/credentials.js", () => ({
   getBrowserWs: vi.fn(),
   getProxyCredentials: vi.fn(),
+  resolveProxyCredentials: vi.fn(),
   getWebUnblockerKey: vi.fn(),
 }));
 
-import { getBrowserWs, getProxyCredentials, getWebUnblockerKey } from "../../src/utils/credentials.js";
+import { getBrowserWs, resolveProxyCredentials, getWebUnblockerKey } from "../../src/utils/credentials.js";
 const mockedGetBrowserWs = vi.mocked(getBrowserWs);
-const mockedGetProxyCredentials = vi.mocked(getProxyCredentials);
+const mockedResolveProxyCredentials = vi.mocked(resolveProxyCredentials);
 const mockedGetWebUnblockerKey = vi.mocked(getWebUnblockerKey);
 
 const { novadaHealth } = await import("../../src/tools/health.js");
@@ -32,7 +33,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Default: all env-based products not configured
   mockedGetBrowserWs.mockReturnValue(undefined);
-  mockedGetProxyCredentials.mockReturnValue(null);
+  mockedResolveProxyCredentials.mockResolvedValue(null);
   mockedGetWebUnblockerKey.mockReturnValue(undefined);
 });
 
@@ -41,31 +42,31 @@ afterEach(() => {
 });
 
 describe("novadaHealth", () => {
-  it("shows all active when all HTTP probes return 200 and env vars are set", async () => {
+  it("shows active HTTP probes and configured env-based products when all set", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ code: 0, data: [] }),
     });
-    mockedGetProxyCredentials.mockReturnValue({ user: "u", pass: "p", endpoint: "proxy.example.com:7777" });
+    mockedResolveProxyCredentials.mockResolvedValue({ user: "u", pass: "p", endpoint: "proxy.example.com:7777" });
     mockedGetBrowserWs.mockReturnValue("wss://user:pass@browser.example.com");
     mockedGetWebUnblockerKey.mockReturnValue("test-unblocker-key");
 
     const result = await novadaHealth(API_KEY);
 
     expect(result).toContain("✅ Active");
-    expect(result).toContain("Search API");
+    // health.ts probes: Web Unblocker / Extract + Scraper API (no separate Search probe)
     expect(result).toContain("Web Unblocker / Extract");
-    expect(result).toContain("Scraper API (129 platforms)");
+    expect(result).toContain("Scraper API (search + 13 active platforms)");
     expect(result).toContain("Proxy");
     expect(result).toContain("Browser API");
-    expect(result).toContain("All products active");
+    // Proxy/Browser are "configured_unverified" (no live probe possible) — not fully "active"
+    expect(result).toContain("configured (not verified)");
   });
 
   it("shows Not activated for Scraper API when response indicates error code 11006", async () => {
     mockedGetWebUnblockerKey.mockReturnValue("test-unblocker-key");
     mockFetch.mockImplementation((url: string) => {
-      if (url.includes("scraperapi.novada.com")) return makeFetchResponse(200, { code: 0 });
       if (url.includes("webunlocker.novada.com")) return makeFetchResponse(200, { code: 0 });
       // scraper.novada.com/request → 11006
       return makeFetchResponse(200, { code: 11006, msg: "not activated" });
@@ -73,28 +74,29 @@ describe("novadaHealth", () => {
 
     const result = await novadaHealth(API_KEY);
 
-    expect(result).toContain("Scraper API (129 platforms)");
+    expect(result).toContain("Scraper API (search + 13 active platforms)");
     expect(result).toContain("Not activated");
     expect(result).toContain("dashboard.novada.com/overview/scraper/");
     expect(result).toContain("## Next Steps");
   });
 
-  it("shows Not configured for Proxy when NOVADA_PROXY_USER env var is absent", async () => {
+  it("shows Not configured for Proxy when resolveProxyCredentials returns null", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ code: 0 }),
     });
-    mockedGetProxyCredentials.mockReturnValue(null);
+    // resolveProxyCredentials returns null → proxy not configured
+    mockedResolveProxyCredentials.mockResolvedValue(null);
     mockedGetBrowserWs.mockReturnValue("wss://ws.example.com");
 
     const result = await novadaHealth(API_KEY);
 
     expect(result).toContain("Proxy");
     expect(result).toContain("⚠️ Not configured");
+    // The not-configured note tells users what to set
     expect(result).toContain("NOVADA_PROXY_USER");
     expect(result).toContain("## Next Steps");
-    expect(result).toContain("NOVADA_PROXY_PASS");
     expect(result).toContain("NOVADA_PROXY_ENDPOINT");
   });
 
@@ -104,7 +106,7 @@ describe("novadaHealth", () => {
       status: 200,
       json: () => Promise.resolve({ code: 0 }),
     });
-    mockedGetProxyCredentials.mockReturnValue({ user: "u", pass: "p", endpoint: "proxy:7777" });
+    mockedResolveProxyCredentials.mockResolvedValue({ user: "u", pass: "p", endpoint: "proxy:7777" });
     mockedGetBrowserWs.mockReturnValue(undefined);
 
     const result = await novadaHealth(API_KEY);
@@ -156,18 +158,17 @@ describe("novadaHealth", () => {
   it("shows summary counts correctly when some products inactive", async () => {
     // No unblocker key → extract is "not configured"
     mockedGetWebUnblockerKey.mockReturnValue(undefined);
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("scraperapi.novada.com")) return makeFetchResponse(200, { code: 0 }); // search active
+    mockFetch.mockImplementation((_url: string) => {
       return makeFetchResponse(200, { code: 11006 }); // scraper not activated
     });
-    mockedGetProxyCredentials.mockReturnValue(null);
+    mockedResolveProxyCredentials.mockResolvedValue(null);
     mockedGetBrowserWs.mockReturnValue(undefined);
 
     const result = await novadaHealth(API_KEY);
 
     expect(result).toContain("## Summary");
-    // 1 active (search), 1 not activated (scraper), 3 not configured (extract+proxy+browser)
-    expect(result).toContain("1 active");
+    // scraper=not_activated; extract=not_configured; proxy=not_configured; browser=not_configured
+    expect(result).toContain("not activated");
     expect(result).toContain("not configured");
   });
 
@@ -182,7 +183,7 @@ describe("novadaHealth", () => {
     expect(result).toContain("## Summary");
   });
 
-  it("runs HTTP probes for search and scraper (extract skipped when no unblocker key)", async () => {
+  it("runs 1 HTTP probe when unblocker key is absent (extract skipped)", async () => {
     mockedGetWebUnblockerKey.mockReturnValue(undefined);
     mockFetch.mockResolvedValue({
       ok: true,
@@ -192,11 +193,11 @@ describe("novadaHealth", () => {
 
     await novadaHealth(API_KEY);
 
-    // Search + Scraper = 2 HTTP probes (Extract skipped: no unblocker key)
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    // Scraper only = 1 HTTP probe (Extract skipped: no unblocker key)
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("runs 3 HTTP probes when unblocker key is configured", async () => {
+  it("runs 2 HTTP probes when unblocker key is configured (extract + scraper)", async () => {
     mockedGetWebUnblockerKey.mockReturnValue("test-unblocker-key");
     mockFetch.mockResolvedValue({
       ok: true,
@@ -206,25 +207,27 @@ describe("novadaHealth", () => {
 
     await novadaHealth(API_KEY);
 
-    // Search + Extract + Scraper = 3 HTTP probes
-    expect(mockFetch).toHaveBeenCalledTimes(3);
+    // Extract + Scraper = 2 HTTP probes
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it("does not show Next Steps entry for active products", async () => {
+  it("does not show not-configured or not-activated items when HTTP probes succeed and env vars are set", async () => {
     mockedGetWebUnblockerKey.mockReturnValue("test-unblocker-key");
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ code: 0 }),
     });
-    mockedGetProxyCredentials.mockReturnValue({ user: "u", pass: "p", endpoint: "proxy:7777" });
-    mockedGetBrowserWs.mockReturnValue("wss://ws.example.com");
+    mockedResolveProxyCredentials.mockResolvedValue({ user: "u", pass: "p", endpoint: "proxy:7777" });
+    // Well-formed wss URL — BrowserWS is configured_unverified (no live probe)
+    mockedGetBrowserWs.mockReturnValue("wss://user:pass@ws.example.com");
 
     const result = await novadaHealth(API_KEY);
 
-    expect(result).toContain("All products active");
-    // Should NOT have bullet action items
-    expect(result).not.toContain("- Search API:");
-    expect(result).not.toContain("- Proxy:");
+    // HTTP products are active; proxy/browser are configured_unverified
+    expect(result).toContain("✅ Active");
+    // Should NOT have not-configured or not-activated bullet items
+    expect(result).not.toContain("Not configured");
+    expect(result).not.toContain("Not activated");
   });
 });
