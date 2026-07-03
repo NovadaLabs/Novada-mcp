@@ -1,6 +1,7 @@
 import type { VerifyParams, NovadaSearchResult } from "./types.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { classifyAuthority } from "../utils/authority.js";
 
 // FIX-4: Max claim length — prevents excessively long claims from blowing up search queries
 const CLAIM_MAX_LENGTH = 1000;
@@ -17,6 +18,87 @@ function sanitizeClaim(claim: string): string {
     .replace(/<[^>]*>/g, " ")          // strip HTML tags that embed context
     .replace(/\s{2,}/g, " ")           // collapse runs of whitespace
     .trim();
+}
+
+// ─── F7-B: Hedged/association claim detection ─────────────────────────────────
+
+/**
+ * Hedging language that signals associative / probabilistic claims rather than
+ * direct factual assertions.  When a claim uses these words AND the skeptical
+ * search returns zero contradicting sources, we cap confidence and never emit
+ * "supported" at high confidence — the search balance alone cannot confirm or
+ * deny a probabilistic claim.
+ */
+const HEDGE_PATTERN = /\b(associated with|linked to|may\b|might\b|could\b|correlated|correlates|possibly|potentially|suggests?|appears? to|seems? to|some evidence|emerging evidence)\b/i;
+
+/** True when the claim contains hedging/association language. */
+function isHedgedClaim(claim: string): boolean {
+  return HEDGE_PATTERN.test(claim);
+}
+
+// ─── F7-C: Redirect-poisoned URL detection ────────────────────────────────────
+
+/**
+ * Indicators that a URL is a redirect/authentication intermediary rather than
+ * the actual content source.  These appear in:
+ *   - signOut/logout flows (signOut in path or query)
+ *   - SSO redirect params (redirect=, redirect_uri=)
+ *   - Cross-domain source wrappers (source=<other-domain> in query)
+ *   - Nested document viewers (file=http... in query)
+ */
+const REDIRECT_PATH_RE = /\/sign[Oo]ut|\/logout|\/log-out/;
+const REDIRECT_QUERY_PARAMS = ["redirect", "redirect_uri", "redirecturi", "returnurl", "return_url", "signout"];
+const CROSS_DOMAIN_PARAMS = ["source", "file", "url", "src"];
+
+/**
+ * Returns true if the URL contains redirect or cross-domain proxy indicators
+ * that suggest it's an authentication/redirect intermediary, not the actual
+ * content source.  Preference: reject rather than silently include.
+ *
+ * Handles four cases:
+ *   1. signOut/logout in the outer URL pathname
+ *   2. Explicit SSO redirect query params (redirect=, redirect_uri=, etc.)
+ *   3. Cross-domain wrapper param values that start with http(s):// (explicit absolute URL)
+ *   4. Cross-domain wrapper param values whose DECODED path contains signOut/logout
+ *      (e.g. file=/index.php/login/signOut?source=.otherdomain.com)
+ */
+function isRedirectPoisonedUrl(rawUrl: string | undefined): boolean {
+  if (!rawUrl) return false;
+  try {
+    const parsed = new URL(rawUrl);
+    // 1. Check outer path for signOut/logout segments
+    if (REDIRECT_PATH_RE.test(parsed.pathname)) return true;
+    // Check query parameters
+    const params = parsed.searchParams;
+    for (const key of params.keys()) {
+      const lk = key.toLowerCase();
+      // 2. Explicit redirect params
+      if (REDIRECT_QUERY_PARAMS.includes(lk)) return true;
+      // 3 & 4. Cross-domain wrapper params
+      if (CROSS_DOMAIN_PARAMS.includes(lk)) {
+        const val = params.get(key) ?? "";
+        // 3. Explicit absolute URL in param value
+        if (/^https?:\/\//i.test(val)) return true;
+        // 4. Decoded path value contains signOut/logout (e.g. file=/…/signOut?…)
+        if (REDIRECT_PATH_RE.test(val)) return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * F7-C: Extract URLs from search result objects, stripping any redirect-poisoned URLs.
+ * Hoisted to module level so it can be used from any context without closing over
+ * outer variables.
+ */
+function sanitizeEvidenceUrls(sources: NovadaSearchResult[]): string[] {
+  return sources
+    .map(r => r.url || r.link)
+    .filter((u): u is string => Boolean(u))
+    .filter(u => !isRedirectPoisonedUrl(u));
 }
 
 interface QueryResult {
@@ -252,8 +334,47 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
       if ((verdict === "supported" || verdict === "unsupported") && confidence < 40) {
         confidence = 40;
       }
+
+      // F7-B: Hedged/association claim confidence cap.
+      // When the claim contains hedging language (associated with, may, correlated…)
+      // AND the skeptical query returned zero contradicting sources, search balance
+      // alone cannot confirm a probabilistic/associative claim at high confidence.
+      // Absence of debunking keywords is not the same as scientific consensus.
+      if (isHedgedClaim(claim) && contradictCount === 0) {
+        const HEDGE_CONFIDENCE_CAP = 70;
+        confidence = Math.min(confidence, HEDGE_CONFIDENCE_CAP);
+        // "supported" at high confidence is inappropriate: downgrade to contested
+        // to honestly represent that keyword absence ≠ scientific agreement.
+        if (verdict === "supported") {
+          verdict = "contested";
+        }
+      }
     }
   }
+
+  // F7-D: Classify authority of all evidence sources for the low-authority warning.
+  // A "scientific" claim is one that has hedge language (associated with / may / correlated)
+  // or explicitly invokes research/study/clinical evidence language.
+  // NOTE: bare "data" is intentionally excluded — it appears in policy/tech claims like
+  // "TikTok collects user data" which are NOT scientific and should not get the primary-
+  // literature nudge. Research-context phrases ("data shows", "the data suggest") are
+  // matched instead via the explicit SCIENTIFIC_DATA_CONTEXT_PATTERN below.
+  const SCIENTIFIC_CLAIM_PATTERN = /\b(study|studies|research|trial|clinical|evidence|risk|association|correlation|published|journal|peer[- ]review|meta[- ]analysis)\b/i;
+  const SCIENTIFIC_DATA_CONTEXT_PATTERN = /\bdata\s+(shows?|suggests?|indicates?|demonstrate|reveal|support)\b|\bthe\s+data\s+(suggest|show|indicate)\b/i;
+  const isScientificClaim = isHedgedClaim(claim) || SCIENTIFIC_CLAIM_PATTERN.test(claim) || SCIENTIFIC_DATA_CONTEXT_PATTERN.test(claim);
+  const allEvidenceSources = [...relevantSupportSources, ...relevantContradictSources];
+  const hasHighAuthority = allEvidenceSources.some(r =>
+    classifyAuthority(r.url || r.link) === "authoritative"
+  );
+  const hasOnlyLowAuthority =
+    allEvidenceSources.length > 0 &&
+    allEvidenceSources.every(r => {
+      const tier = classifyAuthority(r.url || r.link);
+      return tier === "social" || tier === "neutral";
+    }) &&
+    allEvidenceSources.some(r => classifyAuthority(r.url || r.link) === "social");
+
+  // F7-C: sanitizeEvidenceUrls is a module-level helper (above). No closure needed here.
 
   // Build output
   const lines: string[] = [
@@ -267,11 +388,16 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
     ``,
   ];
 
-  // Supporting evidence section (relevant sources only)
-  lines.push(`## Supporting Evidence (${relevantSupportSources.length} sources)`);
+  // F7-A: Provenance-honest bucket labels.
+  // "Supporting" / "Contradicting" imply stance verification which the keyword-
+  // retrieval model cannot do.  Replace with provenance-accurate headings that
+  // describe how sources were retrieved (query keyword matching), not what they
+  // mean (stance agreement/disagreement).  The verdict line still carries the
+  // overall verdict; these section headings describe the retrieval provenance.
+  lines.push(`## Sources matching the claim wording (${relevantSupportSources.length} sources)`);
   lines.push(``);
   if (relevantSupportSources.length === 0) {
-    lines.push(`_No relevant supporting sources found._`);
+    lines.push(`_No sources matching the claim wording found._`);
   } else {
     for (let i = 0; i < relevantSupportSources.length; i++) {
       const r = relevantSupportSources[i];
@@ -284,11 +410,11 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   }
   lines.push(``);
 
-  // Contradicting Evidence section (relevant + refuting sources only)
-  lines.push(`## Contradicting Evidence (${relevantContradictSources.length} sources)`);
+  // F7-A: Provenance-honest: negation-query results (used to be "Contradicting Evidence").
+  lines.push(`## Sources matching a negation of the claim (${relevantContradictSources.length} sources)`);
   lines.push(``);
   if (relevantContradictSources.length === 0) {
-    lines.push(`_No contradicting sources found._`);
+    lines.push(`_No sources matching a negation of the claim found._`);
   } else {
     for (let i = 0; i < relevantContradictSources.length; i++) {
       const r = relevantContradictSources[i];
@@ -303,40 +429,51 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   lines.push(``);
   lines.push(`---`);
   lines.push(`## Agent Hints`);
+  // F7-A: Always emit the keyword-match caveat so agents know bucket membership
+  // reflects retrieval provenance, not verified stance.
+  lines.push(`- Bucket membership reflects keyword match (query provenance), NOT verified stance. A source in "matching the claim wording" may debunk it; a source in "matching a negation" may discuss the claim approvingly. Treat as retrieval signal, not stance classification.`);
   lines.push(`- Verdict is based on search result balance, not deep reasoning. Treat as a signal, not a definitive answer.`);
   lines.push(`- 'supported' requires multiple independent relevant sources with no refutation; 'insufficient_data' means the claim's terms did not appear in enough sources to judge.`);
   if (verdict === "insufficient_data") {
     lines.push(`- No relevant evidence found in search. Use novada_research for a deeper multi-source investigation, or rephrase the claim with more specific terms.`);
   }
   if (verdict === "contested") {
-    lines.push(`- Sources disagree. Use novada_extract on both supporting and contradicting URLs above to read the full arguments.`);
+    lines.push(`- Sources disagree. Use novada_extract on both claim-matching and negation-matching URLs above to read the full arguments.`);
   }
   if (verdict === "unsupported") {
-    lines.push(`- Sources actively refute this claim. Use novada_extract on the contradicting URLs above to confirm.`);
+    lines.push(`- Sources actively refute this claim. Use novada_extract on the negation-matching URLs above to confirm.`);
   }
   if (confidence < 40 && verdict !== "insufficient_data") {
     lines.push(`- Low confidence (${confidence}/100). More specific claim wording may improve accuracy.`);
   }
+  // F7-D: Low-authority warning for scientific claims where all sources are social/PR.
+  if (isScientificClaim && hasOnlyLowAuthority) {
+    lines.push(`- Warning: all evidence sources are from social media or press-release domains. For scientific/medical claims, verify against primary literature (PubMed, NIH, peer-reviewed journals) before acting on this verdict.`);
+  }
 
-  // Top URLs from supporting sources (relevant only)
-  const supportUrls = relevantSupportSources
-    .map(r => r.url || r.link)
-    .filter((u): u is string => Boolean(u))
-    .slice(0, 3);
-  lines.push(`- Supporting URLs: ${supportUrls.length > 0 ? supportUrls.join(", ") : "none"}`);
+  // Top URLs from claim-matching sources (relevant only) — F7-C: strip redirect-poisoned URLs.
+  // Labels match the provenance-honest section headers above (not stance assertions).
+  const supportUrls = sanitizeEvidenceUrls(relevantSupportSources).slice(0, 3);
+  lines.push(`- Claim-matching URLs: ${supportUrls.length > 0 ? supportUrls.join(", ") : "none"}`);
 
   // INC-196: Use FILTERED contradicting sources (only items with genuine dispute markers),
   // not the raw skepticalResult.results. Also dedup against supporting URLs.
+  // F7-C: strip redirect-poisoned URLs.
+  // Labels match the provenance-honest section headers above (not stance assertions).
   const supportUrlSet = new Set(supportUrls);
-  const contradictUrls = relevantContradictSources
-    .map(r => r.url || r.link)
-    .filter((u): u is string => Boolean(u))
+  const contradictUrls = sanitizeEvidenceUrls(relevantContradictSources)
     .filter(u => !supportUrlSet.has(u))
     .slice(0, 3);
-  lines.push(`- Contradicting URLs: ${contradictUrls.length > 0 ? contradictUrls.join(", ") : "none"}`);
+  lines.push(`- Negation-matching URLs: ${contradictUrls.length > 0 ? contradictUrls.join(", ") : "none"}`);
 
   lines.push(``);
   lines.push(`## Agent Action`);
-  lines.push(`agent_instruction: verdict=${verdict} confidence=${confidence} | next: novada_research for deeper investigation | next: novada_extract on source URLs for full context`);
+  // F7-A: keyword-match caveat in the agent_instruction field for machine consumers.
+  // F7-D: no_authoritative_sources_found only when there ARE sources but none are high-authority.
+  // Must not fire on empty evidence (allEvidenceSources.length === 0 → insufficient_data path).
+  const noAuthNote = allEvidenceSources.length > 0 && !hasHighAuthority && isScientificClaim && !hasOnlyLowAuthority
+    ? " | note: no_authoritative_sources_found"
+    : "";
+  lines.push(`agent_instruction: verdict=${verdict} confidence=${confidence} | bucket_labels=keyword_match_provenance_not_stance | next: novada_research for deeper investigation | next: novada_extract on source URLs for full context${hasOnlyLowAuthority && isScientificClaim ? " | warning: verify_against_primary_literature" : ""}${noAuthNote}`);
   return lines.join("\n");
 }

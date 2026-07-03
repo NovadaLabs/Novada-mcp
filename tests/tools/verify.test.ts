@@ -66,8 +66,9 @@ describe("novadaVerify", () => {
     const out = await novadaVerify({ claim: "The Eiffel Tower in Paris is 330 meters tall" }, API_KEY);
     expect(getVerdict(out)).toBe("supported");
     expect(out).toContain("## Claim Verification");
-    expect(out).toContain("## Supporting Evidence");
-    expect(out).toContain("## Contradicting Evidence");
+    // F7-A: section headings are now provenance-honest (keyword-match, not stance)
+    expect(out).toContain("## Sources matching the claim wording");
+    expect(out).toContain("## Sources matching a negation of the claim");
     expect(out).toContain("## Agent Hints");
   });
 
