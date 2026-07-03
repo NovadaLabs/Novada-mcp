@@ -4,6 +4,19 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [Unreleased] — in testing on staging
+
+Round 3 Fix & Verify revamp — will ship as **0.9.2** (0.9.1 is already on npm). Code lives on the `staging` branch of the internal test repo; **not yet released**. 3 gates remain: rotate the 4 leaked credentials, decide the monitor + bot-detection architecture, human merge-review.
+
+### Fixed
+- **36 defects** across `crawl` (glob + dedup), `discover` (category gating), `extract` (credential redaction + `urls` alias + block-page detection), `fields` (description quality), `map` (sitemap honesty), `research` (synthesis), `search` (sentinel + time_range + JSON), `verify` (stance mitigation) — each independently verified and reviewed. Detail: Linear NOV-680.
+- `monitor` improvements shipped as **preview** — deepest stable-hash layer pending an architecture decision (hash extract's structured `content`, not a parsed markdown blob).
+
+### Process
+- Internal test workflow: test repo reduced to `main` + `staging`; auto-mirror hook scoped; gated `promote-to-public.sh` release script. Detail: Linear NOV-684 / NOV-688.
+
+---
+
 ## [0.9.1] — 2026-07-02
 
 Availability, config-accuracy, and safety fixes (NOV-673/674 follow-up), plus a customer-docs consistency pass.

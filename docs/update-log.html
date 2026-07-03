@@ -1,989 +1,450 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Novada MCP — Update Log</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<!-- ⚠ AUTO-GENERATED from CHANGELOG.md by scripts/gen-update-log.mjs — DO NOT EDIT BY HAND. -->
 <style>
-  :root {
-    --bg: #f5f0e8;
-    --card: #fffdf8;
-    --ink: #3d3529;
-    --muted: #8a7e6b;
-    --accent: #c4956a;
-    --accent-light: #f0e4d4;
-    --green: #5a8a5e;
-    --green-light: #e8f0e4;
-    --blue: #5a7a9a;
-    --blue-light: #e4ecf4;
-    --red: #b85c4a;
-    --red-light: #f4e4e0;
-    --purple: #7a6a9a;
-    --purple-light: #eee8f4;
-    --line: #e4ddd0;
-    --radius: 14px;
-  }
-  * { box-sizing: border-box; margin: 0; }
-  body {
-    font-family: "Nunito", "Noto Sans SC", sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-    line-height: 1.6;
-    padding: 24px 16px;
-  }
-  .wrap { max-width: 720px; margin: 0 auto; }
-
-  /* Language */
-  .en { display: none; }
-  html.lang-en .zh { display: none; }
-  html.lang-en .en { display: inline; }
-
-  /* Lang toggle */
-  .lang-btn {
-    position: fixed; top: 16px; right: 16px; z-index: 99;
-    display: flex; gap: 2px; background: var(--card); border: 1px solid var(--line);
-    border-radius: 20px; padding: 3px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  }
-  .lang-btn button {
-    border: 0; background: none; font: 600 12px "Nunito", sans-serif;
-    color: var(--muted); padding: 4px 12px; border-radius: 16px; cursor: pointer;
-  }
-  .lang-btn button.on { background: var(--ink); color: #fff; }
-
-  /* Header */
-  .head {
-    background: var(--ink); color: #fff; border-radius: var(--radius);
-    padding: 20px 24px 16px; margin-bottom: 16px;
-  }
-  .head h1 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
-  .head .sub { color: #bbb3a4; font-size: 13px; }
-  .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-  .pill {
-    font-size: 11px; font-weight: 700; padding: 3px 10px;
-    border-radius: 10px; background: rgba(255,255,255,0.12); color: #ddd;
-  }
-
-  /* Cards */
-  .card {
-    background: var(--card); border: 1px solid var(--line);
-    border-radius: var(--radius); margin-bottom: 10px;
-    overflow: hidden;
-  }
-  .card summary {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px; cursor: pointer; list-style: none;
-    font-weight: 700; font-size: 14px;
-  }
-  .card summary::-webkit-details-marker { display: none; }
-  .card summary::after {
-    content: ""; margin-left: auto;
-    border: solid var(--muted); border-width: 0 2px 2px 0;
-    padding: 3px; transform: rotate(45deg); transition: 0.15s;
-  }
-  .card[open] summary::after { transform: rotate(-135deg); }
-  .card .body { padding: 0 16px 14px; font-size: 13px; line-height: 1.65; }
-  .card .body p { margin-bottom: 8px; }
-  .card .body ul { padding-left: 18px; margin-bottom: 8px; }
-  .card .body li { margin-bottom: 4px; }
-
-  /* Tag */
-  .tag {
-    display: inline-block; font-size: 11px; font-weight: 700;
-    padding: 2px 8px; border-radius: 6px;
-  }
-  .tag-fix { background: var(--blue-light); color: var(--blue); }
-  .tag-verify { background: var(--accent-light); color: #8a6a3a; }
-  .tag-sync { background: var(--purple-light); color: var(--purple); }
-  .tag-feat { background: var(--green-light); color: var(--green); }
-  .tag-sec { background: var(--red-light); color: var(--red); }
-
-  /* Status chip */
-  .chip {
-    font-size: 11px; font-weight: 600; padding: 2px 8px;
-    border-radius: 8px; background: var(--green-light); color: var(--green);
-    margin-left: auto; flex-shrink: 0;
-  }
-
-  code {
-    font-family: "JetBrains Mono", monospace; font-size: 12px;
-    background: var(--accent-light); color: #6a4a2a; padding: 1px 5px; border-radius: 4px;
-  }
-  pre {
-    font-family: "JetBrains Mono", monospace; font-size: 12px;
-    background: var(--ink); color: #ddd; padding: 12px 14px;
-    border-radius: 10px; overflow-x: auto; margin-bottom: 10px; line-height: 1.5;
-  }
-  pre code { background: none; color: inherit; padding: 0; }
-
-  .note {
-    background: var(--accent-light); border-radius: 8px;
-    padding: 8px 12px; font-size: 12px; margin-bottom: 10px;
-  }
-  .note b { color: var(--ink); }
-  .note.warn { background: var(--red-light); }
-
-  table { width: 100%; font-size: 12px; border-collapse: collapse; margin-bottom: 10px; }
-  th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line); }
-  th { font-weight: 700; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-
-  .foot { text-align: center; font-size: 11px; color: var(--muted); padding: 16px; }
+  :root{--purple:#5D34F2;--pink:#C21BBA;--ink:#181235;--muted:#6B6690;--muted2:#9691B8;
+    --bg:#FBFAFF;--card:#fff;--tint:#F5F1FF;--line:rgba(93,52,242,.14);--line2:rgba(24,18,53,.08);
+    --grad:linear-gradient(115deg,#5D34F2,#8C64F9 45%,#C21BBA);--amber:#B8791A;
+    --shadow:0 1px 2px rgba(24,18,53,.04),0 8px 24px rgba(93,52,242,.06);}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,"PingFang SC",Roboto,Arial,sans-serif;
+    background:radial-gradient(1100px 600px at 88% -8%,rgba(93,52,242,.09),transparent 60%),var(--bg);
+    color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .gline{height:4px;background:var(--grad)}
+  .wrap{max-width:900px;margin:0 auto;padding:0 22px 70px}
+  a{color:var(--purple);text-decoration:none} a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:.85em;background:var(--tint);
+    padding:.1em .4em;border-radius:5px;color:#5A38C7;border:1px solid var(--line)}
+  header{padding:48px 0 26px}
+  .brand{font-weight:800;letter-spacing:.14em;font-size:14px;background:var(--grad);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  h1{font-size:30px;font-weight:820;letter-spacing:-.02em;margin:8px 0 6px}
+  .sub{color:var(--muted);font-size:14px}
+  .gen{margin-top:10px;font-size:12px;color:var(--muted2)}
+  .gen code{font-size:11px}
+  details.card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    margin:14px 0;box-shadow:var(--shadow);overflow:hidden}
+  details.card.pre{border-color:rgba(140,100,249,.4);background:linear-gradient(180deg,#F6F2FF,#fff)}
+  summary{display:flex;align-items:center;gap:12px;padding:16px 20px;cursor:pointer;list-style:none;flex-wrap:wrap}
+  summary::-webkit-details-marker{display:none}
+  .date{font-size:12px;color:var(--muted2);font-variant-numeric:tabular-nums;min-width:88px}
+  .ttl{font-weight:700;font-size:15px;flex:1}
+  .tag{font-size:11px;font-weight:700;padding:2px 9px;border-radius:100px;background:rgba(184,121,26,.14);color:#8A5D10}
+  .chip{font-size:12px;font-weight:800;padding:3px 11px;border-radius:100px;background:var(--tint);color:var(--purple);border:1px solid var(--line)}
+  .chip.pre{background:rgba(140,100,249,.16);color:#7A4DE0}
+  .body{padding:2px 22px 20px}
+  .intro{color:var(--muted);font-size:14px;margin:6px 0 12px}
+  h4{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--pink);margin:14px 0 6px}
+  ul{margin:0 0 4px;padding-left:20px} li{font-size:14px;margin:5px 0;color:var(--ink)} li code{color:#5A38C7}
+  footer{margin-top:30px;padding-top:18px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--muted2)}
 </style>
 </head>
 <body>
-
-<div class="lang-btn">
-  <button id="bz" class="on" onclick="setLang('zh')">中文</button>
-  <button id="be" onclick="setLang('en')">EN</button>
-</div>
-
+<div class="gline"></div>
 <div class="wrap">
+  <header>
+    <div class="brand">NOVADA · MCP</div>
+    <h1>Update Log</h1>
+    <div class="sub">Latest released: <b>v0.9.1</b> · 2026-07-02 · npm <code>novada-mcp</code></div>
+    <div class="gen">⚙ Auto-generated from <code>CHANGELOG.md</code> — do not edit this file by hand. Team progress &amp; health live in the Linear project "MCP — Hosted + Tools + Optimization".</div>
+  </header>
 
-  <div class="head">
-    <h1>
-      <span class="zh">Novada MCP 更新日志</span>
-      <span class="en">Novada MCP Update Log</span>
-    </h1>
-    <div class="sub">npm v0.9.1 · hosted v0.9.0 · 2026-07-02 · 38 tools · 14-chapter docs · 100% Firecrawl coverage</div>
-    <div class="pills">
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;"><span class="zh">结构化 100%</span><span class="en">Structured 100%</span></span>
-      <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">38 <span class="zh">工具</span><span class="en">tools</span></span>
-      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
-      <span class="pill">30+ bug fixes</span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.9.1</span>
-      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.9.0</span>
+  <details class="card pre" open>
+    <summary>
+      <span class="date">in testing on staging</span>
+      <span class="tag">In testing · not released</span>
+      <span class="ttl">Next release (in testing)</span>
+      <span class="chip pre">Unreleased</span>
+    </summary>
+    <div class="body">
+      <p class="intro">Round 3 Fix &amp; Verify revamp — will ship as <b>0.9.2</b> (0.9.1 is already on npm). Code lives on the <code>staging</code> branch of the internal test repo; <b>not yet released</b>. 3 gates remain: rotate the 4 leaked credentials, decide the monitor + bot-detection architecture, human merge-review.</p>
+      <h4>Fixed</h4>
+      <ul>
+        <li><b>36 defects</b> across <code>crawl</code> (glob + dedup), <code>discover</code> (category gating), <code>extract</code> (credential redaction + <code>urls</code> alias + block-page detection), <code>fields</code> (description quality), <code>map</code> (sitemap honesty), <code>research</code> (synthesis), <code>search</code> (sentinel + time_range + JSON), <code>verify</code> (stance mitigation) — each independently verified and reviewed. Detail: Linear NOV-680.</li>
+        <li><code>monitor</code> improvements shipped as <b>preview</b> — deepest stable-hash layer pending an architecture decision (hash extract's structured <code>content</code>, not a parsed markdown blob).</li>
+      </ul>
+      <h4>Process</h4>
+      <ul>
+        <li>Internal test workflow: test repo reduced to <code>main</code> + <code>staging</code>; auto-mirror hook scoped; gated <code>promote-to-public.sh</code> release script. Detail: Linear NOV-684 / NOV-688.</li>
+      </ul>
     </div>
-  </div>
+  </details>
 
-  <!-- ============================================================ -->
-  <!-- MASSIVE SPRINT — 2026-06-24                                -->
-  <!-- ============================================================ -->
-  <!-- ============================================================ -->
-  <!-- HOSTED VERSION SYNC — 2026-06-27                           -->
-  <!-- ============================================================ -->
-  <!-- ============================================================ -->
-  <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
-  <!-- ============================================================ -->
-  <!-- ============================================================ -->
-  <!-- v0.9.1 AVAILABILITY + CONFIG + DOCS CONSISTENCY — 2026-07-02 -->
-  <!-- ============================================================ -->
-  <details class="card" open style="border-left: 4px solid var(--blue);">
+  <details class="card">
     <summary>
       <span class="date">2026-07-02</span>
-      <span class="tag tag-fix"><span class="zh">修复 + 文档</span><span class="en">Fix + Docs</span></span>
-      <span>
-        <span class="zh">v0.9.1 — 可用性 / 配置准确性 / 安全修复 + 客户文档一致性梳理</span>
-        <span class="en">v0.9.1 — availability / config-accuracy / safety fixes + customer-docs consistency pass</span>
-      </span>
-      <span class="chip" style="background:var(--blue-light);color:var(--blue);">v0.9.1</span>
+      
+      <span class="ttl">v0.9.1</span>
+      <span class="chip">v0.9.1</span>
     </summary>
     <div class="body">
+      <p class="intro">Availability, config-accuracy, and safety fixes (NOV-673/674 follow-up), plus a customer-docs consistency pass.</p>
+      <h4>Fixed</h4>
       <ul>
-        <li><b><span class="zh">搜索</span><span class="en">Search</span></b> <span class="zh"><code>novada_search</code> 默认引擎 <code>−32001</code> 修复(两处 60s 提交超时改用 <code>TIMEOUTS.SEARCH_TOTAL_CEILING</code>)· 缓存键加入 <code>country</code>+<code>language</code>(地域/语言变体不再串用同一缓存)· 无 task_id 分支 <code>throw new Error</code> → <code>makeNovadaError(API_DOWN)</code>(带 agent_instruction)</span><span class="en"> <code>novada_search</code> default-engine <code>−32001</code> fix (two 60s submit timeouts → <code>TIMEOUTS.SEARCH_TOTAL_CEILING</code>) · cache key now includes <code>country</code>+<code>language</code> (geo/locale variants no longer collide) · no-task_id branch <code>throw new Error</code> → <code>makeNovadaError(API_DOWN)</code> (carries agent_instruction)</span></li>
-        <li><b>🔒 SSRF</b> <span class="zh"><code>novada_browser_flow</code> 手写主机正则 → 复用共享 <code>isBlockedHost</code> 白名单,堵住绕过缺口</span><span class="en"> <code>novada_browser_flow</code> hand-rolled host regex → shared <code>isBlockedHost</code> allowlist, closing a bypass gap</span></li>
-        <li><b><span class="zh">配置措辞</span><span class="en">Config wording</span></b> <span class="zh">仪表盘链接 <code>/overview/</code>(403)→ <code>/api-key/</code>(200)· <code>novada_health</code> 未激活提示改真实 URL · <code>novada_setup</code> “Status: Ready” 弱化避免过度声称</span><span class="en"> dashboard link <code>/overview/</code> (403) → <code>/api-key/</code> (200) · <code>novada_health</code> not-activated line uses a real URL · <code>novada_setup</code> “Status: Ready” softened</span></li>
-        <li><b><span class="zh">文档一致性</span><span class="en">Docs consistency</span></b> <span class="zh">移除不存在的 <code>/sse</code> 托管路由(实测 404)—— 托管鉴权统一为同一 <code>/mcp</code> 端点上的 Bearer header 或 <code>?token=</code> · 工具数全站校正为 <b>38</b> · <code>novada_unblock</code> 标注为未分组(用 <code>NOVADA_TOOLS</code> 选择)· 版本 pin 对齐已发布版</span><span class="en"> removed the non-existent <code>/sse</code> hosted route (404 in prod) — hosted auth is a Bearer header or <code>?token=</code> on the same <code>/mcp</code> endpoint · tool count corrected to <b>38</b> everywhere · <code>novada_unblock</code> documented as ungrouped (select via <code>NOVADA_TOOLS</code>) · version pins aligned to the published release</span></li>
+        <li><b><code>novada_search</code> default-engine <code>-32001</code></b>: two submit timeouts hard-coded to <code>60000</code> now use <code>TIMEOUTS.SEARCH_TOTAL_CEILING</code>, so the default engine no longer times out under the transport ceiling.</li>
+        <li><b><code>novada_search</code> cache correctness</b>: cache key now includes <code>country</code> + <code>language</code> — geo/locale variants no longer collide on a shared cached result.</li>
+        <li><b><code>novada_search</code> no-task_id path</b>: a raw <code>throw new Error(rawJSON)</code> is now <code>makeNovadaError(API_DOWN, …)</code>, so failures surface as a classified error carrying <code>agent_instruction</code>.</li>
+        <li><b><code>novada_browser_flow</code> SSRF guard</b>: replaced a hand-rolled host regex with the shared <code>isBlockedHost</code> allowlist used elsewhere, closing a bypass gap.</li>
       </ul>
-      <div class="note"><span class="zh">承接 v0.9.0(NOV-673/674)。npm 已发布 0.9.1;托管端点版本另行部署。</span><span class="en">Follows v0.9.0 (NOV-673/674). Published to npm as 0.9.1; hosted endpoint versioned separately.</span></div>
+      <h4>Changed</h4>
+      <ul>
+        <li><b>Error / health / setup wording</b>: dashboard link <code>dashboard.novada.com/overview/</code> (403) → <code>/api-key/</code> (200); <code>novada_health</code> not-activated line reworded with a real activation URL; <code>novada_setup</code> "Status: Ready" softened to avoid over-claiming.</li>
+      </ul>
+      <h4>Docs</h4>
+      <ul>
+        <li>Removed the non-existent <code>/sse</code> hosted route from every client guide (it 404s) — hosted auth is a <b>Bearer header or <code>?token=</code> on the same <code>/mcp</code> endpoint</b>.</li>
+        <li>Version pins aligned to the published release; tool count corrected to <b>38</b> across all pages; <code>novada_unblock</code> documented as ungrouped (select via <code>NOVADA_TOOLS</code>).</li>
+      </ul>
     </div>
   </details>
 
-  <!-- ============================================================ -->
-  <!-- v0.9.0 HARDENING + RED-TEAM CONSOLIDATION — 2026-07-01       -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left: 4px solid var(--red);">
+  <details class="card">
     <summary>
       <span class="date">2026-07-01</span>
-      <span class="tag tag-fix"><span class="zh">安全 + 契约</span><span class="en">Security + Contract</span></span>
-      <span>
-        <span class="zh">v0.9.0 — 红队合并批:数据泄漏加固 + Schema 契约修复 + 德语抓取增强(3 组修复 × 3 组独立验证)</span>
-        <span class="en">v0.9.0 — red-team consolidation: data-leak hardening + schema-contract fixes + German-scrape improvements (3 fix groups × 3 independent verify groups)</span>
-      </span>
-      <span class="chip" style="background:var(--red-light);color:var(--red);">v0.9.0</span>
+      
+      <span class="ttl">v0.9.0</span>
+      <span class="chip">v0.9.0</span>
     </summary>
     <div class="body">
+      <p class="intro">Consolidation release. Merges the red-team hardening campaign into a single version and supersedes the 0.8.5–0.8.10 line (NOV-578 series), which shipped to npm without individual changelog entries.</p>
+      <h4>Security / data-leak (Taxonomy B — NOV-674)</h4>
       <ul>
-        <li><b>🔒 <span class="zh">安全 / 数据泄漏</span><span class="en">Security / data-leak</span></b> <span class="zh">本地路径 + PII 脱敏(<code>/Users/</code>、<code>/home/</code> → <code>[local-path]</code>)· 代理用户名在 url/env/curl 三格式 × proxy/static/dedicated 三工具全脱敏 · 鉴权分类(401/11000/10002 → INVALID_API_KEY)</span><span class="en"> local-path + PII redaction (<code>/Users/</code>, <code>/home/</code> → <code>[local-path]</code>) · proxy username masked across url/env/curl × proxy/static/dedicated · auth classification (401/11000/10002 → INVALID_API_KEY)</span></li>
-        <li><span class="zh">输入上限(query 500 / question 2000 / scraper 载荷 60KB)· unblock 超时上限 120s(不再 −32001)· verify 注入拦截(CRLF / 空字节 / javascript:)</span><span class="en"> input caps (query 500 / question 2000 / scraper payload 60KB) · unblock 120s timeout ceiling (no more −32001) · verify injection rejection (CRLF / null-byte / javascript:)</span></li>
-        <li><b><span class="zh">Schema 契约</span><span class="en">Schema contract</span></b> <span class="zh">~25 工具的 <code>required[]</code> 移除带默认值的键(Zod v4 toJSONSchema 透传 bug)· 去掉虚假 <code>additionalProperties:false</code> · 无 structuredContent 处移除 outputSchema(修 −32600)· ZodError → agent_instruction</span><span class="en"> removed defaulted keys from <code>required[]</code> across ~25 tools (Zod v4 toJSONSchema passthrough) · dropped false <code>additionalProperties:false</code> · removed outputSchema where no structuredContent (fixes −32600) · ZodError → agent_instruction</span></li>
-        <li><span class="zh">德语公共站抓取:Kufer/webbasys 名额 sprite 识别 · 德语标签-值表提取(50 词映射)· 批量紧凑摘要 · 保表截断 · health 环境变量已设未探测时显示 “configured (not verified)” 而非 active</span><span class="en"> German public-site scraping: Kufer/webbasys availability-sprite detection · German label-value table extraction (50-term map) · batch compact summary · table-preserving truncation · health shows “configured (not verified)” not active when env set-but-unprobed</span></li>
+        <li><b>Path + PII redaction</b>: <code>/Users/…</code> and <code>/home/…</code> in any error/output → <code>[local-path]</code> (single-boundary <code>redactSecrets</code>).</li>
+        <li><b>Proxy username masking</b>: masked across url/env/curl formats × <code>novada_proxy</code> / <code>novada_proxy_static</code> / <code>novada_proxy_dedicated</code>; zone-suffixed usernames in error text → <code>[proxy-username]</code>; usage examples use a <code>&lt;PROXY_USER&gt;</code> placeholder.</li>
+        <li><b>Auth classification</b>: developer-API codes 401 / 11000 / 10002 → <code>INVALID_API_KEY</code> (failure_class=auth, retry_recommended=false) instead of a misleading not_found / invalid_params.</li>
+        <li><b>Input caps at the schema boundary</b>: query ≤ 500 chars, research question ≤ 2000, scraper payload ≤ 60 KB — rejected synchronously before any HTTP call.</li>
+        <li><b><code>novada_unblock</code> timeout ceiling</b>: <code>Math.min(timeout, 120_000)</code> + <code>Promise.race</code> guard — no more transport <code>-32001</code>.</li>
+        <li><b><code>novada_verify</code> injection rejection</b>: CRLF / null-byte / <code>javascript:</code> claims rejected; HTML sanitized so no false <code>supported</code> verdict.</li>
       </ul>
-      <div class="note"><span class="zh">承接 0.8.5–0.8.10(NOV-578 系列)的加固。50 个 Sonnet-4.6 红队 agent 的发现合并为 2 个 taxonomy(NOV-673 契约 / NOV-674 安全),按 fix≠verify≠orchestrator 分离流程修复,全部经独立、真实凭证的 live 验证通过。</span><span class="en">Consolidates hardening from 0.8.5–0.8.10 (NOV-578 series). 50 Sonnet-4.6 red-team agents' findings merged into 2 taxonomies (NOV-673 contract / NOV-674 safety), fixed under a fix≠verify≠orchestrator separated process, all independently live-verified with real credentials.</span></div>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- v0.8.9 BACKLOG BATCH B+C — 2026-06-30                       -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left: 4px solid var(--green);">
-    <summary>
-      <span class="date">2026-06-30</span>
-      <span class="tag tag-feat"><span class="zh">功能 + 打磨</span><span class="en">Features + Polish</span></span>
-      <span>
-        <span class="zh">v0.8.9 — backlog 批次:2 新工具 + prompts + 进度通知 + snake_case + outputSchema + 路由缓存 + 日志</span>
-        <span class="en">v0.8.9 — backlog batch: 2 new tools + prompts + progress + snake_case + outputSchema + routing memory + logging</span>
-      </span>
-      <span class="chip">v0.8.9</span>
-    </summary>
-    <div class="body">
+      <h4>Schema-contract integrity (Taxonomy A — NOV-673)</h4>
       <ul>
-        <li><span class="zh">2 个新工具:<code>novada_session_stats</code>(用量统计)+ <code>novada_search_feedback</code>(搜索反馈飞轮)</span><span class="en"> 2 new tools: <code>novada_session_stats</code> (usage telemetry) + <code>novada_search_feedback</code> (search feedback flywheel)</span></li>
-        <li><span class="zh">MCP prompts(选工具决策树)· crawl/research 进度通知 · MCP 2025-06-18 outputSchema + annotations</span><span class="en"> MCP prompts (tool-selection decision trees) · progress notifications for crawl/research · MCP 2025-06-18 outputSchema + annotations</span></li>
-        <li><span class="zh">参数统一 snake_case(camelCase 向后兼容)· session 内域名→模式路由缓存 · 统一请求日志(NOVADA_LOG)· 出站遥测头</span><span class="en"> snake_case params (camelCase back-compat) · session domain→mode routing memory · central request logging (NOVADA_LOG) · outbound telemetry headers</span></li>
-        <li><span class="zh">README 平台数纠正(129 → 真实 13 内置 + Scraper API)· 工具描述修复 · extract 去重</span><span class="en"> README platform-count corrected (129 → truthful 13 built-in + Scraper API) · tool-desc fixes · extract dedup</span></li>
+        <li><b><code>required[]</code> correctness</b>: defaulted params no longer appear in JSON-Schema <code>required[]</code> across ~25 tools (root-caused to Zod v4 <code>toJSONSchema()</code> verbatim passthrough).</li>
+        <li>Removed false <code>additionalProperties:false</code>; removed <code>outputSchema</code> where no <code>structuredContent</code> was returned (fixes <code>-32600</code>); <code>idempotentHint:false</code> on <code>novada_monitor</code> / <code>novada_verify</code>.</li>
+        <li>Global ZodError handler now emits <code>agent_instruction</code>.</li>
+        <li>Deleted dead <code>mode</code> / <code>limit</code> crawl aliases (undocumented, no backend support).</li>
       </ul>
-      <div class="note"><span class="zh">12 个 backlog issue 一批清完(NOV-326/327/324/325/319/321/323/330/334/315/342/402),多 agent 串行实现 + 独立复审,零回归(+83 测试通过),38 工具。</span><span class="en">Cleared 12 backlog issues in one batch via serial multi-agent implementation + independent review, zero regressions (+83 passing tests), 38 tools.</span></div>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- v0.8.8 SECURITY HOTFIX + QA FIXES — 2026-06-30             -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left: 4px solid var(--red);">
-    <summary>
-      <span class="date">2026-06-30</span>
-      <span class="tag tag-fix"><span class="zh">安全 + QA</span><span class="en">Security + QA</span></span>
-      <span>
-        <span class="zh">v0.8.8 — 安全热修(凭证脱敏)+ 实测 QA 修复</span>
-        <span class="en">v0.8.8 — security hotfix (credential redaction) + live-QA fixes</span>
-      </span>
-      <span class="chip" style="background:var(--red-light);color:var(--red);">v0.8.8</span>
-    </summary>
-    <div class="body">
+      <h4>Fixed (NOV-662–666)</h4>
       <ul>
-        <li><b>🔒 <span class="zh">安全</span><span class="en">Security</span></b> <span class="zh">extract 报错不再泄漏 Browser 凭证 / 内部主机(redactSecrets 接入 npm + 托管两端)—— 线上 mcp.novada.com 已修</span><span class="en"> extract errors no longer leak Browser credentials / internal hosts (redactSecrets wired through npm + hosted) — fixed live on mcp.novada.com</span></li>
-        <li><span class="zh">extract:render 失败回退到静态结果(不再返回空)· verify:假 / 胡言乱语不再判 supported · search:bing 标记降级、num 上下限、空白查询拦截</span><span class="en"> extract render-fallback (no more empty) · verify no longer 'supported' for false/gibberish · search: bing degraded, num cap/floor, whitespace rejected</span></li>
-        <li><span class="zh">crawl:select_paths 只过滤子链接(种子必爬)· 托管:超时返结构化 JSON-RPC(不再裸 504)· scrape:操作 / 参数预校验</span><span class="en"> crawl: select_paths filters children only (seed always crawled) · hosted: timeouts return structured JSON-RPC (no bare 504) · scrape: op/param pre-flight</span></li>
-        <li><span class="zh">SDK langchain-novada 0.1.1:sync get_tools() 在事件循环里不再崩</span><span class="en"> SDK langchain-novada 0.1.1: sync get_tools() no longer crashes inside a running event loop</span></li>
+        <li>outputSchema/structuredContent contract on search/extract/map/verify.</li>
+        <li><code>novada_scraper_status</code> / <code>novada_scraper_result</code>: propagation-aware <code>not_found</code> (checks task existence on the primary <code>!downloadUrl</code> branch + code 10000).</li>
       </ul>
-      <div class="note"><span class="zh">实测 QA(6 个 tester 用真实 key 实打)发现 22 项 → 本批修 17,零回归(38 失败 / 815 通过,优于基线)。独立安全 + 正确性复审确认 #2 不再泄漏。</span><span class="en">Live QA (6 testers, real key) found 22 issues → 17 fixed here, zero regressions (38 failed / 815 passed, better than baseline). Independent security + correctness review confirmed #2 no longer leaks.</span></div>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- v0.8.7 SECURITY + PERF — 2026-06-30                         -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left: 4px solid var(--red);">
-    <summary>
-      <span class="date">2026-06-30</span>
-      <span class="tag tag-fix"><span class="zh">安全 + 性能</span><span class="en">Security + Perf</span></span>
-      <span>
-        <span class="zh">v0.8.7 — 审计批:ReDoS + 托管鉴权/配额 + 依赖 CVE + 性能 + discover</span>
-        <span class="en">v0.8.7 — audit batch: ReDoS + hosted auth/quota + dep CVEs + perf + discover</span>
-      </span>
-      <span class="chip" style="background:var(--red-light);color:var(--red);">v0.8.7</span>
-    </summary>
-    <div class="body">
+      <h4>Improved (NOV-668–672)</h4>
       <ul>
-        <li><b>NOV-570</b> <span class="zh">[P0] 消灭 </span><code>compilePatterns</code> <span class="zh">的 ReDoS —— 用户路径 pattern 改线性时间 DP glob 匹配器(彻底去回溯正则;1000字符/50条上限)</span><span class="en"> [P0] ReDoS in <code>compilePatterns</code> killed — user path patterns now use a linear-time DP glob matcher (no backtracking regex; 1000-char / 50-pattern caps)</span></li>
-        <li><b>NOV-573</b> <span class="zh">托管鉴权/配额加固:API key 作 KV key 前 SHA-256 哈希、原子 incr(无 TOCTOU)、可信 IP、鉴权先于任何 KV 读写</span><span class="en"> Hosted auth/quota hardened: SHA-256-hash the key before any KV-key use, atomic incr (no TOCTOU), trusted IP, auth-before-KV</span></li>
-        <li><b>NOV-576</b> <span class="zh">依赖 CVE:form-data ^4.0.6(CRLF)+ undici ^7.28.0(SOCKS5 / WS-DoS)两仓 overrides 清除</span><span class="en"> Dep CVEs: form-data ^4.0.6 (CRLF) + undici ^7.28.0 (SOCKS5 / WS-DoS) cleared via overrides in both repos</span></li>
-        <li><b>NOV-577</b> <span class="zh">性能:每请求只解析一次 cheerio、字段单遍收集、重依赖惰性导入(冷启动更快)</span><span class="en"> Perf: cheerio parsed once per request, single-pass field collection, lazy heavy imports (faster cold start)</span></li>
-        <li><b>NOV-575</b> <span class="zh">discover 目录从工具注册表派生(消除幽灵/遗漏)+ 防漂移测试</span><span class="en"> discover catalog derived from the tool registry (kills ghosts/omissions) + drift test</span></li>
-        <li><b>NOV-578 / NOV-574</b> <span class="zh">托管失败调用退还配额、正文剥离不再误删内容、匹配器加界;补 v0.8.5 两个回归的测试</span><span class="en"> Hosted refund on failed calls, boilerplate strip no longer deletes content, bounded matchers; regression tests for the two v0.8.5 bugs</span></li>
+        <li><b>Kufer/webbasys availability</b>: detects CSS-sprite course status (skips <code>&lt;a&gt;</code> link text; keys on a recognized status keyword) — no more false "available" on <code>ausgebucht</code> courses.</li>
+        <li><b>German label-value tables</b>: 50-entry <code>GERMAN_LABEL_MAP</code> wired into infobox + label-value row extraction (Beginn/Status/Anmeldeschluss/…); table cell cap 200, <code>&lt;dl&gt;</code> cap 80.</li>
+        <li>Batch <code>novada_extract</code> returns a compact inline summary; <code>truncatePreservingTable</code> keeps bottom-of-page tables intact; contextual <code>agent_instruction</code>.</li>
       </ul>
-      <div class="note"><span class="zh">独立安全 + 正确性复审抓到 2 个 HIGH(误删正文 / browser 定时器泄漏崩溃)已修。npm + 托管 0.8.7-hosted 均已上线并验证。</span><span class="en">An independent security + correctness review caught 2 HIGH issues (content over-stripping / browser timer-leak crash) — both fixed. npm + hosted 0.8.7-hosted both live + verified.</span></div>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- v0.8.6 PATCH — 2026-06-29                                  -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left: 4px solid var(--blue);">
-    <summary>
-      <span class="date">2026-06-29</span>
-      <span class="tag tag-fix"><span class="zh">修复</span><span class="en">Patch</span></span>
-      <span>
-        <span class="zh">v0.8.6 — 审计修复:托管错误质量 + v0.8.5 回归 + serverless 守卫</span>
-        <span class="en">v0.8.6 — audit fixes: hosted error-quality + v0.8.5 regressions + serverless guard</span>
-      </span>
-      <span class="chip" style="background:var(--blue-light);color:var(--blue);">v0.8.6</span>
-    </summary>
-    <div class="body">
+      <h4>Fixed (FIX-5)</h4>
       <ul>
-        <li><b>NOV-571</b> <span class="zh">托管端错误现在保留 </span><code>agent_instruction</code><span class="zh">(之前付费端点丢弃了所有定制错误指引)</span><span class="en"> Hosted errors now preserve <code>agent_instruction</code> (the paid endpoint was dropping all tailored guidance)</span></li>
-        <li><b>NOV-574</b> <span class="zh">修两个 v0.8.5 回归:</span><code>detectIntent</code> <span class="zh">社交词子串误判 + </span><code>STAT_FIELD</code> <span class="zh">数字守卫(要求值"是"数字,而非含数字的散文)</span><span class="en"> Two v0.8.5 regressions: detectIntent social substring mis-match + STAT_FIELD guard (value must BE a number, not prose containing one)</span></li>
-        <li><span class="zh">源码 </span><code>output.ts</code> <span class="zh">加 serverless 守卫 — 托管 re-vendor 不再需要手动 stub</span><span class="en"> output.ts serverless guard in source — hosted re-vendor no longer needs a manual stub</span></li>
-        <li><span class="zh">安全:从托管 vendor 移除 4 个未接线的账户管理工具(capture_apikey/reset 等)</span><span class="en"> Security: removed 4 unwired account-mgmt tools (capture_apikey/reset etc.) from the hosted vendor</span></li>
+        <li><code>novada_health</code> / <code>novada_health_all</code>: env vars set-but-unprobed now render <b>"configured (not verified)"</b> (<code>configured_unverified</code> status) instead of a misleading <b>"active"</b>. Env-absent still shows "not configured".</li>
       </ul>
-      <div class="note"><span class="zh">9 项审计发现已归档为 NOV-570…578(本次发 P0 + 回归,其余进 backlog)。</span><span class="en">9 audit findings filed as NOV-570…578 (this release ships the P0s + regressions; rest backlogged).</span></div>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left: 4px solid var(--green);">
-    <summary>
-      <span class="date">2026-06-29</span>
-      <span class="tag tag-feat">
-        <span class="zh">优化发布</span><span class="en">Optimization</span>
-      </span>
-      <span>
-        <span class="zh">v0.8.5 — 6 项实测驱动的优化(批量 / 字段 / 质量 / 搜索 / 整站复制)</span>
-        <span class="en">v0.8.5 — 6 evidence-driven fixes (batch / fields / quality / search / site-copy)</span>
-      </span>
-      <span class="chip">v0.8.5</span>
-    </summary>
-    <div class="body">
-      <div class="note">
-        <b><span class="zh">由来：</span><span class="en">Origin:</span></b>
-        <span class="zh">用真实买家任务(文档摄取、股票数据、竞品抓取)dogfood Novada MCP,发现 6 个问题(NOV-563…568)。多 agent 实现 + 3 轮 QA 循环 + 独立对抗式复审,全部已验证。</span>
-        <span class="en">Surfaced by dogfooding Novada MCP on real buyer tasks (docs ingestion, stock data, competitor scraping) — 6 issues (NOV-563…568). Multi-agent implementation + 3 QA loops + an independent adversarial review, all verified.</span>
-      </div>
-      <h3><span class="zh">前后对比</span><span class="en">Before → After</span></h3>
-      <table>
-        <tr><th><span class="zh">场景</span><span class="en">Scenario</span></th><th>Before</th><th>After</th></tr>
-        <tr><td><span class="zh">批量提取 8 URL @ max_chars=20k</span><span class="en">Batch 8 URLs @ max_chars=20k</span></td><td>~3,125</td><td style="color:var(--green);font-weight:700;">~21,088</td></tr>
-        <tr><td><span class="zh">金融字段填充(MRVL,5 项)</span><span class="en">Finance fields (MRVL, 5)</span></td><td>0/5</td><td style="color:var(--green);font-weight:700;">4/5</td></tr>
-        <tr><td><span class="zh">文档页 content_ok / 分数</span><span class="en">Docs content_ok / score</span></td><td>false / 30</td><td style="color:var(--green);font-weight:700;">true / 45</td></tr>
-        <tr><td><span class="zh">整站文档复制(≥30 页)</span><span class="en">Site-copy (≥30 pages)</span></td><td><span class="zh">做不到</span><span class="en">impossible</span></td><td style="color:var(--green);font-weight:700;"><span class="zh">全量 + manifest</span><span class="en">full + manifest</span></td></tr>
-        <tr><td><span class="zh">搜索权威性(top-5)*</span><span class="en">Search authority (top-5)*</span></td><td>0.40</td><td style="color:var(--green);font-weight:700;">0.60</td></tr>
-      </table>
-      <h3><span class="zh">改了什么</span><span class="en">What changed</span></h3>
+      <h4>Process</h4>
       <ul>
-        <li><b>NOV-563/568</b> <code>extract.ts</code>: <span class="zh">删除批量二次截断,每页按 max_chars,加 returned_chars/content_truncated + 文件路径置顶</span><span class="en">drop batch re-truncation, honor max_chars per page, add returned_chars/content_truncated + file path on top</span></li>
-        <li><b>NOV-564</b> <code>fields.ts</code>: <span class="zh">新增行标签表格 / hero 数值块 / 容忍正则解析层 + 别名映射,不再静默返回 null</span><span class="en">row-label table / hero-block / tolerant-regex parsers + alias map; no more silent null</span></li>
-        <li><b>NOV-565</b> <code>html.ts</code>: <span class="zh">拆分 content_present 与 cleanliness_score;content_ok 跟实质内容走,不再被低分否决</span><span class="en">split content_present vs cleanliness_score; content_ok tracks presence, not the score gate</span></li>
-        <li><b>NOV-567</b> <code>rerank.ts</code> + <code>authority.ts</code>: <span class="zh">域名权威性信号 + 意图识别 + source_type 过滤(压制社媒/PR)</span><span class="en">domain-authority signal + intent gating + source_type filter (de-emphasize social/PR)</span></li>
-        <li><b>NOV-566</b> <span class="zh">新工具</span><span class="en">new tool</span> <code>novada_site_copy</code>: <span class="zh">llms.txt/sitemap 探测 → 流式落盘 + manifest,上限 20→1000</span><span class="en">llms.txt/sitemap detect → stream-to-disk + manifest, cap 20→1000</span></li>
-        <li><span class="zh">安全:新 </span><span class="en">Security: new </span><code>ssrf.ts</code> (<span class="zh">每个 fetch/重定向/DNS 重绑校验</span><span class="en">fetch/redirect/DNS-rebind guards</span>), <span class="zh">路径沙箱 + schema 防 ReDoS</span><span class="en">path sandbox + ReDoS schema bounds</span></li>
-      </ul>
-      <div class="note">
-        <b><span class="zh">质量：</span><span class="en">Quality:</span></b>
-        <span class="zh">32 文件,+3,708 / −396 行,7 新文件,+136 测试。构建通过;修复测试 201/201;全量 50 失败 / 726 通过(基线 59/579),0 新回归。独立复审捕获 2 HIGH + 3 MED 已修。* 搜索 0.40→0.60 为复现实测值,机制有测试覆盖、该比例非测试断言。</span>
-        <span class="en">32 files, +3,708 / −396, 7 new files, +136 tests. Build green; fix-tests 201/201; full suite 50 fail / 726 pass (baseline 59/579), 0 new regressions. Independent review caught 2 HIGH + 3 MED, fixed. * search 0.40→0.60 is an authored reproduction; the mechanism is test-backed, the exact ratio is not a test assertion.</span>
-      </div>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- HOSTED VERSION SYNC — 2026-06-27                           -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left: 4px solid var(--purple);">
-    <summary>
-      <span class="date">2026-06-27</span>
-      <span class="tag tag-sync">
-        <span class="zh">同步</span><span class="en">Sync</span>
-      </span>
-      <span>
-        <span class="zh">托管端版本号脱节修复 — serverInfo 现在真实且自动派生</span>
-        <span class="en">Hosted version desync fixed — serverInfo now truthful &amp; auto-derived</span>
-      </span>
-      <span class="chip" style="background:var(--purple-light);color:var(--purple);">0.8.4.t1</span>
-    </summary>
-    <div class="body">
-      <div class="note warn">
-        <b><span class="zh">问题：</span><span class="en">Problem:</span></b>
-        <span class="zh">线上 mcp.novada.com 的 <code>serverInfo.version</code> 报告 <code>0.8.2-hosted</code>，而 npm 包与托管 vendor 早已是 <code>0.8.4</code> —— 落后两个版本。外部用户 / MCP 目录看到的是"已废弃"的假象。</span>
-        <span class="en">Live mcp.novada.com reported <code>serverInfo.version = 0.8.2-hosted</code> while npm + the vendored copy were already <code>0.8.4</code> — two releases behind. External users / MCP registries saw a stale, abandoned-looking version.</span>
-      </div>
-      <h3><span class="zh">根因</span><span class="en">Root cause</span></h3>
-      <ul>
-        <li><span class="zh">版本号在 </span><code>vercel/api/mcp.ts</code><span class="zh"> 中写死成字符串，多次 vendor 同步从未更新；休眠的 worker 更旧（</span><code>0.7.13-hosted</code><span class="zh">）。</span><span class="en"> Version was hardcoded as a literal in <code>vercel/api/mcp.ts</code>, never bumped across vendor syncs; the dormant worker was even older (<code>0.7.13-hosted</code>).</span></li>
-      </ul>
-      <h3><span class="zh">修复</span><span class="en">Fix</span></h3>
-      <ul>
-        <li><span class="zh">线上版本号改为<b>自动派生</b>：npm 版本部分始终读取 vendored </span><code>package.json</code><span class="zh">（绝不写死），再加"仅服务端"构建标签 </span><code>t1</code><span class="zh"> → </span><code>0.8.4.t1-hosted</code><span class="zh">。从此不可能再漂移。</span><span class="en"> Live version now <b>auto-derives</b>: the npm part always reads the vendored <code>package.json</code> (never hardcoded) + a server-only build tag <code>t1</code> → <code>0.8.4.t1-hosted</code>. Drift is now structurally impossible.</span></li>
-        <li><span class="zh">休眠 worker 标签校正并标注"未部署"。</span><span class="en">Dormant worker label corrected and marked not-deployed.</span></li>
-      </ul>
-      <table>
-        <tr><th>Surface</th><th>Version</th><th>Loop 1</th></tr>
-        <tr><td>npm <code>novada-mcp</code></td><td>0.8.4</td><td>—</td></tr>
-        <tr><td><span class="zh">线上 </span><span class="en">Live </span>mcp.novada.com</td><td style="color:var(--green);font-weight:700;">0.8.4.t1-hosted ✅</td><td>—</td></tr>
-      </table>
-      <div class="note">
-        <b><span class="zh">说明：</span><span class="en">Note:</span></b>
-        <span class="zh">此修复只在服务端仓库（novada-mcpserver），npm 包未改动，故不发新 npm 版本。Loop 1（内容质量 / JS 延迟 / 字段解析）仍待随 v0.8.5 上线。</span>
-        <span class="en">This fix is server-side only (novada-mcpserver); the npm package is unchanged, so no new npm release. Loop 1 (content quality / JS latency / field parsers) still pending with v0.8.5.</span>
-      </div>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- MASSIVE SPRINT — 2026-06-24                                -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left: 4px solid var(--green);">
-    <summary>
-      <span class="date">2026-06-24</span>
-      <span class="tag feat">
-        <span class="zh">重大冲刺</span><span class="en">Massive Sprint</span>
-      </span>
-      <span>
-        <span class="zh">30+ bug fixes · 全页提取 · API 合规 · 14 章文档 · 输出管道</span>
-        <span class="en">30+ bug fixes · full-page extraction · API compliance · 14-chapter docs · output pipeline</span>
-      </span>
-    </summary>
-    <div class="body">
-      <h3><span class="zh">三核心指标提升</span><span class="en">3 Core Metrics Improved</span></h3>
-      <ul>
-        <li><b>P50 <span class="zh">延迟</span><span class="en">Latency</span>:</b> 7,102ms → 738ms (↑9.6×) — 300ms pre-wait + 60s cache + keepAlive</li>
-        <li><b><span class="zh">字符数</span><span class="en">Characters</span>:</b> 7,149 → 47,919 avg (↑14×) — <span class="zh">全页提取默认</span><span class="en">full-page extraction default</span>, <code>clean=true</code> <span class="zh">可选主内容</span><span class="en">for main-content mode</span></li>
-        <li><b><span class="zh">结构化数据</span><span class="en">Structured Data</span>:</b> 87.5% → 100% — <span class="zh">领先竞品 25pp</span><span class="en">beats competitors by 25pp</span></li>
-      </ul>
-
-      <h3>Round 1 — P0/P1 Fixes (8 <span class="zh">并行 worker</span><span class="en">parallel workers</span>)</h3>
-      <ul>
-        <li><code>search.ts</code>: <span class="zh">过滤参数转发（原静默丢弃）+ 300ms pre-wait + 60s dedup cache</span><span class="en">filter params forwarded (were silently dropped) + 300ms pre-wait + 60s dedup cache</span></li>
-        <li><code>types.ts</code>: <span class="zh">删除 novada_unblock 3 个 ghost params</span><span class="en">removed 3 ghost params from novada_unblock</span></li>
-        <li><span class="zh">所有 "129 platforms" → "13 platforms (~78 operations)"</span><span class="en">all "129 platforms" → "13 platforms (~78 operations)"</span></li>
-        <li><code>proxy_static/dedicated</code>: <span class="zh">密码明文 → 遮掩</span><span class="en">plaintext password → masked</span></li>
-        <li><code>router.ts</code>: routeFetch <span class="zh">加 DOMAIN_REGISTRY 短路 + 3 处错误吞噬修复</span><span class="en">DOMAIN_REGISTRY shortcut + 3 swallowed errors surfaced</span></li>
-        <li><code>html.ts</code>: 7 <span class="zh">质量 fix（boilerplate、ol 编号、code lang、img markdown、转义）</span><span class="en">quality fixes (boilerplate, ol numbering, code lang, img markdown, escaping)</span></li>
-        <li><code>browser.ts</code>: navigator.webdriver=false + CF challenge wait</li>
-        <li><code>http.ts</code>: full jitter + keepAlive + Web Unblocker Content-Type fix</li>
-      </ul>
-
-      <h3>Round 2 — <span class="zh">字符数 + UA + 统一 Key</span><span class="en">Characters + UA + Unified Key</span></h3>
-      <ul>
-        <li><span class="zh">全页提取默认（7K→102K chars），<code>clean=true</code> 可选主内容模式</span><span class="en">Full-page extraction default (7K→102K chars), <code>clean=true</code> for main-content mode</span></li>
-        <li>Chrome User-Agent <span class="zh">轮换（3 种 UA）</span><span class="en">rotation (3 UAs)</span></li>
-        <li><span class="zh">所有工具描述更新：ONE KEY covers everything</span><span class="en">All tool descriptions updated: ONE KEY covers everything</span></li>
-      </ul>
-
-      <h3>Round 3 — API <span class="zh">合规（10 个验证 agent 发现 18 个 bug）</span><span class="en">Compliance (10 verify agents found 18 bugs)</span></h3>
-      <ul>
-        <li>Scraper API download <span class="zh">完全重写：COS 2 步下载</span><span class="en">fully rewritten: COS 2-step download</span></li>
-        <li>Mobile balance/traffic URL <span class="zh">修正</span><span class="en">fixed</span></li>
-        <li><span class="zh">错误码 50001/50002/50003 处理</span><span class="en">Error codes 50001/50002/50003 handled</span></li>
-        <li>ip_whitelist <span class="zh">注册到 index.ts（原死代码）</span><span class="en">registered in index.ts (was dead code)</span></li>
-      </ul>
-
-      <h3><span class="zh">输出管道（新功能）</span><span class="en">Output Pipeline (new feature)</span></h3>
-      <ul>
-        <li><span class="zh">所有工具自动保存到</span><span class="en">All tools auto-save to</span> <code>~/Downloads/novada-mcp/YYYY-MM-DD/</code></li>
-        <li><span class="zh">支持 JSON、CSV、Markdown 格式</span><span class="en">JSON, CSV, Markdown formats supported</span></li>
-      </ul>
-
-      <h3><span class="zh">文档（14 章，167KB）</span><span class="en">Documentation (14 chapters, 167KB)</span></h3>
-      <ul>
-        <li>100% <span class="zh">覆盖 Firecrawl 文档结构 + 3 个独家章节</span><span class="en">covers Firecrawl doc structure + 3 exclusive chapters</span></li>
-        <li><span class="zh">产出</span><span class="en">Output</span>: <code>docs/novada-mcp-documentation.md</code> + <code>docs/llms.txt</code></li>
-      </ul>
-
-      <h3><span class="zh">竞品分析（20 个 agent 并行）</span><span class="en">Competitive Analysis (20 parallel agents)</span></h3>
-      <ul>
-        <li>Firecrawl <span class="zh">"100% 反爬"被证伪：Proxyway 独立测试 33.69%（倒数第一）</span><span class="en">"100% anti-bot" debunked: Proxyway test 33.69% (last of 10)</span></li>
-        <li>npm <span class="zh">下载 1,253 vs Firecrawl 494K — 分发是第一问题</span><span class="en">downloads 1,253 vs Firecrawl 494K — distribution is #1 problem</span></li>
-        <li><span class="zh">我们的 agent_instruction 错误格式是业界最优</span><span class="en">Our agent_instruction error format is best-in-class</span></li>
+        <li>Fix / verify / orchestrator separation (never self-verify); 50 Sonnet-4.6 red-team agents → 165 findings → 2 taxonomies; 3 fix groups × 3 independent live-verify groups with real credentials.</li>
       </ul>
     </div>
   </details>
 
-  <!-- ============================================================ -->
-  <!-- AGENT EXPERIENCE + PROXY UNIFICATION — 2026-06-23          -->
-  <!-- ============================================================ -->
-  <details class="card" style="border-left:4px solid var(--purple);">
-    <summary>
-      <span class="tag tag-feat">AGENT UX</span>
-      <span>
-        <span class="zh">2026-06-23 — 统一 API Key 验证 · 代理自动注入 · 10 轮代理体验测试 · 5 个 prompt 修复</span>
-        <span class="en">2026-06-23 — Unified API Key verification · Proxy auto-provision · 10-round agent UX testing · 5 prompt fixes</span>
-      </span>
-      <span class="chip" style="background:var(--purple-light);color:var(--purple);">INC-144</span>
-    </summary>
-    <div class="body">
-
-      <p><b><span class="zh">统一 API Key 验证结论：</span><span class="en">Unified API Key verification:</span></b></p>
-      <div class="note" style="background:var(--green-light);border-left:3px solid var(--green);">
-        <b><span class="zh">✅ 确认：NOVADA_API_KEY 是统一 key，覆盖所有产品</span><span class="en">✅ Confirmed: NOVADA_API_KEY is the unified key covering all products</span></b><br>
-        <span class="zh">Search · Extract · Research · Crawl · Scrape · Unblock（fallback）· Proxy 自动注入（via /v1/proxy_account/list Bearer auth）· Developer API — 全部同一个 key。</span>
-        <span class="en">Search · Extract · Research · Crawl · Scrape · Unblock (fallback) · Proxy auto-provision (via /v1/proxy_account/list Bearer auth) · Developer API — all one key.</span>
-      </div>
-
-      <p><b><span class="zh">代理自动注入测试（A/B/C 三方案）：</span><span class="en">Proxy auto-provision test (Options A/B/C):</span></b></p>
-      <table>
-        <tr><th><span class="zh">方案</span><span class="en">Option</span></th><th><span class="zh">结果</span><span class="en">Result</span></th><th><span class="zh">说明</span><span class="en">Notes</span></th></tr>
-        <tr><td>A 直接用 key 做密码</td><td style="color:var(--red);">❌ 407</td><td><span class="zh">代理层需要子账号 user:pass</span><span class="en">Proxy requires sub-account credentials</span></td></tr>
-        <tr><td><b>B 自动拉取子账号</b></td><td style="color:var(--green);font-weight:700;">✅ 已实现</td><td><span class="zh">startup 调 /v1/proxy_account/list，注入 process.env，15行代码，6h 缓存</span><span class="en">Startup fetches /v1/proxy_account/list, injects to process.env, 15 lines, 6h cache</span></td></tr>
-        <tr><td>C 完全零配置</td><td style="color:var(--accent);">🟡 接近</td><td><span class="zh">唯一障碍：NOVADA_PROXY_ENDPOINT 无法自动获取 — 待 Yixuan 确认端点是否共用</span><span class="en">Only blocker: NOVADA_PROXY_ENDPOINT not API-derivable — pending Yixuan confirmation</span></td></tr>
-      </table>
-
-      <p><b><span class="zh">10 轮代理体验验证发现 + 修复：</span><span class="en">10-round agent UX verification findings + fixes:</span></b></p>
-      <table>
-        <tr><th><span class="zh">问题</span><span class="en">Issue</span></th><th><span class="zh">修复</span><span class="en">Fix</span></th><th>tsc</th></tr>
-        <tr><td><span class="zh">7个 proxy 工具描述说 "需要 USER/PASS"（矛盾）</span><span class="en">7 proxy tools said "Requires USER/PASS" (contradicts unified key)</span></td><td><code>index.ts:231-310</code> <span class="zh">改为自动注入说明</span><span class="en">changed to auto-fetch wording</span></td><td>✅</td></tr>
-        <tr><td><span class="zh">setup 实际输出无统一 key 说明</span><span class="en">setup() output had no unified key mention</span></td><td><code>setup.ts:51-52</code> <span class="zh">加入统一 key + 自动注入说明</span><span class="en">added unified key + auto-provision note</span></td><td>✅</td></tr>
-        <tr><td><span class="zh">health.ts 引导 Agent 去网站手动配置代理</span><span class="en">health.ts misdirected agents to website for manual proxy creds</span></td><td><code>health.ts:209</code> <span class="zh">改为自动注入路径</span><span class="en">updated to auto-provision path</span></td><td>✅</td></tr>
-        <tr><td><span class="zh">setup.ts:61 仍有 USER/PASS/ENDPOINT 标签</span><span class="en">setup.ts:61 still listed USER/PASS/ENDPOINT</span></td><td><code>setup.ts:61</code> <span class="zh">改为 ENDPOINT only + 自动注入</span><span class="en">ENDPOINT only + auto-provision</span></td><td>✅</td></tr>
-        <tr><td><span class="zh">低质量结果（quality:5）无 agent_instruction</span><span class="en">Low-quality result (quality:5) had no agent_instruction</span></td><td><code>extract.ts</code> <span class="zh">static+低质量时加三步升级路径</span><span class="en">added 3-step escalation when static+low quality</span></td><td>✅</td></tr>
-        <tr><td><span class="zh">DuckDuckGo "3x faster" 描述是假的</span><span class="en">DuckDuckGo "3x faster" claim was false</span></td><td><code>index.ts:154</code> <span class="zh">修正描述</span><span class="en">corrected description</span></td><td>✅</td></tr>
-      </table>
-
-      <p><b><span class="zh">10 轮验证最终评分：</span><span class="en">10-round verification final scores:</span></b></p>
-      <table>
-        <tr><th><span class="zh">维度</span><span class="en">Dimension</span></th><th><span class="zh">修复前</span><span class="en">Before</span></th><th><span class="zh">修复后</span><span class="en">After</span></th></tr>
-        <tr><td><span class="zh">统一 key 理解</span><span class="en">Unified key understanding</span></td><td>7/10</td><td style="color:var(--green);">9/10</td></tr>
-        <tr><td><span class="zh">代理自动注入</span><span class="en">Proxy auto-provisioning</span></td><td>4/10</td><td style="color:var(--green);">8/10</td></tr>
-        <tr><td><span class="zh">低质量结果处理</span><span class="en">Low-quality result handling</span></td><td>2/10</td><td style="color:var(--green);">7/10</td></tr>
-        <tr><td><span class="zh">整体 Agent 体验</span><span class="en">Overall agent experience</span></td><td>5/10</td><td style="color:var(--green);">8/10</td></tr>
-      </table>
-
-      <div class="note warn">
-        <b><span class="zh">中文网站 Web Unblocker 503 — 平台层问题：</span><span class="en">Chinese site Web Unblocker 503 — platform-level issue:</span></b>
-        <span class="zh">豆瓣、36Kr、掘金、CSDN 等中文内容站全部返回 "Faulted After Too Many Retries"。确认不是 key 问题（正确 key 重试结果相同）。根因：Web Unblocker 无中国大陆出口节点。需 Yixuan 决策：是否增加 CN 节点？</span>
-        <span class="en">Douban, 36Kr, Juejin, CSDN all return "Faulted After Too Many Retries". Confirmed not a key issue (retried with correct key, same result). Root cause: Web Unblocker has no CN exit nodes. Platform decision needed from Yixuan.</span>
-      </div>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- FINAL 100-URL BENCHMARK — 2026-06-22 ALL FIXES APPLIED     -->
-  <!-- ============================================================ -->
-  <details class="card" open style="border-left:4px solid var(--blue);">
-    <summary>
-      <span class="tag tag-verify">BENCHMARK</span>
-      <span>
-        <span class="zh">2026-06-22 最终基准（100 URL，全修复版）— Novada 82.5% 并列 Tavily · JS-Heavy 94% 胜出</span>
-        <span class="en">2026-06-22 Final Benchmark (100 URLs, all fixes) — Novada 82.5% ties Tavily · JS-Heavy 94% wins</span>
-      </span>
-      <span class="chip" style="background:var(--blue-light);color:var(--blue);">600 reqs</span>
-    </summary>
-    <div class="body">
-      <div class="note">
-        <b><span class="zh">测试规格：</span><span class="en">Test spec:</span></b>
-        <span class="zh">50 URL/类别 × 4 类别 × 3 provider = 600 次请求 · 超时 30s · 本地 SDK（含所有今日修复）· 2026-06-22 21:xx UTC</span>
-        <span class="en">50 URLs/category × 4 categories × 3 providers = 600 requests · 30s timeout · local SDK (all today's fixes applied) · 2026-06-22</span>
-      </div>
-
-      <p><b><span class="zh">整体结果：</span><span class="en">Overall:</span></b></p>
-      <table>
-        <tr><th></th><th>Novada</th><th>Firecrawl</th><th>Tavily</th></tr>
-        <tr><td><b><span class="zh">成功率</span><span class="en">Success</span></b></td><td style="color:var(--green);font-weight:700;">82.5% ✅</td><td>91.0%</td><td>82.5% ✅</td></tr>
-        <tr><td><b>P50 <span class="zh">延迟</span><span class="en">latency</span></b></td><td>8114ms</td><td style="color:var(--green);">693ms</td><td style="color:var(--green);">389ms</td></tr>
-        <tr><td><b>P95</b></td><td>31875ms</td><td>1549ms</td><td>752ms</td></tr>
-        <tr><td><b><span class="zh">质量评分</span><span class="en">Quality</span></b></td><td>7.6/10</td><td>8.9/10</td><td>8.6/10</td></tr>
-        <tr><td><b><span class="zh">平均字符</span><span class="en">Avg chars</span></b></td><td>7,361</td><td>49,252</td><td>25,956</td></tr>
-        <tr><td><b>$/1k</b></td><td style="color:var(--green);font-weight:700;">$1.00</td><td>$4.00</td><td>$5.00</td></tr>
-      </table>
-
-      <p><b><span class="zh">分类详情：</span><span class="en">Per category:</span></b></p>
-      <table>
-        <tr><th><span class="zh">类别</span><span class="en">Category</span></th><th>Novada</th><th>Firecrawl</th><th>Tavily</th><th><span class="zh">胜出</span><span class="en">Winner</span></th></tr>
-        <tr><td>Static</td><td>84%</td><td>96%</td><td>94%</td><td>Firecrawl</td></tr>
-        <tr><td><b>JS-Heavy SPA</b></td><td style="color:var(--green);font-weight:700;">94%</td><td>98%</td><td>86%</td><td style="color:var(--green);">Novada &gt; Tavily ✅</td></tr>
-        <tr><td>Anti-Bot</td><td>74%</td><td>80%</td><td>76%</td><td>Firecrawl（差距缩小）</td></tr>
-        <tr><td><b>Structured</b></td><td style="color:var(--green);font-weight:700;">78%</td><td>90%</td><td>74%</td><td style="color:var(--green);">Novada &gt; Tavily ✅</td></tr>
-      </table>
-
-      <div class="note" style="background:var(--green-light);border-left:3px solid var(--green);">
-        <b><span class="zh">✅ 我们的优势：</span><span class="en">✅ Our wins:</span></b>
-        <span class="zh">整体并列 Tavily（82.5%）· JS-Heavy 胜 Tavily（94% vs 86%）· Structured 胜 Tavily（78% vs 74%）· Reddit 100%（Firecrawl 0%）· 成本 4-5× 更便宜</span>
-        <span class="en">Ties Tavily overall (82.5%) · JS-Heavy beats Tavily (94% vs 86%) · Structured beats Tavily (78% vs 74%) · Reddit 100% (Firecrawl 0%) · 4-5× cheaper</span>
-      </div>
-
-      <div class="note">
-        <b><span class="zh">📊 关于字符数（7,361 vs 49,252）：</span><span class="en">📊 On character count (7,361 vs 49,252):</span></b>
-        <span class="zh">Novada 返回主内容（去除导航/页脚/脚本/广告）。Firecrawl/Tavily 返回整页原始内容（含所有噪音）。对 AI Agent 来说：少而精优于多而杂——噪音消耗 Token 且干扰模型判断。真正的问题不是字符数少，而是质量评分 7.6/10（vs 8.9），说明部分站点主内容提取不完整。</span>
-        <span class="en">Novada returns main content only (no nav/footer/scripts/ads). Firecrawl/Tavily return full-page raw content (all boilerplate included). For AI agents: clean-but-less beats noisy-but-more — noise wastes tokens and confuses models. The real issue is quality score 7.6/10 (vs 8.9), meaning main content extraction is incomplete on some sites.</span>
-      </div>
-
-      <div class="note warn">
-        <b><span class="zh">🔍 延迟 8114ms 根因：Novada 平台问题（非 MCP 代码问题）：</span><span class="en">🔍 8114ms latency root cause: Novada platform issue (not MCP code):</span></b>
-        <span class="zh">Scraper API 采用任务轮询架构（submit→poll→download），后端处理本身需要 1.5-3s。MCP 代码层能优化的已全部完成（scraperSleep 退避、keepAlive）。剩余延迟需要 Novada 平台层提供同步 API（Option A/C，INC-143）。需与 Yixuan 讨论优先级。</span>
-        <span class="en">Scraper API uses task-polling architecture (submit→poll→download); backend processing takes 1.5-3s irreducibly. All MCP code optimizations done (scraperSleep backoff, keepAlive). Remaining latency requires Novada platform to provide a synchronous API (Option A/C, INC-143). Priority discussion needed with Yixuan.</span>
-      </div>
-
-      <p><span class="zh"><b>完整报告：</b> <code>docs/benchmark-report-2026-06-22.html</code>（双语，含根因分析、解决方案、行动计划）</span><span class="en"><b>Full report:</b> <code>docs/benchmark-report-2026-06-22.html</code> (bilingual, with root cause analysis, solutions, action plan)</span></p>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- ROUND TABLE + 4 FIXES + COMPLIANCE BENCHMARK — 2026-06-22  -->
-  <!-- ============================================================ -->
-  <details class="card" open style="border-left:4px solid var(--purple);">
-    <summary>
-      <span class="tag tag-fix">ROUNDTABLE</span>
-      <span>
-        <span class="zh">2026-06-22 — 10人圆桌 + 4个即时修复 + 合规基准测试 + 关键词搜索对比</span>
-        <span class="en">2026-06-22 — 10-Agent Roundtable + 4 Immediate Fixes + Compliant Benchmark + Search Comparison</span>
-      </span>
-      <span class="chip" style="background:var(--purple-light);color:var(--purple);">INC-140/141</span>
-    </summary>
-    <div class="body">
-
-      <p><b><span class="zh">架构圆桌（10个视角）：</span><span class="en">Architecture Roundtable (10 perspectives):</span></b></p>
-      <ul>
-        <li><span class="zh">7/10 认为 extract.ts 是可维护性风险（Extension Safety 3/10，Testability 4/10）</span><span class="en">7/10 rate extract.ts as a maintainability risk (Extension Safety 3/10, Testability 4/10)</span></li>
-        <li><span class="zh">10/10 一致同意立即修复 MT-1（proxyTier 在 render 路径被静默丢弃）</span><span class="en">10/10 unanimously: fix MT-1 immediately (proxyTier silently dropped on render path)</span></li>
-        <li><span class="zh">发现两条独立升级链并存（router.ts + extract.ts L289-335 和 L417-483），参数传播到处丢失</span><span class="en">Two independent escalation chains co-exist; parameter propagation failures are structural</span></li>
-        <li><span class="zh">行业模式：Scrapy/Crawlee 收敛于 Context 对象 + 中间件链；基础设施负责升级决策，handler 不接触传输层</span><span class="en">Industry pattern: Scrapy/Crawlee converge on Context object + middleware chain; infra owns escalation</span></li>
-      </ul>
-
-      <p><b><span class="zh">4个即时修复（并行 4 个 Loop，tsc 全部 clean）：</span><span class="en">4 Immediate Fixes (4 parallel loops, all tsc clean):</span></b></p>
-      <table>
-        <tr><th>Fix</th><th><span class="zh">内容</span><span class="en">Change</span></th><th><span class="zh">文件</span><span class="en">Files</span></th></tr>
-        <tr><td><b>Loop 1</b></td><td><span class="zh"><code>wait_ms: 0</code> 假值 guard 修复：<code>&amp;&amp;</code> → <code>!== undefined &amp;&amp; >= 0</code></span><span class="en"><code>wait_ms: 0</code> falsy guard fix in browser.ts</span></td><td><code>browser.ts</code></td></tr>
-        <tr><td><b>Loop 2</b></td><td><span class="zh">电路断路器 key 改为 <code>${tier}:${endpoint}</code>，住宅/数据中心彻底隔离</span><span class="en">Circuit breaker keyed by <code>${tier}:${endpoint}</code> — tier isolation</span></td><td><code>http.ts</code></td></tr>
-        <tr><td><b>Loop 3</b></td><td><span class="zh">启动时校验：24 个住宅代理域名，env var 缺失时 stderr 警告</span><span class="en">Startup warning when 24 residential-tier domains configured but env vars absent</span></td><td><code>domains.ts</code> + <code>index.ts</code></td></tr>
-        <tr><td><b>Loop 4</b></td><td><span class="zh">Static 超时 30s→15s，加 45s 总上限 Promise.race（消灭 127s 超时案例）</span><span class="en">Static timeout 30s→15s, 45s total ceiling via Promise.race (eliminates 127s hang)</span></td><td><code>config.ts</code> + <code>extract.ts</code></td></tr>
-      </table>
-
-      <p><b><span class="zh">合规 URL 基准（GitHub = 0% 根因确认）：</span><span class="en">Compliant URL Benchmark (GitHub 0% root cause confirmed):</span></b></p>
-      <table>
-        <tr><th><span class="zh">类别</span><span class="en">Category</span></th><th>Novada</th><th>Firecrawl</th><th>Tavily</th><th><span class="zh">说明</span><span class="en">Note</span></th></tr>
-        <tr><td>Static (Wiki/MDN)</td><td style="color:var(--green);font-weight:700;">100% ✅</td><td>100%</td><td>100%</td><td><span class="zh">P50 396ms，Novada 最快</span><span class="en">P50 396ms — Novada fastest</span></td></tr>
-        <tr><td>JS-Heavy SPAs</td><td>90%</td><td>100%</td><td>90%</td><td><span class="zh">shadcn.ui.com 三家均失败</span><span class="en">shadcn.ui.com fails all providers</span></td></tr>
-        <tr><td><b>GitHub repos</b></td><td style="color:var(--red);font-weight:700;">0% ❌</td><td>100%</td><td>100%</td><td><span class="zh">代码 bug：强制 render 模式，GitHub 实为静态 HTML</span><span class="en">Code bug: forced render mode; GitHub is static HTML</span></td></tr>
-        <tr><td>Open APIs</td><td>70%</td><td>90%</td><td>60%</td><td><span class="zh">Novada 胜 Tavily；CoinDesk/SpaceX API 超时</span><span class="en">Novada beats Tavily; CoinDesk/SpaceX timeout</span></td></tr>
-      </table>
-      <div class="note warn">
-        <b><span class="zh">🔍 GitHub 0% 根因：</span><span class="en">🔍 GitHub 0% Root Cause:</span></b>
-        <span class="zh">基准测试将 GitHub 归类为 anti_bot → 强制 <code>render: "render"</code> → Web Unblocker 路由失败。但 GitHub 静态 HTML 实测 393KB、40+ 内容标记，完全不需要 JS 渲染。修复：在 <code>DOMAIN_REGISTRY</code> 添加 <code>github.com: { method: "static" }</code>，预计成功率 100%。工程量 &lt;1h。Linear: INC-141。</span><span class="en">Benchmark forces anti_bot category → <code>render: "render"</code> → Web Unblocker fails. But GitHub static HTML = 393KB with 40+ content signals — no JS needed. Fix: add <code>github.com: { method: "static" }</code> to DOMAIN_REGISTRY. &lt;1h. INC-141.</span>
-      </div>
-
-      <p><b><span class="zh">关键词搜索对比（24 关键词）：</span><span class="en">Keyword Search Comparison (24 keywords):</span></b></p>
-      <table>
-        <tr><th></th><th>Novada</th><th>Firecrawl</th><th>Tavily</th></tr>
-        <tr><td><b><span class="zh">成功率</span><span class="en">Success</span></b></td><td>91.7%</td><td>100%</td><td>100%</td></tr>
-        <tr><td><b>P50 <span class="zh">延迟</span><span class="en">latency</span></b></td><td style="color:var(--red);">1915ms</td><td>840ms</td><td>907ms</td></tr>
-        <tr><td><b><span class="zh">内容摘要</span><span class="en">Content snippets</span></b></td><td><span class="zh">无（仅 URL+标题）</span><span class="en">None (URL+title only)</span></td><td><span class="zh">Markdown（无内容）</span><span class="en">Markdown (no content)</span></td><td style="color:var(--green);">5.5K avg ✅</td></tr>
-        <tr><td><b><span class="zh">失败关键词</span><span class="en">Failed</span></b></td><td>2/24</td><td>0/24</td><td>0/24</td></tr>
-      </table>
-      <div class="note">
-        <b><span class="zh">🔍 搜索延迟 2× 差距根因：</span><span class="en">🔍 Search Latency 2× Root Cause:</span></b>
-        <span class="zh">Novada 走 Scraper API 任务轮询（submit→poll→poll→download ≈ 1000ms 固定开销）。Firecrawl/Tavily 走同步 API（1次 POST ≈ 200ms）。这是基础设施架构差距，代码层无法消除。短期代码优化（并行化 submit+首次轮询）可节省 ~200ms。根本解决需要 Novada 提供同步搜索端点。</span><span class="en">Novada uses Scraper API task polling (submit→poll→poll→download ≈ +1000ms fixed overhead). Firecrawl/Tavily use synchronous APIs (1 POST ≈ 200ms). This is an infrastructure architecture gap, not fixable in MCP code. Short-term: parallelize submit+first-poll to save ~200ms. Long-term: Novada synchronous search endpoint.</span>
-      </div>
-      <p><span class="zh"><b>搜索内容质量：</b>Tavily 提供内容摘要（avg 5.5K 字符/结果），让 AI Agent 不需要再次调用 extract 即可判断相关性。Firecrawl 返回格式化 markdown 但无实际内容。Novada 仅有 URL+标题。建议：在 <code>novadaSearch</code> 输出中暴露已有的 snippet/description 字段（数据有，未暴露）。Linear: INC-141。</span><span class="en"><b>Search content quality:</b> Tavily provides content summaries (avg 5.5K chars/result), letting agents assess relevance without an extra extract call. Firecrawl has formatted markdown but no content. Novada has URL+title only. Fix: expose existing snippet/description fields in <code>novadaSearch</code> output. INC-141.</span></p>
-    </div>
-  </details>
-
-  <!-- ============================================================ -->
-  <!-- BENCHMARK LOOP — 2026-06-22: 5-round Plywood OSS analysis  -->
-  <!-- ============================================================ -->
-  <details class="card" open style="border-left:4px solid var(--green);">
-    <summary>
-      <span class="tag tag-feat">BENCHMARK</span>
-      <span>
-        <span class="zh">2026-06-22 — 5轮 Plywood OSS 分析循环 · 成功率 70%→80% · Amazon 40%→70%</span>
-        <span class="en">2026-06-22 — 5-Round Plywood OSS Analysis Loop · Success 70%→80% · Amazon 40%→70%</span>
-      </span>
-      <span class="chip" style="background:var(--green-light);color:var(--green);">+10pp</span>
-    </summary>
-    <div class="body">
-      <div class="note">
-        <b><span class="zh">背景：</span><span class="en">Context:</span></b>
-        <span class="zh">KR-1 基准测试（2026-06-22 早）显示 Novada Extract 整体成功率 70%，Amazon 仅 40%。通过 Plywood SOP 编排 5 轮 multi-agent 循环：OSS 分析 → 差距分析 → 代码实现 → 代码审查 → 最终合成。</span>
-        <span class="en">KR-1 benchmark (2026-06-22 morning) showed Novada Extract overall 70% success, Amazon only 40%. Ran 5-round multi-agent Plywood loop: OSS analysis → gap analysis → code → review → synthesis.</span>
-      </div>
-
-      <p><b><span class="zh">OSS 竞争情报（Round 1）：</span><span class="en">OSS Competitive Intel (Round 1):</span></b></p>
-      <ul>
-        <li><span class="zh"><b>Firecrawl</b>：闭源 fire-engine，TLS 指纹伪装（<code>tlsclient</code>），GPT-4o-mini 引擎选择，9级质量瀑布；OSS 里没有 stealth 逻辑。</span><span class="en"><b>Firecrawl</b>: closed-source fire-engine, TLS fingerprint impersonation (<code>tlsclient</code>), GPT-4o-mini engine picker, 9-tier quality waterfall; no stealth logic in OSS.</span></li>
-        <li><span class="zh"><b>Tavily</b>：Extract API 全为实时抓取（非预索引）；Amazon 40% 失败 = 数据中心 IP 被 DataDome/WAF 封锁；<code>wait_for</code> 未暴露给用户。</span><span class="en"><b>Tavily</b>: Extract is always live-fetch (not pre-indexed); Amazon 40% failure = datacenter IPs blocked by DataDome/WAF; <code>wait_for</code> not exposed to users.</span></li>
-      </ul>
-
-      <p><b><span class="zh">差距分析（Round 2）— 找到 10 个差距：</span><span class="en">Gap Analysis (Round 2) — 10 gaps found:</span></b></p>
-      <table>
-        <tr><th>ID</th><th><span class="zh">优先级</span><span class="en">Priority</span></th><th><span class="zh">根因</span><span class="en">Root Cause</span></th></tr>
-        <tr><td>QW-1</td><td>P0</td><td><span class="zh"><code>wait_for</code> 未接入 <code>novadaExtract</code> — 6 个 fetchViaBrowser 调用均未传 options</span><span class="en"><code>wait_for</code> not wired into <code>novadaExtract</code> — 6 fetchViaBrowser call sites pass no options</span></td></tr>
-        <tr><td>QW-2</td><td>P1</td><td><span class="zh">DataDome/Amazon WAF challenge 字符串缺失于 <code>detectBotChallenge</code></span><span class="en">DataDome/Amazon WAF challenge strings missing from <code>detectBotChallenge</code></span></td></tr>
-        <tr><td>QW-3</td><td>P1</td><td><span class="zh"><code>waitForSelector</code> 硬编码 5000ms（<code>browser.ts</code>），超时太短</span><span class="en"><code>waitForSelector</code> hardcoded 5000ms in <code>browser.ts</code>, too short</span></td></tr>
-        <tr><td>QW-4</td><td>P1</td><td><span class="zh">render 结果无内容长度下限检测，bot-challenge 页面不会触发 browser 升级</span><span class="en">No content-length floor on render result — bot-challenge pages don't trigger browser escalation</span></td></tr>
-        <tr><td>MT-1</td><td>P1</td><td><span class="zh"><code>DOMAIN_REGISTRY</code> 已标记 19 个需要住宅代理的域名，但 <code>fetchViaProxy</code> 使用单一静态数据中心代理</span><span class="en"><code>DOMAIN_REGISTRY</code> tags 19 domains as anti-bot but <code>fetchViaProxy</code> uses a single static datacenter proxy</span></td></tr>
-        <tr><td>MT-2</td><td>P1</td><td><span class="zh"><code>wait_ms</code> 在 <code>unblock.ts</code> 中是 <code>void</code> 空操作，从未转发</span><span class="en"><code>wait_ms</code> in <code>unblock.ts</code> is a <code>void</code> no-op, never forwarded</span></td></tr>
-      </table>
-
-      <p><b><span class="zh">代码实现（Round 3）— 8 个文件，6 个差距修复：</span><span class="en">Code Implementation (Round 3) — 8 files, 6 gaps fixed:</span></b></p>
-      <ul>
-        <li><b>QW-1</b>: <span class="zh">在 <code>types.ts</code> 中添加 <code>wait_for</code>/<code>wait_ms</code> schema 字段，在 <code>extract.ts</code> 中接入 6 个 fetchViaBrowser 调用</span><span class="en">Added <code>wait_for</code>/<code>wait_ms</code> schema fields in <code>types.ts</code>, wired into 6 fetchViaBrowser call sites in <code>extract.ts</code></span></li>
-        <li><b>QW-2</b>: <span class="zh">在 <code>http.ts</code> 中新增 5 个 DataDome/Amazon WAF challenge 字符串到 <code>detectBotChallenge</code></span><span class="en">Added 5 DataDome/Amazon WAF challenge strings to <code>detectBotChallenge</code> in <code>http.ts</code></span></li>
-        <li><b>QW-3</b>: <span class="zh">将 <code>waitForSelector</code> 超时从 5000ms 改为 <code>Math.min(options.timeout ?? 15000, 15000)</code>（后在 Round 4 HIGH 修复中进一步改为固定 15000ms）</span><span class="en">Changed <code>waitForSelector</code> timeout from 5000ms to <code>Math.min(options.timeout ?? 15000, 15000)</code> (further fixed to fixed 15000 in Round 4 HIGH fix)</span></li>
-        <li><b>QW-4</b>: <span class="zh">在 <code>extract.ts</code> 添加 &lt;2000 char 内容长度下限检测触发 browser 升级（后加 <code>detectBotChallenge</code> guard）</span><span class="en">Added &lt;2000 char content-length floor in <code>extract.ts</code> triggering browser escalation (later guarded by <code>detectBotChallenge</code>)</span></li>
-        <li><b>MT-1</b>: <span class="zh">在 <code>domains.ts</code> 给 19 个域名加 <code>proxyTier:"residential"</code>，<code>credentials.ts</code> 新增 <code>getResidentialProxyCredentials()</code>，<code>http.ts</code> 路由住宅代理</span><span class="en">Added <code>proxyTier:"residential"</code> to 19 domains in <code>domains.ts</code>, new <code>getResidentialProxyCredentials()</code> in <code>credentials.ts</code>, residential routing in <code>http.ts</code></span></li>
-        <li><b>MT-2</b>: <span class="zh">修复 <code>unblock.ts</code> 中 <code>wait_ms</code> void 空操作，在 <code>router.ts</code> 的 4 个 fetchViaBrowser 调用中接入 <code>wait_ms</code></span><span class="en">Fixed <code>wait_ms</code> void no-op in <code>unblock.ts</code>, wired <code>wait_ms</code> through 4 fetchViaBrowser calls in <code>router.ts</code></span></li>
-      </ul>
-
-      <p><b><span class="zh">代码审查（Round 4）— 2 个 HIGH 问题已修复：</span><span class="en">Code Review (Round 4) — 2 HIGH issues fixed:</span></b></p>
-      <ul>
-        <li><b>HIGH #1 — browser.ts L115+L155</b>: <span class="zh">waitForSelector 超时耦合 page navigation timeout：当调用方传入小值（5000ms）时，selector 等待也被压缩至 5000ms，破坏了 15s 上限保护。修复：改为固定常量 <code>15000</code>。</span><span class="en">waitForSelector timeout coupled to page navigation timeout: when caller passes small value (5000ms), selector wait is also capped at 5000ms, defeating the 15s cap. Fix: changed to fixed constant <code>15000</code>.</span></li>
-        <li><b>HIGH #2 — extract.ts L232</b>: <span class="zh">QW-4 内容长度下限 &lt;2000 chars 触发逻辑对所有短响应生效，包括合法的短 API 响应（如 <code>&lt;result/&gt;</code>），导致不必要的 browser 升级。修复：加 <code>&amp;&amp; detectBotChallenge(html)</code> 守卫，与文件中其他升级路径保持一致。</span><span class="en">QW-4 content-length floor &lt;2000 chars triggered on all short responses including short legitimate API responses (e.g. <code>&lt;result/&gt;</code>), causing spurious browser escalation. Fix: added <code>&amp;&amp; detectBotChallenge(html)</code> guard, consistent with other escalation paths in the file.</span></li>
-      </ul>
-
-      <p><b><span class="zh">基准测试结果对比（10 URL/类别 验证）：</span><span class="en">Benchmark Results (10 URL/category validation):</span></b></p>
-      <table>
-        <tr><th></th><th><span class="zh">修复前</span><span class="en">Before</span></th><th><span class="zh">修复后</span><span class="en">After</span></th><th>Delta</th><th>Firecrawl</th><th>Tavily</th></tr>
-        <tr><td><b><span class="zh">整体成功率</span><span class="en">Overall</span></b></td><td>70%</td><td style="color:var(--green);font-weight:700;">80%</td><td>+10pp</td><td>97.5%</td><td>85%</td></tr>
-        <tr><td><b>Amazon / Structured</b></td><td>40%</td><td style="color:var(--green);font-weight:700;">70%</td><td>+30pp</td><td>100%</td><td>70%</td></tr>
-        <tr><td><b>JS-Heavy SPAs</b></td><td>80%</td><td style="color:var(--green);font-weight:700;">100%</td><td>+20pp</td><td>100%</td><td>100%</td></tr>
-        <tr><td><b>Anti-Bot</b></td><td>60%</td><td>60%</td><td>0</td><td>100%</td><td>70%</td></tr>
-        <tr><td><b>Static</b></td><td>100%</td><td>90%</td><td>-10pp</td><td>90%</td><td>100%</td></tr>
-        <tr><td><b>P50 <span class="zh">延迟</span><span class="en">latency</span></b></td><td>8053ms</td><td>7102ms</td><td>-12%</td><td>944ms</td><td>370ms</td></tr>
-      </table>
-      <div class="note">
-        <b><span class="zh">测试验证：</span><span class="en">Test verification:</span></b>
-        <span class="zh">修复前基线 56 个测试失败。修复后 55 个（净 +1 pass）。我们的改动未引入新的测试失败。</span>
-        <span class="en">Baseline before fixes: 56 test failures. After fixes: 55 (net +1 pass). Our changes introduced zero new test failures.</span>
-      </div>
-
-      <p><b><span class="zh">✅ 全量 50 URL 基准测试最终结果：</span><span class="en">✅ Final 50-URL Benchmark Results:</span></b></p>
-      <table>
-        <tr><th></th><th>Novada <span class="zh">修复前</span><span class="en">Before</span></th><th>Novada <span class="zh">修复后</span><span class="en">After</span></th><th>Delta</th><th>Firecrawl</th><th>Tavily</th></tr>
-        <tr><td><b><span class="zh">整体成功率</span><span class="en">Overall</span></b></td><td>70%</td><td style="color:var(--green);font-weight:800;">85.5%</td><td style="color:var(--green);font-weight:700;">+15.5pp</td><td>91.0%</td><td>81.5% ✅</td></tr>
-        <tr><td><b>Static</b></td><td>~90%</td><td>86%</td><td style="color:var(--red);">-4pp</td><td>96%</td><td>94%</td></tr>
-        <tr><td><b>JS-Heavy SPAs</b></td><td>80%</td><td style="color:var(--green);font-weight:700;">100%</td><td style="color:var(--green);">+20pp</td><td>100%</td><td>86% ✅</td></tr>
-        <tr><td><b>Anti-Bot</b></td><td>60%</td><td style="color:var(--green);font-weight:700;">80%</td><td style="color:var(--green);">+20pp</td><td>78% ✅ <span style="font-size:10px;">WE WIN</span></td><td>72% ✅</td></tr>
-        <tr><td><b>Structured</b></td><td>40%</td><td style="color:var(--green);font-weight:700;">76%</td><td style="color:var(--green);">+36pp</td><td>90%</td><td>74% ✅</td></tr>
-        <tr><td><b>P50 Latency</b></td><td>8053ms</td><td>9279ms</td><td>—</td><td>1944ms</td><td>399ms</td></tr>
-        <tr><td><b>$/1k</b></td><td>—</td><td>$1.00</td><td>—</td><td>$4.00</td><td>$5.00</td></tr>
-      </table>
-      <div class="note" style="background:var(--green-light);border-left:3px solid var(--green);">
-        <b><span class="zh">📊 关键结论：</span><span class="en">📊 Key Takeaway:</span></b>
-        <span class="zh">Novada 现已全面超越 Tavily（85.5% vs 81.5%）。与 Firecrawl 的差距从 30pp 缩至 <b>5.5pp</b>。Anti-bot 类别 Novada 80% <b>赢了</b> Firecrawl 78%。JS-Heavy 100% 并列第一。成本 $1/千次 vs 竞争对手 $4–5。</span>
-        <span class="en">Novada now beats Tavily overall (85.5% vs 81.5%). Gap with Firecrawl narrowed from 30pp to <b>5.5pp</b>. Anti-bot Novada 80% <b>beats</b> Firecrawl 78%. JS-Heavy tied at 100%. Cost $1/1k vs competitors $4–5.</span>
-      </div>
-    </div>
-  </details>
-
-  <!-- KR-6 M-6.2 + M-6.3: 4 new tools -->
-  <details class="card" open>
-    <summary>
-      <span class="tag tag-feat">FEAT</span>
-      <span>
-        <span class="zh">KR-6 M-6.2 + M-6.3 完成 — 4 个新工具</span>
-        <span class="en">KR-6 M-6.2 + M-6.3 Complete — 4 New Tools</span>
-      </span>
-      <span class="chip">8ad2c1b</span>
-    </summary>
-    <div class="body">
-      <p>
-        <span class="zh">4 个并行 sub-agent 实现，Orchestrator (Opus) 独立 review。1 个 HIGH bug（<code>task_download</code> 字段名错误）在 review 中发现并修复。</span>
-        <span class="en">4 parallel sub-agents implemented, Orchestrator (Opus) independent review. 1 HIGH bug (<code>task_download</code> wrong field name) caught in review and fixed before commit.</span>
-      </p>
-      <table>
-        <tr><th>Issue</th><th><span class="zh">工具</span><span class="en">Tool</span></th><th>Actions</th><th><span class="zh">类型</span><span class="en">Type</span></th></tr>
-        <tr><td>INC-110</td><td><code>novada_static_ip_mgmt</code></td><td>open · renew · export · list</td><td><span class="zh">读+写(confirm)</span><span class="en">R+W(confirm)</span></td></tr>
-        <tr><td>INC-111</td><td><code>novada_ip_whitelist</code></td><td>add · list · del · remark</td><td><span class="zh">读+写(confirm)</span><span class="en">R+W(confirm)</span></td></tr>
-        <tr><td>INC-112</td><td><code>novada_scraper_task</code></td><td>list · status · download · last_status</td><td><span class="zh">只读</span><span class="en">Read-only</span></td></tr>
-        <tr><td>INC-113</td><td><code>novada_capture_apikey</code></td><td>get · reset</td><td><span class="zh">读+写(confirm)</span><span class="en">R+W(confirm)</span></td></tr>
-      </table>
-      <p><b><span class="zh">WRITE 安全门控：</span><span class="en">WRITE safety gates:</span></b></p>
-      <ul>
-        <li><span class="zh"><code>open</code>/<code>renew</code>（静态 IP）、<code>add</code>/<code>del</code>（白名单）、<code>reset</code>（API key）— 均需 <code>confirm:true</code>，否则仅返回预览</span>
-            <span class="en"><code>open</code>/<code>renew</code> (static IP), <code>add</code>/<code>del</code> (whitelist), <code>reset</code> (API key) — all require <code>confirm:true</code>, otherwise return preview only</span></li>
-      </ul>
-      <div class="note">
-        <b><span class="zh">Review 发现（已修复）：</span><span class="en">Review finding (fixed):</span></b>
-        <span class="zh"><code>task_download</code> 发送 <code>task_id</code>（单数），API 期望 <code>task_ids</code>（复数）+ 缺少必填 <code>file_type</code> 字段。运行时会返回 <code>code:10001</code>。已在 commit 前修复。</span>
-        <span class="en"><code>task_download</code> sent <code>task_id</code> (singular), API expects <code>task_ids</code> (plural) + missing required <code>file_type</code> field. Would return <code>code:10001</code> at runtime. Fixed before commit.</span>
-      </div>
-    </div>
-  </details>
-
-  <!-- A: Race fix -->
   <details class="card">
     <summary>
-      <span class="tag tag-fix">FIX</span>
-      <span>
-        <span class="zh">Scraper 状态竞态修复</span>
-        <span class="en">Scraper Status Race Fix</span>
-      </span>
-      <span class="chip">e708010</span>
+      <span class="date">2026-04-25 (pending review)</span>
+      
+      <span class="ttl">v0.8.4</span>
+      <span class="chip">v0.8.4</span>
     </summary>
     <div class="body">
-      <p>
-        <span class="zh"><code>novada_scraper_submit</code> 返回 <code>task_id</code> 后立即调用 <code>novada_scraper_status</code>,服务器尚未传播,返回 <code>not_found</code>。原响应未区分「竞态」与「无效 ID」。</span>
-        <span class="en">Calling <code>novada_scraper_status</code> right after <code>novada_scraper_submit</code> hit a propagation window returning <code>not_found</code>. The old response didn't distinguish a race from a genuinely invalid task_id.</span>
-      </p>
-      <p>
-        <span class="zh"><b>修复:</b> <code>not_found</code> 的 <code>agent_instruction</code> 现区分两种情况 — 刚提交则等 5-10s 重试一次;重试后仍 not_found 则判定无效/过期。</span>
-        <span class="en"><b>Fix:</b> <code>not_found</code> response now distinguishes two cases — just submitted: wait 5-10s, retry once; still not_found after retry: treat as invalid/expired.</span>
-      </p>
-      <div class="note">
-        <b>Agent-First:</b>
-        <span class="zh">错误响应必须告诉 agent「下一步做什么」,不能只报失败。</span>
-        <span class="en">Error responses must tell the agent what to do next, not just report failure.</span>
-      </div>
+      
+      <h4>Added</h4>
+      <ul>
+        <li><b><code>novada://scraper-platforms</code> MCP resource</b>: Full catalog of 129 supported scraper platforms with operation IDs and required params. Agents can now discover which platform/operation to use without reading external docs. Covers 10 categories: e-commerce, search engines, social media, jobs, real estate, finance, reviews, tech, travel, news.</li>
+        <li><b>Browser action <code>aria_snapshot</code></b>: Returns Playwright's accessibility tree as YAML — semantic role+name refs, ~70% smaller than raw HTML, stable selectors. Uses <code>page.ariaSnapshot()</code> (Playwright v1.46+ API). Better than <code>snapshot</code> for element discovery.</li>
+        <li><b>MCP Prompt <code>scrape_platform_data</code></b>: Slash command guiding agents through platform/operation discovery → novada_scrape call → Error 11006 fallback workflow.</li>
+        <li><b>MCP Prompt <code>browser_stateful_workflow</code></b>: Slash command guiding agents through aria_snapshot-first browser automation with session_id state management.</li>
+      </ul>
+      <h4>Improved</h4>
+      <ul>
+        <li><b><code>novada_browser</code> description</b>: Removed stale "no state persists" text (wrong since v0.8.2 added sessions). Now documents <code>session_id</code> usage, session TTL, and all available actions.</li>
+        <li><b><code>novada_scrape</code> description</b>: References <code>novada://scraper-platforms</code> resource instead of external docs URL.</li>
+        <li><b><code>novada_unblock</code> description</b>: Clarified distinction from <code>novada_extract(render="render")</code> — unblock returns raw HTML, extract returns cleaned text.</li>
+        <li><b><code>novada://guide</code> resource</b>: Added Failure Recovery Patterns (4 scenarios with exact next steps) and Token Efficiency Tips (5 patterns for reducing token usage).</li>
+        <li><b><code>operation</code> field in ScrapeParamsSchema</b>: Expanded from 3 to 8 example operation IDs, references <code>novada://scraper-platforms</code> resource.</li>
+        <li><b><code>snapshot</code> action</b>: Added tip comment pointing to <code>aria_snapshot</code> as the preferred alternative.</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>439 passing (was 366 in v0.8.3, +73 new tests)</li>
+        <li>New: 2 aria_snapshot tests (<code>tests/tools/browser.test.ts</code>)</li>
+        <li>New: 40 prompt tests (<code>tests/prompts/index.test.ts</code>) — all 5 prompts, optional args, error handling</li>
+        <li>New: 31 resource tests (<code>tests/resources/index.test.ts</code>) — all 4 resources, content verification</li>
+      </ul>
     </div>
   </details>
 
-  <!-- B: Google Shopping -->
   <details class="card">
     <summary>
-      <span class="tag tag-verify">VERIFY</span>
-      <span>
-        <span class="zh">Google Shopping 操作 ID 校验</span>
-        <span class="en">Google Shopping Operation ID Verify</span>
-      </span>
-      <span class="chip" style="background:var(--accent-light);color:#8a6a3a;">WRONG_ID</span>
+      <span class="date">2026-04-24</span>
+      
+      <span class="ttl">v0.8.3</span>
+      <span class="chip">v0.8.3</span>
     </summary>
     <div class="body">
-      <p>
-        <span class="zh">QA 报告 Google Shopping 返回 <code>code 11006</code>。浏览器核实:</span>
-        <span class="en">QA flagged Google Shopping returning <code>code 11006</code>. Browser-verified:</span>
-      </p>
+      
+      <h4>Added</h4>
       <ul>
-        <li><span class="zh">Scraper API <b>全局 Active</b></span><span class="en">Scraper API <b>Active</b> account-wide</span></li>
-        <li><span class="zh"><code>11006</code> = <b>非规范操作 ID</b>,非账户问题</span><span class="en"><code>11006</code> = <b>malformed op ID</b>, not account issue</span></li>
+        <li><b><code>novada_health</code> tool</b> (11th tool): instantly shows which Novada products are active on your API key. Runs parallel probes for Search, Web Unblocker, Scraper API, Proxy, and Browser API. Returns a markdown status table with activation links for anything not yet enabled — great for first-time setup and debugging.</li>
+        <li><b>Browser action <code>hover</code></b>: hover over a CSS selector (triggers CSS hover states, dropdown menus, tooltips).</li>
+        <li><b>Browser action <code>press_key</code></b>: press a keyboard key (Enter, Tab, Escape, ArrowDown, Space, etc.). Optional <code>selector</code> focuses an element first.</li>
+        <li><b>Browser action <code>select</code></b>: select a value from a <code>&lt;select&gt;</code> dropdown by value or label text.</li>
       </ul>
-      <table>
-        <tr><th>field</th><th>value</th></tr>
-        <tr><td>platform</td><td><code>google.com</code></td></tr>
-        <tr><td>operation</td><td><code>google_shopping_keywords</code></td></tr>
-        <tr><td>params</td><td><code>{ keyword }</code></td></tr>
-      </table>
+      <h4>Fixed</h4>
+      <ul>
+        <li><b>Scraper API error 11006 message</b>: replaced dead-end "Contact support@novada.com" with a direct self-serve activation link — <code>dashboard.novada.com/overview/scraper/</code> — so users can unblock themselves without waiting for support.</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>366 passing (was 351 in v0.8.2, +15 new tests)</li>
+        <li>New: 11 health tool tests (<code>tests/tools/health.test.ts</code>) — probes, masking, Next Steps section</li>
+        <li>New: 4 browser action tests for hover, press\_key (with/without selector), select</li>
+      </ul>
     </div>
   </details>
 
-  <!-- C: Version reconcile -->
   <details class="card">
     <summary>
-      <span class="tag tag-sync">SYNC</span>
-      <span>
-        <span class="zh">版本号对账 0.7.9 → 0.8.0</span>
-        <span class="en">Version Reconcile 0.7.9 → 0.8.0</span>
-      </span>
-      <span class="chip">Supabase</span>
+      <span class="date">2026-04-24</span>
+      
+      <span class="ttl">v0.8.2</span>
+      <span class="chip">v0.8.2</span>
     </summary>
     <div class="body">
-      <p>
-        <span class="zh">Supabase <code>projects.current_version</code> 停留在 <code>0.7.9</code>,与 <code>package.json</code> 的 <code>0.8.0</code> 不一致。已更新。</span>
-        <span class="en">Supabase <code>projects.current_version</code> was stale at <code>0.7.9</code> vs <code>package.json</code> <code>0.8.0</code>. Reconciled.</span>
-      </p>
-      <pre><code>UPDATE projects SET current_version = '0.8.0'
-WHERE slug = 'novada-mcp';</code></pre>
+      
+      <h4>Added</h4>
+      <ul>
+        <li><b>PDF extraction</b>: <code>novada_extract</code> now handles PDF URLs transparently — detects <code>Content-Type: application/pdf</code> and <code>.pdf</code> extension, extracts plain text + page count via pdf-parse. No new tool needed; works the same as HTML extraction.</li>
+        <li><b>Persistent browser sessions</b>: <code>novada_browser</code> now accepts a <code>session_id</code> parameter — reuse the same browser page (cookies, localStorage, login state) across multiple calls.</li>
+        <li><b>New browser actions</b>: <code>close_session</code> (explicitly release a named session) and <code>list_sessions</code> (see all active session IDs).</li>
+        <li><b>Session TTL</b>: Browser sessions expire after 10 minutes of inactivity with automatic cleanup on next access.</li>
+        <li><b>Claude plugin manifest</b>: <code>claude-plugin.json</code> created (local only, in .gitignore).</li>
+        <li><b>Token efficiency documentation</b>: <code>docs/TOKEN_EFFICIENCY.md</code> with benchmark table vs Bright Data (local only).</li>
+        <li><b>Quick Install section</b>: README.md now includes a Quick Install section for Claude Code.</li>
+        <li><b>PDF size cap</b>: PDFs larger than 10 MB are rejected with a helpful error message.</li>
+      </ul>
+      <h4>Fixed</h4>
+      <ul>
+        <li><b>PDF detection in all fetch modes</b>: <code>extractSingle</code> previously only detected PDFs via <code>routeFetch</code>. Now also detects PDFs directly when <code>render="render"</code> or <code>render="static"</code> modes call <code>fetchWithRender</code>/<code>fetchViaProxy</code> directly.</li>
+        <li><b>PDF escalation guard</b>: Added <code>!html.startsWith("pdf_pages:")</code> guard to prevent unnecessary JS rendering escalation when PDF content is already extracted.</li>
+        <li><b>Browser mock missing <code>close</code> method</b>: <code>tests/tools/browser.test.ts</code> mock page now includes <code>close: vi.fn()</code> required by session cleanup.</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>351 passing (was 326 in v0.8.1, +25 new tests)</li>
+        <li>New: <code>tests/utils/pdf.test.ts</code> (13 tests — <code>isPdfResponse</code>, <code>extractPdf</code> size guard, mock-based text/metadata extraction)</li>
+        <li>New: 8 session management tests in <code>tests/utils/browser.test.ts</code></li>
+        <li>New: 4 session tool tests in <code>tests/tools/browser.test.ts</code></li>
+      </ul>
+      <h4>New Tools</h4>
+      <ul>
+        <li><code>novada_scrape</code> — structured data from 129 platforms via Scraper API</li>
+        <li><code>novada_proxy</code> — proxy connection strings (url/env/curl)</li>
+        <li><code>novada_verify</code> — fact-checking via multi-source search + evidence synthesis</li>
+        <li><code>novada_unblock</code> — forced JS render via Web Unblocker or Browser API CDP</li>
+        <li><code>novada_browser</code> — cloud browser automation via CDP (up to 20 chained actions)</li>
+      </ul>
+      <h4>Smart Routing &amp; Performance</h4>
+      <ul>
+        <li><b>Auto-escalation chain</b> — static → render → browser, with bot-challenge detection at each step</li>
+        <li><b>Race fetch</b> — Scraper API and direct fetch race in parallel; 866ms → 108ms latency</li>
+        <li><b>Domain registry</b> — 70-entry pre-routing table; known JS-heavy sites skip the static probe entirely</li>
+        <li><b>Session circuit breaker</b> — proxy availability cached per session</li>
+      </ul>
+      <h4>Content Quality</h4>
+      <ul>
+        <li>Content limit raised 8,000 → 25,000 chars with paragraph-boundary truncation</li>
+        <li>Inline links (<code>[text](url)</code>), bold/italic/code preserved in markdown output</li>
+        <li>Density scoring (simplified Mozilla Readability) for main content selection</li>
+        <li>JSON-LD / schema.org structured data extraction (Product, Article, Event, Person, etc.)</li>
+        <li>Bot challenge detection — Cloudflare, Akamai, Imperva signal coverage</li>
+        <li>Extraction quality score 0–100 exposed as <code>quality:N</code> in metadata</li>
+      </ul>
+      <h4>Field-Targeted Extraction</h4>
+      <ul>
+        <li><code>fields</code> param on <code>novada_extract</code> — <code>["price", "author", "rating"]</code> → <code>## Requested Fields</code> block</li>
+        <li>Source priority: JSON-LD → regex patterns → key:value scan → not_found</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>258 passing (was 66 in v0.5.0). Full unit coverage across all 10 tools + utilities.</li>
+      </ul>
+      <h4>Known Blockers (account-level)</h4>
+      <ul>
+        <li><code>novada_search</code>, <code>novada_research</code>, <code>novada_verify</code>: SERP backend needs activation</li>
+        <li><code>novada_scrape</code>: Error 11006 — Scraper API product not yet activated on this account</li>
+      </ul>
+      <h4>Added</h4>
+      <ul>
+        <li><b>Domain registry</b> (<code>src/utils/domains.ts</code>) — 70-entry lookup table mapping known domains to optimal fetch method (static/render/browser). Eliminates auto-detection probe for known sites. <code>lookupDomain(url)</code> checks exact match → www-stripped → subdomain fallback.</li>
+        <li><b>Integrated into <code>novada_extract</code></b> — when <code>render: "auto"</code>, registry entry is used as <code>effectiveMode</code>. Known render/browser domains skip the static probe entirely.</li>
+        <li><b>Field-targeted extraction</b> (<code>src/utils/fields.ts</code>) — <code>fields</code> param on <code>novada_extract</code>. Pass <code>["price", "author", "rating"]</code>, get <code>## Requested Fields</code> block in output.</li>
+        <li><b><code>fields</code> added to <code>ExtractParamsSchema</code></b> (<code>src/tools/types.ts</code>) — optional, max 20 fields</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>258 passing (was 240). +18: domains (10), fields (8).</li>
+      </ul>
+      <h4>Performance</h4>
+      <ul>
+        <li><b>Race proxy+direct</b> (<code>src/utils/http.ts</code>) — <code>fetchViaProxy</code> now starts Scraper API and direct fetch simultaneously. Saves ~400ms per call when Scraper API returns 404. Session circuit breaker caches result. Benchmark: 866ms → 108ms.</li>
+      </ul>
+      <h4>Content Quality</h4>
+      <ul>
+        <li><b>Content limit</b> — <code>extractMainContent</code> raised from 8,000 → 25,000 chars. Paragraph-boundary truncation replaces mid-sentence cut.</li>
+        <li><b>Inline links</b> — <code>&lt;a href&gt;</code> now rendered as <code>[text](url)</code> in markdown body. Wikipedia: 0 → 165 inline links.</li>
+        <li><b>Bold/italic</b> — <code>&lt;strong&gt;/&lt;b&gt;</code> → <code><b>text</b></code>, <code>&lt;em&gt;/&lt;i&gt;</code> → <code>*italic*</code>, <code>&lt;code&gt;</code> → backtick inline.</li>
+        <li><b>Boilerplate removal</b> — table-layout nav selectors + <code>td[bgcolor]</code> cell removal. HN nav leak fixed.</li>
+        <li><b><code>extractMainContent</code> accepts <code>baseUrl</code></b> — inline links resolve to absolute URLs.</li>
+      </ul>
+      <h4>Added — Content Intelligence</h4>
+      <ul>
+        <li><b>Density scoring</b> (<code>scoreCandidateElement</code>) — simplified Mozilla Readability algorithm in Cheerio. Scores <code>div/section/article/main</code> by <code>text_len × (1 - link_density) + heading_bonus + para_bonus</code>. Used as fallback when CSS selectors miss.</li>
+        <li><b>JSON-LD extraction</b> (<code>extractStructuredData</code>) — parses <code>&lt;script type="application/ld+json"&gt;</code>. Supports Product (price, brand, rating, availability), Article/NewsArticle (headline, author, datePublished), Event, Person, Organization, WebPage. Priority-ordered by schema type.</li>
+        <li><b>Bot challenge detection</b> (<code>detectBotChallenge</code>) — Cloudflare (just a moment, cf-browser-verification, __cf_chl_opt), Akamai (_abck, bm_sz), Imperva (incap_ses), heuristic signals (tiny body + blank title). Auto-escalates to browser in <code>novada_extract</code>.</li>
+        <li><b>Extraction quality score</b> (<code>scoreExtraction</code>) — 0–100 per extraction. Factors: structured data (+30), content length, link density, headings, code blocks, render mode, bot challenge penalty. Exposed as <code>quality:N</code> in metadata line.</li>
+        <li><b>Structured data block</b> — <code>## Structured Data</code> section prepended to extract output when JSON-LD found.</li>
+      </ul>
+      <h4>Tests</h4>
+      <ul>
+        <li>240 passing (was 222). +18 new: JSON-LD (7), density scoring (2), bot challenge (6), quality score (3).</li>
+      </ul>
+      <h4>Added — Full 10-tool MCP</h4>
+      <ul>
+        <li><code>novada_scrape</code> — structured data from 129 platforms via Scraper API. Outputs: markdown/json/csv/html/xlsx.</li>
+        <li><code>novada_proxy</code> — proxy connection strings in url/env/curl format. Country, city, session_id targeting.</li>
+        <li><code>novada_verify</code> — fact-checking via multi-source search + evidence synthesis.</li>
+        <li><code>novada_unblock</code> — forced JS render via Web Unblocker or Browser API CDP. 50K char truncation.</li>
+        <li><code>novada_browser</code> — cloud browser automation via CDP (Playwright). Up to 20 chained actions: navigate, click, type, screenshot, snapshot, evaluate, wait, scroll.</li>
+      </ul>
+      <h4>Known Blockers (account-level, not code bugs)</h4>
+      <ul>
+        <li><code>novada_search</code>, <code>novada_research</code>, <code>novada_verify</code>: <code>scraper.novada.com/search</code> returns 404 — backend needs sync search endpoint.</li>
+        <li><code>novada_scrape</code>: Error 11006 — Scraper API product not activated on this account.</li>
+      </ul>
+      <h4>Functional Test Results (47 real API calls, 2026-04-23)</h4>
+      <ul>
+        
+      </ul>
     </div>
   </details>
 
-  <!-- D: scrape.ts -->
   <details class="card">
     <summary>
-      <span class="tag tag-feat">FEAT</span>
-      <span>
-        <span class="zh">scrape.ts 自纠错改进</span>
-        <span class="en">scrape.ts Self-Correcting</span>
-      </span>
-      <span class="chip">c4f3b42</span>
+      <span class="date">2026-04-20</span>
+      
+      <span class="ttl">v0.6.7</span>
+      <span class="chip">v0.6.7</span>
     </summary>
     <div class="body">
-      <p><span class="zh"><b>3 处改动</b>,已过 code-reviewer。</span><span class="en"><b>3 edits</b>, code-reviewer approved.</span></p>
-
-      <p><b>1.</b>
-        <span class="zh"><code>OPERATION_ALIASES</code> 增加 <code>google_shopping</code> → <code>google_shopping_keywords</code>,agent 近似写法自动纠正。</span>
-        <span class="en">Added <code>google_shopping</code> → <code>google_shopping_keywords</code> alias for auto-correction.</span>
-      </p>
-      <p><b>2.</b>
-        <span class="zh"><code>11006</code> 不再笼统归因「API 未激活」,改为引导 agent 确认规范 ID。</span>
-        <span class="en"><code>11006</code> no longer blanket-blames "API not activated" — steers agent to verify canonical ID.</span>
-      </p>
-
-      <div class="note warn">
-        <b>3. HIGH —</b>
-        <span class="zh">别名分支说「用规范 ID 重试」,但规范 ID 已提交并被拒 → <b>无限重试</b>。已修:改为说明「已提交仍被拒」。</span>
-        <span class="en">Alias branch said "retry with canonical ID" but it was already submitted and rejected → <b>infinite retry loop</b>. Fixed: now says "already submitted, still rejected."</span>
-      </div>
+      
+      <h4>Added</h4>
+      <ul>
+        <li><b>Smart routing</b> in <code>novada_extract</code> and <code>novada_crawl</code>: auto-escalates from static → render (Web Unblocker) → Browser API when JS-heavy content detected</li>
+        <li><b><code>novada_proxy</code> tool</b> (6th tool): returns proxy credentials in <code>url</code>, <code>env</code>, or <code>curl</code> format for use in HTTP clients</li>
+        <li><b>Browser API</b> via <code>playwright-core</code>: set <code>NOVADA_BROWSER_WS=wss://...</code> to enable full CDP-controlled browser rendering</li>
+        <li><b>Research source extraction</b>: <code>novada_research</code> now fetches top 3 sources in full — not just snippets</li>
+        <li><b>TypeScript SDK</b>: <code>NovadaClient</code> class exported from <code>novada-search/sdk</code> with typed methods</li>
+        <li><b><code>render</code> param</b> on <code>novada_extract</code> and <code>novada_crawl</code>: <code>auto</code> (default), <code>static</code>, <code>render</code>, <code>browser</code></li>
+        <li><b>Multi-credential support</b>: <code>NOVADA_BROWSER_WS</code>, <code>NOVADA_PROXY_USER/PASS/ENDPOINT</code> env vars</li>
+        <li><b>nova CLI</b>: <code>proxy</code> subcommand + <code>--render</code> flag on extract/crawl</li>
+      </ul>
+      <h4>Fixed</h4>
+      <ul>
+        <li><code>novada_extract</code> / <code>novada_crawl</code> now detect and handle JS-heavy sites (Cloudflare, SPAs, React apps) instead of silently returning empty shells</li>
+        <li><code>novada_research</code> now returns actual source content, not just URL snippets</li>
+      </ul>
+      <h4>Changed</h4>
+      <ul>
+        <li>All tool descriptions updated for agent-optimal clarity (problem-first, not product-first)</li>
+      </ul>
     </div>
   </details>
 
-  <!-- E: Adversarial audit -->
   <details class="card">
     <summary>
-      <span class="tag tag-sec">SEC</span>
-      <span>
-        <span class="zh">对抗性安全审计 — 23 项修复</span>
-        <span class="en">Adversarial Audit — 23 Fixes</span>
-      </span>
-      <span class="chip" style="background:var(--red-light);color:var(--red);">23/23</span>
+      <span class="date">2026-04-10</span>
+      
+      <span class="ttl">v0.6.0</span>
+      <span class="chip">v0.6.0</span>
     </summary>
     <div class="body">
-      <p>
-        <span class="zh">4 个对抗性 agent 并行攻击,7 个文件,156 行新增 / 82 行删除。</span>
-        <span class="en">4 adversarial agents in parallel, 7 files, +156 / -82 lines.</span>
-      </p>
-
-      <table>
-        <tr><th>Agent</th><th><span class="zh">攻击面</span><span class="en">Surface</span></th><th><span class="zh">发现</span><span class="en">Findings</span></th></tr>
-        <tr><td><span class="zh">安全</span><span class="en">Security</span></td><td><span class="zh">注入 / 密钥泄漏</span><span class="en">Injection / key leak</span></td><td>2C 5H 4M</td></tr>
-        <tr><td><span class="zh">边缘</span><span class="en">Edge</span></td><td><span class="zh">畸形输入 / 栈溢出</span><span class="en">Malformed / overflow</span></td><td>4B 3W</td></tr>
-        <tr><td><span class="zh">行为</span><span class="en">Behavior</span></td><td><span class="zh">重试陷阱 / isError</span><span class="en">Retry traps / isError</span></td><td>4T 3C</td></tr>
-        <tr><td><span class="zh">兼容</span><span class="en">Compat</span></td><td><span class="zh">别名不对称 / URL</span><span class="en">Alias asymmetry / URLs</span></td><td>3I 4N</td></tr>
-      </table>
-
-      <p><b>CRITICAL:</b></p>
+      
+      <h4>Added</h4>
       <ul>
-        <li><b>C-1</b> <span class="zh"><code>sanitizeServerMsg</code> 未剥离 JSON 字段中的 API key</span><span class="en"><code>sanitizeServerMsg</code> missed API keys in JSON fields</span></li>
-        <li><b>C-2</b> <span class="zh"><code>platform</code>/<code>operation</code> 无正则 → 提示注入</span><span class="en"><code>platform</code>/<code>operation</code> no regex → prompt injection</span></li>
+        <li><b>novada_map</b> tool — fast URL discovery via BFS crawl without content extraction. Filter results by search term.</li>
+        <li><b>Zod validation</b> — all tool parameters validated with Zod schemas. Clear error messages for invalid inputs.</li>
+        <li><b>cheerio HTML parsing</b> — replaced regex-based HTML extraction with cheerio for reliable content extraction from complex pages.</li>
+        <li><b>Structured error classification</b> — errors categorized as INVALID_API_KEY, RATE_LIMITED, URL_UNREACHABLE, API_DOWN with retry guidance.</li>
+        <li><b>Rich tool descriptions</b> — each tool now includes "Best for", "Not recommended for", "Common mistakes", usage examples, and return descriptions.</li>
+        <li><b>cleanParams utility</b> — removes empty values before API calls.</li>
+        <li><b>extractLinks function</b> — cheerio-based link extraction with deduplication and relative URL resolution.</li>
+        <li><b>CHANGELOG.md</b> and <b>.env.example</b> files.</li>
+        <li>51 new tests (117 total, up from 66).</li>
+        <li><b>Tool function tests</b> — mocked axios tests for novadaSearch, novadaExtract, novadaResearch covering success, error, and edge case paths.</li>
+        <li><b>URL scheme validation</b> — only HTTP/HTTPS URLs accepted. Blocks file://, ftp://, localhost, and RFC 1918 private IP ranges (SSRF protection).</li>
+        <li><b>Input schemas generated from Zod</b> — tool inputSchema now auto-generated via zod-to-json-schema, eliminating schema drift.</li>
+        <li><b>Failure reporting</b> — research tool now reports failed search count in output.</li>
       </ul>
-
-      <p><b>KEY HIGH:</b></p>
+      <h4>Changed</h4>
       <ul>
-        <li><b>H-1</b> <span class="zh">原型污染 <code>__proto__</code> → <code>Object.create(null)</code></span><span class="en">Prototype pollution → <code>Object.create(null)</code></span></li>
-        <li><b>H-6</b> <span class="zh"><code>scraper_submit</code> 缺少别名解析</span><span class="en"><code>scraper_submit</code> missing alias resolution</span></li>
-        <li><b>H-7</b> <span class="zh"><code>isError:false</code> 误报成功 → 改为 re-throw</span><span class="en"><code>isError:false</code> on errors → fixed: re-throw</span></li>
-        <li><b>H-8</b> <span class="zh">超时误判为 <code>URL_UNREACHABLE</code></span><span class="en">Timeout misclassified as <code>URL_UNREACHABLE</code></span></li>
+        <li>Tool descriptions rewritten to follow Firecrawl pattern with agent guidance.</li>
+        <li>Validation errors now return Zod's structured error messages instead of generic strings.</li>
+        <li>HTML content extraction now handles tables, blockquotes, and code blocks correctly.</li>
+        <li>Error responses include error code, retry guidance, and documentation URL.</li>
+        <li>SIGINT handler for graceful shutdown.</li>
+        <li>Proxy fallback now logs a warning when falling back to direct fetch.</li>
+        <li>HTML content selector threshold raised from 100 to 200 chars (reduces false matches).</li>
+        <li>HTML truncation for <code>format: "html"</code> now cuts at tag boundaries instead of mid-tag.</li>
+        <li>Relative URL resolution now uses <code>new URL(href, base)</code> for all path types.</li>
       </ul>
-
-      <div class="note">
-        <b><span class="zh">验证:</span><span class="en">Verify:</span></b>
-        <span class="zh">Round 3 验证 23/23 全部修复。<code>npm run build</code> 通过。commit <code>1989f06</code>。</span>
-        <span class="en">Round 3 verified 23/23 fixed. <code>npm run build</code> passed. Commit <code>1989f06</code>.</span>
-      </div>
+      <h4>Fixed</h4>
+      <ul>
+        <li><b>SECURITY</b>: Upgraded axios to &gt;= 1.15.0 to patch critical SSRF vulnerability (GHSA-3p68-rc4w-qgx5).</li>
+        <li><b>SECURITY</b>: API keys stripped from all error messages via <code>sanitizeMessage()</code> — prevents credential leaks in error responses.</li>
+        <li><b>SECURITY</b>: Proxy 401/403 errors no longer silently swallowed — auth failures are now re-thrown instead of falling back to direct fetch.</li>
+        <li>HTML parser no longer fails on deeply nested divs or encoded entities.</li>
+        <li>Link extraction now handles relative URLs and protocol-relative URLs (<code>//</code>) correctly.</li>
+        <li>Table cell content no longer duplicated in markdown output.</li>
+        <li>Map tool seed URL now normalized in dedup set (prevents duplicate seed in output).</li>
+        <li>Map and crawl tools now filter discovered links through <code>isContentLink</code> (skip assets, auth pages).</li>
+        <li>cleanParams utility now actually wired into search tool (was previously dead code).</li>
+      </ul>
     </div>
   </details>
 
-  <!-- F: Dashboard page -->
   <details class="card">
     <summary>
-      <span class="tag tag-feat">FEAT</span>
-      <span>
-        <span class="zh">Dashboard 页 — 12 集成 + 配置抽屉</span>
-        <span class="en">Dashboard Page — 12 Integrations + Config Drawer</span>
-      </span>
-      <span class="chip">landing/dashboard.html</span>
+      <span class="date">2026-03-29</span>
+      
+      <span class="ttl">v0.5.0</span>
+      <span class="chip">v0.5.0</span>
     </summary>
     <div class="body">
-      <p>
-        <span class="zh">仿 BrightData <code>/cp/mcp</code> 布局,完整构建 Novada MCP 控制台页。</span>
-        <span class="en">BrightData <code>/cp/mcp</code>-inspired layout, built as Novada MCP console page.</span>
-      </p>
-      <p><b><span class="zh">功能</span><span class="en">Features</span></b></p>
+      
+      <h4>Added</h4>
       <ul>
-        <li>
-          <span class="zh">12 个集成卡片,带官方 Logo — Cursor、Claude Desktop、Claude Code、OpenAI SDK/Agent Builder/Codex（内联 SVG）、LangChain、n8n、LlamaIndex、CrewAI、Windsurf、Cline</span>
-          <span class="en">12 integration cards with official logos — Cursor, Claude Desktop, Claude Code, OpenAI SDK/Agent Builder/Codex (inline SVG), LangChain, n8n, LlamaIndex, CrewAI, Windsurf, Cline</span>
-        </li>
-        <li>
-          <span class="zh">点击任意卡片弹出右侧抽屉,显示该集成的精确 MCP 配置 snippet（自动代入 API key）、3 步安装指引、官方文档链接</span>
-          <span class="en">Click any card → slide-in drawer with exact MCP config snippet (API key pre-filled from localStorage), 3 setup steps, and official docs link</span>
-        </li>
-        <li>
-          <span class="zh">API key 存 <code>localStorage</code>,支持掩码显示、一键复制 URL、Edit 模式更新 key</span>
-          <span class="en">API key stored in <code>localStorage</code> — masked display, one-click URL copy, Edit modal to update key</span>
-        </li>
-        <li>
-          <span class="zh">亮/暗主题切换，无 FOCT（内联 IIFE）</span>
-          <span class="en">Light/dark theme toggle, FOCT-free (inline IIFE)</span>
-        </li>
+        <li>Initial release with novada_search, novada_extract, novada_crawl, novada_research tools.</li>
+        <li>Proxy infrastructure integration (100M+ IPs, 195 countries).</li>
+        <li>Multi-engine search (Google, Bing, DuckDuckGo, Yahoo, Yandex).</li>
+        <li>BFS/DFS crawling with concurrent page fetching.</li>
+        <li>Exponential backoff retry logic.</li>
+        <li>66 unit tests.</li>
       </ul>
-      <p><b><span class="zh">Logo 来源</span><span class="en">Logo sources</span></b></p>
-      <ul>
-        <li><span class="zh">9 个集成：<code>cdn.simpleicons.org/[slug]/ffffff</code></span><span class="en">9 integrations: <code>cdn.simpleicons.org/[slug]/ffffff</code></span></li>
-        <li><span class="zh">3 个 OpenAI（SDK / Agent Builder / Codex）：内联 SVG path，避免 CDN 404</span><span class="en">3 OpenAI (SDK / Agent Builder / Codex): inline SVG path, bypasses CDN 404</span></li>
-      </ul>
-      <div class="note">
-        <b><span class="zh">覆盖的集成配置：</span><span class="en">Config snippets verified for:</span></b>
-        <span class="zh">Claude Desktop (JSON)、Claude Code (bash CLI)、Cursor (JSON)、OpenAI Agents SDK (Python)、OpenAI Responses API (Python)、LangChain (Python)、n8n (UI node)、LlamaIndex (Python)、CrewAI (Python)、Windsurf (serverUrl JSON)、Cline (streamableHttp JSON)、Codex CLI (TOML)</span>
-        <span class="en">Claude Desktop (JSON), Claude Code (bash CLI), Cursor (JSON), OpenAI Agents SDK (Python), OpenAI Responses API (Python), LangChain (Python), n8n (UI node), LlamaIndex (Python), CrewAI (Python), Windsurf (serverUrl JSON), Cline (streamableHttp JSON), Codex CLI (TOML)</span>
-      </div>
     </div>
   </details>
 
-  <div class="foot">Novada MCP · Plywood Protocol + AAM</div>
-
+  <footer>Generated by <code>scripts/gen-update-log.mjs</code> from <code>CHANGELOG.md</code>. Public changelog = this / <code>CHANGELOG.md</code> · Internal health &amp; progress = Linear project updates.</footer>
 </div>
-
-<script>
-function setLang(l) {
-  var h = document.documentElement;
-  h.classList.toggle('lang-en', l === 'en');
-  h.setAttribute('lang', l === 'en' ? 'en' : 'zh-CN');
-  document.getElementById('bz').classList.toggle('on', l === 'zh');
-  document.getElementById('be').classList.toggle('on', l === 'en');
-}
-</script>
 </body>
 </html>

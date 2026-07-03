@@ -45,6 +45,17 @@ tool descriptions in `src/index.ts`:
 - Errors should carry an `agent_instruction` where it helps the model recover.
 - Prefer structured, parseable output.
 
+## Changelog & releases
+
+`CHANGELOG.md` is the **single source of truth** for the changelog — add your entry under
+`## [Unreleased]` (Keep-a-Changelog style). **Do not hand-edit `docs/update-log.html`** — it is
+auto-generated from `CHANGELOG.md` by `scripts/gen-update-log.mjs` (regenerated at release).
+Team progress + health goes to the Linear project *"MCP — Hosted + Tools + Optimization"*, not files.
+
+Releases ship via `scripts/promote-to-public.sh` (gated, dry-run by default) — one version to all
+platforms (npm + public git + hosted) at once; never hand-bump a single platform. npm versions are
+immutable, so the next release is a new number. Full rules for agents and teammates: **[AGENTS.md](./AGENTS.md)**.
+
 ## Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`,
