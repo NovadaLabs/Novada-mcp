@@ -62,6 +62,10 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
     const ALIAS_NAMES = new Set<string>([
       ...Object.keys(PROXY_ALIAS_MAP),  // novada_proxy_residential/isp/datacenter/mobile/static/dedicated
       "novada_health_all",              // → novada_health(mode=full)
+      "novada_scraper_submit",          // → novada_scrape (sync inline)
+      "novada_scraper_status",          // → benign ok (async flow removed)
+      "novada_scraper_result",          // → benign ok
+      "novada_scraper_task_mgmt",       // → benign ok
     ]);
     const wiredSet = new Set(wiredNames.filter((n) => !ALIAS_NAMES.has(n)));
     const registrySet = new Set(registryNames);

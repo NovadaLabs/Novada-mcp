@@ -107,24 +107,6 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
   },
   {
-    name: "novada_scraper_submit",
-    description: "Submit an async scraping task; returns task_id for status polling. Use when novada_scrape doesn't support the platform. Follow with novada_scraper_status to poll, then novada_scraper_result to retrieve data.",
-    category: "Scraping & Verification",
-    status: "active",
-  },
-  {
-    name: "novada_scraper_status",
-    description: "Poll async scraping task status by task_id; returns pending/running/complete/failed with per-state agent_instruction. Poll every 5–10s with exponential backoff.",
-    category: "Scraping & Verification",
-    status: "active",
-  },
-  {
-    name: "novada_scraper_result",
-    description: "Retrieve completed scraping results by task_id; returns markdown table, JSON, or raw API response. Call only after novada_scraper_status reports status='complete'.",
-    category: "Scraping & Verification",
-    status: "active",
-  },
-  {
     name: "novada_ai_monitor",
     description: "Check how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand or product; returns per-model sentiment, key claims, competitor mentions, and source URLs",
     category: "Scraping & Verification",
@@ -214,12 +196,6 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   {
     name: "novada_capture_apikey",
     description: "Get or reset the Capture API key for the account; reset is a WRITE action requiring confirm:true after human approval.",
-    category: "Account & Billing",
-    status: "active",
-  },
-  {
-    name: "novada_scraper_task_mgmt",
-    description: "Manage async scraper tasks: list, check status, download results, or get last task status via the developer-api scraper management endpoints.",
     category: "Account & Billing",
     status: "active",
   },

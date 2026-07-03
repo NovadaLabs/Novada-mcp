@@ -992,14 +992,21 @@ class NovadaMCPServer {
           case "novada_discover":
             result = await novadaDiscover(validateDiscoverParams(args as Record<string, unknown>));
             break;
+          // 0.9.4: async scraper trio removed from tools/list (upstream returns results INLINE;
+          // the poll endpoints never tracked /request tasks — NOV-697). Old names still work:
+          // submit runs the sync scrape and returns real records; status/result return a benign
+          // ok pointing to novada_scrape. No error status for old callers.
           case "novada_scraper_submit":
-            result = await novadaScraperSubmit(validateScraperSubmitParams(args as Record<string, unknown>), API_KEY!);
+            result = await novadaScrape(validateScrapeParams(args as Record<string, unknown>), API_KEY!);
             break;
           case "novada_scraper_status":
-            result = await novadaScraperStatus(validateScraperStatusParams(args as Record<string, unknown>), API_KEY!);
-            break;
           case "novada_scraper_result":
-            result = await novadaScraperResult(validateScraperResultParams(args as Record<string, unknown>), API_KEY!);
+          case "novada_scraper_task_mgmt":
+            result = JSON.stringify({
+              status: "ok",
+              message: "The async scraper flow was replaced in 0.9.4 — novada_scrape now returns results inline in one call.",
+              agent_instruction: "Call novada_scrape with { platform, operation, params } to get the records directly. No polling needed.",
+            }, null, 2);
             break;
           case "novada_browser_flow":
             result = await novadaBrowserFlow(validateBrowserFlowParams(args as Record<string, unknown>), API_KEY!);
@@ -1052,9 +1059,6 @@ class NovadaMCPServer {
             break;
           case "novada_capture_apikey":
             result = await novadaCaptureApikey(validateCaptureApikeyParams(args as Record<string, unknown>), API_KEY);
-            break;
-          case "novada_scraper_task_mgmt":
-            result = await novadaScraperTaskMgmt(validateScraperTaskMgmtParams(args as Record<string, unknown>), API_KEY);
             break;
           case "novada_static_ip_mgmt":
             result = await novadaStaticIpMgmt(validateStaticIpMgmtParams(args as Record<string, unknown>), API_KEY);
