@@ -103,7 +103,9 @@ function extractRecords(data: unknown): Record<string, unknown>[] {
 
 /**
  * Fetch completed results for a scraping task by task_id.
- * Tries the confirmed download endpoint first; falls back to api-m.novada.com.
+ * Primary: 2-step COS download via POST /v1/scraper/task_download.
+ * Fallback: legacy GET download endpoint (api.novada.com/g/api/proxy/scraper_download).
+ * (The old api-m.novada.com status route was removed — it was a dead 404 route.)
  */
 export async function novadaScraperResult(
   params: ScraperResultParams,
@@ -148,10 +150,12 @@ export async function novadaScraperResult(
       //   (a) bogus/unknown task_ids — API returns {code:0, data:[{download:"", task_id:bogus}]}
       //   (b) newly-submitted real tasks — for ~30s after submit the status endpoint hasn't
       //       propagated yet, so checkTaskExists returns "not_found" even though the task exists.
-      // Disambiguate via a lightweight status existence check, but be honest about the
-      // propagation window: "not_found" from checkTaskExists CANNOT definitively distinguish
-      // bogus from just-submitted-and-not-yet-propagated.
-      // NOV-666: this is now the primary disambiguation site for empty-downloadUrl paths.
+      // Disambiguate via a lightweight status existence check. IMPORTANT: the old GET-based
+      // disambiguation (api-m.novada.com/v1/scraper/{task_id}, which was claimed to return a
+      // definitive 404 for unknown ids) was REMOVED — it was a dead 404 route. checkTaskExists
+      // now uses the POST status endpoint, so "not_found" CANNOT definitively distinguish a
+      // bogus id from a just-submitted-and-not-yet-propagated one. The not_found branch below
+      // therefore returns a propagation-aware retry hint, not a definitive give-up.
       const existence = await checkTaskExists(task_id, apiKey);
       if (existence === "exists") {
         // Status endpoint confirms task exists — definitely not_ready (still running).
@@ -253,8 +257,13 @@ export async function novadaScraperResult(
         if (bObj.code === 27202) {
           // NOV-666: code 27202 from the legacy download endpoint is ambiguous — it means
           // "result not yet available" for both real pending tasks AND unknown/bogus task_ids.
-          // Disambiguate by doing a lightweight existence check via the status endpoint
-          // (which returns HTTP 404 definitively for unknown ids).
+          // Disambiguate with a lightweight existence check via the status endpoint.
+          // Note: the old GET disambiguation (api-m.novada.com/v1/scraper/{task_id}) was
+          // removed — it was a dead 404 route. checkTaskExists now uses the POST status
+          // endpoint, which returns "not_found" for empty-status responses. That signal
+          // is NOT definitive: a task submitted within the last ~30s also reads as empty
+          // status for a propagation window, so "not_found" must carry a retry hint rather
+          // than a give-up.
           const existence = await checkTaskExists(task_id, apiKey);
           if (existence === "not_found") {
             return JSON.stringify(
@@ -262,8 +271,10 @@ export async function novadaScraperResult(
                 status: "not_found",
                 task_id,
                 agent_instruction:
-                  "Task not found. The task_id is invalid, was never submitted, or has expired (tasks expire after 24 hours). " +
-                  "Do NOT poll further — re-submit with novada_scraper_submit or use novada_extract as an alternative.",
+                  "Task not found on the status endpoint. Two possibilities: " +
+                  "(1) You JUST submitted this task (within the last ~30 seconds) — this is normal API propagation lag. Wait 5-10 seconds and retry novada_scraper_status; if it returns pending/running, the task exists and you should keep polling. " +
+                  "(2) The task_id is invalid or expired (tasks expire after 24 hours). " +
+                  "Only stop polling and re-submit with novada_scraper_submit if novada_scraper_status STILL returns not_found after waiting ~30s from submission.",
               },
               null,
               2
