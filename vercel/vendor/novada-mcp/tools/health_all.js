@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getBrowserWs, getWebUnblockerKey, } from "../utils/credentials.js";
+import { getBrowserWs, getWebUnblockerKey, getProxyCredentials, fetchProxySubAccountCredentials, fetchBrowserSubAccountCredentials, } from "../utils/credentials.js";
 import { SCRAPER_API_BASE, WEB_UNBLOCKER_BASE, } from "../config.js";
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PROBE_TIMEOUT_MS = 20000;
@@ -226,77 +226,54 @@ async function probeScraperAll(apiKey) {
         clearTimeout(timer);
     }
 }
-function probeProxyAll() {
-    const proxyUser = process.env.NOVADA_PROXY_USER;
-    const proxyEndpoint = process.env.NOVADA_PROXY_ENDPOINT;
-    if (!proxyUser) {
-        return {
-            product: "Proxy",
-            status: "not_configured",
-            latency: null,
-            notes: "Set NOVADA_PROXY_ENDPOINT only — user/pass are auto-fetched via NOVADA_API_KEY",
-            activationLink: "https://dashboard.novada.com/overview/proxy/",
-        };
+async function probeProxyAll(apiKey) {
+    // Local mode: explicit env credentials present → report configured.
+    if (getProxyCredentials()) {
+        return { product: "Proxy", status: "configured_unverified", latency: null, notes: "env vars present — no live probe" };
     }
-    if (!proxyEndpoint || !proxyEndpoint.includes(":")) {
-        return {
-            product: "Proxy",
-            status: "misconfigured",
-            latency: null,
-            notes: "NOVADA_PROXY_ENDPOINT missing or malformed — expected format: hostname:port",
-            activationLink: "https://dashboard.novada.com/overview/proxy/",
-        };
+    // NOV-689/hosted: no env vars — probe the auto-provision path (product=1 sub-account
+    // fetched with the caller's key). If it returns, proxy IS usable from just the key
+    // (universal gateway proxy.novada.pro:7777 + -zone-res). This is the reality on hosted;
+    // the old code reported "not configured" here, which was false.
+    const start = Date.now();
+    try {
+        const fetched = await fetchProxySubAccountCredentials(apiKey);
+        const latency = Date.now() - start;
+        if (fetched) {
+            return { product: "Proxy", status: "active", latency, notes: "Auto-provisioned from API key (proxy.novada.pro:7777, zone-res)" };
+        }
+        return { product: "Proxy", status: "not_activated", latency, notes: "No proxy sub-account on this account — enable at dashboard.novada.com/overview/proxy/", activationLink: "https://dashboard.novada.com/overview/proxy/" };
     }
-    // FIX-5: Credentials are present and well-formed, but no live TCP probe is done.
-    // Label "configured_unverified" so agents don't treat this as proof of connectivity.
-    return {
-        product: "Proxy",
-        status: "configured_unverified",
-        latency: null,
-        notes: "env vars present — no live probe",
-    };
+    catch (e) {
+        return { product: "Proxy", status: "error", latency: Date.now() - start, notes: `Proxy probe failed: ${e instanceof Error ? e.message : String(e)}` };
+    }
 }
-// INC-195: Detect hosted (Vercel/Lambda) environment
-function isHostedEnvironment() {
-    return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
-}
-function probeBrowserAll() {
-    // INC-195: On hosted environments, Browser API is architecturally unavailable
-    if (isHostedEnvironment()) {
-        return {
-            product: "Browser API",
-            status: "not_configured",
-            latency: null,
-            notes: "Not available on hosted — requires WebSocket transport not supported on Vercel Edge/Lambda. Use local MCP server.",
-        };
-    }
+async function probeBrowserAll(apiKey) {
+    // Local/explicit mode: NOVADA_BROWSER_WS set → report configured.
     const ws = getBrowserWs();
-    if (!ws) {
-        return {
-            product: "Browser API",
-            status: "not_configured",
-            latency: null,
-            notes: "Set NOVADA_BROWSER_WS (wss://user:pass@host format)",
-            activationLink: "https://dashboard.novada.com/overview/browser/",
-        };
+    if (ws) {
+        if (!ws.startsWith("wss://") || !ws.includes("@")) {
+            return { product: "Browser API", status: "misconfigured", latency: null, notes: "NOVADA_BROWSER_WS must be wss://username:password@host", activationLink: "https://dashboard.novada.com/overview/browser/" };
+        }
+        return { product: "Browser API", status: "configured_unverified", latency: null, notes: "env var present — no live probe" };
     }
-    if (!ws.startsWith("wss://") || !ws.includes("@")) {
-        return {
-            product: "Browser API",
-            status: "misconfigured",
-            latency: null,
-            notes: "NOVADA_BROWSER_WS must be wss://username:password@host — get from dashboard.novada.com/overview/browser/",
-            activationLink: "https://dashboard.novada.com/overview/browser/",
-        };
+    // Hosted: Browser API works via connectOverCDP to Novada's REMOTE cloud browser
+    // (one-shot task, ~5s, verified 2026-07-03). Credentials auto-provision from the key
+    // (product=10 sub-account, -zone-browser zone). Probe that path. The old code hard-coded
+    // "not available on hosted — WebSocket not supported", which was FALSE (a one-shot CDP
+    // session completes well inside the serverless budget).
+    const start = Date.now();
+    try {
+        const wsUrl = await fetchBrowserSubAccountCredentials(apiKey);
+        const latency = Date.now() - start;
+        if (wsUrl) {
+            return { product: "Browser API", status: "active", latency, notes: "Auto-provisioned from API key (one-shot CDP; use novada_browser)" };
+        }
+        return { product: "Browser API", status: "not_activated", latency, notes: "No Browser API sub-account on this account — enable at dashboard.novada.com/overview/browser/", activationLink: "https://dashboard.novada.com/overview/browser/" };
     }
-    // FIX-5: NOVADA_BROWSER_WS is set and well-formed, but no live WebSocket probe is done.
-    // Label "configured_unverified" to avoid claiming Active without a real connectivity check.
-    return {
-        product: "Browser API",
-        status: "configured_unverified",
-        latency: null,
-        notes: "env var present — no live probe",
-    };
+    catch (e) {
+        return { product: "Browser API", status: "error", latency: Date.now() - start, notes: `Browser probe failed: ${e instanceof Error ? e.message : String(e)}` };
+    }
 }
 async function probeUnblockAll(apiKey) {
     // Unblock uses Web Unblocker internally — reuse the same probe but label differently
@@ -332,11 +309,13 @@ function latencyStr(latency) {
 export async function novadaHealthAll(apiKey) {
     const maskedKey = apiKey.length >= 4 ? `****${apiKey.slice(-4)}` : "****";
     // Run all HTTP probes in parallel; sync checks run inline
-    const [searchSettled, extractSettled, scraperSettled, unblockSettled,] = await Promise.allSettled([
+    const [searchSettled, extractSettled, scraperSettled, unblockSettled, proxySettled, browserSettled,] = await Promise.allSettled([
         probeSearchAll(apiKey),
         probeExtractAll(apiKey),
         probeScraperAll(apiKey),
         probeUnblockAll(apiKey),
+        probeProxyAll(apiKey),
+        probeBrowserAll(apiKey),
     ]);
     const errorFallback = (product) => ({
         product,
@@ -348,8 +327,8 @@ export async function novadaHealthAll(apiKey) {
         searchSettled.status === "fulfilled" ? searchSettled.value : errorFallback("Search API"),
         extractSettled.status === "fulfilled" ? extractSettled.value : errorFallback("Extract / Web Unblocker"),
         scraperSettled.status === "fulfilled" ? scraperSettled.value : errorFallback("Scraper API (13 platforms)"),
-        probeProxyAll(),
-        probeBrowserAll(),
+        proxySettled.status === "fulfilled" ? proxySettled.value : errorFallback("Proxy"),
+        browserSettled.status === "fulfilled" ? browserSettled.value : errorFallback("Browser API"),
         unblockSettled.status === "fulfilled" ? unblockSettled.value : errorFallback("Unblock API"),
     ];
     const activeCount = results.filter(r => r.status === "active").length;
