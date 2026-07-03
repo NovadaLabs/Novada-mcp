@@ -438,8 +438,17 @@ async function parallelBfsCrawl(
 
     if (unvisited.length === 0) continue;
 
-    // Fetch all in parallel
-    const results = await Promise.allSettled(
+    // Fetch all in parallel — but RACE the batch against the remaining deadline budget.
+    // A between-batches deadline check is NOT enough: a single batch whose fetches hang
+    // (slow proxy, retries) can itself run ~30s, so a batch dispatched just under the
+    // deadline could overshoot the hosted wall-clock and produce a 504/TOOL_ERR. Racing
+    // guarantees we abandon an in-flight hanging batch the instant the deadline passes and
+    // return whatever was discovered so far — never a hard timeout. (Loop-3 fix, 0.9.6.)
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      return { urls: [...discovered], hitDeadline: true };
+    }
+    const batchWork = Promise.allSettled(
       unvisited.map(async ({ url, depth }) => {
         if (depth >= maxDepth) return { links: [] };
         const response = await fetchViaProxy(url, apiKey, { tool: "map", timeout: TIMEOUTS.CRAWL_STATIC });
@@ -447,6 +456,20 @@ async function parallelBfsCrawl(
         return { links: extractLinks(response.data, url), depth };
       })
     );
+    const DEADLINE_SENTINEL = Symbol("deadline");
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const raced = await Promise.race([
+      batchWork,
+      new Promise<typeof DEADLINE_SENTINEL>((resolve) => {
+        deadlineTimer = setTimeout(() => resolve(DEADLINE_SENTINEL), remainingMs);
+      }),
+    ]);
+    if (deadlineTimer) clearTimeout(deadlineTimer);
+    if (raced === DEADLINE_SENTINEL) {
+      // Deadline fired mid-batch — abandon the in-flight fetches, return graceful partial.
+      return { urls: [...discovered], hitDeadline: true };
+    }
+    const results = raced;
 
     for (const result of results) {
       if (result.status !== "fulfilled") continue;
