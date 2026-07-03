@@ -6,7 +6,27 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased] — in testing on staging
 
-Round 3 Fix & Verify revamp — will ship as **0.9.2** (0.9.1 is already on npm). Code lives on the `staging` branch of the internal test repo; **not yet released**. 3 gates remain: rotate the 4 leaked credentials, decide the monitor + bot-detection architecture, human merge-review.
+P0 unified-key + agent-first correctness pass (Loop 1→2→3: audit → adversarial test → fix → review). Destined for **0.9.3**. Code on the `staging` branch of the internal test repo; **not yet released**. The unified-key credential-threading fix (one `NOVADA_API_KEY` unlocks Web Unblocker / Proxy / Browser on the hosted endpoint too) is held on a separate GATED branch pending a deploy decision.
+
+### Fixed
+- **Health probe false-negative (P0):** the Web Unblocker health probe sent `js_render:false`, which the backend answers with `code=5001`, mislabeling an *active* Web Unblocker as "not_activated". Probe now sends `js_render:true`, and only `code=5001` maps to "not_activated" (any other non-zero code surfaces as a real error). Fixes `novada_health` + `novada_health_all`; the proxy probe now uses the auto-fetch-aware resolver.
+- **Stale-version shadow (P0):** all documented client configs now pin `novada-mcp@latest`, so a globally-installed old build can no longer silently shadow `npx`. Added a "staying on the latest version" troubleshooting note + a no-global-install convention.
+- **Dead scraper-status route:** removed the `api-m.novada.com/v1/scraper/{task_id}` GET fallback (returned HTTP 404) and the now-orphaned `SCRAPER_STATUS_BASE` / `SCRAPERAPI_BASE` constants. A `not_found` for a just-submitted task now carries a propagation-aware retry hint instead of a definitive give-up.
+- **Structured errors:** `novada_setup` / `novada_session_stats` no longer dump raw ZodError JSON on invalid params.
+
+### Changed
+- **Tool descriptions & routing (agent-first "right prompt → right tool"):** corrected `novada_scrape` formats (dropped `csv`/`html`/`xlsx` the schema rejects; documented `toon`); `novada_scraper_submit` no longer claims "any URL" (it is platform + operation only); `novada_ai_monitor` clarified as a domain-filtered web search (not a direct model query); `novada_discover` category legend corrected; `novada_verify` wording aligned. Sharpened "Best for / Not for" to disambiguate `extract` vs `unblock` vs `scrape` and `search` vs `research` vs `map` vs `crawl` vs `site_copy`.
+- **Three previously-unwired tools are now usable:** `novada_scraper_task_mgmt`, `novada_static_ip_mgmt`, `novada_capture_apikey` were implemented but never registered — now wired into the tool surface (account group). `novada_capture_apikey` masks the returned key (`****last4`); the two management tools gate writes behind `confirm:true`.
+- `novada_setup` env table now lists `NOVADA_WEB_UNBLOCKER_KEY` and notes a single `NOVADA_API_KEY` already covers it.
+
+### Security
+- Input hardening on the newly-wired management tools: regex/length constraints on task ids, region, IP list, and keyword params (untrusted-input rule).
+
+---
+
+## [0.9.2] — 2026-07-03
+
+Round 3 Fix & Verify revamp — **shipped to npm + hosted on 2026-07-03**. Also: NOV-682 — over-long search queries are now truncated at a word boundary (with a `query_truncated` marker in all response paths) instead of throwing.
 
 ### Fixed
 - **36 defects** across `crawl` (glob + dedup), `discover` (category gating), `extract` (credential redaction + `urls` alias + block-page detection), `fields` (description quality), `map` (sitemap honesty), `research` (synthesis), `search` (sentinel + time_range + JSON), `verify` (stance mitigation) — each independently verified and reviewed. Detail: Linear NOV-680.
