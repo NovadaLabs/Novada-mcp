@@ -6,7 +6,7 @@
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
   },
-  "version": "0.9.1",
+  "version": "0.9.2",
   "tools": [
     {
       "name": "novada_search",
@@ -104,13 +104,29 @@
       "path": "skills/novada-agent/SKILL.md"
     }
   ],
-  "categories": ["web-search", "web-scraping", "research", "data-extraction"],
-  "topics": ["search", "extract", "crawl", "map", "research", "proxy", "anti-bot", "geo-targeting", "rag", "ai-agents"],
+  "categories": [
+    "web-search",
+    "web-scraping",
+    "research",
+    "data-extraction"
+  ],
+  "topics": [
+    "search",
+    "extract",
+    "crawl",
+    "map",
+    "research",
+    "proxy",
+    "anti-bot",
+    "geo-targeting",
+    "rag",
+    "ai-agents"
+  ],
   "packages": [
     {
       "registryType": "npm",
       "identifier": "novada-mcp",
-      "version": "0.9.1",
+      "version": "0.9.2",
       "transport": {
         "type": "stdio"
       },
