@@ -9,6 +9,7 @@ import { makeNovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors
 import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
+import { isBrowserAvailableOnRuntime, getBrowserUnavailableError } from "../utils/runtime.js";
 
 export { detectJsHeavyContent } from "../utils/index.js";
 
@@ -485,6 +486,15 @@ async function extractSingleInner(
 
   // Force modes (or registry-resolved modes) skip escalation logic
   if (effectiveMode === "browser") {
+    // Bug1/Bug3 fix: pre-check runtime capability before attempting CDP connection.
+    // On serverless (Vercel/Lambda), connectOverCDP cannot hold the WS and fails with a raw
+    // "AuthorizationError" that looks like a credentials problem but is actually a transport
+    // limitation. Fail fast with a structured, actionable error instead.
+    // isBrowserAvailableOnRuntime() checks: isHostedEnvironment() (false on Vercel unless
+    // DEPLOYMENT_SUPPORTS_WS=true override) AND whether NOVADA_BROWSER_WS creds are set.
+    if (!isBrowserAvailableOnRuntime()) {
+      return getBrowserUnavailableError("browser");
+    }
     html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
     usedMode = "browser";
   } else if (effectiveMode === "render") {
