@@ -71,13 +71,13 @@ export declare function resolveBrowserWs(apiKey?: string): Promise<string | null
 /**
  * Resolve proxy credentials with priority:
  * 1. Explicit env vars (NOVADA_PROXY_USER + NOVADA_PROXY_PASS + NOVADA_PROXY_ENDPOINT) — no API call.
- * 2. Auto-fetch via caller-supplied apiKey (or NOVADA_API_KEY) when only NOVADA_PROXY_ENDPOINT is set.
+ * 2. Auto-fetch sub-account via apiKey when NOVADA_PROXY_ENDPOINT is set (custom endpoint).
+ * 3. Auto-fetch sub-account via apiKey with NO endpoint configured → use the universal
+ *    gateway proxy.novada.pro:7777. This is the hosted-server path: the caller supplies
+ *    only an API key, we derive a working {user,pass,endpoint} entirely from it.
  *
- * NOVADA_PROXY_ENDPOINT is required in both cases.
- * Returns null if NOVADA_PROXY_ENDPOINT is not set (proxy tools disabled).
- *
- * @param apiKey - Caller's API key. Takes priority over NOVADA_API_KEY for the auto-fetch call.
- *   Pass the per-request key here so hosted-server requests are billed to the caller, not the server account.
+ * @param apiKey - Caller's API key. Takes priority over the store-scoped key and NOVADA_API_KEY,
+ *   so hosted-server requests are billed to the caller, not the server account.
  */
 export declare function resolveProxyCredentials(apiKey?: string): Promise<{
     user: string;

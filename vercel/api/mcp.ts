@@ -277,7 +277,7 @@ const TOOLS = [
   { name: "novada_scrape",              title: "Platform Scraper",           schema: ScrapeParamsSchema,              description: "Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings — NOT general websites (use extract for those)." },
   { name: "novada_verify",              title: "Claim Verifier",             schema: VerifyParamsSchema,              description: "Fact-check a claim by searching from 3 angles (supporting, skeptical, fact-check). Use when you need to validate a statement before citing it. Returns verdict (supported/unsupported/contested) + confidence 0-100." },
   { name: "novada_unblock",             title: "Anti-Bot Unblocking",        schema: UnblockParamsSchema,             description: "Get raw HTML from bot-protected pages via JS rendering or headless browser. Use only when extract fails on a protected page and you need the raw HTML." },
-  { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate a cloud browser via CDP — click, type, screenshot, navigate. Local MCP only (not available on hosted)." },
+  { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key." },
   { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Generate proxy credentials (URL/env/curl format) for your own HTTP clients. Not needed for extract/crawl — those handle proxies internally." },
   { name: "novada_proxy_residential",   title: "Residential Proxy",          schema: ProxyResidentialParamsSchema,    description: "Residential proxy credentials — real home ISP IPs, best for anti-bot bypass. For web extraction, use extract instead." },
   { name: "novada_proxy_isp",           title: "ISP Proxy",                  schema: ProxyIspParamsSchema,            description: "ISP proxy credentials — looks like home users. For web extraction, use extract instead." },
@@ -318,7 +318,10 @@ const TOOLS = [
 // Tools that are architecturally unavailable on hosted (Vercel) but should still
 // be callable (returns NOT_AVAILABLE_ON_HOSTED error) if explicitly requested.
 // Separated from TOOLS array because .map() strips non-standard properties.
-const HOSTED_HIDDEN = new Set(["novada_browser", "novada_browser_flow"]);
+// novada_browser is ENABLED on hosted (one-shot CDP to Novada's remote cloud browser
+// works — verified 2026-07-03). novada_browser_flow stays hidden: it keeps a persistent
+// session across MULTIPLE tool calls, which a per-request serverless isolate cannot hold.
+const HOSTED_HIDDEN = new Set(["novada_browser_flow"]);
 
 // ─── Tool-set filtering (?tools= / ?groups=) ─────────────────────────────────
 // Lets a client request a slim toolset, e.g. ?groups=search,scrape or
@@ -686,17 +689,13 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         case "novada_unblock":
           result = await withWallClock(name, novadaUnblock(validateUnblockParams(argsObj), apiKey)); break;
         case "novada_browser":
-          // 🔴 NOT AVAILABLE ON HOSTED — Playwright native deps don't run in Edge runtime.
-          // No work done → refund the pre-decremented quota (NOV-578).
-          logUsage(env, ctx.token, name, false, Date.now() - started);
-          await refundQuota(ctx.tokenHash, env);
-          return {
-            content: [{
-              type: "text" as const,
-              text: "Error [NOT_AVAILABLE_ON_HOSTED]: novada_browser requires native Playwright binaries and cannot run on the hosted MCP server.\nagent_instruction: To use novada_browser, install the local MCP server via `npx novada-mcp` and call it from your client instead. All other Novada tools (search/scrape/extract/map/crawl/verify/research/proxy/*) work on the hosted server.",
-            }],
-            isError: true,
-          };
+          // ENABLED ON HOSTED (2026-07-03): connectOverCDP talks to Novada's REMOTE cloud
+          // browser over WS — needs playwright-core (vendored, real) but NOT local browser
+          // binaries. A one-shot task (connect→navigate→snapshot→close) completes in ~6s,
+          // well inside the wall-clock budget. resolveBrowserWs(apiKey) auto-provisions the
+          // caller's browser sub-account (`-zone-browser` zone). The prior "AuthorizationError"
+          // was a missing zone suffix in the WSS username, not a transport limitation.
+          result = await withWallClock(name, novadaBrowser(validateBrowserParams(argsObj), apiKey)); break;
         case "novada_health":
           validateHealthParams(argsObj);
           result = await novadaHealth(apiKey); break;

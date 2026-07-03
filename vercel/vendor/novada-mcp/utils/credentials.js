@@ -154,7 +154,13 @@ export async function fetchBrowserSubAccountCredentials(apiKey) {
         if (accounts.length === 0)
             return null;
         const { account, password } = accounts[0];
-        const wsUrl = `wss://${account}:${password}@${BROWSER_WS_HOST}`;
+        // The Browser API sub-account MUST carry the `-zone-browser` zone suffix in the
+        // WSS username, exactly like proxy sub-accounts carry `-zone-res`/`-zone-isp`.
+        // Without it the WS handshake completes HTTP 101 then closes with code 1006
+        // (routing mismatch), which playwright-core misreports as "AuthorizationError:
+        // Account or Password verification failed" — the red herring that made hosted
+        // browser look impossible. Verified live: suffix present → CDP connects in ~6s.
+        const wsUrl = `wss://${account}-zone-browser:${password}@${BROWSER_WS_HOST}`;
         _browserWsCache.set(fp, { wsUrl, fetchedAt: Date.now() });
         return wsUrl;
     }
@@ -177,27 +183,33 @@ export async function resolveBrowserWs(apiKey) {
         return null;
     return fetchBrowserSubAccountCredentials(key);
 }
+/** Universal proxy gateway host — works for every account (zone suffix on the
+ * username selects the product/geo). Used when no per-account NOVADA_PROXY_ENDPOINT
+ * is configured, e.g. on the hosted server. Verified live: routes residential IPs. */
+const UNIVERSAL_PROXY_ENDPOINT = "proxy.novada.pro:7777";
 /**
  * Resolve proxy credentials with priority:
  * 1. Explicit env vars (NOVADA_PROXY_USER + NOVADA_PROXY_PASS + NOVADA_PROXY_ENDPOINT) — no API call.
- * 2. Auto-fetch via caller-supplied apiKey (or NOVADA_API_KEY) when only NOVADA_PROXY_ENDPOINT is set.
+ * 2. Auto-fetch sub-account via apiKey when NOVADA_PROXY_ENDPOINT is set (custom endpoint).
+ * 3. Auto-fetch sub-account via apiKey with NO endpoint configured → use the universal
+ *    gateway proxy.novada.pro:7777. This is the hosted-server path: the caller supplies
+ *    only an API key, we derive a working {user,pass,endpoint} entirely from it.
  *
- * NOVADA_PROXY_ENDPOINT is required in both cases.
- * Returns null if NOVADA_PROXY_ENDPOINT is not set (proxy tools disabled).
- *
- * @param apiKey - Caller's API key. Takes priority over NOVADA_API_KEY for the auto-fetch call.
- *   Pass the per-request key here so hosted-server requests are billed to the caller, not the server account.
+ * @param apiKey - Caller's API key. Takes priority over the store-scoped key and NOVADA_API_KEY,
+ *   so hosted-server requests are billed to the caller, not the server account.
  */
 export async function resolveProxyCredentials(apiKey) {
     const direct = getProxyCredentials();
     if (direct)
         return direct;
-    const endpoint = process.env.NOVADA_PROXY_ENDPOINT;
+    // Prefer the explicit arg, then the request-scoped store key (hosted pass-through),
+    // then the server-level env var. Without the store fallback, hosted proxy calls would
+    // bill the server account instead of the caller.
+    const effectiveApiKey = apiKey ?? store.getStore()?.apiKey ?? process.env.NOVADA_API_KEY;
+    const endpoint = process.env.NOVADA_PROXY_ENDPOINT ?? (effectiveApiKey ? UNIVERSAL_PROXY_ENDPOINT : undefined);
     if (!endpoint)
         return null;
-    // NOVADA_PROXY_ENDPOINT is set but user/pass are missing — try auto-fetch.
-    // Prefer the caller-supplied key; fall back to the server-level env var.
-    const effectiveApiKey = apiKey ?? process.env.NOVADA_API_KEY;
+    // No user/pass configured — auto-fetch a sub-account with the effective key.
     if (!effectiveApiKey)
         return null;
     const fetched = await fetchProxySubAccountCredentials(effectiveApiKey);
