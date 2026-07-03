@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { withCredentials, getWebUnblockerKey, getBrowserWs, getProxyCredentials, resolveProxyCredentials, redactSecret } from "../../src/utils/credentials.js";
+import {
+  withCredentials,
+  getWebUnblockerKey,
+  getBrowserWs,
+  getProxyCredentials,
+  resolveProxyCredentials,
+  redactSecret,
+  fetchProxySubAccountCredentials,
+  fetchBrowserSubAccountCredentials,
+} from "../../src/utils/credentials.js";
 
 describe("credentials — env var fallback", () => {
   beforeEach(() => {
@@ -191,6 +200,98 @@ describe("resolveProxyCredentials — apiKey threading (L3 unified-key)", () => 
     const headers = (callArgs[1] as RequestInit).headers as Record<string, string>;
     expect(headers["Authorization"]).toBe("Bearer caller-key");
     expect(headers["Authorization"]).not.toBe("Bearer server-key");
+  });
+});
+
+// TENANT SAFETY (multi-tenant hosted server): the auto-fetch caches are process-global
+// and shared across callers. Each entry must be keyed by the fetching apiKey's fingerprint
+// so caller A's fetched proxy/browser credentials are NEVER served to caller B within the
+// 6h TTL. These tests assert that a second, DIFFERENT key does not read the first key's
+// cache entry, and that the SAME key does hit the cache (no redundant network call).
+describe("auto-fetch cache — per-key tenant isolation", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("fetchProxySubAccountCredentials does NOT serve caller A's creds to caller B", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { list: [{ account: "A-user", password: "A-pass" }] } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { list: [{ account: "B-user", password: "B-pass" }] } }),
+      } as Response);
+
+    const a = await fetchProxySubAccountCredentials("tenant-a-key-cache-iso-proxy");
+    const b = await fetchProxySubAccountCredentials("tenant-b-key-cache-iso-proxy");
+
+    // B must get its OWN creds, not A's cached creds.
+    expect(a).toEqual({ account: "A-user", password: "A-pass" });
+    expect(b).toEqual({ account: "B-user", password: "B-pass" });
+    // A different key must trigger its own network fetch (no cross-tenant cache hit).
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    // Authorization headers must carry each caller's own key.
+    const h0 = (fetchSpy.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const h1 = (fetchSpy.mock.calls[1][1] as RequestInit).headers as Record<string, string>;
+    expect(h0["Authorization"]).toBe("Bearer tenant-a-key-cache-iso-proxy");
+    expect(h1["Authorization"]).toBe("Bearer tenant-b-key-cache-iso-proxy");
+  });
+
+  it("fetchProxySubAccountCredentials reuses the cache for the SAME key (one network call)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { list: [{ account: "same-user", password: "same-pass" }] } }),
+    } as Response);
+
+    const key = "tenant-same-key-cache-hit-proxy";
+    const first = await fetchProxySubAccountCredentials(key);
+    const second = await fetchProxySubAccountCredentials(key);
+
+    expect(first).toEqual({ account: "same-user", password: "same-pass" });
+    expect(second).toEqual(first);
+    // Second call served from cache → only ONE network call.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetchBrowserSubAccountCredentials does NOT serve caller A's WSS endpoint to caller B", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { list: [{ account: "A-br", password: "A-brpass" }] } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 0, data: { list: [{ account: "B-br", password: "B-brpass" }] } }),
+      } as Response);
+
+    const a = await fetchBrowserSubAccountCredentials("tenant-a-key-cache-iso-browser");
+    const b = await fetchBrowserSubAccountCredentials("tenant-b-key-cache-iso-browser");
+
+    // Each caller gets a WSS URL built from its OWN sub-account, never the other's.
+    expect(a).toContain("A-br:A-brpass@");
+    expect(b).toContain("B-br:B-brpass@");
+    expect(a).not.toEqual(b);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("getBrowserWs does NOT leak the auto-fetch cache (no apiKey to match against)", async () => {
+    delete process.env.NOVADA_BROWSER_WS;
+    // Populate the browser cache for some caller...
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 0, data: { list: [{ account: "leaky", password: "leaky-pass" }] } }),
+    } as Response);
+    await fetchBrowserSubAccountCredentials("some-tenant-key-getbrowserws-leak");
+
+    // getBrowserWs() has no apiKey context → must NOT return the cached value.
+    // (store empty + env unset → undefined). This closes the unconditional-cache-fallback leak.
+    expect(getBrowserWs()).toBeUndefined();
   });
 });
 
