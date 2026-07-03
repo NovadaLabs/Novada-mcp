@@ -128,6 +128,16 @@ import {
   novadaIpWhitelist,
   validateIpWhitelistParams,
   IpWhitelistParamsSchema,
+  // Ghost tools — complete implementations wired in L3 fix
+  novadaCaptureApikey,
+  validateCaptureApikeyParams,
+  CaptureApikeyParamsSchema,
+  novadaScraperTaskMgmt,
+  validateScraperTaskMgmtParams,
+  ScraperTaskMgmtParamsSchema,
+  novadaStaticIpMgmt,
+  validateStaticIpMgmtParams,
+  StaticIpMgmtParamsSchema,
   // NOV-321 / NOV-323: session telemetry + search feedback (in-memory, auth-free)
   novadaSessionStats,
   validateSessionStatsParams,
@@ -220,10 +230,10 @@ By default returns full page content for maximum information. Add clean=true to 
   },
   {
     name: "novada_crawl",
-    description: `Use when you need content from multiple pages of a site and don't have the URLs yet. Crawls BFS or DFS up to 20 pages, extracts content from each. Use select_paths globs to target specific sections (e.g. "/docs/api/**").
+    description: `Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS or DFS, extracts content from each page inline. Use select_paths globs to target specific sections (e.g. "/docs/api/**").
 
-**Best for:** Doc site ingestion, competitive content analysis, building knowledge bases from a domain.
-**Not for:** A single page (use novada_extract), URL discovery without content extraction (use novada_map — much faster).
+**Best for:** Competitive content analysis, extracting a handful of related pages inline (returns page bodies directly).
+**Not for:** A single page (use novada_extract), URL discovery without content extraction (use novada_map — much faster), copying an entire site to disk (use novada_site_copy — it handles hundreds of pages and writes files).
 
 Common mistakes:
 - Do NOT set max_pages > 10 for large sites — crawl time scales linearly (~1.4s/page). At max_pages=20, expect 28s minimum.
@@ -231,12 +241,13 @@ Common mistakes:
 - Use select_paths to restrict to relevant URL patterns before setting max_pages high.
 
 When to use:
-- You need content from multiple pages on one domain (e.g., all /docs/* pages).
-- You need BFS discovery of related content under a path prefix.
+- You need content from a small set of related pages on one domain (e.g., all /docs/* pages, up to 20).
+- You need BFS discovery of related content under a path prefix and want bodies inline.
 
 Not for:
 - Single-URL extraction — use novada_extract.
-- Finding all URLs on a site without downloading content — use novada_map.`,
+- Finding all URLs on a site without downloading content — use novada_map.
+- Copying a whole docs site or knowledge base to disk — use novada_site_copy (handles hundreds of pages, returns a manifest).`,
     inputSchema: zodToMcpSchema(CrawlParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
@@ -244,8 +255,9 @@ Not for:
     name: "novada_research",
     description: `The most powerful research tool in any MCP server. One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extract full content from top 5 sources → synthesized cited report. No other MCP server can do this.
 
-**Use for:** Any complex question needing multiple sources. Comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.
-**Not for:** Single fact lookup (novada_search) or reading one URL (novada_extract).
+**Use for:** Any complex question requiring synthesis across ≥3 independent sources. Comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.
+**Not for:** Single fact lookup or finding one URL — use novada_search for that (faster, cheaper). Reading a known URL — use novada_extract.
+**Rule of thumb:** If the answer could fit in one search result snippet, use novada_search. If you need to synthesize information from multiple sources into a report, use novada_research.
 **Depth:** "quick" (3 queries), "deep" (5-6), "comprehensive" (8-10), "auto" (default).
 **Key advantage:** Agents call this ONCE instead of orchestrating search→extract→synthesize manually. Saves tokens, time, and complexity.
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
@@ -254,10 +266,10 @@ Not for:
   },
   {
     name: "novada_map",
-    description: `Use when you need to know what URLs exist on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl. Returns URL list only — no content.
+    description: `Use when you need to know what URLs exist on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl. Returns URL list only — no content. Hard cap: 100 URLs.
 
-**Best for:** Site structure discovery, finding the correct subpage URL when you extracted the wrong page.
-**Not for:** Reading page content (follow with novada_extract or novada_crawl).
+**Best for:** Site structure discovery, finding the correct subpage URL when you extracted the wrong page, pre-flight before novada_crawl or novada_extract.
+**Not for:** Reading page content (follow with novada_extract or novada_crawl). Copying an entire site to disk (use novada_site_copy — it handles hundreds of pages).
 **Note:** Limited results on JavaScript SPAs — will flag this in output.`,
     inputSchema: zodToMcpSchema(MapParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
@@ -280,8 +292,8 @@ Not for:
     description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 13 platforms (~78 operations): Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more.
 
 **Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
-**Not for:** General web pages (use novada_extract), unknown domains not in the platform list (use novada_crawl).
-**Output formats:** "markdown" (default, agent-optimized table), "json" (structured, for programmatic use).
+**Not for:** General web pages not in the platform list — use novada_extract for arbitrary URLs instead.
+**Output formats:** "markdown" (default, agent-optimized table), "json" (structured, for programmatic use), "toon" (token-optimized pipe-separated format — 40-65% smaller than JSON/markdown, best for large result sets in context-constrained situations).
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}
 **Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
@@ -454,12 +466,12 @@ Not for:
   },
   {
     name: "novada_discover",
-    description: `List all available Novada tools with name, description, category, and status (active/todo).
+    description: `List all available Novada tools with name, description, category, and status.
 
 **agent_instruction:** Call this first to see all available Novada tools and capabilities — especially useful when starting a new task and you need to find the right tool.
-**Returns:** Markdown table grouped by category — Content Retrieval, Scraping & Verification, Proxy, Browser & Rendering, Health & Discovery, Auth.
+**Returns:** Markdown table grouped by category — Content Retrieval, Scraping & Verification, Proxy, Browser & Rendering, Account & Billing, Health & Discovery.
 **Filter:** Pass category to narrow to a specific group (e.g. category="Proxy" to see all proxy tools).
-**Status legend:** active = available now; todo = planned but not yet implemented.
+**Status legend:** active = available now.
 
 **KEY FACT: ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. No separate keys needed for any product. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no extra API key. If a tool fails, call novada_health_all() to diagnose.`,
     inputSchema: zodToMcpSchema(DiscoverParamsSchema),
@@ -467,11 +479,11 @@ Not for:
   },
   {
     name: "novada_scraper_submit",
-    description: `Submit an async scraping task for any URL. Returns a task_id — use novada_scraper_status to poll progress, then novada_scraper_result to retrieve data.
+    description: `Submit an async scraping task. Returns a task_id — use novada_scraper_status to poll progress, then novada_scraper_result to retrieve data.
 
-**Best for:** Scraping URLs that require async processing (JS-heavy pages, rate-limited targets, long-running extractions).
+**Best for:** Scraping platform operations that require async processing (rate-limited targets, long-running extractions).
 **Workflow:** submit → poll status → retrieve result. Three separate calls.
-**Params:** platform (the scraper domain, e.g. 'amazon.com'), operation (the operation ID for that platform), and optional params (operation-specific key/values). These three are the ONLY accepted fields — this tool takes no category/type selector; the platform + operation pair alone determines what runs.
+**Params:** platform (the scraper domain, e.g. 'amazon.com'), operation (the operation ID for that platform), and optional params (operation-specific key/values). These three are the ONLY accepted fields — this tool takes no URL and no category/type selector; the platform + operation pair alone determines what runs.
 **Valid platform values (scraper_name):** amazon.com, walmart.com, google.com, bing.com, duckduckgo.com, yandex.com, x.com, tiktok.com, instagram.com, facebook.com, youtube.com, linkedin.com, github.com. Read novada://scraper-platforms for the full operation IDs per platform.
 **Next step:** After calling this tool, use novada_scraper_status with the returned task_id to check progress.
 **Note:** If the endpoint returns a placeholder task_id, contact Novada support at support@novada.com to confirm operation availability.
@@ -516,9 +528,10 @@ Not for:
   },
   {
     name: "novada_ai_monitor",
-    description: `Use when you need to check how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand or product. Searches each AI platform's indexed content for brand mentions, analyzes sentiment, extracts claims, and identifies competitor mentions.
+    description: `Use when you need to check how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand or product. Runs domain-filtered Google searches (site:chatgpt.com, site:perplexity.ai, etc.) to find indexed content about the brand on each AI platform's domain, then analyzes sentiment, extracts claims, and identifies competitor mentions.
 
-**Best for:** Brand monitoring across AI search engines, competitive positioning analysis, detecting how AI recommends or compares your product.
+**How it works:** For each selected model, executes a Google search scoped to that model's domain (e.g. site:openai.com "brandname") and analyzes the returned snippets. Does NOT query AI models directly.
+**Best for:** Brand monitoring across AI search engines, competitive positioning analysis, detecting how AI platforms discuss or recommend your product.
 **Not for:** General web search (use novada_search), real-time social monitoring (use novada_scrape with twitter/reddit).
 **Output:** Per-model sentiment (positive/neutral/negative), key claims, competitor mentions, source URLs.
 **Models supported:** chatgpt, perplexity, grok, claude, gemini. Default checks: chatgpt, perplexity, grok.`,
@@ -657,6 +670,37 @@ Output pipeline supports optional project folders for grouping related queries.`
     // per-tool annotations can't vary by action, so the tool takes its most dangerous posture.)
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
   },
+  // ─── Ghost tools wired in L3 fix ──────────────────────────────────────────
+  {
+    name: "novada_capture_apikey",
+    description: `Get or reset the Capture API key for the account. Wraps POST /v1/capture/get_apikey and /v1/capture/reset_apikey.
+
+**Actions:** "get" = retrieve the current capture/scraper API key (read-only). "reset" = regenerate the key — DESTRUCTIVE, invalidates the old key, requires confirm:true.
+**Behavior:** Without confirm:true on "reset", returns a warning preview and does NOT call the API.
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+    inputSchema: zodToMcpSchema(CaptureApikeyParamsSchema),
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
+  },
+  {
+    name: "novada_scraper_task_mgmt",
+    description: `Manage async scraper tasks via the developer-api. List tasks, check status by task_id(s), download results, or get the last task's status.
+
+**Actions:** "list" (paginated task list), "status" (status by task_ids — comma-separated, max 200), "download" (download result by task_id), "last_status" (most recent task).
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).
+**Note:** This wraps management endpoints on api-m.novada.com, separate from the scraper.novada.com submission API. For submitting new tasks use novada_scraper_submit; for polling a known task_id use novada_scraper_status.`,
+    inputSchema: zodToMcpSchema(ScraperTaskMgmtParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_static_ip_mgmt",
+    description: `Manage static ISP IPs on the account. Wraps /v1/static_house/* developer-api endpoints.
+
+**Actions:** "open" = purchase new static IPs (WRITE, requires confirm:true). "renew" = renew existing IPs (WRITE, requires confirm:true). "export" = export filtered IP list (read-only). "list" = paginated IP list (read-only).
+**Behavior:** Without confirm:true on "open"/"renew", returns a preview and does NOT hit the API.
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+    inputSchema: zodToMcpSchema(StaticIpMgmtParamsSchema),
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
+  },
   // ─── NOV-321 / NOV-323: session telemetry + search feedback ───────────────
   {
     name: "novada_session_stats",
@@ -690,9 +734,9 @@ const CATEGORY_MAP: Record<string, string[]> = {
   search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor", "novada_search_feedback"],
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
   browser: ["novada_browser", "novada_browser_flow"],
-  scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
+  scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result", "novada_unblock"],
   health:  ["novada_health", "novada_health_all", "novada_discover", "novada_setup", "novada_session_stats"],
-  account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_proxy_account_create", "novada_proxy_account_list", "novada_traffic_daily", "novada_plan_balance_all", "novada_capture_logs", "novada_account_summary", "novada_ip_whitelist"],
+  account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_proxy_account_create", "novada_proxy_account_list", "novada_traffic_daily", "novada_plan_balance_all", "novada_capture_logs", "novada_account_summary", "novada_ip_whitelist", "novada_capture_apikey", "novada_scraper_task_mgmt", "novada_static_ip_mgmt"],
 };
 
 /** Normalize short name → full tool name */
@@ -1018,11 +1062,20 @@ class NovadaMCPServer {
           case "novada_ip_whitelist":
             result = await novadaIpWhitelist(validateIpWhitelistParams(args as Record<string, unknown>));
             break;
+          case "novada_capture_apikey":
+            result = await novadaCaptureApikey(validateCaptureApikeyParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_scraper_task_mgmt":
+            result = await novadaScraperTaskMgmt(validateScraperTaskMgmtParams(args as Record<string, unknown>), API_KEY);
+            break;
+          case "novada_static_ip_mgmt":
+            result = await novadaStaticIpMgmt(validateStaticIpMgmtParams(args as Record<string, unknown>), API_KEY);
+            break;
           default:
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs, novada_ip_whitelist, novada_session_stats, novada_search_feedback`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs, novada_account_summary, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback`,
               }],
               isError: true,
             };

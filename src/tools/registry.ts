@@ -90,13 +90,13 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   // ─── Scraping & Verification ────────────────────────────────────────────
   {
     name: "novada_scrape",
-    description: "Extract structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.) in a single synchronous call; supports markdown/json/csv/html/xlsx output",
+    description: "Extract structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.) in a single synchronous call; supports markdown/json/toon output",
     category: "Scraping & Verification",
     status: "active",
   },
   {
     name: "novada_verify",
-    description: "Fact-check a claim by running 3 parallel queries (supporting + skeptical + neutral); returns verdict (supported/unsupported/contested/insufficient_data) and confidence score 0–100",
+    description: "Fact-check a claim by running 3 parallel queries (supporting + skeptical + fact-check); returns verdict (supported/unsupported/contested/insufficient_data) and confidence score 0–100",
     category: "Scraping & Verification",
     status: "active",
   },
@@ -244,6 +244,24 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   {
     name: "novada_ip_whitelist",
     description: "Manage the proxy IP whitelist (add/list/del/remark) for Residential (1), Unlimited (4), and Static ISP (5) products; add/del are writes requiring confirm:true.",
+    category: "Account & Billing",
+    status: "active",
+  },
+  {
+    name: "novada_capture_apikey",
+    description: "Get or reset the Capture API key for the account; reset is a WRITE action requiring confirm:true after human approval.",
+    category: "Account & Billing",
+    status: "active",
+  },
+  {
+    name: "novada_scraper_task_mgmt",
+    description: "Manage async scraper tasks: list, check status, download results, or get last task status via the developer-api scraper management endpoints.",
+    category: "Account & Billing",
+    status: "active",
+  },
+  {
+    name: "novada_static_ip_mgmt",
+    description: "Manage static ISP IPs: open (WRITE, confirm gate), renew (WRITE, confirm gate), export, or list; wraps /v1/static_house/* developer-api endpoints.",
     category: "Account & Billing",
     status: "active",
   },
