@@ -11,6 +11,30 @@ import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } fr
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
 const QUERY_MAX_LENGTH = 500;
 
+/**
+ * NOV-682: Bound an over-long query by truncating at a word boundary instead of
+ * rejecting it. Google only ranks on the first ~32 words, so cutting at 500 chars
+ * loses no relevance while keeping the upstream payload bounded (huge strings
+ * caused 60s+ scraper hangs). Throwing wasted the calling agent's turn on a
+ * recoverable condition. Returns the bounded query plus a `truncated` marker
+ * (e.g. "query_truncated:812→497") for surfacing in the tool response, or null
+ * when the query was already within bounds.
+ */
+export function boundQuery(query: string): { query: string; truncated: string | null } {
+  if (query.length <= QUERY_MAX_LENGTH) {
+    return { query, truncated: null };
+  }
+  let cut = query.slice(0, QUERY_MAX_LENGTH);
+  // slice() counts UTF-16 code units — don't leave a lone high surrogate at the
+  // cut point (corrupts emoji / non-BMP CJK characters).
+  const lastCode = cut.charCodeAt(cut.length - 1);
+  if (lastCode >= 0xd800 && lastCode <= 0xdbff) cut = cut.slice(0, -1);
+  const lastSpace = cut.lastIndexOf(" ");
+  // Cut at a word boundary unless it would drop more than half the budget.
+  const bounded = (lastSpace > QUERY_MAX_LENGTH / 2 ? cut.slice(0, lastSpace) : cut).trim();
+  return { query: bounded, truncated: `query_truncated:${query.length}→${bounded.length}` };
+}
+
 const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 
 const _searchCache = new Map<string, { result: string; ts: number }>();
@@ -369,16 +393,8 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   if (!query) {
     throw new Error('query is required and must be a non-empty string');
   }
-  // FIX-2: Reject over-long queries immediately — prevents submitting huge strings
-  // to the upstream scraper API which can cause 60s+ hangs.
-  if (query.length > QUERY_MAX_LENGTH) {
-    throw makeNovadaError(
-      NovadaErrorCode.INVALID_PARAMS,
-      `query exceeds maximum length of ${QUERY_MAX_LENGTH} characters (got ${query.length}). Shorten your query and retry.`,
-      `query_length:${query.length} max:${QUERY_MAX_LENGTH}`
-    );
-  }
-  params = { ...params, query };
+  const { query: boundedQuery, truncated: queryTruncated } = boundQuery(query);
+  params = { ...params, query: boundedQuery };
 
   const engine = params.engine || "google";
 
@@ -548,9 +564,11 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   if (results.length === 0) {
     // F16: honour format="json" in the empty-results branch — previously always emitted
     // markdown which caused JSON.parse to throw on the caller side.
+    // NOV-682: surface truncation on the zero-result path too — otherwise an
+    // agent retrying the same over-long query never learns it was modified.
     let emptyResult: string;
     if (params.format === "json") {
-      const emptyJson = {
+      const emptyJson: Record<string, unknown> = {
         status: "ok",
         result_count: 0,
         results: [] as unknown[],
@@ -565,11 +583,12 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
         ],
         agent_instruction: "No results found. Try rephrasing the query, switching engine, or using novada_research for multi-source investigation.",
       };
+      if (queryTruncated) emptyJson.query_truncated = queryTruncated;
       emptyResult = JSON.stringify(emptyJson, null, 2);
     } else {
       emptyResult = [
         `## Search Results`,
-        `results:0 | engine:${engine}`,
+        `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}`,
         ``,
         `No results found for: "${params.query}"`,
         ``,
@@ -791,6 +810,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     // Surface a scarcity signal when fewer than `num` results were genuinely
     // available, so agents don't assume the ceiling was hit.
     if (scarcity) jsonResult.scarcity = scarcity;
+    if (queryTruncated) jsonResult.query_truncated = queryTruncated;
     // Wire output save — best-effort, never breaks the tool.
     // Inject output_saved as a field so JSON remains valid and parseable.
     // FIX-1: Redact home path from output_saved before embedding in agent-visible JSON.
@@ -827,6 +847,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   if (params.exclude_social) activeFilters.push(`exclude_social:true`);
 
   if (scarcity) activeFilters.push(scarcity);
+  if (queryTruncated) activeFilters.push(queryTruncated);
 
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 

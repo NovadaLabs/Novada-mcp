@@ -40,10 +40,19 @@ afterEach(() => {
 // ─── FIX-2: Unbounded input / DoS — search ────────────────────────────────
 
 describe("FIX-2: query length cap (search)", () => {
-  it("rejects query over 500 chars with INVALID_PARAMS", async () => {
+  it("truncates query over 500 chars instead of throwing (NOV-682)", async () => {
+    // Old contract threw INVALID_PARAMS; new contract truncates at a word
+    // boundary and surfaces a query_truncated marker (see boundQuery / NOV-682).
     const longQuery = "a".repeat(501);
-    await expect(novadaSearch({ query: longQuery, engine: "google", num: 10, country: "", language: "" }, API_KEY))
-      .rejects.toMatchObject({ name: "NovadaError", code: NovadaErrorCode.INVALID_PARAMS });
+    vi.mocked(axios).post.mockResolvedValue({
+      data: { code: 0, data: { task_id: "task-1" } },
+    });
+    vi.mocked(axios).get.mockResolvedValue({
+      data: { organic_results: [] },
+    });
+    const result = await novadaSearch({ query: longQuery, engine: "google", num: 10, country: "", language: "" }, API_KEY);
+    expect(result).toContain("No results found");
+    expect(result).toContain("query_truncated:501→500");
   });
 
   it("accepts query exactly at limit (500 chars)", async () => {
