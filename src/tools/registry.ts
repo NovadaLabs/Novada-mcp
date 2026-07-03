@@ -284,3 +284,26 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
 export const REGISTERED_TOOL_NAMES: ReadonlySet<string> = new Set(
   TOOL_REGISTRY.map((t) => t.name)
 );
+
+/**
+ * The subset of TOOL_CATEGORIES that have at least one entry in TOOL_REGISTRY.
+ * Categories with zero entries (e.g. "Auth") are intentionally excluded so they
+ * never appear in the Zod enum, the inputSchema description, or Zod validation
+ * error hints shown to callers.
+ *
+ * Guaranteed non-empty at runtime because the registry always has tools.
+ * Type is `[ToolCategory, ...ToolCategory[]]` to satisfy z.enum() which requires
+ * a non-empty tuple.
+ */
+const _populatedCategories = TOOL_CATEGORIES.filter(
+  (c) => TOOL_REGISTRY.some((t) => t.category === c)
+);
+
+// z.enum() requires a non-empty tuple — assert at module load time so a
+// misconfigured empty registry surfaces as a startup error, not a type error.
+if (_populatedCategories.length === 0) {
+  throw new Error("TOOL_REGISTRY is empty — cannot derive populated categories for Zod enum");
+}
+
+export const POPULATED_TOOL_CATEGORIES: [ToolCategory, ...ToolCategory[]] =
+  _populatedCategories as [ToolCategory, ...ToolCategory[]];

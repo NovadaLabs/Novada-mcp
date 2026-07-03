@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   TOOL_REGISTRY,
   TOOL_CATEGORIES,
+  POPULATED_TOOL_CATEGORIES,
   type ToolMeta,
   type ToolCategory,
 } from "./registry.js";
@@ -15,10 +16,13 @@ import {
 
 export const DiscoverParamsSchema = z.object({
   category: z
-    .enum(TOOL_CATEGORIES)
+    // Use POPULATED_TOOL_CATEGORIES (categories with >=1 registry entry) so that
+    // zero-entry placeholders like "Auth" never appear in the enum, the inputSchema
+    // description, or Zod validation-error hints shown to callers.
+    .enum(POPULATED_TOOL_CATEGORIES)
     .optional()
     .describe(
-      `Optional category filter. One of: ${TOOL_CATEGORIES.map((c) => `'${c}'`).join(", ")}. Omit to list all tools.`
+      `Optional category filter. One of: ${POPULATED_TOOL_CATEGORIES.map((c) => `'${c}'`).join(", ")}. Omit to list all tools.`
     ),
 });
 
@@ -58,7 +62,37 @@ export async function novadaDiscover(
     : visible;
 
   if (entries.length === 0) {
-    return `No tools found for category: ${category}`;
+    // Determine why the result is empty:
+    //   (a) the category exists in the full registry but is filtered out of the
+    //       visible set → gated message with count + novada_health pointer
+    //   (b) the category has zero entries in the full registry itself → truly
+    //       unknown / empty category message
+    const fullRegistryCount = TOOL_REGISTRY.filter(
+      (t) => t.category === category
+    ).length;
+    if (fullRegistryCount > 0) {
+      // Category is real but gated in this session
+      const toolWord = fullRegistryCount === 1 ? "tool" : "tools";
+      return (
+        `Category "${category}" has ${fullRegistryCount} registered ${toolWord} ` +
+        `but none are exposed in this session. ` +
+        `Call \`novada_health\` to check which products are active on your API key ` +
+        `and whether this category is available to you.`
+      );
+    }
+    // Truly empty or unknown category (future-proofing: if a TOOL_CATEGORIES
+    // entry has no registry entries yet).
+    // Only advertise categories that actually have >= 1 registry entry so that
+    // a zero-entry placeholder (e.g. "Auth") is never listed as a retry target
+    // — an agent retrying category=Auth would loop forever.
+    const nonEmptyCategories = TOOL_CATEGORIES.filter(
+      (c) => TOOL_REGISTRY.some((t) => t.category === c)
+    );
+    const validCategories = nonEmptyCategories.join(", ");
+    return (
+      `No tools found for category: ${category}. ` +
+      `Valid categories are: ${validCategories}.`
+    );
   }
 
   // Group by category
@@ -106,6 +140,9 @@ export async function novadaDiscover(
     lines.push("");
   }
 
+  // Derive which Next Steps bullets to include based on the visible tool set.
+  const visibleNames = new Set(visible.map((t) => t.name));
+
   lines.push("---");
   lines.push("## Next Steps");
   lines.push("");
@@ -121,12 +158,16 @@ export async function novadaDiscover(
   lines.push(
     "- **Full research:** Use `novada_research` for multi-source synthesis."
   );
-  lines.push(
-    "- **Proxy access:** Use `novada_proxy` for geo-targeted IP rotation."
-  );
-  lines.push(
-    "- **Browser automation:** Use `novada_browser` for interactive flows (login, click, screenshot)."
-  );
+  if (visibleNames.has("novada_proxy")) {
+    lines.push(
+      "- **Proxy access:** Use `novada_proxy` for geo-targeted IP rotation."
+    );
+  }
+  if (visibleNames.has("novada_browser")) {
+    lines.push(
+      "- **Browser automation:** Use `novada_browser` for interactive flows (login, click, screenshot)."
+    );
+  }
 
   return lines.join("\n");
 }
