@@ -16,6 +16,17 @@ export const SCRAPER_DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
 // Response: { code: 0, data: { code: 200, html: "...", use_balance: N } }
 export const WEB_UNBLOCKER_BASE = "https://webunlocker.novada.com";
 
+/**
+ * True on serverless hosts (Vercel / AWS Lambda) that cannot hold a persistent
+ * WebSocket. The Browser API is CDP-over-WebSocket, so `render="browser"` can
+ * never run there — callers use this to fail fast with a clear error and to keep
+ * `render="auto"` from escalating into an impossible tier. (health.ts /
+ * health_all.ts carry local copies; dedupe to this in a follow-up.)
+ */
+export function isHostedEnvironment(): boolean {
+  return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
+
 // Optional: Browser API WebSocket endpoint (CDP)
 // Format: wss://username:password@upg-scbr2.novada.com
 export const BROWSER_WS_ENDPOINT = process.env.NOVADA_BROWSER_WS;
