@@ -32,7 +32,7 @@ This is **KR-5 in tongwu's June 2026 personal OKRs** — Ethan-flagged P0, targe
 | **Pre-launch checklist** | `~/Projects/novada-mcpserver/vercel/PRE_LAUNCH_CHECKLIST.md` ← READ BEFORE FLIPPING `STUB_AUTH_WARNING_ACCEPTED` TO `true` |
 | KR HTML report | `~/Projects/novada-june-kr-report-2026.html` (Section "KR-5 · Novada Hosted MCP") |
 | Upstream npm package (separate repo) | `~/Projects/novada-mcp/` — UNTOUCHED, the actual MCP tool source |
-| AgentRecall project slug | `novada-mcp` (yes, same slug as the npm package — they share history) |
+| AgentRecall project slug | `novada-mcpserver` (separate from the npm package slug `novada-mcp`) |
 
 ---
 
@@ -144,7 +144,7 @@ Recommended (post-launch) — see PRE_LAUNCH_CHECKLIST.md §RECOMMENDED:
 
 ## 9. Reference materials for cross-session context
 
-**AgentRecall** (project slug `novada-mcp`):
+**AgentRecall** (project slug `novada-mcpserver`):
 - `recall('2026 mcp target')` — KR-5 full threshold spec with M-5.1/5.2/5.3 OUTPUT/OUTCOME/KILL
 - `recall('report user cyan')` — build sprint summary 2026-06-02
 - `recall('cf-free-tier-rejects-subdomain')` — critical insight: why we pivoted to Vercel
@@ -165,9 +165,9 @@ Recommended (post-launch) — see PRE_LAUNCH_CHECKLIST.md §RECOMMENDED:
 
 1. **Read this file** end-to-end first.
 2. Check §7 "Status board" → first unchecked OUTPUT item = where to resume.
-3. If unsure of context, run `recall({ project: "novada-mcp", query: "<topic>" })`.
+3. If unsure of context, run `recall({ project: "novada-mcpserver", query: "<topic>" })`.
 4. Before any code change in `~/Projects/novada-mcpserver/`, read `vercel/PRE_LAUNCH_CHECKLIST.md` to understand pre-deploy constraints.
-5. After significant work, update this file (§7 status + §11 changelog) AND save via `remember({ project: "novada-mcp", content: "...", context: "decision" })`.
+5. After significant work, update this file (§7 status + §11 changelog) AND save via `remember({ project: "novada-mcpserver", content: "...", context: "decision" })`.
 
 ---
 
