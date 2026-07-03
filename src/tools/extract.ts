@@ -1005,6 +1005,7 @@ async function extractSingleInner(
               source: r.source,
               confidence: r.confidence,
               ...(r.source === "unresolved" && r.agent_instruction ? { agent_instruction: r.agent_instruction } : {}),
+              ...(r.warning ? { warning: r.warning } : {}),
             },
           ]))
         : null,
@@ -1117,7 +1118,8 @@ async function extractSingleInner(
           const cleanValue = typeof r.value === "string"
             ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
             : r.value;
-          lines.push(`${r.field}: ${cleanValue}${sourceTag} *(conf:${r.confidence.toFixed(2)})*`);
+          const warningTag = r.warning ? ` *(warning: ${r.warning})*` : "";
+          lines.push(`${r.field}: ${cleanValue}${sourceTag} *(conf:${r.confidence.toFixed(2)})*${warningTag}`);
         }
       }
     }
