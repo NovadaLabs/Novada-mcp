@@ -4,9 +4,9 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
-## [Unreleased] — in testing on staging
+## [0.9.2] — 2026-07-03
 
-Round 3 Fix & Verify revamp — will ship as **0.9.2** (0.9.1 is already on npm). Code lives on the `staging` branch of the internal test repo; **not yet released**. 3 gates remain: rotate the 4 leaked credentials, decide the monitor + bot-detection architecture, human merge-review.
+Round 3 Fix & Verify revamp. Also: NOV-682 — over-long search queries are now truncated at a word boundary (with a query_truncated marker in all response paths) instead of throwing.
 
 ### Fixed
 - **36 defects** across `crawl` (glob + dedup), `discover` (category gating), `extract` (credential redaction + `urls` alias + block-page detection), `fields` (description quality), `map` (sitemap honesty), `research` (synthesis), `search` (sentinel + time_range + JSON), `verify` (stance mitigation) — each independently verified and reviewed. Detail: Linear NOV-680.
