@@ -274,8 +274,9 @@ describe("auto-fetch cache — per-key tenant isolation", () => {
     const b = await fetchBrowserSubAccountCredentials("tenant-b-key-cache-iso-browser");
 
     // Each caller gets a WSS URL built from its OWN sub-account, never the other's.
-    expect(a).toContain("A-br:A-brpass@");
-    expect(b).toContain("B-br:B-brpass@");
+    // Username carries the required `-zone-browser` zone suffix (see credentials.ts).
+    expect(a).toContain("A-br-zone-browser:A-brpass@");
+    expect(b).toContain("B-br-zone-browser:B-brpass@");
     expect(a).not.toEqual(b);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
