@@ -86,9 +86,15 @@ function tokenizeGlob(pattern: string): GlobToken[] {
  *  RegExp involved, so crafted patterns like `*a*a*a…` can NEVER cause catastrophic
  *  (exponential) backtracking that freezes the event loop (NOV-570).
  *
- *  Glob semantics are exactly equivalent to the previous anchored-regex implementation
- *  (`**`→`.*`, `*`→`[^/]*`, `?`→`[^/]`, anchored ^…$), so crawl/site_copy scope behavior is
- *  unchanged — only the catastrophic-backtracking failure mode is removed. */
+ *  Glob semantics follow standard path-glob conventions:
+ *  - `**` matches zero or more path segments (including the parent path itself)
+ *  - A literal "/" immediately preceding "**" is optional so that:
+ *      - "/foo/**" matches "/foo" (trailing parent, no trailing slash) — F4
+ *      - "/a/**\/b" matches "/a/b" (mid-pattern zero-segment) — C3
+ *    In both cases the "/" before "**" collapses when the globstar contributes
+ *    zero path characters. Boundary correctness is preserved: "/introductionX"
+ *    never matches "/introduction/**".
+ *  - `*` matches within one segment; `?` matches one non-`/` char */
 function globToMatcher(pattern: string): PathMatcher {
   const toks = tokenizeGlob(pattern);
   const n = toks.length;
@@ -98,9 +104,32 @@ function globToMatcher(pattern: string): PathMatcher {
     // each row depending only on the previous (ti+1) row. Two rolling rows = O(m) space.
     let next = new Array<boolean>(m + 1).fill(false);
     next[m] = true; // empty token list matches only the empty remainder
+
+    // For each globstar token at index ti, we need to know whether the tokens AFTER the
+    // globstar (i.e. toks[ti+1:]) can match from position si WITHOUT the globstar consuming
+    // any characters. This is exactly the `next` row that exists just before the globstar
+    // is processed (the row computed for toks[ti+1:]). We save it keyed by token index so
+    // that the preceding `lit:/` token can use it for the zero-cost skip branch.
+    //
+    // This is safe with the DP's bottom-up order: globstar (ti=k) is processed before
+    // lit:/ (ti=k-1), so when we reach lit:/ the saved row is already populated.
+    //
+    // Space: one array of (m+1) booleans per globstar token in the pattern. Since pattern
+    // length is capped at 1000 chars (MAX_PATTERN_LENGTH), the number of globstars is at
+    // most 500 (`**` is 2 chars), so worst-case is 500 x 1001 booleans ~ 500 KB. In
+    // practice patterns are short.
+    const afterGlobstarRow = new Map<number, boolean[]>();
+
     for (let ti = n - 1; ti >= 0; ti--) {
       const tok = toks[ti];
       const cur = new Array<boolean>(m + 1).fill(false);
+
+      if (tok.t === "globstar") {
+        // Save the row that was `next` BEFORE globstar consumed anything.
+        // This row encodes "can toks[ti+1:] match s[si:] with zero globstar chars".
+        afterGlobstarRow.set(ti, next.slice());
+      }
+
       for (let si = m; si >= 0; si--) {
         switch (tok.t) {
           case "globstar":
@@ -114,9 +143,32 @@ function globToMatcher(pattern: string): PathMatcher {
           case "question":
             cur[si] = si < m && s[si] !== "/" && next[si + 1];
             break;
-          default: // lit
-            cur[si] = si < m && s[si] === tok.c && next[si + 1];
+          default: { // lit
+            // Standard: literal char must match at position si.
+            // Special case: a literal "/" immediately before "**" is optional — the "/"
+            // can be "skipped" (not consumed from the path) when the globstar contributes
+            // zero characters. This supports:
+            //   (a) Trailing: "/foo/**" matches "/foo" (si === m, end of path)
+            //   (b) Mid-pattern: "/a/**\/b" matches "/a/b" (globstar zero-segment)
+            //
+            // The skip is valid iff the tokens AFTER the globstar (toks[ti+2:]) can match
+            // the path from position si without the globstar consuming anything. This is
+            // exactly afterGlobstarRow.get(ti+1)[si] — the "zero-cost globstar" value.
+            //
+            // Boundary guard: for "/introductionX" vs "/introduction/**", when si is at 'X'
+            // the afterGlobstarRow for a terminal "**" is all-false except si===m, so the
+            // skip never fires at non-boundary positions. This preserves the F4 correctness.
+            const nextTokIsGlobstar = ti + 1 < n && toks[ti + 1].t === "globstar";
+            const consumeMatch = si < m && s[si] === tok.c && next[si + 1];
+            let skipBranch = false;
+            if (tok.c === "/" && nextTokIsGlobstar) {
+              // zeroGlobstar[si]: can toks[ti+2:] match s[si:] with the globstar eating nothing?
+              const zeroGlobstar = afterGlobstarRow.get(ti + 1)!;
+              skipBranch = zeroGlobstar[si];
+            }
+            cur[si] = consumeMatch || skipBranch;
             break;
+          }
         }
       }
       next = cur;
@@ -196,6 +248,14 @@ export async function novadaCrawl(
 
   let failedCount = 0;
   let sparsePageCount = 0;
+  // F4: track how many discovered links were rejected by path filters so we can
+  // emit an accurate diagnostic instead of blaming "JavaScript SPA".
+  let pathRejectedCount = 0;
+  // F8: content-hash dedup — maps a normalized content fingerprint to the first URL
+  // that produced it; prevents byte-identical pages (e.g. redirect aliases) from
+  // appearing as distinct results without inflating the page count.
+  const contentHashes = new Set<string>();
+  let duplicatesCollapsed = 0;
 
   const selectPatterns = compilePatterns(params.select_paths);
   const excludePatterns = compilePatterns(params.exclude_paths);
@@ -260,6 +320,17 @@ export async function novadaCrawl(
         continue;
       }
 
+      // F8: content-hash dedup — if two URLs return byte-identical extracted text
+      // (e.g. root "/" redirects to "/introduction" on some doc sites), treat them as
+      // the same page and skip the duplicate. A simple 32-char hash of the first 500 chars
+      // of normalized text is sufficient; full MD5 would be overkill for content dedup.
+      const contentFingerprint = text.slice(0, 500).replace(/\s+/g, " ").trim();
+      if (contentHashes.has(contentFingerprint)) {
+        duplicatesCollapsed++;
+        continue; // duplicate content — skip, already counted via the first URL
+      }
+      contentHashes.add(contentFingerprint);
+
       const jsContentMissing = jsMissing ? true : undefined;
       results.push({ url: batch[i].url, title, text, depth: batch[i].depth, wordCount, jsContentMissing });
 
@@ -279,10 +350,15 @@ export async function novadaCrawl(
           if (
             linkHostname === baseHostname &&
             !visited.has(normalizedLink) &&
-            isContentLink(link) &&
-            shouldCrawlUrl(link, selectPatterns, excludePatterns)
+            isContentLink(link)
           ) {
-            queue.push({ url: link, depth: batch[i].depth + 1 });
+            if (shouldCrawlUrl(link, selectPatterns, excludePatterns)) {
+              queue.push({ url: link, depth: batch[i].depth + 1 });
+            } else {
+              // F4: count links that exist but were rejected by path filters —
+              // used to suppress the false JS-SPA diagnostic.
+              pathRejectedCount++;
+            }
           }
         } catch { /* invalid URL */ }
       }
@@ -325,9 +401,14 @@ export async function novadaCrawl(
   const jsMissingCount = results.filter(r => r.jsContentMissing).length;
   const stoppedEarly = results.length < maxPages;
   const exhaustedLinks = stoppedEarly && queue.length === 0;
+  // F4: when select_paths/exclude_paths are active AND links were discovered but rejected,
+  // do NOT blame JavaScript SPA — the empty queue is because of the path filter, not the site.
+  const filtersActive = selectPatterns.length > 0 || excludePatterns.length > 0;
   const stopReason = stoppedEarly
     ? exhaustedLinks
-      ? "No more same-domain links to follow. Site may be a JavaScript SPA (React/Vue/Angular) or Swagger/Redoc API docs — these generate routes dynamically and static link extraction misses most pages."
+      ? filtersActive && pathRejectedCount > 0
+        ? `${pathRejectedCount} link(s) discovered but rejected by select_paths/exclude_paths filters. Remove or widen the filters to crawl more pages.`
+        : "No more same-domain links to follow. Site may be a JavaScript SPA (React/Vue/Angular) or Swagger/Redoc API docs — these generate routes dynamically and static link extraction misses most pages."
       : "Remaining links were filtered by path rules or already visited."
     : "";
 
@@ -342,6 +423,9 @@ export async function novadaCrawl(
       total_words: totalWords,
       failed: failedCount,
       js_missing: jsMissingCount > 0 ? jsMissingCount : undefined,
+      // F8: duplicates_collapsed is set when byte-identical pages were collapsed.
+      // unique_pages equals pages_crawled (all results are content-distinct).
+      duplicates_collapsed: duplicatesCollapsed > 0 ? duplicatesCollapsed : undefined,
       pages: results.map(r => ({
         url: r.url,
         title: r.title,
@@ -395,8 +479,14 @@ export async function novadaCrawl(
     lines.push(`  Re-crawl with render="render" for full content (3–5s/page vs 0.5s/page).`);
   }
   if (exhaustedLinks) {
-    lines.push(`- Crawl exhausted all static links before reaching max_pages. The site may be a JavaScript SPA (React/Vue/Next.js) that renders links dynamically.`);
-    lines.push(`- Recovery: use novada_crawl with render="render" for JS-rendered sites, or novada_map to discover URLs first.`);
+    // F4: when path filters are active and rejected links, do NOT blame JavaScript SPA —
+    // the empty queue is a consequence of the filter, not of dynamic routing.
+    if (filtersActive && pathRejectedCount > 0) {
+      lines.push(`- Crawl exhausted all select_paths-filtered links (${pathRejectedCount} link(s) discovered but rejected by path filters). Widen select_paths or remove them to crawl more pages.`);
+    } else {
+      lines.push(`- Crawl exhausted all static links before reaching max_pages. The site may be a JavaScript SPA (React/Vue/Next.js) that renders links dynamically.`);
+      lines.push(`- Recovery: use novada_crawl with render="render" for JS-rendered sites, or novada_map to discover URLs first.`);
+    }
   }
   if (selectPatterns.length > 0 || excludePatterns.length > 0) {
     lines.push(`- Path filters were active. Remove them to crawl the full site.`);

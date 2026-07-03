@@ -4,14 +4,65 @@ import { novadaExtract } from "./extract.js";
 import { redactSecrets } from "../_core/errors.js";
 
 /**
- * Strip the path: /abs/path header that extract.ts prepends to its output before
- * computing the content hash and storing the preview — prevents absolute local paths
- * from leaking into the stored MonitorEntry and agent-visible output (FIX-1).
+ * Strip volatile metadata emitted by extract.ts before hashing so that
+ * source: live→cache flips, fetched_at timestamp changes, quality score
+ * fluctuations, and Requested Fields conf:/source annotation variations
+ * do not produce false "changed" reports on byte-identical page bodies.
+ *
+ * The extract output structure when fields are requested:
+ *   ## Extracted Content                       ← header block (volatile)
+ *   url: <url>
+ *   mode: static | source: live | quality:72/100 ...
+ *   quality_reasons: ...
+ *   fetched_at: 2026-07-02T12:34:56.789Z
+ *   extraction_quality: ...     (optional)
+ *   title: ...
+ *   description: ...            (optional)
+ *   chars:1234 | links:1
+ *
+ *   ---                                        ← first separator
+ *
+ *   ## Requested Fields                        ← annotation block (volatile:
+ *   title: Example *(json-ld)* *(conf:0.80)*     conf and source tag flip)
+ *
+ *   ---                                        ← second separator (last)
+ *
+ *   <stable page body>                         ← only this contributes to hash
+ *
+ * C7 Fix: strip to the LAST `\n---\n` separator (not the first) so that both
+ * the header metadata AND the Requested Fields annotation block are excluded
+ * from the hashed region. Without fields, there is only one separator, and
+ * lastIndexOf behaves identically to indexOf.
+ *
+ * Also strips the legacy `path: /abs/path` prefix (FIX-1 original).
  */
-function stripExtractPathHeader(content: string): string {
-  // extract.ts prepends `path: /Users/.../file\n\n` (or `📁 /path\n\n`)
-  return content.replace(/^(?:path|📁)[^\n]*\n\n?/, "");
+function stripVolatileMetadataHeader(content: string): string {
+  // Strip the leading path: /abs/path header from FIX-1
+  const withoutPathHeader = content.replace(/^(?:path|📁)[^\n]*\n\n?/, "");
+
+  // C7 Fix: strip to the LAST `\n---\n` separator so the ## Requested Fields
+  // annotation block (with volatile conf: and source: tags) is also excluded.
+  // When no fields are requested there is only one separator, so lastIndexOf
+  // behaves identically to indexOf — no regression for the no-fields case.
+  const lastSepIdx = withoutPathHeader.lastIndexOf("\n---\n");
+  if (lastSepIdx !== -1) {
+    // Return everything after the last `---\n` separator (skip leading blank lines)
+    return withoutPathHeader.slice(lastSepIdx + 5).replace(/^\n+/, "");
+  }
+
+  // Fallback: strip individual volatile lines if no separator was found
+  // (handles edge cases like truncated output)
+  return withoutPathHeader
+    .replace(/^## Extracted Content\n/m, "")
+    .replace(/^mode:.*$/m, "")
+    .replace(/^quality_reasons:.*$/m, "")
+    .replace(/^fetched_at:.*$/m, "")
+    .replace(/^extraction_quality:.*$/m, "")
+    .replace(/^source:.*$/m, "");
 }
+
+/** @deprecated Alias kept for internal callers that only needed the old path-strip. */
+const stripExtractPathHeader = stripVolatileMetadataHeader;
 
 // ─── URL Safety (duplicated from types.ts — safeUrl is not exported) ────────
 
@@ -69,6 +120,15 @@ interface MonitorEntry {
 }
 
 const monitorStore = new Map<string, MonitorEntry>();
+
+/**
+ * Reset the session-scoped monitor store. Exposed for unit tests only; not
+ * part of the public MCP tool surface. The store resets automatically on
+ * server restart (session-scoped / no durable state).
+ */
+export function resetMonitorStore(): void {
+  monitorStore.clear();
+}
 
 // ─── Field extraction helpers ───────────────────────────────────────────────
 
@@ -178,12 +238,28 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
     }, apiKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return formatError(params.url, now, message);
+    return formatError(params.url, now, message, params.format);
   }
 
-  // FIX-1: Strip absolute path header that extract prepends — prevents path leakage
-  // in the stored MonitorEntry (content_preview, hash input).
-  const cleanContent = stripExtractPathHeader(content);
+  // C8 Fix: Detect extraction failure sentinels BEFORE baselining.
+  // novadaExtract returns "## Extract Failed" / "## Extraction Error" as a
+  // string (not a throw) for certain failure modes (DNS failure, timeout, etc.).
+  // Without this guard, the error string gets hashed and stored as a baseline;
+  // a varying error message on the next call falsely reports "changed".
+  if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
+    // Surface the error text directly. The extraction already formatted a full
+    // agent-oriented error block; re-use it rather than duplicating the message.
+    const firstLine = content.split("\n").find((l) => l.startsWith("Error:") || l.startsWith("error:")) ?? "";
+    const errorMsg = firstLine ? firstLine.replace(/^[Ee]rror:\s*/, "") : "extraction returned a failure sentinel";
+    return formatError(params.url, now, errorMsg, params.format);
+  }
+
+  // F5: Strip volatile metadata header (mode:/source:/quality:/fetched_at: lines) from
+  // extract output before hashing. Without stripping, source:live→cache flips and
+  // fetched_at timestamp changes produce false "changed" reports on identical page bodies.
+  // C7 Fix: uses lastIndexOf to also strip the ## Requested Fields annotation block.
+  // Also strips the legacy path: /abs/path prefix (FIX-1 original).
+  const cleanContent = stripVolatileMetadataHeader(content);
 
   // 2. Hash the content (use cleanContent so path changes don't cause false change detection)
   const hash = createHash("sha256").update(cleanContent).digest("hex").slice(0, 16);
@@ -248,12 +324,14 @@ function formatFirstCheck(
     `hash: ${hash}`,
     `fields_tracked: ${trackedFields}`,
     `timestamp: ${timestamp}`,
+    `session_scoped: true | no_durable_state: baseline is lost when the MCP server restarts`,
     `content_preview: ${content.slice(0, 300).replace(/\n/g, " ")}`,
     ...fieldBlock,
     ``,
     `## Agent Instruction`,
     `agent_status: baseline_set | action: call_again_later_to_detect_changes`,
     `This is the first check for this URL. Call novada_monitor again later to detect changes.`,
+    `Note: Session-scoped only — state is not persisted to disk. For durable monitoring, schedule recurring calls from your own job runner and store diffs externally.`,
   ].join("\n");
 }
 
@@ -319,7 +397,16 @@ function formatChanged(
   return lines.join("\n");
 }
 
-function formatError(url: string, timestamp: string, message: string): string {
+function formatError(url: string, timestamp: string, message: string, format: "markdown" | "json" = "markdown"): string {
+  if (format === "json") {
+    return JSON.stringify({
+      url,
+      status: "error",
+      timestamp,
+      error: message,
+      agent_instruction: "status:error | action: retry_later_or_check_url — failed to extract content from the URL. Check if the URL is accessible, then retry.",
+    }, null, 2);
+  }
   return [
     `## Monitor: Error`,
     `url: ${url}`,
@@ -341,9 +428,10 @@ function formatJson(
   const hasChanged = prev ? prev.hash !== curr.hash : false;
   const fieldDiffs = prev ? computeFieldDiffs(prev.fields, curr.fields) : [];
 
+  const isFirstCheck = !prev;
   const result: Record<string, unknown> = {
     url: params.url,
-    status: !prev ? "baseline_recorded" : hasChanged ? "changed" : "unchanged",
+    status: isFirstCheck ? "baseline_recorded" : hasChanged ? "changed" : "unchanged",
     current_hash: curr.hash,
     previous_hash: prev?.hash ?? null,
     previous_check: prev?.timestamp ?? null,
@@ -356,8 +444,11 @@ function formatJson(
       ? fieldDiffs.map(d => ({ field: d.field, previous: d.previous, current: d.current, annotation: d.annotation }))
       : null,
     content_preview: curr.content_preview.slice(0, 300),
-    agent_instruction: !prev
-      ? "Baseline recorded. Call novada_monitor again later to detect changes."
+    // F5-b: Surface session-scoped / non-durable state on first check so agents understand
+    // that the baseline is lost on server restart. Subsequent calls omit this field.
+    ...(isFirstCheck ? { session_scoped: true, no_durable_state: "Session-scoped only — baseline lost on server restart. Schedule from your own job runner for durable monitoring." } : {}),
+    agent_instruction: isFirstCheck
+      ? "Baseline recorded. Session-scoped only — no durable state. Call novada_monitor again later to detect changes."
       : hasChanged
         ? "Changes detected. Process the changed_fields or alert the user."
         : "No changes detected. Call novada_monitor again later.",

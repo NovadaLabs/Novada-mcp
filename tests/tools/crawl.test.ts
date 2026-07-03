@@ -214,6 +214,271 @@ describe("compilePatterns ReDoS hardening (NOV-570)", () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// F4: glob "/introduction/**" must match "/introduction" (no trailing slash)
+//     + suppress JS-SPA diagnostic when path filters are active + frontier non-empty
+// F8: duplicate pages (redirect aliases) must not count as distinct results
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("F4: glob double-star matches parent path (no trailing slash)", () => {
+  it("/introduction/** matches /introduction (exact — no trailing slash)", () => {
+    const [match] = compilePatterns(["/introduction/**"]);
+    expect(match("/introduction")).toBe(true);
+  });
+
+  it("/introduction/** matches /introduction/ (trailing slash)", () => {
+    const [match] = compilePatterns(["/introduction/**"]);
+    expect(match("/introduction/")).toBe(true);
+  });
+
+  it("/introduction/** matches /introduction/quickstart (one level deep)", () => {
+    const [match] = compilePatterns(["/introduction/**"]);
+    expect(match("/introduction/quickstart")).toBe(true);
+  });
+
+  it("/introduction/** does NOT match / (root)", () => {
+    const [match] = compilePatterns(["/introduction/**"]);
+    expect(match("/")).toBe(false);
+  });
+
+  it("/introduction/** does NOT match /introductionX (suffix extension, no slash)", () => {
+    const [match] = compilePatterns(["/introduction/**"]);
+    expect(match("/introductionX")).toBe(false);
+  });
+
+  it("/**  matches / (root is the base of /**)", () => {
+    const [match] = compilePatterns(["/**"]);
+    expect(match("/")).toBe(true);
+  });
+
+  it("/** matches /anything/nested", () => {
+    const [match] = compilePatterns(["/**"]);
+    expect(match("/anything/nested")).toBe(true);
+  });
+
+  it("/docs/** matches /docs (no trailing slash) — same semantics as /introduction/**", () => {
+    const [match] = compilePatterns(["/docs/**"]);
+    expect(match("/docs")).toBe(true);
+  });
+});
+
+describe("F4: crawl with select_paths=['/introduction/**'] returns /introduction* pages", () => {
+  it("seed '/' with select_paths=['/introduction/**'] — discovers /introduction page and includes it in results", async () => {
+    // Reproduces: novadaCrawl(url=https://docs.firecrawl.dev, select_paths=["/introduction/**"])
+    // should return pages on /introduction*, not just the bare root.
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url === "https://docs.example.com" || url === "https://docs.example.com/") {
+        return Promise.resolve({
+          data: `<html><body><h1>Docs Home</h1><p>${"word ".repeat(30)}</p>
+            <a href="https://docs.example.com/introduction">Introduction</a>
+            <a href="https://docs.example.com/introduction/quickstart">Quickstart</a>
+            <a href="https://docs.example.com/api/reference">API</a>
+          </body></html>`,
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        });
+      }
+      if (url === "https://docs.example.com/introduction") {
+        return Promise.resolve({
+          data: `<html><body><h1>Introduction</h1><p>${"intro overview ".repeat(25)}</p></body></html>`,
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        });
+      }
+      // Distinct content per URL to avoid content-hash dedup collapsing them
+      const slug = new URL(url).pathname.replace(/\//g, "-").slice(1);
+      return Promise.resolve({
+        data: `<html><body><h1>${slug}</h1><p>${slug + " page content ".repeat(10) + "extra ".repeat(15)}</p></body></html>`,
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+    });
+
+    const result = await novadaCrawl(
+      {
+        url: "https://docs.example.com",
+        max_pages: 5,
+        strategy: "bfs",
+        render: "static",
+        format: "json",
+        select_paths: ["/introduction/**"],
+      },
+      "test-key"
+    );
+    const parsed = JSON.parse(result) as { status: string; pages: { url: string }[] };
+    const crawledUrls = parsed.pages.map(p => p.url);
+
+    // /introduction must appear — it matches /introduction/**
+    expect(crawledUrls).toContain("https://docs.example.com/introduction");
+    // /introduction/quickstart also matches
+    expect(crawledUrls).toContain("https://docs.example.com/introduction/quickstart");
+    // /api/reference should be filtered out by select_paths
+    expect(crawledUrls).not.toContain("https://docs.example.com/api/reference");
+  });
+
+  it("when all links are rejected by select_paths, reports rejected count — not JS-SPA blame", async () => {
+    // When select_paths=["/nomatch/**"] rejects all discovered links, the error or early-stop
+    // note must say something about path filters, NOT blame a "JavaScript SPA".
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url === "https://docs.example.com" || url === "https://docs.example.com/") {
+        return Promise.resolve({
+          data: `<html><body><h1>Docs Home</h1><p>${"word ".repeat(30)}</p>
+            <a href="https://docs.example.com/api/reference">API</a>
+            <a href="https://docs.example.com/guide/intro">Guide</a>
+          </body></html>`,
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        });
+      }
+      return Promise.resolve({
+        data: `<html><body><h1>Page</h1><p>${"word ".repeat(30)}</p></body></html>`,
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+    });
+
+    const result = await novadaCrawl(
+      {
+        url: "https://docs.example.com",
+        max_pages: 5,
+        strategy: "bfs",
+        render: "static",
+        select_paths: ["/nomatch/**"],
+      },
+      "test-key"
+    );
+
+    // Should NOT blame JavaScript SPA when select_paths filtered the links
+    expect(result).not.toContain("JavaScript SPA");
+    // Should mention path filters or select_paths
+    expect(result.toLowerCase()).toMatch(/filter|select_path|path rule/);
+  });
+});
+
+describe("F8: URL deduplication — redirect aliases must not count as distinct pages", () => {
+  it("root URL and its trailing-slash alias produce a single result, not two", async () => {
+    // Simulates: https://docs.firecrawl.dev (root) and https://docs.firecrawl.dev/
+    // resolving to byte-identical content. normalizeUrl strips trailing slash, so
+    // both must map to the same visited-set key → only one result.
+    const htmlContent = `<html><body><h1>Root Page</h1><p>${"word ".repeat(40)}</p>
+      <a href="https://docs.example.com/">Home alias</a>
+      <a href="https://docs.example.com/introduction">Introduction</a>
+    </body></html>`;
+
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url === "https://docs.example.com/introduction") {
+        return Promise.resolve({
+          data: `<html><body><h1>Introduction</h1><p>${"intro ".repeat(40)}</p></body></html>`,
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        });
+      }
+      // Both root and trailing-slash alias return identical content
+      return Promise.resolve({
+        data: htmlContent,
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+    });
+
+    const result = await novadaCrawl(
+      {
+        url: "https://docs.example.com",
+        max_pages: 5,
+        strategy: "bfs",
+        render: "static",
+        format: "json",
+      },
+      "test-key"
+    );
+    const parsed = JSON.parse(result) as { status: string; pages: { url: string }[] };
+
+    // Root URL and trailing-slash alias must not both appear as separate pages
+    const rootCount = parsed.pages.filter(
+      p => p.url === "https://docs.example.com" || p.url === "https://docs.example.com/"
+    ).length;
+    expect(rootCount).toBeLessThanOrEqual(1);
+  });
+
+  it("byte-identical pages from two different URLs are collapsed — only one result plus duplicates_collapsed field (F8)", async () => {
+    // Simulates root "/" and "/introduction" returning the same HTML (redirect alias).
+    // The crawl must NOT count both as distinct results. Either one is suppressed
+    // (collapsed) OR a duplicates_collapsed field is emitted in json output.
+    const sharedHtml = `<html><body><h1>Introduction</h1><p>${"intro ".repeat(40)}</p>
+      <a href="https://docs.example.com/introduction">Introduction</a>
+      <a href="https://docs.example.com/page2">Page 2</a>
+    </body></html>`;
+
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url === "https://docs.example.com/page2") {
+        return Promise.resolve({
+          data: `<html><body><h1>Page 2</h1><p>${"page2 ".repeat(40)}</p></body></html>`,
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        });
+      }
+      // Root AND /introduction return identical HTML — redirect alias simulation
+      return Promise.resolve({
+        data: sharedHtml,
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+    });
+
+    const result = await novadaCrawl(
+      {
+        url: "https://docs.example.com",
+        max_pages: 5,
+        strategy: "bfs",
+        render: "static",
+        format: "json",
+      },
+      "test-key"
+    );
+    const parsed = JSON.parse(result) as {
+      status: string;
+      pages: { url: string }[];
+      duplicates_collapsed?: number;
+    };
+
+    // The two byte-identical pages must NOT both appear as distinct results.
+    // Either: (a) only one is in pages[], OR (b) duplicates_collapsed is set > 0
+    const hasIntroRoot = parsed.pages.some(p =>
+      p.url === "https://docs.example.com" || p.url === "https://docs.example.com/"
+    );
+    const hasIntroDirect = parsed.pages.some(
+      p => p.url === "https://docs.example.com/introduction"
+    );
+    const deduped = !(hasIntroRoot && hasIntroDirect);
+    const hasDuplicatesField = typeof parsed.duplicates_collapsed === "number" && parsed.duplicates_collapsed > 0;
+
+    expect(deduped || hasDuplicatesField).toBe(true);
+  });
+
+  it("genuinely distinct pages are never collapsed (dedup must not over-collapse)", async () => {
+    mockedAxios.get.mockImplementation((url: string) => {
+      const slug = new URL(url).pathname.replace(/\//g, "") || "root";
+      return Promise.resolve({
+        data: `<html><body><h1>${slug}</h1><p>${slug + " ".repeat(1) + "word ".repeat(35)}</p>
+          <a href="https://docs.example.com/page1">p1</a>
+          <a href="https://docs.example.com/page2">p2</a>
+          <a href="https://docs.example.com/page3">p3</a>
+        </body></html>`,
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+    });
+
+    const result = await novadaCrawl(
+      {
+        url: "https://docs.example.com",
+        max_pages: 4,
+        strategy: "bfs",
+        render: "static",
+        format: "json",
+      },
+      "test-key"
+    );
+    const parsed = JSON.parse(result) as { status: string; pages: { url: string }[] };
+
+    // 4 genuinely distinct pages must all appear
+    expect(parsed.pages.length).toBe(4);
+    // All URLs must be unique
+    const urls = parsed.pages.map(p => p.url);
+    expect(new Set(urls).size).toBe(4);
+  });
+});
+
 describe("novadaCrawl progress notifications (NOV-319)", () => {
   const page = (n: number) => ({
     data: `<html><body><h1>Page ${n}</h1><p>${"word ".repeat(40)}</p>
