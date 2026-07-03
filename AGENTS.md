@@ -38,6 +38,8 @@ public  npm + public git + hosted   ← customers
   (not a re-publish of 0.9.1). Check `npm view novada-mcp version` before choosing a number.
 - `package.json`, `server.json` (`.version` + `packages[].version`) must all match the release version.
   The promote script keeps them in sync; don't set them by hand across platforms.
+- **Client configs and docs must pin `novada-mcp@latest`; never document a bare `npx novada-mcp`
+  or a global/bare install.** A global binary shadows `npx` and silently runs a stale version.
 
 ## Releasing (the gated flow)
 

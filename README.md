@@ -1,6 +1,8 @@
 # Novada MCP
 
 > **One MCP server. All web data.** Search, extract, crawl, scrape, proxy, and AI research — 38 tools behind a single `npx` command. Run it locally or call the hosted endpoint.
+>
+> **Always use `npx -y novada-mcp@latest`.** A bare `npx novada-mcp` or a global `npm i -g novada-mcp` can silently run an old cached version. See [Staying on the latest version](#staying-on-the-latest-version).
 
 [![npm version](https://img.shields.io/npm/v/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
@@ -10,7 +12,7 @@
 
 ```bash
 # Local (Claude Code)
-claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp@latest
 ```
 
 ## The Problem
@@ -25,7 +27,7 @@ AI agents need web data but the tools are fragmented:
 ## The Fix
 
 ```bash
-npx novada-mcp
+npx -y novada-mcp@latest
 ```
 
 One server. One API key. Tools that cover every web data need an AI agent has:
@@ -79,7 +81,7 @@ One server. One API key. Tools that cover every web data need an AI agent has:
 
 **Claude Code:**
 ```bash
-claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp@latest
 ```
 
 **Claude Desktop / Cursor / VS Code / Windsurf:**
@@ -88,7 +90,7 @@ claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": { "NOVADA_API_KEY": "your_key" }
     }
   }
@@ -260,6 +262,29 @@ Novada automatically handles these anti-bot systems via its escalation chain:
 | `NOVADA_WEB_UNBLOCKER_KEY` | No | Separate key for Web Unblocker (if different from main API key) |
 | `NOVADA_TOOLS` | No | Load specific tools only: `"extract,search,research,monitor"` |
 | `NOVADA_GROUPS` | No | Load tool groups: `"search,proxy,browser"` — groups: search, proxy, browser, scraper, health |
+
+## Staying on the latest version
+
+Always use `npx -y novada-mcp@latest` — never `npx novada-mcp` (bare) and never `npm install -g novada-mcp`.
+
+**Why:** A globally-installed `novada-mcp` shadows `npx`, so every subsequent `npx novada-mcp` silently runs the global binary regardless of what npm has published. You could be running a build that is multiple versions behind without any warning.
+
+**If you see an old version:**
+
+```bash
+# 1. Check what you are running vs what npm has
+npx novada-mcp@latest --version
+npm view novada-mcp version
+
+# 2. Remove any stale global install
+npm uninstall -g novada-mcp
+
+# 3. Clear the npx cache
+npm cache verify
+
+# 4. Confirm the correct version now runs
+npx -y novada-mcp@latest --version
+```
 
 ## Links
 

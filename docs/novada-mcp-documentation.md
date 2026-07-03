@@ -31,7 +31,7 @@ Novada consolidates all of this behind a single `NOVADA_API_KEY`. Search, extrac
 
 ```bash
 # That's it. One key, all tools.
-npx novada-mcp
+npx -y novada-mcp@latest
 ```
 
 ## How Novada compares
@@ -67,7 +67,7 @@ Install Novada in one command:
 
 ```bash
 # Claude Code
-claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp@latest
 ```
 
 ```json
@@ -76,7 +76,7 @@ claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": { "NOVADA_API_KEY": "your_key" }
     }
   }
@@ -110,7 +110,7 @@ Choose the method that matches your MCP client.
 ### Option A: Claude Code (recommended)
 
 ```bash
-claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp@latest
 ```
 
 That's it. Restart Claude Code and the tools are available immediately.
@@ -129,7 +129,7 @@ Add this to your MCP configuration file:
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": {
         "NOVADA_API_KEY": "your_key"
       }
@@ -142,9 +142,9 @@ Save the file and restart your editor. The server starts automatically on first 
 
 ### Option C: npm Global Install
 
-```bash
-npm install -g novada-mcp
-```
+> **Warning:** Do not use `npm install -g novada-mcp`. A global install shadows `npx`, causing subsequent `npx novada-mcp` calls to silently run the old global binary even when a newer version exists on npm. Always use `npx -y novada-mcp@latest` instead.
+
+If you need a system-wide install for a Dockerfile or CI environment, pin the version explicitly and plan to update it: `npm install -g novada-mcp@latest`.
 
 Then run the server directly:
 
@@ -238,7 +238,7 @@ One call generates 5-6 parallel searches, deduplicates sources, extracts full co
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": {
         "NOVADA_API_KEY": "your_api_key",
         "NOVADA_PROXY_ENDPOINT": "your_proxy_host:port",
@@ -276,7 +276,7 @@ Run `claude mcp list` to confirm the server is registered. If missing, re-run th
 Some products (Proxy, Browser, Scraper API) require separate activation on your Novada dashboard. Run `novada_health()` to see which products are active and get direct activation links.
 
 **npx download is slow on first run**
-The first `npx -y novada-mcp` call downloads the package. Subsequent calls use the cached version. Alternatively, install globally with `npm install -g novada-mcp` for instant startup.
+The first `npx -y novada-mcp@latest` call downloads the package. Subsequent calls use the cached version. Do **not** install globally (`npm install -g novada-mcp`) — a global install shadows `npx` and will silently run a stale version on every future call. If startup time is critical, use a pinned local install in your project instead.
 
 ---
 
@@ -462,13 +462,7 @@ To pin a specific version:
 npx -y novada-mcp@0.8.1
 ```
 
-To install globally instead:
-
-```bash
-npm install -g novada-mcp
-```
-
-Then replace `"command": "npx", "args": ["-y", "novada-mcp@latest"]` with `"command": "novada-mcp"` in your config.
+> **Do not install globally** (`npm install -g novada-mcp`). A global binary shadows `npx`, so every future `npx novada-mcp` call silently runs the old global version — you stop receiving updates. If you must install globally for a CI or Docker environment, use `npm install -g novada-mcp@latest` and update it explicitly when you upgrade.
 
 ---
 
@@ -651,12 +645,12 @@ Network or npm cache issue.
 
 **Fix:**
 ```bash
-# Clear npm cache
+# Clear npm cache and retry
 npm cache clean --force
-
-# Or install globally as fallback
-npm install -g novada-mcp
+npx -y novada-mcp@latest --version
 ```
+
+> Do **not** reach for `npm install -g novada-mcp` as a fallback — a global install shadows `npx` and will silently run a stale version on every future call. If you need offline startup, pre-warm the npm cache with `npm pack novada-mcp@latest` instead.
 
 ### Claude Desktop does not show Novada tools
 
@@ -2268,6 +2262,33 @@ The output directory is created automatically on first write. Each day gets its 
 
 ---
 
+# Staying on the latest version / Troubleshooting stale versions
+
+**Always use `npx -y novada-mcp@latest`.** Never run a bare `npx novada-mcp` and never do `npm install -g novada-mcp`.
+
+**Why global installs are dangerous:** When a global `novada-mcp` binary exists on `PATH`, every `npx novada-mcp` invocation resolves to the global binary — npm's registry is never checked. You silently run whatever version was installed, which may be many versions behind. The global install on your maintainer machine was running `0.7.4` while npm latest was `0.9.2`.
+
+**If you see the wrong version running:**
+
+```bash
+# 1. Compare what you are running vs what npm has published
+npx novada-mcp@latest --version
+npm view novada-mcp version
+
+# 2. Remove any stale global install
+npm uninstall -g novada-mcp
+
+# 3. Verify the cache is clean
+npm cache verify
+
+# 4. Confirm the correct version now starts
+npx -y novada-mcp@latest --version
+```
+
+**Convention for client configs and docs:** All MCP client configuration examples (Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Zed, n8n) must use `npx -y novada-mcp@latest`. Never document a bare `npx novada-mcp` or a global/bare install in user-facing instructions.
+
+---
+
 # CLI Reference
 
 Novada ships two command-line interfaces from a single npm package: the **MCP server** (`novada-mcp`) that AI agents connect to via stdio, and the **direct CLI** (`novada`) for running web data commands from your terminal.
@@ -2286,8 +2307,12 @@ Runs the MCP server directly. No global install, always up to date.
 
 ### Global install
 
+> **Warning:** Avoid `npm install -g novada-mcp` for development or client configs. A global binary shadows `npx`, so every future `npx novada-mcp` call silently runs the old global version — you stop receiving updates without any warning. Use `npx -y novada-mcp@latest` instead.
+>
+> Global install is appropriate for Docker images and CI environments where you control the rebuild cadence. Pin `@latest` and rebuild when upgrading: `npm install -g novada-mcp@latest`.
+
 ```bash
-npm install -g novada-mcp
+npm install -g novada-mcp@latest
 ```
 
 Exposes two binaries:
@@ -2301,7 +2326,7 @@ Exposes two binaries:
 
 ```bash
 # Claude Code
-claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp@latest
 
 # Verify it's connected
 claude mcp list
@@ -2332,7 +2357,7 @@ The `novada-mcp` binary starts the MCP server. It communicates over stdio and is
 Start the MCP server.
 
 ```bash
-NOVADA_API_KEY=your_key npx novada-mcp
+NOVADA_API_KEY=your_key npx -y novada-mcp@latest
 ```
 
 ```
@@ -2344,7 +2369,7 @@ Novada MCP server v0.8.1 running on stdio — 39 tools loaded
 Display server help, environment variable reference, and full tool list.
 
 ```bash
-npx novada-mcp --help
+npx -y novada-mcp@latest --help
 ```
 
 ### `novada-mcp --list-tools`
@@ -2352,7 +2377,7 @@ npx novada-mcp --help
 Print all available tools with one-line descriptions. Respects `NOVADA_TOOLS` and `NOVADA_GROUPS` filtering.
 
 ```bash
-npx novada-mcp --list-tools
+npx -y novada-mcp@latest --list-tools
 ```
 
 ```
@@ -2729,13 +2754,13 @@ These variables control which tools the MCP server exposes. Useful for reducing 
 
 ```bash
 # Only search and extraction tools (14 tools instead of 39)
-NOVADA_TOOLS="search,extract,crawl,map,research" npx novada-mcp
+NOVADA_TOOLS="search,extract,crawl,map,research" npx -y novada-mcp@latest
 
 # Load by category
-NOVADA_GROUPS="search,scraper" npx novada-mcp
+NOVADA_GROUPS="search,scraper" npx -y novada-mcp@latest
 
 # Combine both
-NOVADA_TOOLS="verify" NOVADA_GROUPS="proxy" npx novada-mcp
+NOVADA_TOOLS="verify" NOVADA_GROUPS="proxy" npx -y novada-mcp@latest
 ```
 
 ### HTTP transport authentication (MCP server only)
@@ -2767,7 +2792,7 @@ Error: search requires an argument. Run 'novada --help' for usage.
 
 ```bash
 # MCP server version
-npx novada-mcp --version
+npx -y novada-mcp@latest --version
 
 # CLI version
 novada --version
@@ -3980,7 +4005,7 @@ Platform-specific setup guides for Novada MCP. Each section is self-contained: i
 ### Install
 
 ```bash
-claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp@latest
 ```
 
 One command. No config file to edit.
@@ -4006,7 +4031,7 @@ claude mcp add novada \
   -e NOVADA_PROXY_USER=your_proxy_user \
   -e NOVADA_PROXY_PASS=your_proxy_pass \
   -e NOVADA_BROWSER_WS=wss://your_browser_ws_url \
-  -- npx -y novada-mcp
+  -- npx -y novada-mcp@latest
 ```
 
 ### Reduce Tool Count
@@ -4017,7 +4042,7 @@ Load only the tools you need to save context window:
 claude mcp add novada \
   -e NOVADA_API_KEY=your_key \
   -e NOVADA_GROUPS=search,health \
-  -- npx -y novada-mcp
+  -- npx -y novada-mcp@latest
 ```
 
 ### Common Issues
@@ -4025,7 +4050,7 @@ claude mcp add novada \
 | Symptom | Fix |
 |---------|-----|
 | Tools not appearing after install | Run `claude mcp list` to confirm registration. Re-run `claude mcp add` if missing. |
-| `npx` download slow on first run | Install globally instead: `npm install -g novada-mcp`, then `claude mcp add novada -e NOVADA_API_KEY=your_key -- novada-mcp` |
+| `npx` download slow on first run | First run downloads the package; subsequent runs use the npm cache. Do **not** install globally — see [Staying on the latest version](#staying-on-the-latest-version-troubleshooting-stale-versions). |
 | "NOVADA_API_KEY is not set" | Check for extra spaces or quotes in the `-e` flag value. |
 | Too many tools cluttering context | Set `NOVADA_GROUPS` or `NOVADA_TOOLS` to load a subset. |
 
@@ -4052,7 +4077,7 @@ Create or edit the config file:
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": {
         "NOVADA_API_KEY": "your_key"
       }
@@ -4097,7 +4122,7 @@ Project-level (recommended): `.cursor/mcp.json` in your project root.
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": {
         "NOVADA_API_KEY": "your_key"
       }
@@ -4138,7 +4163,7 @@ Project-level: `.vscode/mcp.json` in your project root.
   "servers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": {
         "NOVADA_API_KEY": "your_key"
       }
@@ -4185,7 +4210,7 @@ Add the `mcpServers` section to your existing Continue config:
     {
       "name": "novada",
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": {
         "NOVADA_API_KEY": "your_key"
       }
@@ -4231,7 +4256,7 @@ Note: Continue uses an array format for `mcpServers`, not an object.
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-mcp"],
+      "args": ["-y", "novada-mcp@latest"],
       "env": {
         "NOVADA_API_KEY": "your_key"
       }
@@ -4252,7 +4277,7 @@ Note: Continue uses an array format for `mcpServers`, not an object.
 |---------|-----|
 | Server shows "disconnected" | Click the restart button in the MCP settings panel. Check that Node.js >= 18 is installed. |
 | Config file location unclear | Run `novada_setup()` from any connected MCP client -- it outputs the exact path for Windsurf. |
-| Tools timeout on first call | The first `npx` invocation downloads the package. Subsequent calls are fast. Install globally (`npm i -g novada-mcp`) to avoid this. |
+| Tools timeout on first call | The first `npx` invocation downloads the package. Subsequent calls use the npm cache and are fast. Do **not** install globally — a global install shadows `npx` and will silently run a stale version. |
 
 ---
 
@@ -4277,7 +4302,7 @@ Add to your Zed `settings.json` under `context_servers`:
     "novada": {
       "command": {
         "path": "npx",
-        "args": ["-y", "novada-mcp"],
+        "args": ["-y", "novada-mcp@latest"],
         "env": {
           "NOVADA_API_KEY": "your_key"
         }
@@ -4349,7 +4374,7 @@ services:
 
 | Symptom | Fix |
 |---------|-----|
-| "npx not found" in n8n container | Install Node.js in your n8n Docker image, or use the global install: `npm install -g novada-mcp` and set command to `novada-mcp`. |
+| "npx not found" in n8n container | Install Node.js in your n8n Docker image so `npx` is available, then use `npx -y novada-mcp@latest`. Avoid a bare global install — it shadows `npx` and pins you to a stale version. |
 | MCP tools timeout | n8n may have a short default timeout for MCP connections. Increase the timeout in the MCP Client Tool node settings. |
 | Environment variables not passed | In n8n Cloud, set env vars through the platform's credentials/secrets UI, not the node config. |
 
@@ -4410,7 +4435,9 @@ For MCP clients that support remote/HTTP transport:
 ```dockerfile
 FROM node:20-slim
 
-RUN npm install -g novada-mcp
+# Pin @latest so the image always installs the current release.
+# Rebuild the image periodically to pick up new versions.
+RUN npm install -g novada-mcp@latest
 
 ENV NOVADA_API_KEY=your_key
 
