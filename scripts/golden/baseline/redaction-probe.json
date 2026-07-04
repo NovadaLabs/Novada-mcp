@@ -1,5 +1,5 @@
 {
-  "is_error": false,
+  "is_error": true,
   "leak_checks": {
     "internal_api_m": false,
     "proxy_host_with_unmasked_creds": false,
@@ -8,9 +8,7 @@
   "leaked": false,
   "note": "proxy.novada.pro hostname appears in response (expected public endpoint). leaked=True only if unmasked credentials precede @host.",
   "sample_markers": [
-    "Proxy Configuration",
-    "Usage Examples",
-    "Agent Hints"
+    "Quota Exhausted"
   ],
   "trigger_tool": "novada_proxy",
   "triggered": true

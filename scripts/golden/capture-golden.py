@@ -10,7 +10,9 @@ All captured files are deterministic: two identical-behavior runs produce byte-i
 import json, re, sys, os, time, urllib.request, concurrent.futures as cf
 from pathlib import Path
 
-KEY = "1f35b477c9e1802778ec64aee2a6adfa"
+KEY = os.environ.get("NOVADA_API_KEY") or os.environ.get("NOVADA_MCP_KEY")
+if not KEY:
+    sys.exit("Set NOVADA_API_KEY (or NOVADA_MCP_KEY) in env — no key is baked into this script.")
 
 # ─── volatile normalization ───────────────────────────────────────────────────
 _MONEY_RE   = re.compile(r'\b\d+(?:\.\d+)?\s*(?:USD|credits?|GB|MB)\b', re.I)

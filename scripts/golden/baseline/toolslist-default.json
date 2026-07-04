@@ -1048,6 +1048,11 @@
           "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'.",
           "maxLength": 30,
           "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. When provided, skips submitting a new scrape task and fetches the result of this existing task_id directly \u2014 no new billable task is created. Use this to resume a previous novada_scrape call that returned status:processing without incurring a duplicate charge. platform and operation are still required (used for display only when resuming).",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
         }
       },
       "required": [

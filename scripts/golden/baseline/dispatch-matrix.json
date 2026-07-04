@@ -1,6 +1,6 @@
 {
   "novada_account_summary": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
       "Novada Account"
     ],
@@ -8,12 +8,11 @@
     "structural": "markdown"
   },
   "novada_ai_monitor": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "AI Brand Monitor \u2014 novada",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_browser": {
@@ -30,35 +29,25 @@
   "novada_capture_logs": {
     "length_band": "xs",
     "markers": [
-      "Novada Account"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_crawl": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Crawl Results",
-      "Agent Hints",
-      "[1/1] https://example.com",
-      "Example Domain"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_discover": {
-    "length_band": "m",
+    "length_band": "xs",
     "markers": [
-      "Novada MCP \u2014 Tool Catalog",
-      "Content Retrieval",
-      "Scraping & Verification",
-      "Proxy",
-      "Browser & Rendering",
-      "Account & Billing",
-      "Health & Discovery",
-      "Next Steps"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_extract": {
@@ -74,26 +63,25 @@
   "novada_health": {
     "length_band": "xs",
     "markers": [
-      "Novada Account"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_health_all": {
     "length_band": "xs",
     "markers": [
-      "Novada Account"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_map": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Site Map",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_monitor": {
@@ -114,93 +102,76 @@
     "structural": "markdown"
   },
   "novada_proxy": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_account_create": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "action",
-      "agent_instruction",
-      "preview",
-      "status"
+      "Quota Exhausted"
     ],
-    "status": "ok",
-    "structural": "json"
+    "status": "err",
+    "structural": "markdown"
   },
   "novada_proxy_account_list": {
-    "length_band": "m",
-    "markers": [],
-    "status": "ok",
-    "structural": "other"
+    "length_band": "xs",
+    "markers": [
+      "Quota Exhausted"
+    ],
+    "status": "err",
+    "structural": "markdown"
   },
   "novada_proxy_datacenter": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_dedicated": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "agent_instruction",
-      "message",
-      "next_step",
-      "status"
+      "Quota Exhausted"
     ],
-    "status": "ok",
-    "structural": "json"
+    "status": "err",
+    "structural": "markdown"
   },
   "novada_proxy_isp": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_mobile": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_residential": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_static": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "agent_instruction",
-      "message",
-      "next_step",
-      "status"
+      "Quota Exhausted"
     ],
-    "status": "ok",
-    "structural": "json"
+    "status": "err",
+    "structural": "markdown"
   },
   "novada_research": {
     "length_band": "m",
@@ -215,41 +186,35 @@
     "structural": "markdown"
   },
   "novada_scrape": {
-    "length_band": "l",
+    "length_band": "xs",
     "markers": [
-      "Scrape Results",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_scraper_result": {
     "length_band": "xs",
     "markers": [
-      "agent_instruction",
-      "message",
-      "status"
+      "Quota Exhausted"
     ],
-    "status": "ok",
-    "structural": "json"
+    "status": "err",
+    "structural": "markdown"
   },
   "novada_scraper_status": {
     "length_band": "xs",
     "markers": [
-      "agent_instruction",
-      "message",
-      "status"
+      "Quota Exhausted"
     ],
-    "status": "ok",
-    "structural": "json"
+    "status": "err",
+    "structural": "markdown"
   },
   "novada_scraper_submit": {
-    "length_band": "l",
+    "length_band": "xs",
     "markers": [
-      "Scrape Results",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_search": {
@@ -275,26 +240,25 @@
   "novada_traffic_daily": {
     "length_band": "xs",
     "markers": [
-      "Traffic Usage"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_unblock": {
-    "length_band": "s",
-    "markers": [],
-    "status": "ok",
-    "structural": "other"
+    "length_band": "xs",
+    "markers": [
+      "Quota Exhausted"
+    ],
+    "status": "err",
+    "structural": "markdown"
   },
   "novada_verify": {
-    "length_band": "m",
+    "length_band": "xs",
     "markers": [
-      "Claim Verification",
-      "Sources matching the claim wording (<N> sources)",
-      "Sources matching a negation of the claim (<N> sources)",
-      "Agent Hints"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_wallet_balance": {
@@ -306,11 +270,11 @@
     "structural": "markdown"
   },
   "novada_wallet_usage_record": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Wallet Usage History"
+      "Quota Exhausted"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   }
 }

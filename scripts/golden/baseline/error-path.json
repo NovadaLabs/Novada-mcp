@@ -1,12 +1,16 @@
 {
   "extract_bad_url": {
-    "error_markers": [],
+    "error_markers": [
+      "Quota Exhausted"
+    ],
     "has_agent_instruction": true,
     "is_error": true,
     "length_band": "xs"
   },
   "search_missing_query": {
-    "error_markers": [],
+    "error_markers": [
+      "Quota Exhausted"
+    ],
     "has_agent_instruction": true,
     "is_error": true,
     "length_band": "xs"

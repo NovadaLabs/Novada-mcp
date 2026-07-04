@@ -43,9 +43,11 @@ GOLDEN_CAPTURE_PY="$SCRIPT_DIR/golden/capture-golden.py"
 MCP_URL="https://mcp.novada.com/mcp"
 
 # ─── api key ──────────────────────────────────────────────────────────────────
-if [[ -z "${NOVADA_MCP_KEY:-}" ]]; then
-    NOVADA_MCP_KEY="1f35b477c9e1802778ec64aee2a6adfa"
-    echo "[NOTE] NOVADA_MCP_KEY not set in env — using built-in test key."
+# Never hardcode a key in a committed script. Read from env only.
+NOVADA_MCP_KEY="${NOVADA_MCP_KEY:-${NOVADA_API_KEY:-}}"
+if [[ -z "$NOVADA_MCP_KEY" ]]; then
+    echo "[ERROR] Set NOVADA_MCP_KEY (or NOVADA_API_KEY) in your env before running — no key is baked into this script." >&2
+    exit 1
 fi
 
 # ─── helpers ──────────────────────────────────────────────────────────────────

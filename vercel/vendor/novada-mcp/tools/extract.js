@@ -386,6 +386,82 @@ function pickBetterHtml(current, candidate, url, useFullPage) {
     }
     return { ...current, adopted: false };
 }
+/**
+ * NOV-GB1 / NOV-GB2: GitBook .md fallback.
+ *
+ * GitBook hosts serve raw markdown at <page>.md — a free, no-JS-needed path that
+ * bypasses ALL rendering. This is critical on the hosted (Vercel serverless) endpoint,
+ * where render mode 503s and browser mode is unavailable (no persistent CDP WebSocket).
+ * On such runtimes the escalation ladder would otherwise short-circuit to a
+ * "Browser Mode Unavailable" error and never surface the docs content at all.
+ *
+ * Detection gate — conservative, will NOT trigger on normal pages:
+ *   (1) staticHtml contains "static-2v.gitbook.com" OR "api.gitbook.com/cache/" OR
+ *       "gitbook-x-prod.appspot.com" — GitBook-specific CDN assets that appear in
+ *       ALL GitBook-hosted sites and NOWHERE else.
+ *       NOTE (NOV-GB2): we do NOT gate on detectJsHeavyContent — modern GitBook ships a
+ *       ~500KB shell with no "__next"/"id=root" markers, so detectJsHeavyContent returns
+ *       FALSE and the old gate never fired. The CDN signature alone is the correct gate:
+ *       if a page is served by GitBook, its .md sibling is authoritative content.
+ *   (2) URL does not already end in .md.
+ *   (3) URL has a non-root path (can't append .md to a bare origin/).
+ *
+ * .md result accepted only when: content-type is text/markdown (or text/plain) AND
+ * length > 200 chars (GitBook "Page Not Found" stubs are ~100-200 chars).
+ *
+ * @returns the raw markdown + a lightweight synthetic HTML wrapper (so downstream
+ *          title/link/score helpers still work), or null when the fallback does not apply.
+ */
+async function attemptGitBookMdFallback(pageUrl, staticHtml) {
+    if (!staticHtml || staticHtml.startsWith("pdf_pages:") || pageUrl.endsWith(".md"))
+        return null;
+    const htmlLower = staticHtml.toLowerCase();
+    const isGitBook = htmlLower.includes("static-2v.gitbook.com") ||
+        htmlLower.includes("api.gitbook.com/cache/") ||
+        htmlLower.includes("gitbook-x-prod.appspot.com");
+    if (!isGitBook)
+        return null;
+    let mdUrl;
+    try {
+        const parsed = new URL(pageUrl);
+        const path = parsed.pathname.replace(/\/+$/, "");
+        if (!path || path === "/")
+            return null; // root path — nothing to append .md to
+        mdUrl = `${parsed.origin}${path}.md`;
+    }
+    catch {
+        return null;
+    }
+    try {
+        const mdResp = await fetchWithRetry(mdUrl, { tool: "extract", timeout: 8000 });
+        const mdCt = String(mdResp.headers?.["content-type"] ?? "");
+        const mdBody = typeof mdResp.data === "string" ? mdResp.data : "";
+        // Accept markdown responses that are longer than a "Page Not Found" stub AND look like
+        // real docs. Structural check (review MEDIUM #2): require a markdown heading or a
+        // non-trivial word count so a verbose text/plain custom-404 can't inject garbage as
+        // page content. GitBook's own "Page Not Found" stub has neither an H1 nor 40+ words.
+        const looksLikeDocs = /^#{1,6}\s+\S/m.test(mdBody) || mdBody.split(/\s+/).length >= 40;
+        if (mdBody.length > 200 && looksLikeDocs && (mdCt.includes("text/markdown") || mdCt.includes("text/plain"))) {
+            // Wrap the markdown in a lightweight HTML shell so downstream helpers
+            // (title extraction, link extraction, scoreExtraction) still work. The
+            // wrapper carries the H1 as <title>; the markdown body sits in a <main>.
+            const mdTitle = mdBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? "";
+            const wrapped = [
+                `<html><head>`,
+                `<title>${mdTitle || "GitBook Page"}</title>`,
+                `<meta name="x-gitbook-md-fallback" content="true"/>`,
+                `</head><body><main>`,
+                mdBody,
+                `</main></body></html>`,
+            ].join("");
+            return { md: mdBody, html: wrapped };
+        }
+    }
+    catch {
+        /* .md fetch failed — caller falls through to its normal path */
+    }
+    return null;
+}
 /** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
 async function extractSingleInner(params, apiKey) {
     // Normalize render="js" → "render" (js is the agent-friendly alias)
@@ -442,10 +518,38 @@ async function extractSingleInner(params, apiKey) {
         // isBrowserAvailableOnRuntime() checks: isHostedEnvironment() (false on Vercel unless
         // DEPLOYMENT_SUPPORTS_WS=true override) AND whether NOVADA_BROWSER_WS creds are set.
         if (!isBrowserAvailableOnRuntime()) {
-            return getBrowserUnavailableError("browser");
+            // NOV-GB2: BEFORE returning the browser-unavailable error, probe for a GitBook
+            // .md sibling. On the hosted endpoint browser is unavailable and this is the ONLY
+            // way GitBook docs content is reachable. A page can reach this branch via a
+            // route-memory / registry hint that pins "browser" for the host, so this probe
+            // must run here — not just in the auto/static ladder below.
+            //
+            // Cost guard (review HIGH #2): skip the probe when a known anti-bot provider is
+            // already identified (detectedAntiBot, set from domainHint.provider). Those domains
+            // genuinely require the CDP/browser tier and are never GitBook docs — probing them
+            // is a pure wasted fetch + proxy credit that ends in the same unavailable error.
+            // NOTE: we intentionally do NOT gate on a "gitbook" hostname substring — GitBook is
+            // frequently served on custom domains (e.g. developer.novada.com) with no such marker;
+            // the authoritative GitBook check is the CDN signature inside attemptGitBookMdFallback.
+            const probe = detectedAntiBot
+                ? ""
+                : await fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 8000 })
+                    .then(r => (typeof r.data === "string" ? r.data : ""))
+                    .catch(() => "");
+            const gb = probe ? await attemptGitBookMdFallback(params.url, probe) : null;
+            if (gb) {
+                gitbookMdContent = gb.md;
+                html = gb.html;
+                usedMode = "static";
+            }
+            else {
+                return getBrowserUnavailableError("browser");
+            }
         }
-        html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
-        usedMode = "browser";
+        else {
+            html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
+            usedMode = "browser";
+        }
     }
     else if (effectiveMode === "render") {
         const response = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}) });
@@ -474,12 +578,26 @@ async function extractSingleInner(params, apiKey) {
             }
             html = response.data;
         }
+        // NOV-GB2: render mode returned a GitBook shell — prefer the .md sibling. GitBook
+        // content lives in client bundles, so even a rendered fetch is often just chrome.
+        // The .md endpoint is authoritative and cheaper than a browser escalation.
+        if (typeof html === "string") {
+            const gb = await attemptGitBookMdFallback(params.url, html);
+            if (gb) {
+                gitbookMdContent = gb.md;
+                html = gb.html;
+                usedMode = "static";
+            }
+        }
         // F2 / QW-4: Detect bot-challenge pages returned by the Web Unblocker (any size).
         // A full-size Cloudflare interstitial (e.g., "Attention Required! | Cloudflare", "Sorry,
         // you have been blocked") is several KB — the old html.length < 2000 guard missed it.
         // Fix: run detectBotChallenge unconditionally; attempt browser escalation when available,
         // otherwise surface a concrete error instead of silently returning interstitial text.
-        if (typeof html === "string" && detectBotChallenge(html)) {
+        // NOV-GB2: if the .md fallback already resolved content, skip the bot-challenge
+        // escalation entirely — the synthetic wrapper is not a challenge page and must
+        // keep its "static" usedMode (set by attemptGitBookMdFallback above).
+        if (gitbookMdContent === null && typeof html === "string" && detectBotChallenge(html)) {
             if (isBrowserConfigured()) {
                 const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => null);
                 // F2/R3: Use pickBetterHtml (quality-score comparison) instead of raw byte
@@ -502,7 +620,7 @@ async function extractSingleInner(params, apiKey) {
                     `Use render=browser with NOVADA_BROWSER_WS configured, or try a different URL.`);
             }
         }
-        else {
+        else if (gitbookMdContent === null) {
             usedMode = "render";
         }
     }
@@ -550,67 +668,19 @@ async function extractSingleInner(params, apiKey) {
             }
             html = response.data;
         }
-        // GitBook .md fallback (NOV-GB1):
-        // GitBook hosts serve raw markdown at <page>.md — a free, no-JS-needed path that
-        // bypasses all JS rendering. When the static HTML is a GitBook JS shell (content
-        // lives in React bundles, not inline HTML), fetch <url>.md before attempting an
-        // expensive render escalation that 503s on the hosted (Vercel) endpoint.
-        //
-        // Detection gate — conservative, will NOT trigger on normal pages:
-        //   (1) HTML contains "static-2v.gitbook.com" OR "api.gitbook.com/cache/" OR
-        //       "gitbook-x-prod.appspot.com" — GitBook-specific CDN assets that appear in
-        //       ALL GitBook-hosted sites and NOWHERE else.
-        //   (2) Page is JS-heavy (detectJsHeavyContent) — real content not in the HTML.
-        //   (3) URL does not already end in .md.
-        //   (4) URL has a non-root path (can't append .md to bare origin/).
-        //
-        // .md result accepted only when: content-type is text/markdown (or text/plain) AND
-        // length > 200 chars (GitBook "Page Not Found" stubs are ~100-200 chars).
-        if (!html.startsWith("pdf_pages:") && !params.url.endsWith(".md")) {
-            const htmlLower = html.toLowerCase();
-            const isGitBook = htmlLower.includes("static-2v.gitbook.com") ||
-                htmlLower.includes("api.gitbook.com/cache/") ||
-                htmlLower.includes("gitbook-x-prod.appspot.com");
-            if (isGitBook && detectJsHeavyContent(html)) {
-                const mdUrl = (() => {
-                    try {
-                        const parsed = new URL(params.url);
-                        const path = parsed.pathname.replace(/\/+$/, "");
-                        if (!path || path === "/")
-                            return null;
-                        return `${parsed.origin}${path}.md`;
-                    }
-                    catch {
-                        return null;
-                    }
-                })();
-                if (mdUrl) {
-                    try {
-                        const mdResp = await fetchWithRetry(mdUrl, { tool: "extract", timeout: 8000 });
-                        const mdCt = String(mdResp.headers?.["content-type"] ?? "");
-                        const mdBody = typeof mdResp.data === "string" ? mdResp.data : "";
-                        // Accept markdown responses that are longer than a "Page Not Found" stub
-                        if (mdBody.length > 200 && (mdCt.includes("text/markdown") || mdCt.includes("text/plain"))) {
-                            gitbookMdContent = mdBody;
-                            // Replace the JS-heavy shell with a lightweight HTML wrapper so downstream
-                            // helpers (title extraction, link extraction, scoreExtraction) still work.
-                            // The wrapper carries the H1 as <title>; the markdown body is in a <main>
-                            // so extractMainContent/extractFullPageContent can score it.
-                            const mdTitle = mdBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? "";
-                            html = [
-                                `<html><head>`,
-                                `<title>${mdTitle || "GitBook Page"}</title>`,
-                                `<meta name="x-gitbook-md-fallback" content="true"/>`,
-                                `</head><body><main>`,
-                                mdBody,
-                                `</main></body></html>`,
-                            ].join("");
-                            // Mark JS-heavy as resolved — the .md content needs no render escalation.
-                            usedMode = "static";
-                        }
-                    }
-                    catch { /* .md fetch failed — fall through to normal render escalation */ }
-                }
+        // GitBook .md fallback (NOV-GB1 / NOV-GB2):
+        // If the static HTML is served by GitBook (CDN signature), fetch the authoritative
+        // <url>.md sibling BEFORE any render/browser escalation. This is a free, no-JS path
+        // that works on the hosted (Vercel) endpoint where render 503s and browser is
+        // unavailable. See attemptGitBookMdFallback for the full detection contract.
+        // NOV-GB2 fix: gate on the GitBook CDN signature ALONE — NOT detectJsHeavyContent,
+        // which returns false on modern GitBook's ~500KB shell (no __next/id=root markers).
+        {
+            const gb = await attemptGitBookMdFallback(params.url, html);
+            if (gb) {
+                gitbookMdContent = gb.md;
+                html = gb.html;
+                usedMode = "static";
             }
         }
         // Skip JS detection if we already have PDF content (no escalation needed).
@@ -696,7 +766,14 @@ async function extractSingleInner(params, apiKey) {
     // NOV-330: remember the winning mode for this host so the rest of the session can
     // start there. recordRouteSuccess ignores the "render-failed" pseudo-mode, so only a
     // genuine static/render/browser success is pinned. Cheap + best-effort.
-    recordRouteSuccess(params.url, usedMode);
+    // NOV-GB2: do NOT pin a route when the GitBook .md fallback resolved — usedMode is set
+    // to "static" as a synthetic label, but the host did NOT actually serve usable content
+    // via a plain static fetch (it needed the .md special-path). Pinning "static" here would
+    // misclassify the host for subsequent pages. The GitBook .md probe runs on all branches
+    // anyway, so skipping the pin loses nothing.
+    if (gitbookMdContent === null) {
+        recordRouteSuccess(params.url, usedMode);
+    }
     // NOV-334: request logging now happens centrally in the fetch helpers (fetchViaProxy /
     // fetchWithRender / fetchWithRetry), so every tool — not just extract — emits one
     // structured stderr line per upstream request (silent unless NOVADA_LOG=debug). The
