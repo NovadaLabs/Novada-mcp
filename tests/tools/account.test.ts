@@ -398,6 +398,103 @@ describe("novadaAccount traffic section", () => {
   });
 });
 
+// ─── Graceful degradation on dev-api business-code failures ──────────────────
+
+describe("novadaAccount — graceful degradation on dev-api failure", () => {
+  it("summary card: returns dashboard-pointer message (not raw error) when account_summary throws a non-auth error", async () => {
+    mockedSummary.mockRejectedValue(new Error("Developer-api rejected request (code=40002): No approval received"));
+    const result = await novadaAccount(validateAccountParams({ section: "summary", format: "card" }));
+    // Must NOT surface as a bare error blob (isError flag, raw stack, etc.)
+    expect(result).not.toContain("isError");
+    // Must contain the friendly pointer as primary content
+    expect(result).toContain("dashboard.novada.com/wallet/");
+    expect(result).toContain("API key still works");
+    // The friendly pointer must come BEFORE any reason snippet
+    const pointerIdx = result.indexOf("dashboard.novada.com/wallet/");
+    const reasonIdx = result.indexOf("Reason:");
+    // If there's a Reason line, the pointer must appear before it
+    if (reasonIdx !== -1) {
+      expect(pointerIdx).toBeLessThan(reasonIdx);
+    }
+  });
+
+  it("summary json: returns structured unavailable object (not raw error) on non-auth failure", async () => {
+    mockedSummary.mockRejectedValue(new Error("Developer-api rejected request (code=40002): No approval received"));
+    const result = await novadaAccount(validateAccountParams({ section: "summary", format: "json" }));
+    const obj = JSON.parse(result) as Record<string, unknown>;
+    expect(obj.status).toBe("unavailable");
+    expect(obj.message).toContain("dashboard.novada.com/wallet/");
+    expect(obj.agent_instruction).toContain("not an auth failure");
+    // Must be parseable JSON — not a raw error string thrown as a bare object
+    expect(() => JSON.parse(result)).not.toThrow();
+  });
+
+  it("balance card: returns dashboard-pointer on non-auth dev-api failure", async () => {
+    mockedWallet.mockRejectedValue(new Error("Developer-api rejected request (code=40002): No approval received"));
+    const result = await novadaAccount(validateAccountParams({ section: "balance", format: "card" }));
+    expect(result).toContain("dashboard.novada.com/wallet/");
+    // Must NOT be just the raw error blob without any friendly context
+    expect(result).not.toContain("isError");
+  });
+
+  it("balance json: returns structured unavailable object on non-auth failure", async () => {
+    mockedWallet.mockRejectedValue(new Error("Developer-api rejected request (code=99): Some business error"));
+    const result = await novadaAccount(validateAccountParams({ section: "balance", format: "json" }));
+    const obj = JSON.parse(result) as Record<string, unknown>;
+    expect(obj.status).toBe("unavailable");
+    expect(obj.message).toContain("dashboard.novada.com/wallet/");
+  });
+
+  it("plans card: returns dashboard-pointer on non-auth failure", async () => {
+    mockedPlans.mockRejectedValue(new Error("Network error"));
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    expect(result).toContain("dashboard.novada.com/wallet/");
+  });
+
+  it("usage card: returns dashboard-pointer on non-auth failure", async () => {
+    mockedUsage.mockRejectedValue(new Error("Developer-api returned HTTP 500. Treat as transient"));
+    const result = await novadaAccount(validateAccountParams({ section: "usage", format: "card" }));
+    expect(result).toContain("dashboard.novada.com/wallet/");
+  });
+
+  it("traffic card: returns dashboard-pointer on non-auth failure", async () => {
+    mockedTraffic.mockRejectedValue(new Error("Developer-api rejected request (code=40002): No approval received"));
+    const result = await novadaAccount(validateAccountParams({ section: "traffic", format: "card" }));
+    expect(result).toContain("dashboard.novada.com/wallet/");
+    // Must not be a bare error blob
+    expect(result).not.toContain("isError");
+  });
+
+  it("non-zero business code does NOT surface as INVALID_API_KEY / 'key invalid'", async () => {
+    mockedSummary.mockRejectedValue(new Error("Developer-api rejected request (code=40002): No approval received"));
+    const result = await novadaAccount(validateAccountParams({ section: "summary", format: "card" }));
+    expect(result).not.toMatch(/key.*invalid/i);
+    expect(result).not.toContain("INVALID_API_KEY");
+  });
+
+  it("includes a sanitized reason snippet (without raw secrets) when available", async () => {
+    mockedWallet.mockRejectedValue(new Error("Developer-api rejected request (code=40002): No approval received"));
+    const result = await novadaAccount(validateAccountParams({ section: "balance", format: "card" }));
+    // The reason line should appear but must not expose secret patterns
+    expect(result).toContain("Reason:");
+    expect(result).not.toMatch(/api_key=[^&\s"')\*]/);
+  });
+
+  it("auth failure (INVALID_API_KEY) still bubbles — is NOT silently swallowed", async () => {
+    const { NovadaError, NovadaErrorCode } = await import("../../src/_core/errors.js");
+    const authErr = new NovadaError({
+      code: NovadaErrorCode.INVALID_API_KEY,
+      message: "Developer-api auth failure: key rejected",
+      agent_instruction: "Fix the key",
+      retryable: false,
+    });
+    mockedSummary.mockRejectedValue(authErr);
+    await expect(
+      novadaAccount(validateAccountParams({ section: "summary", format: "card" }))
+    ).rejects.toThrow();
+  });
+});
+
 // ─── All-expired edge case ────────────────────────────────────────────────────
 
 describe("novadaAccount — all plans expired", () => {

@@ -402,15 +402,27 @@ export async function fetchWithRender(
         // Inner code check — outer code=0 but inner data.code indicates a transient error
         if (resp.data?.data?.code && resp.data.data.code !== 200) {
           const innerCode = resp.data.data.code;
+          const innerMsg: string = resp.data.data.msg ?? "";
+          // 503 "Faulted After Too Many Retries" means the unblocker already exhausted its
+          // own internal retry budget — the target is genuinely hard (Cloudflare challenge,
+          // bot detection, etc.). Retrying from our side wastes serverless budget and won't
+          // succeed. Throw immediately so the caller can surface a useful error faster.
+          // NOV-GB2: Part B — hosted render 503 fix.
+          if (innerCode === 503 && innerMsg.toLowerCase().includes("faulted")) {
+            throw new Error(
+              `Web Unblocker error (503): ${innerMsg || "Faulted After Too Many Retries"} — ` +
+              `the target rejected all render attempts. Use render="static" or the GitBook .md fallback instead.`
+            );
+          }
           // 403/429/500/502/503 are transient — retry
           if ([403, 429, 500, 502, 503].includes(innerCode) && attempt < MAX_RETRIES) {
-            lastError = new Error(`Web Unblocker error (${innerCode}): ${resp.data.data.msg ?? "unknown"}`);
+            lastError = new Error(`Web Unblocker error (${innerCode}): ${innerMsg || "unknown"}`);
             const _base1 = Math.pow(2, attempt) * 1000;
             const _jitter1 = Math.random() * _base1;
             await new Promise(r => setTimeout(r, Math.min(_jitter1, 30_000)));
             continue;
           }
-          throw new Error(`Web Unblocker error (${innerCode}): ${resp.data.data.msg ?? "unknown"}`);
+          throw new Error(`Web Unblocker error (${innerCode}): ${innerMsg || "unknown"}`);
         }
         if (resp.data?.code !== 0) {
           throw new Error(`Web Unblocker error: ${resp.data?.msg ?? "unknown"}`);

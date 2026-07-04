@@ -472,3 +472,67 @@ describe("novadaScrape — pre-flight (#6)", () => {
     expect(preflightScrape("x.com", "twitter_profile_username", { username: "jack" })).toBeNull();
   });
 });
+
+// NOV-689: task_id resume path — skip submit when task_id is provided
+describe("novadaScrape — task_id resume path (NOV-689)", () => {
+  it("skips submit when task_id is provided and fetches result directly", async () => {
+    // Arrange: provide task_id — POST (submit) must NOT be called
+    mockedAxios.get.mockResolvedValue(makeDownloadOk(MOCK_RECORDS));
+
+    const result = await novadaScrape(
+      {
+        platform: "amazon.com",
+        operation: "amazon_product_keywords",
+        params: { keyword: "iphone" },
+        format: "markdown",
+        limit: 20,
+        task_id: "resume-task-abc123",
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+
+    // submit must NOT be called — no new billable task
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    // download must be called with the provided task_id
+    expect(mockedAxios.get).toHaveBeenCalled();
+    const [url] = mockedAxios.get.mock.calls[0];
+    expect(url).toContain("resume-task-abc123");
+    // result should contain records
+    expect(result).toContain("iPhone 16 Pro");
+  });
+
+  it("returns honest processing message with task_id for free-resume when still pending", async () => {
+    // Arrange: submit returns a task_id; download stays pending (27202) on every poll.
+    // Use fake timers so the 45s ceiling is reached instantly without actually waiting.
+    vi.useFakeTimers();
+    try {
+      mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+      mockedAxios.get.mockResolvedValue({
+        data: { code: 27202, data: null, msg: "" },
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+
+      // Start the scrape (will poll until deadline)
+      const resultPromise = novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+
+      // Advance past the POLL_TIMEOUT_MS ceiling (45000ms) + a little extra
+      await vi.advanceTimersByTimeAsync(46000);
+      const result = await resultPromise;
+
+      // Honest message: tells agent to use task_id to resume without re-charging
+      expect(result).toContain("status: processing");
+      expect(result).toContain("task_id=");
+      expect(result).toContain("WITHOUT re-charging");
+      expect(result).toContain("NEW billable task");
+      // The old FALSE claim must be gone
+      expect(result).not.toContain("cached server-side by task");
+      expect(result).not.toContain("retrying does not duplicate billable work");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+});

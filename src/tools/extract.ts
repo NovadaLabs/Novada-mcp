@@ -470,6 +470,8 @@ async function extractSingleInner(
   let html: string;
   let usedMode: "static" | "render" | "browser" | "render-failed" = "static";
   let renderError: string | null = null;
+  /** NOV-GB1: raw markdown from GitBook .md fallback, used to override mainContent extraction */
+  let gitbookMdContent: string | null = null;
   /** Anti-bot provider detected during fetch (null = none detected) */
   let detectedAntiBot: string | null = null;
   /** Whether anti-bot was resolved via escalation */
@@ -623,10 +625,72 @@ async function extractSingleInner(
       html = response.data;
     }
 
+    // GitBook .md fallback (NOV-GB1):
+    // GitBook hosts serve raw markdown at <page>.md — a free, no-JS-needed path that
+    // bypasses all JS rendering. When the static HTML is a GitBook JS shell (content
+    // lives in React bundles, not inline HTML), fetch <url>.md before attempting an
+    // expensive render escalation that 503s on the hosted (Vercel) endpoint.
+    //
+    // Detection gate — conservative, will NOT trigger on normal pages:
+    //   (1) HTML contains "static-2v.gitbook.com" OR "api.gitbook.com/cache/" OR
+    //       "gitbook-x-prod.appspot.com" — GitBook-specific CDN assets that appear in
+    //       ALL GitBook-hosted sites and NOWHERE else.
+    //   (2) Page is JS-heavy (detectJsHeavyContent) — real content not in the HTML.
+    //   (3) URL does not already end in .md.
+    //   (4) URL has a non-root path (can't append .md to bare origin/).
+    //
+    // .md result accepted only when: content-type is text/markdown (or text/plain) AND
+    // length > 200 chars (GitBook "Page Not Found" stubs are ~100-200 chars).
+    if (!html.startsWith("pdf_pages:") && !params.url.endsWith(".md")) {
+      const htmlLower = html.toLowerCase();
+      const isGitBook =
+        htmlLower.includes("static-2v.gitbook.com") ||
+        htmlLower.includes("api.gitbook.com/cache/") ||
+        htmlLower.includes("gitbook-x-prod.appspot.com");
+      if (isGitBook && detectJsHeavyContent(html)) {
+        const mdUrl = (() => {
+          try {
+            const parsed = new URL(params.url);
+            const path = parsed.pathname.replace(/\/+$/, "");
+            if (!path || path === "/") return null;
+            return `${parsed.origin}${path}.md`;
+          } catch { return null; }
+        })();
+        if (mdUrl) {
+          try {
+            const mdResp = await fetchWithRetry(mdUrl, { tool: "extract", timeout: 8000 });
+            const mdCt = String((mdResp.headers as Record<string, string>)?.["content-type"] ?? "");
+            const mdBody = typeof mdResp.data === "string" ? mdResp.data : "";
+            // Accept markdown responses that are longer than a "Page Not Found" stub
+            if (mdBody.length > 200 && (mdCt.includes("text/markdown") || mdCt.includes("text/plain"))) {
+              gitbookMdContent = mdBody;
+              // Replace the JS-heavy shell with a lightweight HTML wrapper so downstream
+              // helpers (title extraction, link extraction, scoreExtraction) still work.
+              // The wrapper carries the H1 as <title>; the markdown body is in a <main>
+              // so extractMainContent/extractFullPageContent can score it.
+              const mdTitle = mdBody.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? "";
+              html = [
+                `<html><head>`,
+                `<title>${mdTitle || "GitBook Page"}</title>`,
+                `<meta name="x-gitbook-md-fallback" content="true"/>`,
+                `</head><body><main>`,
+                mdBody,
+                `</main></body></html>`,
+              ].join("");
+              // Mark JS-heavy as resolved — the .md content needs no render escalation.
+              usedMode = "static";
+            }
+          } catch { /* .md fetch failed — fall through to normal render escalation */ }
+        }
+      }
+    }
+
     // Skip JS detection if we already have PDF content (no escalation needed).
     // Also skip if domainHint resolved this domain — DOMAIN_REGISTRY classification is
     // authoritative for known domains and overrides JS-heavy detection heuristics.
-    if (renderMode === "auto" && !domainHint && !html.startsWith("pdf_pages:") && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
+    // NOV-GB1: also skip when the GitBook .md fallback already resolved the content —
+    // the synthetic HTML wrapper we built is NOT JS-heavy; avoid a false re-escalation.
+    if (renderMode === "auto" && !domainHint && !html.startsWith("pdf_pages:") && !gitbookMdContent && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
       // Identify anti-bot provider from the static HTML before escalation
       detectedAntiBot = identifyAntiBot(html);
 
@@ -764,12 +828,16 @@ async function extractSingleInner(
   }
 
   // For PDF content, use the text directly (no HTML parsing needed).
+  // NOV-GB1: when the GitBook .md fallback fired, use the raw markdown directly —
+  // the standard HTML extractors would strip most content from the synthetic wrapper.
   // useFullPage is hoisted to the fetch section above (shared with pickBetterHtml).
-  let mainContent = pdfPages !== null
-    ? html.slice(0, MAX_CHARS_DEFAULT)
-    : useFullPage
-      ? extractFullPageContent(html, params.url)
-      : extractMainContent(html, params.url);
+  let mainContent = gitbookMdContent !== null
+    ? gitbookMdContent
+    : pdfPages !== null
+      ? html.slice(0, MAX_CHARS_DEFAULT)
+      : useFullPage
+        ? extractFullPageContent(html, params.url)
+        : extractMainContent(html, params.url);
 
   let allLinks = $doc ? extractLinksFrom($doc, params.url) : [];
   let baseDomain: string;
@@ -1055,7 +1123,7 @@ async function extractSingleInner(
       title,
       description: description || null,
       mode: usedMode,
-      source: waybackFallback ? "wayback" : "live",
+      source: gitbookMdContent !== null ? "gitbook-md-fallback" : waybackFallback ? "wayback" : "live",
       fetched_at: fetchedAt,
       // R4/R7: quality is a signal, not a verdict. `content_present` is the
       // display-level presence (true whenever real content is in this payload,
@@ -1093,6 +1161,7 @@ async function extractSingleInner(
       ...(autoEscalated ? { auto_escalated: true, ...(autoEscalatedTo ? { escalated_to: autoEscalatedTo } : {}) } : {}),
       ...(escalationFailed ? { escalation_attempted: true, escalation_failed: true, ...(escalationError ? { escalation_error: escalationError } : {}) } : {}),
       ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
+      ...(gitbookMdContent !== null ? { gitbook_md_fallback: true } : {}),
       ...(waybackFallback ? { wayback_fallback: true } : {}),
       // NOV-668: Kufer availability data
       ...(kuferResult ? {
@@ -1110,6 +1179,7 @@ async function extractSingleInner(
     // Build hints array
     const hints = jsonResult.hints as string[];
     if (redditUrl) hints.push("Reddit URL rewritten to old.reddit.com — new reddit.com blocks all scrapers.");
+    if (gitbookMdContent !== null) hints.push("Content retrieved via GitBook .md fallback — the live page is JS-rendered; the raw markdown endpoint returned richer content.");
     if (waybackFallback) hints.push("Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.");
     try {
       const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
@@ -1177,7 +1247,7 @@ async function extractSingleInner(
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
-    `mode: ${usedMode} | source: ${waybackFallback ? "wayback" : "live"} | ${qualityFraming}`,
+    `mode: ${usedMode} | source: ${gitbookMdContent !== null ? "gitbook-md-fallback" : waybackFallback ? "wayback" : "live"} | ${qualityFraming}`,
     ...(qualityDetailLine ? [qualityDetailLine] : []),
     `fetched_at: ${fetchedAt}`,
     // #22: omit extraction_quality when no fields were requested (n/a is noise).
@@ -1270,6 +1340,10 @@ async function extractSingleInner(
   lines.push(``, `---`, `## Agent Hints`);
   if (redditUrl) {
     lines.push(`- Reddit URL rewritten to old.reddit.com (static HTML) — new reddit.com blocks all scrapers.`);
+  }
+  // NOV-GB1: surface GitBook .md fallback in markdown output hints
+  if (gitbookMdContent !== null) {
+    lines.push(`- [GITBOOK] Content retrieved via GitBook .md fallback — static HTML was JS-only; raw markdown endpoint returned full content.`);
   }
   if (waybackFallback) {
     lines.push(`- [WAYBACK] Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.`);

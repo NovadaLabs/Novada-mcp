@@ -21,6 +21,7 @@ import { novadaWalletUsageRecord } from "./wallet_usage_record.js";
 import { novadaPlanBalanceAll } from "./plan_balance_all.js";
 import { novadaTrafficDaily } from "./traffic_daily.js";
 import { novadaHealth } from "./health.js";
+import { NovadaError, NovadaErrorCode, sanitizeServerMsg } from "../_core/errors.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 
@@ -415,6 +416,84 @@ function flattenSummaryJson(summaryData: Record<string, unknown>): Record<string
   };
 }
 
+// ─── Graceful degradation helpers ────────────────────────────────────────────
+
+const DASHBOARD_WALLET_URL = "https://dashboard.novada.com/wallet/";
+
+/**
+ * Determine whether a thrown error is a genuine auth failure (key rejected by
+ * the server via HTTP 401/403 or a confirmed auth business code) vs. any other
+ * kind of failure (undocumented business codes, network, 5xx, 404-product-not-
+ * provisioned, "No approval received", etc.).
+ *
+ * Only true auth failures should surface as "key invalid" to the user.
+ * Everything else is "data temporarily unavailable" — the key itself is fine.
+ */
+function isAuthFailure(err: unknown): boolean {
+  return err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_API_KEY;
+}
+
+/**
+ * Build a concise, sanitized reason string from any thrown error.
+ * Strips secrets, collapses to one line, caps at 120 chars.
+ */
+function shortReason(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  return sanitizeServerMsg(raw).split("\n")[0]?.slice(0, 120) ?? "";
+}
+
+/**
+ * The friendly dashboard-pointer card to show when developer-api can't return
+ * account data for a non-auth reason. `isError=false` — this is a "data
+ * temporarily unavailable" state, NOT a tool failure.
+ */
+function unavailableCard(reason?: string): string {
+  const reasonLine = reason ? `\n> Reason: ${reason}` : "";
+  return (
+    `⚠️ Couldn't read your account via the API right now. ` +
+    `Check your balance & usage at ${DASHBOARD_WALLET_URL}` +
+    `\n(Your API key still works for search / extract / scrape / proxy / browser.)` +
+    reasonLine
+  );
+}
+
+/**
+ * Wrap a section call so that dev-api business-code failures (including the
+ * undocumented "No approval received") degrade gracefully to a dashboard-pointer
+ * card instead of surfacing a raw scary error string.
+ *
+ * - Auth failures (HTTP 401/403, code 11000/10002) are re-thrown — they indicate
+ *   the key itself is bad, which is different from an API data outage.
+ * - Everything else (non-zero business codes, network, 5xx, 404-product) returns
+ *   the friendly card with isError=false semantics in the returned string.
+ */
+async function withAccountFallback<T>(
+  fn: () => Promise<T>,
+  format: "card" | "json",
+  sectionLabel: string,
+): Promise<T | string> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (isAuthFailure(err)) {
+      // Auth failure: let it bubble — the key is genuinely invalid.
+      throw err;
+    }
+    const reason = shortReason(err);
+    if (format === "json") {
+      return JSON.stringify({
+        status: "unavailable",
+        section: sectionLabel,
+        message: `Account data temporarily unavailable. Check ${DASHBOARD_WALLET_URL}`,
+        reason,
+        note: "Your API key still works for search / extract / scrape / proxy / browser.",
+        agent_instruction: `Account data is temporarily unavailable (not an auth failure). Direct the user to ${DASHBOARD_WALLET_URL} to check their balance and usage. Do NOT treat this as a key error.`,
+      }, null, 2);
+    }
+    return unavailableCard(reason);
+  }
+}
+
 // ─── Tool Implementation ─────────────────────────────────────────────────────
 
 /**
@@ -432,11 +511,31 @@ export async function novadaAccount(
     case "summary": {
       // The summary merges account_summary (wallet+plans+capture) + health entitlements.
       // Always uses full mode — mode param has been removed; there is no lighter variant.
-      const [summaryResult, healthResult] = await Promise.all([
-        novadaAccountSummary({} as never, apiKey),
-        novadaHealth(apiKey ?? "", "full"),
-      ]);
-
+      // Both calls are wrapped: if dev-api returns a business error (e.g. "No approval
+      // received"), we degrade gracefully to the dashboard-pointer card instead of
+      // surfacing a raw scary error. Auth failures still bubble.
+      let summaryResult: string;
+      let healthResult: string;
+      try {
+        [summaryResult, healthResult] = await Promise.all([
+          novadaAccountSummary({} as never, apiKey),
+          novadaHealth(apiKey ?? "", "full"),
+        ]);
+      } catch (err) {
+        if (isAuthFailure(err)) throw err;
+        const reason = shortReason(err);
+        if (format === "json") {
+          return JSON.stringify({
+            status: "unavailable",
+            section: "summary",
+            message: `Account data temporarily unavailable. Check ${DASHBOARD_WALLET_URL}`,
+            reason,
+            note: "Your API key still works for search / extract / scrape / proxy / browser.",
+            agent_instruction: `Account data is temporarily unavailable (not an auth failure). Direct the user to ${DASHBOARD_WALLET_URL} to check their balance and usage. Do NOT treat this as a key error.`,
+          }, null, 2);
+        }
+        return unavailableCard(reason);
+      }
       // Parse the summary JSON
       let summaryData: Record<string, unknown>;
       try {
@@ -468,36 +567,46 @@ export async function novadaAccount(
     }
 
     case "balance": {
-      const raw = await novadaWalletBalance({} as never, apiKey);
+      const result = await withAccountFallback(
+        () => novadaWalletBalance({} as never, apiKey),
+        format,
+        "balance",
+      );
+      if (typeof result !== "string") return String(result);
       if (format === "card") {
         try {
-          return renderBalanceCard(JSON.parse(raw) as Record<string, unknown>);
+          return renderBalanceCard(JSON.parse(result) as Record<string, unknown>);
         } catch {
-          return raw;
+          return result;
         }
       }
       // json: pass through (wallet_balance already returns clean single-level data)
-      return raw;
+      return result;
     }
 
     case "usage": {
-      const raw = await novadaWalletUsageRecord(
-        {
-          start_time: params.start_time,
-          end_time: params.end_time,
-          page: params.page ?? 1,
-          page_size: params.page_size ?? 50,
-        } as never,
-        apiKey,
+      const result = await withAccountFallback(
+        () => novadaWalletUsageRecord(
+          {
+            start_time: params.start_time,
+            end_time: params.end_time,
+            page: params.page ?? 1,
+            page_size: params.page_size ?? 50,
+          } as never,
+          apiKey,
+        ),
+        format,
+        "usage",
       );
+      if (typeof result !== "string") return String(result);
       if (format === "card") {
         try {
-          return renderUsageCard(JSON.parse(raw) as Record<string, unknown>);
+          return renderUsageCard(JSON.parse(result) as Record<string, unknown>);
         } catch {
-          return raw;
+          return result;
         }
       }
-      return raw;
+      return result;
     }
 
     case "plans": {
@@ -507,18 +616,23 @@ export async function novadaAccount(
       const products = params.products?.filter((p): p is PlanProduct =>
         (validPlanProducts as readonly string[]).includes(p),
       );
-      const raw = await novadaPlanBalanceAll(
-        { products: products && products.length > 0 ? products : undefined } as never,
-        apiKey,
+      const result = await withAccountFallback(
+        () => novadaPlanBalanceAll(
+          { products: products && products.length > 0 ? products : undefined } as never,
+          apiKey,
+        ),
+        format,
+        "plans",
       );
+      if (typeof result !== "string") return String(result);
       if (format === "card") {
         try {
-          return renderPlansCard(JSON.parse(raw) as Record<string, unknown>);
+          return renderPlansCard(JSON.parse(result) as Record<string, unknown>);
         } catch {
-          return raw;
+          return result;
         }
       }
-      return raw;
+      return result;
     }
 
     case "traffic": {
@@ -528,22 +642,27 @@ export async function novadaAccount(
       const products = params.products?.filter((p): p is TrafficProduct =>
         (validTrafficProducts as readonly string[]).includes(p),
       );
-      const raw = await novadaTrafficDaily(
-        {
-          start_time: params.start_time,
-          end_time: params.end_time,
-          products: products && products.length > 0 ? products : undefined,
-        } as never,
-        apiKey,
+      const result = await withAccountFallback(
+        () => novadaTrafficDaily(
+          {
+            start_time: params.start_time,
+            end_time: params.end_time,
+            products: products && products.length > 0 ? products : undefined,
+          } as never,
+          apiKey,
+        ),
+        format,
+        "traffic",
       );
+      if (typeof result !== "string") return String(result);
       if (format === "card") {
         try {
-          return renderTrafficCard(JSON.parse(raw) as Record<string, unknown>);
+          return renderTrafficCard(JSON.parse(result) as Record<string, unknown>);
         } catch {
-          return raw;
+          return result;
         }
       }
-      return raw;
+      return result;
     }
 
     default: {

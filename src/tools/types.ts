@@ -426,6 +426,19 @@ const scrapeBase = {
     .describe("Operation-specific parameters. E.g. { keyword: 'iphone 16', num: 5 } for keyword search, { url: 'https://...' } for URL-based ops, { asin: 'B09...' } for ASIN lookup."),
   limit: z.number().int().min(1).max(100).default(20)
     .describe("Max records to return. Default 20, max 100."),
+  // Resume path: when task_id is provided, skip submitting a new task and go directly
+  // to fetching the result for that task_id — NO new billable task is submitted.
+  // Use this to resume a previous call that returned status:processing without re-charging.
+  task_id: z.string()
+    .regex(TASK_ID_REGEX, TASK_ID_REGEX_MSG)
+    .optional()
+    .describe(
+      "Optional. When provided, skips submitting a new scrape task and fetches the result " +
+      "of this existing task_id directly — no new billable task is created. " +
+      "Use this to resume a previous novada_scrape call that returned status:processing " +
+      "without incurring a duplicate charge. platform and operation are still required " +
+      "(used for display only when resuming)."
+    ),
 };
 
 /** MCP tool schema — agent-optimized formats only */

@@ -889,3 +889,108 @@ describe("F12-req3: field-level warning surfaces in tool output (JSON + markdown
     }
   });
 });
+
+describe("NOV-GB1: GitBook .md fallback", () => {
+  // A minimal GitBook SPA shell: Next.js `__next` div + GitBook CDN asset reference.
+  // detectJsHeavyContent fires on this (id="__next" with empty body content).
+  const gitbookShellHtml = [
+    `<html><head>`,
+    `<title>GitBook Page</title>`,
+    `<link rel="preconnect" href="https://static-2v.gitbook.com"/>`,
+    `<link rel="preconnect" href="https://api.gitbook.com/cache/"/>`,
+    `</head><body>`,
+    `<div id="__next"></div>`,
+    `<script src="https://static-2v.gitbook.com/_next/static/chunks/main.js"></script>`,
+    `</body></html>`,
+  ].join("");
+
+  const gitbookMarkdown = [
+    `# GitBook Overview`,
+    ``,
+    `This page explains Novada's API surface. It has real content that an agent can use.`,
+    `Agents can query endpoints to search, extract, crawl, and research content from any URL.`,
+    ``,
+    `## Endpoints`,
+    `- /search — search the web for any topic`,
+    `- /extract — extract content from a URL`,
+    `- /crawl — crawl a website and return all pages`,
+    ``,
+    `For more information, see the full API reference documentation at developer.novada.com.`,
+  ].join("\n");
+
+  it("uses .md fallback when static fetch returns GitBook shell", async () => {
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      // .md fetch URL ends in ".md" — return real markdown.
+      if (typeof url === "string" && url.endsWith(".md")) {
+        return {
+          data: gitbookMarkdown,
+          headers: { "content-type": "text/markdown; charset=utf-8" },
+          status: 200,
+        } as never;
+      }
+      // All other calls (static race direct + proxy) return the GitBook shell.
+      return { data: gitbookShellHtml, headers: { "content-type": "text/html" } } as never;
+    });
+
+    const result = await novadaExtract({
+      url: "https://developer.example.com/docs/overview",
+      format: "markdown",
+      render: "auto",
+    }, API_KEY);
+
+    expect(result).toBeTypeOf("string");
+    // Source must be flagged as the .md fallback, not "live".
+    expect(result).toContain("source: gitbook-md-fallback");
+    // Real markdown content must be present.
+    expect(result).toContain("GitBook Overview");
+    expect(result).toContain("Novada's API surface");
+    // Hint must mention the fallback.
+    expect(result).toContain("GitBook .md fallback");
+    // Must NOT have escalated to render mode — the .md fallback short-circuits it.
+    expect(result).not.toMatch(/mode: render\b/);
+  });
+
+  it("falls through to normal extraction when .md fetch fails", async () => {
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      // .md fetch throws → must not blow up; fall through to render escalation.
+      if (typeof url === "string" && url.endsWith(".md")) {
+        throw new Error(".md fetch network error");
+      }
+      // Static race: return the GitBook shell. Render escalation also gets the shell.
+      return { data: gitbookShellHtml, headers: { "content-type": "text/html" } } as never;
+    });
+
+    const result = await novadaExtract({
+      url: "https://developer.example.com/docs/overview",
+      format: "markdown",
+      render: "auto",
+    }, API_KEY);
+
+    // Should NOT contain gitbook-md-fallback — the fallback silently failed.
+    expect(result).not.toContain("gitbook-md-fallback");
+    // Should still return a string (graceful degradation).
+    expect(result).toBeTypeOf("string");
+  });
+
+  it("does NOT trigger .md fallback on non-GitBook pages", async () => {
+    // Ordinary static page with no GitBook signals.
+    const normalHtml = `<html><head><title>Example</title></head><body><p>Hello world! This is a normal static page with plenty of content that is not JS-heavy. Lorem ipsum dolor sit amet. Consectetur adipiscing elit. More text here.</p></body></html>`;
+
+    mockedAxios.get.mockResolvedValue({
+      data: normalHtml,
+      headers: { "content-type": "text/html" },
+    } as never);
+
+    const result = await novadaExtract({
+      url: "https://example.com",
+      format: "markdown",
+      render: "auto",
+    }, API_KEY);
+
+    expect(result).toBeTypeOf("string");
+    expect(result).not.toContain("gitbook-md-fallback");
+    expect(result).not.toContain("GitBook .md fallback");
+    // Source must be "live" for a normal page.
+    expect(result).toContain("source: live");
+  });
+});
