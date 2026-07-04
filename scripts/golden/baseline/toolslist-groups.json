@@ -1,0 +1,71 @@
+{
+  "account": [
+    "novada_account",
+    "novada_proxy_account_create",
+    "novada_proxy_account_list",
+    "novada_setup"
+  ],
+  "browser": [
+    "novada_browser",
+    "novada_setup"
+  ],
+  "content": [
+    "novada_account",
+    "novada_crawl",
+    "novada_discover",
+    "novada_extract",
+    "novada_map",
+    "novada_monitor",
+    "novada_research",
+    "novada_scrape",
+    "novada_search",
+    "novada_setup"
+  ],
+  "core": [
+    "novada_account",
+    "novada_crawl",
+    "novada_discover",
+    "novada_extract",
+    "novada_map",
+    "novada_monitor",
+    "novada_research",
+    "novada_scrape",
+    "novada_search",
+    "novada_setup"
+  ],
+  "monitor": [
+    "novada_account",
+    "novada_crawl",
+    "novada_discover",
+    "novada_extract",
+    "novada_map",
+    "novada_monitor",
+    "novada_research",
+    "novada_scrape",
+    "novada_search",
+    "novada_setup"
+  ],
+  "proxy": [
+    "novada_proxy",
+    "novada_setup"
+  ],
+  "research": [
+    "novada_ai_monitor",
+    "novada_discover",
+    "novada_monitor",
+    "novada_research",
+    "novada_setup"
+  ],
+  "scraper": [
+    "novada_account",
+    "novada_crawl",
+    "novada_discover",
+    "novada_extract",
+    "novada_map",
+    "novada_monitor",
+    "novada_research",
+    "novada_scrape",
+    "novada_search",
+    "novada_setup"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "is_error": false,
+  "leak_checks": {
+    "internal_api_m": false,
+    "proxy_host_with_unmasked_creds": false,
+    "unmasked_user_pass_at_host": false
+  },
+  "leaked": false,
+  "note": "proxy.novada.pro hostname appears in response (expected public endpoint). leaked=True only if unmasked credentials precede @host.",
+  "sample_markers": [
+    "Proxy Configuration",
+    "Usage Examples",
+    "Agent Hints"
+  ],
+  "trigger_tool": "novada_proxy",
+  "triggered": true
+}

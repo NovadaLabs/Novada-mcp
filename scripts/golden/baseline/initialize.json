@@ -1,0 +1,10 @@
+{
+  "capabilities": {
+    "prompts": {},
+    "tools": {}
+  },
+  "serverInfo": {
+    "name": "novada",
+    "version": "<VERSION>"
+  }
+}
