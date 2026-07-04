@@ -61,12 +61,20 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
     // but NOT registered (removed from tools/list to shrink the surface). Exclude them.
     const ALIAS_NAMES = new Set<string>([
       ...Object.keys(PROXY_ALIAS_MAP),  // novada_proxy_residential/isp/datacenter/mobile/static/dedicated
-      "novada_health_all",              // → novada_health(mode=full)
+      "novada_health_all",              // → novada_account(section="summary", mode="full")
       "novada_scraper_submit",          // → novada_scrape (sync inline)
       "novada_scraper_status",          // → benign ok (async flow removed)
       "novada_scraper_result",          // → benign ok
       "novada_scraper_task_mgmt",       // → benign ok
       "novada_verify",                  // 0.9.8: cut from tools/list (low value + verdict-quality issues); handler kept functional (hidden), no error for old callers
+      // 0.9.9: folded into novada_account — hidden from list, aliases still work
+      "novada_wallet_balance",          // → novada_account(section="balance")
+      "novada_wallet_usage_record",     // → novada_account(section="usage")
+      "novada_plan_balance_all",        // → novada_account(section="plans")
+      "novada_traffic_daily",           // → novada_account(section="traffic")
+      "novada_capture_logs",            // → novada_account(section="summary")
+      "novada_account_summary",         // → novada_account(section="summary")
+      "novada_health",                  // → novada_account(section="summary")
     ]);
     const wiredSet = new Set(wiredNames.filter((n) => !ALIAS_NAMES.has(n)));
     const registrySet = new Set(registryNames);

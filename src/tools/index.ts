@@ -46,6 +46,10 @@ export { validateSearchParams, validateExtractParams, validateCrawlParams, valid
 export { classifyError, NovadaErrorCode } from "../_core/errors.js";
 
 // ─── KR-6: Novada developer-api account-management tools ────────────────────
+// novada_account (unified) — composes the individual tools below
+export { novadaAccount, validateAccountParams, AccountParamsSchema } from "./account.js";
+export type { AccountParams } from "./account.js";
+// Individual composable functions (still exported for internal composition + backward-compat dispatch)
 export { novadaWalletBalance, validateWalletBalanceParams, WalletBalanceParamsSchema } from "./wallet_balance.js";
 export type { WalletBalanceParams } from "./wallet_balance.js";
 export { novadaWalletUsageRecord, validateWalletUsageRecordParams, WalletUsageRecordParamsSchema } from "./wallet_usage_record.js";

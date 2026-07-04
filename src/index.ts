@@ -98,7 +98,10 @@ import {
   novadaSetup,
   validateSetupParams,
   SetupParamsSchema,
-  // KR-6: developer-api account-management tools
+  // KR-6: developer-api account-management tools (unified + composables for alias dispatch)
+  novadaAccount,
+  validateAccountParams,
+  AccountParamsSchema,
   novadaWalletBalance,
   validateWalletBalanceParams,
   WalletBalanceParamsSchema,
@@ -441,25 +444,6 @@ Not for:
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
-    name: "novada_health",
-    description: `Get a Novada account status snapshot — authoritative, no synthetic probes, no credit cost.
-
-**Best for:** First-time setup, diagnosing why a tool is failing, confirming account entitlement + balance before calling a tool.
-**Returns:** Status table for Search/Extract/Scraper/Unblock (wallet-funded), Proxy, and Browser API — derived from actual billing/account data.
-**mode="quick" (default):** Wallet balance + proxy/browser entitlement. Fast (~200–400ms, reads billing API only).
-**mode="full":** Quick + per-product proxy plan balances with expiry dates. Equivalent to novada_health_all.
-
-Reports account entitlement + balance (authoritative, no synthetic probes, no credit cost). To confirm a specific tool works end-to-end, call that tool directly.`,
-    inputSchema: zodToMcpSchema(HealthParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
-  },
-  {
-    name: "novada_health_all",
-    description: `[ALIAS] Equivalent to novada_health(mode="full"). Kept for backward compatibility — prefer novada_health with mode="full". Returns account entitlement snapshot: wallet balance + proxy/browser entitlement + per-product plan balances. Authoritative, no synthetic probes, no credit cost.`,
-    inputSchema: zodToMcpSchema(HealthParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
-  },
-  {
     name: "novada_discover",
     description: `List all available Novada tools with name, description, category, and status.
 
@@ -568,25 +552,19 @@ Detect changes on a web page over time. Extracts content, computes a hash, compa
   },
   // ─── KR-6: developer-api account-management tools ─────────────────────────
   {
-    name: "novada_wallet_balance",
-    description: `Read the master Novada wallet balance (currency). Wraps developer-api POST /v1/wallet/balance.
+    name: "novada_account",
+    description: `Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements based on the \`section\` param.
 
-**Best for:** Confirming credit available before launching billable scraper/proxy jobs.
-**Not for:** Per-product MB/quota — use novada_plan_balance_all for residential/isp/mobile/datacenter/static/capture sub-balances.
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
-    inputSchema: zodToMcpSchema(WalletBalanceParamsSchema),
+**Best for:** "What's my Novada account status?" / "How much do I have left?" / one-shot health snapshot.
+**section="summary" (default):** Full dashboard — wallet balance + plan quotas + recent capture logs + product entitlements (proxy/browser/wallet-funded services). This is what novada_account_summary + novada_health combined.
+**section="balance":** Master wallet currency balance.
+**section="usage":** Paginated wallet transaction / usage history. Pass start_time/end_time/page/page_size.
+**section="plans":** Per-product plan balances (residential/isp/mobile/datacenter/static/capture). Pass products[] to filter.
+**section="traffic":** Daily proxy traffic consumption across products. Pass start_time/end_time/products[].
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).
+**Aliases (backward compat):** novada_wallet_balance, novada_wallet_usage_record, novada_plan_balance_all, novada_traffic_daily, novada_capture_logs, novada_account_summary, novada_health, novada_health_all — all route here.`,
+    inputSchema: zodToMcpSchema(AccountParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
-  },
-  {
-    name: "novada_wallet_usage_record",
-    description: `Paginated wallet transaction / usage history. Wraps developer-api POST /v1/wallet/usage_record.
-
-**Best for:** Auditing recent spend, exporting billing rows.
-**Not for:** Aggregate by-product spend (use novada_traffic_daily) or current balances (use novada_plan_balance_all).
-**Params:** start_time/end_time (YYYY-MM-DD, optional — server default ~30d), page, page_size (max 200). Tool emits both \`start_time\` AND server's typo'd \`strat_time\` for forward-compat.
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
-    inputSchema: zodToMcpSchema(WalletUsageRecordParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "novada_proxy_account_create",
@@ -610,51 +588,6 @@ Detect changes on a web page over time. Extracts content, computes a hash, compa
 **Wire format:** multipart/form-data.
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
     inputSchema: zodToMcpSchema(ProxyAccountListParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
-  },
-  {
-    name: "novada_traffic_daily",
-    description: `Aggregate daily traffic consumption across all 5 Novada proxy products in PARALLEL. Fans out to residential/isp/mobile/datacenter/static \`*_flow/consume_log\` endpoints.
-
-**Best for:** "How much have we spent on proxies in the last N days?" / dashboarding spend per product.
-**Returns:** total_mb_across_products + per_product[<key>].raw (server's day-by-day breakdown) + per-product error flags. Partial failures (e.g. a product not provisioned) do NOT block successful ones.
-**Params:** start_time/end_time (YYYY-MM-DD, optional — emits both start_time AND typo'd strat_time), products (optional subset).
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
-    inputSchema: zodToMcpSchema(TrafficDailyParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: false },
-  },
-  {
-    name: "novada_plan_balance_all",
-    description: `Per-product balance across all 6 Novada flow products in PARALLEL (residential/isp/mobile/datacenter/static/capture).
-
-**Best for:** "Do we have quota left on product X?" / pre-flight check before launching a scrape job.
-**Not for:** Master wallet currency balance — use novada_wallet_balance.
-**Returns:** per_product[<key>].balance (raw server response — typical fields: balance_mb, remaining_mb, plan_mb). Partial failures isolated per product.
-**Params:** products (optional subset).
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
-    inputSchema: zodToMcpSchema(PlanBalanceAllParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
-  },
-  {
-    name: "novada_capture_logs",
-    description: `Paginated capture-task logs. Wraps developer-api POST /v1/capture/logs.
-
-**What "Capture" means:** Novada's async Capture API (managed capture/collection jobs run on your account) — NOT web scraping. For scraping use novada_scrape / novada_scraper_submit; this tool only reads the logs of Capture jobs.
-**Best for:** Auditing what was captured, debugging failed capture jobs.
-**Params:** start_time/end_time (YYYY-MM-DD, optional — emits both start_time AND strat_time), page, page_size (max 200), status filter.
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
-    inputSchema: zodToMcpSchema(CaptureLogsParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: false },
-  },
-  {
-    name: "novada_account_summary",
-    description: `Single-call account dashboard. Calls wallet_balance + plan_balance_all + capture_logs (last 5 rows) in PARALLEL and returns a unified headline + per-section detail.
-
-**Best for:** "What's my Novada account status?" / "How much do I have left?" / one-shot health snapshot.
-**Returns:** \`headline\` (one-line human summary), \`sections.{wallet,plans,capture_recent}\` (raw per-tool output), \`agent_instruction\` (next-step hint — e.g. "all plans expired, buy at dashboard").
-**Why not 3 calls:** Halves round-trip cost for the most common account-status query. Plans section already includes derived \`expired\`/\`expires_at_human\` and \`unavailable_products\` so agents don't compute timestamps.
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
-    inputSchema: zodToMcpSchema(AccountSummaryParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
@@ -735,8 +668,8 @@ const CATEGORY_MAP: Record<string, string[]> = {
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
   browser: ["novada_browser", "novada_browser_flow"],
   scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result", "novada_unblock"],
-  health:  ["novada_health", "novada_health_all", "novada_discover", "novada_setup", "novada_session_stats"],
-  account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_proxy_account_create", "novada_proxy_account_list", "novada_traffic_daily", "novada_plan_balance_all", "novada_capture_logs", "novada_account_summary", "novada_ip_whitelist", "novada_capture_apikey", "novada_scraper_task_mgmt", "novada_static_ip_mgmt"],
+  health:  ["novada_discover", "novada_setup", "novada_session_stats"],
+  account: ["novada_account", "novada_proxy_account_create", "novada_proxy_account_list", "novada_ip_whitelist", "novada_capture_apikey", "novada_scraper_task_mgmt", "novada_static_ip_mgmt"],
 };
 
 /** Normalize short name → full tool name */
@@ -773,9 +706,10 @@ function applyToolFilter(tools: typeof TOOLS): typeof TOOLS {
     }
   }
 
-  // Always include health + setup so agents can diagnose issues regardless of filter.
+  // Always include account + setup so agents can diagnose issues regardless of filter.
   // session_stats + search_feedback are auth-free and in-memory — keep them reachable too.
-  allowed.add("novada_health");
+  // novada_account replaces novada_health as the canonical account status tool.
+  allowed.add("novada_account");
   allowed.add("novada_setup");
   allowed.add("novada_session_stats");
   allowed.add("novada_search_feedback");
@@ -908,14 +842,19 @@ class NovadaMCPServer {
       // They run their own getDeveloperApiKey() check, so we bypass the strict NOVADA_API_KEY
       // gate when a developer-api key is present.
       const KR6_TOOLS = new Set<string>([
+        "novada_account",
+        // Aliases — still route to novada_account; must bypass API_KEY gate the same way
         "novada_wallet_balance",
         "novada_wallet_usage_record",
-        "novada_proxy_account_create",
-        "novada_proxy_account_list",
         "novada_traffic_daily",
         "novada_plan_balance_all",
         "novada_capture_logs",
         "novada_account_summary",
+        "novada_health",
+        "novada_health_all",
+        // Non-folded developer-api tools
+        "novada_proxy_account_create",
+        "novada_proxy_account_list",
         "novada_ip_whitelist",
       ]);
       const hasDeveloperKey = !!process.env.NOVADA_DEVELOPER_API_KEY?.trim();
@@ -987,14 +926,15 @@ class NovadaMCPServer {
           case "novada_browser":
             result = await novadaBrowser(validateBrowserParams(args as Record<string, unknown>));
             break;
+          // novada_health and novada_health_all are hidden aliases → novada_account(section="summary")
           case "novada_health": {
             const hParams = validateHealthParams(args as Record<string, unknown>);
-            result = await novadaHealth(API_KEY!, hParams.mode);
+            result = await novadaAccount(validateAccountParams({ section: "summary", mode: hParams.mode }), API_KEY);
             break;
           }
           case "novada_health_all":
-            // Alias: novada_health_all → novada_health(mode="full") for back-compat
-            result = await novadaHealth(API_KEY!, "full");
+            // Alias: novada_health_all → novada_account(section="summary", mode="full") for back-compat
+            result = await novadaAccount(validateAccountParams({ section: "summary", mode: "full" }), API_KEY);
             break;
           case "novada_discover":
             result = await novadaDiscover(validateDiscoverParams(args as Record<string, unknown>));
@@ -1037,29 +977,35 @@ class NovadaMCPServer {
             result = await novadaMonitor(validateMonitorParams(args as Record<string, unknown>), API_KEY!);
             break;
           // ─── KR-6: developer-api account-management tools ──────────────────
+          case "novada_account":
+            result = await novadaAccount(validateAccountParams(args as Record<string, unknown>), API_KEY);
+            break;
+          // Backward-compat aliases — route to novada_account with the appropriate section.
+          // These are hidden from tools/list but still dispatch correctly for old callers.
           case "novada_wallet_balance":
-            result = await novadaWalletBalance(validateWalletBalanceParams(args as Record<string, unknown>));
+            result = await novadaAccount(validateAccountParams({ section: "balance" }), API_KEY);
             break;
           case "novada_wallet_usage_record":
-            result = await novadaWalletUsageRecord(validateWalletUsageRecordParams(args as Record<string, unknown>));
+            result = await novadaAccount(validateAccountParams({ ...(args as Record<string, unknown>), section: "usage" }), API_KEY);
+            break;
+          case "novada_traffic_daily":
+            result = await novadaAccount(validateAccountParams({ ...(args as Record<string, unknown>), section: "traffic" }), API_KEY);
+            break;
+          case "novada_plan_balance_all":
+            result = await novadaAccount(validateAccountParams({ ...(args as Record<string, unknown>), section: "plans" }), API_KEY);
+            break;
+          case "novada_capture_logs":
+            // capture_logs routed to summary since it's a sub-section of the dashboard
+            result = await novadaAccount(validateAccountParams({ section: "summary" }), API_KEY);
+            break;
+          case "novada_account_summary":
+            result = await novadaAccount(validateAccountParams({ section: "summary" }), API_KEY);
             break;
           case "novada_proxy_account_create":
             result = await novadaProxyAccountCreate(validateProxyAccountCreateParams(args as Record<string, unknown>));
             break;
           case "novada_proxy_account_list":
             result = await novadaProxyAccountList(validateProxyAccountListParams(args as Record<string, unknown>));
-            break;
-          case "novada_traffic_daily":
-            result = await novadaTrafficDaily(validateTrafficDailyParams(args as Record<string, unknown>));
-            break;
-          case "novada_plan_balance_all":
-            result = await novadaPlanBalanceAll(validatePlanBalanceAllParams(args as Record<string, unknown>));
-            break;
-          case "novada_capture_logs":
-            result = await novadaCaptureLogs(validateCaptureLogsParams(args as Record<string, unknown>));
-            break;
-          case "novada_account_summary":
-            result = await novadaAccountSummary(validateAccountSummaryParams(args as Record<string, unknown>));
             break;
           case "novada_ip_whitelist":
             result = await novadaIpWhitelist(validateIpWhitelistParams(args as Record<string, unknown>));
@@ -1074,7 +1020,7 @@ class NovadaMCPServer {
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs, novada_account_summary, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback`,
               }],
               isError: true,
             };
