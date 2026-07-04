@@ -313,6 +313,24 @@ const TOOLS = [
 // session across MULTIPLE tool calls, which a per-request serverless isolate cannot hold.
 const HOSTED_HIDDEN = new Set(["novada_browser_flow"]);
 
+// Backward-compat aliases: names REMOVED from tools/list during the 0.9.4–0.9.9 simplification
+// but still WIRED in dispatch so old callers never break. They are intentionally absent from
+// the visible set, so the visibleToolNames guard below must let them through to their handler.
+// (Without this, a hidden alias returns TOOL_NOT_ENABLED instead of quietly working.)
+const HIDDEN_ALIASES = new Set<string>([
+  // proxy 7→1 (novada_proxy type=...)
+  "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter",
+  "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated",
+  // async scraper trio → sync scrape / benign
+  "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result",
+  // verify → cut (handler kept)
+  "novada_verify",
+  // account fold → novada_account(section=...)
+  "novada_wallet_balance", "novada_wallet_usage_record", "novada_plan_balance_all",
+  "novada_traffic_daily", "novada_capture_logs", "novada_account_summary",
+  "novada_health", "novada_health_all",
+]);
+
 // ─── Tool-set filtering (?tools= / ?groups=) ─────────────────────────────────
 // Lets a client request a slim toolset, e.g. ?groups=search,scrape or
 // ?tools=novada_search,novada_scrape. Matches BrightData's ?groups= pattern.
@@ -591,7 +609,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     const started = Date.now();
 
     // Tool-set filter: reject tools not in the endpoint's ?tools=/?groups= selection.
-    if (ctx.allowedTools && !ctx.allowedTools.has(name)) {
+    if (ctx.allowedTools && !ctx.allowedTools.has(name) && !HIDDEN_ALIASES.has(name)) {
       return {
         content: [{
           type: "text" as const,
@@ -606,7 +624,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // novada_site_copy / novada_ip_whitelist, or an outright unknown name) is rejected
     // BEFORE quota is touched, with an agent_instruction pointing at the npm package
     // where the full tool surface is available.
-    if (!visibleToolNames.has(name)) {
+    if (!visibleToolNames.has(name) && !HIDDEN_ALIASES.has(name)) {
       return {
         content: [{
           type: "text" as const,
