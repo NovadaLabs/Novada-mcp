@@ -6,7 +6,7 @@ import path from "path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const API_KEY = "1f35b477c9e1802778ec64aee2a6adfa";
+const API_KEY = "process.env.NOVADA_API_KEY";
 const PROXY_USER = "tongwu_TRDI7X";
 const PROXY_PASS = "_Asd1644asd_";
 const BROWSER_WS = "wss://novada529MUW_2Q8WuZ-zone-browser:Dz0vkMW4Wkil@upg-scbr2.novada.com";

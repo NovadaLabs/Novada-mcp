@@ -1,7 +1,7 @@
 // Direct API call to diagnose the actual HTTP response
 import axios from '/Users/tongwu/Projects/novada-mcp/node_modules/axios/lib/axios.js';
 
-const API_KEY = '1f35b477c9e1802778ec64aee2a6adfa';
+const API_KEY = 'process.env.NOVADA_API_KEY';
 const ENDPOINT = 'https://api-m.novada.com/v1/browser_flow/browser_flow_use';
 
 async function testDirect(label, payload) {

@@ -129,8 +129,8 @@ export async function novadaPlanBalanceAll(
       errors: errors.length ? errors : undefined,
       agent_instruction:
         expired_products.length > 0
-          ? `Products ${expired_products.join(", ")} have EXPIRED plans (balance=0, expired=true). Master wallet currency still available — call novada_wallet_balance. To restock, the user needs to purchase a new plan at https://dashboard.novada.com.`
-          : "Per-product balances. Each balance includes derived expired/expires_at_human fields. For master wallet (currency) use novada_wallet_balance.",
+          ? `Products ${expired_products.join(", ")} have EXPIRED plans (balance=0, expired=true). Master wallet currency still available — call novada_account(section="balance"). To restock, the user needs to purchase a new plan at https://dashboard.novada.com.`
+          : "Per-product balances. Each balance includes derived expired/expires_at_human fields. For master wallet (currency) use novada_account(section=\"balance\").",
     },
     null,
     2,

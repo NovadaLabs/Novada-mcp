@@ -113,7 +113,7 @@ export async function novadaMap(params: MapParams, apiKey?: string): Promise<str
         `## Agent Hints`,
         `- Try \`novada_extract\` on ${params.url} to read the page content directly.`,
         `- Use \`novada_crawl\` with render="render" for JavaScript-rendered sites.`,
-        `- Use \`novada_unblock\` with method="render" to fetch rendered HTML directly.`,
+        `- Use \`novada_extract\` with render="render" to fetch JS-rendered content directly.`,
         `- Use \`novada_search\` with \`site:${hostname}\` to find indexed subpages.`,
         ``,
         `## Agent Notice — Under-delivery`,

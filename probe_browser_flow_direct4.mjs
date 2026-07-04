@@ -1,7 +1,7 @@
 // Check dashboard API for account status and what browser_flow products are active
 import axios from '/Users/tongwu/Projects/novada-mcp/node_modules/axios/lib/axios.js';
 
-const API_KEY = '1f35b477c9e1802778ec64aee2a6adfa';
+const API_KEY = 'process.env.NOVADA_API_KEY';
 
 async function probe(label, url, method = 'POST', payload = null, headers = {}) {
   try {

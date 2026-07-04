@@ -3,7 +3,7 @@ import { StdioClientTransport } from '/Users/tongwu/Projects/novada-mcp/node_mod
 
 // This time we include NOVADA_PROXY_ENDPOINT so the tool can actually work
 const creds = {
-  NOVADA_API_KEY: '1f35b477c9e1802778ec64aee2a6adfa',
+  NOVADA_API_KEY: 'process.env.NOVADA_API_KEY',
   NOVADA_PROXY_USER: 'tongwu_TRDI7X',
   NOVADA_PROXY_PASS: '_Asd1644asd_',
   // Providing the endpoint — required for the tool to resolve credentials

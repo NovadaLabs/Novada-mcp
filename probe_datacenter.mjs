@@ -2,7 +2,7 @@ import { Client } from '/Users/tongwu/Projects/novada-mcp/node_modules/@modelcon
 import { StdioClientTransport } from '/Users/tongwu/Projects/novada-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js';
 
 const creds = {
-  NOVADA_API_KEY: '1f35b477c9e1802778ec64aee2a6adfa',
+  NOVADA_API_KEY: 'process.env.NOVADA_API_KEY',
   NOVADA_PROXY_USER: 'tongwu_TRDI7X',
   NOVADA_PROXY_PASS: '_Asd1644asd_',
   NOVADA_BROWSER_WS: 'wss://novada529MUW_2Q8WuZ-zone-browser:Dz0vkMW4Wkil@upg-scbr2.novada.com',

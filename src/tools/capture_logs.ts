@@ -68,7 +68,7 @@ export async function novadaCaptureLogs(
       status: "ok",
       data,
       agent_instruction:
-        "Paginated capture task logs. For aggregate capture balance use novada_plan_balance_all (product=capture).",
+        "Paginated capture task logs. For aggregate capture balance use novada_account(section=\"plans\").",
     },
     null,
     2,

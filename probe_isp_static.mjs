@@ -3,7 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const env = {
   ...process.env,
-  NOVADA_API_KEY: "1f35b477c9e1802778ec64aee2a6adfa",
+  NOVADA_API_KEY: "process.env.NOVADA_API_KEY",
 };
 const transport = new StdioClientTransport({
   command: "node",

@@ -3,7 +3,7 @@ import { StdioClientTransport } from '/Users/tongwu/Projects/novada-mcp/node_mod
 import { spawn } from 'child_process';
 
 const CREDS = {
-  NOVADA_API_KEY: '1f35b477c9e1802778ec64aee2a6adfa',
+  NOVADA_API_KEY: 'process.env.NOVADA_API_KEY',
   NOVADA_PROXY_USER: 'tongwu_TRDI7X',
   NOVADA_PROXY_PASS: '_Asd1644asd_',
   NOVADA_BROWSER_WS: 'wss://novada529MUW_2Q8WuZ-zone-browser:Dz0vkMW4Wkil@upg-scbr2.novada.com',
@@ -185,7 +185,7 @@ async function main() {
   log('T15 - nonexistent operation (check for cred leak in error)', r15);
   const r15Str = JSON.stringify(r15);
   const credLeak =
-    r15Str.includes('1f35b477c9e1802778ec64aee2a6adfa') ||
+    r15Str.includes('process.env.NOVADA_API_KEY') ||
     r15Str.includes('tongwu_TRDI7X') ||
     r15Str.includes('_Asd1644asd_') ||
     r15Str.includes('novada529MUW_2Q8WuZ');

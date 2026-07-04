@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'child_process';
 
-const NOVADA_API_KEY = '1f35b477c9e1802778ec64aee2a6adfa';
+const NOVADA_API_KEY = 'process.env.NOVADA_API_KEY';
 const NOVADA_PROXY_USER = 'tongwu_TRDI7X';
 const NOVADA_PROXY_PASS = '_Asd1644asd_';
 

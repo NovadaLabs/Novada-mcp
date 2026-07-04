@@ -2,7 +2,7 @@ import { Client } from '/Users/tongwu/Projects/novada-mcp/node_modules/@modelcon
 import { StdioClientTransport } from '/Users/tongwu/Projects/novada-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js';
 
 const CREDS = {
-  NOVADA_API_KEY: '1f35b477c9e1802778ec64aee2a6adfa',
+  NOVADA_API_KEY: 'process.env.NOVADA_API_KEY',
 };
 
 async function makeClient() {

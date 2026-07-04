@@ -178,7 +178,7 @@ export async function novadaScraperStatus(
         error: "Primary scraper status endpoint unreachable.",
         agent_instruction:
           "Could not reach the Novada scraper status endpoint. " +
-          "Try novada_health to diagnose connectivity. " +
+          "Try novada_account(section=\"summary\") to diagnose connectivity. " +
           "If the endpoint is reachable, retry once after 30 seconds. " +
           "If it persists after 3 attempts, switch to novada_extract or novada_crawl as alternatives. " +
           "Support: support@novada.com.",

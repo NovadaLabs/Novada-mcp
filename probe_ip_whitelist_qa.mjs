@@ -6,8 +6,8 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CREDS = {
-  NOVADA_API_KEY: '1f35b477c9e1802778ec64aee2a6adfa',
-  NOVADA_DEVELOPER_API_KEY: '1f35b477c9e1802778ec64aee2a6adfa',
+  NOVADA_API_KEY: 'process.env.NOVADA_API_KEY',
+  NOVADA_DEVELOPER_API_KEY: 'process.env.NOVADA_API_KEY',
   NOVADA_PROXY_USER: 'tongwu_TRDI7X',
   NOVADA_PROXY_PASS: '_Asd1644asd_',
 };

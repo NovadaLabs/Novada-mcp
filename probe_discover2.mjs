@@ -6,7 +6,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const API_KEY = "1f35b477c9e1802778ec64aee2a6adfa";
+const API_KEY = "process.env.NOVADA_API_KEY";
 
 const transport = new StdioClientTransport({
   command: "node",

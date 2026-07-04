@@ -85,7 +85,7 @@ export async function novadaWalletUsageRecord(
       data,
       ...(data_anomaly ? { data_anomaly } : {}),
       agent_instruction:
-        "Returns paginated wallet transactions. For total spend per product use novada_traffic_daily; for current product balances use novada_plan_balance_all.",
+        "Returns paginated wallet transactions. For total spend per product use novada_account(section=\"traffic\"); for current product balances use novada_account(section=\"plans\").",
     },
     null,
     2

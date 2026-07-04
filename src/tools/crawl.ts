@@ -386,7 +386,7 @@ export async function novadaCrawl(
         `crawl fetched ${sparsePageCount} page(s) from ${params.url} but all had sparse content (< 20 words). ` +
         `This usually means the site returns a bot challenge or requires JavaScript rendering. ` +
         `Try: (1) set render="render" to force JS rendering, (2) use novada_extract on individual pages, ` +
-        `(3) use novada_unblock for heavily protected sites.${renderHint}`,
+        `(3) use novada_extract with render="browser" for heavily protected sites.${renderHint}`,
         "sparse_content"
       );
     }

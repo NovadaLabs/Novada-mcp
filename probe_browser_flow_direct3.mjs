@@ -2,7 +2,7 @@
 // Test with BROWSER_WS endpoint (CDP-based browser) vs the browser_flow API
 import axios from '/Users/tongwu/Projects/novada-mcp/node_modules/axios/lib/axios.js';
 
-const API_KEY = '1f35b477c9e1802778ec64aee2a6adfa';
+const API_KEY = 'process.env.NOVADA_API_KEY';
 
 // Check what base API URL returns 
 async function probeUrl(label, url, method = 'GET', payload = null, headers = {}) {

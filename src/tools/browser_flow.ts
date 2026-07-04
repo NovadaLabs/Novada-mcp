@@ -321,7 +321,7 @@ function formatEndpointUnavailable(url: string, actions: BrowserFlowAction[]): s
     `## Agent Hints`,
     `agent_instruction: novada_browser_flow endpoint is not available. Use one of these fallbacks:`,
     `  - novada_browser: CDP-based browser automation with navigate, click, type, screenshot, aria_snapshot — more action types, same cloud browser infrastructure.`,
-    `  - novada_unblock: Render a single URL without interaction (faster, lower cost).`,
+    `  - novada_extract with render="render": Fetch a single URL without interaction (faster, lower cost).`,
     `  - novada_proxy_residential: Get a residential proxy to route your own HTTP client through.`,
   ].join("\n");
 }

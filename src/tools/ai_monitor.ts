@@ -191,7 +191,7 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
       lines.push(`**All ${failedCount} searches failed or timed out.** This is a service issue, not a genuine "0 mentions" result.`);
       lines.push(``);
       lines.push(`## Agent Hints`);
-      lines.push(`- Search API may be unavailable or rate-limited. Call novada_health to check.`);
+      lines.push(`- Search API may be unavailable or rate-limited. Call novada_account(section="summary") to check product status.`);
       lines.push(`- On hosted (Vercel Edge), ai_monitor may exceed execution time. Try fewer models or use local MCP server.`);
     } else {
       lines.push(`No AI model references found for "${brand}". The brand may not be indexed by these AI models yet.`);
