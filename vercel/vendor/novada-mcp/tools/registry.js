@@ -121,14 +121,8 @@ export const TOOL_REGISTRY = [
     },
     // ─── Account & Billing (KR-6 developer-api tools) ───────────────────────
     {
-        name: "novada_wallet_balance",
-        description: "Read the master Novada wallet balance (currency). Best for confirming credit before launching billable scraper/proxy jobs.",
-        category: "Account & Billing",
-        status: "active",
-    },
-    {
-        name: "novada_wallet_usage_record",
-        description: "Paginated wallet transaction / usage history. Best for auditing recent spend or exporting billing rows.",
+        name: "novada_account",
+        description: "Unified account & billing dashboard. section='summary' (default): wallet balance + plan quotas + recent capture logs + health entitlements. section='balance': wallet balance. section='usage': paginated transaction history. section='plans': per-product plan balances. section='traffic': daily proxy consumption. Aliases: wallet_balance, wallet_usage_record, plan_balance_all, traffic_daily, capture_logs, account_summary, health, health_all.",
         category: "Account & Billing",
         status: "active",
     },
@@ -141,30 +135,6 @@ export const TOOL_REGISTRY = [
     {
         name: "novada_proxy_account_list",
         description: "List proxy sub-accounts for a product (paginated). Best for auditing sub-accounts or finding account names before rotating credentials.",
-        category: "Account & Billing",
-        status: "active",
-    },
-    {
-        name: "novada_traffic_daily",
-        description: "Aggregate daily traffic consumption across all 5 proxy products in parallel for a date range; returns total MB plus per-product day-by-day breakdown.",
-        category: "Account & Billing",
-        status: "active",
-    },
-    {
-        name: "novada_plan_balance_all",
-        description: "Per-product plan balance across all 6 flow products (residential/isp/mobile/datacenter/static/capture) in parallel; partial failures isolated per product.",
-        category: "Account & Billing",
-        status: "active",
-    },
-    {
-        name: "novada_capture_logs",
-        description: "Paginated capture-task logs. Best for auditing what was captured and debugging failed capture jobs.",
-        category: "Account & Billing",
-        status: "active",
-    },
-    {
-        name: "novada_account_summary",
-        description: "Single-call account dashboard: wallet balance + plan balances + recent capture logs in parallel, returned as a unified headline plus per-section detail.",
         category: "Account & Billing",
         status: "active",
     },
@@ -187,12 +157,6 @@ export const TOOL_REGISTRY = [
         status: "active",
     },
     // ─── Health & Discovery ─────────────────────────────────────────────────
-    {
-        name: "novada_health",
-        description: "Check Novada account status: wallet balance, proxy/browser entitlement, and (mode='full') per-product plan balances. Authoritative — reads billing API only, no synthetic probes, no credit cost.",
-        category: "Health & Discovery",
-        status: "active",
-    },
     {
         name: "novada_discover",
         description: "List all available Novada tools with name, description, category, and status",

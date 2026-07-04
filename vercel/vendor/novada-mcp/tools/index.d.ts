@@ -44,6 +44,8 @@ export type { SetupParams } from "./setup.js";
 export type { SearchParams, ExtractParams, CrawlParams, ResearchParams, MapParams, SiteCopyParams, ProxyParams, ScrapeParams, VerifyParams, UnblockParams, BrowserParams, BrowserAction, NovadaSearchResult, NovadaApiResponse, HealthParams } from "./types.js";
 export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams } from "./types.js";
 export { classifyError, NovadaErrorCode } from "../_core/errors.js";
+export { novadaAccount, validateAccountParams, AccountParamsSchema } from "./account.js";
+export type { AccountParams } from "./account.js";
 export { novadaWalletBalance, validateWalletBalanceParams, WalletBalanceParamsSchema } from "./wallet_balance.js";
 export type { WalletBalanceParams } from "./wallet_balance.js";
 export { novadaWalletUsageRecord, validateWalletUsageRecordParams, WalletUsageRecordParamsSchema } from "./wallet_usage_record.js";

@@ -123,6 +123,9 @@ import {
   ScraperResultParamsSchema,
   BrowserFlowParamsSchema,
   // ── Account / billing tools (KR-6) — pass-through key only (customer's own account) ──
+  novadaAccount,
+  validateAccountParams,
+  AccountParamsSchema,
   novadaWalletBalance,
   novadaWalletUsageRecord,
   novadaPlanBalanceAll,
@@ -280,20 +283,17 @@ const TOOLS = [
   { name: "novada_unblock",             title: "Anti-Bot Unblocking",        schema: UnblockParamsSchema,             description: "Get raw HTML from bot-protected pages via JS rendering or headless browser. Use only when extract fails on a protected page and you need the raw HTML." },
   { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key." },
   { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Not needed for extract/crawl — those handle proxies internally." },
-  { name: "novada_health",              title: "Health Check",               schema: HealthParamsSchema,              description: "Health check — which Novada products are active. mode='quick' (default) or mode='full' (live latency probes across all 6 products)." },
   { name: "novada_discover",            title: "Tool Discovery",             schema: DiscoverParamsSchema,            description: "List all available Novada tools grouped by category." },
   { name: "novada_ai_monitor",          title: "AI Brand Monitor",           schema: AiMonitorParamsSchema,           description: "Check how AI models (ChatGPT, Perplexity, Grok, etc.) reference a brand or product." },
   { name: "novada_monitor",             title: "Page Change Monitor",        schema: MonitorParamsSchema,             description: "Track changes on a web page over time. Compares content hash and field-level diffs." },
   { name: "novada_setup",               title: "Setup & Configuration",      schema: SetupParamsSchema,               description: "Check your API key and environment configuration. Use when you want to verify setup or see which Novada products are active. Auth-free, no quota used." },
   // ── Account / billing tools ──
-  { name: "novada_wallet_balance",      title: "Wallet Balance",             schema: WalletBalanceParamsSchema,       description: "Your master wallet balance (the account the API key belongs to)." },
-  { name: "novada_wallet_usage_record", title: "Wallet Usage Record",        schema: WalletUsageRecordParamsSchema,   description: "Paginated wallet transaction / usage history." },
-  { name: "novada_plan_balance_all",    title: "Plan Balances",              schema: PlanBalanceAllParamsSchema,      description: "Per-product plan balances (residential/isp/datacenter/mobile/static/capture) in parallel." },
+  // 0.9.9: wallet_balance / wallet_usage_record / plan_balance_all / traffic_daily /
+  // capture_logs / account_summary / health / health_all folded into novada_account.
+  // Old names remain functional (alias dispatch below) but are hidden from tools/list.
+  { name: "novada_account",             title: "Account & Billing",          schema: AccountParamsSchema,             description: "Single-call account & billing dashboard. section='summary' (default): wallet balance + plan quotas + recent capture logs + health entitlements. section='balance': wallet balance only. section='usage': paginated transaction history. section='plans': per-product plan balances (residential/isp/etc). section='traffic': daily proxy consumption. Pass start_time/end_time (YYYY-MM-DD) and products=[...] for traffic/plans. Aliases: wallet_balance, wallet_usage_record, plan_balance_all, traffic_daily, capture_logs, account_summary, health, health_all." },
   { name: "novada_proxy_account_list",  title: "Proxy Account List",         schema: ProxyAccountListParamsSchema,    description: "List proxy sub-accounts for a product (paginated)." },
   { name: "novada_proxy_account_create",title: "Proxy Account Create",       schema: ProxyAccountCreateParamsSchema,  description: "Create a proxy sub-account. Two-step confirm gate (pass confirm:true after human approval).", write: true },
-  { name: "novada_traffic_daily",       title: "Daily Traffic Report",       schema: TrafficDailyParamsSchema,        description: "Daily traffic consumption across proxy products for a date range." },
-  { name: "novada_account_summary",     title: "Account Summary",            schema: AccountSummaryParamsSchema,      description: "One-shot account overview: wallet + plans + recent capture cost." },
-  { name: "novada_capture_logs",        title: "Capture Logs",               schema: CaptureLogsParamsSchema,         description: "Hourly capture/unlocker/scraper/browser cost breakdown." },
 ].map((t) => ({
   name: t.name,
   title: t.title,
@@ -318,13 +318,14 @@ const HOSTED_HIDDEN = new Set(["novada_browser_flow"]);
 // ?tools=novada_search,novada_scrape. Matches BrightData's ?groups= pattern.
 // Fewer tools = less token overhead in the agent's context window.
 const TOOL_GROUPS: Record<string, string[]> = {
-  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_setup", "novada_health", "novada_monitor", "novada_discover"],
+  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_setup", "novada_account", "novada_monitor", "novada_discover"],
   search: ["novada_search"],
   scrape: ["novada_scrape", "novada_extract", "novada_unblock"],
   crawl: ["novada_crawl", "novada_map"],
   research: ["novada_research", "novada_discover", "novada_ai_monitor", "novada_monitor"],
   proxy: ["novada_proxy"],
-  account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_plan_balance_all", "novada_proxy_account_list", "novada_proxy_account_create", "novada_traffic_daily", "novada_account_summary", "novada_capture_logs"],
+  // 0.9.9: novada_account replaces the 7 folded billing tools in this group
+  account: ["novada_account", "novada_proxy_account_list", "novada_proxy_account_create"],
   browser: ["novada_browser", "novada_browser_flow"],
 };
 const ALL_TOOL_NAMES = new Set(TOOLS.map((t) => t.name));
@@ -686,11 +687,13 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
           // caller's browser sub-account (`-zone-browser` zone). The prior "AuthorizationError"
           // was a missing zone suffix in the WSS username, not a transport limitation.
           result = await withWallClock(name, novadaBrowser(validateBrowserParams(argsObj), apiKey)); break;
+        // 0.9.9: novada_health / novada_health_all folded into novada_account(section="summary").
+        // Old names still work (no error), dispatch routes to the existing novadaHealth vendor fn.
         case "novada_health":
           validateHealthParams(argsObj);
           result = await novadaHealth(apiKey); break;
         case "novada_health_all":
-          // 0.9.4 alias: merged into novada_health(mode="full").
+          // 0.9.4 alias: merged into novada_health(mode="full"). 0.9.9: hidden from tools/list.
           result = await novadaHealth(apiKey, "full"); break;
         case "novada_discover":
           // Scope the catalog to the tools actually exposed on this endpoint so the
@@ -732,6 +735,14 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         case "novada_monitor":
           result = await withWallClock(name, novadaMonitor(validateMonitorParams(argsObj), apiKey)); break;
         // ── Account / billing (KR-6) — apiKey is the customer's pass-through key (their own account) ──
+        // 0.9.9: novada_account is the unified entry point. Old names are hidden from tools/list
+        // but remain functional (alias dispatch). novadaAccount is not yet in vendor — compose
+        // the individual vendor functions here until the orchestrator vendors 0.9.9.
+        // 0.9.9: call the vendored novadaAccount (source-of-truth) directly — no inline
+        // re-implementation, so hosted and npm never drift (the health-drift lesson).
+        case "novada_account":
+          result = await withWallClock(name, novadaAccount(validateAccountParams(argsObj), apiKey)); break;
+        // 0.9.9 backward-compat aliases — hidden from tools/list, still functional (no error).
         case "novada_wallet_balance":
           result = await novadaWalletBalance(validateWalletBalanceParams(argsObj), apiKey); break;
         case "novada_wallet_usage_record":
