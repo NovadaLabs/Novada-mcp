@@ -25,7 +25,7 @@ const URL_BROWSER = "https://dashboard.novada.com/overview/browser/";
 const URL_PROXY = "https://dashboard.novada.com/overview/proxy/";
 /**
  * Cheap, authoritative key check: read the master wallet balance — the same
- * billing endpoint novada_health / novada_account_summary already use. This is a
+ * billing endpoint novada_account already uses. This is a
  * real "does the key work" probe (NOT a synthetic per-product probe), and it
  * doubles as a "you have credit" signal for a brand-new tester.
  *
@@ -161,7 +161,7 @@ export async function novadaSetup(_params, callerApiKey) {
         if (!browserWs)
             optional.push(`For faster **novada_browser** sessions you can set NOVADA_BROWSER_WS (optional — auto-provisioned from your key otherwise). Enable at ${URL_BROWSER}`);
         if (!proxyConfigured)
-            optional.push(`For **novada_proxy_*** in your own HTTP clients, set NOVADA_PROXY_ENDPOINT (user/pass auto-fetched from your key). Details at ${URL_PROXY}`);
+            optional.push(`For **novada_proxy** (set type=residential|isp|mobile|datacenter|static|dedicated) in your own HTTP clients, set NOVADA_PROXY_ENDPOINT (user/pass auto-fetched from your key). Details at ${URL_PROXY}`);
         if (optional.length) {
             L.push("### Optional add-ons");
             for (const o of optional)

@@ -40,7 +40,7 @@ export async function novadaDiscover(params, visibleTools) {
     if (entries.length === 0) {
         // Determine why the result is empty:
         //   (a) the category exists in the full registry but is filtered out of the
-        //       visible set → gated message with count + novada_health pointer
+        //       visible set → gated message with count + novada_account pointer
         //   (b) the category has zero entries in the full registry itself → truly
         //       unknown / empty category message
         const fullRegistryCount = TOOL_REGISTRY.filter((t) => t.category === category).length;
