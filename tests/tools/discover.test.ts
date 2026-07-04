@@ -75,6 +75,7 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
       "novada_capture_logs",            // → novada_account(section="summary")
       "novada_account_summary",         // → novada_account(section="summary")
       "novada_health",                  // → novada_account(section="summary")
+      "novada_unblock",                 // Phase-3 fold → novada_extract(format:"html", render mapped from method)
     ]);
     const wiredSet = new Set(wiredNames.filter((n) => !ALIAS_NAMES.has(n)));
     const registrySet = new Set(registryNames);

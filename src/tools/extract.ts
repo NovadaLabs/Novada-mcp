@@ -735,14 +735,17 @@ async function extractSingleInner(
   const kuferResult = $doc ? detectKuferAvailability($doc, params.url) : null;
 
   if (params.format === "html") {
+    // Honor max_chars for html format; default 100K to match novada_unblock's coverage.
+    // (Was hardcoded 10K — too small for full-page DOM pipelines that need the full source.)
+    const htmlMaxChars = params.max_chars ?? 100000;
     let htmlOutput: string;
-    if (html.length <= 10000) {
+    if (html.length <= htmlMaxChars) {
       htmlOutput = html;
     } else {
-      const truncated = html.slice(0, 10000);
+      const truncated = html.slice(0, htmlMaxChars);
       const lastTagClose = truncated.lastIndexOf(">");
-      htmlOutput = (lastTagClose > 9000 ? truncated.slice(0, lastTagClose + 1) : truncated) +
-        "\n<!-- Content truncated at 10,000 characters -->";
+      htmlOutput = (lastTagClose > htmlMaxChars - 1000 ? truncated.slice(0, lastTagClose + 1) : truncated) +
+        `\n<!-- Content truncated at ${htmlMaxChars} characters — pass max_chars to increase (max: 100000) -->`;
     }
     // Save full (untruncated) HTML to file — best-effort, never breaks the tool
     try {
