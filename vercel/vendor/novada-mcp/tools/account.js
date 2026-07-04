@@ -38,6 +38,15 @@ export const AccountParamsSchema = z
         .describe("Output format. " +
         "'card' (default): human-readable markdown card — scannable headline, status table with icons, expired plans highlighted. " +
         "'json': clean flat structured object for programmatic use — no data.data nesting, human-readable values, errors[] aggregated."),
+    // Deprecated no-op: 0.9.9–0.9.11 advertised `mode` (quick|full) on the summary
+    // section. 0.9.12 removed it — the account card always shows full detail. Kept
+    // here as an accepted-but-IGNORED optional so clients cached on the older schema
+    // (and the novada_health alias) never hit a strict-mode "Unrecognized key" error.
+    // Do NOT read this value anywhere.
+    mode: z
+        .enum(["quick", "full"])
+        .optional()
+        .describe("Deprecated and ignored — the account card always shows full detail. Accepted only for backward compatibility with older clients."),
     // Forwarded to the underlying tools when section != summary
     start_time: z
         .string()

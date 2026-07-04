@@ -26,6 +26,10 @@ export declare const AccountParamsSchema: z.ZodObject<{
         json: "json";
         card: "card";
     }>>;
+    mode: z.ZodOptional<z.ZodEnum<{
+        quick: "quick";
+        full: "full";
+    }>>;
     start_time: z.ZodOptional<z.ZodString>;
     end_time: z.ZodOptional<z.ZodString>;
     page: z.ZodDefault<z.ZodNumber>;
