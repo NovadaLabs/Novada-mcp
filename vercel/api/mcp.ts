@@ -57,11 +57,11 @@ import { kv } from "@vercel/kv";
 
 // ─── Shared catalog + dispatch from vendored core (single source of truth) ────
 // core.ts is side-effect-free: no server construction, no stdio boot, no process.exit.
-// It exports TOOLS (33 npm-visible tools), HIDDEN_ALIASES (9 npm-alias names), and
-// dispatch() which THROWS on error and returns a bare string — all hosted transport
-// wrappers (quota, redaction, wall-clock, ALS) stay in this file.
+// It exports HIDDEN_ALIASES (9 npm-alias names) and dispatch() which THROWS on error
+// and returns a bare string — all hosted transport wrappers (quota, redaction,
+// wall-clock, ALS) stay in this file. The hosted 15-tool TOOLS array (below) is a
+// standalone curation, NOT derived from core's 33-tool TOOLS.
 import {
-  TOOLS as CORE_TOOLS,
   HIDDEN_ALIASES as NPM_HIDDEN_ALIASES,
   dispatch,
 } from "../vendor/novada-mcp/core.js";
@@ -238,23 +238,26 @@ const TOOLS = [
 // session across MULTIPLE tool calls, which a per-request serverless isolate cannot hold.
 const HOSTED_HIDDEN = new Set(["novada_browser_flow"]);
 
-// ─── Derived hidden-alias allowlist (structural fix for bug#2) ───────────────
-// Instead of a hand-maintained list that drifts whenever core adds/removes an alias,
-// derive it: anything core.dispatch can handle that isn't in the hosted visible set
-// and isn't HOSTED_HIDDEN (browser_flow refusal) is allowed past the visibility guards.
-// This means any alias added to core.ts is automatically routable here too.
-//
-//   VISIBLE        = the 15-tool hosted visible set (defined in TOOLS above)
-//   ALL_ROUTABLE   = every name core.dispatch handles (33 CORE_TOOLS + 9 NPM_HIDDEN_ALIASES)
-//   HOSTED_HIDDEN  = names that must REFUSE on hosted (browser_flow — persistent WS)
-//   HOSTED_HIDDEN_ALIASES = ALL_ROUTABLE minus (VISIBLE ∪ HOSTED_HIDDEN)
+// ─── Hidden-alias allowlist (fail-safe — explicit opt-in) ────────────────────
+// Backward-compat ALIASES that must route silently on hosted = fold-targets +
+// the proxy/verify/scraper names hosted hides but still serves. NOT every tool
+// core can dispatch — never-ported tools (site_copy, ip_whitelist,
+// static_ip_mgmt, capture_apikey, scraper_task_mgmt, session_stats,
+// search_feedback) stay refused-by-default. A NEW core tool is refused until
+// explicitly opted in here (fail-safe direction). Two of the excluded names are
+// billable/mutating WRITE actions (static_ip_mgmt spends money, ip_whitelist
+// mutates the account) and site_copy writes to the read-only serverless FS —
+// auto-exposing them would be a security/billing regression.
+const HOSTED_ROUTABLE_ALIASES = new Set<string>([
+  ...NPM_HIDDEN_ALIASES,                        // health*, wallet*, plan, traffic, capture_logs, account_summary, unblock
+  "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter",
+  "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated",
+  "novada_verify",
+  "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result",
+]);
 const HOSTED_HIDDEN_ALIASES: ReadonlySet<string> = (() => {
   const visible = new Set(TOOLS.map((t) => t.name));
-  const allRoutable = new Set([
-    ...CORE_TOOLS.map((t: { name: string }) => t.name),
-    ...NPM_HIDDEN_ALIASES,
-  ]);
-  return new Set([...allRoutable].filter((n) => !visible.has(n) && !HOSTED_HIDDEN.has(n)));
+  return new Set([...HOSTED_ROUTABLE_ALIASES].filter((n) => !visible.has(n) && !HOSTED_HIDDEN.has(n)));
 })();
 
 // ─── Tool-set filtering (?tools= / ?groups=) ─────────────────────────────────
@@ -619,8 +622,8 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
       // ── novada_discover override — scope catalog to this endpoint's visible tools ──
       // core.dispatch calls novadaDiscover(args) without the second arg, which would list
-      // all 33 CORE_TOOLS. On hosted we pass visibleToolNames so the output only advertises
-      // the 15 tools the agent can actually call on this endpoint.
+      // core's full 33-tool catalog. On hosted we pass visibleToolNames so the output only
+      // advertises the 15 tools the agent can actually call on this endpoint.
       if (name === "novada_discover") {
         const result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
