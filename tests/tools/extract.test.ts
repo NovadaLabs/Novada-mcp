@@ -993,4 +993,78 @@ describe("NOV-GB1: GitBook .md fallback", () => {
     // Source must be "live" for a normal page.
     expect(result).toContain("source: live");
   });
+
+  // NOV-GB2 regression: modern GitBook ships a large SSR-ish shell with NO "__next" /
+  // "id=root" markers, so detectJsHeavyContent() returns FALSE. The old gate
+  // (isGitBook && detectJsHeavyContent) never fired on the real hosted page. The fix
+  // gates on the GitBook CDN signature ALONE — this test proves that path.
+  it("uses .md fallback on a NON-JS-heavy GitBook shell (CDN signature alone)", async () => {
+    // >200 chars, no __next / id=root — detectJsHeavyContent returns false here.
+    const gitbookNonJsShell = [
+      `<html><head><title>Docs</title>`,
+      `<link rel="preconnect" href="https://static-2v.gitbook.com"/>`,
+      `</head><body>`,
+      `<div class="gitbook-root"><p>${"navigation chrome and layout scaffolding ".repeat(20)}</p></div>`,
+      `<script src="https://gitbook-x-prod.appspot.com/bundle.js"></script>`,
+      `</body></html>`,
+    ].join("");
+
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.endsWith(".md")) {
+        return {
+          data: gitbookMarkdown,
+          headers: { "content-type": "text/markdown; charset=utf-8" },
+          status: 200,
+        } as never;
+      }
+      return { data: gitbookNonJsShell, headers: { "content-type": "text/html" } } as never;
+    });
+
+    const result = await novadaExtract({
+      url: "https://developer.novada.com/novada/overview",
+      format: "markdown",
+      render: "auto",
+    }, API_KEY);
+
+    expect(result).toContain("source: gitbook-md-fallback");
+    expect(result).toContain("GitBook Overview");
+    expect(result).not.toMatch(/mode: render\b/);
+  });
+
+  // NOV-GB2 hosted path: when a page is force/registry-pinned to render="browser" and
+  // the runtime cannot provide a browser (hosted Vercel), the .md probe must run BEFORE
+  // the "Browser Mode Unavailable" return. Simulate hosted by setting VERCEL=1.
+  it("uses .md fallback on hosted render=browser instead of returning browser-unavailable", async () => {
+    const prevVercel = process.env.VERCEL;
+    const prevWs = process.env.NOVADA_BROWSER_WS;
+    process.env.VERCEL = "1";           // isHostedEnvironment() → true
+    delete process.env.NOVADA_BROWSER_WS; // no CDP creds either
+    try {
+      mockedAxios.get.mockImplementation(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(".md")) {
+          return {
+            data: gitbookMarkdown,
+            headers: { "content-type": "text/markdown; charset=utf-8" },
+            status: 200,
+          } as never;
+        }
+        // The pre-return static probe returns the GitBook shell.
+        return { data: gitbookShellHtml, headers: { "content-type": "text/html" } } as never;
+      });
+
+      const result = await novadaExtract({
+        url: "https://developer.novada.com/novada/overview",
+        format: "markdown",
+        render: "browser",
+      }, API_KEY);
+
+      // Must NOT return the browser-unavailable error — the .md probe rescued it.
+      expect(result).not.toContain("Browser Mode Unavailable");
+      expect(result).toContain("source: gitbook-md-fallback");
+      expect(result).toContain("GitBook Overview");
+    } finally {
+      if (prevVercel === undefined) delete process.env.VERCEL; else process.env.VERCEL = prevVercel;
+      if (prevWs === undefined) delete process.env.NOVADA_BROWSER_WS; else process.env.NOVADA_BROWSER_WS = prevWs;
+    }
+  });
 });
