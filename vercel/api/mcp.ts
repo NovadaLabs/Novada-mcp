@@ -55,101 +55,19 @@ import {
 import { ZodError } from "zod";
 import { kv } from "@vercel/kv";
 
-// ─── Tool implementations & schemas (re-used from local novada-mcp) ──────────
+// ─── Shared catalog + dispatch from vendored core (single source of truth) ────
+// core.ts is side-effect-free: no server construction, no stdio boot, no process.exit.
+// It exports TOOLS (33 npm-visible tools), HIDDEN_ALIASES (9 npm-alias names), and
+// dispatch() which THROWS on error and returns a bare string — all hosted transport
+// wrappers (quota, redaction, wall-clock, ALS) stay in this file.
 import {
-  novadaSearch,
-  novadaExtract,
-  novadaCrawl,
-  novadaResearch,
-  novadaMap,
-  novadaProxy,
-  novadaScrape,
-  novadaVerify,
-  novadaBrowser, // TODO: port for Edge runtime — uses playwright-core CDP, native deps
-  novadaHealth,
-  novadaHealthAll,
-  novadaDiscover,
-  novadaScraperSubmit,
-  novadaScraperStatus,
-  novadaScraperResult,
-  novadaBrowserFlow, // TODO: port for Edge runtime — depends on cloud browser WS
-  novadaAiMonitor,
-  novadaMonitor,
-  novadaProxyResidential,
-  novadaProxyIsp,
-  novadaProxyDatacenter,
-  novadaProxyMobile,
-  novadaProxyStatic,
-  novadaProxyDedicated,
-  novadaSetup,
-  validateMonitorParams,
-  validateSearchParams,
-  validateExtractParams,
-  validateCrawlParams,
-  validateResearchParams,
-  validateMapParams,
-  validateProxyParams,
-  PROXY_ALIAS_MAP,
-  validateScrapeParams,
-  validateVerifyParams,
-  validateBrowserParams,
-  validateHealthParams,
-  validateHealthAllParams,
-  validateDiscoverParams,
-  validateScraperSubmitParams,
-  validateScraperStatusParams,
-  validateScraperResultParams,
-  validateBrowserFlowParams,
-  validateProxyResidentialParams,
-  validateProxyIspParams,
-  validateProxyDatacenterParams,
-  validateProxyMobileParams,
-  validateProxyStaticParams,
-  validateProxyDedicatedParams,
-  validateSetupParams,
-  SetupParamsSchema,
-  ProxyResidentialParamsSchema,
-  ProxyIspParamsSchema,
-  ProxyDatacenterParamsSchema,
-  ProxyMobileParamsSchema,
-  ProxyStaticParamsSchema,
-  ProxyDedicatedParamsSchema,
-  HealthAllParamsSchema,
-  DiscoverParamsSchema,
-  ScraperSubmitParamsSchema,
-  ScraperStatusParamsSchema,
-  ScraperResultParamsSchema,
-  BrowserFlowParamsSchema,
-  // ── Account / billing tools (KR-6) — pass-through key only (customer's own account) ──
-  novadaAccount,
-  validateAccountParams,
-  AccountParamsSchema,
-  novadaWalletBalance,
-  novadaWalletUsageRecord,
-  novadaPlanBalanceAll,
-  novadaProxyAccountList,
-  novadaProxyAccountCreate,
-  novadaTrafficDaily,
-  novadaAccountSummary,
-  novadaCaptureLogs,
-  validateWalletBalanceParams,
-  validateWalletUsageRecordParams,
-  validatePlanBalanceAllParams,
-  validateProxyAccountListParams,
-  validateProxyAccountCreateParams,
-  validateTrafficDailyParams,
-  validateAccountSummaryParams,
-  validateCaptureLogsParams,
-  WalletBalanceParamsSchema,
-  WalletUsageRecordParamsSchema,
-  PlanBalanceAllParamsSchema,
-  ProxyAccountListParamsSchema,
-  ProxyAccountCreateParamsSchema,
-  TrafficDailyParamsSchema,
-  AccountSummaryParamsSchema,
-  CaptureLogsParamsSchema,
-} from "../vendor/novada-mcp/tools/index.js";
+  TOOLS as CORE_TOOLS,
+  HIDDEN_ALIASES as NPM_HIDDEN_ALIASES,
+  dispatch,
+} from "../vendor/novada-mcp/core.js";
 
+// ─── Hosted-only: schemas for the visible 15-tool TOOLS array defined below ──
+// Only the schemas used by the hosted TOOLS curation — no tool function imports.
 import {
   SearchParamsSchema,
   ExtractParamsSchema,
@@ -158,13 +76,24 @@ import {
   MapParamsSchema,
   ProxyParamsSchema,
   ScrapeParamsSchema,
-  VerifyParamsSchema,
   BrowserParamsSchema,
-  HealthParamsSchema,
   AiMonitorParamsSchema,
-  validateAiMonitorParams,
 } from "../vendor/novada-mcp/tools/types.js";
 import { MonitorParamsSchema } from "../vendor/novada-mcp/tools/monitor.js";
+import {
+  // Schemas for hosted TOOLS curation
+  SetupParamsSchema,
+  AccountParamsSchema,
+  ProxyAccountListParamsSchema,
+  ProxyAccountCreateParamsSchema,
+  // novada_setup: auth-free pre-quota handler stays in mcp.ts (not routed via dispatch)
+  novadaSetup,
+  validateSetupParams,
+  // novada_discover: hosted-specific override (scopes catalog to visibleToolNames)
+  novadaDiscover,
+  validateDiscoverParams,
+  DiscoverParamsSchema,
+} from "../vendor/novada-mcp/tools/index.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
 import { NovadaError, NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.js";
 // L3 unified-key: populate the request-scoped credential store with the caller's key so
@@ -309,25 +238,24 @@ const TOOLS = [
 // session across MULTIPLE tool calls, which a per-request serverless isolate cannot hold.
 const HOSTED_HIDDEN = new Set(["novada_browser_flow"]);
 
-// Backward-compat aliases: names REMOVED from tools/list during the 0.9.4–0.9.9 simplification
-// but still WIRED in dispatch so old callers never break. They are intentionally absent from
-// the visible set, so the visibleToolNames guard below must let them through to their handler.
-// (Without this, a hidden alias returns TOOL_NOT_ENABLED instead of quietly working.)
-const HIDDEN_ALIASES = new Set<string>([
-  // proxy 7→1 (novada_proxy type=...)
-  "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter",
-  "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated",
-  // async scraper trio → sync scrape / benign
-  "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result",
-  // verify → cut (handler kept)
-  "novada_verify",
-  // account fold → novada_account(section=...)
-  "novada_wallet_balance", "novada_wallet_usage_record", "novada_plan_balance_all",
-  "novada_traffic_daily", "novada_capture_logs", "novada_account_summary",
-  "novada_health", "novada_health_all",
-  // Phase-3 fold → novada_extract(format:"html", render mapped from method)
-  "novada_unblock",
-]);
+// ─── Derived hidden-alias allowlist (structural fix for bug#2) ───────────────
+// Instead of a hand-maintained list that drifts whenever core adds/removes an alias,
+// derive it: anything core.dispatch can handle that isn't in the hosted visible set
+// and isn't HOSTED_HIDDEN (browser_flow refusal) is allowed past the visibility guards.
+// This means any alias added to core.ts is automatically routable here too.
+//
+//   VISIBLE        = the 15-tool hosted visible set (defined in TOOLS above)
+//   ALL_ROUTABLE   = every name core.dispatch handles (33 CORE_TOOLS + 9 NPM_HIDDEN_ALIASES)
+//   HOSTED_HIDDEN  = names that must REFUSE on hosted (browser_flow — persistent WS)
+//   HOSTED_HIDDEN_ALIASES = ALL_ROUTABLE minus (VISIBLE ∪ HOSTED_HIDDEN)
+const HOSTED_HIDDEN_ALIASES: ReadonlySet<string> = (() => {
+  const visible = new Set(TOOLS.map((t) => t.name));
+  const allRoutable = new Set([
+    ...CORE_TOOLS.map((t: { name: string }) => t.name),
+    ...NPM_HIDDEN_ALIASES,
+  ]);
+  return new Set([...allRoutable].filter((n) => !visible.has(n) && !HOSTED_HIDDEN.has(n)));
+})();
 
 // ─── Tool-set filtering (?tools= / ?groups=) ─────────────────────────────────
 // Lets a client request a slim toolset, e.g. ?groups=search,scrape or
@@ -607,7 +535,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     const started = Date.now();
 
     // Tool-set filter: reject tools not in the endpoint's ?tools=/?groups= selection.
-    if (ctx.allowedTools && !ctx.allowedTools.has(name) && !HIDDEN_ALIASES.has(name)) {
+    if (ctx.allowedTools && !ctx.allowedTools.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
       return {
         content: [{
           type: "text" as const,
@@ -622,7 +550,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // novada_site_copy / novada_ip_whitelist, or an outright unknown name) is rejected
     // BEFORE quota is touched, with an agent_instruction pointing at the npm package
     // where the full tool surface is available.
-    if (!visibleToolNames.has(name) && !HIDDEN_ALIASES.has(name)) {
+    if (!visibleToolNames.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
       return {
         content: [{
           type: "text" as const,
@@ -673,130 +601,42 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // browser). store.run() transparently propagates the inner return values and rejections.
     return await withCredentials({ apiKey }, async () => {
     try {
-      let result: string;
-      switch (name) {
-        // #5: network-bound tools are wrapped in withWallClock so a stall returns a
-        // structured JSON-RPC error before Vercel hard-kills the function into a bare 504.
-        case "novada_search":
-          result = await withWallClock(name, novadaSearch(validateSearchParams(argsObj), apiKey)); break;
-        case "novada_extract":
-          result = await withWallClock(name, novadaExtract(validateExtractParams(argsObj), apiKey)); break;
-        case "novada_crawl":
-          result = await withWallClock(name, novadaCrawl(validateCrawlParams(argsObj), apiKey)); break;
-        case "novada_research":
-          result = await withWallClock(name, novadaResearch(validateResearchParams(argsObj), apiKey)); break;
-        case "novada_map":
-          result = await withWallClock(name, novadaMap(validateMapParams(argsObj), apiKey)); break;
-        case "novada_proxy":
-          result = await novadaProxy(validateProxyParams(argsObj)); break;
-        case "novada_scrape":
-          result = await withWallClock(name, novadaScrape(validateScrapeParams(argsObj), apiKey)); break;
-        case "novada_verify":
-          result = await withWallClock(name, novadaVerify(validateVerifyParams(argsObj), apiKey)); break;
-        // novada_unblock → hidden alias → novada_extract(format:"html", render mapped from method)
-        // method:"render"→render:"render"; method:"browser"→render:"browser". Old callers get raw HTML.
-        case "novada_unblock": {
-          const ubMethod = argsObj["method"];
-          const ubRender = ubMethod === "browser" ? "browser" : "render";
-          const ubArgs: Record<string, unknown> = {
-            url: argsObj["url"],
-            format: "html",
-            render: ubRender,
-          };
-          if (argsObj["max_chars"] !== undefined) ubArgs["max_chars"] = argsObj["max_chars"];
-          if (argsObj["wait_for"] !== undefined) ubArgs["wait_for"] = argsObj["wait_for"];
-          result = await withWallClock("novada_extract", novadaExtract(validateExtractParams(ubArgs), apiKey)); break;
-        }
-        case "novada_browser":
-          // ENABLED ON HOSTED (2026-07-03): connectOverCDP talks to Novada's REMOTE cloud
-          // browser over WS — needs playwright-core (vendored, real) but NOT local browser
-          // binaries. A one-shot task (connect→navigate→snapshot→close) completes in ~6s,
-          // well inside the wall-clock budget. resolveBrowserWs(apiKey) auto-provisions the
-          // caller's browser sub-account (`-zone-browser` zone). The prior "AuthorizationError"
-          // was a missing zone suffix in the WSS username, not a transport limitation.
-          result = await withWallClock(name, novadaBrowser(validateBrowserParams(argsObj), apiKey)); break;
-        // 0.9.9: novada_health / novada_health_all folded into novada_account(section="summary").
-        // Old names still work (no error), dispatch routes to the existing novadaHealth vendor fn.
-        // 0.9.12: novada_health / novada_health_all are hidden aliases → route to
-        // novada_account(section="summary"), matching the npm source dispatch. The old path
-        // called novadaHealth(apiKey) and IGNORED the mode arg (novada_health mode=full returned
-        // the same as quick — the hollow-mode bug). account summary always shows the useful card.
-        case "novada_health":
-        case "novada_health_all":
-          result = await novadaAccount(validateAccountParams({ section: "summary" }), apiKey); break;
-        case "novada_discover":
-          // Scope the catalog to the tools actually exposed on this endpoint so the
-          // hosted discover output never advertises a tool the agent can't call.
-          result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames); break;
-        // 0.9.4: async scraper trio removed from tools/list (upstream returns results INLINE;
-        // poll endpoints never tracked /request tasks — NOV-697). Old names still work with no error.
-        case "novada_scraper_submit":
-          result = await withWallClock(name, novadaScrape(validateScrapeParams(argsObj), apiKey)); break;
-        case "novada_scraper_status":
-        case "novada_scraper_result":
-          result = JSON.stringify({
-            status: "ok",
-            message: "The async scraper flow was replaced in 0.9.4 — novada_scrape returns results inline in one call.",
-            agent_instruction: "Call novada_scrape with { platform, operation, params } to get records directly. No polling needed.",
-          }, null, 2); break;
-        case "novada_browser_flow":
-          // 🔴 NOT AVAILABLE ON HOSTED — cloud browser WS path needs Edge-compatible WebSocket runtime.
-          // No work done → refund the pre-decremented quota (NOV-578).
-          logUsage(env, ctx.token, name, false, Date.now() - started);
-          await refundQuota(ctx.tokenHash, env);
-          return {
-            content: [{
-              type: "text" as const,
-              text: "Error [NOT_AVAILABLE_ON_HOSTED]: novada_browser_flow requires WebSocket transport not yet ported to Vercel Edge runtime.\nagent_instruction: Use the local MCP server (`npx novada-mcp`) for browser-flow tasks, or use novada_scrape / novada_extract for static-content extraction on the hosted server.",
-            }],
-            isError: true,
-          };
-        // 0.9.4: 6 typed proxy tools merged into novada_proxy(type=...). Old names alias-route, no error.
-        case "novada_proxy_residential":
-        case "novada_proxy_isp":
-        case "novada_proxy_datacenter":
-        case "novada_proxy_mobile":
-        case "novada_proxy_static":
-        case "novada_proxy_dedicated":
-          result = await novadaProxy(validateProxyParams({ ...argsObj, type: PROXY_ALIAS_MAP[name] })); break;
-        case "novada_ai_monitor":
-          result = await withWallClock(name, novadaAiMonitor(validateAiMonitorParams(argsObj), apiKey)); break;
-        case "novada_monitor":
-          result = await withWallClock(name, novadaMonitor(validateMonitorParams(argsObj), apiKey)); break;
-        // ── Account / billing (KR-6) — apiKey is the customer's pass-through key (their own account) ──
-        // 0.9.9: novada_account is the unified entry point. Old names are hidden from tools/list
-        // but remain functional (alias dispatch). novadaAccount is not yet in vendor — compose
-        // the individual vendor functions here until the orchestrator vendors 0.9.9.
-        // 0.9.9: call the vendored novadaAccount (source-of-truth) directly — no inline
-        // re-implementation, so hosted and npm never drift (the health-drift lesson).
-        case "novada_account":
-          result = await withWallClock(name, novadaAccount(validateAccountParams(argsObj), apiKey)); break;
-        // 0.9.9 backward-compat aliases — hidden from tools/list, still functional (no error).
-        case "novada_wallet_balance":
-          result = await novadaWalletBalance(validateWalletBalanceParams(argsObj), apiKey); break;
-        case "novada_wallet_usage_record":
-          result = await novadaWalletUsageRecord(validateWalletUsageRecordParams(argsObj), apiKey); break;
-        case "novada_plan_balance_all":
-          result = await novadaPlanBalanceAll(validatePlanBalanceAllParams(argsObj), apiKey); break;
-        case "novada_proxy_account_list":
-          result = await novadaProxyAccountList(validateProxyAccountListParams(argsObj), apiKey); break;
-        case "novada_proxy_account_create":
-          result = await novadaProxyAccountCreate(validateProxyAccountCreateParams(argsObj), apiKey); break;
-        case "novada_traffic_daily":
-          result = await novadaTrafficDaily(validateTrafficDailyParams(argsObj), apiKey); break;
-        case "novada_account_summary":
-          result = await novadaAccountSummary(validateAccountSummaryParams(argsObj), apiKey); break;
-        case "novada_capture_logs":
-          result = await novadaCaptureLogs(validateCaptureLogsParams(argsObj), apiKey); break;
-        default:
-          // Unknown tool → no work done, refund the pre-decremented quota (NOV-578).
-          logUsage(env, ctx.token, name, false, Date.now() - started);
-          await refundQuota(ctx.tokenHash, env);
-          return {
-            content: [{ type: "text" as const, text: `Unknown tool: ${name}` }],
-            isError: true,
-          };
+
+      // ── Browser-flow explicit refusal (BEFORE dispatch — no quota burned for it) ──
+      // novada_browser_flow keeps a persistent WS session across multiple tool calls;
+      // Vercel serverless isolates cannot hold that state. Early-exit + refund (NOV-578).
+      if (name === "novada_browser_flow") {
+        logUsage(env, ctx.token, name, false, Date.now() - started);
+        await refundQuota(ctx.tokenHash, env);
+        return {
+          content: [{
+            type: "text" as const,
+            text: "Error [NOT_AVAILABLE_ON_HOSTED]: novada_browser_flow requires a persistent WebSocket session that Vercel serverless isolates cannot hold.\nagent_instruction: Use the local MCP server (`npx novada-mcp`) for browser-flow tasks, or use novada_scrape / novada_extract for static-content extraction on the hosted server.",
+          }],
+          isError: true,
+        };
       }
+
+      // ── novada_discover override — scope catalog to this endpoint's visible tools ──
+      // core.dispatch calls novadaDiscover(args) without the second arg, which would list
+      // all 33 CORE_TOOLS. On hosted we pass visibleToolNames so the output only advertises
+      // the 15 tools the agent can actually call on this endpoint.
+      if (name === "novada_discover") {
+        const result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames);
+        logUsage(env, ctx.token, name, true, Date.now() - started);
+        const sanitized = sanitizeHostedOutput(result);
+        return { content: [{ type: "text" as const, text: sanitized }] };
+      }
+
+      // ── Single dispatch call (replaces the old hand-maintained switch) ──
+      // core.dispatch handles routing for all 33 npm tools + 9 npm hidden aliases.
+      // It throws Error("Unknown tool: <name>") for anything not in its switch.
+      // withWallClock races the Promise against the 56s wall-clock budget.
+      const result = await withWallClock(
+        name,
+        dispatch(name, argsObj, apiKey, { onProgress: undefined }),
+      );
+
       logUsage(env, ctx.token, name, true, Date.now() - started);
       const sanitized = sanitizeHostedOutput(result);
       // Append quota footer only when quota is running low (< 20% of monthly)
