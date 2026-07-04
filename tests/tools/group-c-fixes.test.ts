@@ -11,6 +11,21 @@ vi.mock("axios");
 vi.mock("playwright-core", () => ({
   chromium: { connectOverCDP: vi.fn() },
 }));
+// ─── Mock billing sub-tools so health tests don't hit the network ──────────
+vi.mock("../../src/tools/wallet_balance.js", () => ({
+  novadaWalletBalance: vi.fn().mockResolvedValue(
+    JSON.stringify({ status: "ok", data: { balance: 10.0, currency: "€" } })
+  ),
+}));
+vi.mock("../../src/tools/plan_balance_all.js", () => ({
+  novadaPlanBalanceAll: vi.fn().mockResolvedValue(
+    JSON.stringify({
+      status: "ok",
+      summary: { active_products: [], expired_products: [], unavailable_products: [] },
+      per_product: {},
+    })
+  ),
+}));
 
 import axios from "axios";
 import { novadaSearch } from "../../src/tools/search.js";
@@ -177,61 +192,84 @@ describe("FIX-4: verify claim sanitization", () => {
   });
 });
 
-// ─── FIX-5: health false-Active ──────────────────────────────────────────
+// ─── FIX-5 (updated contract): health derives status from account facts, not synthetic probes
+//
+// Old behavior: health.ts fired synthetic HTTP probes (Web Unblocker, Scraper API) that burned
+// credits and returned false results. Proxy/browser with env creds were labeled
+// "configured (not verified)" to avoid claiming Active without a probe.
+//
+// New behavior: health.ts reads billing API (wallet, plan balances, sub-account entitlement)
+// — no synthetic product probes at all. Proxy/browser with explicit env creds are "Available"
+// (the creds ARE confirmed — reading them from the environment IS the entitlement check).
+// Auto-provision (no env creds) calls the account API, not a synthetic product call.
 
-describe("FIX-5: health tools don't claim Active without live probe", () => {
-  it("health.ts: proxy with valid credentials says 'configured (not verified)'", async () => {
+describe("FIX-5 (updated): health reads account facts, no synthetic probes", () => {
+  it("health.ts: proxy with explicit env creds → Available (no synthetic probe needed)", async () => {
+    // Set both proxy AND browser env creds so neither auto-provision path fires.
     process.env.NOVADA_PROXY_USER = "testuser";
     process.env.NOVADA_PROXY_PASS = "testpass";
     process.env.NOVADA_PROXY_ENDPOINT = "proxy.novada.com:10000";
+    process.env.NOVADA_BROWSER_WS = "wss://user:pass@browser.novada.com";
 
-    // Mock the HTTP probes so they don't go out to the network
-    vi.mocked(axios).post.mockRejectedValue(new Error("no network"));
-
-    // novadaHealth makes real fetch calls — mock global fetch
-    const fetchSpy = vi.spyOn(global, "fetch").mockRejectedValue(new Error("probe blocked"));
+    // With both env creds set, health.ts reads no account API → global fetch NOT called.
+    const fetchSpy = vi.spyOn(global, "fetch").mockRejectedValue(new Error("unexpected probe call"));
     try {
       const result = await novadaHealth(API_KEY);
-      // Proxy row should indicate 'not verified'
-      expect(result).toContain("not verified");
+      // New contract: explicit env creds → Available (entitlement confirmed by credential presence)
+      expect(result).toContain("Proxy");
+      expect(result).toContain("✅ Available");
+      // No fetch calls at all (neither synthetic product probes NOR account API needed)
+      expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
       delete process.env.NOVADA_PROXY_USER;
       delete process.env.NOVADA_PROXY_PASS;
       delete process.env.NOVADA_PROXY_ENDPOINT;
-    }
-  });
-
-  it("health.ts: browser with valid NOVADA_BROWSER_WS says 'configured (not verified)'", async () => {
-    process.env.NOVADA_BROWSER_WS = "wss://user:pass@browser.novada.com";
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockRejectedValue(new Error("probe blocked"));
-    try {
-      const result = await novadaHealth(API_KEY);
-      expect(result).toContain("not verified");
-    } finally {
-      fetchSpy.mockRestore();
       delete process.env.NOVADA_BROWSER_WS;
     }
   });
 
-  it("health_all.ts: proxy with valid credentials says 'not verified'", async () => {
-    // Full env-var config (user + pass + endpoint) → local mode → "configured (not verified)".
-    // Without a live probe the tool must not claim Active. When env vars are ABSENT the tool
-    // instead probes the key-based auto-provision path (covered by hosted verification).
+  it("health.ts: browser with NOVADA_BROWSER_WS set → Available (no synthetic probe needed)", async () => {
+    // Set both proxy AND browser env creds so neither auto-provision path fires.
     process.env.NOVADA_PROXY_USER = "testuser";
     process.env.NOVADA_PROXY_PASS = "testpass";
     process.env.NOVADA_PROXY_ENDPOINT = "proxy.novada.com:10000";
+    process.env.NOVADA_BROWSER_WS = "wss://user:pass@browser.novada.com";
 
-    const fetchSpy = vi.spyOn(global, "fetch").mockRejectedValue(new Error("probe blocked"));
+    const fetchSpy = vi.spyOn(global, "fetch").mockRejectedValue(new Error("unexpected probe call"));
     try {
-      const result = await novadaHealthAll(API_KEY);
-      expect(result).toContain("not verified");
+      const result = await novadaHealth(API_KEY);
+      expect(result).toContain("Browser API");
+      expect(result).toContain("✅ Available");
+      expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
       delete process.env.NOVADA_PROXY_USER;
       delete process.env.NOVADA_PROXY_PASS;
       delete process.env.NOVADA_PROXY_ENDPOINT;
+      delete process.env.NOVADA_BROWSER_WS;
+    }
+  });
+
+  it("health_all.ts (alias): proxy with explicit env creds → Available (fact-based, no probe)", async () => {
+    // Set both env creds → no auto-provision fetch fires.
+    process.env.NOVADA_PROXY_USER = "testuser";
+    process.env.NOVADA_PROXY_PASS = "testpass";
+    process.env.NOVADA_PROXY_ENDPOINT = "proxy.novada.com:10000";
+    process.env.NOVADA_BROWSER_WS = "wss://user:pass@browser.novada.com";
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockRejectedValue(new Error("unexpected probe call"));
+    try {
+      const result = await novadaHealthAll(API_KEY);
+      expect(result).toContain("Proxy");
+      expect(result).toContain("✅ Available");
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+      delete process.env.NOVADA_PROXY_USER;
+      delete process.env.NOVADA_PROXY_PASS;
+      delete process.env.NOVADA_PROXY_ENDPOINT;
+      delete process.env.NOVADA_BROWSER_WS;
     }
   });
 });

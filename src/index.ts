@@ -442,18 +442,20 @@ Not for:
   },
   {
     name: "novada_health",
-    description: `Check which Novada API products are active on your API key.
+    description: `Get a Novada account status snapshot — authoritative, no synthetic probes, no credit cost.
 
-**Best for:** First-time setup, diagnosing why a tool is failing, confirming your account has the right products activated.
-**Returns:** Status table for all products — with activation links for anything not yet enabled.
-**mode="quick" (default):** Product-activation check, no live latency probes. Fast, ~100ms.
-**mode="full":** Deep parallel probes with latency across all 6 products (Search, Extract, Scraper, Proxy, Browser, Unblock). Equivalent to former novada_health_all.`,
+**Best for:** First-time setup, diagnosing why a tool is failing, confirming account entitlement + balance before calling a tool.
+**Returns:** Status table for Search/Extract/Scraper/Unblock (wallet-funded), Proxy, and Browser API — derived from actual billing/account data.
+**mode="quick" (default):** Wallet balance + proxy/browser entitlement. Fast (~200–400ms, reads billing API only).
+**mode="full":** Quick + per-product proxy plan balances with expiry dates. Equivalent to novada_health_all.
+
+Reports account entitlement + balance (authoritative, no synthetic probes, no credit cost). To confirm a specific tool works end-to-end, call that tool directly.`,
     inputSchema: zodToMcpSchema(HealthParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "novada_health_all",
-    description: `[ALIAS] Equivalent to novada_health(mode="full"). Kept for backward compatibility — prefer novada_health with mode="full". Extended health check that tests ALL Novada product endpoints in parallel and returns detailed per-product status with latency.`,
+    description: `[ALIAS] Equivalent to novada_health(mode="full"). Kept for backward compatibility — prefer novada_health with mode="full". Returns account entitlement snapshot: wallet balance + proxy/browser entitlement + per-product plan balances. Authoritative, no synthetic probes, no credit cost.`,
     inputSchema: zodToMcpSchema(HealthParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },

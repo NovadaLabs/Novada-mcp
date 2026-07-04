@@ -309,7 +309,7 @@ export const VerifyParamsSchema = z.object({
 
 export const HealthParamsSchema = z.object({
   mode: z.enum(["quick", "full"]).default("quick")
-    .describe("'quick' (default): product-activation check only, no live latency probes. 'full': deep parallel probes with latency across all 6 products (equivalent to the former novada_health_all)."),
+    .describe("'quick' (default): wallet balance + proxy/browser entitlement from account data (no synthetic probes, no credit cost). 'full': quick + per-product proxy plan balances with expiry (= novada_health_all). Reports account state, not live tool status — to confirm a tool works, call it."),
 });
 export type HealthParams = z.infer<typeof HealthParamsSchema>;
 export function validateHealthParams(args: Record<string, unknown> | undefined): HealthParams {

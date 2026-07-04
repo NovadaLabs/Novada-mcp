@@ -208,7 +208,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   // ─── Health & Discovery ─────────────────────────────────────────────────
   {
     name: "novada_health",
-    description: "Check which Novada API products are active on your key. mode='quick' (default): fast activation check. mode='full': live parallel latency probes across all 6 products (= former novada_health_all).",
+    description: "Check Novada account status: wallet balance, proxy/browser entitlement, and (mode='full') per-product plan balances. Authoritative — reads billing API only, no synthetic probes, no credit cost.",
     category: "Health & Discovery",
     status: "active",
   },

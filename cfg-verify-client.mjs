@@ -1,0 +1,11 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+const KEY = process.env.QA_KEY;
+const t = new StdioClientTransport({ command: "node", args: ["/Users/tongwu/Projects/novada-mcp/build/index.js"], env: Object.assign({}, process.env, { NOVADA_API_KEY: KEY }) });
+const c = new Client({ name: "cfg-verify", version: "0" }, { capabilities: {} });
+await c.connect(t);
+const tools = await c.listTools();
+console.log("TOOLS_SAMPLE:", JSON.stringify(tools).slice(0,600));
+const result = await c.callTool({ name:"novada_search", arguments:{ query:"best open-source vector databases 2026", num:5, engine:"google" }});
+console.log("SEARCH_RESULT:", JSON.stringify(result).slice(0,2500));
+await c.close();

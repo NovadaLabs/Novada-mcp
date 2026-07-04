@@ -1,258 +1,275 @@
-import { getBrowserWs, getWebUnblockerKey, resolveProxyCredentials } from "../utils/credentials.js";
-import { SCRAPER_API_BASE, WEB_UNBLOCKER_BASE } from "../config.js";
+/**
+ * novada_health — account-facts health check.
+ *
+ * Reports authoritative account state (wallet balance + proxy/browser entitlement
+ * + plan balances) via the same billing API endpoints already used by
+ * novada_account_summary / novada_plan_balance_all / novada_wallet_balance.
+ *
+ * No synthetic product probes. No credit cost. To confirm a specific tool works
+ * end-to-end, call that tool directly.
+ */
+import { novadaWalletBalance } from "./wallet_balance.js";
+import { novadaPlanBalanceAll } from "./plan_balance_all.js";
+import {
+  fetchProxySubAccountCredentials,
+  fetchBrowserSubAccountCredentials,
+  getProxyCredentials,
+  getBrowserWs,
+} from "../utils/credentials.js";
 
-const PROBE_TIMEOUT_MS = 8000;
+// ─── Internal types ───────────────────────────────────────────────────────────
 
-interface ProbeResult {
-  status: "active" | "configured_unverified" | "not_activated" | "not_configured" | "error";
-  label: string;
-  latency: number | null;
-  note?: string;
+type AvailabilityStatus = "available" | "needs_topup" | "needs_renewal" | "not_entitled" | "not_configured" | "error";
+
+interface ProductStatus {
+  product: string;
+  status: AvailabilityStatus;
+  note: string;
 }
 
-async function probeHttp(url: string): Promise<{ ok: boolean; status: number; body: unknown; latency: number }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  const start = Date.now();
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    const latency = Date.now() - start;
-    let body: unknown = null;
-    try { body = await res.json(); } catch { /* ignore */ }
-    return { ok: res.ok, status: res.status, body, latency };
-  } finally {
-    clearTimeout(timer);
-  }
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-
-async function probeExtract(_apiKey: string): Promise<ProbeResult> {
-  // Extract uses Web Unblocker: POST webunlocker.novada.com/request
-  // NOVADA_API_KEY covers Web Unblocker (unified key) — no separate key needed.
-  const unblockerKey = getWebUnblockerKey();
-  if (!unblockerKey) {
-    return { status: "not_configured", label: "Web Unblocker / Extract", latency: null, note: "set NOVADA_API_KEY env var (covers Web Unblocker)" };
+function statusIcon(s: AvailabilityStatus): string {
+  switch (s) {
+    case "available":      return "✅ Available";
+    case "needs_topup":    return "⚠️ Needs top-up";
+    case "needs_renewal":  return "⚠️ Needs renewal";
+    case "not_entitled":   return "❌ Not entitled";
+    case "not_configured": return "⚙️ Not configured";
+    case "error":          return "❌ Error";
   }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  const start = Date.now();
-  try {
-    const res = await fetch(`${WEB_UNBLOCKER_BASE}/request`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${unblockerKey}` },
-      // js_render:true is required — js_render:false returns code=5001 (false-negative)
-      body: JSON.stringify({ target_url: "https://example.com", response_format: "html", js_render: true, country: "" }),
-      signal: controller.signal,
-    });
-    const latency = Date.now() - start;
-    let body: Record<string, unknown> | null = null;
-    try { body = await res.json() as Record<string, unknown>; } catch { /* ignore */ }
-    const code = body?.code as number | undefined;
-    if (code === 0) return { status: "active", label: "Web Unblocker / Extract", latency };
-    // code=5001 is the definitive "product not activated" signal
-    if (code === 5001) return { status: "not_activated", label: "Web Unblocker / Extract", latency, note: "code=5001 — activate at dashboard.novada.com/overview/unblocker/" };
-    // Any other non-zero code is an error (auth failure, quota, etc.) — not "not_activated"
-    return { status: "error", label: "Web Unblocker / Extract", latency, note: `code=${code ?? res.status}` };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { status: "error", label: "Web Unblocker / Extract", latency: null, note: msg.slice(0, 80) };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function probeScraper(apiKey: string): Promise<ProbeResult> {
-  // Correct endpoint: POST scraper.novada.com/request with scraper_name/scraper_id body
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  const start = Date.now();
-  try {
-    const form = new URLSearchParams();
-    form.append("scraper_name", "google.com");
-    form.append("scraper_id", "google_search");
-    form.append("q", "test");
-    form.append("num", "1");
-    const res = await fetch(`${SCRAPER_API_BASE}/request`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "Authorization": `Bearer ${apiKey}` },
-      body: form.toString(),
-      signal: controller.signal,
-    });
-    const latency = Date.now() - start;
-    let body: Record<string, unknown> | null = null;
-    try { body = await res.json() as Record<string, unknown>; } catch { /* ignore */ }
-    const code = body?.code as number | undefined;
-    if (code === 0) return { status: "active", label: "Scraper API (search + 13 active platforms)", latency };
-    // 11006 = product not activated; 11000 = invalid key
-    if (code === 11006) {
-      return { status: "not_activated", label: "Scraper API (search + 13 active platforms)", latency, note: "dashboard.novada.com/overview/scraper/ — contact support to enable Bearer token access" };
-    }
-    if (code === 11000) {
-      return { status: "error", label: "Scraper API (search + 13 active platforms)", latency, note: "Invalid API key (11000)" };
-    }
-    return { status: "not_activated", label: "Scraper API (search + 13 active platforms)", latency, note: `code=${code ?? res.status}` };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { status: "error", label: "Scraper API (search + 13 active platforms)", latency: null, note: msg.slice(0, 80) };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function probeProxy(): Promise<ProbeResult> {
-  // resolveProxyCredentials: checks env vars first, then auto-fetches via NOVADA_API_KEY
-  // so users who rely on auto-fetch are not shown a false "not_configured".
-  const creds = await resolveProxyCredentials();
-  if (creds) {
-    // We can only verify credentials are present — no live TCP probe here.
-    // Label as "configured (not verified)" rather than "Active" to avoid false-Active.
-    const endpointValid = creds.endpoint.includes(":");
-    if (endpointValid) {
-      return { status: "configured_unverified", label: "Proxy", latency: null, note: "env vars present — no live probe" };
-    }
-    return { status: "configured_unverified", label: "Proxy", latency: null, note: "env vars present — endpoint format may be wrong (expected host:port)" };
-  }
-  return {
-    status: "not_configured",
-    label: "Proxy",
-    latency: null,
-    note: "set NOVADA_PROXY_USER env var",
-  };
-}
-
-// INC-195: Detect hosted (Vercel) environment where Browser API is architecturally unavailable
-function isHostedEnvironment(): boolean {
-  return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
-}
-
-function probeBrowser(): ProbeResult {
-  // INC-195: On hosted environments, Browser API requires WebSocket transport
-  // that is not available on Vercel Edge/Lambda — don't mislead with "set env"
-  if (isHostedEnvironment()) {
-    return {
-      status: "not_configured",
-      label: "Browser API",
-      latency: null,
-      note: "Not available on hosted — requires WebSocket transport. Use local MCP server for browser features.",
-    };
-  }
-  const ws = getBrowserWs();
-  if (ws) {
-    const wsValid = ws.startsWith("wss://") && ws.includes("@");
-    if (wsValid) {
-      // FIX-5: NOVADA_BROWSER_WS is set and well-formed, but we don't do a live WebSocket probe.
-      // Label as "configured_unverified" to avoid claiming Active without a real connectivity check.
-      return { status: "configured_unverified", label: "Browser API", latency: null, note: "env var present — no live probe" };
-    }
-    return { status: "configured_unverified", label: "Browser API", latency: null, note: "NOVADA_BROWSER_WS format may be wrong — expected wss://user:pass@host" };
-  }
-  return {
-    status: "not_configured",
-    label: "Browser API",
-    latency: null,
-    note: "set NOVADA_BROWSER_WS env var",
-  };
-}
-
-function statusIcon(r: ProbeResult): string {
-  switch (r.status) {
-    case "active": return "✅ Active";
-    case "configured_unverified": return "⚙️ Configured (not verified)";
-    case "not_activated": return `❌ Not activated — ${r.note}`;
-    case "not_configured": return `⚠️ Not configured — ${r.note}`;
-    case "error": return `❌ Error: ${r.note}`;
-  }
-}
-
-function latencyStr(r: ProbeResult): string {
-  return r.latency !== null ? `${r.latency}ms` : "—";
 }
 
 /**
- * Check which Novada API products are active on the given API key.
- * Runs probes in parallel via Promise.allSettled.
+ * Derive wallet-funded product status from wallet balance.
+ * wallet > 0 → available; wallet === 0 → needs top-up; unknown → error.
+ */
+function walletFundedStatus(balance: number | undefined, error?: string): AvailabilityStatus {
+  if (error) return "error";
+  if (balance === undefined) return "error";
+  return balance > 0 ? "available" : "needs_topup";
+}
+
+// ─── Per-product fact readers (no synthetic probes) ───────────────────────────
+
+/** Proxy: check explicit env creds first, then auto-provision via API key. */
+async function proxyStatus(apiKey: string): Promise<ProductStatus> {
+  const direct = getProxyCredentials();
+  if (direct) {
+    return {
+      product: "Proxy",
+      status: "available",
+      note: "Explicit env creds (NOVADA_PROXY_USER/PASS/ENDPOINT configured)",
+    };
+  }
+  // No env creds → check if account has a proxy sub-account (product=1)
+  try {
+    const creds = await fetchProxySubAccountCredentials(apiKey);
+    if (creds) {
+      return {
+        product: "Proxy",
+        status: "available",
+        note: "Auto-provisioned from API key (proxy.novada.pro:7777, zone-res)",
+      };
+    }
+    return {
+      product: "Proxy",
+      status: "not_entitled",
+      note: "No proxy sub-account on this account — enable at https://dashboard.novada.com/overview/proxy/",
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { product: "Proxy", status: "error", note: `Account API error: ${msg.slice(0, 80)}` };
+  }
+}
+
+/** Browser API: check explicit env creds first, then auto-provision via API key. */
+async function browserStatus(apiKey: string): Promise<ProductStatus> {
+  const ws = getBrowserWs();
+  if (ws) {
+    return {
+      product: "Browser API",
+      status: "available",
+      note: "NOVADA_BROWSER_WS env var configured",
+    };
+  }
+  // No env var → check if account has a Browser API sub-account (product=10)
+  try {
+    const wsUrl = await fetchBrowserSubAccountCredentials(apiKey);
+    if (wsUrl) {
+      return {
+        product: "Browser API",
+        status: "available",
+        note: "Auto-provisioned from API key (one-shot CDP via upg-scbr2.novada.com)",
+      };
+    }
+    return {
+      product: "Browser API",
+      status: "not_entitled",
+      note: "No Browser API sub-account on this account — enable at https://dashboard.novada.com/overview/browser/",
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { product: "Browser API", status: "error", note: `Account API error: ${msg.slice(0, 80)}` };
+  }
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
+
+/**
+ * Account-facts health check.
+ *
+ * mode="quick": wallet balance + proxy/browser entitlement only (fast, no plan details).
+ * mode="full" : quick + per-product proxy plan balances with expiry dates.
+ *
+ * novada_health_all is an alias for novada_health(mode="full").
  */
 export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "quick"): Promise<string> {
-  if (mode === "full") {
-    const { novadaHealthAll } = await import("./health_all.js");
-    return novadaHealthAll(apiKey);
-  }
-
   const maskedKey = apiKey.length >= 4 ? `****${apiKey.slice(-4)}` : "****";
 
-  // Run all probes in parallel (probeProxy is now async — resolveProxyCredentials path)
-  const [extractSettled, scraperSettled, proxySettled] = await Promise.allSettled([
-    probeExtract(apiKey),
-    probeScraper(apiKey),
-    probeProxy(),
+  // ── 1. Fetch wallet and (if full) plan balances in parallel ──────────────
+  const walletPromise = novadaWalletBalance({} as never, apiKey)
+    .then(raw => {
+      const parsed = JSON.parse(raw) as { status?: string; data?: { balance?: number; currency?: string } };
+      const balance = parsed?.data?.balance;
+      const currency = parsed?.data?.currency ?? "€";
+      return { balance: typeof balance === "number" ? balance : undefined, currency, error: undefined as string | undefined };
+    })
+    .catch((e: unknown) => ({
+      balance: undefined as number | undefined,
+      currency: "€",
+      error: e instanceof Error ? e.message : String(e),
+    }));
+
+  const planPromise = mode === "full"
+    ? novadaPlanBalanceAll({} as never, apiKey)
+        .then(raw => JSON.parse(raw) as {
+          status?: string;
+          summary?: { active_products?: string[]; expired_products?: string[]; unavailable_products?: string[] };
+          per_product?: Record<string, { status: string; balance?: unknown; expired?: boolean; expires_at?: string; expires_at_human?: string }>;
+          errors?: Array<{ product: string; error: string }>;
+        })
+        .catch(() => null)
+    : Promise.resolve(null);
+
+  const [wallet, planData, proxy, browser] = await Promise.all([
+    walletPromise,
+    planPromise,
+    proxyStatus(apiKey),
+    browserStatus(apiKey),
   ]);
 
-  const results: ProbeResult[] = [
-    extractSettled.status === "fulfilled" ? extractSettled.value : { status: "error" as const, label: "Web Unblocker / Extract", latency: null, note: "probe threw unexpectedly" },
-    scraperSettled.status === "fulfilled" ? scraperSettled.value : { status: "error" as const, label: "Scraper API (search + 13 active platforms)", latency: null, note: "probe threw unexpectedly" },
-    proxySettled.status === "fulfilled" ? proxySettled.value : { status: "error" as const, label: "Proxy", latency: null, note: "probe threw unexpectedly" },
-    probeBrowser(),
+  // ── 2. Derive wallet-funded product statuses ──────────────────────────────
+  const walletStatus = walletFundedStatus(wallet.balance, wallet.error);
+  const walletNote = wallet.error
+    ? `Error fetching balance: ${wallet.error.slice(0, 80)}`
+    : wallet.balance !== undefined
+      ? wallet.balance > 0
+        ? `${wallet.currency}${wallet.balance.toFixed(2)} — funds Search, Extract, Scraper, Unblock (pay-per-use)`
+        : `${wallet.currency}0.00 — top up at https://dashboard.novada.com to re-enable pay-per-use tools`
+      : "Balance unknown";
+
+  const walletFundedProducts: ProductStatus[] = [
+    {
+      product: "Search / Extract / Scraper / Unblock",
+      status: walletStatus,
+      note: walletNote,
+    },
   ];
 
-  const activeCount = results.filter(r => r.status === "active").length;
-  const configuredUnverifiedCount = results.filter(r => r.status === "configured_unverified").length;
-  const notActivatedCount = results.filter(r => r.status === "not_activated").length;
-  const notConfiguredCount = results.filter(r => r.status === "not_configured").length;
-  const errorCount = results.filter(r => r.status === "error").length;
+  // ── 3. Build status rows ──────────────────────────────────────────────────
+  const allProducts: ProductStatus[] = [
+    ...walletFundedProducts,
+    proxy,
+    browser,
+  ];
 
+  // ── 4. Format markdown output ──────────────────────────────────────────────
   const lines: string[] = [
-    "## Novada API — Health Check",
+    "## Novada API — Account Status",
     "",
     `api_key: ${maskedKey}`,
     `checked: ${new Date().toISOString()}`,
     "",
-    "| Product | Status | Latency | Notes |",
-    "|---------|--------|---------|-------|",
+    "> Reports account entitlement + balance (authoritative, no synthetic probes, no credit cost).",
+    "> To confirm a specific tool works end-to-end, call that tool directly.",
+    "",
+    "| Product | Status | Notes |",
+    "|---------|--------|-------|",
   ];
 
-  for (const r of results) {
-    // FIX-5: Surface notes for all rows (including active) so "not verified" caveat is visible
-    const noteCell = r.note ? r.note : "";
-    lines.push(`| ${r.label} | ${statusIcon(r)} | ${latencyStr(r)} | ${noteCell} |`);
+  for (const p of allProducts) {
+    lines.push(`| ${p.product} | ${statusIcon(p.status)} | ${p.note} |`);
   }
-  lines.push(`| Output Pipeline | ✅ active — ~/Downloads/novada-mcp/ | — | |`);
+
+  // Add plan balance rows (full mode only)
+  if (mode === "full" && planData?.per_product) {
+    lines.push("");
+    lines.push("### Proxy Plan Balances");
+    lines.push("");
+    lines.push("| Plan | Status | Balance | Expires |");
+    lines.push("|------|--------|---------|---------|");
+
+    const PLAN_LABELS: Record<string, string> = {
+      residential: "Residential",
+      isp: "ISP",
+      mobile: "Mobile",
+      datacenter: "Datacenter",
+      static: "Static ISP",
+      capture: "Capture",
+    };
+
+    for (const [key, val] of Object.entries(planData.per_product)) {
+      const label = PLAN_LABELS[key] ?? key;
+      if (val.status === "error") {
+        // Check if it's a missing product (not provisioned) vs actual error
+        const isUnavailable = (val as { unavailable?: boolean }).unavailable === true;
+        if (isUnavailable) {
+          lines.push(`| ${label} | ❌ Not on account | — | — |`);
+        } else {
+          lines.push(`| ${label} | ❌ Error | — | — |`);
+        }
+      } else {
+        const planExpired = val.expired === true;
+        const planStatus = planExpired ? "⚠️ Expired" : "✅ Active";
+        // Extract balance_mb if present
+        const balanceRaw = val.balance as Record<string, unknown> | null | undefined;
+        const balanceMb = typeof balanceRaw?.balance_mb === "number" ? `${balanceRaw.balance_mb} MB` : "—";
+        const expiresAt = val.expires_at ?? val.expires_at_human ?? "—";
+        lines.push(`| ${label} | ${planStatus} | ${balanceMb} | ${expiresAt} |`);
+      }
+    }
+  }
+
+  // ── 5. Summary + headline ──────────────────────────────────────────────────
+  const availableCount = allProducts.filter(p => p.status === "available").length;
+  const actionNeeded = allProducts.filter(p => p.status !== "available");
 
   lines.push("");
   lines.push("---");
   lines.push("## Summary");
 
-  const parts: string[] = [];
-  if (activeCount > 0) parts.push(`${activeCount} active`);
-  if (configuredUnverifiedCount > 0) parts.push(`${configuredUnverifiedCount} configured (not verified)`);
-  if (notActivatedCount > 0) parts.push(`${notActivatedCount} not activated`);
-  if (notConfiguredCount > 0) parts.push(`${notConfiguredCount} not configured`);
-  if (errorCount > 0) parts.push(`${errorCount} error`);
-  lines.push(`- ${parts.join("  |  ")}`);
+  const headline = `${availableCount}/${allProducts.length} product groups available`;
+  lines.push(`- ${headline}`);
 
-  const needsAction = results.filter(r => r.status !== "active");
-  if (needsAction.length === 0) {
+  if (wallet.balance !== undefined) {
+    const suffix = wallet.balance > 0 ? `(${wallet.currency}${wallet.balance.toFixed(2)} wallet)` : "(empty wallet)";
+    lines.push(`- Pay-per-use tools (Search/Extract/Scraper/Unblock): ${walletStatus === "available" ? "funded" : "needs top-up"} ${suffix}`);
+  }
+
+  if (actionNeeded.length > 0) {
     lines.push("");
-    lines.push("## Next Steps");
-    lines.push("All products active — you're good to go.");
-  } else {
-    lines.push("");
-    lines.push("## Next Steps");
-    for (const r of needsAction) {
-      if (r.status === "configured_unverified") {
-        lines.push(`- ${r.label}: ${r.note} — connectivity not confirmed, but should work if credentials are valid`);
-      } else if (r.status === "not_activated") {
-        lines.push(`- ${r.label}: not activated on your account (${r.note}). Activate it at https://dashboard.novada.com/api-key/`);
-      } else if (r.status === "not_configured") {
-        if (r.label === "Proxy") {
-          lines.push(`- Proxy: Set NOVADA_PROXY_ENDPOINT (user/pass auto-provisioned from NOVADA_API_KEY). Or set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT for explicit credentials.`);
-        } else if (r.label === "Browser API") {
-          lines.push(`- Browser API: Export NOVADA_BROWSER_WS (get credentials at dashboard.novada.com/overview/browser/)`);
-        } else {
-          lines.push(`- ${r.label}: ${r.note}`);
-        }
-      } else if (r.status === "error") {
-        lines.push(`- ${r.label}: Probe failed — ${r.note}`);
-      }
+    lines.push("## Action Required");
+    for (const p of actionNeeded) {
+      lines.push(`- **${p.product}**: ${p.note}`);
+    }
+  }
+
+  if (mode === "full" && planData?.summary) {
+    const summary = planData.summary;
+    if (summary.expired_products && summary.expired_products.length > 0) {
+      lines.push("");
+      lines.push(`> Expired proxy plans: ${summary.expired_products.join(", ")}. Purchase new plan at https://dashboard.novada.com`);
     }
   }
 
