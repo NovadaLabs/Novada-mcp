@@ -39,7 +39,7 @@ interface Validation {
 
 /**
  * Cheap, authoritative key check: read the master wallet balance — the same
- * billing endpoint novada_health / novada_account_summary already use. This is a
+ * billing endpoint novada_account already uses. This is a
  * real "does the key work" probe (NOT a synthetic per-product probe), and it
  * doubles as a "you have credit" signal for a brand-new tester.
  *
@@ -87,12 +87,12 @@ const CORE_TOOLS: Array<{ tool: string; line: string }> = [
   { tool: "novada_extract", line: "Read any page — clean text, title, links, or specific fields from a URL." },
   { tool: "novada_scrape",  line: "Structured data from platforms — Amazon products, LinkedIn, TikTok, YouTube, and more." },
   { tool: "novada_browser", line: "Operate a page — click, type, scroll, screenshot; drive JS-heavy sites and logins." },
-  { tool: "novada_account_summary", line: "Your account at a glance — balance, plan quotas, and recent usage." },
+  { tool: "novada_account", line: "Your account at a glance — balance, plan quotas, and recent usage." },
 ];
 
 const ADDON_TOOLS =
   "Also available: novada_research (multi-source cited report), novada_crawl / novada_site_copy (whole sites), " +
-  "novada_monitor (watch a page for changes), novada_unblock (raw HTML behind anti-bot), and the novada_proxy_* tools (residential/ISP/mobile/datacenter IPs for your own HTTP clients).";
+  "novada_monitor (watch a page for changes), and novada_proxy (residential/ISP/mobile/datacenter IPs for your own HTTP clients — set type=).";
 
 /**
  * Onboarding concierge — the first-run front door of the Novada MCP.
@@ -181,20 +181,20 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
   if (state === "ready") {
     const optional: string[] = [];
     if (!browserWs) optional.push(`For faster **novada_browser** sessions you can set NOVADA_BROWSER_WS (optional — auto-provisioned from your key otherwise). Enable at ${URL_BROWSER}`);
-    if (!proxyConfigured) optional.push(`For **novada_proxy_*** in your own HTTP clients, set NOVADA_PROXY_ENDPOINT (user/pass auto-fetched from your key). Details at ${URL_PROXY}`);
+    if (!proxyConfigured) optional.push(`For **novada_proxy** (set type=residential|isp|mobile|datacenter|static|dedicated) in your own HTTP clients, set NOVADA_PROXY_ENDPOINT (user/pass auto-fetched from your key). Details at ${URL_PROXY}`);
     if (optional.length) {
       L.push("### Optional add-ons");
       for (const o of optional) L.push(`- ${o}`);
       L.push("");
     }
-    L.push("Next: call **novada_account_summary** for balance + quotas, or **novada_discover** to list every tool.");
+    L.push("Next: call **novada_account** for balance + quotas, or **novada_discover** to list every tool.");
     L.push("");
   }
 
   // ─── Agent-facing machine block ───────────────────────────────────────────
   const agentInstruction =
     state === "ready"
-      ? "Key is valid. You may call any tool. Suggest the user try novada_search or novada_extract; call novada_account_summary for balance/quotas."
+      ? "Key is valid. You may call any tool. Suggest the user try novada_search or novada_extract; call novada_account for balance/quotas."
       : state === "present_but_invalid"
         ? `Do NOT retry other tools yet — the key is invalid. Tell the user to get a valid key at ${URL_API_KEY} and update NOVADA_API_KEY in their MCP client config, then restart. This is a setup step, not a tool failure.`
         : `No key yet. Tell the user to register at ${URL_DASHBOARD} (free credits included), copy their API key from ${URL_API_KEY}, add it as NOVADA_API_KEY in their MCP client config, and restart. Do not treat this as an error — it is the normal first-run state.`;
