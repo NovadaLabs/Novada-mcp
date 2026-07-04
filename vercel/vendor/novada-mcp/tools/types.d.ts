@@ -229,6 +229,7 @@ export declare const ScrapeParamsSchema: z.ZodObject<{
     operation: z.ZodString;
     params: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     limit: z.ZodDefault<z.ZodNumber>;
+    task_id: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 /** CLI/SDK schema — all output formats */
 export declare const ScrapeParamsFullSchema: z.ZodObject<{
@@ -245,6 +246,7 @@ export declare const ScrapeParamsFullSchema: z.ZodObject<{
     operation: z.ZodString;
     params: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     limit: z.ZodDefault<z.ZodNumber>;
+    task_id: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 /** MCP-restricted type: only markdown/json/toon formats (matches ScrapeParamsSchema) */
 export type ScrapeParams = z.infer<typeof ScrapeParamsSchema>;

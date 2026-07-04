@@ -511,28 +511,43 @@ export async function novadaScrape(params, apiKey) {
     // preflight, source_url, and the chainable "remember" hint (downstream tooling
     // needs the exact backend id).
     const displayOperation = hasAlias ? `${params.operation} (→ ${operation})` : operation;
-    // #6: pre-flight validation — fail fast on a bad op id / missing required param
-    // BEFORE the backend round-trip, so a typo can't hang ~60s and 504. Reuses the
-    // existing 11006-style typed-error contract (NovadaError → index.ts isError:true).
-    const preflightErr = preflightScrape(platform, operation, (opParams ?? {}));
-    if (preflightErr)
-        throw preflightErr;
+    // Resume path: if task_id is provided, skip submit entirely (NOV-689).
+    // No new task is submitted, no new charge is incurred — we go straight to polling.
+    // platform/operation are still validated for display; preflight is skipped because
+    // the task is already running server-side and the op params are irrelevant at this point.
+    const resumeTaskId = params.task_id;
+    if (!resumeTaskId) {
+        // #6: pre-flight validation — fail fast on a bad op id / missing required param
+        // BEFORE the backend round-trip, so a typo can't hang ~60s and 504. Reuses the
+        // existing 11006-style typed-error contract (NovadaError → index.ts isError:true).
+        const preflightErr = preflightScrape(platform, operation, (opParams ?? {}));
+        if (preflightErr)
+            throw preflightErr;
+    }
     try {
-        // Step 1: Submit task — resolves to inline records, an empty-serp signal, or a task_id.
+        // Step 1: Submit task OR resume from a previously-returned task_id.
+        //   - If task_id is provided: skip submit entirely (no billable task created).
+        //   - Otherwise: submit a new task → resolves to inline records, empty-serp, or a task_id.
         let submitOutcome;
-        try {
-            submitOutcome = await submitScrapeTask(apiKey, platform, operation, opParams);
+        if (resumeTaskId) {
+            // Resume: go straight to polling with the caller-supplied task_id.
+            submitOutcome = { kind: "task", taskId: resumeTaskId };
         }
-        catch (error) {
-            if (error instanceof AxiosError) {
-                const status = error.response?.status;
-                const body = error.response?.data;
-                if (status === 401 || status === 403) {
-                    throw new Error("Invalid NOVADA_API_KEY or insufficient permissions for platform scrapers.");
-                }
-                throw new Error(`Scraper API error (HTTP ${status}): ${JSON.stringify(body)}`);
+        else {
+            try {
+                submitOutcome = await submitScrapeTask(apiKey, platform, operation, opParams);
             }
-            throw error;
+            catch (error) {
+                if (error instanceof AxiosError) {
+                    const status = error.response?.status;
+                    const body = error.response?.data;
+                    if (status === 401 || status === 403) {
+                        throw new Error("Invalid NOVADA_API_KEY or insufficient permissions for platform scrapers.");
+                    }
+                    throw new Error(`Scraper API error (HTTP ${status}): ${JSON.stringify(body)}`);
+                }
+                throw error;
+            }
         }
         // Empty serp / no-results → GRACEFUL success (status ok, NOT isError). The query
         // was valid; it simply matched nothing. Returning a plain string keeps isError:false.
@@ -569,20 +584,23 @@ export async function novadaScrape(params, apiKey) {
                 throw error;
             }
             // Still processing after the sync ceiling → CLEAN pending status (NOT isError).
-            // A slow-but-valid task is not a failure; the caller just retries shortly.
+            // A slow-but-valid task is not a failure; return an honest message with the task_id
+            // so the caller can resume WITHOUT re-submitting (and without a new charge).
             if (pollOutcome.kind === "pending") {
                 return [
                     `## Scrape Results`,
                     `platform: ${platform} | operation: ${operation} | records: 0 | source: live`,
                     ``,
                     `status: processing`,
-                    `_The scraper is still running (task_id="${pollOutcome.taskId}") after ${POLL_TIMEOUT_MS / 1000}s._`,
-                    `This is expected for slow platforms (Amazon, Walmart, LinkedIn) and is NOT an error.`,
+                    `⏳ Task still running (task_id="${pollOutcome.taskId}") after ${POLL_TIMEOUT_MS / 1000}s.`,
+                    `To fetch the result WITHOUT re-charging, call novada_scrape again with task_id="${pollOutcome.taskId}" (skips re-submit).`,
+                    `A plain retry with the same params starts a NEW billable task.`,
                     ``,
                     `---`,
                     `## Agent Hints`,
-                    `- Retry novada_scrape with the SAME params in ~10-20s; the completed result is cached server-side by task, so retrying does not duplicate billable work.`,
-                    `- Do not treat this as a failure — the task succeeded in starting and is finishing server-side.`,
+                    `- Pass task_id="${pollOutcome.taskId}" to novada_scrape in ~10-20s to resume for free.`,
+                    `- platform and operation are still required when resuming (used for display only).`,
+                    `- Do not treat this as a failure — the task is finishing server-side.`,
                 ].join("\n");
             }
             resultItems = pollOutcome.items;

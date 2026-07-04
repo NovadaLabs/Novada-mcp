@@ -5,9 +5,15 @@ export const VERSION = _pkg.version;
 // Scraper API — platform scraper endpoint (POST /request with Bearer token auth).
 // Only /request is live. Returns code 11006 when Scraper product is not activated on account.
 export const SCRAPER_API_BASE = "https://scraper.novada.com";
-// Scraper task result download — uses apikey query param, not Bearer token.
+// Scraper task result download — Tier-1 legacy endpoint, uses apikey query param, not Bearer token.
 // GET /scraper_download?task_id=...&file_type=json&apikey=...
 // Returns {"code":27202} when pending, or JSON array when complete.
+//
+// Tier-2 probe (2026-07-04): POST https://api-m.novada.com/v1/scraper/task_download
+// with Authorization: Bearer returns {"code":401,"msg":"authentication failure:10000"} for
+// BOTH multipart/form-data and x-www-form-urlencoded. Tier-2 requires OAuth, not the raw
+// API key. Tier-1 (this constant) is the correct endpoint with the pass-through API key.
+// Keep Tier-1 until Novada exposes an OAuth flow for the hosted MCP server.
 export const SCRAPER_DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
 // Web Unblocker — JS-rendered pages, POST /request with Bearer token auth.
 // Response: { code: 0, data: { code: 200, html: "...", use_balance: N } }
