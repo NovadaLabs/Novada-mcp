@@ -24,6 +24,15 @@ type SubmitOutcome = {
  * wasted a round-trip on inline-result platforms and threw isError on empty serps.
  */
 export declare function submitScrapeTask(apiKey: string, scraper_name: string, scraper_id: string, params: Record<string, unknown>): Promise<SubmitOutcome>;
+/**
+ * Curate flattened records for tabular display (csv / excel / html):
+ *   1. Drop columns whose non-empty values are majority base64 blobs (useless + fragile).
+ *   2. Reorder so curated key columns (title/price/rating/url/…) lead.
+ * Returns NEW record objects with the curated column set/order — never mutates input.
+ * If every column would be dropped (degenerate input) the original columns are kept,
+ * so we never hand back empty rows.
+ */
+export declare function curateTabularRecords(records: Record<string, unknown>[]): Record<string, unknown>[];
 export declare const OPERATION_ALIASES: Record<string, string>;
 type OpMap = Record<string, readonly string[]>;
 export declare const PLATFORM_OPERATIONS: Record<string, OpMap>;

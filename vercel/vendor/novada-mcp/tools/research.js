@@ -192,7 +192,7 @@ export async function novadaResearch(params, apiKey, onProgress) {
                 // Skip failed extractions.
                 // extract.ts returns "## Extract Failed" on generic errors (extract.ts:242)
                 // and "## Extraction Error" on TOTAL_REQUEST_CEILING timeout (extract.ts:1294).
-                // Both must be caught here so timeout error text never reaches synthesizeAnswer.
+                // Both must be caught here so timeout error text never reaches source-material assembly.
                 if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
                     return { ok: false, title: source.title, url: source.url, snippet: source.snippet };
                 }
@@ -274,15 +274,15 @@ export async function novadaResearch(params, apiKey, onProgress) {
             `agent_instruction: status:search_unavailable | action: call novada_health_all() to diagnose, then activate_scraper_api | question_not_answered: true`,
         ].join("\n");
     }
-    // NOV-319 phase 4/4: synthesizing the cited report.
+    // NOV-319 phase 4/4: assembling the cited source material.
     await reportProgress(onProgress, {
         progress: 4,
         total: RESEARCH_PHASES,
-        message: "Synthesizing cited report",
+        message: "Assembling cited source material",
     });
-    // Build structured synthesis from extracted contents + snippet fallbacks
-    // F14-1: synthesizeAnswer now returns quality signal alongside text
-    const { text: summaryText, quality: synthesisQuality } = synthesizeAnswer(topic, extractedContents, extractFailedSources, sources);
+    // Assemble grounded, cited SOURCE MATERIAL (one relevant extract per top source).
+    // No synthesis is claimed — the consuming agent composes the answer from this.
+    const { extracts, quality: materialQuality } = assembleSourceMaterial(topic, extractedContents, extractFailedSources, sources);
     // Build Key Findings bullets from sources with snippets
     const findingBullets = sources.length > 0
         ? sources.map(s => `- **${s.title}** (${s.url})${s.snippet ? ` — ${s.snippet}` : ""}`)
@@ -295,17 +295,17 @@ export async function novadaResearch(params, apiKey, onProgress) {
     for (const s of extractFailedSources) {
         sourceRows.push({ label: sourceLabel(s.title, s.url), url: s.url, note: "snippet only" });
     }
-    // Agent hints. On a real synthesis (ok/weak) the answer is already above — do NOT
-    // tell the caller to "go extract yourself" (that was the #1 annoyance). Only when
-    // synthesis genuinely failed do we point at manual extraction as a recovery path.
+    // Agent hints. The material above is complete and cited — the consuming agent
+    // should compose the answer from it, NOT make follow-up extract calls (that was
+    // the original complaint). Only on genuine insufficiency do we suggest recovery.
     const agentHints = [];
-    if (synthesisQuality === "failed") {
-        agentHints.push(`- Synthesis needs more signal — \`novada_extract\` these specific URLs for full content: ${sources.slice(0, 3).map(s => s.url).join(", ") || "none available"}.`);
+    if (materialQuality === "insufficient") {
+        agentHints.push(`- Material is thin — if the above is not enough, \`novada_extract\` these URLs directly: ${sources.slice(0, 3).map(s => s.url).join(", ") || "none available"}.`);
     }
     else {
-        agentHints.push(`- The Summary above is synthesized from the extracted sources; cite it via the [n] markers into the Sources table.`);
-        if (synthesisQuality === "weak") {
-            agentHints.push(`- Grounding is snippet-level (full-page extraction was thin/blocked) — deepen with depth='comprehensive' or a narrower \`focus\`.`);
+        agentHints.push(`- Compose the user's answer directly from the cited source material above; cite claims with the [n] markers. No further calls are needed.`);
+        if (materialQuality === "snippets") {
+            agentHints.push(`- Material is snippet-level (full-page extraction was thin/blocked) — good for a summary; use depth='comprehensive' or a narrower \`focus\` if you need deeper detail.`);
         }
     }
     agentHints.push(`- For narrower research: add \`focus\` param to guide sub-query generation.`);
@@ -313,7 +313,7 @@ export async function novadaResearch(params, apiKey, onProgress) {
         agentHints.push(`- For more coverage: use depth='comprehensive' (8-10 searches).`);
     }
     if (failedCount > 0) {
-        agentHints.push(`- ${failedCount} of ${queries.length} search queries failed; results may be incomplete.`);
+        agentHints.push(`- ${failedCount} of ${queries.length} search queries failed; coverage may be incomplete.`);
     }
     // F14-2: Check for comparison questions where a named comparand has zero hits across all sources
     if (detectDomain(topic) === "comparison") {
@@ -335,8 +335,8 @@ export async function novadaResearch(params, apiKey, onProgress) {
         failedQueries,
         sourcesFetchedCount: extractedContents.length,
         snippetOnlyCount: extractFailedSources.length,
-        summaryText,
-        synthesisQuality,
+        extracts,
+        materialQuality,
         findingBullets,
         sourceRows,
         agentHints,
@@ -540,101 +540,49 @@ function splitSentences(raw) {
         return true;
     });
 }
-function synthesizeAnswer(question, extracted, failedSources, allSources) {
-    const fallback = "The extracted pages did not yield enough clean prose to synthesize a confident answer. " +
-        "The sources below were located and are citable — see **Key Findings** for their snippets and **Sources** for the full URLs.";
-    const questionKeywords = new Set(question.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !STOP_WORDS.has(w)));
-    // Ordered source list used for [n] citations. Extracted sources first (richer),
-    // then snippet-only sources — matching the Sources table ordering in the formatter.
-    const orderedSources = [
-        ...extracted.map(s => ({ title: s.title, url: s.url })),
-        ...failedSources.map(s => ({ title: s.title, url: s.url })),
-    ];
-    const sourceIndexByTitle = new Map();
-    orderedSources.forEach((s, i) => { if (!sourceIndexByTitle.has(s.title))
-        sourceIndexByTitle.set(s.title, i); });
-    const citeIdx = (title) => sourceIndexByTitle.get(title) ?? 0;
-    // ── Build the sentence pool ────────────────────────────────────────────────
-    // Tier 1: full extracted bodies (deep — the whole point of extracting).
-    const pool = [];
-    for (const src of extracted) {
-        for (const s of splitSentences(src.content)) {
-            pool.push({ text: s, sourceIdx: citeIdx(src.title), source: src.title, tokens: new Set(contentTokens(s)), score: 0 });
-        }
-    }
-    const usedSnippetFallback = pool.length === 0;
-    // Tier 2 (fallback): search snippets — clean but shallow. Only when extraction
-    // produced no usable prose at all do we synthesize from snippets, so the Summary
-    // is still a REAL paragraph rather than "go extract yourself".
-    if (usedSnippetFallback) {
-        const snippetSeen = new Set();
-        const addSnippet = (title, snippet) => {
-            if (!snippet)
-                return;
-            const t = scrubFragmentText(snippet);
-            if (t.length < 20 || snippetSeen.has(t))
-                return;
-            snippetSeen.add(t);
-            pool.push({ text: t, sourceIdx: citeIdx(title), source: title, tokens: new Set(contentTokens(t)), score: 0 });
-        };
-        for (const src of failedSources)
-            addSnippet(src.title, src.snippet);
-        for (const src of allSources)
-            if (!sourceIndexByTitle.has(src.title)) {
-                // snippet-only source not already in the ordered list — index it at the end
-                const idx = orderedSources.length;
-                orderedSources.push({ title: src.title, url: src.url });
-                sourceIndexByTitle.set(src.title, idx);
-                addSnippet(src.title, src.snippet);
-            }
-    }
-    if (pool.length === 0)
-        return { text: fallback, quality: "failed" };
-    // ── Score every sentence ─────────────────────────────────────────────────
-    // (a) query relevance — fraction of question keywords the sentence mentions.
-    // (b) centrality — average token overlap with all OTHER sentences; a sentence
-    //     that echoes the corpus is a consensus/central claim (classic centroid idea).
-    // (c) length prior — favor 12–35-word claim-shaped sentences.
-    for (const s of pool) {
+/** Score a source's sentences by query relevance + corpus centrality + shape, then
+ *  MMR-select the top few into a substantive, non-redundant extract for THAT source.
+ *  `corpus` is the pooled tokens across ALL sources — centrality rewards sentences
+ *  whose content recurs across the research set (consensus signal). */
+function selectExtractForSource(sentences, questionKeywords, corpus, maxSentences) {
+    if (sentences.length === 0)
+        return "";
+    const scored = sentences.map(text => ({
+        text, sourceIdx: 0, source: "", tokens: new Set(contentTokens(text)), score: 0,
+    }));
+    for (const s of scored) {
         let kwHits = 0;
         for (const kw of questionKeywords)
             if (s.text.toLowerCase().includes(kw))
                 kwHits++;
         const relevance = questionKeywords.size > 0 ? kwHits / questionKeywords.size : 0;
         let centrality = 0;
-        if (pool.length > 1) {
+        if (corpus.length > 1) {
             let sum = 0;
-            for (const o of pool)
-                if (o !== s)
+            for (const o of corpus)
+                if (o.text !== s.text)
                     sum += jaccard(s.tokens, o.tokens);
-            centrality = sum / (pool.length - 1);
+            centrality = sum / (corpus.length - 1);
         }
         const words = s.text.split(/\s+/).length;
         const lengthPrior = words >= 12 && words <= 35 ? 1 : words < 12 ? 0.4 : 0.7;
         const chromePenalty = chromeFraction(s.text) > 0.4 ? 1 : 0;
-        // Relevance dominates (answer the question), consensus and shape refine ties.
         s.score = relevance * 3 + centrality * 2 + lengthPrior * 0.5 - chromePenalty * 10;
     }
-    // ── MMR selection ─────────────────────────────────────────────────────────
-    // Greedily pick the best sentence, then each next one that maximizes
-    // λ·score − (1−λ)·maxSimilarityToPicked → relevant AND non-redundant. Cap the
-    // answer at a handful of sentences so the Summary is a paragraph, not a wall.
-    const ranked = [...pool].sort((a, b) => b.score - a.score);
-    const targetSentences = usedSnippetFallback ? 4 : Math.min(6, Math.max(3, extracted.length + 2));
+    // MMR: relevant AND non-redundant within this source's extract.
+    const ranked = [...scored].sort((a, b) => b.score - a.score);
     const lambda = 0.72;
-    const DEDUP_THRESHOLD = 0.6; // near-duplicate cutoff — two sources restating one fact
-    const selected = [];
+    const DEDUP_THRESHOLD = 0.6;
+    const picked = [];
     const remaining = [...ranked];
-    while (selected.length < targetSentences && remaining.length > 0) {
+    while (picked.length < maxSentences && remaining.length > 0) {
         let bestIdx = -1;
         let bestVal = -Infinity;
         for (let i = 0; i < remaining.length; i++) {
             const cand = remaining[i];
             let maxSim = 0;
-            for (const sel of selected)
+            for (const sel of picked)
                 maxSim = Math.max(maxSim, jaccard(cand.tokens, sel.tokens));
-            // Hard-drop near-duplicates outright — two sources paraphrasing the same fact
-            // must not both land in the answer (this was surfacing "X. X." repetition).
             if (maxSim >= DEDUP_THRESHOLD)
                 continue;
             const mmr = lambda * cand.score - (1 - lambda) * maxSim * 3;
@@ -644,67 +592,121 @@ function synthesizeAnswer(question, extracted, failedSources, allSources) {
             }
         }
         if (bestIdx === -1)
-            break; // everything left is a near-duplicate of what we have
-        selected.push(remaining.splice(bestIdx, 1)[0]);
+            break;
+        picked.push(remaining.splice(bestIdx, 1)[0]);
     }
-    if (selected.length === 0)
-        return { text: fallback, quality: "failed" };
-    // R9: if the question has keywords but NOTHING we selected mentions any of them,
-    // the "prose" is off-topic boilerplate — report honest failure rather than a
-    // plausible-looking non-answer.
-    const onTopicCount = selected.filter(s => [...questionKeywords].some(kw => s.text.toLowerCase().includes(kw))).length;
-    if (questionKeywords.size > 0 && onTopicCount === 0) {
-        return { text: fallback, quality: "failed" };
+    if (picked.length === 0)
+        return "";
+    // Keep the extract in the source's ORIGINAL reading order (not score order) so it
+    // reads as a coherent passage from that page, not re-shuffled fragments.
+    const orderInSource = new Map(sentences.map((t, i) => [t, i]));
+    picked.sort((a, b) => (orderInSource.get(a.text) ?? 0) - (orderInSource.get(b.text) ?? 0));
+    return picked.map(s => s.text.replace(/\s+/g, " ").trim()).join(" ");
+}
+/**
+ * Assemble grounded, cited SOURCE MATERIAL for the question. Returns one extract per
+ * top source (from the full extracted body where available, else the search snippet),
+ * ordered to match the Sources table, plus a coverage quality flag. NO synthesis is
+ * claimed — the consuming agent writes the answer from this material.
+ */
+function assembleSourceMaterial(question, extracted, failedSources, allSources) {
+    const questionKeywords = new Set(question.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !STOP_WORDS.has(w)));
+    // Ordered source list = extracted first, then snippet-only — matches the Sources
+    // table order in the formatter so [n] citations line up.
+    const orderedSources = [
+        ...extracted.map(s => ({ title: s.title, url: s.url })),
+        ...failedSources.map(s => ({ title: s.title, url: s.url })),
+    ];
+    // Build the shared corpus (all clean sentences from all extracted bodies) so
+    // per-source centrality can reward cross-source consensus.
+    const corpus = [];
+    const bodySentences = new Map();
+    for (const src of extracted) {
+        const sents = splitSentences(src.content);
+        bodySentences.set(src.url, sents);
+        for (const t of sents)
+            corpus.push({ text: t, sourceIdx: 0, source: src.title, tokens: new Set(contentTokens(t)), score: 0 });
     }
-    // ── Compose the answer paragraph ────────────────────────────────────────────
-    // Order selected sentences by relevance-desc so the answer opens on the most
-    // on-point claim, then weave them into a cited paragraph. Each sentence carries a
-    // [n] citation into the Sources table so the synthesis stays grounded.
-    const answerOrder = [...selected].sort((a, b) => b.score - a.score);
-    const answerSentences = answerOrder.map(s => {
-        const clean = s.text.replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
-        return `${clean} [${s.sourceIdx + 1}]`;
-    });
-    const answerParagraph = answerSentences.join(". ") + ".";
-    // Themed findings — one line per distinct source represented in the answer, so the
-    // reader sees which source contributed what (the "additional perspectives" idea,
-    // but now grounded in the selected sentences rather than raw fragments).
-    const perSource = new Map();
-    for (const s of answerOrder) {
-        if (!perSource.has(s.sourceIdx)) {
-            perSource.set(s.sourceIdx, { source: s.source, text: s.text.replace(/\s+/g, " ").trim() });
+    const extracts = [];
+    let index = 0;
+    let groundedCount = 0;
+    // On-topic gate: when the question has keywords, an extract that shares NONE of them
+    // is off-topic page furniture (marketing/community/nav copy that reads like prose but
+    // answers nothing) — e.g. "LM Community Join the community to learn from peers...".
+    // Such material is worse than useless in a research report, so it is rejected.
+    const isOnTopic = (text) => {
+        if (questionKeywords.size === 0)
+            return true;
+        const lower = text.toLowerCase();
+        return [...questionKeywords].some(kw => lower.includes(kw));
+    };
+    // Extracted bodies → substantive per-source extracts.
+    for (const src of extracted) {
+        index++;
+        const sents = bodySentences.get(src.url) ?? [];
+        const extract = selectExtractForSource(sents, questionKeywords, corpus, 4);
+        const snip = allSources.find(s => s.url === src.url)?.snippet ?? "";
+        const cleanedSnippet = scrubFragmentText(snip);
+        if (extract && looksLikeProse(extract) && isOnTopic(extract)) {
+            // Full-body extract that actually addresses the question.
+            extracts.push({ index, title: src.title, url: src.url, extract, grounded: true });
+            groundedCount++;
+        }
+        else if (cleanedSnippet.length >= 20 && isOnTopic(cleanedSnippet)) {
+            // Body was off-topic/debris-only → fall back to the on-topic search snippet.
+            extracts.push({ index, title: src.title, url: src.url, extract: cleanedSnippet, grounded: false });
+        }
+        else {
+            // Neither the body nor the snippet is usable/on-topic for this question.
+            extracts.push({ index, title: src.title, url: src.url, extract: "(no clean, on-topic extract available — see Sources for the full URL)", grounded: false });
         }
     }
-    const parts = [answerParagraph];
-    if (perSource.size > 1) {
-        parts.push("");
-        parts.push("**What the sources say:**");
-        for (const [idx, v] of perSource) {
-            parts.push(`- [${idx + 1}] *${sourceLabel(v.source, orderedSources[idx]?.url ?? "")}*: ${v.text.slice(0, 220).trim()}`);
-        }
+    // Snippet-only sources (extraction failed/blocked) → cite their clean, on-topic snippet.
+    for (const src of failedSources) {
+        index++;
+        const cleaned = scrubFragmentText(src.snippet || "");
+        const usable = cleaned.length >= 20 && isOnTopic(cleaned);
+        extracts.push({
+            index,
+            title: src.title,
+            url: src.url,
+            extract: usable ? cleaned : "(extraction blocked — no on-topic snippet available; see Sources for the full URL)",
+            grounded: false,
+        });
     }
-    const synthesis = parts.join("\n").trim();
-    if (!looksLikeProse(answerParagraph)) {
-        return { text: fallback, quality: "failed" };
-    }
-    // Quality: "ok" when we synthesized from extracted bodies and the answer is on
-    // topic; "weak" only when we had to fall back to snippets (thinner grounding) or
-    // the answer is only marginally on topic. Never a to-do dump either way.
-    const relevantShare = questionKeywords.size > 0 ? onTopicCount / selected.length : 1;
-    const isWeak = usedSnippetFallback || relevantShare < 0.34;
-    return { text: synthesis, quality: isWeak ? "weak" : "ok" };
+    // Quality: grounded when ≥1 source gave a real body extract; snippets when we only
+    // have snippet-level material; insufficient when nothing usable at all.
+    const anyUsable = extracts.some(e => !e.extract.startsWith("("));
+    const quality = !anyUsable ? "insufficient" : groundedCount > 0 ? "grounded" : "snippets";
+    // orderedSources is retained implicitly via extract.index/url — no further use here.
+    void orderedSources;
+    return { extracts, quality };
 }
 // ─── Output Formatting ─────────────────────────────────────────────────────
 function formatResearchOutput(args) {
     const timestamp = new Date().toISOString();
-    const summaryText = args.summaryText.trim();
-    // R9: synthesis quality (not string-matching) decides whether we have a real
-    // summary. On "failed", show an HONEST note pointing at Key Findings — never
-    // dump raw scraped debris as the headline deliverable.
-    const synthesisStatus = args.synthesisQuality;
-    const hasSynthesis = synthesisStatus !== "failed" && summaryText.length > 0;
-    const failNote = "_Could not synthesize a coherent summary from the extracted pages — see **Key Findings** below for the source snippets, which are clean and citable._";
-    const summary = hasSynthesis ? summaryText : failNote;
+    const materialQuality = args.materialQuality;
+    const hasMaterial = materialQuality !== "insufficient" && args.extracts.some(e => !e.extract.startsWith("("));
+    // Build the "Researched source material" block: one cited extract per top source.
+    // This is the honest deliverable — grounded material the consuming agent turns
+    // into the answer, NOT a fake-synthesized paragraph.
+    const materialLines = [];
+    if (hasMaterial) {
+        for (const e of args.extracts) {
+            const label = sourceLabel(e.title, e.url);
+            const tag = e.grounded ? "extracted" : "snippet";
+            materialLines.push(`### [${e.index}] ${label} — ${tag}`);
+            materialLines.push(e.extract);
+            materialLines.push(`Source: ${e.url}`);
+            materialLines.push("");
+        }
+        // Trim trailing blank line.
+        if (materialLines[materialLines.length - 1] === "")
+            materialLines.pop();
+    }
+    else {
+        materialLines.push("_No clean source material could be extracted for this question. The sources below were located — see **Sources** for their URLs to inspect directly._");
+    }
     const findingBullets = args.findingBullets.length > 0 ? args.findingBullets : [`- No structured findings extracted.`];
     const agentHints = args.agentHints.length > 0 ? args.agentHints : [`- Try a narrower query or provide known source URLs to inspect directly.`];
     const totalSources = args.sourceRows.length;
@@ -750,8 +752,11 @@ function formatResearchOutput(args) {
         ``,
         `---`,
         ``,
-        `## Summary`,
-        summary,
+        `> This section is CITED SOURCE MATERIAL, not a written answer. Compose the user's answer from it, citing sources with the [n] markers. No further tool calls are needed.`,
+        ``,
+        `## Researched source material for: ${args.topic}`,
+        ``,
+        ...materialLines,
         ``,
         `## Key Findings`,
         ...findingBullets,
@@ -764,13 +769,13 @@ function formatResearchOutput(args) {
         ...agentHints,
         ``,
         `## Agent Action`,
-        `agent_instruction: status:${(synthesisStatus === "ok" || synthesisStatus === "weak") ? "success" : "partial"} | requested_depth:${args.requestedDepth} | resolved_depth:${args.depth} | queries:${args.queriesSucceeded}/${args.queriesTotal} | sources:${args.sourcesFetchedCount} | synthesis:${synthesisStatus} | answer_ready:${hasSynthesis}`,
-        // On a real synthesis, the answer is DONE — tell the caller to relay the Summary,
-        // not to go extract sources itself (that "to-do dump" was the audited complaint).
-        ...(hasSynthesis
-            ? [`next: relay the synthesized Summary above as the answer${synthesisStatus === "weak" ? " (grounding is snippet-level — deepen with depth='comprehensive' if higher confidence is needed)" : ""}`]
+        `agent_instruction: status:${hasMaterial ? "success" : "partial"} | requested_depth:${args.requestedDepth} | resolved_depth:${args.depth} | queries:${args.queriesSucceeded}/${args.queriesTotal} | sources:${args.sourcesFetchedCount} | material:${materialQuality} | answer_ready:${hasMaterial}`,
+        // The material above is complete + cited — the consuming LLM composes the answer.
+        // Do NOT emit a "go extract yourself" to-do on success (the audited complaint).
+        ...(hasMaterial
+            ? [`next: Grounded cited source material assembled — compose the answer for the user from this; no further calls needed.${materialQuality === "snippets" ? " (Material is snippet-level; use depth='comprehensive' if deeper detail is needed.)" : ""}`]
             : [
-                `next: novada_extract on specific source URLs for full content, then synthesize`,
+                `next: novada_extract on specific source URLs for full content`,
                 `next: novada_research with focus="<subtopic>" to narrow coverage`,
             ]),
         ...(args.failedQueries && args.failedQueries.length > 0

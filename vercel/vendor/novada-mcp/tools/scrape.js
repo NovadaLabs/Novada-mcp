@@ -236,6 +236,93 @@ function extractRecords(data) {
     }
     return [];
 }
+// ─── Tabular column curation (csv / excel / html) ────────────────────────────
+// Hosted QA: raw scrape records inline base64 favicon/image blobs as cell values.
+// In a spreadsheet those are useless, they bloat the file, and the unescaped
+// commas inside base64 make naive CSV parsers choke. For the *tabular* human
+// formats (csv/excel/html) we drop base64-blob columns and lead with meaningful
+// key columns. This is a display-only transform — json/toon keep the full record.
+/** True when a value is a base64 data URI or a long unbroken base64-looking blob. */
+function isBase64Blob(v) {
+    if (typeof v !== "string")
+        return false;
+    const s = v.trim();
+    // data:image/png;base64,.... or data:application/...;base64,....
+    if (/^data:[a-z0-9.+-]+\/[a-z0-9.+-]+;base64,/i.test(s))
+        return true;
+    // A long, unbroken token (no whitespace) made only of base64 alphabet chars.
+    // 200-char floor avoids nuking normal ids/hashes (asin, sha, short tokens).
+    if (s.length >= 200 && !/\s/.test(s) && /^[A-Za-z0-9+/=_-]+$/.test(s))
+        return true;
+    return false;
+}
+// Curated key columns that a human opening a spreadsheet actually wants, in
+// priority order. Matched case-insensitively against the *leaf* of a flattened
+// dot-path key (e.g. "price.value" → leaf "value" also checks the full key).
+const KEY_COLUMN_PRIORITY = [
+    "title", "name", "product_name", "headline",
+    "price", "current_price", "price.value", "rating", "reviews", "review_count", "stars",
+    "url", "link", "product_url", "permalink", "href",
+    "description", "snippet", "summary", "content", "text",
+    "author", "brand", "seller", "date", "published", "location", "asin", "sku", "id",
+];
+/** Rank a column header for key-first ordering. Lower rank = earlier column. */
+function columnRank(header) {
+    const h = header.toLowerCase();
+    const leaf = h.split(".").pop() ?? h;
+    for (let i = 0; i < KEY_COLUMN_PRIORITY.length; i++) {
+        const k = KEY_COLUMN_PRIORITY[i];
+        if (h === k || leaf === k)
+            return i;
+    }
+    return KEY_COLUMN_PRIORITY.length; // unmatched → after all key columns, stable
+}
+/**
+ * Curate flattened records for tabular display (csv / excel / html):
+ *   1. Drop columns whose non-empty values are majority base64 blobs (useless + fragile).
+ *   2. Reorder so curated key columns (title/price/rating/url/…) lead.
+ * Returns NEW record objects with the curated column set/order — never mutates input.
+ * If every column would be dropped (degenerate input) the original columns are kept,
+ * so we never hand back empty rows.
+ */
+export function curateTabularRecords(records) {
+    if (records.length === 0)
+        return records;
+    // Union all keys across records so heterogeneous rows don't lose columns.
+    const allHeaders = new Set();
+    for (const r of records)
+        Object.keys(r).forEach(k => allHeaders.add(k));
+    // Drop a column if the MAJORITY (≥50%) of its non-empty values are base64 blobs.
+    const kept = [];
+    for (const h of allHeaders) {
+        let nonEmpty = 0;
+        let blobs = 0;
+        for (const r of records) {
+            const v = r[h];
+            if (v === null || v === undefined || String(v) === "")
+                continue;
+            nonEmpty++;
+            if (isBase64Blob(v))
+                blobs++;
+        }
+        const isBlobColumn = nonEmpty > 0 && blobs / nonEmpty >= 0.5;
+        if (!isBlobColumn)
+            kept.push(h);
+    }
+    // Degenerate guard: if curation nuked everything, fall back to original headers.
+    const headers = kept.length > 0 ? kept : Array.from(allHeaders);
+    // Stable key-first ordering.
+    const ordered = headers
+        .map((h, idx) => ({ h, idx, rank: columnRank(h) }))
+        .sort((a, b) => (a.rank - b.rank) || (a.idx - b.idx))
+        .map(x => x.h);
+    return records.map(r => {
+        const out = {};
+        for (const h of ordered)
+            out[h] = r[h];
+        return out;
+    });
+}
 // Aliases for stale or non-canonical operation IDs that appeared in old docs/examples.
 // Maps a near-miss op ID an agent might guess → the canonical op ID the backend accepts.
 // H-1: null-prototype object prevents __proto__/constructor/toString lookup pollution.
@@ -548,10 +635,14 @@ export async function novadaScrape(params, apiKey) {
             return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
         }
         const title = `${platform} — ${displayOperation}`;
-        // For json/csv/excel we want clean structured records (not the flattened dot-path display version).
+        // For json we want clean structured records (not the flattened dot-path display version).
         // rawRecords are already sliced by limit above via `rawRecords.slice(0, limit)`.
         // `records` is the flattenRecord'd version used for markdown/toon tabular display.
         const cleanRecords = rawRecords.slice(0, limit);
+        // For the human tabular formats (csv/excel/html): drop base64-blob columns
+        // (favicon/image data URIs — useless in a spreadsheet + fragile in CSV) and
+        // lead with curated key columns (title/price/rating/url/…). Display-only.
+        const tabularRecords = curateTabularRecords(records);
         let output;
         switch (format) {
             case "json":
@@ -574,11 +665,13 @@ export async function novadaScrape(params, apiKey) {
                 ].join("\n");
                 break;
             case "csv": {
-                // Inline CSV — header row + one row per record. Uses flattenRecord output for consistent column names.
-                const csvText = formatAsCsv(records);
+                // Inline CSV — header row + one row per record. Curated columns (base64 blobs
+                // dropped, key fields first). formatAsCsv RFC-4180 quotes any cell with a
+                // comma/quote/newline, so it round-trips in any spreadsheet or CSV parser.
+                const csvText = formatAsCsv(tabularRecords);
                 output = [
                     `## Scrape Results`,
-                    `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: csv`,
+                    `platform: ${platform} | operation: ${displayOperation} | records: ${tabularRecords.length} | source: live | format: csv`,
                     ``,
                     "```csv",
                     csvText,
@@ -595,13 +688,15 @@ export async function novadaScrape(params, apiKey) {
             case "excel":
             case "xlsx": {
                 // Real .xlsx via exceljs — inline base64 so no disk writes (serverless-safe).
-                const xlsxBuf = await formatAsXlsx(records, operation.slice(0, 31));
+                // Curated columns (base64 blobs dropped, key fields first) so the spreadsheet
+                // opens with clean, meaningful columns instead of favicon/image data URIs.
+                const xlsxBuf = await formatAsXlsx(tabularRecords, operation.slice(0, 31));
                 const b64 = xlsxBuf.toString("base64");
                 output = [
                     `## Scrape Results`,
-                    `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: excel`,
+                    `platform: ${platform} | operation: ${displayOperation} | records: ${tabularRecords.length} | source: live | format: excel`,
                     ``,
-                    `**Excel file (base64-encoded .xlsx)** — ${records.length} rows, ${Object.keys(records[0] ?? {}).length} columns`,
+                    `**Excel file (base64-encoded .xlsx)** — ${tabularRecords.length} rows, ${Object.keys(tabularRecords[0] ?? {}).length} columns`,
                     `Decode and save as \`${operation}.xlsx\` to open in Excel or Google Sheets.`,
                     ``,
                     "```",
@@ -617,12 +712,12 @@ export async function novadaScrape(params, apiKey) {
                 break;
             }
             case "html": {
-                // Inline HTML <table> — header <th> row + one <tr> per record, columns left-to-right
-                // in first-seen key order (key fields first). Ready to drop into a page or open in a browser.
-                const htmlTable = formatAsHtml(records, title);
+                // Inline HTML <table> — header <th> row + one <tr> per record. Curated columns
+                // (base64 blobs dropped, key fields first). Ready to drop into a page or open in a browser.
+                const htmlTable = formatAsHtml(tabularRecords, title);
                 output = [
                     `## Scrape Results`,
-                    `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: html`,
+                    `platform: ${platform} | operation: ${displayOperation} | records: ${tabularRecords.length} | source: live | format: html`,
                     ``,
                     htmlTable,
                     ``,
