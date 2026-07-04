@@ -88,7 +88,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Check how AI models (ChatGPT, Perplexity, Grok, etc.) reference a brand or product.",
+    "description": "Search AI-company domains (chatgpt.com, perplexity.ai, anthropic.com, etc.) and the web for PUBLIC mentions & sentiment of a brand. NOTE: searches indexed public pages \u2014 it does NOT query the live models; a brand with few indexed pages shows low/zero mentions (not a measure of how the models actually respond).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
