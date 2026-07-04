@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "novada-landing",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "4500", "landing"],
+      "port": 4500
+    }
+  ]
+}

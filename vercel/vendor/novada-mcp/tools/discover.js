@@ -49,7 +49,7 @@ export async function novadaDiscover(params, visibleTools) {
             const toolWord = fullRegistryCount === 1 ? "tool" : "tools";
             return (`Category "${category}" has ${fullRegistryCount} registered ${toolWord} ` +
                 `but none are exposed in this session. ` +
-                `Call \`novada_health\` to check which products are active on your API key ` +
+                `Call \`novada_account\` to see your balance, plans, and entitlements ` +
                 `and whether this category is available to you.`);
         }
         // Truly empty or unknown category (future-proofing: if a TOOL_CATEGORIES
@@ -102,7 +102,7 @@ export async function novadaDiscover(params, visibleTools) {
     lines.push("---");
     lines.push("## Next Steps");
     lines.push("");
-    lines.push("- **Start here:** Call `novada_health` to check which products are active on your API key.");
+    lines.push("- **Start here:** Call `novada_account` to see your balance, plans, and entitlements.");
     lines.push("- **Search the web:** Use `novada_search` for queries, `novada_extract` for specific URLs.");
     lines.push("- **Structured data:** Use `novada_scrape` for 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, etc.).");
     lines.push("- **Full research:** Use `novada_research` for multi-source synthesis.");

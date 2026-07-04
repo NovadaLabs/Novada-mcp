@@ -65,7 +65,6 @@ import {
   novadaProxy,
   novadaScrape,
   novadaVerify,
-  novadaUnblock,
   novadaBrowser, // TODO: port for Edge runtime — uses playwright-core CDP, native deps
   novadaHealth,
   novadaHealthAll,
@@ -93,7 +92,6 @@ import {
   PROXY_ALIAS_MAP,
   validateScrapeParams,
   validateVerifyParams,
-  validateUnblockParams,
   validateBrowserParams,
   validateHealthParams,
   validateHealthAllParams,
@@ -161,7 +159,6 @@ import {
   ProxyParamsSchema,
   ScrapeParamsSchema,
   VerifyParamsSchema,
-  UnblockParamsSchema,
   BrowserParamsSchema,
   HealthParamsSchema,
   AiMonitorParamsSchema,
@@ -274,13 +271,12 @@ function zodToMcpSchema(schema: any): Record<string, unknown> {
 // ─── Tool catalog ────────────────────────────────────────────────────────────
 const TOOLS = [
   { name: "novada_search",              title: "Web Search",                 schema: SearchParamsSchema,              description: "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract." },
-  { name: "novada_extract",             title: "Content Extractor",          schema: ExtractParamsSchema,             description: "Read clean content from one or more URLs. Use when you have a specific page URL and need its content. Handles anti-bot protection automatically (if extract still fails, try unblock). For multiple pages on one site, use crawl instead." },
+  { name: "novada_extract",             title: "Content Extractor",          schema: ExtractParamsSchema,             description: "Read clean content from one or more URLs. Use when you have a specific page URL and need its content. Handles anti-bot protection automatically. For raw HTML, use format='html'. For multiple pages on one site, use crawl instead." },
   { name: "novada_crawl",               title: "Site Crawler",               schema: CrawlParamsSchema,               description: "Read content from multiple pages on one site (up to 20). Use when you need an entire section of a website. Optionally run map first to discover target URLs." },
   { name: "novada_research",            title: "Deep Research",              schema: ResearchParamsSchema,            description: "Deep multi-source research: searches multiple angles, reads top sources, returns a synthesized report with citations. Use when you need comprehensive analysis of an open-ended topic (not a yes/no claim — use verify for that). Slower than a single search." },
   { name: "novada_map",                 title: "URL Mapper",                 schema: MapParamsSchema,                 description: "List all URLs on a website via sitemap or crawl. Use when you need to find the right page before crawl/extract. Returns URLs only, no content. Fast site reconnaissance." },
   { name: "novada_scrape",              title: "Platform Scraper",           schema: ScrapeParamsSchema,              description: "Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings — NOT general websites (use extract for those)." },
 
-  { name: "novada_unblock",             title: "Anti-Bot Unblocking",        schema: UnblockParamsSchema,             description: "Get raw HTML from bot-protected pages via JS rendering or headless browser. Use only when extract fails on a protected page and you need the raw HTML." },
   { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key." },
   { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Not needed for extract/crawl — those handle proxies internally." },
   { name: "novada_discover",            title: "Tool Discovery",             schema: DiscoverParamsSchema,            description: "List all available Novada tools grouped by category." },
@@ -329,6 +325,8 @@ const HIDDEN_ALIASES = new Set<string>([
   "novada_wallet_balance", "novada_wallet_usage_record", "novada_plan_balance_all",
   "novada_traffic_daily", "novada_capture_logs", "novada_account_summary",
   "novada_health", "novada_health_all",
+  // Phase-3 fold → novada_extract(format:"html", render mapped from method)
+  "novada_unblock",
 ]);
 
 // ─── Tool-set filtering (?tools= / ?groups=) ─────────────────────────────────
@@ -338,7 +336,7 @@ const HIDDEN_ALIASES = new Set<string>([
 const TOOL_GROUPS: Record<string, string[]> = {
   core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_setup", "novada_account", "novada_monitor", "novada_discover"],
   search: ["novada_search"],
-  scrape: ["novada_scrape", "novada_extract", "novada_unblock"],
+  scrape: ["novada_scrape", "novada_extract"],
   crawl: ["novada_crawl", "novada_map"],
   research: ["novada_research", "novada_discover", "novada_ai_monitor", "novada_monitor"],
   proxy: ["novada_proxy"],
@@ -358,8 +356,8 @@ function resolveAllowedTools(url: URL): Set<string> | null {
   const groupsParam = url.searchParams.get("groups");
   if (!toolsParam && !groupsParam) {
     // Default: expose ALL tools (minus HOSTED_HIDDEN, filtered in buildServer) so a first-time
-    // chatbox user can discover + use every product — Web Unblocker (novada_unblock), proxy,
-    // scraper, account — without knowing to pass ?groups=. Slim with ?groups=core or ?tools=…
+    // chatbox user can discover + use every product — extract, proxy, scraper, account —
+    // without knowing to pass ?groups=. Slim with ?groups=core or ?tools=…
     // when a smaller context window is preferred.
     return null;
   }
@@ -628,7 +626,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       return {
         content: [{
           type: "text" as const,
-          text: `Error [TOOL_NOT_ENABLED]: '${name}' is not available on the hosted Novada MCP endpoint.\nagent_instruction: Install the local MCP server to use ${name} — \`npx novada-mcp\` (npm package "novada-mcp") with your own NOVADA_API_KEY exposes the full tool surface, including browser automation and disk-writing tools. All other Novada tools (search/extract/crawl/map/research/scrape/verify/unblock/proxy/account) work on the hosted endpoint.`,
+          text: `Error [TOOL_NOT_ENABLED]: '${name}' is not available on the hosted Novada MCP endpoint.\nagent_instruction: Install the local MCP server to use ${name} — \`npx novada-mcp\` (npm package "novada-mcp") with your own NOVADA_API_KEY exposes the full tool surface, including browser automation and disk-writing tools. All other Novada tools (search/extract/crawl/map/research/scrape/verify/proxy/account) work on the hosted endpoint.`,
         }],
         isError: true,
       };
@@ -695,8 +693,20 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
           result = await withWallClock(name, novadaScrape(validateScrapeParams(argsObj), apiKey)); break;
         case "novada_verify":
           result = await withWallClock(name, novadaVerify(validateVerifyParams(argsObj), apiKey)); break;
-        case "novada_unblock":
-          result = await withWallClock(name, novadaUnblock(validateUnblockParams(argsObj), apiKey)); break;
+        // novada_unblock → hidden alias → novada_extract(format:"html", render mapped from method)
+        // method:"render"→render:"render"; method:"browser"→render:"browser". Old callers get raw HTML.
+        case "novada_unblock": {
+          const ubMethod = argsObj["method"];
+          const ubRender = ubMethod === "browser" ? "browser" : "render";
+          const ubArgs: Record<string, unknown> = {
+            url: argsObj["url"],
+            format: "html",
+            render: ubRender,
+          };
+          if (argsObj["max_chars"] !== undefined) ubArgs["max_chars"] = argsObj["max_chars"];
+          if (argsObj["wait_for"] !== undefined) ubArgs["wait_for"] = argsObj["wait_for"];
+          result = await withWallClock("novada_extract", novadaExtract(validateExtractParams(ubArgs), apiKey)); break;
+        }
         case "novada_browser":
           // ENABLED ON HOSTED (2026-07-03): connectOverCDP talks to Novada's REMOTE cloud
           // browser over WS — needs playwright-core (vendored, real) but NOT local browser
@@ -707,12 +717,13 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
           result = await withWallClock(name, novadaBrowser(validateBrowserParams(argsObj), apiKey)); break;
         // 0.9.9: novada_health / novada_health_all folded into novada_account(section="summary").
         // Old names still work (no error), dispatch routes to the existing novadaHealth vendor fn.
+        // 0.9.12: novada_health / novada_health_all are hidden aliases → route to
+        // novada_account(section="summary"), matching the npm source dispatch. The old path
+        // called novadaHealth(apiKey) and IGNORED the mode arg (novada_health mode=full returned
+        // the same as quick — the hollow-mode bug). account summary always shows the useful card.
         case "novada_health":
-          validateHealthParams(argsObj);
-          result = await novadaHealth(apiKey); break;
         case "novada_health_all":
-          // 0.9.4 alias: merged into novada_health(mode="full"). 0.9.9: hidden from tools/list.
-          result = await novadaHealth(apiKey, "full"); break;
+          result = await novadaAccount(validateAccountParams({ section: "summary" }), apiKey); break;
         case "novada_discover":
           // Scope the catalog to the tools actually exposed on this endpoint so the
           // hosted discover output never advertises a tool the agent can't call.
@@ -838,9 +849,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const rawMsg = redactHostedSecrets(error instanceof Error ? error.message : String(error));
       let userMsg = rawMsg;
 
-      // Common hosted failure: NOVADA_WEB_UNBLOCKER_KEY not set → extract/unblock render fails
+      // Common hosted failure: NOVADA_WEB_UNBLOCKER_KEY not set → extract render fails
       if (rawMsg.includes("NOVADA_WEB_UNBLOCKER_KEY") || rawMsg.includes("UNBLOCKER_NOT_CONFIGURED")) {
-        userMsg = `Extract/unblock JS rendering is not configured on this hosted endpoint. The tool attempted static extraction only. For JS-heavy pages, use a local MCP server with NOVADA_WEB_UNBLOCKER_KEY configured, or try novada_scrape for platform-specific data.`;
+        userMsg = `Extract JS rendering is not configured on this hosted endpoint. The tool attempted static extraction only. For JS-heavy pages, use a local MCP server with NOVADA_WEB_UNBLOCKER_KEY configured, or try novada_scrape for platform-specific data.`;
       }
       // Proxy not configured
       else if (rawMsg.includes("PROXY_AUTH_FAILURE") || rawMsg.includes("proxy credentials not configured")) {

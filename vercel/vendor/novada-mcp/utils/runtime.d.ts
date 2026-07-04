@@ -44,6 +44,11 @@ export declare function isBrowserAvailableOnRuntime(): boolean;
  * is unavailable. Provides different messages based on WHY it's unavailable:
  *  1. Serverless runtime: explains the WS transport limitation + local MCP guidance
  *  2. Missing credentials: explains how to configure NOVADA_BROWSER_WS
+ *
+ * @param paramValue  The value of the triggering param (e.g. "browser")
+ * @param fieldName   The param field name for the calling tool.
+ *                    novada_extract uses `render=`; novada_unblock uses `method=`.
+ *                    Defaults to "render" for backward-compat.
  */
-export declare function getBrowserUnavailableError(renderParamValue?: string): string;
+export declare function getBrowserUnavailableError(paramValue?: string, fieldName?: string): string;
 //# sourceMappingURL=runtime.d.ts.map

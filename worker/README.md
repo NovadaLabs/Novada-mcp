@@ -1,5 +1,13 @@
 # novada-mcp-hosted (Cloudflare Worker)
 
+> ⚠️ **DORMANT / ARCHIVED — this is NOT the live endpoint.** Production hosted MCP runs on
+> **Vercel** (`vercel/api/mcp.ts`), not this Cloudflare Worker. This directory is kept for
+> reference only: it has its own `worker/tsconfig.json`, is **not** typechecked or deployed by
+> CI, and its code may be stale / may not compile against the current `novada-mcp` API.
+> Do **not** revive it without (1) re-vendoring novada-mcp (`cd vercel && npm run sync:hosted`),
+> (2) reconciling the tool catalog against `vercel/api/mcp.ts`, and (3) a clean
+> `wrangler deploy --dry-run`. Tracked as NOV-578 #8.
+
 Wraps the local **novada-mcp** server in a remote **Streamable HTTP** endpoint at
 `https://mcp.novada.com/mcp`. Any MCP client (Claude Desktop, Cursor, Cline,
 Windsurf, VS Code, etc.) can connect via URL — no `npx`, no local install.

@@ -31,10 +31,6 @@ export declare const AccountParamsSchema: z.ZodObject<{
     page: z.ZodDefault<z.ZodNumber>;
     page_size: z.ZodDefault<z.ZodNumber>;
     products: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    mode: z.ZodOptional<z.ZodEnum<{
-        quick: "quick";
-        full: "full";
-    }>>;
 }, z.core.$strict>;
 export type AccountParams = z.infer<typeof AccountParamsSchema>;
 export declare function validateAccountParams(args: Record<string, unknown> | undefined): AccountParams;

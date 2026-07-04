@@ -2,7 +2,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
-import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateHealthParams, validateDiscoverParams, validateBrowserFlowParams, } from "./tools/index.js";
+import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateDiscoverParams, validateBrowserFlowParams, } from "./tools/index.js";
 import { classifyError } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, } from "./tools/types.js";
@@ -746,13 +746,13 @@ class NovadaMCPServer {
                         break;
                     // novada_health and novada_health_all are hidden aliases → novada_account(section="summary")
                     case "novada_health": {
-                        const hParams = validateHealthParams(args);
-                        result = await novadaAccount(validateAccountParams({ section: "summary", mode: hParams.mode }), API_KEY);
+                        // mode param removed from account (was a no-op) — always routes to full summary
+                        result = await novadaAccount(validateAccountParams({ section: "summary" }), API_KEY);
                         break;
                     }
                     case "novada_health_all":
-                        // Alias: novada_health_all → novada_account(section="summary", mode="full") for back-compat
-                        result = await novadaAccount(validateAccountParams({ section: "summary", mode: "full" }), API_KEY);
+                        // Alias: novada_health_all → novada_account(section="summary") for back-compat
+                        result = await novadaAccount(validateAccountParams({ section: "summary" }), API_KEY);
                         break;
                     case "novada_discover":
                         result = await novadaDiscover(validateDiscoverParams(args));
