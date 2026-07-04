@@ -57,15 +57,20 @@ export function isBrowserAvailableOnRuntime(): boolean {
  * is unavailable. Provides different messages based on WHY it's unavailable:
  *  1. Serverless runtime: explains the WS transport limitation + local MCP guidance
  *  2. Missing credentials: explains how to configure NOVADA_BROWSER_WS
+ *
+ * @param paramValue  The value of the triggering param (e.g. "browser")
+ * @param fieldName   The param field name for the calling tool.
+ *                    novada_extract uses `render=`; novada_unblock uses `method=`.
+ *                    Defaults to "render" for backward-compat.
  */
-export function getBrowserUnavailableError(renderParamValue?: string): string {
-  const paramContext = renderParamValue ? ` (render="${renderParamValue}")` : "";
+export function getBrowserUnavailableError(paramValue?: string, fieldName = "render"): string {
+  const paramContext = paramValue ? ` (${fieldName}="${paramValue}")` : "";
 
   if (isHostedEnvironment() && process.env.DEPLOYMENT_SUPPORTS_WS !== "true") {
     return [
       `## Browser Mode Unavailable`,
       ``,
-      `render="browser"${paramContext} requires a persistent CDP WebSocket transport that ` +
+      `${fieldName}="browser"${paramContext} requires a persistent CDP WebSocket transport that ` +
         `the hosted Novada MCP endpoint (Vercel serverless) cannot provide.`,
       ``,
       `## Why This Happens`,
@@ -75,7 +80,7 @@ export function getBrowserUnavailableError(renderParamValue?: string): string {
       ``,
       `## Agent Action`,
       `agent_instruction: status:browser_unavailable_on_runtime | ` +
-        `Use render="render" (Web Unblocker) for JS rendering on the hosted endpoint. ` +
+        `Use ${fieldName}="render" (Web Unblocker) for JS rendering on the hosted endpoint. ` +
         `For full browser automation, run the MCP server locally: npx -y novada-mcp@latest ` +
         `with NOVADA_BROWSER_WS configured. ` +
         `Docs: https://docs.novada.com/mcp/local-setup`,
@@ -86,7 +91,7 @@ export function getBrowserUnavailableError(renderParamValue?: string): string {
   return [
     `## Browser Mode Unavailable`,
     ``,
-    `render="browser"${paramContext} requires NOVADA_BROWSER_WS to be configured.`,
+    `${fieldName}="browser"${paramContext} requires NOVADA_BROWSER_WS to be configured.`,
     ``,
     `## Setup`,
     `Set NOVADA_BROWSER_WS=wss://username:password@host in your MCP environment:`,
@@ -101,6 +106,6 @@ export function getBrowserUnavailableError(renderParamValue?: string): string {
     `agent_instruction: status:browser_not_configured | ` +
       `Set NOVADA_BROWSER_WS env var to enable browser mode. ` +
       `Get credentials at dashboard.novada.com/overview/browser/. ` +
-      `Alternatively, use render="render" (Web Unblocker) for JS rendering — no extra config needed.`,
+      `Alternatively, use ${fieldName}="render" (Web Unblocker) for JS rendering — no extra config needed.`,
   ].join("\n");
 }

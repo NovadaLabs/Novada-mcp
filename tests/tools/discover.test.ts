@@ -61,7 +61,7 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
     // but NOT registered (removed from tools/list to shrink the surface). Exclude them.
     const ALIAS_NAMES = new Set<string>([
       ...Object.keys(PROXY_ALIAS_MAP),  // novada_proxy_residential/isp/datacenter/mobile/static/dedicated
-      "novada_health_all",              // → novada_account(section="summary", mode="full")
+      "novada_health_all",              // → novada_account(section="summary")
       "novada_scraper_submit",          // → novada_scrape (sync inline)
       "novada_scraper_status",          // → benign ok (async flow removed)
       "novada_scraper_result",          // → benign ok

@@ -77,13 +77,6 @@ export const AccountParamsSchema = z
         "plans: residential|isp|mobile|datacenter|static|capture. " +
         "traffic: residential|isp|mobile|datacenter|static.",
       ),
-    mode: z
-      .enum(["quick", "full"])
-      .optional()
-      .describe(
-        "Health check depth (summary section only). " +
-        "'full' includes per-product proxy plan balances. Defaults to 'full' for summary.",
-      ),
   })
   .strict();
 
@@ -429,11 +422,10 @@ export async function novadaAccount(
   switch (section) {
     case "summary": {
       // The summary merges account_summary (wallet+plans+capture) + health entitlements.
-      // Run both in parallel; health mode defaults to "full" for complete picture.
-      const mode = params.mode ?? "full";
+      // Always uses full mode — mode param has been removed; there is no lighter variant.
       const [summaryResult, healthResult] = await Promise.all([
         novadaAccountSummary({} as never, apiKey),
-        novadaHealth(apiKey ?? "", mode),
+        novadaHealth(apiKey ?? "", "full"),
       ]);
 
       // Parse the summary JSON

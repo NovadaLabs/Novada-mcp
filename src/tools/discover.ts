@@ -76,7 +76,7 @@ export async function novadaDiscover(
       return (
         `Category "${category}" has ${fullRegistryCount} registered ${toolWord} ` +
         `but none are exposed in this session. ` +
-        `Call \`novada_health\` to check which products are active on your API key ` +
+        `Call \`novada_account\` to see your balance, plans, and entitlements ` +
         `and whether this category is available to you.`
       );
     }
@@ -147,7 +147,7 @@ export async function novadaDiscover(
   lines.push("## Next Steps");
   lines.push("");
   lines.push(
-    "- **Start here:** Call `novada_health` to check which products are active on your API key."
+    "- **Start here:** Call `novada_account` to see your balance, plans, and entitlements."
   );
   lines.push(
     "- **Search the web:** Use `novada_search` for queries, `novada_extract` for specific URLs."

@@ -3,7 +3,7 @@
  *
  * Tests the four scenarios required by the F13 finding:
  *   (1) category registered but fully filtered out of visible set →
- *       gated message with count + novada_health pointer
+ *       gated message with count + novada_account pointer
  *   (2) truly unknown category (e.g. "Bananas") → unknown-category message
  *       listing valid categories (Zod catches this before novadaDiscover)
  *   (3) category partially visible → normal listing
@@ -51,8 +51,8 @@ describe("F13-S1: category registered but fully filtered out of visible set", ()
     // Must mention the registered count
     expect(out).toMatch(new RegExp(`${proxyTools.length}\\s+registered\\s+tool`, "i"));
 
-    // Must point to novada_health
-    expect(out).toContain("novada_health");
+    // Must point to novada_account (novada_health is a hidden alias)
+    expect(out).toContain("novada_account");
 
     // Must NOT list any proxy tools (none are visible)
     for (const name of proxyTools) {
@@ -72,7 +72,7 @@ describe("F13-S1: category registered but fully filtered out of visible set", ()
 
     expect(out).not.toContain("No tools found for category");
     expect(out).toMatch(new RegExp(`${browserTools.length}\\s+registered\\s+tool`, "i"));
-    expect(out).toContain("novada_health");
+    expect(out).toContain("novada_account");
   });
 });
 

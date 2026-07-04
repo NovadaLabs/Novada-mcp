@@ -914,13 +914,13 @@ class NovadaMCPServer {
             break;
           // novada_health and novada_health_all are hidden aliases → novada_account(section="summary")
           case "novada_health": {
-            const hParams = validateHealthParams(args as Record<string, unknown>);
-            result = await novadaAccount(validateAccountParams({ section: "summary", mode: hParams.mode }), API_KEY);
+            // mode param removed from account (was a no-op) — always routes to full summary
+            result = await novadaAccount(validateAccountParams({ section: "summary" }), API_KEY);
             break;
           }
           case "novada_health_all":
-            // Alias: novada_health_all → novada_account(section="summary", mode="full") for back-compat
-            result = await novadaAccount(validateAccountParams({ section: "summary", mode: "full" }), API_KEY);
+            // Alias: novada_health_all → novada_account(section="summary") for back-compat
+            result = await novadaAccount(validateAccountParams({ section: "summary" }), API_KEY);
             break;
           case "novada_discover":
             result = await novadaDiscover(validateDiscoverParams(args as Record<string, unknown>));

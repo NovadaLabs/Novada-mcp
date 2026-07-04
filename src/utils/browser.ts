@@ -143,9 +143,9 @@ export async function fetchViaBrowser(
   // back to the render (Web Unblocker) tier; forced render="browser" gets the message.
   if (isHostedEnvironment()) {
     throw new Error(
-      'Browser mode (render="browser") is not available on the hosted Novada MCP endpoint — ' +
+      "Browser mode is not available on the hosted Novada MCP endpoint — " +
       "it needs a persistent WebSocket (CDP) transport that serverless (Vercel) cannot provide. " +
-      'agent_instruction: Use render="render" (Web Unblocker) for JS rendering, or run the MCP server ' +
+      "agent_instruction: Use the 'render' mode (Web Unblocker) for JS rendering, or run the MCP server " +
       "locally (npx -y novada-mcp@latest) where Browser mode works."
     );
   }
