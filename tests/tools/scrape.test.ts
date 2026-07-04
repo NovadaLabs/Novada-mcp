@@ -126,6 +126,39 @@ describe("novadaScrape — output formats", () => {
     expect(buf[0]).toBe(0x50);
     expect(buf[1]).toBe(0x4b);
   });
+
+  it("returns base64 xlsx block for format=excel (MCP schema alias)", async () => {
+    mockSuccess(MOCK_RECORDS);
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "excel", limit: 20 },
+      "test-key"
+    );
+    expect(result).toContain("base64");
+    expect(result).toContain("format: excel");
+    const b64Match = result.match(/```\n([A-Za-z0-9+/=\n]+)\n```/);
+    expect(b64Match).not.toBeNull();
+    // Verify base64 decodes to a real xlsx (zip PK header)
+    const buf = Buffer.from(b64Match![1].trim(), "base64");
+    expect(buf[0]).toBe(0x50); // 'P'
+    expect(buf[1]).toBe(0x4b); // 'K'
+  });
+
+  it("CSV has header row and data rows", async () => {
+    mockSuccess(MOCK_RECORDS);
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "csv", limit: 20 },
+      "test-key"
+    );
+    const csvMatch = result.match(/```csv\n([\s\S]+?)\n```/);
+    expect(csvMatch).not.toBeNull();
+    const lines = csvMatch![1].trim().split("\n");
+    // Header row present
+    expect(lines[0]).toContain("title");
+    // At least 2 data rows
+    expect(lines.length).toBeGreaterThanOrEqual(3); // header + 2 records
+    // Data row contains the first record's title
+    expect(lines.slice(1).some(l => l.includes("iPhone 16 Pro"))).toBe(true);
+  });
 });
 
 describe("novadaScrape — request format", () => {

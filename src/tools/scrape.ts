@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS } from "../config.js";
-import { formatAsMarkdown } from "../utils/format.js";
+import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
@@ -522,6 +522,14 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
   // H-1: safe lookup — null-prototype + hasOwnProperty guard
   const hasAlias = Object.prototype.hasOwnProperty.call(OPERATION_ALIASES, params.operation);
   const operation = hasAlias ? OPERATION_ALIASES[params.operation] : params.operation;
+  // displayOperation echoes the operation the CALLER passed, so the results header
+  // reflects what the user actually asked for. When we auto-resolved a near-miss
+  // alias we surface both forms (requested → canonical) rather than silently
+  // swapping in the canonical id — transparent, not misleading. Used only in the
+  // human-facing header lines; the canonical `operation` still drives the API call,
+  // preflight, source_url, and the chainable "remember" hint (downstream tooling
+  // needs the exact backend id).
+  const displayOperation = hasAlias ? `${params.operation} (→ ${operation})` : operation;
 
   // #6: pre-flight validation — fail fast on a bad op id / missing required param
   // BEFORE the backend round-trip, so a typo can't hang ~60s and 504. Reuses the
@@ -654,26 +662,98 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
     return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
   }
 
-  const title = `${platform} — ${operation}`;
+  const title = `${platform} — ${displayOperation}`;
+
+  // For json/csv/excel we want clean structured records (not the flattened dot-path display version).
+  // rawRecords are already sliced by limit above via `rawRecords.slice(0, limit)`.
+  // `records` is the flattenRecord'd version used for markdown/toon tabular display.
+  const cleanRecords = rawRecords.slice(0, limit);
 
   let output: string;
   switch (format) {
     case "json":
+      // Clean JSON: surface key fields prominently. rawRecords are the upstream objects;
+      // they may still have deep nesting, but agents can navigate them. We emit them as-is
+      // (not flattenRecord'd), keeping structure and avoiding the 70-column flat-object problem.
       output = [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live`,
+        `platform: ${platform} | operation: ${displayOperation} | records: ${cleanRecords.length} | source: live`,
         ``,
         "```json",
-        JSON.stringify(rawRecords.slice(0, limit), null, 2),
+        JSON.stringify(cleanRecords, null, 2),
         "```",
         ``,
         `---`,
         `## Agent Hints`,
         `- Increase limit (max 100) to retrieve more records.`,
-        `- For human-readable output: use format='markdown' instead.`,
+        `- For human-readable output: use format='markdown'. For spreadsheets: format='csv' or format='excel'.`,
         `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
       ].join("\n");
       break;
+
+    case "csv": {
+      // Inline CSV — header row + one row per record. Uses flattenRecord output for consistent column names.
+      const csvText = formatAsCsv(records);
+      output = [
+        `## Scrape Results`,
+        `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: csv`,
+        ``,
+        "```csv",
+        csvText,
+        "```",
+        ``,
+        `---`,
+        `## Agent Hints`,
+        `- Copy the CSV block above and paste into Excel, Google Sheets, or any spreadsheet app.`,
+        `- Increase limit (max 100) to retrieve more records.`,
+        `- Use format='excel' to get a real .xlsx file instead.`,
+      ].join("\n");
+      break;
+    }
+
+    case "excel":
+    case "xlsx": {
+      // Real .xlsx via exceljs — inline base64 so no disk writes (serverless-safe).
+      const xlsxBuf = await formatAsXlsx(records, operation.slice(0, 31));
+      const b64 = xlsxBuf.toString("base64");
+      output = [
+        `## Scrape Results`,
+        `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: excel`,
+        ``,
+        `**Excel file (base64-encoded .xlsx)** — ${records.length} rows, ${Object.keys(records[0] ?? {}).length} columns`,
+        `Decode and save as \`${operation}.xlsx\` to open in Excel or Google Sheets.`,
+        ``,
+        "```",
+        b64,
+        "```",
+        ``,
+        `---`,
+        `## Agent Hints`,
+        `- Base64 → xlsx: \`echo "<base64>" | base64 -d > data.xlsx\` or use any online base64-to-file converter.`,
+        `- Increase limit (max 100) to retrieve more records.`,
+        `- Use format='csv' for a smaller inline text alternative.`,
+      ].join("\n");
+      break;
+    }
+
+    case "html": {
+      // Inline HTML <table> — header <th> row + one <tr> per record, columns left-to-right
+      // in first-seen key order (key fields first). Ready to drop into a page or open in a browser.
+      const htmlTable = formatAsHtml(records, title);
+      output = [
+        `## Scrape Results`,
+        `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: html`,
+        ``,
+        htmlTable,
+        ``,
+        `---`,
+        `## Agent Hints`,
+        `- The HTML above is a standalone <table> document — save it as .html and open in a browser, or embed the <table> element in a page.`,
+        `- Increase limit (max 100) to retrieve more records.`,
+        `- Use format='csv' or format='excel' for spreadsheet-ready output, format='json' for code.`,
+      ].join("\n");
+      break;
+    }
 
     case "toon": {
       // TOON: headers declared once, then pipe-separated rows — 40-65% token savings vs JSON/markdown
@@ -687,7 +767,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       ];
       output = [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live | format: toon`,
+        `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: toon`,
         ``,
         toonRows.join("\n"),
         ``,
@@ -703,15 +783,11 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       break;
     }
 
-    // M-4: CLI/SDK formats that reach here via ScrapeParamsFullType — render as markdown with a notice
-    case "csv":
-    case "html":
-    case "xlsx":
     case "markdown":
     default:
       output = [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live${records.length >= limit ? ` (limit:${limit})` : ""}`,
+        `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live${records.length >= limit ? ` (limit:${limit})` : ""}`,
         ``,
         `---`,
         ``,
@@ -719,7 +795,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
         ``,
         `---`,
         `## Agent Hints`,
-        `- Use format='json' or format='csv' for downstream processing.`,
+        `- Use format='json' or format='csv' for downstream processing. Use format='excel' for a .xlsx spreadsheet.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- For structured scraping of other platforms, change platform and operation.`,
         `- Discover all 129 supported platforms and their operations: read novada://scraper-platforms resource.`,

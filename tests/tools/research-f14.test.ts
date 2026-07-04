@@ -106,10 +106,15 @@ describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
         { title: "Real proxy guide", url: "https://real.example.com", description: "residential proxies are real IPs" },
       ])
     );
-    // First extract = nav chrome, second = real content
-    mockedAxios.get
-      .mockResolvedValueOnce(extractResponse(`<nav>[Skip to main content] Sign up Sign in</nav>`))
-      .mockResolvedValueOnce(extractResponse(`<p>Residential proxies use real ISP-assigned IP addresses, making them harder to detect. Datacenter proxies are faster but more likely to be blocked by anti-bot systems.</p>`));
+    // URL-aware mock (nav page is a bot-challenge → extract.ts also fires a
+    // web.archive.org fallback GET for it; keying on URL avoids the real content
+    // being consumed by that out-of-order retry under Promise.all).
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (url.includes("real.example.com")) {
+        return extractResponse(`<p>Residential proxies use real ISP-assigned IP addresses, making them harder to detect. Datacenter proxies are faster but more likely to be blocked by anti-bot systems.</p>`);
+      }
+      return extractResponse(`<nav>[Skip to main content] Sign up Sign in</nav>`); // nav.example.com + archive retry
+    });
 
     const result = await novadaResearch(
       { question: "tradeoffs between residential and datacenter proxies for web scraping", depth: "quick" },
@@ -135,9 +140,15 @@ describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
         { title: "Real source", url: "https://real.example.com", description: realInfo },
       ])
     );
-    mockedAxios.get
-      .mockResolvedValueOnce(extractResponse(`<p>${chromeHeavy}</p>`))
-      .mockResolvedValueOnce(extractResponse(`<p>${realInfo}</p>`));
+    // URL-aware mock: the chrome page is a bot-challenge, so extract.ts also fires a
+    // web.archive.org fallback GET for it — 3 GETs for 2 sources, resolving out of
+    // order under Promise.all. Keying on the URL (not a positional `Once` queue) keeps
+    // the chrome page returning chrome content on BOTH its direct + archive fetch, so
+    // the real source's content is never stolen by the retry.
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (url.includes("real.example.com")) return extractResponse(`<p>${realInfo}</p>`);
+      return extractResponse(`<p>${chromeHeavy}</p>`); // chrome.example.com + its archive retry
+    });
 
     const result = await novadaResearch(
       { question: "What is the difference between datacenter and residential proxies?", depth: "quick" },

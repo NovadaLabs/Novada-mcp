@@ -363,12 +363,24 @@ export async function novadaResearch(
     sourceRows.push({ label: sourceLabel(s.title, s.url), url: s.url, note: "snippet only" });
   }
 
-  // Agent hints
-  const agentHints: string[] = [
-    `- Use \`novada_extract\` with specific source URLs to get full content: ${sources.slice(0, 3).map(s => s.url).join(", ") || "none available"}.`,
-    `- For narrower research: add \`focus\` param to guide sub-query generation.`,
-    `- For more coverage: use depth='comprehensive' (8-10 searches).`,
-  ];
+  // Agent hints. On a real synthesis (ok/weak) the answer is already above — do NOT
+  // tell the caller to "go extract yourself" (that was the #1 annoyance). Only when
+  // synthesis genuinely failed do we point at manual extraction as a recovery path.
+  const agentHints: string[] = [];
+  if (synthesisQuality === "failed") {
+    agentHints.push(
+      `- Synthesis needs more signal — \`novada_extract\` these specific URLs for full content: ${sources.slice(0, 3).map(s => s.url).join(", ") || "none available"}.`
+    );
+  } else {
+    agentHints.push(`- The Summary above is synthesized from the extracted sources; cite it via the [n] markers into the Sources table.`);
+    if (synthesisQuality === "weak") {
+      agentHints.push(`- Grounding is snippet-level (full-page extraction was thin/blocked) — deepen with depth='comprehensive' or a narrower \`focus\`.`);
+    }
+  }
+  agentHints.push(`- For narrower research: add \`focus\` param to guide sub-query generation.`);
+  if (!isComprehensive) {
+    agentHints.push(`- For more coverage: use depth='comprehensive' (8-10 searches).`);
+  }
   if (failedCount > 0) {
     agentHints.push(`- ${failedCount} of ${queries.length} search queries failed; results may be incomplete.`);
   }
@@ -535,11 +547,98 @@ function looksLikeProse(text: string): boolean {
 }
 
 // ─── Synthesis ─────────────────────────────────────────────────────────────
-// Build a structured synthesis: direct answer + contrasting points + common finding
-// R9: Summary must be clean synthesized prose or an honest "could not synthesize" —
-// never raw scraped DOM/nav debris. F14-1: Returns { text, quality }.
+// Extractive multi-document synthesis. The audit finding was that research
+// returned a bare snippet dump + "synthesis:weak, go extract yourself" — i.e. it
+// never actually SYNTHESIZED. This engine does real extractive summarization over
+// the FULL extracted source bodies:
+//   1. sentence pool  — split every extracted body into clean, cited sentences
+//   2. score          — query-relevance (TF) + cross-source consensus (centrality)
+//                       + length prior − chrome/debris penalty
+//   3. MMR selection  — greedily pick high-score, low-redundancy sentences so the
+//                       answer is coherent and non-repetitive, drawing from multiple
+//                       sources rather than one fragment
+//   4. compose        — weave the selected sentences into a real answer paragraph
+//                       with inline [n] citations, then a themed findings block
+// Degrades to snippet-based synthesis (still real prose) when extraction fails, and
+// only reports honest failure when there is genuinely 0 usable content — even then
+// it points at the Sources, never a to-do list. F14-1: returns { text, quality }.
 
 type SynthesisQuality = "ok" | "weak" | "failed";
+
+interface ScoredSentence {
+  text: string;
+  sourceIdx: number;   // index into the ordered source list (for [n] citation)
+  source: string;      // source title (for the themed findings block)
+  tokens: Set<string>; // content tokens, for centrality + MMR similarity
+  score: number;
+}
+
+/** Tokenize to content words (drop stop-words + short tokens). Used for scoring. */
+function contentTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+}
+
+/** Jaccard similarity between two token sets (0–1) — MMR redundancy signal. */
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter++;
+  return inter / (a.size + b.size - inter);
+}
+
+// Tool/config debris that can survive extract.ts metadata stripping and leak into
+// the sentence pool (bot-challenge hints, browser-WS setup lines, agent-instruction
+// echoes, dashboard/env prompts). These are never part of a page's substantive prose,
+// so a sentence containing any of them is dropped outright before synthesis.
+const TOOL_META_PATTERNS: RegExp[] = [
+  /\bNOVADA_[A-Z_]+\b/,                       // env var names (NOVADA_BROWSER_WS, ...)
+  /\brender\s*=\s*["']?(browser|render|auto|static|js)\b/i,
+  /\bnovada_(extract|unblock|research|search|scrape|map|crawl)\s*\(/i,
+  /\bsuggested_fix\s*:/i,
+  /\bagent_instruction\s*:/i,
+  /\bdashboard\.novada\.com\b/i,
+  /\bBrowser API\b.*\bcosts?\b/i,
+  /\bbot[- ]?challenge\b/i,
+  /\bset\s+NOVADA_/i,
+];
+
+// Forum / social-UI chrome that reads like prose (letters + words) but is site
+// furniture, not substantive content — Reddit vote widgets, account prompts, comment
+// metadata. Seen leaking LIVE from a reddit.com extraction into the Summary:
+// "Create an account [–] user[S] 0 points1 point2 points 2 years ago (0 children)".
+const SOCIAL_CHROME_PATTERNS: RegExp[] = [
+  /\bcreate an account\b/i,
+  /\d+\s*point(s)?\d*\s*point/i,             // "0 points1 point2 points" vote widget
+  /\b\d+\s+points?\b[\s\S]*\bago\b/i,        // score followed by "N years ago"
+  /\(\s*\d+\s+child(ren)?\s*\)/i,            // "(0 children)"
+  /\[\s*[–\-+]\s*\]/,                         // [–] / [-] / [+] collapse toggles
+  /\[S\]|\[OP\]|\[deleted\]|\[removed\]/,     // reddit submitter/OP/removed markers
+  /\b(log in|sign in|sign up)\s+(or|to)\b/i, // "log in or sign up"
+  /\bpermalink\s*embed\s*save\b/i,            // reddit action bar (run-together)
+  /\bupvote|downvote\b/i,
+];
+
+/** Split one cleaned text blob into candidate prose sentences. */
+function splitSentences(raw: string): string[] {
+  const deChromed = stripNavChrome(raw.replace(/^#+.*$/gm, ""));
+  const scrubbed = scrubFragmentText(deChromed);
+  const parts = scrubbed.match(/[^.!?]+[.!?]+(?:\s|$)/g) ?? [scrubbed];
+  return parts
+    .map(s => s.trim())
+    .filter(s => s.length >= 30 && s.length <= 400)
+    .filter(s => {
+      const words = s.split(/\s+/);
+      if (words.length < 6) return false;              // too short to be a claim
+      const letters = (s.match(/[a-zA-Z]/g) ?? []).length;
+      if (letters / s.length < 0.6) return false;      // reject debris-heavy lines
+      if (TOOL_META_PATTERNS.some(re => re.test(s))) return false;   // tool/config debris
+      if (SOCIAL_CHROME_PATTERNS.some(re => re.test(s))) return false; // forum/social UI chrome
+      return true;
+    });
+}
 
 function synthesizeAnswer(
   question: string,
@@ -547,116 +646,161 @@ function synthesizeAnswer(
   failedSources: { title: string; url: string; snippet: string }[],
   allSources: { title: string; url: string; snippet: string }[],
 ): { text: string; quality: SynthesisQuality } {
-  // R9: honest failure sentinel — the formatter renders a "summary unavailable"
-  // note (status:partial) rather than dumping debris when nothing clean survives.
-  const fallback = "Synthesis unavailable — see Key Findings below for the source snippets.";
+  const fallback =
+    "The extracted pages did not yield enough clean prose to synthesize a confident answer. " +
+    "The sources below were located and are citable — see **Key Findings** for their snippets and **Sources** for the full URLs.";
 
-  // Build a clean prose fragment from one text blob: strip nav-chrome LINES, then
-  // scrub inline markdown/URL debris, split into sentences, and keep only the ones
-  // that actually read as prose. Returns "" when nothing usable remains.
-  const proseFragment = (raw: string): string => {
-    const deChromed = stripNavChrome(raw.replace(/^#+.*$/gm, ""));
-    const scrubbed = scrubFragmentText(deChromed);
-    const sentences = (scrubbed.match(/[^.!?]+[.!?]+/g) ?? [scrubbed])
-      .map(x => x.trim())
-      .filter(x => x.length >= 20 && /[a-zA-Z]/.test(x));
-    // Prefer 1-4 real sentences; fall back to the scrubbed blob if the splitter
-    // produced nothing (e.g. snippet without terminal punctuation).
-    const candidate = sentences.slice(0, 4).join(" ").trim() || scrubbed;
-    return looksLikeProse(candidate) ? candidate : "";
-  };
+  const questionKeywords = new Set(
+    question.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !STOP_WORDS.has(w))
+  );
 
-  // Tier 1: full extracted content (richest, but most debris-prone).
-  const extractedFragments: { source: string; text: string }[] = [];
+  // Ordered source list used for [n] citations. Extracted sources first (richer),
+  // then snippet-only sources — matching the Sources table ordering in the formatter.
+  const orderedSources: { title: string; url: string }[] = [
+    ...extracted.map(s => ({ title: s.title, url: s.url })),
+    ...failedSources.map(s => ({ title: s.title, url: s.url })),
+  ];
+  const sourceIndexByTitle = new Map<string, number>();
+  orderedSources.forEach((s, i) => { if (!sourceIndexByTitle.has(s.title)) sourceIndexByTitle.set(s.title, i); });
+  const citeIdx = (title: string): number => sourceIndexByTitle.get(title) ?? 0;
+
+  // ── Build the sentence pool ────────────────────────────────────────────────
+  // Tier 1: full extracted bodies (deep — the whole point of extracting).
+  const pool: ScoredSentence[] = [];
   for (const src of extracted) {
-    const fragment = proseFragment(src.content);
-    if (fragment) extractedFragments.push({ source: src.title, text: fragment });
-  }
-
-  // Tier 2: search snippets (already clean — this is what Key Findings uses).
-  const snippetFragments: { source: string; text: string }[] = [];
-  for (const src of failedSources) {
-    if (src.snippet) {
-      const t = scrubFragmentText(src.snippet);
-      if (looksLikeProse(t) || t.length >= 20) snippetFragments.push({ source: src.title, text: t });
+    for (const s of splitSentences(src.content)) {
+      pool.push({ text: s, sourceIdx: citeIdx(src.title), source: src.title, tokens: new Set(contentTokens(s)), score: 0 });
     }
   }
-  for (const src of allSources) {
-    if (snippetFragments.some(f => f.source === src.title)) continue;
-    if (src.snippet) {
-      const t = scrubFragmentText(src.snippet);
-      if (looksLikeProse(t) || t.length >= 20) snippetFragments.push({ source: src.title, text: t });
-    }
-  }
+  const usedSnippetFallback = pool.length === 0;
 
-  // R9: build from extracted prose when we have it; otherwise fall back to the clean
-  // snippets. Snippets are short but coherent — far better than nav debris. Only when
-  // BOTH tiers are empty do we honestly report failure.
-  let fragments = extractedFragments.length > 0 ? extractedFragments : snippetFragments;
-  let usedSnippetFallback = extractedFragments.length === 0;
-
-  if (fragments.length === 0) return { text: fallback, quality: "failed" };
-
-  // Rank fragments by keyword overlap with the question — most relevant first.
-  const questionKeywords = question.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !STOP_WORDS.has(w));
-  const scoreFrag = (text: string): number => {
-    const lower = text.toLowerCase();
-    return questionKeywords.filter(kw => lower.includes(kw)).length - (chromeFraction(text) > 0.4 ? 100 : 0);
-  };
-  if (questionKeywords.length > 0) {
-    fragments = [...fragments].sort((a, b) => scoreFrag(b.text) - scoreFrag(a.text));
-  }
-
-  // If the best EXTRACTED fragment still shares no keyword with the question, the
-  // extraction was off-topic (nav/boilerplate that slipped the prose gate) — prefer
-  // clean snippets instead of leading with irrelevant text.
-  if (!usedSnippetFallback && questionKeywords.length > 0 && snippetFragments.length > 0) {
-    const bestExtractedScore = scoreFrag(fragments[0].text);
-    if (bestExtractedScore < 1) {
-      const rankedSnippets = [...snippetFragments].sort((a, b) => scoreFrag(b.text) - scoreFrag(a.text));
-      if (scoreFrag(rankedSnippets[0].text) >= 1) {
-        fragments = rankedSnippets;
-        usedSnippetFallback = true;
-      }
+  // Tier 2 (fallback): search snippets — clean but shallow. Only when extraction
+  // produced no usable prose at all do we synthesize from snippets, so the Summary
+  // is still a REAL paragraph rather than "go extract yourself".
+  if (usedSnippetFallback) {
+    const snippetSeen = new Set<string>();
+    const addSnippet = (title: string, snippet: string) => {
+      if (!snippet) return;
+      const t = scrubFragmentText(snippet);
+      if (t.length < 20 || snippetSeen.has(t)) return;
+      snippetSeen.add(t);
+      pool.push({ text: t, sourceIdx: citeIdx(title), source: title, tokens: new Set(contentTokens(t)), score: 0 });
+    };
+    for (const src of failedSources) addSnippet(src.title, src.snippet);
+    for (const src of allSources) if (!sourceIndexByTitle.has(src.title)) {
+      // snippet-only source not already in the ordered list — index it at the end
+      const idx = orderedSources.length;
+      orderedSources.push({ title: src.title, url: src.url });
+      sourceIndexByTitle.set(src.title, idx);
+      addSnippet(src.title, src.snippet);
     }
   }
 
-  // Build structured synthesis.
-  const parts: string[] = [];
-  const primary = fragments[0];
-  parts.push(primary.text);
+  if (pool.length === 0) return { text: fallback, quality: "failed" };
 
-  if (fragments.length > 1) {
-    const supplementary = fragments.slice(1, 4)
-      .filter(f => f.text.length > 30)
-      .map(f => `- *${f.source}*: ${f.text.slice(0, 200).trim()}`);
-    if (supplementary.length > 0) {
-      parts.push("");
-      parts.push("**Additional perspectives:**");
-      parts.push(...supplementary);
+  // ── Score every sentence ─────────────────────────────────────────────────
+  // (a) query relevance — fraction of question keywords the sentence mentions.
+  // (b) centrality — average token overlap with all OTHER sentences; a sentence
+  //     that echoes the corpus is a consensus/central claim (classic centroid idea).
+  // (c) length prior — favor 12–35-word claim-shaped sentences.
+  for (const s of pool) {
+    let kwHits = 0;
+    for (const kw of questionKeywords) if (s.text.toLowerCase().includes(kw)) kwHits++;
+    const relevance = questionKeywords.size > 0 ? kwHits / questionKeywords.size : 0;
+
+    let centrality = 0;
+    if (pool.length > 1) {
+      let sum = 0;
+      for (const o of pool) if (o !== s) sum += jaccard(s.tokens, o.tokens);
+      centrality = sum / (pool.length - 1);
+    }
+
+    const words = s.text.split(/\s+/).length;
+    const lengthPrior = words >= 12 && words <= 35 ? 1 : words < 12 ? 0.4 : 0.7;
+    const chromePenalty = chromeFraction(s.text) > 0.4 ? 1 : 0;
+
+    // Relevance dominates (answer the question), consensus and shape refine ties.
+    s.score = relevance * 3 + centrality * 2 + lengthPrior * 0.5 - chromePenalty * 10;
+  }
+
+  // ── MMR selection ─────────────────────────────────────────────────────────
+  // Greedily pick the best sentence, then each next one that maximizes
+  // λ·score − (1−λ)·maxSimilarityToPicked → relevant AND non-redundant. Cap the
+  // answer at a handful of sentences so the Summary is a paragraph, not a wall.
+  const ranked = [...pool].sort((a, b) => b.score - a.score);
+  const targetSentences = usedSnippetFallback ? 4 : Math.min(6, Math.max(3, extracted.length + 2));
+  const lambda = 0.72;
+  const DEDUP_THRESHOLD = 0.6; // near-duplicate cutoff — two sources restating one fact
+  const selected: ScoredSentence[] = [];
+  const remaining = [...ranked];
+  while (selected.length < targetSentences && remaining.length > 0) {
+    let bestIdx = -1;
+    let bestVal = -Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const cand = remaining[i];
+      let maxSim = 0;
+      for (const sel of selected) maxSim = Math.max(maxSim, jaccard(cand.tokens, sel.tokens));
+      // Hard-drop near-duplicates outright — two sources paraphrasing the same fact
+      // must not both land in the answer (this was surfacing "X. X." repetition).
+      if (maxSim >= DEDUP_THRESHOLD) continue;
+      const mmr = lambda * cand.score - (1 - lambda) * maxSim * 3;
+      if (mmr > bestVal) { bestVal = mmr; bestIdx = i; }
+    }
+    if (bestIdx === -1) break; // everything left is a near-duplicate of what we have
+    selected.push(remaining.splice(bestIdx, 1)[0]);
+  }
+
+  if (selected.length === 0) return { text: fallback, quality: "failed" };
+
+  // R9: if the question has keywords but NOTHING we selected mentions any of them,
+  // the "prose" is off-topic boilerplate — report honest failure rather than a
+  // plausible-looking non-answer.
+  const onTopicCount = selected.filter(s =>
+    [...questionKeywords].some(kw => s.text.toLowerCase().includes(kw))
+  ).length;
+  if (questionKeywords.size > 0 && onTopicCount === 0) {
+    return { text: fallback, quality: "failed" };
+  }
+
+  // ── Compose the answer paragraph ────────────────────────────────────────────
+  // Order selected sentences by relevance-desc so the answer opens on the most
+  // on-point claim, then weave them into a cited paragraph. Each sentence carries a
+  // [n] citation into the Sources table so the synthesis stays grounded.
+  const answerOrder = [...selected].sort((a, b) => b.score - a.score);
+  const answerSentences = answerOrder.map(s => {
+    const clean = s.text.replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
+    return `${clean} [${s.sourceIdx + 1}]`;
+  });
+  const answerParagraph = answerSentences.join(". ") + ".";
+
+  // Themed findings — one line per distinct source represented in the answer, so the
+  // reader sees which source contributed what (the "additional perspectives" idea,
+  // but now grounded in the selected sentences rather than raw fragments).
+  const perSource = new Map<number, { source: string; text: string }>();
+  for (const s of answerOrder) {
+    if (!perSource.has(s.sourceIdx)) {
+      perSource.set(s.sourceIdx, { source: s.source, text: s.text.replace(/\s+/g, " ").trim() });
+    }
+  }
+  const parts: string[] = [answerParagraph];
+  if (perSource.size > 1) {
+    parts.push("");
+    parts.push("**What the sources say:**");
+    for (const [idx, v] of perSource) {
+      parts.push(`- [${idx + 1}] *${sourceLabel(v.source, orderedSources[idx]?.url ?? "")}*: ${v.text.slice(0, 220).trim()}`);
     }
   }
 
   const synthesis = parts.join("\n").trim();
-  if (!synthesis || !looksLikeProse(primary.text)) {
-    // Nothing coherent survived — be honest rather than emit debris (R9).
+  if (!looksLikeProse(answerParagraph)) {
     return { text: fallback, quality: "failed" };
   }
 
-  // R9: if the question has keywords but the ENTIRE candidate set shares none of
-  // them, the "prose" we have is off-topic (link-flattened nav text that reads like
-  // sentences but answers nothing). Leading the Summary with it is the exact failure
-  // the audit flagged — report honest failure instead of a plausible-looking non-answer.
-  const primaryKeywordMatches = questionKeywords.filter(kw => primary.text.toLowerCase().includes(kw)).length;
-  if (questionKeywords.length > 0) {
-    const anyFragmentOnTopic = fragments.some(f => scoreFrag(f.text) >= 1);
-    if (!anyFragmentOnTopic) {
-      return { text: fallback, quality: "failed" };
-    }
-  }
-
-  // Quality: weak if snippet-only fallback (thinner) or the primary shares no keyword.
-  const isWeak = usedSnippetFallback || (questionKeywords.length > 0 && primaryKeywordMatches < 1);
+  // Quality: "ok" when we synthesized from extracted bodies and the answer is on
+  // topic; "weak" only when we had to fall back to snippets (thinner grounding) or
+  // the answer is only marginally on topic. Never a to-do dump either way.
+  const relevantShare = questionKeywords.size > 0 ? onTopicCount / selected.length : 1;
+  const isWeak = usedSnippetFallback || relevantShare < 0.34;
 
   return { text: synthesis, quality: isWeak ? "weak" : "ok" };
 }
@@ -751,9 +895,15 @@ function formatResearchOutput(args: {
     ...agentHints,
     ``,
     `## Agent Action`,
-    `agent_instruction: status:${(synthesisStatus === "ok" || synthesisStatus === "weak") ? "success" : "partial"} | requested_depth:${args.requestedDepth} | resolved_depth:${args.depth} | queries:${args.queriesSucceeded}/${args.queriesTotal} | sources:${args.sourcesFetchedCount} | synthesis:${synthesisStatus}`,
-    `next: novada_extract on specific source URLs for full content`,
-    `next: novada_research with focus="<subtopic>" to narrow coverage`,
+    `agent_instruction: status:${(synthesisStatus === "ok" || synthesisStatus === "weak") ? "success" : "partial"} | requested_depth:${args.requestedDepth} | resolved_depth:${args.depth} | queries:${args.queriesSucceeded}/${args.queriesTotal} | sources:${args.sourcesFetchedCount} | synthesis:${synthesisStatus} | answer_ready:${hasSynthesis}`,
+    // On a real synthesis, the answer is DONE — tell the caller to relay the Summary,
+    // not to go extract sources itself (that "to-do dump" was the audited complaint).
+    ...(hasSynthesis
+      ? [`next: relay the synthesized Summary above as the answer${synthesisStatus === "weak" ? " (grounding is snippet-level — deepen with depth='comprehensive' if higher confidence is needed)" : ""}`]
+      : [
+          `next: novada_extract on specific source URLs for full content, then synthesize`,
+          `next: novada_research with focus="<subtopic>" to narrow coverage`,
+        ]),
     ...(args.failedQueries && args.failedQueries.length > 0
       ? [`note: ${args.failedQueries.length} queries failed — retry those searches individually or add focus param`]
       : []),
