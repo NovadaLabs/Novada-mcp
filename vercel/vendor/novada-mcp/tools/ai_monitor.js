@@ -134,8 +134,9 @@ export async function novadaAiMonitor(params, apiKey) {
     const foundMentions = mentions.filter(m => m.sentiment !== "not_found");
     // Format output
     const lines = [
-        `## AI Brand Monitor — ${brand}`,
-        `models_checked: ${models.join(", ")} | mentions_found: ${foundMentions.length} | sentiment: +${sentimentCounts.positive} neutral:${sentimentCounts.neutral} -${sentimentCounts.negative}`,
+        `## Brand Presence on AI-Company Domains — ${brand}`,
+        `domains_searched: ${models.join(", ")} | mentions_found: ${foundMentions.length} | sentiment: +${sentimentCounts.positive} neutral:${sentimentCounts.neutral} -${sentimentCounts.negative}`,
+        `NOTE: results reflect indexed PUBLIC PAGES on these domains — not how the live AI models respond to queries about this brand.`,
         ``,
         `---`,
         ``,
@@ -147,15 +148,17 @@ export async function novadaAiMonitor(params, apiKey) {
             lines.push(`**All ${failedCount} searches failed or timed out.** This is a service issue, not a genuine "0 mentions" result.`);
             lines.push(``);
             lines.push(`## Agent Hints`);
-            lines.push(`- Search API may be unavailable or rate-limited. Call novada_health to check.`);
+            lines.push(`- Search API may be unavailable or rate-limited. Call novada_account(section="summary") to check product status.`);
             lines.push(`- On hosted (Vercel Edge), ai_monitor may exceed execution time. Try fewer models or use local MCP server.`);
         }
         else {
-            lines.push(`No AI model references found for "${brand}". The brand may not be indexed by these AI models yet.`);
+            lines.push(`No public-page mentions found for "${brand}" on these AI-company domains.`);
+            lines.push(`0 mentions = the brand isn't on these domains' indexed public pages; this does not reflect how the models actually respond.`);
             lines.push(``);
             lines.push(`## Agent Hints`);
-            lines.push(`- Try broader search terms or different models`);
+            lines.push(`- Try broader search terms or check different domain groups`);
             lines.push(`- Check if the brand has a website indexed by search engines first: novada_search("${brand}")`);
+            lines.push(`- To find out how AI models actually answer about the brand, query the models directly`);
         }
     }
     else {
@@ -188,14 +191,14 @@ export async function novadaAiMonitor(params, apiKey) {
     }
     lines.push(``);
     lines.push(`## Agent Memory`);
-    lines.push(`remember: AI monitor for '${brand}' — ${foundMentions.length} mentions across ${models.length} models, overall ${sentimentCounts.positive > sentimentCounts.negative ? "positive" : "neutral"}`);
+    lines.push(`remember: Brand domain-presence check for '${brand}' — ${foundMentions.length} indexed-page mentions across ${models.length} AI-company domains, overall ${sentimentCounts.positive > sentimentCounts.negative ? "positive" : "neutral"}`);
     lines.push(``);
     lines.push(`## Chainable Output`);
     lines.push(`brand: ${brand}`);
-    lines.push(`models_checked: ${models.join(", ")}`);
+    lines.push(`domains_searched: ${models.join(", ")}`);
     if (allCompetitors.length > 0)
         lines.push(`competitors_found: ${allCompetitors.join(", ")}`);
-    lines.push(`agent_instruction: AI monitor complete. To deep-dive into any source, call novada_extract with the source URL. To monitor a competitor, call novada_ai_monitor with their brand name.`);
+    lines.push(`agent_instruction: Domain presence check complete. Results show indexed PUBLIC PAGES on AI-company domains — not live model responses. To deep-dive into any source URL, call novada_extract. To check a competitor, call novada_ai_monitor with their brand name.`);
     return lines.join("\n");
 }
 //# sourceMappingURL=ai_monitor.js.map

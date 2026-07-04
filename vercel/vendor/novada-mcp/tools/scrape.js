@@ -830,7 +830,7 @@ export async function novadaScrape(params, apiKey) {
                 code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
                 message: `Scraper code 11006 for '${operation}' on '${platform}'. ${aliasHint}`,
                 agent_instruction: `${aliasHint} Read novada://scraper-platforms to confirm the exact operation ID. ` +
-                    `Alternatives: novada_extract (general pages), novada_unblock (bot-protected), novada_crawl (multi-page). ` +
+                    `Alternatives: novada_extract (general pages), novada_extract with render="render" (bot-protected), novada_crawl (multi-page). ` +
                     `Only treat as an activation issue if the operation ID is confirmed correct. Do not retry with the same ID.`,
                 retryable: false,
                 detail: hasAlias ? `alias:${params.operation}→${OPERATION_ALIASES[params.operation]}` : "code 11006",

@@ -83,7 +83,7 @@ export const TOOL_REGISTRY = [
     },
     {
         name: "novada_ai_monitor",
-        description: "Check how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand or product; returns per-model sentiment, key claims, competitor mentions, and source URLs",
+        description: "Search indexed public pages on AI-company domains (chatgpt.com/openai.com, perplexity.ai, anthropic.com, ...) for brand mentions and sentiment. Does NOT query the live AI models — reflects indexed-page coverage only. Returns per-domain sentiment signals, key claims, competitor mentions, and source URLs.",
         category: "Scraping & Verification",
         status: "active",
     },

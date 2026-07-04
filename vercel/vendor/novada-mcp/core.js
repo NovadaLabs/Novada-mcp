@@ -332,13 +332,13 @@ Not for:
     },
     {
         name: "novada_ai_monitor",
-        description: `Use when you need to check how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand or product. Runs domain-filtered Google searches (site:chatgpt.com, site:perplexity.ai, etc.) to find indexed content about the brand on each AI platform's domain, then analyzes sentiment, extracts claims, and identifies competitor mentions.
+        description: `Search the public web and AI-company domains (chatgpt.com/openai.com, perplexity.ai, anthropic.com, ...) for PUBLIC mentions and sentiment of a brand or product. NOTE: this searches INDEXED PUBLIC PAGES — it does NOT query the live AI models' responses. Returns per-source mention counts, sentiment signals, and competitor mentions. A brand not discussed on those indexed domains will show few/zero mentions — that reflects indexed-page coverage, not the models' actual behavior.
 
-**How it works:** For each selected model, executes a Google search scoped to that model's domain (e.g. site:openai.com "brandname") and analyzes the returned snippets. Does NOT query AI models directly.
-**Best for:** Brand monitoring across AI search engines, competitive positioning analysis, detecting how AI platforms discuss or recommend your product.
-**Not for:** General web search (use novada_search), real-time social monitoring (use novada_scrape with twitter/reddit).
-**Output:** Per-model sentiment (positive/neutral/negative), key claims, competitor mentions, source URLs.
-**Models supported:** chatgpt, perplexity, grok, claude, gemini. Default checks: chatgpt, perplexity, grok.`,
+**How it works:** For each selected domain group, executes a Google search scoped to that domain (e.g. site:openai.com "brandname") and analyzes the returned page snippets for sentiment, claims, and competitor co-mentions.
+**Best for:** Checking whether a brand appears on AI-company public docs/blogs/changelogs; competitive presence on indexed pages of AI platforms.
+**Not for:** Finding out how ChatGPT/Perplexity/Claude actually answer questions about your brand (those are live model responses, not indexed pages); general web search (use novada_search); real-time social monitoring (use novada_scrape with twitter/reddit).
+**Output:** Per-domain sentiment (positive/neutral/negative), key claims from indexed snippets, competitor mentions, source URLs.
+**Domains searched:** chatgpt.com+openai.com, perplexity.ai, grok.com+x.com/i/grok, claude.ai+anthropic.com, gemini.google.com. Default: chatgpt, perplexity, grok.`,
         inputSchema: zodToMcpSchema(AiMonitorParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },

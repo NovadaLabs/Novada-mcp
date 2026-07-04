@@ -76,10 +76,10 @@ function parseItemStats(content) {
  * Extract readable/structured content from a URL.
  * Returns cleaned markdown, JSON fields, or summaries — content processed for agent consumption.
  *
- * Distinction from novada_unblock:
- *   - novada_extract  → readable/structured content (markdown, JSON, fields, summaries).
+ * Format guide:
+ *   - novada_extract(format="markdown") → readable/structured content (default).
  *                       Best for: articles, docs, product pages, any page where you want processed text.
- *   - novada_unblock  → raw HTML (full DOM source) for custom parsing or inspecting page structure.
+ *   - novada_extract(format="html")  → raw HTML (full DOM source) for custom parsing or inspecting page structure.
  *                       Best for: when you need the actual source, CSS-selector workflows, or debugging DOM.
  *
  * Handles Cloudflare, DataDome, JS-heavy SPAs automatically via auto-escalation.
@@ -308,13 +308,13 @@ function getSuggestedFix(url, errorMsg) {
     // P1: render mode itself returned a bot-challenge page — do NOT suggest render="render"
     // again (it was just tried and returned the challenge). Escalate to browser or unblock.
     if (lower.includes("render returned a bot challenge") || lower.includes("bot challenge page")) {
-        return `suggested_fix: render mode returned a bot-challenge page — do not retry with render="render". Try: render="browser" with NOVADA_BROWSER_WS configured, or novada_unblock(url="${url}") for raw HTML via stealth browser`;
+        return `suggested_fix: render mode returned a bot-challenge page — do not retry with render="render". Try: render="browser" with NOVADA_BROWSER_WS configured, or novada_extract(url="${url}", format="html") for raw HTML via stealth browser`;
     }
     // Known anti-bot / access-denial patterns
     if (lower.includes("bot") || lower.includes("challenge") || lower.includes("captcha") ||
         lower.includes("cloudflare") || lower.includes("403") || lower.includes("forbidden") ||
         lower.includes("access denied") || lower.includes("blocked")) {
-        return `suggested_fix: retry with render="render" (JS rendering + anti-bot bypass). If that also fails: novada_unblock(url="${url}") returns raw HTML via stealth browser — parse the response body manually`;
+        return `suggested_fix: retry with render="render" (JS rendering + anti-bot bypass). If that also fails: novada_extract(url="${url}", format="html") returns raw HTML via stealth browser — parse the response body manually`;
     }
     if (lower.includes("all promises were rejected") || lower.includes("eai_again") ||
         lower.includes("econnrefused") || lower.includes("enotfound") || lower.includes("timeout")) {
@@ -327,7 +327,7 @@ function getSuggestedFix(url, errorMsg) {
     try {
         const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
         if (host === "zhihu.com")
-            return `suggested_fix: zhihu.com blocks automated access. Use render="render" first; if blocked, novada_unblock returns raw HTML. Alternatively search via novada_search`;
+            return `suggested_fix: zhihu.com blocks automated access. Use render="render" first; if blocked, use format="html" for raw HTML. Alternatively search via novada_search`;
         if (host === "amazon.com")
             return `suggested_fix: try novada_scrape(platform="amazon.com", operation="amazon_product_keywords") for structured product data`;
         if (host === "x.com" || host === "twitter.com")
@@ -338,7 +338,7 @@ function getSuggestedFix(url, errorMsg) {
             return `suggested_fix: try novada_scrape(platform="linkedin.com", operation="linkedin_company_information_url")`;
     }
     catch { /* ignore */ }
-    return `suggested_fix: retry with render="render" for JS-heavy pages. If blocked: novada_unblock(url="${url}") returns raw HTML via stealth browser`;
+    return `suggested_fix: retry with render="render" for JS-heavy pages. If blocked: novada_extract(url="${url}", format="html") returns raw HTML via stealth browser`;
 }
 function rewriteRedditUrl(url) {
     try {
@@ -803,7 +803,7 @@ async function extractSingleInner(params, apiKey) {
     // BEFORE markdown conversion strips inline styles and text nodes.
     const kuferResult = $doc ? detectKuferAvailability($doc, params.url) : null;
     if (params.format === "html") {
-        // Honor max_chars for html format; default 100K to match novada_unblock's coverage.
+        // Honor max_chars for html format; default 100K for full-page DOM pipelines.
         // (Was hardcoded 10K — too small for full-page DOM pipelines that need the full source.)
         const htmlMaxChars = params.max_chars ?? 100000;
         let htmlOutput;
@@ -1216,7 +1216,7 @@ async function extractSingleInner(params, apiKey) {
             }
             // NOV-565: never show a bot-protection hint when the page already has full content.
             if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
-                hints.push(`Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
+                hints.push(`Page is bot-protected. Try: render="browser" with NOVADA_BROWSER_WS, or format="html" for raw HTML with anti-bot bypass.`);
             }
         }
         if (isTruncated)
@@ -1425,7 +1425,7 @@ async function extractSingleInner(params, apiKey) {
         }
         // NOV-565: never show a bot-protection hint when the page already has full content.
         if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
-            lines.push(`- Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
+            lines.push(`- Page is bot-protected. Try: render="browser" with NOVADA_BROWSER_WS, or format="html" for raw HTML with anti-bot bypass.`);
         }
     }
     // R4: only suggest a render retry when content is genuinely ABSENT, not merely

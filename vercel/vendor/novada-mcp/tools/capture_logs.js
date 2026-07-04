@@ -47,7 +47,7 @@ export async function novadaCaptureLogs(params, apiKey) {
     return JSON.stringify({
         status: "ok",
         data,
-        agent_instruction: "Paginated capture task logs. For aggregate capture balance use novada_plan_balance_all (product=capture).",
+        agent_instruction: "Paginated capture task logs. For aggregate capture balance use novada_account(section=\"plans\").",
     }, null, 2);
 }
 //# sourceMappingURL=capture_logs.js.map
