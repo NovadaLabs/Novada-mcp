@@ -4,8 +4,13 @@
  * Veto scenario: patterns /\bsign\s+(in|up)\b/i, /\bprivacy\s+policy\b/i,
  * /\bterms\s+(of\s+)?(service|use)\b/i are too broad — they strip lines where
  * "sign in", "privacy policy", "terms of service" appear as SUBJECT MATTER in a
- * substantive sentence, causing a GDPR/OAuth fragment to score chromeFraction=1.0
- * and wrongly get synthesis:weak.
+ * substantive sentence, causing a GDPR/OAuth source to be wrongly dropped from the
+ * assembled source material.
+ *
+ * Contract note: research now assembles CITED SOURCE MATERIAL (## Researched source
+ * material for: …, material:grounded|snippets|insufficient) rather than a fake
+ * "synthesized" ## Summary. "substantive content survives" ⇒ material:grounded with
+ * the topic text present; "nav-only content rejected" ⇒ material:insufficient.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
@@ -36,6 +41,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+function extractMaterialSection(output: string): string {
+  const match = output.match(/## Researched source material for:[^\n]*\n([\s\S]*?)(?=\n## Key Findings|\n---\n|$)/);
+  return match ? match[1].trim() : "";
+}
+
 describe("NAV_CHROME false-positive: substantive content containing chrome phrases", () => {
   it("VETO-FP-1: sentence with 'sign in' as subject of OAuth documentation is NOT stripped", async () => {
     // Substantive OAuth sentence — "sign in" is the SUBJECT being documented, not a nav affordance
@@ -56,12 +66,11 @@ describe("NAV_CHROME false-positive: substantive content containing chrome phras
       API_KEY
     );
 
-    // The synthesis must NOT be synthesis:weak — the content is substantive OAuth documentation
-    expect(result, "OAuth documentation with 'sign in' as subject should produce synthesis:ok, not synthesis:weak").not.toMatch(/synthesis:weak/);
-    // The summary must retain OAuth-specific content
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : "";
-    expect(summary, "Summary should retain OAuth/authorization content").toMatch(/OAuth|authorization|token|PKCE|redirect/i);
+    // Substantive OAuth documentation must be surfaced as grounded material, not dropped.
+    expect(result, "OAuth documentation with 'sign in' as subject should be grounded material").toMatch(/material:grounded/);
+    // The material must retain OAuth-specific content
+    const material = extractMaterialSection(result);
+    expect(material, "Material should retain OAuth/authorization content").toMatch(/OAuth|authorization|token|PKCE|redirect/i);
   });
 
   it("VETO-FP-2: sentence with 'privacy policy' as GDPR subject is NOT stripped", async () => {
@@ -83,10 +92,9 @@ describe("NAV_CHROME false-positive: substantive content containing chrome phras
       API_KEY
     );
 
-    expect(result, "GDPR documentation with 'privacy policy' as subject should produce synthesis:ok").not.toMatch(/synthesis:weak/);
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : "";
-    expect(summary, "Summary should retain GDPR content").toMatch(/GDPR|Article|data|processing|fines|retention/i);
+    expect(result, "GDPR documentation with 'privacy policy' as subject should be grounded material").toMatch(/material:grounded/);
+    const material = extractMaterialSection(result);
+    expect(material, "Material should retain GDPR content").toMatch(/GDPR|Article|data|processing|fines|retention/i);
   });
 
   it("VETO-FP-3: sentence with 'terms of service' as compliance subject is NOT stripped", async () => {
@@ -108,10 +116,9 @@ describe("NAV_CHROME false-positive: substantive content containing chrome phras
       API_KEY
     );
 
-    expect(result, "Legal documentation with 'terms of service' as subject should produce synthesis:ok").not.toMatch(/synthesis:weak/);
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : "";
-    expect(summary, "Summary should retain terms/legal content").toMatch(/terms|service|arbitration|liability|regulatory|compliance/i);
+    expect(result, "Legal documentation with 'terms of service' as subject should be grounded material").toMatch(/material:grounded/);
+    const material = extractMaterialSection(result);
+    expect(material, "Material should retain terms/legal content").toMatch(/terms|service|arbitration|liability|regulatory|compliance/i);
   });
 
   it("VETO-FP-4: combined OAuth + GDPR question — both 'sign in' and 'privacy policy' must survive", async () => {
@@ -133,12 +140,11 @@ describe("NAV_CHROME false-positive: substantive content containing chrome phras
       API_KEY
     );
 
-    // Must NOT be synthesis:weak — the fragment is substantive documentation
-    expect(result, "Combined OAuth+GDPR content should produce synthesis:ok").not.toMatch(/synthesis:weak/);
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : "";
-    // The summary should contain content related to both OAuth and GDPR
-    expect(summary, "Summary should contain OAuth or GDPR content").toMatch(/OAuth|authorization|JWT|GDPR|privacy|disclosure/i);
+    // Substantive documentation → grounded material, not dropped.
+    expect(result, "Combined OAuth+GDPR content should be grounded material").toMatch(/material:grounded/);
+    const material = extractMaterialSection(result);
+    // The material should contain content related to both OAuth and GDPR
+    expect(material, "Material should contain OAuth or GDPR content").toMatch(/OAuth|authorization|JWT|GDPR|privacy|disclosure/i);
   });
 
   it("VETO-CHROME-PASS: genuine nav-affordance lines are still stripped", async () => {
@@ -155,7 +161,12 @@ describe("NAV_CHROME false-positive: substantive content containing chrome phras
       API_KEY
     );
 
-    // A fragment with ONLY nav chrome should get synthesis:weak or synthesis:failed
-    expect(result, "Genuine nav-only fragment should yield synthesis:weak or synthesis:failed").toMatch(/synthesis:(weak|failed)/);
+    // A source with ONLY nav chrome (and an off-topic snippet) yields no usable
+    // on-topic material → material:insufficient (never presented as grounded material).
+    expect(result, "Genuine nav-only source should yield material:insufficient, never grounded").toMatch(/material:(insufficient|snippets)/);
+    expect(result).not.toMatch(/material:grounded/);
+    const material = extractMaterialSection(result);
+    // No nav labels leak into the material section.
+    expect(material).not.toContain("Toggle navigation");
   });
 });

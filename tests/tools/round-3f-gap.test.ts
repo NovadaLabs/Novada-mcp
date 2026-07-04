@@ -8,7 +8,12 @@
  * P2: research.ts sentinel check only catches "## Extract Failed" but NOT "## Extraction Error"
  *     (the TOTAL_REQUEST_CEILING timeout sentinel added by C4 in extract.ts:1294). When novadaExtract
  *     returns "## Extraction Error", research.ts treats it as valid content and pushes
- *     the raw timeout error text into synthesizeAnswer as source material.
+ *     the raw timeout error text into the assembled source material.
+ *
+ * Contract note: research now assembles CITED SOURCE MATERIAL (## Researched source
+ * material for: …, material:grounded|snippets|insufficient) rather than a "synthesized"
+ * ## Summary. "substantive content survives" ⇒ material:grounded with topic text present;
+ * "chrome-only content rejected" ⇒ not grounded.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
@@ -59,6 +64,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+function extractMaterialSection(output: string): string {
+  const match = output.match(/## Researched source material for:[^\n]*\n([\s\S]*?)(?=\n## Key Findings|\n---\n|$)/);
+  return match ? match[1].trim() : "";
+}
+
 // ─── P1: accept-cookies/tracking STRONG_CHROME false-positive ────────────────
 
 describe("P1: accept-cookies/tracking must not strip substantive GDPR sentences", () => {
@@ -85,18 +95,18 @@ describe("P1: accept-cookies/tracking must not strip substantive GDPR sentences"
       API_KEY
     );
 
-    // Must NOT be synthesis:weak — the content is substantive GDPR documentation
+    // Substantive GDPR documentation must be surfaced as grounded material (the
+    // accept-cookies pattern must have a length guard so it isn't stripped).
     expect(
       result,
-      "GDPR accept-cookies substantive content should NOT produce synthesis:weak — the pattern has no length guard"
-    ).not.toMatch(/synthesis:weak/);
+      "GDPR accept-cookies substantive content should be grounded material — the pattern has a length guard"
+    ).toMatch(/material:grounded/);
 
-    // The summary must retain cookie/consent-related content, not be empty
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : "";
+    // The material must retain cookie/consent-related content, not be empty
+    const material = extractMaterialSection(result);
     expect(
-      summary,
-      "Summary should retain GDPR/cookie content, not be stripped to nothing"
+      material,
+      "Material should retain GDPR/cookie content, not be stripped to nothing"
     ).toMatch(/GDPR|Article|cookie|consent|purpose|tracking|ePrivacy|withdraw/i);
   });
 
@@ -124,12 +134,11 @@ describe("P1: accept-cookies/tracking must not strip substantive GDPR sentences"
 
     expect(
       result,
-      "IAB TCF accept-tracking substantive content should NOT produce synthesis:weak"
-    ).not.toMatch(/synthesis:weak/);
+      "IAB TCF accept-tracking substantive content should be grounded material"
+    ).toMatch(/material:grounded/);
 
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : "";
-    expect(summary).toMatch(/tracking|consent|IAB|TCF|purpose|vendor|advertising/i);
+    const material = extractMaterialSection(result);
+    expect(material).toMatch(/tracking|consent|IAB|TCF|purpose|vendor|advertising/i);
   });
 
   it("GAP-P1-PASS: short 'Accept all cookies' button text IS still stripped", async () => {
@@ -151,11 +160,15 @@ describe("P1: accept-cookies/tracking must not strip substantive GDPR sentences"
       API_KEY
     );
 
-    // A fragment with ONLY cookie-banner chrome must get synthesis:weak or synthesis:failed
+    // A source with ONLY cookie-banner chrome (off-topic to proxy rotation) must NOT
+    // be presented as grounded material — short "accept cookies" is still chrome.
     expect(
       result,
-      "Cookie-banner-only fragment should yield synthesis:weak or synthesis:failed — short accept cookies is still chrome"
-    ).toMatch(/synthesis:(weak|failed)/);
+      "Cookie-banner-only fragment should not be grounded material — short accept cookies is still chrome"
+    ).not.toMatch(/material:grounded/);
+    expect(result).toMatch(/material:(insufficient|snippets)/);
+    const material = extractMaterialSection(result);
+    expect(material).not.toContain("Accept all cookies");
   });
 });
 

@@ -29,8 +29,8 @@ const extractResponse = (body: string) => ({
   statusText: "OK",
 });
 
-function extractSummarySection(output: string): string {
-  const match = output.match(/## Summary\n([\s\S]*?)(?=\n## |\n---\n|$)/);
+function extractMaterialSection(output: string): string {
+  const match = output.match(/## Researched source material for:[^\n]*\n([\s\S]*?)(?=\n## Key Findings|\n---\n|$)/);
   return match ? match[1].trim() : "";
 }
 
@@ -49,7 +49,9 @@ describe("novadaResearch", () => {
     const result = await novadaResearch({ question: "How do AI agents work?", depth: "quick" }, API_KEY);
     expect(result).toContain("## Research:");
     expect(result).toContain("How do AI agents work?");
-    expect(result).toContain("## Summary");
+    // Honest framing: cited source material, not a fake "synthesized" summary.
+    expect(result).toContain("## Researched source material for:");
+    expect(result).not.toContain("## Summary");
     expect(result).toContain("## Key Findings");
     expect(result).toContain("## Sources");
     // quick = 3 queries
@@ -97,21 +99,27 @@ describe("novadaResearch", () => {
     );
 
     const result = await novadaResearch({ question: "Dedup test query here", depth: "quick" }, API_KEY);
-    // Even though 3 queries all return the same URL, it appears a bounded number of times.
+    // The dedup invariant: 3 queries returning the same URL must collapse to ONE
+    // source. Canonical check = exactly one row in the Sources table for that URL
+    // (not 3). The URL is then referenced once per output section (material Source
+    // line, Key Findings, Sources-table link+column) — a small fixed count, never
+    // multiplied by the query count.
+    const sourceTableRows = result.match(/^\| \d+ \| \[[^\]]*\]\(https:\/\/same\.com\/page\)/gm);
+    expect(sourceTableRows, "the deduped URL must appear in exactly one Sources-table row").toHaveLength(1);
     const sourceMatches = result.match(/https:\/\/same\.com\/page/g);
     expect(sourceMatches).not.toBeNull();
-    expect(sourceMatches!.length).toBeLessThanOrEqual(3);
+    expect(sourceMatches!.length).toBeLessThanOrEqual(4); // material + finding + 2 table cells
   });
 });
 
-describe("novadaResearch source extraction + synthesis", () => {
-  it("extracts top source URLs and synthesizes a cited answer", async () => {
+describe("novadaResearch source-material assembly", () => {
+  it("extracts top source URLs and assembles cited source material", async () => {
     mockedAxios.post.mockResolvedValue(
       searchEnvelope([
         { title: "Deep Article", url: "https://example.com/article", description: "Covers the topic" },
       ])
     );
-    // Rich, on-topic article body so full-content extraction + synthesis fires.
+    // Rich, on-topic article body so full-content extraction fires.
     mockedAxios.get.mockResolvedValue(
       extractResponse(
         "<article><h1>Quantum Computing</h1><p>Quantum computing uses qubits that can exist in superposition, unlike classical bits which are strictly 0 or 1. Entanglement lets qubits share state so that operating on one instantly affects another. These properties let quantum computers explore many solutions in parallel for certain problems.</p></article>"
@@ -122,12 +130,13 @@ describe("novadaResearch source extraction + synthesis", () => {
     // Sources section present with the extracted source marked full.
     expect(result).toContain("## Sources");
     expect(result).toContain("full content extracted");
-    // The synthesis must have run over the extracted body.
-    expect(result).toMatch(/synthesis:(ok|weak)/);
+    // Honest framing: grounded cited source material, not a claimed synthesis.
+    expect(result).toMatch(/material:grounded/);
+    expect(result).not.toMatch(/synthesis:(ok|weak)/);
     expect(result).toContain("answer_ready:true");
   });
 
-  it("Summary is synthesized prose about the question, not a snippet dump or 'synthesis:weak' to-do", async () => {
+  it("assembles substantive cited per-source material an agent can answer from in one call", async () => {
     mockedAxios.post.mockResolvedValue(
       searchEnvelope([
         { title: "HTTP/3 explainer", url: "https://example.com/http3", description: "HTTP/3 over QUIC" },
@@ -144,24 +153,26 @@ describe("novadaResearch source extraction + synthesis", () => {
       "test-key"
     );
 
-    const summary = extractSummarySection(result);
-    // Real synthesized prose that actually answers the question.
-    expect(summary.length).toBeGreaterThan(40);
-    expect(summary).toMatch(/QUIC/);
-    expect(summary).toMatch(/TCP|UDP/);
-    // NOT the honest-failure sentinel, NOT a bare "go extract yourself" dump.
-    expect(summary).not.toMatch(/Could not synthesize/i);
-    expect(summary).not.toMatch(/go extract/i);
-    // No raw DOM / markdown-link debris in the headline deliverable.
-    expect(summary).not.toContain("](/");
-    expect(summary).not.toMatch(/^path:/m);
-    // Cited into the Sources table via [n] markers.
-    expect(summary).toMatch(/\[\d+\]/);
-    // Success signal — the answer is ready to relay.
+    const material = extractMaterialSection(result);
+    // Substantive relevant material (multi-sentence, not a one-liner) that answers the question.
+    expect(material.length).toBeGreaterThan(120);
+    expect(material).toMatch(/QUIC/);
+    expect(material).toMatch(/TCP|UDP/);
+    // Per-source cited extract, tagged as grounded full-body material.
+    expect(material).toMatch(/### \[1\]/);
+    expect(material).toMatch(/Source: https:\/\/example\.com\/http3/);
+    // Honest framing — NEVER claims "synthesized".
+    expect(result).not.toMatch(/synthesis:(ok|weak)/);
+    expect(result).not.toMatch(/\bsynthesized\b/i);
+    // No raw DOM / markdown-link debris in the material.
+    expect(material).not.toContain("](/");
+    expect(material).not.toMatch(/^path:/m);
+    // Agent Action tells the consuming agent to compose the answer — no follow-up calls.
     expect(result).toContain("answer_ready:true");
+    expect(result).toMatch(/no further calls needed/i);
   });
 
-  it("degrades to snippet-grounded prose (not a to-do dump) when extraction yields no clean body", async () => {
+  it("degrades to snippet-grounded material (not a to-do dump) when extraction yields no clean body", async () => {
     // Search snippets are clean; the extracted page is pure nav debris.
     mockedAxios.post.mockResolvedValue(
       searchEnvelope([
@@ -181,16 +192,16 @@ describe("novadaResearch source extraction + synthesis", () => {
       "test-key"
     );
 
-    const summary = extractSummarySection(result);
-    expect(summary.length).toBeGreaterThan(0);
-    // Either a real snippet-grounded paragraph, or the honest sentinel — never nav debris.
-    expect(summary).not.toContain("](/support)");
-    expect(summary).not.toContain("[![");
-    // If it synthesized, it must be about the question and cited; if it honestly
-    // failed, it must point at Key Findings — but in NO case a bare snippet list header.
-    const honest = /Could not synthesize/i.test(summary);
-    const synthesized = /autoscal|kubernetes|replica|utilis/i.test(summary) && /\[\d+\]/.test(summary);
-    expect(honest || synthesized).toBe(true);
+    const material = extractMaterialSection(result);
+    expect(material.length).toBeGreaterThan(0);
+    // Never nav debris in the material section.
+    expect(material).not.toContain("](/support)");
+    expect(material).not.toContain("[![");
+    // Falls back to the clean on-topic snippet (material:snippets), and it is cited —
+    // NOT a bare "go extract yourself" to-do.
+    expect(result).toMatch(/material:snippets/);
+    expect(material).toMatch(/autoscal|kubernetes|replica|utilis/i);
+    expect(result).not.toMatch(/go extract yourself/i);
   });
 });
 
@@ -203,7 +214,7 @@ describe("novadaResearch progress notifications (NOV-319)", () => {
     statusText: "OK",
   });
 
-  it("emits 4 phase updates (search → collect → extract → synthesize) on the success path", async () => {
+  it("emits 4 phase updates (search → collect → extract → assemble) on the success path", async () => {
     mockedAxios.post.mockResolvedValue(
       searchEnvelopeP([{ title: "Src", url: "https://src.example.com", description: "About the topic" }])
     );
@@ -227,7 +238,8 @@ describe("novadaResearch progress notifications (NOV-319)", () => {
     expect(updates.map((u) => u.progress)).toEqual([1, 2, 3, 4]);
     expect(updates.every((u) => u.total === 4)).toBe(true);
     expect(updates[0].message).toMatch(/Searching/i);
-    expect(updates[3].message).toMatch(/Synthesiz/i);
+    // Phase 4 assembles cited source material (honest framing — not "synthesizing").
+    expect(updates[3].message).toMatch(/Assembling|source material/i);
   });
 
   it("is a no-op without a callback and swallows reporter errors", async () => {

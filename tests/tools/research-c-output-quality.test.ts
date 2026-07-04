@@ -37,8 +37,8 @@ const extractResponse = (body: string) => ({
   statusText: "OK",
 });
 
-function extractSummarySection(output: string): string {
-  const match = output.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
+function extractMaterialSection(output: string): string {
+  const match = output.match(/## Researched source material for:[^\n]*\n([\s\S]*?)(?=\n## Key Findings|\n---\n|$)/);
   return match ? match[1].trim() : "";
 }
 
@@ -54,8 +54,30 @@ const ABLY_DEBRIS = `<div><img src="https://voltaire.ably.com/static/ably-logo.p
 
 const CLEAN_HTTP3 = `<article><p>The main distinction between HTTP/2 and HTTP/3 lies in their underlying transport protocols. HTTP/2 runs over TCP while HTTP/3 runs over QUIC, which itself runs over UDP. QUIC eliminates head-of-line blocking that affects HTTP/2 over TCP. This makes HTTP/3 more resilient on lossy networks and faster to establish connections.</p></article>`;
 
-describe("C-audit R9: research Summary is clean synthesis, never DOM debris", () => {
-  it("debris-only extracts + clean snippets => Summary uses snippets, no path:/](/ debris", async () => {
+describe("C-audit R9: research source material is clean, never DOM debris, honestly framed", () => {
+  it("output is framed as cited SOURCE MATERIAL, never claims 'synthesized'", async () => {
+    mockedAxios.post.mockResolvedValue(
+      searchEnvelope([
+        { title: "HTTP/3 vs HTTP/2", url: "https://example.com/http3", description: "HTTP/3 uses QUIC over UDP." },
+      ])
+    );
+    mockedAxios.get.mockResolvedValue(extractResponse(CLEAN_HTTP3));
+
+    const result = await novadaResearch(
+      { question: "What are the main differences between HTTP/2 and HTTP/3?", depth: "quick" },
+      API_KEY
+    );
+
+    // Honest framing: the tool assembles source material; it does NOT claim to have
+    // synthesized/written the answer. The consuming agent does that.
+    expect(result).toContain("## Researched source material for:");
+    expect(result).toMatch(/material:(grounded|snippets)/);
+    expect(result).not.toContain("## Summary");
+    expect(result).not.toMatch(/synthesis:(ok|weak)/);
+    expect(result).not.toMatch(/\bsynthesized\b/i);
+  });
+
+  it("debris-only extracts + clean snippets => material uses snippets, no path:/](/ debris", async () => {
     mockedAxios.post.mockResolvedValue(
       searchEnvelope([
         { title: "HTTP/3 vs HTTP/2", url: "https://www.logicmonitor.com/deep-dive/http3-vs-http2/introduction", description: "The main distinction between HTTP/2 and HTTP/3 lies in their underlying transport protocols, TCP and QUIC." },
@@ -69,19 +91,20 @@ describe("C-audit R9: research Summary is clean synthesis, never DOM debris", ()
       API_KEY
     );
 
-    const summary = extractSummarySection(result);
-    expect(summary).not.toContain("](/support)");
-    expect(summary).not.toContain("](/");
-    expect(summary).not.toMatch(/^path:/m);
-    expect(summary).not.toContain("[![");
-    expect(summary).not.toContain("Ably logo");
-    expect(summary.length).toBeGreaterThan(0);
-    const hasAnswer = /QUIC|TCP|UDP|transport/i.test(summary);
-    const honestFail = /could not synthesize/i.test(summary);
-    expect(hasAnswer || honestFail).toBe(true);
+    const material = extractMaterialSection(result);
+    expect(material).not.toContain("](/support)");
+    expect(material).not.toContain("](/");
+    expect(material).not.toMatch(/^path:/m);
+    expect(material).not.toContain("[![");
+    expect(material).not.toContain("Ably logo");
+    expect(material.length).toBeGreaterThan(0);
+    // Falls back to the clean snippets — real material about the question.
+    const hasAnswer = /QUIC|TCP|UDP|transport/i.test(material);
+    const honest = /no clean source material|no clean extract/i.test(material);
+    expect(hasAnswer || honest).toBe(true);
   });
 
-  it("clean extracted prose => Summary is coherent answer prose (synthesis:ok/weak)", async () => {
+  it("clean extracted prose => material is a substantive per-source extract (material:grounded)", async () => {
     mockedAxios.post.mockResolvedValue(
       searchEnvelope([
         { title: "HTTP/3 vs HTTP/2", url: "https://example.com/http3", description: "HTTP/3 uses QUIC over UDP." },
@@ -94,15 +117,21 @@ describe("C-audit R9: research Summary is clean synthesis, never DOM debris", ()
       API_KEY
     );
 
-    const summary = extractSummarySection(result);
-    expect(summary).toMatch(/QUIC/);
-    expect(summary).toMatch(/TCP|UDP/);
-    expect(summary).not.toContain("](/");
-    expect(summary).not.toMatch(/^path:/m);
-    expect(result).toMatch(/synthesis:(ok|weak)/);
+    const material = extractMaterialSection(result);
+    expect(material).toMatch(/QUIC/);
+    expect(material).toMatch(/TCP|UDP/);
+    expect(material).not.toContain("](/");
+    expect(material).not.toMatch(/^path:/m);
+    // Cited per-source extract, tagged as grounded (full-body) material.
+    expect(material).toMatch(/### \[1\]/);
+    expect(result).toMatch(/material:grounded/);
+    expect(result).toContain("answer_ready:true");
+    // The material must be substantive (not a one-line snippet) — the clean body has
+    // multiple relevant sentences; expect more than a single short line.
+    expect(material.length).toBeGreaterThan(120);
   });
 
-  it("only debris everywhere (no usable snippets) => honest, not debris dump", async () => {
+  it("only debris everywhere (no usable snippets) => honest insufficiency, not debris dump", async () => {
     mockedAxios.post.mockResolvedValue(
       searchEnvelope([
         { title: "Nav page", url: "https://nav.example.com", description: "" },
@@ -115,10 +144,12 @@ describe("C-audit R9: research Summary is clean synthesis, never DOM debris", ()
       API_KEY
     );
 
-    const summary = extractSummarySection(result);
-    expect(summary).not.toContain("](/support)");
-    expect(summary).not.toContain("LM Community");
-    expect(summary.length).toBeGreaterThan(0);
+    const material = extractMaterialSection(result);
+    expect(material).not.toContain("](/support)");
+    expect(material).not.toContain("LM Community");
+    expect(material.length).toBeGreaterThan(0);
+    // No debris masquerading as material — either honest insufficiency or a clean placeholder.
+    expect(result).toMatch(/material:(insufficient|snippets)/);
   });
 
   it("R1: no dangling 'Research saved:' line when no file is written (hosted)", async () => {

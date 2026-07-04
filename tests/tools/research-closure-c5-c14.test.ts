@@ -42,6 +42,16 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+// Research now assembles CITED SOURCE MATERIAL (## Researched source material for: …,
+// material:grounded|snippets|insufficient) rather than a fake "synthesized" ## Summary.
+// "substantive content survives" ⇒ material:grounded with topic text present;
+// "nav-only content rejected" ⇒ material:insufficient. The underlying C5/C14 nav-chrome
+// length-guard fixes still gate splitSentences/chromeFraction, so these cases still matter.
+function extractMaterialSection(output: string): string {
+  const match = output.match(/## Researched source material for:[^\n]*\n([\s\S]*?)(?=\n## Key Findings|\n---\n|$)/);
+  return match ? match[1].trim() : "";
+}
+
 // ─── C5: cookie-consent / cookie-policy must not be ALWAYS stripped ─────────
 
 describe("C5: cookie-consent phrases in substantive GDPR sentences survive", () => {
@@ -73,17 +83,16 @@ describe("C5: cookie-consent phrases in substantive GDPR sentences survive", () 
       API_KEY
     );
 
-    // Must not be synthesis:weak — content is substantive GDPR documentation
-    expect(result, "GDPR cookie consent documentation should yield synthesis:ok, not synthesis:weak").not.toMatch(
-      /synthesis:weak/
+    // Substantive GDPR documentation must be surfaced as grounded material, not dropped.
+    expect(result, "GDPR cookie consent documentation should be grounded material").toMatch(
+      /material:grounded/
     );
 
-    // Summary must contain substantive cookie consent content
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : result;
+    // Material must contain substantive cookie consent content
+    const material = extractMaterialSection(result);
     expect(
-      summary,
-      "Summary must contain substantive cookie-consent content, not be empty"
+      material,
+      "Material must contain substantive cookie-consent content, not be empty"
     ).toMatch(/cookie\s+consent|GDPR|Article\s+7|ePrivacy|freely\s+given|unambiguous|withdraw/i);
   });
 
@@ -112,10 +121,9 @@ describe("C5: cookie-consent phrases in substantive GDPR sentences survive", () 
       API_KEY
     );
 
-    expect(result, "GDPR cookie policy documentation should produce synthesis:ok").not.toMatch(/synthesis:weak/);
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : result;
-    expect(summary, "Summary must retain cookie-policy/GDPR content").toMatch(
+    expect(result, "GDPR cookie policy documentation should be grounded material").toMatch(/material:grounded/);
+    const material = extractMaterialSection(result);
+    expect(material, "Material must retain cookie-policy/GDPR content").toMatch(
       /cookie\s+policy|GDPR|ePrivacy|retention|vendor|processing/i
     );
   });
@@ -147,10 +155,12 @@ describe("C5: cookie-consent phrases in substantive GDPR sentences survive", () 
       API_KEY
     );
 
-    // A fragment with only nav-chrome cookie links should NOT produce synthesis:ok
-    expect(result, "Nav-only cookie links should yield synthesis:weak or synthesis:failed").toMatch(
-      /synthesis:(weak|failed)/
-    );
+    // A source with only nav-chrome cookie links (off-topic to "residential proxies")
+    // yields no usable on-topic material → never grounded.
+    expect(result, "Nav-only cookie links should not be grounded material").not.toMatch(/material:grounded/);
+    expect(result).toMatch(/material:(insufficient|snippets)/);
+    const material = extractMaterialSection(result);
+    expect(material).not.toContain("Accept all cookies");
   });
 });
 
@@ -197,15 +207,14 @@ describe("C14: chromeFraction split aligned with stripNavChrome for consistent l
     );
 
     // With old split /[\n.!?]+/, each sentence < 80 chars would falsely flag as chrome,
-    // pushing chromeFraction > 0.4 → synthesis:weak.
-    // With fixed split /\n/, the whole paragraph is one long line → chromeFraction ~0 → synthesis:ok.
-    expect(result, "Single-line GDPR cookie-consent paragraph should not score synthesis:weak").not.toMatch(
-      /synthesis:weak/
+    // pushing chromeFraction > 0.4 and dropping the source. With fixed split /\n/, the whole
+    // paragraph is one long line → chromeFraction ~0 → surfaced as grounded material.
+    expect(result, "Single-line GDPR cookie-consent paragraph should be grounded material").toMatch(
+      /material:grounded/
     );
 
-    const summaryMatch = result.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
-    const summary = summaryMatch ? summaryMatch[1] : result;
-    expect(summary, "Summary must contain substantive GDPR/cookie content").toMatch(
+    const material = extractMaterialSection(result);
+    expect(material, "Material must contain substantive GDPR/cookie content").toMatch(
       /cookie\s+consent|GDPR|Article\s+7|ePrivacy|freely\s+given|withdrawal|vendor/i
     );
   });
@@ -238,9 +247,11 @@ describe("C14: chromeFraction split aligned with stripNavChrome for consistent l
       API_KEY
     );
 
-    // After alignment, nav-only lines should still score high chromeFraction → synthesis:weak
-    expect(result, "Nav-only content should still produce synthesis:weak or synthesis:failed after C14 fix").toMatch(
-      /synthesis:(weak|failed)/
+    // After alignment, nav-only lines still score high chromeFraction and, being off-topic
+    // to "residential proxies", yield no usable on-topic material → never grounded.
+    expect(result, "Nav-only content should not be grounded material after C14 fix").not.toMatch(
+      /material:grounded/
     );
+    expect(result).toMatch(/material:(insufficient|snippets)/);
   });
 });

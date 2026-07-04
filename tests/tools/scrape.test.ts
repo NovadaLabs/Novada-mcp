@@ -159,7 +159,79 @@ describe("novadaScrape — output formats", () => {
     // Data row contains the first record's title
     expect(lines.slice(1).some(l => l.includes("iPhone 16 Pro"))).toBe(true);
   });
+
+  it("CSV drops base64 blob columns and RFC-4180 quotes comma cells", async () => {
+    // A favicon/image base64 data URI (useless in a spreadsheet) + a long unbroken
+    // base64 blob + a title containing a comma (must be quoted to round-trip).
+    const bigBlob = "A".repeat(300); // 300-char unbroken base64-looking token
+    const recs = [
+      {
+        title: "Widget, Deluxe Edition",
+        price: "$19",
+        favicon: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA==",
+        thumbnail: bigBlob,
+        url: "https://example.com/widget",
+      },
+      {
+        title: "Gadget",
+        price: "$29",
+        favicon: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA==",
+        thumbnail: bigBlob,
+        url: "https://example.com/gadget",
+      },
+    ];
+    mockSuccess(recs);
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "widget" }, format: "csv", limit: 20 },
+      "test-key"
+    );
+    const csvMatch = result.match(/```csv\n([\s\S]+?)\n```/);
+    expect(csvMatch).not.toBeNull();
+    const csv = csvMatch![1];
+
+    // 1. Base64 blobs must NOT appear anywhere in the CSV.
+    expect(csv).not.toContain("data:image");
+    expect(csv).not.toContain(bigBlob);
+    // The blob column headers should be dropped too.
+    const header = csv.split("\n")[0];
+    expect(header).not.toContain("favicon");
+    expect(header).not.toContain("thumbnail");
+    // Useful columns survive, key columns lead (title first).
+    expect(header.startsWith("title")).toBe(true);
+    expect(header).toContain("price");
+    expect(header).toContain("url");
+
+    // 2. The comma-containing title cell must be RFC-4180 quoted so it round-trips.
+    expect(csv).toContain('"Widget, Deluxe Edition"');
+    // Parse the first data row respecting quotes → the title field is intact.
+    const firstDataRow = csv.split("\n")[1];
+    const cells = parseCsvLine(firstDataRow);
+    expect(cells[0]).toBe("Widget, Deluxe Edition"); // comma preserved inside one cell
+    expect(cells[1]).toBe("$19");
+  });
 });
+
+/** Minimal RFC-4180 line parser for test assertions (handles quoted commas). */
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; } // escaped quote
+        else inQuotes = false;
+      } else cur += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ",") { out.push(cur); cur = ""; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
 
 describe("novadaScrape — request format", () => {
   it("sends correct scraper_name, scraper_id, and operation params", async () => {

@@ -1,7 +1,7 @@
 /**
  * Tests for F14 (P1): Three sub-fixes for novadaResearch
  *
- * F14-1: synthesizeAnswer emits nav/header chrome as ## Summary
+ * F14-1: nav/header chrome must not leak into the assembled source material
  * F14-2: generateSearchQueries truncates named entities from sub-queries
  * F14-3: depth=auto silently resolves with no provenance (no requested_depth / resolved_depth)
  */
@@ -52,11 +52,15 @@ const NAV_CHROME = [
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
-// F14-1: synthesizeAnswer — nav/header chrome filtering
+// F14-1: nav/header chrome filtering in assembled source material
 // ──────────────────────────────────────────────────────────────────────────────
+// Contract note: research now assembles CITED SOURCE MATERIAL (## Researched source
+// material for: …, material:grounded|snippets|insufficient) rather than a "synthesized"
+// ## Summary. Nav chrome must never appear in the material; nav-only sources must not
+// be presented as grounded material.
 
-describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
-  it("RED: summary must NOT start with nav-chrome text like [Skip to main content]", async () => {
+describe("F14-1: nav-chrome filtering in source material", () => {
+  it("RED: material must NOT contain nav-chrome text like [Skip to main content]", async () => {
     // The extraction returns content that starts with nav chrome
     const navChrome = `[Skip to main content] Sign up Sign in Toggle navigation\n\nMain content about proxies here.`;
     const realContent = `Residential proxies route traffic through real ISP-assigned IP addresses. They are harder to detect than datacenter proxies. Datacenter proxies are faster but easier to block. Trade-offs include cost, speed, and detectability.`;
@@ -72,17 +76,15 @@ describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
       API_KEY
     );
 
-    const summarySection = extractSummarySection(result);
-    // Summary must not be composed primarily of nav chrome lines
+    const material = extractMaterialSection(result);
+    // Material must not contain nav chrome lines
     for (const chrome of NAV_CHROME) {
-      expect(summarySection, `Summary must not contain nav chrome: "${chrome}"`).not.toContain(chrome);
+      expect(material, `Material must not contain nav chrome: "${chrome}"`).not.toContain(chrome);
     }
   });
 
-  it("RED: nav-chrome-only fragment gets synthesis:weak or synthesis:failed (never synthesis:ok)", async () => {
-    // After stripping all nav-chrome lines, the fragment is empty → quality:"failed" → synthesis:failed.
-    // If somehow a non-empty but entirely chrome fragment survives, quality:"weak" → synthesis:weak.
-    // Either is correct; synthesis:ok is wrong for a nav-chrome-only source.
+  it("RED: nav-chrome-only source is never grounded material (insufficient/snippets, not grounded)", async () => {
+    // After stripping all nav-chrome lines, nothing on-topic survives → not grounded.
     const navOnlyContent = `[Skip to main content]\nSign up\nSign in\nToggle navigation\nCookie preferences`;
 
     mockedAxios.post.mockResolvedValue(
@@ -95,7 +97,8 @@ describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
       API_KEY
     );
 
-    expect(result).toMatch(/synthesis:(weak|failed)/);
+    expect(result).not.toMatch(/material:grounded/);
+    expect(result).toMatch(/material:(insufficient|snippets)/);
   });
 
   it("RED: prefers fragment containing question keywords over nav-chrome fragment", async () => {
@@ -121,11 +124,11 @@ describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
       API_KEY
     );
 
-    const summarySection = extractSummarySection(result);
+    const material = extractMaterialSection(result);
     // Should contain content about proxies, not nav chrome
-    expect(summarySection).toMatch(/residential|datacenter|ISP|proxy|proxies/i);
+    expect(material).toMatch(/residential|datacenter|ISP|proxy|proxies/i);
     for (const chrome of NAV_CHROME) {
-      expect(summarySection).not.toContain(chrome);
+      expect(material).not.toContain(chrome);
     }
   });
 
@@ -155,9 +158,9 @@ describe("F14-1: synthesizeAnswer nav-chrome filtering", () => {
       API_KEY
     );
 
-    const summarySection = extractSummarySection(result);
-    expect(summarySection).toMatch(/datacenter|residential|proxy|proxies/i);
-    expect(summarySection).not.toContain("[Skip to main content]");
+    const material = extractMaterialSection(result);
+    expect(material).toMatch(/datacenter|residential|proxy|proxies/i);
+    expect(material).not.toContain("[Skip to main content]");
   });
 });
 
@@ -303,8 +306,8 @@ describe("F14-3: depth=auto provenance", () => {
 // Helpers for extracting output sections
 // ──────────────────────────────────────────────────────────────────────────────
 
-function extractSummarySection(output: string): string {
-  const match = output.match(/## Summary\n([\s\S]*?)(?=\n##|\n---\n|$)/);
+function extractMaterialSection(output: string): string {
+  const match = output.match(/## Researched source material for:[^\n]*\n([\s\S]*?)(?=\n## Key Findings|\n---\n|$)/);
   return match ? match[1].trim() : "";
 }
 
