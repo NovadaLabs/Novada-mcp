@@ -414,16 +414,21 @@ Detect changes on a web page over time. Extracts content, computes a hash, compa
     },
     {
         name: "novada_setup",
-        description: `Check environment configuration and get step-by-step setup instructions. Safe to call before NOVADA_API_KEY is configured.
+        description: `The onboarding concierge and first-run front door of the Novada MCP. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key.
 
-**Use for:** First-time setup, diagnosing missing credentials, getting exact config snippets for Claude Code / Claude Desktop / Cursor / VS Code / Windsurf.
-**Output:** Status of all env vars (NOVADA_API_KEY, NOVADA_BROWSER_WS, NOVADA_PROXY_*), setup commands for all MCP clients, and which tools are currently active.
-**No auth required:** This tool works even when NOVADA_API_KEY is not set.
+**What it does:**
+1. **Validates your key** — makes one cheap, authoritative account read (wallet balance) to confirm your key actually works, and shows your balance. No synthetic per-product probes, no credit cost.
+2. **Guides you if you have no key** — tells you to register at the Novada dashboard (free credits included for testing), where to copy your API key, and the exact config snippet for Claude Code / Claude Desktop / Cursor / VS Code / Windsurf.
+3. **Orients you** — a plain-language list of the core things you can do (search, extract, scrape, browser, account) plus the add-ons.
 
-**UNIFIED KEY:** NOVADA_API_KEY is the only required key. It covers: Search, Extract, Web Unblocker, Scraper API, Research, Crawl, Map, Browser API HTTP management, Proxy management and auto-provisioning. NOVADA_BROWSER_WS (Browser WebSocket) and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no separate API key — NOVADA_API_KEY authenticates them all. Also shows output pipeline status (where extracted files are saved).
-Output pipeline supports optional project folders for grouping related queries.`,
+**Three states it reports:** key present + valid (ready) · key present but rejected (fix it) · no key yet (register + free credits).
+
+**Auth-free by design:** this is the tool that helps you GET a key, so a missing key is the normal first-run state — it guides, it never errors. Includes a machine-usable agent_instruction so an AI knows exactly what to tell the user next.
+
+**Unified key:** NOVADA_API_KEY covers search, extract, unblock, scraper, research, crawl, map, browser and proxy auto-provisioning. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT are optional add-ons that need no separate key.`,
         inputSchema: zodToMcpSchema(SetupParamsSchema),
-        annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+        // openWorldHint:true — now performs one authoritative account read to validate the key.
+        annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },
     // ─── KR-6: developer-api account-management tools ─────────────────────────
     {
@@ -699,7 +704,7 @@ class NovadaMCPServer {
             // novada_setup is auth-free — handle it before the API_KEY gate
             if (name === "novada_setup") {
                 try {
-                    const result = novadaSetup(validateSetupParams(args));
+                    const result = await novadaSetup(validateSetupParams(args));
                     return { content: [{ type: "text", text: result }] };
                 }
                 catch (e) {

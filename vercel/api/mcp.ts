@@ -276,7 +276,7 @@ const TOOLS = [
   { name: "novada_research",            title: "Deep Research",              schema: ResearchParamsSchema,            description: "Deep multi-source research: searches multiple angles, reads top sources, returns a synthesized report with citations. Use when you need comprehensive analysis of an open-ended topic (not a yes/no claim — use verify for that). Slower than a single search." },
   { name: "novada_map",                 title: "URL Mapper",                 schema: MapParamsSchema,                 description: "List all URLs on a website via sitemap or crawl. Use when you need to find the right page before crawl/extract. Returns URLs only, no content. Fast site reconnaissance." },
   { name: "novada_scrape",              title: "Platform Scraper",           schema: ScrapeParamsSchema,              description: "Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings — NOT general websites (use extract for those)." },
-  { name: "novada_verify",              title: "Claim Verifier",             schema: VerifyParamsSchema,              description: "Fact-check a claim by searching from 3 angles (supporting, skeptical, fact-check). Use when you need to validate a statement before citing it. Returns verdict (supported/unsupported/contested) + confidence 0-100." },
+
   { name: "novada_unblock",             title: "Anti-Bot Unblocking",        schema: UnblockParamsSchema,             description: "Get raw HTML from bot-protected pages via JS rendering or headless browser. Use only when extract fails on a protected page and you need the raw HTML." },
   { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key." },
   { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Not needed for extract/crawl — those handle proxies internally." },
@@ -318,11 +318,11 @@ const HOSTED_HIDDEN = new Set(["novada_browser_flow"]);
 // ?tools=novada_search,novada_scrape. Matches BrightData's ?groups= pattern.
 // Fewer tools = less token overhead in the agent's context window.
 const TOOL_GROUPS: Record<string, string[]> = {
-  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_verify", "novada_setup", "novada_health", "novada_monitor", "novada_discover"],
+  core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_setup", "novada_health", "novada_monitor", "novada_discover"],
   search: ["novada_search"],
   scrape: ["novada_scrape", "novada_extract", "novada_unblock"],
   crawl: ["novada_crawl", "novada_map"],
-  research: ["novada_research", "novada_verify", "novada_discover", "novada_ai_monitor", "novada_monitor"],
+  research: ["novada_research", "novada_discover", "novada_ai_monitor", "novada_monitor"],
   proxy: ["novada_proxy"],
   account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_plan_balance_all", "novada_proxy_account_list", "novada_proxy_account_create", "novada_traffic_daily", "novada_account_summary", "novada_capture_logs"],
   browser: ["novada_browser", "novada_browser_flow"],
