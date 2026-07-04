@@ -66,6 +66,7 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
       "novada_scraper_status",          // → benign ok (async flow removed)
       "novada_scraper_result",          // → benign ok
       "novada_scraper_task_mgmt",       // → benign ok
+      "novada_verify",                  // 0.9.8: cut from tools/list (low value + verdict-quality issues); handler kept functional (hidden), no error for old callers
     ]);
     const wiredSet = new Set(wiredNames.filter((n) => !ALIAS_NAMES.has(n)));
     const registrySet = new Set(registryNames);

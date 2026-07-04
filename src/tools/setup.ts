@@ -1,4 +1,6 @@
 import { z, ZodError } from "zod";
+import { novadaWalletBalance } from "./wallet_balance.js";
+import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 export const SetupParamsSchema = z.object({}).strict();
 export type SetupParams = z.infer<typeof SetupParamsSchema>;
@@ -17,151 +19,190 @@ export function validateSetupParams(raw: Record<string, unknown>): SetupParams {
   }
 }
 
+// ─── Canonical URLs (reused from the codebase — do NOT invent new paths) ──────
+//   REGISTER / free credits : https://dashboard.novada.com  (dashboard home + overview)
+//   GET AN API KEY          : https://dashboard.novada.com/api-key/  (errors.ts INVALID_API_KEY template)
+//   BROWSER API WS          : https://dashboard.novada.com/overview/browser/  (health.ts)
+//   PROXY                   : https://dashboard.novada.com/overview/proxy/    (health.ts)
+const URL_DASHBOARD = "https://dashboard.novada.com";
+const URL_API_KEY   = "https://dashboard.novada.com/api-key/";
+const URL_BROWSER   = "https://dashboard.novada.com/overview/browser/";
+const URL_PROXY     = "https://dashboard.novada.com/overview/proxy/";
+
+type KeyState = "ready" | "present_but_invalid" | "not_set";
+
+interface Validation {
+  state: KeyState;
+  balanceLine?: string;   // human line describing wallet balance (ready state)
+  detail?: string;        // extra detail for invalid state (sanitized error snippet)
+}
+
 /**
- * Check environment configuration and return step-by-step setup instructions.
- * Does NOT require NOVADA_API_KEY — safe to call before the key is configured.
+ * Cheap, authoritative key check: read the master wallet balance — the same
+ * billing endpoint novada_health / novada_account_summary already use. This is a
+ * real "does the key work" probe (NOT a synthetic per-product probe), and it
+ * doubles as a "you have credit" signal for a brand-new tester.
+ *
+ * Never throws — classifies the outcome into one of the three key-states.
  */
-export function novadaSetup(_params: SetupParams): string {
-  const apiKey   = process.env.NOVADA_API_KEY?.trim();
+async function validateKey(effectiveKey: string | undefined): Promise<Validation> {
+  if (!effectiveKey) return { state: "not_set" };
+
+  try {
+    const raw = await novadaWalletBalance({} as never, effectiveKey);
+    const parsed = JSON.parse(raw) as { data?: { balance?: number; currency?: string } };
+    const balance = parsed?.data?.balance;
+    const currency = parsed?.data?.currency ?? "€";
+    if (typeof balance === "number") {
+      const balanceLine = balance > 0
+        ? `Wallet balance: ${currency}${balance.toFixed(2)} — enough to start testing.`
+        : `Wallet balance: ${currency}0.00 — top up at ${URL_DASHBOARD} to run pay-per-use tools.`;
+      return { state: "ready", balanceLine };
+    }
+    // Key was accepted (no auth error) but balance shape was unexpected — still
+    // "ready" (the credential works); just can't show a number.
+    return { state: "ready", balanceLine: "Key accepted. (Wallet balance unavailable right now.)" };
+  } catch (e) {
+    // Auth failures → the key is present but not valid. Everything else
+    // (network, rate-limit, transient 5xx) is NOT the key's fault → treat the
+    // key as present-and-probably-fine so we never scare a first-run user with
+    // a transient blip.
+    const isAuth =
+      e instanceof NovadaError && e.code === NovadaErrorCode.INVALID_API_KEY;
+    const msg = e instanceof Error ? e.message : String(e);
+    if (isAuth) {
+      return { state: "present_but_invalid", detail: msg.split("\n")[0]?.slice(0, 160) };
+    }
+    return {
+      state: "ready",
+      balanceLine: `Key present — couldn't confirm balance (temporary API issue: ${msg.split("\n")[0]?.slice(0, 100)}). This is usually transient.`,
+    };
+  }
+}
+
+// ─── "What you can do" orientation (plain-language, human + agent friendly) ───
+
+const CORE_TOOLS: Array<{ tool: string; line: string }> = [
+  { tool: "novada_search",  line: "Search the web (Google/Bing/etc.) — find pages, news, facts." },
+  { tool: "novada_extract", line: "Read any page — clean text, title, links, or specific fields from a URL." },
+  { tool: "novada_scrape",  line: "Structured data from platforms — Amazon products, LinkedIn, TikTok, YouTube, and more." },
+  { tool: "novada_browser", line: "Operate a page — click, type, scroll, screenshot; drive JS-heavy sites and logins." },
+  { tool: "novada_account_summary", line: "Your account at a glance — balance, plan quotas, and recent usage." },
+];
+
+const ADDON_TOOLS =
+  "Also available: novada_research (multi-source cited report), novada_crawl / novada_site_copy (whole sites), " +
+  "novada_monitor (watch a page for changes), novada_unblock (raw HTML behind anti-bot), and the novada_proxy_* tools (residential/ISP/mobile/datacenter IPs for your own HTTP clients).";
+
+/**
+ * Onboarding concierge — the first-run front door of the Novada MCP.
+ *
+ * AUTH-FREE by design: this is the tool that helps you GET a key, so a missing
+ * key is the normal first-run state, never an error. It (1) reports whether your
+ * key is present+valid / present-but-invalid / not set, (2) tells you the exact
+ * next action, and (3) orients you on what you can do.
+ */
+export async function novadaSetup(_params: SetupParams): Promise<string> {
+  const apiKey = process.env.NOVADA_API_KEY?.trim();
   const devApiKey = process.env.NOVADA_DEVELOPER_API_KEY?.trim();
   const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
-  const webUnblockerKey = process.env.NOVADA_WEB_UNBLOCKER_KEY?.trim();
   const proxyUser = process.env.NOVADA_PROXY_USER?.trim();
   const proxyPass = process.env.NOVADA_PROXY_PASS?.trim();
   const proxyEndpoint = process.env.NOVADA_PROXY_ENDPOINT?.trim();
-  // INC-194: The key that actual API calls use — matches getDeveloperApiKey() priority
+  // The key that actual API calls use — matches getDeveloperApiKey() priority.
   const effectiveKey = devApiKey ?? apiKey;
-
   const proxyConfigured = !!(proxyUser && proxyPass && proxyEndpoint);
-  const allCoreReady = !!apiKey;
 
-  const lines: string[] = ["## Novada MCP — Setup Status", ""];
+  const validation = await validateKey(effectiveKey);
+  const { state } = validation;
 
-  // ─── Environment variable status ──────────────────────────────────────────
+  const L: string[] = ["# Welcome to Novada", ""];
 
-  lines.push("### Environment Variables");
-  lines.push("");
+  // ─── (a) Status line ────────────────────────────────────────────────────
+  const statusLabel =
+    state === "ready" ? "✅ You're ready — your API key works."
+    : state === "present_but_invalid" ? "⚠️ Your API key is set but was rejected."
+    : "👋 No API key yet — let's get you started (free credits available).";
+  L.push(`**Status:** ${statusLabel}`);
+  if (state === "ready" && validation.balanceLine) L.push(`> ${validation.balanceLine}`);
+  L.push("");
 
-  const check = (label: string, value: string | boolean | undefined, note: string) => {
-    const ok = typeof value === "boolean" ? value : !!value;
-    const icon = ok ? "✓" : "✗";
-    const masked = typeof value === "string" && value.length > 8
-      ? `${value.slice(0, 4)}...${value.slice(-4)}`
-      : value ? "(set)" : "(not set)";
-    return `  ${icon} ${label.padEnd(28)}${ok ? masked : "(not set)"}  — ${note}`;
-  };
-
-  lines.push(check("NOVADA_API_KEY", apiKey, apiKey
-    ? "covers search, extract, crawl, research, scrape, monitor, verify, unblock"
-    : "REQUIRED — get at https://www.novada.com"));
-  // INC-194: Show NOVADA_DEVELOPER_API_KEY if set and different from NOVADA_API_KEY
-  if (devApiKey && devApiKey !== apiKey) {
-    lines.push(check("NOVADA_DEVELOPER_API_KEY", devApiKey, "used for account-management tools (wallet, traffic, proxy_account)"));
-    lines.push(`  ⚠ API calls use NOVADA_DEVELOPER_API_KEY (effective key: ${devApiKey.slice(0, 4)}...${devApiKey.slice(-4)}), not NOVADA_API_KEY`);
+  // ─── (b) Next action for this state ───────────────────────────────────────
+  if (state === "not_set") {
+    L.push("## Get started in 3 steps");
+    L.push("");
+    L.push(`1. **Register** at ${URL_DASHBOARD} — free credits are included so you can test right away.`);
+    L.push(`2. **Copy your API key** from ${URL_API_KEY}`);
+    L.push("3. **Add it to your MCP client**, then restart it:");
+    L.push("");
+    L.push("   **Claude Code** (one command):");
+    L.push("   ```");
+    L.push("   claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp");
+    L.push("   ```");
+    L.push("");
+    L.push("   **Claude Desktop / Cursor / VS Code / Windsurf** (mcp config `env` block):");
+    L.push("   ```json");
+    L.push('   { "mcpServers": { "novada": {');
+    L.push('     "command": "npx", "args": ["-y", "novada-mcp"],');
+    L.push('     "env": { "NOVADA_API_KEY": "your_key" }');
+    L.push("   } } }");
+    L.push("   ```");
+    L.push("");
+    L.push("Then call **novada_setup** again — it will confirm your key works and show your balance.");
+    L.push("");
+  } else if (state === "present_but_invalid") {
+    L.push("## Fix your key");
+    L.push("");
+    L.push(`Your key was rejected by the account API. Get a valid key at ${URL_API_KEY} and update the`);
+    L.push("`NOVADA_API_KEY` env var in your MCP client config, then restart the client.");
+    if (validation.detail) L.push(`> Detail: ${validation.detail}`);
+    L.push("");
+    L.push(`If you don't have an account yet, register at ${URL_DASHBOARD} (free credits included).`);
+    L.push("");
+  } else {
+    // ready
+    L.push("You're all set. Here's what you can do:");
+    L.push("");
   }
-  lines.push(check("NOVADA_BROWSER_WS", browserWs, browserWs
-    ? "enables novada_browser and novada_browser_flow"
-    : "optional — needed for novada_browser / novada_browser_flow"));
-  lines.push(check("NOVADA_WEB_UNBLOCKER_KEY", webUnblockerKey, webUnblockerKey
-    ? "overrides the unblocker key (optional — NOVADA_API_KEY is used as fallback)"
-    : "optional — NOVADA_API_KEY already covers Web Unblocker; set this only to use a separate unblocker key"));
-  lines.push(check("NOVADA_PROXY_USER/PASS/ENDPOINT", proxyConfigured, proxyConfigured
-    ? "enables novada_proxy_* credential tools"
-    : "optional — needed for novada_proxy_* credential generation"));
 
-  lines.push("");
-  lines.push("**Unified API Key:** NOVADA_API_KEY covers search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning.");
-  lines.push("**Proxy auto-provision:** If NOVADA_PROXY_ENDPOINT is set, user/pass are auto-fetched from your account — no separate NOVADA_PROXY_USER/PASS needed.");
-  lines.push("");
+  // ─── (c) "What you can do" orientation (always shown) ─────────────────────
+  L.push("## What you can do");
+  L.push("");
+  for (const { tool, line } of CORE_TOOLS) {
+    L.push(`- **${tool}** — ${line}`);
+  }
+  L.push("");
+  L.push(ADDON_TOOLS);
+  L.push("");
 
-  // ─── Summary ──────────────────────────────────────────────────────────────
-
-  if (allCoreReady) {
-    lines.push("**Status: Ready** (configuration OK). Core tools are configured — run `novada_health_all` to confirm which products are activated on your account.");
-    const missing: string[] = [];
-    if (!browserWs) missing.push("novada_browser, novada_browser_flow (need NOVADA_BROWSER_WS)");
-    if (!proxyConfigured) missing.push("novada_proxy_* routing (set NOVADA_PROXY_ENDPOINT — user/pass auto-fetched from your account via NOVADA_API_KEY)");
-    if (missing.length) {
-      lines.push("Optional tools not configured:");
-      for (const m of missing) lines.push(`  - ${m}`);
+  // Optional capabilities (only nudge when ready — don't clutter the first run).
+  if (state === "ready") {
+    const optional: string[] = [];
+    if (!browserWs) optional.push(`For faster **novada_browser** sessions you can set NOVADA_BROWSER_WS (optional — auto-provisioned from your key otherwise). Enable at ${URL_BROWSER}`);
+    if (!proxyConfigured) optional.push(`For **novada_proxy_*** in your own HTTP clients, set NOVADA_PROXY_ENDPOINT (user/pass auto-fetched from your key). Details at ${URL_PROXY}`);
+    if (optional.length) {
+      L.push("### Optional add-ons");
+      for (const o of optional) L.push(`- ${o}`);
+      L.push("");
     }
-    lines.push("");
-    lines.push("Confirm active products: call `novada_health`");
-  } else {
-    lines.push("**Status: Setup required.** NOVADA_API_KEY is missing.");
-    lines.push("");
-    lines.push("─── Step 1: Get your API key ─────────────────────────────────");
-    lines.push("  https://www.novada.com  → sign up → copy your API key");
-    lines.push("");
-    lines.push("─── Step 2: Add the key to your MCP client ───────────────────");
-    lines.push("");
-    lines.push("**Claude Code** (terminal, one command):");
-    lines.push("```");
-    lines.push("claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp");
-    lines.push("```");
-    lines.push("");
-    lines.push("**Claude Desktop** (~/Library/Application Support/Claude/claude_desktop_config.json):");
-    lines.push("```json");
-    lines.push("{");
-    lines.push('  "mcpServers": {');
-    lines.push('    "novada": {');
-    lines.push('      "command": "npx",');
-    lines.push('      "args": ["-y", "novada-mcp"],');
-    lines.push('      "env": { "NOVADA_API_KEY": "your_key" }');
-    lines.push("    }");
-    lines.push("  }");
-    lines.push("}");
-    lines.push("```");
-    lines.push("");
-    lines.push("**Cursor / VS Code / Windsurf** (.cursor/mcp.json or .vscode/mcp.json):");
-    lines.push("```json");
-    lines.push("{");
-    lines.push('  "mcpServers": {');
-    lines.push('    "novada": {');
-    lines.push('      "command": "npx",');
-    lines.push('      "args": ["-y", "novada-mcp"],');
-    lines.push('      "env": { "NOVADA_API_KEY": "your_key" }');
-    lines.push("    }");
-    lines.push("  }");
-    lines.push("}");
-    lines.push("```");
-    lines.push("");
-    lines.push("─── Step 3: Restart your MCP client ──────────────────────────");
-    lines.push("  After saving the config, restart Claude Desktop / reload your IDE.");
-    lines.push("  Then call `novada_health` to confirm the key is active.");
-    lines.push("");
-    lines.push("─── Optional: Browser automation ─────────────────────────────");
-    lines.push("  To use novada_browser / novada_browser_flow, also set:");
-    lines.push('  "NOVADA_BROWSER_WS": "wss://...@upg-scbr2.novada.com"');
-    lines.push("  Get the WebSocket URL at https://www.novada.com → Browser API");
-    lines.push("");
-    lines.push("─── Optional: Proxy credential tools ──────────────────────────");
-    lines.push("  To use novada_proxy_residential / novada_proxy_* tools, also set:");
-    lines.push("  NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT");
-    lines.push("  Get credentials at https://www.novada.com → Residential Proxies");
+    L.push("Next: call **novada_account_summary** for balance + quotas, or **novada_discover** to list every tool.");
+    L.push("");
   }
 
-  lines.push("");
-  lines.push("## Output Pipeline");
-  lines.push("");
-  lines.push("📁 Results auto-saved to: ~/Downloads/novada-mcp/YYYY-MM-DD/");
-  lines.push("   Formats: .md (content), .json (structured), .html (raw)");
-  lines.push("   Output directory is ~/Downloads/novada-mcp/YYYY-MM-DD/ (not yet configurable)");
-  lines.push("");
+  // ─── Agent-facing machine block ───────────────────────────────────────────
+  const agentInstruction =
+    state === "ready"
+      ? "Key is valid. You may call any tool. Suggest the user try novada_search or novada_extract; call novada_account_summary for balance/quotas."
+      : state === "present_but_invalid"
+        ? `Do NOT retry other tools yet — the key is invalid. Tell the user to get a valid key at ${URL_API_KEY} and update NOVADA_API_KEY in their MCP client config, then restart. This is a setup step, not a tool failure.`
+        : `No key yet. Tell the user to register at ${URL_DASHBOARD} (free credits included), copy their API key from ${URL_API_KEY}, add it as NOVADA_API_KEY in their MCP client config, and restart. Do not treat this as an error — it is the normal first-run state.`;
 
-  lines.push("## Agent Action");
-  lines.push(`status: ${allCoreReady ? "ready" : "setup_required"}`);
-  if (allCoreReady) {
-    const available = ["search", "extract", "crawl", "research", "scrape", "monitor", "verify", "unblock", "map", "health"];
-    lines.push(`configured_tools: ${available.join(", ")}`);
-    const optMissing: string[] = [];
-    if (!browserWs) optMissing.push("browser");
-    if (!proxyConfigured) optMissing.push("proxy");
-    if (optMissing.length) lines.push(`optional_not_configured: ${optMissing.join(", ")}`);
-  } else {
-    lines.push("next_step: Set NOVADA_API_KEY in your MCP client config and restart");
-    lines.push("get_key: https://www.novada.com");
-  }
+  L.push("## Agent");
+  L.push(`key_state: ${state}`);
+  L.push(`register_url: ${URL_DASHBOARD}`);
+  L.push(`api_key_url: ${URL_API_KEY}`);
+  L.push(`core_tools: ${CORE_TOOLS.map(t => t.tool).join(", ")}`);
+  L.push(`agent_instruction: ${agentInstruction}`);
 
-  return lines.join("\n");
+  return L.join("\n");
 }

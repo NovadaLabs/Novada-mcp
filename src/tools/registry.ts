@@ -95,12 +95,6 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
   },
   {
-    name: "novada_verify",
-    description: "Fact-check a claim by running 3 parallel queries (supporting + skeptical + fact-check); returns verdict (supported/unsupported/contested/insufficient_data) and confidence score 0–100",
-    category: "Scraping & Verification",
-    status: "active",
-  },
-  {
     name: "novada_unblock",
     description: "Render blocked or JS-heavy pages via Web Unblocker or Browser CDP; returns raw rendered HTML; supports render/browser methods and wait_for selectors",
     category: "Scraping & Verification",
@@ -220,7 +214,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   },
   {
     name: "novada_setup",
-    description: "Check environment configuration and get step-by-step setup instructions for every MCP client; auth-free, works before NOVADA_API_KEY is set",
+    description: "Onboarding concierge + first-run front door: validates your API key against the account API, tells you exactly how to register / get a key (free credits) if you have none, and orients you on the core tools. Auth-free — never errors on a missing key.",
     category: "Health & Discovery",
     status: "active",
   },
