@@ -83,15 +83,17 @@ const ADDON_TOOLS = "Also available: novada_research (multi-source cited report)
  * key is present+valid / present-but-invalid / not set, (2) tells you the exact
  * next action, and (3) orients you on what you can do.
  */
-export async function novadaSetup(_params) {
+export async function novadaSetup(_params, callerApiKey) {
     const apiKey = process.env.NOVADA_API_KEY?.trim();
     const devApiKey = process.env.NOVADA_DEVELOPER_API_KEY?.trim();
     const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
     const proxyUser = process.env.NOVADA_PROXY_USER?.trim();
     const proxyPass = process.env.NOVADA_PROXY_PASS?.trim();
     const proxyEndpoint = process.env.NOVADA_PROXY_ENDPOINT?.trim();
-    // The key that actual API calls use — matches getDeveloperApiKey() priority.
-    const effectiveKey = devApiKey ?? apiKey;
+    // On the hosted server the customer's key arrives per-request (callerApiKey) — validate
+    // THAT, not the server's env fallback. Locally, fall back to env. This makes setup a
+    // truthful front door: it checks the key the customer actually connected with.
+    const effectiveKey = callerApiKey?.trim() || devApiKey || apiKey;
     const proxyConfigured = !!(proxyUser && proxyPass && proxyEndpoint);
     const validation = await validateKey(effectiveKey);
     const { state } = validation;

@@ -618,7 +618,8 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // novada_setup is auth-free and never charged against quota.
     if (name === "novada_setup") {
       try {
-        const result = novadaSetup(validateSetupParams(argsObj));
+        // Pass the caller's token so setup validates the CUSTOMER's key (not the server env fallback).
+        const result = await novadaSetup(validateSetupParams(argsObj), ctx.token);
         logUsage(env, ctx.token, name, true, Date.now() - started);
         return { content: [{ type: "text" as const, text: result }] };
       } catch (e) {

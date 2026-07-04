@@ -10,5 +10,5 @@ export declare function validateSetupParams(raw: Record<string, unknown>): Setup
  * key is present+valid / present-but-invalid / not set, (2) tells you the exact
  * next action, and (3) orients you on what you can do.
  */
-export declare function novadaSetup(_params: SetupParams): Promise<string>;
+export declare function novadaSetup(_params: SetupParams, callerApiKey?: string): Promise<string>;
 //# sourceMappingURL=setup.d.ts.map
