@@ -30,15 +30,15 @@ interface ToolSegment {
 }
 
 /**
- * Slice src/index.ts into per-tool segments from `const TOOLS = [` up to the first
+ * Slice src/core.ts into per-tool segments from `const TOOLS = [` up to the first
  * top-level `];`, so we never pick up `name:` keys from other arrays (CATEGORY_MAP,
  * the --help block, etc.).
  */
 function readToolSegments(): ToolSegment[] {
-  const indexPath = resolve(__dirname, "../../src/index.ts");
+  const indexPath = resolve(__dirname, "../../src/core.ts");
   const src = readFileSync(indexPath, "utf8");
   const start = src.indexOf("const TOOLS = [");
-  expect(start, "could not locate `const TOOLS = [` in src/index.ts").toBeGreaterThan(-1);
+  expect(start, "could not locate `const TOOLS = [` in src/core.ts").toBeGreaterThan(-1);
   const after = src.slice(start);
   const endRel = after.search(/\n\];/);
   expect(endRel, "could not locate end of TOOLS array").toBeGreaterThan(-1);

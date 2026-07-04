@@ -21,15 +21,15 @@ import { dirname, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/** Extract the TOOLS array block from src/index.ts as text. */
+/** Extract the TOOLS array block from src/core.ts as text. */
 function readToolsBlock(): string {
-  const indexPath = resolve(__dirname, "../../src/index.ts");
+  const indexPath = resolve(__dirname, "../../src/core.ts");
   const src = readFileSync(indexPath, "utf8");
   const start = src.indexOf("const TOOLS = [");
-  if (start === -1) throw new Error("could not locate `const TOOLS = [` in src/index.ts");
+  if (start === -1) throw new Error("could not locate `const TOOLS = [` in src/core.ts");
   const after = src.slice(start);
   const endRel = after.search(/\n\];/);
-  if (endRel === -1) throw new Error("could not locate end of TOOLS array in src/index.ts");
+  if (endRel === -1) throw new Error("could not locate end of TOOLS array in src/core.ts");
   return after.slice(0, endRel);
 }
 

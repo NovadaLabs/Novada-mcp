@@ -29,18 +29,18 @@ import { PROXY_ALIAS_MAP } from "../../src/tools/types.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Extract the tool names declared in the `TOOLS = [ ... ]` array in src/index.ts.
+ * Extract the tool names declared in the `TOOLS = [ ... ]` array in src/core.ts.
  * This is the server's authoritative ListTools surface. We slice from `const TOOLS = [`
  * to the first top-level `];` so we never pick up names from other arrays (CATEGORY_MAP
  * values, the --help block, etc.).
  */
 function readWiredToolNames(): string[] {
-  const indexPath = resolve(__dirname, "../../src/index.ts");
+  const indexPath = resolve(__dirname, "../../src/core.ts");
   const src = readFileSync(indexPath, "utf8");
   const start = src.indexOf("const TOOLS = [");
-  expect(start, "could not locate `const TOOLS = [` in src/index.ts").toBeGreaterThan(-1);
+  expect(start, "could not locate `const TOOLS = [` in src/core.ts").toBeGreaterThan(-1);
   const end = src.indexOf("\n];", start);
-  expect(end, "could not locate end of TOOLS array in src/index.ts").toBeGreaterThan(start);
+  expect(end, "could not locate end of TOOLS array in src/core.ts").toBeGreaterThan(start);
   const block = src.slice(start, end);
   const names = [...block.matchAll(/name:\s*"(novada_[a-z_]+)"/g)].map((m) => m[1]);
   return names;

@@ -27,12 +27,12 @@ function readIndexSrc(): string {
   return readFileSync(resolve(__dirname, "../../src/index.ts"), "utf8");
 }
 
-// ─── Helper: extract TOOLS array text from index.ts ──────────────────────────
+// ─── Helper: extract TOOLS array text from core.ts ───────────────────────────
 
 function readToolsBlock(): string {
-  const src = readIndexSrc();
+  const src = readFileSync(resolve(__dirname, "../../src/core.ts"), "utf8");
   const start = src.indexOf("const TOOLS = [");
-  if (start === -1) throw new Error("could not locate `const TOOLS = [` in src/index.ts");
+  if (start === -1) throw new Error("could not locate `const TOOLS = [` in src/core.ts");
   const after = src.slice(start);
   let depth = 0;
   let i = after.indexOf("[");
