@@ -2,10 +2,10 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
-import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaUnblock, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams, validateDiscoverParams, validateBrowserFlowParams, } from "./tools/index.js";
+import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateHealthParams, validateDiscoverParams, validateBrowserFlowParams, } from "./tools/index.js";
 import { classifyError } from "./_core/errors.js";
 import { ZodError } from "zod";
-import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, UnblockParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, } from "./tools/types.js";
+import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, } from "./tools/types.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
 import { ScraperSubmitParamsSchema } from "./tools/scraper_submit.js";
 import { ScraperStatusParamsSchema } from "./tools/scraper_status.js";
@@ -75,7 +75,7 @@ const TOOLS = [
 **CRITICAL — Format Selection:**
 - \`format="markdown"\` (default): full-page content for reading/analysis. Best for articles, docs.
 - \`format="json"\`: structured object. Key fields: url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at. Use \`fields=["price","title"]\` to populate the \`fields\` key — this is the primary reason to choose format="json".
-- \`format="html"\`: raw HTML source (truncated at 10K chars — use novada_unblock for full HTML). Best for debugging or custom parsing.
+- \`format="html"\`: raw HTML source (truncated at 100K chars by default; pass max_chars to adjust). Best for debugging or custom DOM parsing.
 - \`clean=true\`: strip nav/sidebar, return main content only (~15K chars vs ~100K full page).
 
 Common mistake: using markdown when you need specific data — use \`format="json"\` + \`fields=["price","title"]\` instead.
@@ -265,37 +265,11 @@ Not for:
         annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
     {
-        name: "novada_unblock",
-        description: `Use when you need the raw rendered HTML of a blocked or JS-heavy page. Forces JS rendering via Web Unblocker or Browser API. Returns raw HTML, not cleaned text.
-
-**Best for:** When you need raw HTML (not cleaned text) for custom DOM parsing. When novada_extract with render="render" still fails. Returns the full JS-rendered HTML source.
-**Tip:** For most anti-bot pages, try novada_extract with render="render" first — it returns clean text. Use novada_unblock when you specifically need the raw HTML source.
-**Not for:** Reading cleaned text (use novada_extract with render="render"), structured platform data (use novada_scrape).
-**Methods:** "render" (Web Unblocker, faster/cheaper), "browser" (full Chromium CDP, handles complex SPAs).
-**Wait hint:** Use wait_for to specify a CSS selector to wait for before capturing HTML.
-
-Common mistakes:
-- This tool returns RAW HTML, not parsed/cleaned text. Passing the output directly to an LLM expecting markdown will produce garbled, token-heavy responses.
-- For extracted content from bot-protected pages, use novada_extract (it calls the unblocker internally with render='render').
-- Do not use novada_unblock for simple static pages — it adds 9-16 seconds of latency vs 112ms for novada_extract.
-
-When to use:
-- You need the original DOM structure for CSS selector parsing in a processing pipeline.
-- You are feeding the HTML into a downstream parser, not directly to an LLM.
-- You need raw access to a page's complete HTML before novada_extract's content selection.
-
-Not for:
-- Getting readable content from protected pages — use novada_extract with render='render'.
-**Auth:** Uses NOVADA_API_KEY (the single key for all Novada products) — no separate key needed. NOVADA_WEB_UNBLOCKER_KEY is an optional override; NOVADA_API_KEY is used as fallback if it is not set.`,
-        inputSchema: zodToMcpSchema(UnblockParamsSchema),
-        annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
-    },
-    {
         name: "novada_browser",
         description: `Use when you need to interact with a web page — click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Chain multiple actions in one call for efficiency.
 
 **Best for:** Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions.
-**Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_unblock).
+**Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_extract with format="html").
 **Actions:** navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call.
 **Sessions:** Pass session_id to maintain state (cookies, login) across multiple calls. Sessions expire after 10 min of inactivity. Use close_session to release early.
 **Auth:** NOVADA_API_KEY (auto-provisions Browser API credentials). NOVADA_BROWSER_WS is optional — set it to override auto-provision.
@@ -338,7 +312,7 @@ Not for:
 **Required:** task_id (from novada_scraper_submit).
 **Pending/running:** Retry in 5–10 seconds. Use exponential backoff (5s → 10s → 20s → 40s).
 **Complete:** Call novada_scraper_result with the same task_id to retrieve formatted data.
-**Failed:** Re-submit with novada_scraper_submit, or use novada_extract / novada_unblock as alternatives.
+**Failed:** Re-submit with novada_scraper_submit, or use novada_extract as an alternative.
 **agent_instruction:** Each response includes the next action to take — always follow it.`,
         inputSchema: zodToMcpSchema(ScraperStatusParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -362,7 +336,7 @@ Not for:
 **Actions:** click, scroll, wait, type, screenshot — up to 20 per call.
 **Sessions:** Pass session_id to reuse the same browser instance across calls (preserves cookies, login state). Sessions expire after 10 minutes of inactivity.
 **Fallback:** If this tool fails, use novada_browser — it uses CDP directly and supports more action types (navigate, aria_snapshot, evaluate, hover, press_key, select).
-**Not for:** Single URL reading without interaction (use novada_extract or novada_unblock), structured platform data (use novada_scrape).`,
+**Not for:** Single URL reading without interaction (use novada_extract), structured platform data (use novada_scrape).`,
         inputSchema: zodToMcpSchema(BrowserFlowParamsSchema),
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -526,7 +500,7 @@ const CATEGORY_MAP = {
     search: ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor", "novada_search_feedback"],
     proxy: ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
     browser: ["novada_browser", "novada_browser_flow"],
-    scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result", "novada_unblock"],
+    scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
     health: ["novada_discover", "novada_setup", "novada_session_stats"],
     account: ["novada_account", "novada_proxy_account_create", "novada_proxy_account_list", "novada_ip_whitelist", "novada_capture_apikey", "novada_scraper_task_mgmt", "novada_static_ip_mgmt"],
 };
@@ -752,9 +726,21 @@ class NovadaMCPServer {
                     case "novada_verify":
                         result = await novadaVerify(validateVerifyParams(args), API_KEY);
                         break;
-                    case "novada_unblock":
-                        result = await novadaUnblock(validateUnblockParams(args), API_KEY);
+                    // novada_unblock → hidden alias → novada_extract(format:"html", render mapped from method)
+                    // method:"render" → render:"render"; method:"browser" → render:"browser"
+                    // Old callers still get raw HTML; max_chars/wait_for/url are preserved.
+                    case "novada_unblock": {
+                        const unblockArgs = args;
+                        const unblockRender = unblockArgs["method"] === "browser" ? "browser" : "render";
+                        result = await novadaExtract(validateExtractParams({
+                            url: unblockArgs["url"],
+                            format: "html",
+                            render: unblockRender,
+                            ...(unblockArgs["max_chars"] !== undefined && { max_chars: unblockArgs["max_chars"] }),
+                            ...(unblockArgs["wait_for"] !== undefined && { wait_for: unblockArgs["wait_for"] }),
+                        }), API_KEY);
                         break;
+                    }
                     case "novada_browser":
                         result = await novadaBrowser(validateBrowserParams(args));
                         break;
@@ -852,7 +838,7 @@ class NovadaMCPServer {
                         return {
                             content: [{
                                     type: "text",
-                                    text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback`,
+                                    text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback`,
                                 }],
                             isError: true,
                         };

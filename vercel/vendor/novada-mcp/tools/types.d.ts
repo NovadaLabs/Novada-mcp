@@ -218,7 +218,10 @@ export declare const TASK_ID_REGEX_MSG = "task_id must be alphanumeric with unde
 export declare const ScrapeParamsSchema: z.ZodObject<{
     format: z.ZodDefault<z.ZodEnum<{
         json: "json";
+        html: "html";
         markdown: "markdown";
+        csv: "csv";
+        excel: "excel";
         toon: "toon";
     }>>;
     project: z.ZodOptional<z.ZodString>;
@@ -235,6 +238,7 @@ export declare const ScrapeParamsFullSchema: z.ZodObject<{
         markdown: "markdown";
         csv: "csv";
         xlsx: "xlsx";
+        excel: "excel";
         toon: "toon";
     }>>;
     platform: z.ZodString;

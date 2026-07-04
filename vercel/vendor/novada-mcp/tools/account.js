@@ -32,6 +32,12 @@ export const AccountParamsSchema = z
         "'usage': paginated wallet usage/transaction history. " +
         "'plans': per-product plan balances (residential/isp/mobile/datacenter/static/capture). " +
         "'traffic': daily proxy traffic consumption."),
+    format: z
+        .enum(["card", "json"])
+        .default("card")
+        .describe("Output format. " +
+        "'card' (default): human-readable markdown card — scannable headline, status table with icons, expired plans highlighted. " +
+        "'json': clean flat structured object for programmatic use — no data.data nesting, human-readable values, errors[] aggregated."),
     // Forwarded to the underlying tools when section != summary
     start_time: z
         .string()
@@ -72,6 +78,297 @@ export const AccountParamsSchema = z
 export function validateAccountParams(args) {
     return AccountParamsSchema.parse(args ?? {});
 }
+// ─── Card renderers ──────────────────────────────────────────────────────────
+/** Plan-status icon + label for a product row. */
+function planIcon(expired, unavailable, isError) {
+    if (unavailable)
+        return "⛔ not provisioned";
+    if (isError)
+        return "⛔ error";
+    if (expired)
+        return "⚠️ EXPIRED";
+    return "✅ active";
+}
+/** MB → human units: shows GB when ≥ 1024 */
+function mbToHuman(mb) {
+    if (mb >= 1024)
+        return `${(mb / 1024).toFixed(1)} GB`;
+    return `${mb} MB`;
+}
+/** Extract balance_mb from a plan balance object (various server shapes). */
+function extractBalanceMb(balance) {
+    if (!balance || typeof balance !== "object")
+        return undefined;
+    const b = balance;
+    if (typeof b.balance_mb === "number")
+        return b.balance_mb;
+    if (typeof b.remaining_mb === "number")
+        return b.remaining_mb;
+    if (typeof b.plan_mb === "number")
+        return b.plan_mb;
+    return undefined;
+}
+/** Render the summary section as a human card. */
+function renderSummaryCard(summaryData) {
+    const headline = summaryData.headline ?? "";
+    const sections = summaryData.sections ?? {};
+    const wallet = sections.wallet;
+    const plans = sections.plans;
+    const capture = sections.capture_recent;
+    const errors = summaryData.errors ?? [];
+    const lines = [];
+    // ── Headline ────────────────────────────────────────────────────────────
+    lines.push("## Novada Account");
+    lines.push("");
+    if (headline) {
+        // Wallet balance from headline or wallet section
+        const walletBalance = typeof wallet?.balance === "number" ? wallet.balance : undefined;
+        const currency = typeof wallet?.currency === "string" ? wallet.currency : "€";
+        if (walletBalance !== undefined) {
+            lines.push(`**Wallet:** ${currency}${walletBalance.toFixed(2)}`);
+        }
+    }
+    lines.push("");
+    // ── Plan table ──────────────────────────────────────────────────────────
+    const perProduct = plans?.per_product ?? {};
+    const planSummary = plans?.summary ?? {};
+    const expiredProducts = planSummary.expired_products ?? [];
+    const hasExpired = expiredProducts.length > 0;
+    if (hasExpired) {
+        lines.push(`> ⚠️ **EXPIRED PLANS: ${expiredProducts.join(", ")}** — renew at https://dashboard.novada.com`);
+        lines.push("");
+    }
+    const PLAN_LABELS = {
+        residential: "Residential", isp: "ISP", mobile: "Mobile",
+        datacenter: "Datacenter", static: "Static ISP", capture: "Capture",
+    };
+    lines.push("| Plan | Status | Balance | Expires |");
+    lines.push("|------|--------|---------|---------|");
+    for (const [key, val] of Object.entries(perProduct)) {
+        const label = PLAN_LABELS[key] ?? key;
+        if (!val || typeof val !== "object")
+            continue;
+        const v = val;
+        const isErr = v.status === "error";
+        const isUnavailable = v.unavailable === true;
+        const isExpired = v.expired === true;
+        const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable);
+        const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
+        const balanceStr = balanceMb !== undefined ? mbToHuman(balanceMb) : "—";
+        const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
+        lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
+    }
+    lines.push("");
+    // ── Capture recent ──────────────────────────────────────────────────────
+    if (capture?.status === "ok") {
+        const recent = capture.recent ?? [];
+        lines.push(`**Recent capture:** ${recent.length} log entries`);
+        lines.push("");
+    }
+    // ── Errors (clean, no raw API text) ─────────────────────────────────────
+    const realErrors = errors.filter(e => {
+        // Suppress "not provisioned" product errors — already shown in table as ⛔
+        return !e.error.toLowerCase().includes("not provisioned") &&
+            !e.error.toLowerCase().includes("http 404") &&
+            !e.error.includes("Product not provisioned");
+    });
+    if (realErrors.length > 0) {
+        lines.push("**Issues:**");
+        for (const e of realErrors) {
+            lines.push(`- ${e.product}: service error (check API key or contact support)`);
+        }
+        lines.push("");
+    }
+    // ── Entitlements (from health section if present) ────────────────────────
+    const entitlements = sections.entitlements;
+    if (entitlements && typeof entitlements === "string") {
+        // Extract only the plan table portion — skip the verbose health preamble
+        const planTableStart = entitlements.indexOf("### Proxy Plan Balances");
+        if (planTableStart === -1) {
+            // No plan table — extract the product table from health
+            const tableStart = entitlements.indexOf("| Product |");
+            const tableEnd = entitlements.indexOf("\n---");
+            if (tableStart !== -1) {
+                lines.push("**Entitlements:**");
+                lines.push(tableEnd !== -1
+                    ? entitlements.slice(tableStart, tableEnd).trim()
+                    : entitlements.slice(tableStart).trim());
+                lines.push("");
+            }
+        }
+    }
+    lines.push(`*Checked: ${new Date().toISOString().slice(0, 19)}Z*`);
+    return lines.join("\n");
+}
+/** Render wallet balance as a card. */
+function renderBalanceCard(raw) {
+    const data = raw.data;
+    const balance = typeof data?.balance === "number" ? data.balance : undefined;
+    const currency = typeof data?.currency === "string" ? data.currency : "€";
+    if (balance === undefined)
+        return "**Wallet balance:** unavailable";
+    return `## Wallet Balance\n\n**${currency}${balance.toFixed(2)}** available\n\n*Use \`section=plans\` for per-product MB quotas.*`;
+}
+/** Render wallet usage as a markdown table card. */
+function renderUsageCard(raw) {
+    const data = raw.data;
+    if (!data || typeof data !== "object")
+        return "**Usage:** no records returned.";
+    const list = Array.isArray(data.list)
+        ? data.list
+        : [];
+    const count = typeof data.count === "number"
+        ? data.count
+        : list.length;
+    const lines = [];
+    lines.push("## Wallet Usage History");
+    lines.push("");
+    lines.push(`*${count} records total (showing ${list.length})*`);
+    lines.push("");
+    if (list.length === 0) {
+        lines.push("No transactions found for the requested period.");
+        return lines.join("\n");
+    }
+    lines.push("| Date | Description | Amount |");
+    lines.push("|------|-------------|--------|");
+    for (const item of list.slice(0, 20)) {
+        if (!item || typeof item !== "object")
+            continue;
+        const t = item;
+        const date = typeof t.created_at === "string" ? t.created_at.slice(0, 10)
+            : typeof t.date === "string" ? t.date : "—";
+        const desc = typeof t.remark === "string" ? t.remark
+            : typeof t.description === "string" ? t.description
+                : typeof t.type === "string" ? t.type : "—";
+        const amtRaw = typeof t.amount === "number" ? t.amount
+            : typeof t.price === "number" ? t.price : undefined;
+        const currency = typeof t.currency === "string" ? t.currency : "€";
+        const amt = amtRaw !== undefined ? `${currency}${amtRaw.toFixed ? amtRaw.toFixed(2) : amtRaw}` : "—";
+        lines.push(`| ${date} | ${desc} | ${amt} |`);
+    }
+    if (list.length > 20) {
+        lines.push(`*... and ${list.length - 20} more. Use \`page\`/\`page_size\` to paginate.*`);
+    }
+    return lines.join("\n");
+}
+/** Render plan balances as a markdown table card. */
+function renderPlansCard(raw) {
+    const perProduct = raw.per_product ?? {};
+    const planSummary = raw.summary ?? {};
+    const expiredProducts = planSummary.expired_products ?? [];
+    const activeProducts = planSummary.active_products ?? [];
+    const lines = [];
+    lines.push("## Plan Balances");
+    lines.push("");
+    lines.push(`${activeProducts.length} active / ${expiredProducts.length} expired`);
+    lines.push("");
+    if (expiredProducts.length > 0) {
+        lines.push(`> ⚠️ **EXPIRED: ${expiredProducts.join(", ")}** — renew at https://dashboard.novada.com`);
+        lines.push("");
+    }
+    const PLAN_LABELS = {
+        residential: "Residential", isp: "ISP", mobile: "Mobile",
+        datacenter: "Datacenter", static: "Static ISP", capture: "Capture",
+    };
+    lines.push("| Plan | Status | Balance | Expires |");
+    lines.push("|------|--------|---------|---------|");
+    for (const [key, val] of Object.entries(perProduct)) {
+        const label = PLAN_LABELS[key] ?? key;
+        if (!val || typeof val !== "object")
+            continue;
+        const v = val;
+        const isErr = v.status === "error";
+        const isUnavailable = v.unavailable === true;
+        const isExpired = v.expired === true;
+        const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable);
+        const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
+        const balanceStr = balanceMb !== undefined ? mbToHuman(balanceMb) : "—";
+        const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
+        lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
+    }
+    return lines.join("\n");
+}
+/** Render traffic data as a markdown table card. */
+function renderTrafficCard(raw) {
+    const perProduct = raw.per_product ?? {};
+    const totalMb = typeof raw.total_mb_across_products === "number" ? raw.total_mb_across_products : 0;
+    const range = raw.range ?? {};
+    const lines = [];
+    lines.push("## Traffic Usage");
+    lines.push("");
+    lines.push(`**Total: ${mbToHuman(totalMb)}** — ${range.start_time ?? "?"} to ${range.end_time ?? "?"}`);
+    lines.push("");
+    lines.push("| Product | Consumed |");
+    lines.push("|---------|----------|");
+    for (const [key, val] of Object.entries(perProduct)) {
+        if (!val || typeof val !== "object")
+            continue;
+        const v = val;
+        if (v.status === "error") {
+            lines.push(`| ${key} | ⛔ error |`);
+        }
+        else {
+            const mb = typeof v.total_mb === "number" ? v.total_mb : 0;
+            lines.push(`| ${key} | ${mbToHuman(mb)} |`);
+        }
+    }
+    return lines.join("\n");
+}
+/** Flatten the summary JSON to a clean single-level structure. */
+function flattenSummaryJson(summaryData) {
+    const sections = summaryData.sections ?? {};
+    const wallet = sections.wallet;
+    const plans = sections.plans;
+    const capture = sections.capture_recent;
+    const errors = summaryData.errors ?? [];
+    const planSummary = plans?.summary ?? {};
+    const perProduct = plans?.per_product ?? {};
+    // Flatten per-product into human-readable shape
+    const flatPlans = {};
+    const PLAN_LABELS = {
+        residential: "Residential", isp: "ISP", mobile: "Mobile",
+        datacenter: "Datacenter", static: "Static ISP", capture: "Capture",
+    };
+    for (const [key, val] of Object.entries(perProduct)) {
+        if (!val || typeof val !== "object")
+            continue;
+        const v = val;
+        const isErr = v.status === "error";
+        const isUnavailable = v.unavailable === true;
+        const isExpired = v.expired === true;
+        const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
+        flatPlans[key] = {
+            name: PLAN_LABELS[key] ?? key,
+            status: isUnavailable ? "not_provisioned" : isErr ? "error" : isExpired ? "expired" : "active",
+            balance_mb: balanceMb,
+            balance_human: balanceMb !== undefined ? mbToHuman(balanceMb) : null,
+            expires_at: typeof v.expires_at === "string" ? v.expires_at : null,
+        };
+    }
+    // Clean errors — omit "not provisioned" product 404s
+    const cleanErrors = errors
+        .filter(e => !e.error.includes("not provisioned") && !e.error.includes("HTTP 404") && !e.error.includes("Product not provisioned"))
+        .map(e => ({ product: e.product, message: "service error" }));
+    return {
+        status: summaryData.status,
+        wallet: {
+            balance: typeof wallet?.balance === "number" ? wallet.balance : null,
+            currency: typeof wallet?.currency === "string" ? wallet.currency : "€",
+            balance_human: typeof wallet?.balance === "number"
+                ? `${typeof wallet?.currency === "string" ? wallet.currency : "€"}${wallet.balance.toFixed(2)}`
+                : null,
+        },
+        plans: {
+            active: planSummary.active_products ?? [],
+            expired: planSummary.expired_products ?? [],
+            not_provisioned: planSummary.unavailable_products ?? [],
+            per_product: flatPlans,
+        },
+        capture_recent_count: Array.isArray(capture?.recent) ? capture.recent.length : 0,
+        errors: cleanErrors,
+        agent_instruction: summaryData.agent_instruction,
+    };
+}
 // ─── Tool Implementation ─────────────────────────────────────────────────────
 /**
  * Unified account & billing tool.
@@ -79,6 +376,7 @@ export function validateAccountParams(args) {
  */
 export async function novadaAccount(params, apiKey) {
     const section = params.section ?? "summary";
+    const format = params.format ?? "card";
     switch (section) {
         case "summary": {
             // The summary merges account_summary (wallet+plans+capture) + health entitlements.
@@ -88,7 +386,7 @@ export async function novadaAccount(params, apiKey) {
                 novadaAccountSummary({}, apiKey),
                 novadaHealth(apiKey ?? "", mode),
             ]);
-            // Compose: wrap health as a subsection appended to the summary JSON
+            // Parse the summary JSON
             let summaryData;
             try {
                 summaryData = JSON.parse(summaryResult);
@@ -96,7 +394,8 @@ export async function novadaAccount(params, apiKey) {
             catch {
                 summaryData = { raw: summaryResult };
             }
-            return JSON.stringify({
+            // Merge health into sections
+            const merged = {
                 ...summaryData,
                 sections: {
                     ...(typeof summaryData.sections === "object" && summaryData.sections !== null
@@ -106,32 +405,76 @@ export async function novadaAccount(params, apiKey) {
                 },
                 agent_instruction: summaryData.agent_instruction ??
                     "Full account snapshot: wallet balance, plan quotas, recent capture activity, and product entitlements (proxy/browser/wallet-funded).",
-            }, null, 2);
+            };
+            if (format === "card") {
+                return renderSummaryCard(merged);
+            }
+            // json: flatten into clean structure
+            return JSON.stringify(flattenSummaryJson(merged), null, 2);
         }
-        case "balance":
-            return novadaWalletBalance({}, apiKey);
-        case "usage":
-            return novadaWalletUsageRecord({
+        case "balance": {
+            const raw = await novadaWalletBalance({}, apiKey);
+            if (format === "card") {
+                try {
+                    return renderBalanceCard(JSON.parse(raw));
+                }
+                catch {
+                    return raw;
+                }
+            }
+            // json: pass through (wallet_balance already returns clean single-level data)
+            return raw;
+        }
+        case "usage": {
+            const raw = await novadaWalletUsageRecord({
                 start_time: params.start_time,
                 end_time: params.end_time,
                 page: params.page ?? 1,
                 page_size: params.page_size ?? 50,
             }, apiKey);
+            if (format === "card") {
+                try {
+                    return renderUsageCard(JSON.parse(raw));
+                }
+                catch {
+                    return raw;
+                }
+            }
+            return raw;
+        }
         case "plans": {
             // Validate products subset (plan-specific values)
             const validPlanProducts = ["residential", "isp", "mobile", "datacenter", "static", "capture"];
             const products = params.products?.filter((p) => validPlanProducts.includes(p));
-            return novadaPlanBalanceAll({ products: products && products.length > 0 ? products : undefined }, apiKey);
+            const raw = await novadaPlanBalanceAll({ products: products && products.length > 0 ? products : undefined }, apiKey);
+            if (format === "card") {
+                try {
+                    return renderPlansCard(JSON.parse(raw));
+                }
+                catch {
+                    return raw;
+                }
+            }
+            return raw;
         }
         case "traffic": {
             // Validate products subset (traffic-specific values)
             const validTrafficProducts = ["residential", "isp", "mobile", "datacenter", "static"];
             const products = params.products?.filter((p) => validTrafficProducts.includes(p));
-            return novadaTrafficDaily({
+            const raw = await novadaTrafficDaily({
                 start_time: params.start_time,
                 end_time: params.end_time,
                 products: products && products.length > 0 ? products : undefined,
             }, apiKey);
+            if (format === "card") {
+                try {
+                    return renderTrafficCard(JSON.parse(raw));
+                }
+                catch {
+                    return raw;
+                }
+            }
+            return raw;
         }
         default: {
             // Exhaustiveness guard — TypeScript should prevent this, but guard at runtime too.

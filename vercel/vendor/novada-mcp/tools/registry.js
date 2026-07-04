@@ -82,12 +82,6 @@ export const TOOL_REGISTRY = [
         status: "active",
     },
     {
-        name: "novada_unblock",
-        description: "Render blocked or JS-heavy pages via Web Unblocker or Browser CDP; returns raw rendered HTML; supports render/browser methods and wait_for selectors",
-        category: "Scraping & Verification",
-        status: "active",
-    },
-    {
         name: "novada_ai_monitor",
         description: "Check how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand or product; returns per-model sentiment, key claims, competitor mentions, and source URLs",
         category: "Scraping & Verification",

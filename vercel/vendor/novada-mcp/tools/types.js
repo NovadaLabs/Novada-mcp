@@ -333,16 +333,16 @@ const scrapeBase = {
 /** MCP tool schema — agent-optimized formats only */
 export const ScrapeParamsSchema = z.object({
     ...scrapeBase,
-    format: z.enum(["markdown", "json", "toon"]).default("markdown")
-        .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': raw records array for programmatic processing. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
+    format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
+        .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': clean structured records array — key fields (title/price/rating/url) surfaced, noise trimmed. 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 — paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
     project: z.string().max(30).optional()
         .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
 });
 /** CLI/SDK schema — all output formats */
 export const ScrapeParamsFullSchema = z.object({
     ...scrapeBase,
-    format: z.enum(["markdown", "json", "toon", "csv", "html", "xlsx"]).default("markdown")
-        .describe("Output format. 'markdown'/'json'/'toon' for agents/code. 'csv'/'html'/'xlsx' for human download."),
+    format: z.enum(["markdown", "json", "toon", "csv", "excel", "html", "xlsx"]).default("markdown")
+        .describe("Output format. 'markdown'/'json'/'toon' for agents/code. 'csv'/'excel'/'html'/'xlsx' for human download. 'excel' = alias for 'xlsx' (inline base64)."),
 });
 export function validateScrapeParams(args) {
     return ScrapeParamsSchema.parse(args ?? {});
