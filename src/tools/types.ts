@@ -636,7 +636,7 @@ export const AI_MONITOR_MODELS = ["chatgpt", "perplexity", "grok", "claude", "ge
 export const AiMonitorParamsSchema = z.object({
   // H5 / M8: cap length + strip quote chars so a `"` can't break the site: scoping
   // and inject search operators (result-manipulation only — transport is form-encoded).
-  brand: z.string().min(1).max(200).transform(s => s.replace(/["']/g, "").trim())
+  brand: z.string().min(1).max(200)
     .describe("Brand or product name to monitor across AI models. E.g. 'novada', 'firecrawl', 'stripe'."),
   // H5: validate against the known model keys (lowercased) so an unknown value —
   // including prototype-pollution keys like "__proto__" — is rejected at the Zod
@@ -648,13 +648,23 @@ export const AiMonitorParamsSchema = z.object({
     z.array(z.enum(AI_MONITOR_MODELS)).min(1).max(5),
   ).optional()
     .describe("AI models to check. Options: 'chatgpt', 'perplexity', 'grok', 'claude', 'gemini'. Default: ['chatgpt', 'perplexity', 'grok']."),
-  topics: z.array(z.string().max(200).transform(s => s.replace(/["']/g, "").trim())).max(10).optional()
+  topics: z.array(z.string().max(200)).max(10).optional()
     .describe("Topic filters to narrow the search. E.g. ['pricing', 'comparison', 'recommendation']. Default: general brand mentions."),
 });
 
 export type AiMonitorParams = z.infer<typeof AiMonitorParamsSchema>;
 
 export function validateAiMonitorParams(args: Record<string, unknown> | undefined): AiMonitorParams {
-  return AiMonitorParamsSchema.parse(args ?? {});
+  const parsed = AiMonitorParamsSchema.parse(args ?? {});
+  // M8: strip quote chars so a `"`/`'` can't break site: scoping / inject search
+  // operators. Done POST-parse (not via .transform() in the schema) because the
+  // schema is converted to JSON Schema for the MCP inputSchema, and Zod transforms
+  // cannot be represented there (they crash zodToMcpSchema at module load).
+  const strip = (s: string) => s.replace(/["']/g, "").trim();
+  return {
+    ...parsed,
+    brand: strip(parsed.brand),
+    ...(parsed.topics ? { topics: parsed.topics.map(strip) } : {}),
+  };
 }
 
