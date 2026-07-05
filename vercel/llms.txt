@@ -1,46 +1,52 @@
 # Novada MCP
 
-> Novada Hosted MCP is a remote Streamable-HTTP Model Context Protocol server at `https://mcp.novada.com/mcp` that exposes 25 web-data tools — web search, SERP, scrape, extract, site map, multi-page crawl, source verification, topic discovery, deep research, and 6 proxy variants — through a single authenticated URL. Designed for AI agents running in Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf, or any MCP-compatible client. Zero install required; paste the URL and go.
+> Novada Hosted MCP is a remote Streamable-HTTP Model Context Protocol server at `https://mcp.novada.com/mcp` that exposes 15 web-data tools — web search, content extraction, site map, multi-page crawl, platform scraping, deep research, source/brand monitoring, cloud browser automation, and proxy credentials — through a single authenticated URL. Designed for AI agents running in Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf, or any MCP-compatible client. Zero install required; paste the URL and go.
 
 ## Endpoint
 
 - URL: `https://mcp.novada.com/mcp`
 - Auth (option A): query param `?token=YOUR_API_KEY`
 - Auth (option B): header `Authorization: Bearer YOUR_API_KEY` (preferred — keeps key out of logs and screen-shares)
+- Auth (option C): path form `https://mcp.novada.com/YOUR_API_KEY/mcp`
 - Transport: Streamable HTTP per MCP March 2025 spec
-- Free tier: 1,000 tool calls / month per token, no credit card required
-- Rate limit: 60 requests / minute per IP
+- Free gateway cap: 1,000 tool calls / month per API key — an anti-abuse cap on the free hosted gateway, independent of your Novada balance. No credit card required. Reaching it returns a JSON-RPC tool-error result (not HTTP 429); it resets at the start of next month (UTC), or use the local `npx novada-mcp` server which has no monthly gateway cap.
+- Billing: pay-as-you-go on your Novada balance. Each call draws per-call usage at Novada's standard rates from the same balance used by the REST API and proxy. Some tools make multiple upstream calls and draw proportionally — e.g. `novada_research` reads several sources per call and `novada_crawl` fetches many pages per call.
+- Rate limit: 60 requests / minute per source IP (exceeding it returns HTTP 429; not counted against the gateway cap)
 - Infrastructure: Vercel Edge, 195+ countries, auto-SSL
 
 ## Tools
 
-25 tools total. All callable on the hosted endpoint except `novada_browser` and `novada_browser_flow` (see Browser tools section).
+15 tools total, all callable on the hosted endpoint. (`novada_browser` runs on the hosted endpoint via cloud CDP; only the multi-step `novada_browser_flow` session tool is local-only — see Browser tools below.)
 
-### First-class data tools (9)
+### Search & extraction (2)
 
-- `search`: web search across major search engines
-- `serp`: structured Google / Bing SERP result JSON
-- `scrape`: single-URL clean markdown content extraction
-- `extract`: schema-driven structured JSON extraction from a URL
-- `map`: discover all URLs on a site (sitemap)
-- `crawl`: multi-page crawl with configurable depth
-- `verify`: source credibility check with confidence scoring
-- `discover`: find related sources for a topic
-- `research`: deep multi-source research agent
+- `novada_search`: web search via Google, Bing, DuckDuckGo, Yahoo, or Yandex — returns titles, URLs, snippets
+- `novada_extract`: read clean content from one or more URLs; handles anti-bot protection automatically (JS-render / anti-bot paths require the Web Unblocker product to be activated on your account); `format='html'` for raw HTML
 
-### Proxy variants (6)
+### Site data (3)
 
-- `novada_proxy_residential`: residential IP proxy
-- `novada_proxy_datacenter`: datacenter IP proxy
-- `novada_proxy_isp`: ISP proxy
-- `novada_proxy_dedicated`: dedicated proxy
-- `novada_proxy_static`: static IP proxy
-- `novada_proxy_universal`: universal proxy
+- `novada_map`: list all URLs on a site via sitemap or crawl (URLs only, no content)
+- `novada_crawl`: read content from multiple pages on one site (up to 20 pages per call)
+- `novada_scrape`: structured data from platforms — Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more (13 platforms, ~78 operations)
 
-### Browser tools (2 — local only)
+### Research & monitoring (4)
 
-- `novada_browser`: headless browser page interaction
-- `novada_browser_flow`: multi-step headless browser flow automation
+- `novada_research`: deep multi-source research — searches multiple angles, reads top sources, returns a synthesized report with citations (multiple upstream calls per invocation)
+- `novada_ai_monitor`: search AI-company domains + the web for PUBLIC page mentions & sentiment of a brand. NOTE: searches indexed public pages — it does NOT query the live AI models
+- `novada_monitor`: track changes on a web page over time (content hash + field-level diffs)
+- `novada_discover`: list all available Novada tools grouped by category
+
+### Browser (1)
+
+- `novada_browser`: automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Runs on the hosted endpoint; credentials auto-provisioned from your API key.
+
+### Proxy & account (5)
+
+- `novada_proxy`: proxy credentials for your own HTTP clients — `type=residential|isp|datacenter|mobile|static|dedicated` (default residential). Returns credentials; does NOT auto-fetch. Not needed for extract/crawl (those handle proxies internally).
+- `novada_account`: single-call account & billing dashboard — wallet balance, plan quotas, usage history, per-product plan balances, daily proxy traffic, health entitlements (`section=summary|balance|usage|plans|traffic`)
+- `novada_setup`: check your API key and which Novada products are active (auth-free, no gateway cap used)
+- `novada_proxy_account_list`: list proxy sub-accounts for a product (paginated)
+- `novada_proxy_account_create`: create a proxy sub-account (two-step confirm gate)
 
 ## Install
 
@@ -133,32 +139,36 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 
 ## Browser tools
 
-`novada_browser` and `novada_browser_flow` are NOT available on the hosted endpoint. Playwright cannot run inside serverless edge functions. Calling either tool on the hosted endpoint returns:
+`novada_browser` runs on the hosted endpoint — it drives Novada's cloud browser over CDP (navigate, click, type, screenshot, snapshot), one shot per call, with credentials auto-provisioned from your key.
+
+`novada_browser_flow` (multi-step automation that holds a persistent session across calls) is NOT available on the hosted endpoint — Vercel serverless isolates cannot hold a persistent WebSocket session. Calling it on the hosted endpoint returns:
 
 ```
-501 NOT_AVAILABLE_ON_HOSTED
-agent_instruction: Install the local MCP via `npx novada-mcp` and use the same API key.
+Error [NOT_AVAILABLE_ON_HOSTED]
+agent_instruction: Use the local MCP server (`npx novada-mcp`) for browser-flow tasks, or use novada_scrape / novada_extract for static-content extraction on the hosted server.
 ```
 
-To use browser tools, run the local MCP instead:
+To use `novada_browser_flow`, run the local MCP instead:
 
 ```bash
-npx novada-mcp
+npx novada-mcp@latest
 ```
 
-The same `YOUR_API_KEY` key works. All 25 tools including browser flows are available locally.
+The same `YOUR_API_KEY` works. The local server also has no monthly gateway cap (per-call usage still draws your Novada balance).
 
 ## Source / repo
 
 - GitHub: https://github.com/NovadaLabs/novada-mcpserver
-- npm (local MCP): https://www.npmjs.com/package/novada-mcp (`npx novada-mcp`)
-- Sign up / get API key: https://www.novada.com/signup
+- npm (local MCP): https://www.npmjs.com/package/novada-mcp (`npx novada-mcp@latest`)
+- Get API key: https://dashboard.novada.com/api-key/
+- Top up balance: https://dashboard.novada.com/
 
 ## FAQ
 
 Full FAQ at https://mcp.novada.com/#faq. Key points:
 
-- **Same key everywhere.** One Novada API key works for the hosted MCP, `npx novada-mcp` local, and the Novada REST API. Quota counts per token.
+- **Same key everywhere.** One Novada API key works for the hosted MCP, `npx novada-mcp` local, and the Novada REST API. Per-call usage draws the same Novada balance.
 - **No separate MCP key needed.** Use your existing Novada API key.
-- **Hosted vs local.** Hosted = zero install, always latest, no browser tools. Local (`npx novada-mcp`) = all 25 tools including Playwright flows, you manage updates.
+- **Free gateway cap vs balance.** The 1,000-calls/month free-gateway cap is an anti-abuse throttle on the hosted endpoint, independent of billing. Per-call usage always draws your Novada balance; top up at dashboard.novada.com.
+- **Hosted vs local.** Hosted = zero install, always latest, includes `novada_browser` (cloud CDP). Local (`npx novada-mcp`) = all 15 tools plus multi-step `novada_browser_flow`, no monthly gateway cap, you manage updates.
 - **Key in URL vs header.** Both work identically. Prefer `Authorization: Bearer` header when storing configs in repos or sharing screens.

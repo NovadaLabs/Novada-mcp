@@ -70,7 +70,7 @@ const safeUrl = z.string()
 export const SearchParamsSchema = withCamelCaseAliases(z.object({
     query: z.string().min(1, "Search query is required"),
     engine: z.enum(["google", "bing", "duckduckgo", "yahoo", "yandex"]).default("google")
-        .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yahoo': broad index. 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED — may return zero results; avoid."),
+        .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED — may return zero results; avoid. 'yahoo': NOT SUPPORTED — returns an error; do not use."),
     num: z.number().int().min(1).max(20).default(10),
     country: z.string().default(""),
     language: z.string().default(""),
@@ -293,7 +293,7 @@ export const ProxyParamsSchema = withCamelCaseAliases(z.object({
     type: z.enum(["residential", "isp", "datacenter", "mobile", "static", "dedicated"]).default("residential")
         .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static' for a dedicated ISP IP (same IP every request, requires session_id), 'dedicated' for an exclusive datacenter IP (not shared, requires session_id)."),
     country: z.string().regex(/^[a-zA-Z]{2}$/, "country must be a 2-letter ISO code (e.g. 'us', 'gb', 'de')").optional()
-        .describe("ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country."),
+        .describe("ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country. NOTE: country targeting is NOT applied when type='isp' — it is silently ignored for that proxy type."),
     city: z.string().max(50).regex(/^[a-zA-Z\s\-]+$/, "city must contain only letters, spaces, or hyphens").optional()
         .describe("City name for city-level targeting. Requires country to be set."),
     session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
@@ -470,7 +470,7 @@ export const BrowserParamsSchema = z.preprocess((input) => {
         "{action: \"aria_snapshot\"}. " +
         "Do NOT use string format (\"navigate\") or object-key format ({navigate: \"url\"}) — both are invalid."),
     country: z.string().length(2).optional()
-        .describe("ISO 2-letter country code for browser exit node (e.g. 'us', 'gb'). Required for platforms with geo-restrictions (TikTok is banned in India — use country='us'). Omit for no targeting."),
+        .describe("ISO 2-letter country code (e.g. 'us', 'gb'). NOTE: accepted but NOT yet applied — the browser exit node is not geo-routed by this param today. Do not rely on it for geo-restricted platforms."),
     timeout: z.number().int().min(5000).max(120000).default(60000)
         .describe("Total timeout for all actions in ms. Default 60000."),
     session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
@@ -494,16 +494,16 @@ export const AiMonitorParamsSchema = z.object({
     // H5 / M8: cap length + strip quote chars so a `"` can't break the site: scoping
     // and inject search operators (result-manipulation only — transport is form-encoded).
     brand: z.string().min(1).max(200)
-        .describe("Brand or product name to monitor across AI models. E.g. 'novada', 'firecrawl', 'stripe'."),
+        .describe("Brand or product name to search for on AI-company public web domains. E.g. 'novada', 'firecrawl', 'stripe'."),
     // H5: validate against the known model keys (lowercased) so an unknown value —
     // including prototype-pollution keys like "__proto__" — is rejected at the Zod
     // boundary with a clear INVALID_PARAMS message instead of crashing the runtime
     // (MODEL_DOMAINS["__proto__"] would return Object.prototype → uncaught TypeError)
     // or silently becoming a mislabeled unscoped global search.
     models: z.preprocess((v) => Array.isArray(v) ? v.map(m => typeof m === "string" ? m.toLowerCase() : m) : v, z.array(z.enum(AI_MONITOR_MODELS)).min(1).max(5)).optional()
-        .describe("AI models to check. Options: 'chatgpt', 'perplexity', 'grok', 'claude', 'gemini'. Default: ['chatgpt', 'perplexity', 'grok']."),
+        .describe("Domain groups to search (each key → a set of AI-company public web domains, e.g. 'chatgpt' → chatgpt.com + openai.com). This does NOT query the live AI models — it searches their indexed public pages. Options: 'chatgpt', 'perplexity', 'grok', 'claude', 'gemini'. Default: ['chatgpt', 'perplexity', 'grok']."),
     topics: z.array(z.string().max(200)).max(10).optional()
-        .describe("Topic filters to narrow the search. E.g. ['pricing', 'comparison', 'recommendation']. Default: general brand mentions."),
+        .describe("Topic filter to narrow the search. Only the FIRST entry is used; the rest are ignored. E.g. ['pricing']. Default: general brand mentions."),
 });
 export function validateAiMonitorParams(args) {
     const parsed = AiMonitorParamsSchema.parse(args ?? {});

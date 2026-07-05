@@ -8,7 +8,7 @@ function toggleTheme(){}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Pricing — Novada MCP</title>
-<meta name="description" content="Novada MCP pricing: 1,000 free tool calls per month, no credit card required. Simple, usage-based. Start free with all 15 web-data tools." />
+<meta name="description" content="Novada MCP pricing: 1,000 free gateway calls/month (no credit card), then pay-as-you-go on your Novada balance. All 15 web-data tools, one key, one endpoint." />
 <link rel="canonical" href="https://mcp.novada.com/pricing" />
 <link rel="icon" href="https://www.novada.com/favicon.ico" />
 
@@ -16,17 +16,17 @@ function toggleTheme(){}
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Novada MCP" />
 <meta property="og:title" content="Pricing — Novada MCP" />
-<meta property="og:description" content="1,000 free tool calls per month. No credit card. All 15 web-data tools. Simple, usage-based pricing." />
+<meta property="og:description" content="1,000 free gateway calls/month (no credit card), then pay-as-you-go on your Novada balance. All 15 web-data tools, one key." />
 <meta property="og:url" content="https://mcp.novada.com/pricing" />
 <meta property="og:image" content="https://mcp.novada.com/og-image.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="Novada MCP Pricing — 1,000 free calls/month, no credit card" />
+<meta property="og:image:alt" content="Novada MCP Pricing — 1,000 free gateway calls/month, then pay-as-you-go" />
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Pricing — Novada MCP" />
-<meta name="twitter:description" content="1,000 free tool calls per month. No credit card. All 15 web-data tools." />
+<meta name="twitter:description" content="1,000 free gateway calls/month (no credit card), then pay-as-you-go on your Novada balance. All 15 web-data tools." />
 <meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -261,8 +261,8 @@ function toggleTheme(){}
 <!-- ANNOUNCEMENT BAR -->
 <div class="announcement-bar" role="region" aria-label="Announcement">
   <span class="ab-dot" aria-hidden="true"></span>
-  <span class="en"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 tools · one endpoint · one key · 1,000 free calls/month</span> <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
-  <span class="zh"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费</span> <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
+  <span class="en"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 tools · one endpoint · one key · 1,000 free gateway calls/mo · then balance</span> <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费网关调用 · 之后按余额扣费</span> <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
 </div>
 
 <!-- HEADER -->
@@ -309,8 +309,8 @@ function toggleTheme(){}
       <span class="zh">[ <span class="accent">价格</span> ]</span>
     </h1>
     <p class="pixel-text mx-auto" style="font-size:14px;max-width:560px;line-height:1.7">
-      <span class="en">Free to start. Pay as you mine. One key, one endpoint — no separate billing for MCP vs REST.</span>
-      <span class="zh">免费开始，按需付费。一把密钥，一个端点 — MCP 与 REST 共用同一账单。</span>
+      <span class="en">Free to start — 1,000 gateway calls/month, then pay-as-you-go on your Novada balance. One key, one endpoint — the same balance covers MCP, REST, and proxy.</span>
+      <span class="zh">免费开始 — 每月 1,000 次免费网关调用，之后按用量从 Novada 余额扣费。一把密钥，一个端点 — 同一余额覆盖 MCP、REST 与代理。</span>
     </p>
   </div>
 </section>
@@ -334,12 +334,17 @@ function toggleTheme(){}
 
         <!-- Big number -->
         <div class="pixel-font mb-4" style="font-size:clamp(20px,3vw,30px);color:#011627;text-shadow:2px 2px 0 #271472;line-height:1.3">
-          <span class="en">1,000 CALLS<br><span style="color:#7749F1;font-size:0.6em">/ MONTH</span></span>
-          <span class="zh">每月 1,000 次<br><span style="color:#7749F1;font-size:0.6em">免费</span></span>
+          <span class="en">1,000 CALLS<br><span style="color:#7749F1;font-size:0.6em">/ MONTH FREE</span></span>
+          <span class="zh">每月 1,000 次<br><span style="color:#7749F1;font-size:0.6em">免费网关调用</span></span>
         </div>
         <p class="pixel-text mb-7" style="font-size:13px;line-height:1.7">
-          <span class="en">One unified Novada key. Same endpoint as paid usage. No credit card to start.</span>
-          <span class="zh">一把统一的 Novada 密钥。与付费版同端点。无需信用卡即可开始。</span>
+          <span class="en">1,000 free calls/month through the hosted gateway — an anti-abuse cap, independent of your balance. No credit card to start. Beyond that, it's pay-as-you-go on your Novada balance (the same balance as REST &amp; proxy).</span>
+          <span class="zh">通过托管网关每月 1,000 次免费调用 — 这是防滥用上限，与余额独立。无需信用卡即可开始。超出后按用量从 Novada 余额扣费(与 REST、代理共用同一余额)。</span>
+        </p>
+        <!-- OWNER: real pay-as-you-go rates + narrative here -->
+        <p class="pixel-text mb-7" style="font-size:12px;line-height:1.6;color:#727082">
+          <span class="en">Per-call usage draws your Novada balance at Novada's standard rates. Some tools make multiple upstream calls (e.g. <code class="pixel-code-inline">novada_research</code>, <code class="pixel-code-inline">novada_crawl</code>) and draw proportionally.</span>
+          <span class="zh">每次调用按 Novada 标准费率从余额扣费。部分工具会发起多次上游调用(如 <code class="pixel-code-inline">novada_research</code>、<code class="pixel-code-inline">novada_crawl</code>),按比例扣费。</span>
         </p>
 
         <!-- Bullet list -->
@@ -368,15 +373,15 @@ function toggleTheme(){}
           <li class="flex items-start gap-3">
             <span style="color:#7749F1;font-weight:700">▸</span>
             <span style="color:#424242">
-              <span class="en">Same key works with <code class="pixel-code-inline">npx novada-mcp</code> locally — quota shared across hosted + local</span>
-              <span class="zh">同一密钥直接用于本地 <code class="pixel-code-inline">npx novada-mcp</code> — 托管与本地共享同一配额</span>
+              <span class="en">Same key works with <code class="pixel-code-inline">npx novada-mcp</code> locally — the local server has no free-gateway cap (per-call usage still draws your balance)</span>
+              <span class="zh">同一密钥直接用于本地 <code class="pixel-code-inline">npx novada-mcp</code> — 本地不受免费网关上限限制(每次调用仍从余额扣费)</span>
             </span>
           </li>
           <li class="flex items-start gap-3">
             <span style="color:#7749F1;font-weight:700">▸</span>
             <span style="color:#424242">
-              <span class="en">Quota resets monthly, per API token</span>
-              <span class="zh">配额按月重置，以 API Token 为单位计算</span>
+              <span class="en">Free-gateway cap resets monthly (UTC), per API token</span>
+              <span class="zh">免费网关上限每月(UTC)重置，以 API Token 为单位计算</span>
             </span>
           </li>
         </ul>
@@ -404,8 +409,8 @@ function toggleTheme(){}
           <span class="zh">更高<br><span style="color:#7749F1;font-size:0.6em">额度</span></span>
         </div>
         <p class="pixel-text mb-7" style="font-size:13px;line-height:1.7">
-          <span class="en">The free tier gets you moving — production agents and high-volume pipelines need more. Paid tiers with higher monthly quotas and rate limits are available through the Novada dashboard.</span>
-          <span class="zh">免费额度用于快速上手 — 生产级 Agent 和高频流水线则需要更多。更高月度配额与速率限制的付费方案可通过 Novada 控制台获取。</span>
+          <span class="en">The free gateway cap gets you moving — production agents run on pay-as-you-go. Top up your Novada balance in the dashboard to cover per-call usage; the same balance powers REST, proxy, and MCP. Need a higher free-gateway cap for high-volume pipelines? Contact sales.</span>
+          <span class="zh">免费网关上限用于快速上手 — 生产级 Agent 按用量付费运行。在控制台为 Novada 余额充值即可覆盖每次调用的用量;同一余额同时驱动 REST、代理与 MCP。高频流水线需要更高的免费网关上限?请联系销售。</span>
         </p>
 
         <!-- Bullet list -->
@@ -420,8 +425,8 @@ function toggleTheme(){}
           <li class="flex items-start gap-3">
             <span style="color:#7749F1;font-weight:700">▸</span>
             <span style="color:#424242">
-              <span class="en"><span style="color:#011627;font-weight:600">No rollover</span> — free quota resets at the start of each calendar month and does not carry over. Paid plans follow the same cadence unless otherwise specified.</span>
-              <span class="zh"><span style="color:#011627;font-weight:600">配额不滚存</span> — 免费配额每月初重置，不滚存到下个月。付费方案遵循相同节奏，除非另有说明。</span>
+              <span class="en"><span style="color:#011627;font-weight:600">No rollover</span> — the free-gateway call cap resets at the start of each month (UTC) and does not carry over. Your Novada balance is separate — it carries over and is spent per call.</span>
+              <span class="zh"><span style="color:#011627;font-weight:600">上限不滚存</span> — 免费网关调用上限每月(UTC)初重置，不滚存到下个月。Novada 余额独立计算 — 余额会滚存,按每次调用扣费。</span>
             </span>
           </li>
           <li class="flex items-start gap-3">
@@ -457,8 +462,8 @@ function toggleTheme(){}
         <span class="zh">用量如何计算</span>
       </h2>
       <p class="pixel-text mx-auto" style="font-size:13px;max-width:520px;line-height:1.7">
-        <span class="en">Straightforward rules — no hidden multipliers, no per-tool surcharges.</span>
-        <span class="zh">规则简单透明 — 没有隐藏倍率，没有按工具收费。</span>
+        <span class="en">Two separate meters: the free-gateway call cap (1 per call) and your Novada balance (per-call usage, proportional to work done).</span>
+        <span class="zh">两套独立计量:免费网关调用上限(每次调用计 1 次)与 Novada 余额(按实际用量扣费)。</span>
       </p>
     </div>
 
@@ -467,12 +472,12 @@ function toggleTheme(){}
       <div class="pixel-card p-6">
         <span class="pixel-rule-num mb-4">1</span>
         <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
-          <span class="en">1 TOOL CALL = 1 UNIT</span>
-          <span class="zh">1 次调用 = 1 单位</span>
+          <span class="en">GATEWAY CAP: 1 PER CALL</span>
+          <span class="zh">网关上限:每次调用计 1</span>
         </h3>
         <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
-          <span class="en">Every successful MCP tool invocation deducts one unit from your monthly quota, regardless of which tool, how much data is returned, or response time.</span>
-          <span class="zh">每次成功的 MCP 工具调用消耗一个单位配额，与具体工具、返回数据量或响应时间无关。</span>
+          <span class="en">Each successful MCP tool call counts as 1 against the free-gateway monthly cap, regardless of tool. This is only the anti-abuse counter — your actual cost is drawn from your Novada balance (Rule 3), where some tools do more upstream work.</span>
+          <span class="zh">每次成功的 MCP 工具调用在免费网关月度上限中计为 1 次,与具体工具无关。这只是防滥用计数器 — 实际费用从 Novada 余额扣除(见规则 3),部分工具会发起更多上游工作。</span>
         </p>
       </div>
 
@@ -480,12 +485,12 @@ function toggleTheme(){}
       <div class="pixel-card p-6">
         <span class="pixel-rule-num mb-4">2</span>
         <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
-          <span class="en">QUOTA = PER TOKEN, MONTHLY</span>
-          <span class="zh">配额按 TOKEN 每月重置</span>
+          <span class="en">CAP = PER TOKEN, MONTHLY</span>
+          <span class="zh">上限按 TOKEN 每月计</span>
         </h3>
         <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
-          <span class="en">The counter is attached to your API key, not an IP address or device. You can use the same key across Claude Desktop, Claude Code, Cursor, and local <code class="pixel-code-inline">npx novada-mcp</code> — quota is shared.</span>
-          <span class="zh">计数绑定在你的 API 密钥上，与 IP 地址或设备无关。你可以在 Claude Desktop、Claude Code、Cursor 和本地 <code class="pixel-code-inline">npx novada-mcp</code> 共用同一密钥 — 配额合并计算。</span>
+          <span class="en">The free-gateway cap is attached to your API key, not an IP or device. The same key works across Claude Desktop, Claude Code, Cursor, and local <code class="pixel-code-inline">npx novada-mcp</code> — but the cap applies only to the hosted gateway; the local server has no monthly gateway cap.</span>
+          <span class="zh">免费网关上限绑定在你的 API 密钥上,与 IP 或设备无关。同一密钥可用于 Claude Desktop、Claude Code、Cursor 和本地 <code class="pixel-code-inline">npx novada-mcp</code> — 但该上限仅作用于托管网关;本地服务不受月度网关上限限制。</span>
         </p>
       </div>
 
@@ -493,12 +498,12 @@ function toggleTheme(){}
       <div class="pixel-card p-6">
         <span class="pixel-rule-num mb-4">3</span>
         <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
-          <span class="en">SUCCESS-ONLY BILLING</span>
-          <span class="zh">仅成功调用计费</span>
+          <span class="en">BALANCE: PAY-AS-YOU-GO</span>
+          <span class="zh">余额:按用量付费</span>
         </h3>
         <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
-          <span class="en">Only successful tool calls count. <code class="pixel-code-inline">novada_browser</code> runs on the hosted endpoint (cloud CDP) and bills like any other tool. Only multi-step <code class="pixel-code-inline">novada_browser_flow</code> is hosted-unavailable and needs local <code class="pixel-code-inline">npx novada-mcp</code>.</span>
-          <span class="zh">仅成功的工具调用计入配额。<code class="pixel-code-inline">novada_browser</code> 在托管端运行(云端 CDP),与其他工具同样计费。仅多步的 <code class="pixel-code-inline">novada_browser_flow</code> 托管端不可用,需本地 <code class="pixel-code-inline">npx novada-mcp</code>。</span>
+          <span class="en">Each call draws per-call usage from your Novada balance at standard rates. Some tools make multiple upstream calls and draw proportionally — e.g. <code class="pixel-code-inline">novada_research</code> reads several sources and <code class="pixel-code-inline">novada_crawl</code> fetches many pages in one call. Failed calls don't count against the free-gateway cap (it's refunded), though any upstream work already done may still draw balance.</span>
+          <span class="zh">每次调用按标准费率从 Novada 余额扣除用量。部分工具会发起多次上游调用并按比例扣费 — 例如 <code class="pixel-code-inline">novada_research</code> 会读取多个来源、<code class="pixel-code-inline">novada_crawl</code> 单次调用抓取多页。失败调用不计入免费网关上限(会退还),但已完成的上游工作仍可能扣除余额。</span>
         </p>
       </div>
 
@@ -510,8 +515,8 @@ function toggleTheme(){}
           <span class="zh">速率:每 IP 60 次/分钟</span>
         </h3>
         <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
-          <span class="en">The hosted endpoint enforces 60 requests per minute per source IP, independent of quota. Requests that exceed the rate limit receive <code class="pixel-code-inline">429 Too Many Requests</code> and are not counted against your monthly quota.</span>
-          <span class="zh">托管端对每个来源 IP 每分钟限制 60 次请求，与月度配额独立计算。超出速率限制的请求返回 <code class="pixel-code-inline">429 Too Many Requests</code>，不消耗月度配额。</span>
+          <span class="en">The hosted endpoint enforces 60 requests per minute per source IP, independent of the gateway cap. Requests that exceed the rate limit receive <code class="pixel-code-inline">429 Too Many Requests</code> and are not counted against your free-gateway cap. (This 429 is the <em>only</em> case the server returns 429 — reaching the monthly gateway cap returns a normal tool-error result, not 429.)</span>
+          <span class="zh">托管端对每个来源 IP 每分钟限制 60 次请求，与免费网关上限独立计算。超出速率限制的请求返回 <code class="pixel-code-inline">429 Too Many Requests</code>，不计入免费网关上限。(这是服务器<em>唯一</em>返回 429 的情形 — 达到月度网关上限时返回的是普通工具错误结果,而非 429。)</span>
         </p>
       </div>
     </div>
@@ -523,24 +528,24 @@ function toggleTheme(){}
         <span class="zh">快速参考</span>
       </div>
       <div class="row">
-        <span class="k"><span class="en">Free monthly quota</span><span class="zh">每月免费配额</span></span>
-        <span class="v">1,000 calls</span>
+        <span class="k"><span class="en">Free gateway calls / month</span><span class="zh">每月免费网关调用</span></span>
+        <span class="v">1,000</span>
       </div>
       <div class="row">
-        <span class="k"><span class="en">Quota counter</span><span class="zh">配额计数单位</span></span>
+        <span class="k"><span class="en">Gateway cap counter</span><span class="zh">网关上限计数单位</span></span>
         <span class="v"><span class="en">Per API token</span><span class="zh">按 API Token</span></span>
       </div>
       <div class="row">
-        <span class="k"><span class="en">Reset cadence</span><span class="zh">重置周期</span></span>
-        <span class="v"><span class="en">Monthly</span><span class="zh">每月</span></span>
+        <span class="k"><span class="en">Cap reset</span><span class="zh">上限重置</span></span>
+        <span class="v"><span class="en">Monthly (UTC)</span><span class="zh">每月(UTC)</span></span>
       </div>
       <div class="row">
         <span class="k"><span class="en">Rate limit</span><span class="zh">速率限制</span></span>
         <span class="v">60 req / min / IP</span>
       </div>
       <div class="row">
-        <span class="k"><span class="en">Cost per call (all 15 tools)</span><span class="zh">每次调用费用(全部 15 个工具)</span></span>
-        <span class="v">1 unit</span>
+        <span class="k"><span class="en">Per-call cost</span><span class="zh">每次调用费用</span></span>
+        <span class="v"><span class="en">Pay-as-you-go (balance)</span><span class="zh">按用量(余额)</span></span>
       </div>
       <div class="row">
         <span class="k"><span class="en">Browser on hosted endpoint</span><span class="zh">托管端浏览器</span></span>

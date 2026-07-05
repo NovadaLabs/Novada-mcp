@@ -80,7 +80,7 @@ class NovadaMCPServer {
         this.server = new Server({
             name: "novada",
             version: VERSION,
-            description: "Novada MCP — unified web data API. ONE API KEY (NOVADA_API_KEY) covers all products: search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. Optional: NOVADA_BROWSER_WS for browser automation, NOVADA_PROXY_ENDPOINT for proxy routing. Call novada_health_all() to verify which products are active.",
+            description: "Novada MCP — unified web data API. ONE API KEY (NOVADA_API_KEY) covers all products: search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. Optional: NOVADA_BROWSER_WS for browser automation, NOVADA_PROXY_ENDPOINT for proxy routing. Call novada_account (section=\"summary\") to check balance, plans, and entitlements.",
         }, { capabilities: { tools: {}, prompts: {}, resources: {} } });
         this.setupHandlers();
         this.setupErrorHandling();
@@ -219,7 +219,12 @@ class NovadaMCPServer {
             try {
                 // NOV-321: record every dispatched tool call for novada_session_stats telemetry.
                 recordToolCall(name);
-                const result = await dispatch(name, args, API_KEY, { onProgress });
+                // When a tool filter is active, pass the active-tool names so novada_discover's
+                // catalog reflects only what's usable this session (not the full registry).
+                const visibleTools = (process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS)
+                    ? new Set(ACTIVE_TOOLS.map(t => t.name))
+                    : undefined;
+                const result = await dispatch(name, args, API_KEY, { onProgress, visibleTools });
                 return { content: [{ type: "text", text: result }] };
             }
             catch (error) {
@@ -313,33 +318,35 @@ Environment (ONE KEY COVERS EVERYTHING):
 Connect to Claude Code:
   claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 
-Tools (${TOOLS.length}):
-  novada_search              Search the web via Google, Bing, and 3 more engines
+Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the live set):
+  novada_search              Search the web via Google, Bing, DuckDuckGo, Yandex (4 engines)
   novada_extract             Extract content from any URL (smart auto-routing)
   novada_crawl               Crawl a website (BFS/DFS, up to 20 pages)
-  novada_research            Multi-step web research with synthesis
-  novada_map                 Discover all URLs on a website (fast)
+  novada_research            Multi-source research — returns cited source material to reason over
+  novada_map                 Discover URLs on a website (up to 100)
+  novada_site_copy           Copy an entire docs site to disk as markdown (one file per page)
   novada_scrape              Structured data from 13 active platforms (~78 operations, e.g. Amazon, TikTok)
-  novada_proxy               Get residential proxy credentials (legacy)
-  novada_verify              Verify a factual claim against web sources
-  novada_unblock             Force JS rendering on blocked/SPA pages
+  novada_ai_monitor          Search AI-company public domains for brand mentions (not live models)
+  novada_monitor             Detect page changes between checks (session-scoped baseline)
+  novada_proxy               Get proxy credentials (residential/isp/datacenter/mobile/static/dedicated)
   novada_browser             Interactive browser automation (navigate, click, type, screenshot)
-  novada_health              Check which Novada products are active on your API key
-  novada_health_all          Extended health check with activation links for all products
-  novada_discover            List all available Novada tools with categories and status
-  novada_proxy_residential   Residential proxy (100M+ IPs, geo-targeting, anti-bot)
-  novada_proxy_isp           ISP proxy (rotating ISP-assigned IPs)
-  novada_proxy_datacenter    Datacenter proxy (fast, cost-effective rotation)
-  novada_proxy_mobile        Mobile carrier proxy (3G/4G/5G IPs)
-  novada_proxy_static        Static ISP proxy (dedicated IP, same IP per session_id)
-  novada_proxy_dedicated     Dedicated datacenter proxy (exclusive IP, no sharing)
-  novada_scraper_submit      Submit async scraping task, returns task_id
-  novada_scraper_status      Poll async scraping task status by task_id
-  novada_scraper_result      Retrieve completed scraping results by task_id
   novada_browser_flow        Cloud browser automation via action sequence API
+  novada_account             Account & billing dashboard (balance, plans, usage, traffic)
+  novada_proxy_account_create  Create a proxy sub-account (WRITE, confirm gate)
+  novada_proxy_account_list  List proxy sub-accounts
   novada_ip_whitelist        Manage IP whitelist for proxy products (add/list/del/remark)
+  novada_capture_apikey      Get or reset the Capture API key
+  novada_static_ip_mgmt      Manage static ISP IPs (open/renew/export/list)
+  novada_discover            List all available Novada tools with categories and status
+  novada_setup               Onboarding concierge + API-key validation
   novada_session_stats       Per-session usage telemetry (tool-call counts, recent calls, uptime)
   novada_search_feedback     Record search-result quality to improve future ranking
+
+  (Backward-compat aliases still dispatch but are hidden from tools/list: novada_unblock,
+   novada_verify, novada_health, novada_health_all, novada_wallet_balance,
+   novada_wallet_usage_record, novada_plan_balance_all, novada_traffic_daily,
+   novada_capture_logs, novada_account_summary, novada_proxy_residential/isp/datacenter/
+   mobile/static/dedicated, novada_scraper_submit/status/result.)
 `);
     process.exit(0);
 }

@@ -73,7 +73,11 @@ const CORE_TOOLS = [
     { tool: "novada_browser", line: "Operate a page — click, type, scroll, screenshot; drive JS-heavy sites and logins." },
     { tool: "novada_account", line: "Your account at a glance — balance, plan quotas, and recent usage." },
 ];
-const ADDON_TOOLS = "Also available: novada_research (multi-source cited report), novada_crawl / novada_site_copy (whole sites), " +
+// H4: novada_site_copy is NOT ported to the hosted surface (writes to a
+// read-only serverless FS), so advertising it here dead-ends a hosted agent
+// with TOOL_NOT_ENABLED. novada_crawl covers whole-site content on both
+// surfaces, so we point at it instead.
+const ADDON_TOOLS = "Also available: novada_research (multi-source cited report), novada_crawl (multi-page content from a site), " +
     "novada_monitor (watch a page for changes), and novada_proxy (residential/ISP/mobile/datacenter IPs for your own HTTP clients — set type=).";
 /**
  * Onboarding concierge — the first-run front door of the Novada MCP.

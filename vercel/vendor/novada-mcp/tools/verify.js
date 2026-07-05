@@ -1,5 +1,5 @@
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
-import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { classifyAuthority } from "../utils/authority.js";
 // FIX-4: Max claim length — prevents excessively long claims from blowing up search queries
 const CLAIM_MAX_LENGTH = 1000;
@@ -96,14 +96,26 @@ function sanitizeEvidenceUrls(sources) {
         .filter((u) => Boolean(u))
         .filter(u => !isRedirectPoisonedUrl(u));
 }
+// C2: a transient network/timeout/5xx blip and a genuine "Scraper API not
+// activated" both throw here — only an auth/entitlement code (or matching
+// message) may be reported as the permanent activation defect.
+function isEntitlementError(err) {
+    if (err instanceof NovadaError) {
+        return err.code === NovadaErrorCode.INVALID_API_KEY ||
+            err.code === NovadaErrorCode.PRODUCT_UNAVAILABLE ||
+            err.code === NovadaErrorCode.RATE_LIMITED;
+    }
+    const msg = err instanceof Error ? err.message : "";
+    return /code 40[0-9]|permission|quota|unauthorized|forbidden|no permission|not activated/i.test(msg);
+}
 async function runSearchQuery(query, apiKey) {
     try {
         const submitted = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
         const results = await resolveSearchResults(apiKey, submitted);
         return { results, failed: false };
     }
-    catch {
-        return { results: [], failed: true };
+    catch (err) {
+        return { results: [], failed: true, entitlement: isEntitlementError(err) };
     }
 }
 // ─── Relevance gating ─────────────────────────────────────────────────────────
@@ -177,19 +189,41 @@ export async function novadaVerify(params, apiKey) {
     const settled = await Promise.allSettled(queries.map(q => runSearchQuery(q, apiKey)));
     const queryResults = settled.map(r => r.status === "fulfilled" ? r.value : { results: [], failed: true });
     const [supportingResult, skepticalResult, neutralResult] = queryResults;
-    // All 3 queries failed — search is unavailable, not a genuine verdict
+    // All 3 queries failed. C2: classify honestly. A bare catch used to treat
+    // ANY triple-failure (transient timeout/5xx/DNS included) as a confident,
+    // permanent "Scraper API not activated" — and shipped
+    // `do_not_interpret_as: genuine_insufficient_data`, which DISABLED the
+    // correct retry path. Now the activation verdict fires only on a real
+    // auth/entitlement signal; a transient flake is reported as retryable.
     if (queryResults.every(r => r.failed && r.results.length === 0)) {
+        const isEntitlement = queryResults.some(r => r.entitlement);
+        if (isEntitlement) {
+            return [
+                `## Verify Unavailable`,
+                ``,
+                `Search failed with an account/authorization error on all 3 queries. The Scraper API (which powers search) is not activated on this API key, or the key is invalid.`,
+                ``,
+                `**Verdict cannot be determined** — this is a service activation issue, not genuine ambiguity about the claim.`,
+                ``,
+                `**Fix:** Activate the Scraper API at https://dashboard.novada.com/overview/scraper/, or run \`novada_account(section="summary")\` to confirm which products are active.`,
+                ``,
+                `## Agent Instruction`,
+                `agent_status: search_unavailable | action: activate_scraper_api | do_not_interpret_as: genuine_insufficient_data`,
+            ].join("\n");
+        }
+        // No auth signal → transient or genuinely-empty. Retry once; only escalate
+        // to activation if it persists. Do NOT suppress the retry path.
         return [
-            `## Verify Unavailable`,
+            `## Verify Incomplete`,
             ``,
-            `Search returned 0 results for all 3 queries. Scraper API (search) is not activated on this account.`,
+            `Search returned 0 results for all 3 queries — likely a temporary upstream issue (timeout, rate-limit, or DNS), not a settled verdict on the claim.`,
             ``,
-            `**Verdict cannot be determined** — this is a service activation issue, not genuine ambiguity about the claim.`,
+            `**Verdict cannot be determined right now** — this is a transient search failure, not proof the claim is unverifiable.`,
             ``,
-            `**Fix:** Activate Scraper API at https://dashboard.novada.com/overview/scraper/`,
+            `**Fix:** Retry this call once. If it keeps failing, run \`novada_account(section="summary")\` to confirm the Scraper API is active.`,
             ``,
             `## Agent Instruction`,
-            `agent_status: search_unavailable | action: activate_scraper_api | do_not_interpret_as: genuine_insufficient_data`,
+            `agent_status: search_temporarily_failed | action: retry_once; if it persists call novada_account(section="summary")`,
         ].join("\n");
     }
     // Dispute markers: snippets must contain genuine disagreement language to count as contradicting.

@@ -69,12 +69,12 @@ function toggleTheme(){}
     {
       "@type": "Question",
       "name": "Where is my data / where does it run?",
-      "acceptedAnswer": { "@type": "Answer", "text": "The hosted MCP server runs on Vercel Edge (global PoPs, auto-SSL). Each request dispatches to Novada's backend. Your API key is used only as a call token — it is not stored beyond the request lifetime." }
+      "acceptedAnswer": { "@type": "Answer", "text": "The hosted MCP server runs on Vercel Edge (global PoPs, auto-SSL). Each request dispatches to Novada's backend. Your API key is used only as a call token — we do not store your API key or request payloads (URLs, queries, arguments). We log minimal operational telemetry: tool name, a hashed token fingerprint, and timing, plus error diagnostics via Sentry." }
     },
     {
       "@type": "Question",
       "name": "What happens when I hit the free quota?",
-      "acceptedAnswer": { "@type": "Answer", "text": "The server returns HTTP 429. Your quota resets monthly per token. To get a higher limit, visit the Novada dashboard." }
+      "acceptedAnswer": { "@type": "Answer", "text": "The free hosted gateway allows 1,000 calls/month per API key (an anti-abuse cap, independent of your balance). When you reach it, the tool call returns a normal result with an error notice (not an HTTP 429 — that status is only for the 60-req/min IP rate limit). The cap resets at the start of next month (UTC), or run the local npx novada-mcp server which has no monthly gateway cap. Either way, per-call usage draws your Novada balance — top up at dashboard.novada.com if it runs low." }
     },
     {
       "@type": "Question",
@@ -376,8 +376,8 @@ function toggleTheme(){}
 <!-- ANNOUNCEMENT BAR -->
 <div class="announcement-bar" role="region" aria-label="Announcement">
   <span class="ab-dot" aria-hidden="true"></span>
-  <span class="en"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 tools · one endpoint · one key · 1,000 free calls/month</span> <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
-  <span class="zh"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费</span> <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
+  <span class="en"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 tools · one endpoint · one key · 1,000 free gateway calls/mo · then balance</span> <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费网关调用 · 之后按余额扣费</span> <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
 </div>
 
 <!-- HEADER -->
@@ -501,8 +501,8 @@ function toggleTheme(){}
         <span class="zh">我的数据在哪里处理?服务运行在哪里?</span>
       </summary>
       <p>
-        <span class="en">The hosted MCP server runs on Vercel Edge (global PoPs, auto-SSL). Each request dispatches to Novada's backend for tool execution. Your API key is used only as a call token — it is not stored beyond the request lifetime. No request payloads are logged by the MCP layer.</span>
-        <span class="zh">托管 MCP 服务器运行于 Vercel Edge(全球节点,自动 SSL)。每次请求均分发至 Novada 后端执行工具。你的 API 密钥仅用作调用凭证 — 请求完成后不会保留。MCP 层不会记录请求内容。</span>
+        <span class="en">The hosted MCP server runs on Vercel Edge (global PoPs, auto-SSL). Each request dispatches to Novada's backend for tool execution. Your API key is used only as a call token — we do not store your API key or your request payloads (URLs, queries, arguments). We do log minimal operational telemetry: the tool name, a hashed token fingerprint, and timing (for abuse-prevention and ops), plus error diagnostics via Sentry.</span>
+        <span class="zh">托管 MCP 服务器运行于 Vercel Edge(全球节点,自动 SSL)。每次请求均分发至 Novada 后端执行工具。你的 API 密钥仅用作调用凭证 — 我们不存储你的 API 密钥或请求内容(URL、查询、参数)。我们会记录最少的运维遥测:工具名称、经过哈希的密钥指纹与耗时(用于防滥用与运维),以及通过 Sentry 记录的错误诊断。</span>
       </p>
     </details>
 
@@ -513,8 +513,8 @@ function toggleTheme(){}
         <span class="zh">免费额度用完后会怎样?</span>
       </summary>
       <p>
-        <span class="en">The server returns HTTP <code class="mono">429</code>. Your quota resets monthly per token. To get a higher limit, visit the <a href="https://www.novada.com">Novada dashboard</a> and upgrade your plan.</span>
-        <span class="zh">服务器将返回 HTTP <code class="mono">429</code>。额度按 Token 每月重置。如需更高配额,请前往 <a href="https://www.novada.com">Novada 控制台</a> 升级套餐。</span>
+        <span class="en">The free hosted gateway allows 1,000 calls/month per API key — an anti-abuse cap, independent of your Novada balance. When you reach it, the tool call returns a normal JSON-RPC result flagged as an error (<em>not</em> an HTTP <code class="mono">429</code> — that status is reserved for the 60-req/min per-IP rate limit). The cap resets at the start of next month (UTC). To keep going now, run the local <code class="mono">npx novada-mcp</code> server, which has no monthly gateway cap. Either way, per-call usage draws your Novada balance — <a href="https://dashboard.novada.com/">top up in the dashboard</a> if your balance runs low.</span>
+        <span class="zh">免费托管网关每月允许每把 API 密钥调用 1,000 次 — 这是防滥用上限,与 Novada 余额独立。达到后,工具调用会返回一个标记为错误的正常 JSON-RPC 结果(<em>不是</em> HTTP <code class="mono">429</code> — 该状态仅用于每 IP 每分钟 60 次的速率限制)。上限在下月初(UTC)重置。若想立即继续,可运行本地 <code class="mono">npx novada-mcp</code>,它没有月度网关上限。无论哪种方式,每次调用都会按用量从 Novada 余额扣费 — 余额不足时请<a href="https://dashboard.novada.com/">在控制台充值</a>。</span>
       </p>
     </details>
 

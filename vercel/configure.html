@@ -198,11 +198,11 @@
 
         <div class="rounded-lg p-3 mb-4" style="background:#f5eeff;border:1px solid #e3daff">
           <p class="text-xs font-semibold" style="color:#6c40e2">
-            <span class="en">Free tier · 1,000 calls / month</span><span class="zh">免费额度 · 每月 1,000 次调用</span>
+            <span class="en">1,000 free gateway calls / month · then pay-as-you-go</span><span class="zh">每月 1,000 次免费网关调用 · 之后按用量付费</span>
           </p>
           <p class="text-xs mt-1" style="color:#677489">
-            <span class="en">Same key works hosted or local. No card required to start.</span>
-            <span class="zh">同一密钥可用于托管或本地。无需绑卡即可开始。</span>
+            <span class="en">Same key works hosted or local. No card required to start. Per-call usage draws your Novada balance.</span>
+            <span class="zh">同一密钥可用于托管或本地。无需绑卡即可开始。每次调用按用量从 Novada 余额扣费。</span>
           </p>
         </div>
 
@@ -219,8 +219,8 @@
           <span class="zh">托管端点会读取 <code class="mono" style="color:#6c40e2">?tools=</code> / <code class="mono" style="color:#6c40e2">?groups=</code> 来过滤工具集。当全部工具都被选中时,该参数会被省略,返回完整端点。</span>
         </p>
         <p class="text-xs mt-2" style="color:#97a0b0">
-          <span class="en">Browser-only tools (<code class="mono">novada_browser*</code>) run via the local MCP — <code class="mono">npx novada-mcp</code> — and are not part of the hosted URL.</span>
-          <span class="zh">浏览器类工具(<code class="mono">novada_browser*</code>)通过本地 MCP 运行 —— <code class="mono">npx novada-mcp</code> —— 不包含在托管 URL 中。</span>
+          <span class="en"><code class="mono">novada_browser</code> (one-shot cloud CDP) runs on the hosted endpoint. Only the multi-step <code class="mono">novada_browser_flow</code> (persistent session) requires the local MCP — <code class="mono">npx novada-mcp</code>.</span>
+          <span class="zh"><code class="mono">novada_browser</code>(一次性云端 CDP)在托管端运行。仅多步的 <code class="mono">novada_browser_flow</code>(持久会话)需要本地 MCP —— <code class="mono">npx novada-mcp</code>。</span>
         </p>
       </div>
     </div>

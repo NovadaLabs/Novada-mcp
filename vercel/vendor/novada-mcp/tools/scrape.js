@@ -154,7 +154,12 @@ async function pollForResult(apiKey, taskId) {
             const errCode = bErr.code;
             const errMsg = bErr.msg ?? "";
             if (errCode === 10001) {
-                throw new Error(`Scraper download error 10001 (Invalid file type): The server could not return results as JSON for this scraper. Try a different operation, or check that the platform and operation names are correct. Use novada://scraper-platforms to find valid operations.`);
+                // M2: at DOWNLOAD time, 10001 ("invalid file type") comes from THIS tool's
+                // own file_type=json download request (see pollForResult URL) — this
+                // operation can't return JSON server-side. It is NOT a bad platform/
+                // operation from the caller (submit-time 10001 is separately mapped to
+                // "missing parameters"), so do not steer the agent to change the operation.
+                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper download error 10001: this operation cannot return its result as JSON server-side. This is a result-format limitation, not a bad platform/operation. Retry once; if it persists, this operation may not support JSON download.`, "download_code:10001");
             }
             if (errCode === 10002 || errCode === 10003) {
                 // API_DOWN (transient) so the customer gets a retryable envelope AND the
@@ -544,8 +549,16 @@ export async function novadaScrape(params, apiKey) {
                 if (error instanceof AxiosError) {
                     const status = error.response?.status;
                     const body = error.response?.data;
-                    if (status === 401 || status === 403) {
-                        throw new Error("Invalid NOVADA_API_KEY or insufficient permissions for platform scrapers.");
+                    // M1: classify honestly. 401 is a real, permanent auth failure (bad/missing
+                    // key). 403 at a scraper edge is frequently transient — geo/WAF/rate
+                    // shielding — NOT proof the key is invalid; bundling the two made agents
+                    // conclude a permanent auth problem when a retry might succeed. Emit typed
+                    // NovadaErrors so downstream classifyError can tag retryability correctly.
+                    if (status === 401) {
+                        throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "Invalid or missing NOVADA_API_KEY for platform scrapers.", "HTTP 401");
+                    }
+                    if (status === 403) {
+                        throw makeNovadaError(NovadaErrorCode.API_DOWN, "Scraper request was blocked (HTTP 403) — often a transient geo/WAF/rate block at the scraper edge rather than an invalid key. Retry once; if it persists on every call, verify the key has scraper permission via novada_account(section=\"summary\").", "HTTP 403");
                     }
                     throw new Error(`Scraper API error (HTTP ${status}): ${JSON.stringify(body)}`);
                 }

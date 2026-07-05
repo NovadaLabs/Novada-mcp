@@ -80,11 +80,23 @@ export async function novadaProxy(params) {
             `- For web extraction without managing proxies, use novada_extract or novada_crawl instead.`,
         ].join("\n");
     }
-    // Mask username in output to prevent credential leakage
-    const maskedUser = proxyUser.slice(0, 4) + "***";
-    const maskedUsername = buildProxyUsername(maskedUser, params);
-    const encodedMaskedUser = encodeURIComponent(maskedUsername);
+    // M7: never derive the masked username from the REAL value. Novada usernames
+    // are structured (baseUser-zone-…) so even a 4-char prefix can reveal the
+    // account. Use a fixed placeholder base — the zone/targeting/session suffix
+    // comes from the caller's own params, not from the credential. The success
+    // path bypasses the error redactor, so this must be leak-safe on its own.
+    // The base is a fixed placeholder, so it needs no percent-encoding — keep it
+    // human-readable as <PROXY_USER> (matching the Node/axios example below).
+    const maskedUsername = buildProxyUsername("<PROXY_USER>", params);
+    const encodedMaskedUser = maskedUsername;
     const typeLabel = TYPE_LABELS[params.type] ?? params.type;
+    // Only country that buildProxyUsername actually applied should be reported as
+    // "targeting" — isp drops country (see buildProxyUsername), so printing it
+    // would claim geo-routing that isn't in the username.
+    const appliedCountry = params.country && params.type !== "isp" ? params.country : undefined;
+    const targetingLine = appliedCountry
+        ? `targeting: ${appliedCountry.toUpperCase()}${params.city ? ` / ${params.city}` : ""}`
+        : "";
     const maskedUrl = `http://${encodedMaskedUser}:***@${proxyEndpoint}`;
     // Shell-safe URL: uses ${NOVADA_PROXY_PASS} literal so credentials are never in tool output
     const proxyUrlShell = `http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${proxyEndpoint}`;
@@ -95,7 +107,7 @@ export async function novadaProxy(params) {
         return [
             `## Proxy Configuration (Shell Environment)`,
             `type: ${typeLabel}`,
-            params.country ? `targeting: ${params.country.toUpperCase()}${params.city ? ` / ${params.city}` : ""}` : "",
+            targetingLine,
             params.session_id ? `session: ${params.session_id} (sticky IP)` : "",
             `proxy_url: ${maskedUrl}`,
             ``,
@@ -128,7 +140,7 @@ export async function novadaProxy(params) {
     return [
         `## Proxy Configuration`,
         `type: ${typeLabel}`,
-        params.country ? `targeting: ${params.country.toUpperCase()}${params.city ? ` / ${params.city}` : ""}` : "",
+        targetingLine,
         params.session_id ? `session: ${params.session_id} (sticky IP)` : "session: rotating (new IP per request)",
         `proxy_url: ${maskedUrl}`,
         ``,

@@ -318,7 +318,7 @@ function getSuggestedFix(url, errorMsg) {
     }
     if (lower.includes("all promises were rejected") || lower.includes("eai_again") ||
         lower.includes("econnrefused") || lower.includes("enotfound") || lower.includes("timeout")) {
-        return `suggested_fix: domain may be unreachable or rate-limiting. Verify URL is correct, then retry with render="render". Run novada_health_all() to check API status`;
+        return `suggested_fix: domain may be unreachable or rate-limiting (transient). Verify the URL is correct, then retry — retry with render="render" if a plain fetch keeps failing. If it persists, run novada_account(section="summary") to check API status`;
     }
     if (lower.includes("js") || lower.includes("javascript") || lower.includes("js-heavy")) {
         return `suggested_fix: retry with render="render" for JavaScript-rendered pages`;

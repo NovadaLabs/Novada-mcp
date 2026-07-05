@@ -25,5 +25,6 @@ export declare const TOOLS: {
 export declare const HIDDEN_ALIASES: ReadonlySet<string>;
 export declare function dispatch(name: string, args: Record<string, unknown>, apiKey?: string, ctx?: {
     onProgress?: ProgressReporter;
+    visibleTools?: ReadonlySet<string>;
 }): Promise<string>;
 //# sourceMappingURL=core.d.ts.map

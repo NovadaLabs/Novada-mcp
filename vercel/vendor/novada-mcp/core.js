@@ -49,11 +49,12 @@ function zodToMcpSchema(schema) {
 export const TOOLS = [
     {
         name: "novada_search",
-        description: `Search the web via 5 engines (Google, Bing, DuckDuckGo, Yahoo, Yandex). Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
+        description: `Search the web via 4 working engines (Google, Bing, DuckDuckGo, Yandex). Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
 
 **Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.
 **Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).
-**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yahoo/yandex are fallbacks and can be markedly slower; 'bing' is currently degraded — avoid it.
+**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yandex are fallbacks and can be markedly slower; 'bing' is currently degraded — avoid it. 'yahoo' is NOT supported — it returns an error, do not use it.
+**Domain filtering:** includeDomains/excludeDomains are applied by injecting \`site:domain\` operators into the query (not API-side filtering).
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(SearchParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
@@ -105,13 +106,13 @@ Not for:
     },
     {
         name: "novada_research",
-        description: `The most powerful research tool in any MCP server. One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extract full content from top 5 sources → synthesized cited report. No other MCP server can do this.
+        description: `One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extract full content from top sources → returns CITED SOURCE MATERIAL (numbered source sections), not a written answer. Extractive, not generative: it gathers and ranks the most relevant passages; YOU compose the final answer from them.
 
-**Use for:** Any complex question requiring synthesis across ≥3 independent sources. Comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.
-**Not for:** Single fact lookup or finding one URL — use novada_search for that (faster, cheaper). Reading a known URL — use novada_extract.
-**Rule of thumb:** If the answer could fit in one search result snippet, use novada_search. If you need to synthesize information from multiple sources into a report, use novada_research.
-**Depth:** "quick" (3 queries), "deep" (5-6), "comprehensive" (8-10), "auto" (default).
-**Key advantage:** Agents call this ONCE instead of orchestrating search→extract→synthesize manually. Saves tokens, time, and complexity.
+**Use for:** Any complex question where you want relevant passages from ≥3 independent sources gathered in one call. Comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.
+**Not for:** Single fact lookup or finding one URL — use novada_search for that (faster, cheaper). Reading a known URL — use novada_extract. A finished prose report — this returns source material, you write the answer.
+**Rule of thumb:** If the answer could fit in one search result snippet, use novada_search. If you need source material pulled from multiple pages to reason over, use novada_research.
+**Depth:** "quick" (3 queries), "deep" (6), "comprehensive" (8-9), "auto" (default: picks quick or deep by question length — never comprehensive).
+**Key advantage:** Agents call this ONCE instead of orchestrating search→extract manually. Saves tokens, time, and complexity.
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(ResearchParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
@@ -141,7 +142,7 @@ Not for:
     },
     {
         name: "novada_scrape",
-        description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 13 platforms (~78 operations): Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more.
+        description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 13 platforms (~78 operations): Amazon, Walmart, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub.
 
 **Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
 **Not for:** General web pages not in the platform list — use novada_extract for arbitrary URLs instead.
@@ -261,9 +262,9 @@ Not for:
 **Best for:** Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions.
 **Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_extract with format="html").
 **Actions:** navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call.
-**Sessions:** Pass session_id to maintain state (cookies, login) across multiple calls. Sessions expire after 10 min of inactivity. Use close_session to release early.
+**Sessions:** Pass session_id to reuse the same browser page (cookies, login) across calls. Persistent cross-call sessions are reliable only on the local/long-lived server; on the hosted serverless endpoint treat each call as one-shot (a session_id may not survive between calls). Use close_session to release early.
 **Auth:** NOVADA_API_KEY (auto-provisions Browser API credentials). NOVADA_BROWSER_WS is optional — set it to override auto-provision.
-**Platform note:** TikTok is geo-restricted in some regions — pass country="us" in actions that support it. Use wait with domcontentloaded (never networkidle) for SPAs.
+**Platform note:** Use wait with domcontentloaded (never networkidle) for SPAs. (The \`country\` param is accepted but NOT yet applied to the browser exit node — do not rely on it for geo-routing.)
 **Constraint:** close_session and list_sessions must be the only action in the call — they cannot be combined with other actions.`,
         inputSchema: zodToMcpSchema(BrowserParamsSchema),
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
@@ -277,7 +278,7 @@ Not for:
 **Filter:** Pass category to narrow to a specific group (e.g. category="Proxy" to see all proxy tools).
 **Status legend:** active = available now.
 
-**KEY FACT: ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. No separate keys needed for any product. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no extra API key. If a tool fails, call novada_health_all() to diagnose.`,
+**KEY FACT: ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. No separate keys needed for any product. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no extra API key. If a tool fails, call novada_account (section="summary") to check your balance, plans, and entitlements.`,
         inputSchema: zodToMcpSchema(DiscoverParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -547,7 +548,9 @@ export async function dispatch(name, args, apiKey, ctx) {
             // Alias: novada_health_all → novada_account(section="summary") for back-compat
             return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
         case "novada_discover":
-            return novadaDiscover(validateDiscoverParams(args));
+            // Pass the active-tool subset so the catalog reflects only what's usable in this
+            // session (NOVADA_TOOLS/NOVADA_GROUPS restrictions). Undefined → full registry.
+            return novadaDiscover(validateDiscoverParams(args), ctx?.visibleTools);
         // 0.9.4: async scraper trio removed from tools/list (upstream returns results INLINE;
         // the poll endpoints never tracked /request tasks — NOV-697). Old names still work:
         // submit runs the sync scrape and returns real records; status/result return a benign
