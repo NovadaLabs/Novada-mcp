@@ -217,6 +217,58 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
     expect(output).not.toContain("status: baseline_recorded");
     expect(output.toLowerCase()).toMatch(/error|unavailable|failed/);
   });
+
+  // Regression (P1): the hosted browser-unavailable path returns
+  // "## Browser Mode Unavailable" (utils/runtime.ts). It previously slipped past
+  // the C8 guard (which only checked ## Extract Failed / ## Extraction Error)
+  // and got hashed + baselined. Now covered by isExtractionFailureSentinel().
+  it("returns error/unavailable status (NOT baseline_recorded) when extract returns ## Browser Mode Unavailable sentinel", async () => {
+    const browserUnavailableOutput = [
+      `## Browser Mode Unavailable`,
+      ``,
+      `render="browser" (render="browser") requires a persistent CDP WebSocket transport that ` +
+        `the hosted Novada MCP endpoint (Vercel serverless) cannot provide.`,
+      ``,
+      `## Agent Action`,
+      `agent_instruction: status:browser_unavailable_on_runtime | Use render="render" (Web Unblocker).`,
+    ].join("\n");
+
+    mockedExtract.mockResolvedValueOnce(browserUnavailableOutput);
+
+    const params = validateMonitorParams({ url: "https://example.com/needs-browser", format: "json" });
+    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+
+    // Must NOT baseline the error page.
+    expect(r1.status).not.toBe("baseline_recorded");
+    // Must surface an error/unavailable status.
+    expect(["error", "unavailable", "extraction_failed"].some(s => r1.status === s)).toBe(true);
+  });
+
+  it("varying ## Browser Mode Unavailable message must NOT produce a false changed", async () => {
+    const bu1 = [
+      `## Browser Mode Unavailable`,
+      ``,
+      `render="browser" requires NOVADA_BROWSER_WS to be configured. (attempt 1)`,
+    ].join("\n");
+    const bu2 = [
+      `## Browser Mode Unavailable`,
+      ``,
+      `render="browser" requires NOVADA_BROWSER_WS to be configured. (attempt 2, different text)`,
+    ].join("\n");
+
+    mockedExtract
+      .mockResolvedValueOnce(bu1)
+      .mockResolvedValueOnce(bu2);
+
+    const params = validateMonitorParams({ url: "https://example.com/needs-browser", format: "json" });
+
+    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r1.status).not.toBe("baseline_recorded");
+
+    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    expect(r2.status).not.toBe("changed");
+    expect(["error", "unavailable", "extraction_failed"].some(s => r2.status === s)).toBe(true);
+  });
 });
 
 // ─── D1: Trailer sections after body must NOT be hashed ──────────────────────

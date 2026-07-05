@@ -141,9 +141,10 @@ function renderSummaryCard(summaryData: Record<string, unknown>): string {
   if (headline) {
     // Wallet balance from headline or wallet section
     const walletBalance = typeof wallet?.balance === "number" ? wallet.balance : undefined;
-    const currency = typeof wallet?.currency === "string" ? wallet.currency : "€";
+    // No currency field from the API → print bare number, do not invent €/$.
+    const currency = typeof wallet?.currency === "string" ? wallet.currency : "";
     if (walletBalance !== undefined) {
-      lines.push(`**Wallet:** ${currency}${walletBalance.toFixed(2)}`);
+      lines.push(`**Wallet:** ${currency}${walletBalance.toFixed(2)} *(currency as shown in your dashboard)*`);
     }
   }
   lines.push("");
@@ -233,9 +234,10 @@ function renderSummaryCard(summaryData: Record<string, unknown>): string {
 function renderBalanceCard(raw: Record<string, unknown>): string {
   const data = raw.data as Record<string, unknown> | undefined;
   const balance = typeof data?.balance === "number" ? data.balance : undefined;
-  const currency = typeof data?.currency === "string" ? data.currency : "€";
+  // No currency field from the API → print bare number, do not invent €/$.
+  const currency = typeof data?.currency === "string" ? data.currency : "";
   if (balance === undefined) return "**Wallet balance:** unavailable";
-  return `## Wallet Balance\n\n**${currency}${balance.toFixed(2)}** available\n\n*Use \`section=plans\` for per-product MB quotas.*`;
+  return `## Wallet Balance\n\n**${currency}${balance.toFixed(2)}** available *(currency as shown in your dashboard)*\n\n*Use \`section=plans\` for per-product MB quotas.*`;
 }
 
 /** Render wallet usage as a markdown table card. */
@@ -274,7 +276,7 @@ function renderUsageCard(raw: Record<string, unknown>): string {
                : typeof t.type === "string" ? t.type : "—";
     const amtRaw = typeof t.amount === "number" ? t.amount
                  : typeof t.price === "number" ? t.price : undefined;
-    const currency = typeof t.currency === "string" ? t.currency : "€";
+    const currency = typeof t.currency === "string" ? t.currency : "";
     const amt = amtRaw !== undefined ? `${currency}${amtRaw.toFixed ? amtRaw.toFixed(2) : amtRaw}` : "—";
     lines.push(`| ${date} | ${desc} | ${amt} |`);
   }
@@ -399,9 +401,10 @@ function flattenSummaryJson(summaryData: Record<string, unknown>): Record<string
     status: summaryData.status,
     wallet: {
       balance: typeof wallet?.balance === "number" ? wallet.balance : null,
-      currency: typeof wallet?.currency === "string" ? wallet.currency : "€",
+      // API omits currency → report null, never an invented €/$.
+      currency: typeof wallet?.currency === "string" ? wallet.currency : null,
       balance_human: typeof wallet?.balance === "number"
-        ? `${typeof wallet?.currency === "string" ? wallet.currency : "€"}${(wallet.balance as number).toFixed(2)}`
+        ? `${typeof wallet?.currency === "string" ? wallet.currency : ""}${(wallet.balance as number).toFixed(2)}`
         : null,
     },
     plans: {

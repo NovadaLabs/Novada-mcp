@@ -52,11 +52,13 @@ async function validateKey(effectiveKey: string | undefined): Promise<Validation
     const raw = await novadaWalletBalance({} as never, effectiveKey);
     const parsed = JSON.parse(raw) as { data?: { balance?: number; currency?: string } };
     const balance = parsed?.data?.balance;
-    const currency = parsed?.data?.currency ?? "€";
+    // The wallet API does NOT return a currency field. Never invent one (€/$):
+    // print the bare number and note the dashboard shows the real currency.
+    const currency = typeof parsed?.data?.currency === "string" ? parsed.data.currency : "";
     if (typeof balance === "number") {
       const balanceLine = balance > 0
-        ? `Wallet balance: ${currency}${balance.toFixed(2)} — enough to start testing.`
-        : `Wallet balance: ${currency}0.00 — top up at ${URL_DASHBOARD} to run pay-per-use tools.`;
+        ? `Wallet balance: ${currency}${balance.toFixed(2)} (currency as shown in your dashboard) — enough to start testing.`
+        : `Wallet balance: ${currency}0.00 (currency as shown in your dashboard) — top up at ${URL_DASHBOARD} to run pay-per-use tools.`;
       return { state: "ready", balanceLine };
     }
     // Key was accepted (no auth error) but balance shape was unexpected — still

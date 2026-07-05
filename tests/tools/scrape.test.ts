@@ -421,6 +421,10 @@ describe("novadaScrape — pre-flight (#6)", () => {
     expect(err!.detail).toBe("preflight:unknown_operation");
     // agent_instruction lists valid operations so the agent can self-correct
     expect(err!.agent_instruction).toContain("amazon_product_asin");
+    // FIX 3: the primary message ALSO lists the platform's valid operations, so
+    // the op list survives even if only .message is surfaced to the agent.
+    expect(err!.message).toContain("Valid operations for amazon.com:");
+    expect(err!.message).toContain("amazon_product_asin");
     expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 

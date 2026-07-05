@@ -592,7 +592,9 @@ export function preflightScrape(
     const opList = validOps.join(", ");
     return new NovadaError({
       code: NovadaErrorCode.INVALID_PARAMS,
-      message: `Unknown operation '${operation}' for platform '${platform}'. Operation IDs are exact and cannot be guessed.`,
+      message:
+        `Unknown operation '${operation}' for platform '${platform}'. Operation IDs are exact and cannot be guessed. ` +
+        `Valid operations for ${platform}: ${opList}`,
       agent_instruction:
         `Use one of the valid operations for ${platform}: ${opList}. ` +
         `Read novada://scraper-platforms for the full list with required params. Do not retry with the same operation id.`,
