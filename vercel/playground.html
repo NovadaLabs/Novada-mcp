@@ -47,18 +47,61 @@ function toggleTheme(){}
   .pixel-container { max-width: 80rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
 
   /* ─── Announcement bar ──────────── */
+  /* ── Announcement bar — pixel / Minecraft hotbar (all pages) ── */
   .announcement-bar {
-    background: #011627;
-    border-bottom: 2px solid #7749F1;
-    color: #E4DCFD;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    background: #7749F1;               /* Novada violet hotbar */
+    color: #fff;
+    font-family: 'Press Start 2P', 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1.9;
     text-align: center;
-    padding: 9px 1rem;
+    padding: 9px 14px;
     letter-spacing: 0.02em;
+    /* hard pixel bevel: inner light/dark edges + blocky bottom rail */
+    box-shadow: inset 0 2px 0 0 #B39DFB, inset 0 -2px 0 0 #271472;
+    border-bottom: 3px solid #271472;
+    image-rendering: pixelated;
   }
-  .announcement-bar a { color: #2EBF79; text-decoration: none; font-weight: 600; }
-  .announcement-bar a:hover { text-decoration: underline; }
+  /* framed [ vX.Y.Z ] version chip — inset pixel block */
+  .announcement-bar .ab-ver {
+    display: inline-block;
+    padding: 3px 7px;
+    background: #271472;
+    color: #E4DCFD;
+    box-shadow: inset 2px 2px 0 0 #9360EF, inset -2px -2px 0 0 #05002b;
+    white-space: nowrap;
+  }
+  .announcement-bar .ab-msg { color: #F5F2FF; }
+  /* blinking green live block */
+  .announcement-bar .ab-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: #2EBF79;
+    box-shadow: 0 0 0 2px #271472;
+    animation: ab-blink 1.2s steps(2, jump-none) infinite;
+    vertical-align: middle;
+  }
+  @keyframes ab-blink { 0%,60%{opacity:1} 61%,100%{opacity:.35} }
+  @media (prefers-reduced-motion: reduce) { .announcement-bar .ab-dot { animation: none; } }
+  .announcement-bar a {
+    color: #2EBF79;
+    text-decoration: none;
+    padding: 3px 7px;
+    background: #011627;
+    box-shadow: inset 2px 2px 0 0 #3ad98f, inset -2px -2px 0 0 #05271a;
+    white-space: nowrap;
+    transition: transform 0.05s steps(2);
+  }
+  .announcement-bar a:hover { color: #fff; background: #2EBF79; transform: translate(-1px,-1px); }
+  .announcement-bar a:active { transform: translate(1px,1px); }
+  @media (max-width: 640px) {
+    .announcement-bar { font-size: 8px; gap: 6px 8px; padding: 8px 10px; }
+  }
 
   /* ─── Nav ───────────────────────── */
   .nav-bar {
@@ -307,9 +350,10 @@ function toggleTheme(){}
 <body class="lang-en">
 
 <!-- ANNOUNCEMENT BAR -->
-<div class="announcement-bar">
-  <span class="en">[ v0.9.18 ] — 15 tools · one endpoint · one key · 1,000 free calls/month · <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
-  <span class="zh">[ v0.9.18 ] — 15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费 · <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
+<div class="announcement-bar" role="region" aria-label="Announcement">
+  <span class="ab-dot" aria-hidden="true"></span>
+  <span class="en"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 tools · one endpoint · one key · 1,000 free calls/month</span> <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh"><span class="ab-ver">[ v0.9.16 ]</span> <span class="ab-msg">15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费</span> <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
 </div>
 
 <!-- HEADER -->
