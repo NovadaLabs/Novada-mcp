@@ -6,7 +6,7 @@
 // produced `code:10001 Invalid parameter`.
 
 import { z } from "zod";
-import { devApiPost } from "../_core/developer_api.js";
+import { devApiPost, maskPasswords } from "../_core/developer_api.js";
 
 const PRODUCT_CODES = ["1", "2", "3", "4", "7", "9"] as const;
 const STATUS_CODES = ["1", "-3"] as const;
@@ -78,25 +78,14 @@ export async function novadaProxyAccountList(
   // INC-189 (Security): Mask plaintext passwords in API response.
   // The server returns `password` in cleartext for each sub-account — strip it
   // before surfacing to agents/users to prevent credential leakage via MCP transcript.
-  if (data !== null && typeof data === "object" && !Array.isArray(data)) {
-    const obj = data as Record<string, unknown>;
-    const list = obj.list;
-    if (Array.isArray(list)) {
-      for (const item of list) {
-        if (item !== null && typeof item === "object") {
-          const rec = item as Record<string, unknown>;
-          if (typeof rec.password === "string") {
-            rec.password = "****";
-          }
-        }
-      }
-    }
-  }
+  // Recursive key-based masking (audit L11): resilient to nested/renamed containers,
+  // not just the exact `data.list[].password` shape.
+  const maskedData = maskPasswords(data);
 
   return JSON.stringify(
     {
       status: "ok",
-      data,
+      data: maskedData,
       agent_instruction:
         "Lists proxy sub-accounts for the given product code. Passwords are masked for security. To create one use novada_proxy_account_create with `confirm: true`. Repeat with different `product` codes to see other product tiers.",
     },

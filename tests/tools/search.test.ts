@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios, { AxiosError } from "axios";
 import { novadaSearch } from "../../src/tools/search.js";
 import * as extractModule from "../../src/tools/extract.js";
+import { NovadaErrorCode } from "../../src/_core/errors.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -74,14 +75,18 @@ describe("novadaSearch", () => {
     expect(result).toContain("https://flat.com");
   });
 
-  it("returns SERP unavailable on 404 (endpoint not deployed)", async () => {
+  it("classifies a transient 404 as retryable API_DOWN, not permanent SERP-unavailable (H3)", async () => {
+    // H3: a 404/network blip is NOT an entitlement problem. It must surface as a
+    // transient, retryable API_DOWN — never as "SERP not available for this API key"
+    // (which would send the agent/customer down a false "contact support" path).
+    // SERP_UNAVAILABLE is now reserved for genuine 401/402/403/quota codes.
     const err = new AxiosError("Not Found", "ERR_BAD_RESPONSE");
     Object.defineProperty(err, "response", { value: { status: 404, data: "404 page not found" } });
     mockedAxios.post.mockRejectedValue(err);
 
-    const result = await novadaSearch({ query: "test-404-unique", engine: "google", num: 10, country: "", language: "" }, API_KEY);
-    expect(result).toContain("Search Unavailable");
-    expect(result).toContain("novada_extract");
+    await expect(
+      novadaSearch({ query: "test-404-unique", engine: "google", num: 10, country: "", language: "" }, API_KEY)
+    ).rejects.toMatchObject({ code: NovadaErrorCode.API_DOWN, retryable: true });
   });
 
   it("passes query to scraper API POST body", async () => {

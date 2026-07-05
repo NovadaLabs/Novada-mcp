@@ -10,7 +10,7 @@
 // `code:10001 Invalid parameter` responses against the live API.
 
 import { z } from "zod";
-import { devApiPost } from "../_core/developer_api.js";
+import { devApiPost, maskPasswords } from "../_core/developer_api.js";
 
 // ─── Product code enum (per proxy-user-management.md docs) ───────────────────
 // 1 = Residential, 2 = Rotating ISP, 3 = Rotating Datacenter,
@@ -129,12 +129,18 @@ export async function novadaProxyAccountCreate(
 
   const data = await devApiPost<unknown>("/v1/proxy_account/create", body, { apiKey });
 
+  // INC-189 (Security): the create response echoes the account object, which the
+  // proxy_account API family returns with a CLEARTEXT password. Recursively mask
+  // every password-like key before surfacing so the credential never lands in the
+  // MCP transcript (mirrors the masking on the sibling proxy_account_list tool).
+  const maskedData = maskPasswords(data);
+
   return JSON.stringify(
     {
       status: "created",
-      data,
+      data: maskedData,
       agent_instruction:
-        "Sub-account created on the user's Novada plan. Use novada_proxy_account_list (with the same `product` code) to confirm it appears. Credentials are NOT logged here — the user already has them.",
+        "Sub-account created on the user's Novada plan. Use novada_proxy_account_list (with the same `product` code) to confirm it appears. The password is masked in this response for security — the user set it and already has it.",
     },
     null,
     2,

@@ -101,7 +101,7 @@ Setup (one-time):
   claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 
 Verify the key is active:
-  Call novada_health — it will confirm which products are accessible.
+  Call novada_account section="summary" — it will confirm which products are accessible.
 
 Get a key: https://dashboard.novada.com/api-key/`,
 
@@ -117,13 +117,13 @@ The target URL could not be reached. This may be temporary.
 
 Action: Verify the URL is publicly accessible (not localhost, not behind auth, not a PDF redirect).
 Retry: Yes — try once more after a 10-second wait.
-Alternative: Use novada_unblock if the URL is protected by anti-bot measures.`,
+Alternative: Use novada_extract with render="render" (or render="browser") if the URL is protected by anti-bot measures.`,
 
   [NovadaErrorCode.SPA_NO_URLS_FOUND]: `\
 This site appears to be a JavaScript SPA — static crawling found no URLs.
 Do not retry novada_map. Recommended next steps:
 1. Use novada_crawl with render="render" to crawl JS-rendered pages.
-2. Use novada_unblock with method="render" to fetch rendered HTML directly.
+2. Use novada_extract with render="render" (or format="html") to fetch rendered content directly.
 3. Use novada_search with "site:<hostname>" to find indexed subpages.`,
 
   [NovadaErrorCode.API_DOWN]: `\
@@ -155,7 +155,7 @@ Option 1 — Activate (recommended):
 Option 2 — Use an alternative tool:
   novada_search unavailable? Try: novada_research (uses internal search)
   novada_scrape unavailable? Try: novada_extract on the target URL directly
-  novada_unblock unavailable? Try: novada_browser with navigate action
+  novada_extract blocked by anti-bot? Try: render="browser" (or novada_browser with navigate action)
 
 Option 3 — Contact support:
   Email: support@novada.com — include your API key prefix and this error code.`,
@@ -163,14 +163,14 @@ Option 3 — Contact support:
   [NovadaErrorCode.TASK_NOT_FOUND]: `\
 The requested task_id does not exist or has expired.
 
-Action: Verify the task_id was returned from a successful novada_scraper_submit call.
-Note: Tasks expire after 24 hours. Re-submit the job if needed.`,
+Action: Use novada_scrape — it runs synchronously and returns results directly, with no task_id to track or poll.
+Note: The async submit/status/result flow is no longer required; novada_scrape replaces it.`,
 
   [NovadaErrorCode.TASK_PENDING]: `\
-The scraping task is still in progress. Poll again after a delay.
+The operation is still in progress.
 
-Action: Wait 5–15 seconds and call novada_scraper_status with the same task_id.
-Pattern: Use exponential backoff — poll at 5s, 10s, 20s, 40s intervals.`,
+Action: Wait 5–15 seconds, then retry the same tool call.
+Note: novada_scrape runs synchronously and returns results directly — there is no separate status/result poll step.`,
 
   [NovadaErrorCode.SESSION_EXPIRED]: `\
 The browser session has expired. Create a new session.
@@ -183,7 +183,7 @@ Proxy authentication failed. Verify your proxy credentials.
 
 Action:
   1. Check NOVADA_PROXY_USER and NOVADA_PROXY_PASS are correctly set.
-  2. Call novada_health to confirm proxy credentials are loaded.
+  2. Call novada_account section="summary" to confirm proxy credentials are loaded.
   3. Regenerate credentials at https://dashboard.novada.com/overview/proxy/ if expired.`,
 
   [NovadaErrorCode.UNKNOWN]: `\

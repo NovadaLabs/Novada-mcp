@@ -629,11 +629,26 @@ export function validateBrowserParams(args: Record<string, unknown> | undefined)
 
 // ─── AI Monitor ──────────────────────────────────────────────────────────────
 
+/** Known AI-company domain groups ai_monitor can scope a search to. Must stay in
+ *  sync with MODEL_DOMAINS in ai_monitor.ts. */
+export const AI_MONITOR_MODELS = ["chatgpt", "perplexity", "grok", "claude", "gemini"] as const;
+
 export const AiMonitorParamsSchema = z.object({
-  brand: z.string().min(1).describe("Brand or product name to monitor across AI models. E.g. 'novada', 'firecrawl', 'stripe'."),
-  models: z.array(z.string()).optional()
+  // H5 / M8: cap length + strip quote chars so a `"` can't break the site: scoping
+  // and inject search operators (result-manipulation only — transport is form-encoded).
+  brand: z.string().min(1).max(200).transform(s => s.replace(/["']/g, "").trim())
+    .describe("Brand or product name to monitor across AI models. E.g. 'novada', 'firecrawl', 'stripe'."),
+  // H5: validate against the known model keys (lowercased) so an unknown value —
+  // including prototype-pollution keys like "__proto__" — is rejected at the Zod
+  // boundary with a clear INVALID_PARAMS message instead of crashing the runtime
+  // (MODEL_DOMAINS["__proto__"] would return Object.prototype → uncaught TypeError)
+  // or silently becoming a mislabeled unscoped global search.
+  models: z.preprocess(
+    (v) => Array.isArray(v) ? v.map(m => typeof m === "string" ? m.toLowerCase() : m) : v,
+    z.array(z.enum(AI_MONITOR_MODELS)).min(1).max(5),
+  ).optional()
     .describe("AI models to check. Options: 'chatgpt', 'perplexity', 'grok', 'claude', 'gemini'. Default: ['chatgpt', 'perplexity', 'grok']."),
-  topics: z.array(z.string()).optional()
+  topics: z.array(z.string().max(200).transform(s => s.replace(/["']/g, "").trim())).max(10).optional()
     .describe("Topic filters to narrow the search. E.g. ['pricing', 'comparison', 'recommendation']. Default: general brand mentions."),
 });
 

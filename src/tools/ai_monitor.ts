@@ -1,5 +1,6 @@
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 import type { NovadaSearchResult } from "./types.js";
+import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,9 @@ interface BrandMention {
   competitor_mentions: string[];
   source_url: string | null;
   snippet: string;
+  /** M6: set when the underlying search failed for an auth reason (invalid key) —
+   *  distinct from a transient timeout/service issue. */
+  error_class?: "auth" | "transient";
 }
 
 // ─── Model domains for site-scoped search ────────────────────────────────────
@@ -100,7 +104,12 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
   // Build all queries upfront
   const queryTasks: QueryTask[] = [];
   for (const model of models) {
-    const domains = MODEL_DOMAINS[model.toLowerCase()];
+    // H5 (defense-in-depth for SDK callers who bypass the Zod enum): use Object.hasOwn
+    // so a prototype-pollution key ("__proto__", "constructor") can't resolve to
+    // Object.prototype (truthy, no .map → uncaught TypeError). Unknown models get an
+    // empty (unscoped) filter rather than crashing.
+    const key = model.toLowerCase();
+    const domains = Object.hasOwn(MODEL_DOMAINS, key) ? MODEL_DOMAINS[key] : undefined;
     const siteFilter = domains ? domains.map(d => `site:${d}`).join(" OR ") : "";
     // One primary query per model (skip extract for speed on hosted)
     const query = topics.length > 0
@@ -153,7 +162,11 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
         timeoutPromise,
       ]);
       return result;
-    } catch {
+    } catch (err) {
+      // M6: surface an auth failure distinctly from a transient timeout so the
+      // aggregate output can point the user at "fix your key" rather than the
+      // generic "service issue → check novada_account" branch.
+      const isAuth = err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_API_KEY;
       return {
         model: task.model,
         query_used: task.query,
@@ -161,7 +174,10 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
         key_claims: [],
         competitor_mentions: [],
         source_url: null,
-        snippet: "Search timed out or failed for this query.",
+        snippet: isAuth
+          ? "Search failed: invalid or missing API key."
+          : "Search timed out or failed for this query.",
+        error_class: isAuth ? "auth" : "transient",
       };
     }
   }
@@ -188,7 +204,15 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
   if (foundMentions.length === 0) {
     // INC-192: Distinguish "all searches failed/timed out" from "genuinely no mentions"
     const failedCount = mentions.filter(m => m.snippet.includes("timed out") || m.snippet.includes("failed")).length;
-    if (failedCount === mentions.length) {
+    // M6: an API-key failure is not a transient "service issue" — surface it distinctly.
+    const authFailed = mentions.some(m => m.error_class === "auth");
+    if (authFailed) {
+      lines.push(`**All searches failed: invalid or missing API key.** This is an authentication problem, not a "0 mentions" result.`);
+      lines.push(``);
+      lines.push(`## Agent Hints`);
+      lines.push(`- Fix your API key first — set NOVADA_API_KEY to a valid key. Do NOT interpret this as "no brand mentions".`);
+      lines.push(`- Get or verify a key at https://dashboard.novada.com/api-key/`);
+    } else if (failedCount === mentions.length) {
       lines.push(`**All ${failedCount} searches failed or timed out.** This is a service issue, not a genuine "0 mentions" result.`);
       lines.push(``);
       lines.push(`## Agent Hints`);
@@ -222,6 +246,9 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
     lines.push(`---`);
     lines.push(`## Summary`);
     lines.push(`overall_sentiment: ${sentimentCounts.positive > sentimentCounts.negative ? "positive" : sentimentCounts.negative > sentimentCounts.positive ? "negative" : "neutral"}`);
+    // M7: be honest about the analysis basis — sentiment/claims/competitors are
+    // derived from the TOP search-result snippet per domain group, not full pages.
+    lines.push(`analysis_basis: top-result snippet only (per domain group) — not full page content`);
     lines.push(`competitor_mentions: ${allCompetitors.length > 0 ? allCompetitors.join(", ") : "none"}`);
     lines.push(``);
     lines.push(`## Agent Hints`);

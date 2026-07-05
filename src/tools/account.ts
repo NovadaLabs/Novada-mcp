@@ -430,7 +430,17 @@ const DASHBOARD_WALLET_URL = "https://dashboard.novada.com/wallet/";
  * Everything else is "data temporarily unavailable" — the key itself is fine.
  */
 function isAuthFailure(err: unknown): boolean {
-  return err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_API_KEY;
+  if (!(err instanceof NovadaError) || err.code !== NovadaErrorCode.INVALID_API_KEY) {
+    return false;
+  }
+  // M9: a MISSING dev-api key (the common "scraper-key-only" user) is NOT a
+  // rejected-credential auth failure — it's "account data unavailable via this
+  // key". Treat it as degrade-to-friendly-card, not rethrow. getDeveloperApiKey()
+  // throws with this exact prefix when neither key is set.
+  if (/Neither NOVADA_DEVELOPER_API_KEY/.test(err.message)) {
+    return false;
+  }
+  return true;
 }
 
 /**

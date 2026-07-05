@@ -631,7 +631,7 @@ async function extractSingleInner(
       if (body.trimStart().startsWith("<")) {
         html = body;
       } else {
-        return formatJsonExtract(params.url, "render", body, params.max_chars);
+        return formatJsonExtract(params.url, "render", body, params.max_chars, params.format);
       }
     } else {
       if (typeof response.data !== "string") {
@@ -730,7 +730,7 @@ async function extractSingleInner(
       if (body.trimStart().startsWith("<")) {
         html = body;
       } else {
-        return formatJsonExtract(params.url, "static", body, params.max_chars);
+        return formatJsonExtract(params.url, "static", body, params.max_chars, params.format);
       }
     } else {
       if (typeof response.data !== "string") {
@@ -1604,13 +1604,34 @@ async function extractSingle(
   }
 }
 
-function formatJsonExtract(url: string, mode: string, jsonStr: string, maxChars?: number): string {
+function formatJsonExtract(url: string, mode: string, jsonStr: string, maxChars?: number, outputFormat?: string): string {
   const limit = maxChars ?? MAX_CHARS_DEFAULT;
-  const truncated = jsonStr.length > limit
-    ? jsonStr.slice(0, limit) + "\n\n[truncated]"
-    : jsonStr;
+  const isTruncated = jsonStr.length > limit;
+  const truncatedStr = isTruncated ? jsonStr.slice(0, limit) : jsonStr;
   let origin = url;
   try { origin = new URL(url).origin; } catch { /* ignore */ }
+
+  // M1: when the caller asked for format="json", return a bare, parseable JSON
+  // envelope — NOT a ```json markdown fence. Fencing broke JSON.parse on the
+  // caller side (same class as the search F16 bug). The fetched body is embedded
+  // as parsed JSON when it's valid, else as a raw string so nothing is lost.
+  if (outputFormat === "json") {
+    let content: unknown = truncatedStr;
+    if (!isTruncated) {
+      try { content = JSON.parse(jsonStr); } catch { content = truncatedStr; }
+    }
+    return JSON.stringify({
+      url,
+      mode,
+      source: "live",
+      content_type: "application/json",
+      content,
+      content_truncated: isTruncated,
+      agent_instruction: `This URL returned JSON, not HTML. 'content' holds the ${isTruncated ? "truncated raw JSON string" : "parsed JSON body"}. To discover more pages call novada_map with url="${origin}".`,
+    }, null, 2);
+  }
+
+  const truncated = isTruncated ? truncatedStr + "\n\n[truncated]" : truncatedStr;
   return [
     `## Extracted Content`,
     `url: ${url}`,

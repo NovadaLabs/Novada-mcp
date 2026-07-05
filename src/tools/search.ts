@@ -6,7 +6,7 @@ import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js"
 import { saveOutput } from "../utils/output.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
 
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
 const QUERY_MAX_LENGTH = 500;
@@ -115,7 +115,12 @@ async function submitBingSearch(apiKey: string, query: string): Promise<NovadaSe
 
     const body = resp.data as { code: number; msg?: string; data: unknown };
     if (body.code !== 0) {
-      throw new Error(`Bing search error (code ${body.code}): ${body.msg ?? "unknown"}`);
+      // H4: route through the classified envelope + sanitize the upstream msg so
+      // raw upstream text (prompt-injection / secret echo) never reaches the agent.
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
+        `Bing search error (code ${body.code}): ${sanitizeServerMsg(body.msg ?? "unknown")}`,
+      );
     }
 
     const inner = body.data as Record<string, unknown> | null;
@@ -327,13 +332,26 @@ export async function pollSearchResult(apiKey: string, taskId: string): Promise<
         pollAttempt++;
         continue;
       }
-      throw new Error(`Scraper download error (code ${bObj.code ?? "?"}): ${bObj.msg ?? JSON.stringify(bObj).slice(0, 150)}`);
+      // H4: sanitize the upstream body/msg before it escapes — a raw response body
+      // can carry secret echoes or injection markers.
+      const rawDetail = typeof bObj.msg === "string" ? bObj.msg : JSON.stringify(bObj).slice(0, 150);
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
+        `Scraper download error (code ${bObj.code ?? "?"}): ${sanitizeServerMsg(rawDetail)}`,
+      );
     }
 
-    throw new Error(`Unexpected scraper download response: ${JSON.stringify(body).slice(0, 200)}`);
+    // H4: never embed the raw upstream body verbatim.
+    throw makeNovadaError(
+      NovadaErrorCode.API_DOWN,
+      `Unexpected scraper download response: ${sanitizeServerMsg(JSON.stringify(body)).slice(0, 200)}`,
+    );
   }
 
-  throw new Error(`Scraper search task ${taskId} timed out after ${TIMEOUTS.SEARCH_TOTAL_CEILING / 1000}s.`);
+  throw makeNovadaError(
+    NovadaErrorCode.API_DOWN,
+    `Scraper search task ${taskId} timed out after ${TIMEOUTS.SEARCH_TOTAL_CEILING / 1000}s.`,
+  );
 }
 
 /** Parse scraper API result data into NovadaSearchResult[]. */
@@ -434,7 +452,23 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   ].join("|");
   const cached = _searchCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
-    return cached.result;
+    // M2: don't replay a cache hit as `source: live` with the original search_id.
+    // Rewrite provenance to cache and stamp a fresh search_id so an agent that
+    // passes it to novada_search_feedback references a live, actionable id.
+    // Handles both the markdown header (`source: live`) and the JSON field
+    // (`"source": "live"`). The empty-results branch has no source line — the
+    // replaces simply no-op there.
+    const freshId = `search-${Date.now()}-${++_searchCounter}`;
+    let replayed = cached.result
+      .replace(/"source":\s*"live"/, '"source": "cache"')
+      .replace(/(^|\n)(results:[^\n]*?)source: live/, `$1$2source: cache`);
+    // Repoint any stored search_id (markdown `search_id:...`, JSON `"search_id": "..."`,
+    // and the JSON agent_instruction prose form `search_id: search-...`).
+    replayed = replayed
+      .replace(/"search_id":\s*"[^"]*"/, `"search_id": "${freshId}"`)
+      .replace(/search_id:search-[0-9]+-[0-9]+/g, `search_id:${freshId}`)
+      .replace(/search_id: search-[0-9]+-[0-9]+/g, `search_id: ${freshId}`);
+    return replayed;
   }
 
   const rawParams: Record<string, string> = {
@@ -542,15 +576,34 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       }
     }
   } catch (err: unknown) {
-    // 4xx errors: SERP endpoint unavailable / quota exhausted / auth failure
-    if (err instanceof AxiosError) {
-      return SERP_UNAVAILABLE;
-    }
+    // H3: Only genuine auth/entitlement/quota failures mean the SERP endpoint is
+    // "not available for this API key" (a permanent account-level condition). A
+    // transient network blip (timeout, 5xx, DNS, ECONNRESET) must NOT be reported
+    // as a permanent entitlement defect — that sends the agent/customer down a
+    // false "contact support to enable SERP" path.
+    //
+    // Entitlement signals: HTTP 401/402/403, or an error message carrying a 40x
+    // code / permission / quota / unauthorized / forbidden keyword.
+    const status = err instanceof AxiosError ? err.response?.status : undefined;
     const msg = err instanceof Error ? err.message : "";
-    if (/code 40[0-9]|permission|quota|unauthorized|forbidden/i.test(msg)) {
+    const isEntitlement =
+      status === 401 || status === 402 || status === 403 ||
+      /code 40[0-9]|permission|quota|unauthorized|forbidden|no permission/i.test(msg);
+    if (isEntitlement) {
       return SERP_UNAVAILABLE;
     }
-    throw err;
+    // Already-classified NovadaError (e.g. INVALID_API_KEY / API_DOWN from
+    // submitSearchScrapeTask) passes through unchanged so its auth/quota
+    // semantics survive — never demote a real auth error to a generic blip.
+    if (err instanceof NovadaError) {
+      throw err;
+    }
+    // Everything else (network / 5xx / timeout / DNS / ECONNRESET) is transient →
+    // route through the retryable API_DOWN envelope with a sanitized upstream note.
+    throw makeNovadaError(
+      NovadaErrorCode.API_DOWN,
+      `Search temporarily unavailable — upstream issue: ${sanitizeServerMsg(msg).slice(0, 200)}`,
+    );
   }
 
   let results: NovadaSearchResult[] = scraperResults;

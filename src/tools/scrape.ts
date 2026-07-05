@@ -228,10 +228,21 @@ async function pollForResult(apiKey: string, taskId: string): Promise<PollOutcom
         throw new Error(`Scraper download error 10001 (Invalid file type): The server could not return results as JSON for this scraper. Try a different operation, or check that the platform and operation names are correct. Use novada://scraper-platforms to find valid operations.`);
       }
       if (errCode === 10002 || errCode === 10003) {
-        throw new Error(`Scraper task error (code ${errCode}): ${errMsg || "Task failed on the server side."} Retry with different parameters.`);
+        // API_DOWN (transient) so the customer gets a retryable envelope AND the
+        // hosted dispatch catch treats it as upstream weather (breadcrumb, not alert)
+        // rather than an UNKNOWN permanent bug.
+        throw makeNovadaError(
+          NovadaErrorCode.API_DOWN,
+          `Scraper task error (code ${errCode}): ${errMsg || "Task failed on the server side."} This is usually transient — retry once, or retry with different parameters.`,
+          `error_code:${errCode}`,
+        );
       }
       if (errCode === 27203) {
-        throw new Error(`Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`);
+        throw makeNovadaError(
+          NovadaErrorCode.API_DOWN,
+          `Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`,
+          "error_code:27203",
+        );
       }
       // code 10000 from the legacy proxy download endpoint means "result not yet available"
       // (equivalent to 27202 from task_status). Continue polling — do NOT throw.
@@ -731,7 +742,13 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
     const itemError = firstAsRecord.error;
     if (typeof itemError === "string" && itemError.length > 0) {
       const errCode = (firstAsRecord.error_code as number | undefined);
-      throw new Error(`Scraper task failed (${errCode ?? "unknown"}): ${itemError}`);
+      // API_DOWN (transient): scraper reached the backend but the task failed —
+      // retryable envelope for the customer + suppressed from Sentry alerts.
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
+        `Scraper task failed (${errCode ?? "unknown"}): ${itemError}. This is usually transient — retry once or try a different operation.`,
+        `error_code:${errCode ?? "unknown"}`,
+      );
     }
     rawRecords = extractRecords((firstAsRecord as { rest: Record<string, unknown> }).rest);
   } else {
@@ -754,11 +771,17 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       const firstErr = errorItems[0] as Record<string, unknown>;
       const errCode = firstErr.error_code ?? "unknown";
       const errMsg = firstErr.error ?? "Unknown scraper error";
-      throw new Error(
+      // INC-190: error_code 300 = the page was reached but extraction failed
+      // (parser/blocked). That is transient upstream weather, not a permanent bug —
+      // classify as API_DOWN so the customer gets a retryable envelope with a hint
+      // AND the hosted dispatch catch records a breadcrumb instead of paging us.
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
         `Scraper collected ${errorItems.length} result(s) but all failed. ` +
         `error_code: ${errCode} — ${sanitizeServerMsg(String(errMsg))}. ` +
         `This means the target page was reached but data extraction failed (parser error, empty page, or access blocked). ` +
-        `Try a different operation or verify the target URL is correct.`
+        `This is usually transient — retry once, or try a different operation / verify the target URL.`,
+        `error_code:${errCode}`,
       );
     }
   }
