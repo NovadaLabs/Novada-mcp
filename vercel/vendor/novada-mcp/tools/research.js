@@ -129,7 +129,9 @@ export async function novadaResearch(params, apiKey, onProgress) {
         total: RESEARCH_PHASES,
         message: `Searching the web (${queries.length} queries)`,
     });
-    // Execute all searches in parallel — each query races all 3 engines simultaneously
+    // Execute all queries in parallel; within each query, searchWithFallback tries
+    // the primary engine (google) first and only races the fallbacks (ddg + bing)
+    // if the primary returns nothing — this saves ~2/3 of API cost vs racing all 3.
     const allResults = await Promise.all(queries.map(async (query) => {
         const results = await searchWithFallback(apiKey, query, 5);
         if (results.length > 0) {
@@ -747,7 +749,7 @@ function formatResearchOutput(args) {
         ...failedQueriesLine,
         ...generatedQueriesLines,
         `**sources_extracted**: ${args.sourcesFetchedCount} full + ${args.snippetOnlyCount} snippet-only`,
-        `**search_strategy**: concurrent engine racing (google + duckduckgo + bing)`,
+        `**search_strategy**: primary engine (google) first, with duckduckgo + bing raced only on failure`,
         `**timestamp**: ${timestamp}`,
         ``,
         `---`,

@@ -24,6 +24,47 @@ import FormData from "form-data";
 import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg } from "./errors.js";
 export const DEVELOPER_API_BASE = "https://api-m.novada.com";
 const DEFAULT_TIMEOUT_MS = 30_000;
+/**
+ * INC-189 (Security): the proxy_account API family returns sub-account passwords
+ * in cleartext (both `list` and `create` echo the account object). Recursively
+ * walk any dev-api response value and replace every `password`-like key
+ * (password / passwd / pwd, case-insensitive) with "****" before it is surfaced
+ * to an agent/user via the MCP transcript.
+ *
+ * Key-based (not shape-based) so a nested or renamed container still gets masked
+ * — the sibling `list` masker only handled `data.list[].password`, which would
+ * pass cleartext through if the server nested it differently (audit L11).
+ *
+ * Mutates in place AND returns the same reference for call-site convenience.
+ * Guards against prototype-pollution keys and cyclic structures.
+ */
+const PASSWORD_KEY_RE = /^(?:password|passwd|pwd)$/i;
+export function maskPasswords(value, seen = new WeakSet()) {
+    if (value === null || typeof value !== "object")
+        return value;
+    if (seen.has(value))
+        return value;
+    seen.add(value);
+    if (Array.isArray(value)) {
+        for (const item of value)
+            maskPasswords(item, seen);
+        return value;
+    }
+    const obj = value;
+    for (const key of Object.keys(obj)) {
+        // Never touch prototype-pollution keys.
+        if (key === "__proto__" || key === "constructor" || key === "prototype")
+            continue;
+        const v = obj[key];
+        if (PASSWORD_KEY_RE.test(key) && typeof v === "string" && v.length > 0) {
+            obj[key] = "****";
+        }
+        else if (v !== null && typeof v === "object") {
+            maskPasswords(v, seen);
+        }
+    }
+    return value;
+}
 /** Return the developer-api bearer token. Prefers NOVADA_DEVELOPER_API_KEY; falls back to NOVADA_API_KEY. */
 export function getDeveloperApiKey() {
     const dev = process.env.NOVADA_DEVELOPER_API_KEY?.trim();

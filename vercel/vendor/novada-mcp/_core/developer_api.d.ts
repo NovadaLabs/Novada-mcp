@@ -5,6 +5,7 @@ export interface DeveloperApiEnvelope<T = unknown> {
     message?: string;
     data?: T | null;
 }
+export declare function maskPasswords<T>(value: T, seen?: WeakSet<object>): T;
 /** Return the developer-api bearer token. Prefers NOVADA_DEVELOPER_API_KEY; falls back to NOVADA_API_KEY. */
 export declare function getDeveloperApiKey(): string;
 /**

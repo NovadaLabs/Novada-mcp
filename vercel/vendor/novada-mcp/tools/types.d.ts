@@ -388,9 +388,18 @@ export declare const BrowserParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unkn
 }, z.core.$strip>>;
 export type BrowserParams = z.infer<typeof BrowserParamsSchema>;
 export declare function validateBrowserParams(args: Record<string, unknown> | undefined): BrowserParams;
+/** Known AI-company domain groups ai_monitor can scope a search to. Must stay in
+ *  sync with MODEL_DOMAINS in ai_monitor.ts. */
+export declare const AI_MONITOR_MODELS: readonly ["chatgpt", "perplexity", "grok", "claude", "gemini"];
 export declare const AiMonitorParamsSchema: z.ZodObject<{
     brand: z.ZodString;
-    models: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    models: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodArray<z.ZodEnum<{
+        chatgpt: "chatgpt";
+        perplexity: "perplexity";
+        grok: "grok";
+        claude: "claude";
+        gemini: "gemini";
+    }>>>>;
     topics: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>;
 export type AiMonitorParams = z.infer<typeof AiMonitorParamsSchema>;

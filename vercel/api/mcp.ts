@@ -44,6 +44,41 @@ async function sentryFlush(): Promise<void> {
   }
 }
 
+// ─── Sentry alert gating (noise reduction) ────────────────────────────────────
+// Every dispatch error is already handled:true (the catch returns a clean isError
+// response). Firing captureException for ALL of them pages the owner for upstream
+// weather (SERP flaked, scraper parse-fail) and user/input mistakes (bad op id,
+// invalid params, bad customer key) — none of which are our bug.
+//
+// This allowlist holds the transient-upstream + user/input NovadaError codes: for
+// those (and any ZodError) we record a forensic breadcrumb instead of an alert.
+// Everything else still alerts: non-NovadaError (TypeError etc.) and NovadaError
+// with code UNKNOWN — i.e. the buckets that may hide a real bug. Flip this set to
+// empty to instantly restore the old alert-on-everything behavior.
+const SENTRY_SUPPRESS_CODES: ReadonlySet<string> = new Set<string>([
+  // Class A — transient upstream (retry usually works, not our bug)
+  NovadaErrorCode.API_DOWN,
+  NovadaErrorCode.URL_UNREACHABLE,
+  NovadaErrorCode.TASK_PENDING,
+  NovadaErrorCode.RATE_LIMITED,
+  // Class B — user / input / customer config (agent's or caller's job to fix)
+  NovadaErrorCode.INVALID_PARAMS,
+  NovadaErrorCode.PRODUCT_UNAVAILABLE,
+  NovadaErrorCode.INVALID_API_KEY,
+  NovadaErrorCode.PROXY_AUTH_FAILURE,
+]);
+
+/**
+ * Whether a handled dispatch error warrants a Sentry error-alert (vs a breadcrumb).
+ * Returns false for handled transient/user errors (breadcrumb only); true for
+ * everything that may be a real bug (non-NovadaError, or NovadaError UNKNOWN).
+ */
+function shouldAlertSentry(error: unknown): boolean {
+  if (error instanceof ZodError) return false;             // user input — never alert
+  if (error instanceof NovadaError) return !SENTRY_SUPPRESS_CODES.has(error.code);
+  return true;                                             // unclassified → real bug → alert
+}
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -652,11 +687,30 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         _meta: { quota_remaining: remaining },
       };
     } catch (error) {
-      Sentry.withScope(scope => {
-        scope.setTag("tool", name);
-        Sentry.captureException(error);
-      });
-      await sentryFlush();
+      // Alert-gating (noise reduction): handled transient/user errors record a
+      // breadcrumb for forensics; only likely-bug errors fire an actual alert.
+      // The customer response, redaction, 500-char cap, logUsage and refundQuota
+      // below are UNCHANGED — this gates the Sentry side-effect only.
+      if (shouldAlertSentry(error)) {
+        Sentry.withScope(scope => {
+          scope.setTag("tool", name);
+          Sentry.captureException(error);
+        });
+        await sentryFlush();
+      } else {
+        const code = error instanceof NovadaError ? error.code : undefined;
+        Sentry.addBreadcrumb({
+          category: "tool-handled",
+          level: "info",
+          message: `${name}: ${code ?? (error instanceof Error ? error.name : "error")}`,
+          data: {
+            tool: name,
+            code,
+            retryable: error instanceof NovadaError ? error.retryable : undefined,
+          },
+        });
+        // no captureException, no alert — breadcrumb rides along on the next real event
+      }
       logUsage(env, ctx.token, name, false, Date.now() - started);
       // The tool failed (validation / upstream / transport) → no useful work done, so
       // refund the quota decremented before the call. Failed calls must not burn customer
