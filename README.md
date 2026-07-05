@@ -1,6 +1,6 @@
 # Novada MCP
 
-> **One MCP server. All web data.** Search, extract, crawl, scrape, proxy, and AI research — 38 tools behind a single `npx` command. Run it locally or call the hosted endpoint.
+> **One MCP server. All web data.** Search, extract, crawl, scrape, proxy, and AI research — 22 curated tools behind a single `npx` command. Run it locally or call the hosted endpoint (15 tools).
 >
 > **Always use `npx -y novada-mcp@latest`.** A bare `npx novada-mcp` or a global `npm i -g novada-mcp` can silently run an old cached version. See [Staying on the latest version](#staying-on-the-latest-version).
 
@@ -34,40 +34,40 @@ One server. One API key. Tools that cover every web data need an AI agent has:
 
 | Need | Tool | What it does |
 |------|------|-------------|
-| Find information | `novada_search` | Web search across Google, Bing, DuckDuckGo, Yandex, Yahoo |
+| Find information | `novada_search` | Web search across Google, Bing, DuckDuckGo, Yandex |
 | Read a page | `novada_extract` | Any URL → clean markdown, batch up to 10 in parallel |
-| Deep research | `novada_research` | One call → parallel searches → dedup → cited multi-source report |
+| Deep research | `novada_research` | One call → parallel searches → dedup → cited source material to reason over |
 | Crawl a site | `novada_crawl` | BFS/DFS up to 20 pages with regex path filtering |
 | Discover URLs | `novada_map` | Sitemap + BFS discovery without reading content |
 | Platform data | `novada_scrape` | Amazon, LinkedIn, TikTok, GitHub, Zillow — 13 built-in platform scrapers, plus the wider Novada Scraper API |
 | Monitor changes | `novada_monitor` | Track price/content/availability changes between checks |
 | Verify claims | `novada_verify` | Parallel fact-checking against live web sources |
-| Raw HTML | `novada_unblock` | JS render or full browser CDP for bot-protected pages |
+| Raw HTML | `novada_extract` (`format: "html"`) | JS render or full browser CDP for bot-protected pages |
 | Browser automation | `novada_browser` | Navigate, click, type, fill forms, screenshot in cloud browser |
 | Browser flows | `novada_browser_flow` | Multi-step browser automation sequences |
 | Proxy credentials | `novada_proxy` | Residential, mobile, ISP, datacenter, static, dedicated — 195 countries |
-| AI brand monitoring | `novada_ai_monitor` | Check how ChatGPT, Perplexity, Grok, Claude, Gemini mention your brand |
-| Health check | `novada_health` | Check which API products are active on your key |
+| AI brand monitoring | `novada_ai_monitor` | Search AI-company public domains (openai.com, perplexity.ai, anthropic.com…) for brand mentions — indexed pages, not live models |
+| Account & health | `novada_account` | Balance, plans, usage, and product entitlements |
 | Async scraping | `novada_scraper_submit` | Submit async scraping task → poll → retrieve results |
 
 ## Tools at a Glance
 
-**38 tools, 6 categories.** Load all of them, or scope to what you need with `NOVADA_GROUPS` / `NOVADA_TOOLS`.
+**22 curated tools, 6 categories** (the count `novada_discover` shows). The hosted endpoint exposes a 15-tool subset. Older tool names (e.g. `novada_health`, `novada_unblock`, `novada_verify`, the six typed `novada_proxy_*`, wallet/traffic lookups) still work as back-compat aliases that route into these. Load all, or scope with `NOVADA_GROUPS` / `NOVADA_TOOLS`.
 
 | Category | Tools | What you get |
 |----------|-------|--------------|
-| Search & research | `novada_search` · `novada_research` · `novada_verify` · `novada_search_feedback` | 5-engine search, cited multi-source research, fact-checking |
+| Search & research | `novada_search` · `novada_research` · `novada_search_feedback` | 4-engine search, cited source-material research, ranking feedback |
 | Extract & crawl | `novada_extract` · `novada_crawl` · `novada_map` · `novada_monitor` · `novada_site_copy` | URL → clean markdown, multi-page crawl, URL discovery, change detection |
-| Platform scraping | `novada_scrape` · `novada_scraper_submit` · `novada_scraper_status` · `novada_scraper_result` | Structured data from 13 built-in platform scrapers (Amazon, LinkedIn, TikTok…), plus the wider Novada Scraper API |
-| Proxy network | `novada_proxy` · `_residential` · `_isp` · `_datacenter` · `_mobile` · `_static` · `_dedicated` | Connection credentials across 195 countries |
-| Browser & unblock | `novada_browser` · `novada_browser_flow` · `novada_unblock` · `novada_ai_monitor` | Cloud-browser automation, raw rendered HTML, AI brand monitoring |
-| Account & ops | `novada_health` · `novada_health_all` · `novada_setup` · `novada_discover` · `novada_wallet_balance` · `novada_plan_balance_all` · `novada_traffic_daily` · `novada_capture_logs` · `novada_session_stats` · proxy account/whitelist mgmt | Key health, balances, usage, sub-account management |
+| Platform scraping | `novada_scrape` · `novada_ai_monitor` | Structured data from 13 built-in platform scrapers (Amazon, LinkedIn, TikTok…), AI-domain brand monitoring |
+| Proxy network | `novada_proxy` (type=residential/isp/datacenter/mobile/static/dedicated) | Connection credentials across 195 countries |
+| Browser | `novada_browser` · `novada_browser_flow` | Cloud-browser automation (interactive + scripted sequences) |
+| Account & ops | `novada_account` · `novada_setup` · `novada_discover` · `novada_session_stats` · `novada_proxy_account_create` · `novada_proxy_account_list` · `novada_ip_whitelist` · `novada_capture_apikey` · `novada_static_ip_mgmt` | Key validation, balances, usage, sub-account & IP management |
 
-> Don't want all 38 in your context window? `NOVADA_GROUPS="search,extract"` loads only those groups. Full list any time via `novada_discover`.
+> Don't want all 22 in your context window? `NOVADA_GROUPS="search,extract"` loads only those groups. Full list any time via `novada_discover`.
 
 ## What Makes This Different
 
-**`novada_research` is unique.** No other MCP server turns one question into a cited multi-source report. It searches across Google, Bing, and DuckDuckGo in parallel, deduplicates, extracts full content from the top 5 sources, and synthesizes with citations. One tool call replaces an entire research workflow. Depth options: quick (3 queries), deep (5-6), comprehensive (8-10).
+**`novada_research` is unique.** No other MCP server turns one question into ranked, cited source material in a single call. It searches across Google, Bing, and DuckDuckGo in parallel, deduplicates, extracts full content from the top sources, and returns the most relevant passages under numbered source sections for your agent to reason over (extractive, not a generated prose report — you compose the answer). One tool call replaces an entire search→extract workflow. Depth options: quick (3 queries), deep (6), comprehensive (8-9).
 
 **Auto-escalation handles anti-bot automatically.** Static fetch → JS render → Browser CDP. Known hard targets (Amazon, LinkedIn, G2, Zillow, Glassdoor, Walmart, Instagram, TikTok, Shein) skip straight to the right method based on a 30+ domain registry. You never think about Cloudflare, DataDome, Kasada, or PerimeterX — the tool handles it.
 
@@ -98,8 +98,9 @@ claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp@latest
 ```
 
 **Hosted (no install, beta):** point any Streamable-HTTP MCP client at
-`https://mcp.novada.com/mcp?token=YOUR_KEY`. Same tools, zero local setup — note that browser
-automation (`novada_browser`, `novada_browser_flow`) is local-only and returns `NOT_AVAILABLE_ON_HOSTED`.
+`https://mcp.novada.com/mcp?token=YOUR_KEY`. A 15-tool subset, zero local setup. `novada_browser`
+runs on the hosted endpoint (via cloud CDP, one-shot per call); only `novada_browser_flow`
+(persistent multi-call sessions) and the disk-writing `novada_site_copy` are local-only.
 
 3. Try it:
 ```
@@ -115,7 +116,7 @@ novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price", "availabi
 
 | Tool | Purpose | Key Params | Example |
 |------|---------|-----------|---------|
-| `novada_search` | Web search via 5 engines | `query`, `engine`, `num`, `time_range`, `include_domains` | `novada_search({query: "best API gateways 2026", engine: "google", num: 10})` |
+| `novada_search` | Web search via 4 engines (Google, Bing, DuckDuckGo, Yandex) | `query`, `engine`, `num`, `time_range`, `include_domains` | `novada_search({query: "best API gateways 2026", engine: "google", num: 10})` |
 | `novada_research` | Multi-source parallel research | `question`, `depth`, `focus` | `novada_research({question: "Kong vs Traefik vs APISIX", depth: "comprehensive", focus: "performance benchmarks"})` |
 | `novada_verify` | Fact-check claims against web | `claim` | `novada_verify({claim: "GPT-5 was released in 2026"})` |
 
@@ -166,11 +167,10 @@ Each proxy tool returns connection credentials in `url`, `env`, or `curl` format
 
 | Tool | Purpose | Example |
 |------|---------|---------|
-| `novada_browser` | Full browser interaction via CDP | `novada_browser({actions: [{type: "navigate", url: "..."}, {type: "click", selector: "#btn"}]})` |
-| `novada_browser_flow` | Multi-step automation sequences | Click, scroll, wait, type, screenshot — up to 20 actions per call |
-| `novada_unblock` | Raw rendered HTML from protected pages | `novada_unblock({url: "...", method: "browser"})` |
+| `novada_browser` | Full browser interaction via CDP | `novada_browser({actions: [{action: "navigate", url: "..."}, {action: "click", selector: "#btn"}]})` |
+| `novada_browser_flow` | Multi-step automation sequences (local-only) | Click, scroll, wait, type, screenshot — up to 20 actions per call |
 
-Sessions persist across calls via `session_id`. Cookies, login state, and page context are maintained.
+For raw rendered HTML from protected pages, use `novada_extract({url, format: "html", render: "render"})` (or `render: "browser"`). Sessions reuse the same page via `session_id` (cookies, login, page context) on the local/long-lived server; on the hosted serverless endpoint treat each call as one-shot.
 
 ## Use Cases
 
@@ -208,7 +208,7 @@ Crawl documentation sites and extract clean markdown for fine-tuning datasets or
 ```
 novada_ai_monitor({brand: "YourProduct", models: ["chatgpt", "perplexity", "claude"]})
 ```
-Check how AI models reference your brand: sentiment, claims, competitor mentions, source URLs.
+Searches AI-company public web domains (openai.com, perplexity.ai, anthropic.com…) for public mentions of your brand: sentiment signals, claims, competitor co-mentions, source URLs. Note: this searches indexed public pages — it does NOT query the live AI models' responses; a brand with few indexed pages shows low/zero mentions.
 
 ### Geo-Targeted Data Collection
 ```
@@ -220,8 +220,8 @@ Get proxy credentials for any of 195 countries. Use with your own HTTP client fo
 
 |  | Novada | Firecrawl | Tavily | BrightData |
 |---|---|---|---|---|
-| Tools | **38** | 14 | 2 | 69 |
-| Search engines | **5** | 0 | 1 | 3 |
+| Tools | **22** (curated; 15 hosted) | 14 | 2 | 69 |
+| Search engines | **4** | 0 | 1 | 3 |
 | Multi-source research | **Yes** | No | No | No |
 | Proxy as MCP tool | **Yes** | No | No | No |
 | Auto anti-bot escalation | **Yes** | No | N/A | No |
@@ -261,7 +261,7 @@ Novada automatically handles these anti-bot systems via its escalation chain:
 | `NOVADA_PROXY_ENDPOINT` | No | Proxy host:port endpoint |
 | `NOVADA_WEB_UNBLOCKER_KEY` | No | Separate key for Web Unblocker (if different from main API key) |
 | `NOVADA_TOOLS` | No | Load specific tools only: `"extract,search,research,monitor"` |
-| `NOVADA_GROUPS` | No | Load tool groups: `"search,proxy,browser"` — groups: search, proxy, browser, scraper, health |
+| `NOVADA_GROUPS` | No | Load tool groups: `"search,proxy,browser"` — groups: search, proxy, browser, scraper, health, account |
 
 ## Staying on the latest version
 
@@ -294,7 +294,7 @@ npx -y novada-mcp@latest --version
 - GitHub: [github.com/NovadaLabs/novada-mcp](https://github.com/NovadaLabs/novada-mcp)
 - Issues: [github.com/NovadaLabs/novada-mcp/issues](https://github.com/NovadaLabs/novada-mcp/issues)
 - Benchmarks: [`benchmark/results/latest-summary.json`](benchmark/results/latest-summary.json) — auditable per-scenario numbers vs Firecrawl & Tavily
-- Tool details: call `novada_discover` or `novada_health` from any MCP client
+- Tool details: call `novada_discover` or `novada_account` from any MCP client
 
 ## License
 

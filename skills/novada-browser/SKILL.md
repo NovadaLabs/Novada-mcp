@@ -53,7 +53,7 @@ Sessions expire after 10 min of inactivity. Call `close_session` to release earl
 
 - Use `wait_until: "domcontentloaded"` — NEVER `networkidle` for SPAs (TikTok, X, React apps never reach networkidle → 30s timeout)
 - Prefer `aria_snapshot` over `screenshot` — 10x more token-efficient, parseable by agents
-- For geo-restricted sites (TikTok): pass `country: "us"` at top level
+- The `country` param is accepted but NOT yet applied to the browser exit node — do not rely on it for geo-restricted sites
 
 ## Common patterns
 

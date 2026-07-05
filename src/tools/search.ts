@@ -376,10 +376,15 @@ export function parseScraperSearchResults(data: Record<string, unknown>): Novada
 
 const SERP_UNAVAILABLE = `## Search Unavailable
 
-The Novada SERP endpoint is not yet available for this API key.
+Search is not available on this API key.
 
-**Why:** \`novada_search\` requires a dedicated SERP quota that is separate from
-the Scraper API and Web Unblocker plans. Contact support@novada.com to enable it.
+**Why:** \`novada_search\` runs on the **Scraper API**, which is not activated on
+this key (or the key lacks permission for it). There is no separate "SERP quota" —
+activating the Scraper API enables search.
+
+**Fix:**
+- Activate the Scraper API at https://dashboard.novada.com/overview/scraper/
+- Run \`novada_account(section="summary")\` to confirm which products are active
 
 **Alternatives right now:**
 - \`novada_extract\` — fetch and read any specific URL directly
@@ -504,8 +509,22 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   let scraperResults: NovadaSearchResult[] = [];
 
+  // H3: an unrecognized engine value is USER INPUT, not an account defect.
+  // (yahoo is handled above with its own card.) Returning the entitlement
+  // message here falsely told the agent their key was broken when they merely
+  // passed a bad enum. Emit a clear invalid-parameter message listing valid engines.
   if (!SCRAPER_SEARCH_ENGINES.has(engine)) {
-    return SERP_UNAVAILABLE;
+    const valid = [...SCRAPER_SEARCH_ENGINES].join(", ");
+    return [
+      `## Invalid Parameter — engine`,
+      ``,
+      `engine="${engine}" is not a supported search engine.`,
+      ``,
+      `**Valid engines:** ${valid} (default: google).`,
+      ``,
+      `## Agent Instruction`,
+      `error: invalid_params | param: engine | valid_values: ${valid} | action: retry with one of the valid engines`,
+    ].join("\n");
   }
 
   // Apply domain filters as query modifiers (site: syntax works on all engines)

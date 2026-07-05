@@ -9,7 +9,7 @@ description: >-
 
 # Novada Agent Skill
 
-You have access to 11 Novada MCP tools. This skill tells you exactly which tool to use when and how to use it effectively.
+You have access to Novada's 22 curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a 15-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
 
 ## Tool Selection — Decision Tree
 
@@ -20,19 +20,18 @@ Need web data?
 │   ├── 1-2 targeted queries → novada_search
 │   ├── Explore an entire site → novada_map or novada_crawl
 │   └── Multi-faceted question → novada_research
-└── Want a ready-made answer with sources? → novada_research
+└── Want ranked, cited source material to reason over? → novada_research
 
-Need structured platform data (Amazon, Reddit, TikTok…)? → novada_scrape
+Need structured platform data (Amazon, TikTok, LinkedIn…)? → novada_scrape
 Need proxy credentials for your own HTTP requests? → novada_proxy
-Need to verify a factual claim? → novada_verify
-Page blocked or JS-heavy, need raw HTML? → novada_unblock
+Page blocked or JS-heavy, need raw HTML? → novada_extract (format:"html", render:"render")
 Need to click/fill/screenshot a page? → novada_browser
-Check API key product access? → novada_health
+Check account balance / plans / entitlements? → novada_account
 ```
 
 Also read `novada://guide` — it contains the full decision tree and workflow patterns.
 
-## The 11 Tools
+## Core Tools
 
 ### `novada_search`
 
@@ -40,7 +39,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 **Key parameters:**
 - `query` — your search string
-- `engine` — `google` (default), `bing`, `duckduckgo`, `yahoo`, `yandex`
+- `engine` — `google` (default), `bing`, `duckduckgo`, `yandex` (`yahoo` is NOT supported — returns an error)
 - `num` — results count, 1-20 (default 10)
 - `time_range` — `day`, `week`, `month`, `year`
 - `include_domains` / `exclude_domains` — up to 10 domains each
@@ -150,16 +149,16 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ### `novada_research`
 
-**When:** You have a question that needs multiple sources to answer well. You want synthesis, not raw search results.
+**When:** You have a question that needs multiple sources. You want ranked, cited source material gathered in one call — then you compose the answer.
 
-**What it does:** Generates 3-10 parallel search queries, deduplicates up to 15 unique sources, returns a cited report with source list.
+**What it does:** Generates 3-10 parallel search queries, deduplicates unique sources, extracts full content from the top ones, and returns the most relevant passages under numbered source sections (CITED SOURCE MATERIAL — extractive, not a generated prose report). You write the final answer from it.
 
 **Key parameters:**
 - `question` — the research question (full sentence works best)
-- `depth` — `auto` (default, server picks), `quick` (3 searches), `deep` (5-6), `comprehensive` (8-10)
+- `depth` — `auto` (default: picks quick or deep by question length, never comprehensive), `quick` (3 searches), `deep` (6), `comprehensive` (8-9)
 - `focus` — optional: `"technical implementation"`, `"business impact"`, `"recent news only"`
 
-**When NOT to use:** You need real-time data or very specific factual lookups — `novada_search` is more precise.
+**When NOT to use:** You need real-time data or very specific factual lookups — `novada_search` is more precise. You want a finished prose report — this returns source material, not an answer.
 
 **Example:**
 ```json
@@ -194,11 +193,11 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ### `novada_scrape`
 
-**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 129 platforms including Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more.
+**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 13 platforms (~78 operations): Amazon, Walmart, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub.
 
 **Key parameters:**
-- `platform` — domain, e.g. `amazon.com`, `reddit.com`, `tiktok.com`
-- `operation` — operation ID, e.g. `amazon_product_by-keywords`, `reddit_posts_by-keywords`
+- `platform` — domain, e.g. `amazon.com`, `tiktok.com`, `linkedin.com`
+- `operation` — operation ID, e.g. `amazon_product_keywords`, `tiktok_posts_url`
 - `params` — operation-specific params, e.g. `{ "keyword": "iphone 16", "num": 5 }`
 - `limit` — max records (1-100, default 20)
 - `format` — `markdown` (default, agent-optimized), `json` (programmatic)
@@ -211,7 +210,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 ```json
 {
   "platform": "amazon.com",
-  "operation": "amazon_product_by-keywords",
+  "operation": "amazon_product_keywords",
   "params": { "keyword": "iphone 16", "num": 5 },
   "format": "json"
 }
@@ -219,7 +218,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ---
 
-### `novada_verify`
+### `novada_verify` (back-compat alias — still works)
 
 **When:** You have a factual claim and need to check whether web sources support it before citing it.
 
@@ -238,21 +237,17 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ---
 
-### `novada_unblock`
+### Raw HTML — use `novada_extract` (`novada_unblock` is a back-compat alias)
 
-**When:** You need the raw rendered HTML of a blocked or JS-heavy page, and `novada_extract` with `render="render"` still fails or returns incomplete content.
+**When:** You need the raw rendered HTML of a blocked or JS-heavy page.
 
-**Key parameters:**
-- `url` — URL to unblock
-- `method` — `render` (Web Unblocker, faster/cheaper) or `browser` (full Chromium CDP, handles complex SPAs)
+**How:** Call `novada_extract` with `format: "html"` and `render: "render"` (Web Unblocker) or `render: "browser"` (full Chromium CDP for complex SPAs). The old `novada_unblock({url, method})` still dispatches to this.
 
-**Requires:** `NOVADA_WEB_UNBLOCKER_KEY` or `NOVADA_BROWSER_WS`
-
-**When NOT to use:** If you want cleaned text (use `novada_extract` with `render="render"` first — it returns clean markdown). Structured platform data (use `novada_scrape`). This tool returns raw HTML.
+**When NOT to use:** If you want cleaned text (use `novada_extract` with `render="render"` and the default markdown format — it returns clean markdown). Structured platform data (use `novada_scrape`).
 
 **Example:**
 ```json
-{ "url": "https://example.com/protected", "method": "render" }
+{ "url": "https://example.com/protected", "format": "html", "render": "render" }
 ```
 
 ---
@@ -267,9 +262,9 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 **Supported actions:** `navigate`, `click`, `type`, `screenshot`, `aria_snapshot`, `evaluate`, `wait`, `scroll`, `hover`, `press_key`, `select`
 
-**Requires:** `NOVADA_BROWSER_WS`
+**Auth:** `NOVADA_API_KEY` auto-provisions Browser API credentials; `NOVADA_BROWSER_WS` is optional (overrides auto-provision). Runs on both local and hosted; only cross-call persistent sessions are local-only. The `country` param is accepted but not yet applied to the exit node — do not rely on it for geo-routing.
 
-**When NOT to use:** Simple page reading (use `novada_extract`). Structured data from a known platform (use `novada_scrape`). Raw HTML without interaction (use `novada_unblock`).
+**When NOT to use:** Simple page reading (use `novada_extract`). Structured data from a known platform (use `novada_scrape`). Raw HTML without interaction (use `novada_extract` with `format: "html"`).
 
 **Example:**
 ```json
@@ -286,19 +281,19 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ---
 
-### `novada_health`
+### `novada_account`
 
-**When:** First-time setup, diagnosing why a tool is failing, or confirming which Novada API products are active on your key.
+**When:** First-time setup, diagnosing why a tool is failing, or checking your balance, plans, and product entitlements. (The old `novada_health` / `novada_health_all` names dispatch here.)
 
-**Key parameters:** None required.
+**Key parameters:** `section` — `summary` (default: wallet balance + plan quotas + recent capture logs + entitlements), `balance`, `usage`, `plans`, `traffic`.
 
-**What it returns:** Status table for Search, Extract, Scraper API, Proxy, and Browser API — with activation links for any product not yet enabled.
+**What it returns:** For `summary`, a full dashboard of wallet balance, per-product plan quotas, and proxy/browser entitlements.
 
-**When NOT to use:** This is a diagnostic tool only. Don't call it in production workflows unless you're debugging.
+**When NOT to use:** This is an account/diagnostic tool. Don't call it in tight production loops unless you're debugging or checking quota.
 
 **Example:**
 ```json
-{}
+{ "section": "summary" }
 ```
 
 ---
@@ -331,5 +326,5 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 1. **Batch > sequential**: Always use `novada_extract` with a URL array instead of multiple single-URL calls.
 2. **Map before crawl for selective work**: If you only need specific pages, `novada_map` + filter + `novada_extract` is more efficient than `novada_crawl`.
 3. **Use `focus` in research**: A focused research question produces tighter, more relevant sub-queries.
-4. **Check `novada://engines`**: Different engines have different strengths — Bing has better news freshness, DuckDuckGo has better privacy site support.
-5. **`novada_research` is not a search**: It synthesizes. Don't use it when you need raw URLs or specific lookups.
+4. **Prefer `engine="google"`**: It is the fastest and most reliable. `bing` is currently degraded and `yahoo` is unsupported (returns an error); `duckduckgo`/`yandex` are slower fallbacks.
+5. **`novada_research` is not a search**: It returns ranked, cited source material to reason over (extractive — you compose the answer), not raw URLs or a finished report. Don't use it for a single lookup.

@@ -4,7 +4,22 @@ import type { ResearchParams, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 import type { ProgressReporter } from "./crawl.js";
-import { makeNovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
+
+// C1: distinguish a REAL account-level entitlement failure (Scraper API not
+// activated / bad key / quota) from a transient blip (timeout, 5xx, DNS). Only
+// the former justifies the permanent "not activated" verdict; everything else
+// must be reported as retryable so the agent doesn't dead-end on a false
+// "activate the Scraper API" conclusion. Mirrors search.ts:589-591.
+function isEntitlementError(err: unknown): boolean {
+  if (err instanceof NovadaError) {
+    return err.code === NovadaErrorCode.INVALID_API_KEY ||
+           err.code === NovadaErrorCode.PRODUCT_UNAVAILABLE ||
+           err.code === NovadaErrorCode.RATE_LIMITED;
+  }
+  const msg = err instanceof Error ? err.message : "";
+  return /code 40[0-9]|permission|quota|unauthorized|forbidden|no permission|not activated/i.test(msg);
+}
 
 // FIX-2: Max question length to prevent DoS via over-long inputs hanging upstream searches
 const QUESTION_MAX_LENGTH = 2000;
@@ -46,13 +61,25 @@ const FALLBACKS: SearchEngine[] = [
  * Search with primary engine first, race fallbacks on failure.
  * Best case: 1 API call. Failure case: 3 API calls (1 primary + 2 raced).
  */
-async function searchWithFallback(apiKey: string, query: string, num: number): Promise<NovadaSearchResult[]> {
+async function searchWithFallback(
+  apiKey: string,
+  query: string,
+  num: number,
+  signal?: { entitlement: boolean },
+): Promise<NovadaSearchResult[]> {
+  // C1: record whether a failure carried a real auth/entitlement signal so the
+  // caller can tell "Scraper API not activated" (permanent) apart from a
+  // transient blip. We never let error inspection change the success path.
+  const note = (err: unknown): void => {
+    if (signal && isEntitlementError(err)) signal.entitlement = true;
+  };
+
   // Attempt 1: Primary engine (Google) — cheapest path
   try {
     const submitted = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum);
     const results = await resolveSearchResults(apiKey, submitted);
     if (results.length > 0) return results;
-  } catch { /* fall through to fallback race */ }
+  } catch (err) { note(err); /* fall through to fallback race */ }
 
   // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery
   const attempts = FALLBACKS.map(eng =>
@@ -62,6 +89,7 @@ async function searchWithFallback(apiKey: string, query: string, num: number): P
         if (results.length === 0) throw new Error("empty results");
         return results;
       })
+      .catch((err: unknown) => { note(err); throw err; })
   );
   try {
     return await Promise.any(attempts);
@@ -177,12 +205,17 @@ export async function novadaResearch(
     message: `Searching the web (${queries.length} queries)`,
   });
 
+  // C1: shared flag — set true only when a search failure carried a real
+  // auth/entitlement signal. Used to gate the permanent "Scraper API not
+  // activated" verdict below; without it, a transient blip is reported as retryable.
+  const authSignal = { entitlement: false };
+
   // Execute all queries in parallel; within each query, searchWithFallback tries
   // the primary engine (google) first and only races the fallbacks (ddg + bing)
   // if the primary returns nothing — this saves ~2/3 of API cost vs racing all 3.
   const allResults = await Promise.all(
     queries.map(async (query): Promise<{ query: string; results: NovadaSearchResult[]; failed?: boolean }> => {
-      const results = await searchWithFallback(apiKey, query, 5);
+      const results = await searchWithFallback(apiKey, query, 5, authSignal);
       if (results.length > 0) {
         return { query, results };
       }
@@ -194,7 +227,7 @@ export async function novadaResearch(
         .replace(/\s+/g, " ")
         .trim();
       if (retryQuery && retryQuery !== query) {
-        const retryResults = await searchWithFallback(apiKey, retryQuery, 5);
+        const retryResults = await searchWithFallback(apiKey, retryQuery, 5, authSignal);
         if (retryResults.length > 0) {
           return { query: retryQuery, results: retryResults };
         }
@@ -318,25 +351,51 @@ export async function novadaResearch(
   // F14-3: keep requested depth for provenance (auto → deep/quick is a lossy transform without this)
   const requestedDepthValue = requestedDepth;
 
-  // All searches failed or returned 0 results — Scraper API not activated
+  // All searches failed or returned 0 results. C1: classify honestly — only a
+  // real auth/entitlement signal justifies the permanent "Scraper API not
+  // activated" verdict. A transient timeout/5xx/DNS blip across every query
+  // produces the SAME failed-count state, so without this gate a temporary
+  // outage becomes a false permanent "activate the Scraper API" dead-end.
   if (failedCount === queries.length || totalResults === 0) {
+    if (authSignal.entitlement) {
+      return [
+        `## Research Unavailable`,
+        ``,
+        `Search failed with an account/authorization error. The Scraper API (which powers search) is not activated on this API key, or the key is invalid.`,
+        ``,
+        `**Cannot complete research on:** "${topic}"`,
+        ``,
+        `**Fix:**`,
+        `- Activate the Scraper API at https://dashboard.novada.com/overview/scraper/`,
+        `- Run \`novada_account(section="summary")\` to check which API products are active on your account`,
+        ``,
+        `**Alternatives while search is unavailable:**`,
+        `- Use \`novada_extract\` with specific URLs you already know`,
+        `- Use \`novada_map\` on a relevant site, then \`novada_extract\` on discovered pages`,
+        ``,
+        `## Agent Action`,
+        `agent_instruction: status:search_unavailable | action: call novada_account(section="summary") to confirm, then activate_scraper_api | question_not_answered: true`,
+      ].join("\n");
+    }
+    // No auth signal → transient / no-results. Retry is the real remedy; do NOT
+    // assert a permanent activation defect.
     return [
-      `## Research Unavailable`,
+      `## Research Incomplete`,
       ``,
-      `All search queries returned 0 results. Scraper API (search) is not activated on this account.`,
+      `All search queries returned 0 results — likely a temporary upstream issue (timeout, rate-limit, or a query that matched nothing), not an account problem.`,
       ``,
       `**Cannot complete research on:** "${topic}"`,
       ``,
       `**Fix:**`,
-      `- Activate Scraper API at https://dashboard.novada.com/overview/scraper/`,
-      `- Run \`novada_health_all()\` to check which API products are currently active on your account`,
+      `- Retry this call once — transient search failures usually clear on retry`,
+      `- If it persists, run \`novada_account(section="summary")\` to confirm the Scraper API is active`,
       ``,
-      `**Alternatives while search is unavailable:**`,
+      `**Alternatives right now:**`,
       `- Use \`novada_extract\` with specific URLs you already know`,
       `- Use \`novada_map\` on a relevant site, then \`novada_extract\` on discovered pages`,
       ``,
       `## Agent Action`,
-      `agent_instruction: status:search_unavailable | action: call novada_health_all() to diagnose, then activate_scraper_api | question_not_answered: true`,
+      `agent_instruction: status:search_temporarily_failed | action: retry_once; if it persists call novada_account(section="summary") | question_not_answered: true`,
     ].join("\n");
   }
 

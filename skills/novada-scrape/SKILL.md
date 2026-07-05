@@ -1,6 +1,6 @@
 # novada_scrape — Platform Scraper Skill
 
-**When to use:** You need structured records from a known platform (Amazon, TikTok, Reddit, LinkedIn, etc.) — not raw HTML, but clean tabular data.
+**When to use:** You need structured records from a known platform (Amazon, TikTok, LinkedIn, GitHub, etc.) — not raw HTML, but clean tabular data. 13 platforms are supported: Amazon, Walmart, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub.
 
 ## Step 1: Find the right platform and operation
 
@@ -15,23 +15,25 @@ ALWAYS read the `novada://scraper-platforms` resource before calling novada_scra
 
 | Platform | Operation example | Key params |
 |----------|------------------|------------|
-| amazon.com | amazon_product_by-keywords | keyword, num |
-| amazon.com | amazon_product_by-asin | asin |
-| reddit.com | reddit_posts_by-keywords | keyword, num |
-| tiktok.com | tiktok_user_videos | username, num |
-| linkedin.com | linkedin_job_listings | keyword, location |
+| amazon.com | amazon_product_keywords | keyword |
+| amazon.com | amazon_product_asin | asin |
+| walmart.com | walmart_product_keywords | keyword |
+| tiktok.com | tiktok_posts_url | url |
+| linkedin.com | linkedin_company_information_url | url |
 | google.com | google_search | q, num |
-| glassdoor.com | glassdoor_jobs_by-keywords | keyword, location |
-| zillow.com | zillow_listings | location |
-| github.com | github_repository_details | owner, repo |
+| google.com | google_shopping_keywords | keyword |
+| youtube.com | youtube_video_search_label | label |
+| github.com | github_repository_repo-url | url |
+
+(Exact operation IDs vary — always read `novada://scraper-platforms` first.)
 
 ## Call pattern
 
 ```json
 {
   "platform": "amazon.com",
-  "operation": "amazon_product_by-keywords",
-  "params": {"keyword": "mechanical keyboard", "num": 10},
+  "operation": "amazon_product_keywords",
+  "params": {"keyword": "mechanical keyboard"},
   "format": "markdown",
   "limit": 10
 }

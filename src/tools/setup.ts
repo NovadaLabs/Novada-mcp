@@ -90,8 +90,12 @@ const CORE_TOOLS: Array<{ tool: string; line: string }> = [
   { tool: "novada_account", line: "Your account at a glance — balance, plan quotas, and recent usage." },
 ];
 
+// H4: novada_site_copy is NOT ported to the hosted surface (writes to a
+// read-only serverless FS), so advertising it here dead-ends a hosted agent
+// with TOOL_NOT_ENABLED. novada_crawl covers whole-site content on both
+// surfaces, so we point at it instead.
 const ADDON_TOOLS =
-  "Also available: novada_research (multi-source cited report), novada_crawl / novada_site_copy (whole sites), " +
+  "Also available: novada_research (multi-source cited report), novada_crawl (multi-page content from a site), " +
   "novada_monitor (watch a page for changes), and novada_proxy (residential/ISP/mobile/datacenter IPs for your own HTTP clients — set type=).";
 
 /**

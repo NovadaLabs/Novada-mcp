@@ -203,14 +203,31 @@ describe("novadaVerify", () => {
     expect(getConfidence(out)).toBe(0);
   });
 
-  it("handles full search unavailability (all queries throw) with activation guidance", async () => {
-    mockedResolve.mockRejectedValue(new Error("Scraper API server error"));
+  it("emits activation guidance only when all queries fail with a real auth/entitlement signal", async () => {
+    // C2: an auth/entitlement failure (e.g. invalid key / not activated) is the
+    // ONLY case that justifies the permanent "activate the Scraper API" verdict.
+    mockedResolve.mockRejectedValue(new Error("no permission — Scraper API not activated (code 403)"));
     const out = await novadaVerify(
       { claim: "The Eiffel Tower is in Paris, France" },
       API_KEY,
     );
     expect(out).toContain("Verify Unavailable");
     expect(out).toContain("activate_scraper_api");
+    expect(out).not.toContain("verdict:");
+  });
+
+  it("treats a transient triple-failure as retryable, NOT a permanent activation defect", async () => {
+    // C2 regression guard: a generic server error / timeout must NOT be reported
+    // as "Scraper API not activated" — that false permanent conclusion used to
+    // disable the retry path via do_not_interpret_as.
+    mockedResolve.mockRejectedValue(new Error("Scraper API server error"));
+    const out = await novadaVerify(
+      { claim: "The Eiffel Tower is in Paris, France" },
+      API_KEY,
+    );
+    expect(out).toContain("Verify Incomplete");
+    expect(out).toContain("retry_once");
+    expect(out).not.toContain("do_not_interpret_as");
     expect(out).not.toContain("verdict:");
   });
 

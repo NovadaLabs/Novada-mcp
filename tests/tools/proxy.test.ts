@@ -88,10 +88,21 @@ describe("novadaProxy — username masked in all output formats (NOV-674)", () =
     expect(result).toContain("curl --proxy");
   });
 
-  it("masked proxy_url uses first 4 chars + *** pattern", async () => {
+  it("masked proxy_url uses a fixed placeholder, never real username bytes (M7)", async () => {
     const result = await novadaProxy({ type: "residential", format: "url" });
-    // e.g. cust*** (first 4 of "customer-ab12-zone-res")
-    expect(result).toContain("cust***");
+    // M7: the masked username must be a fixed <PROXY_USER> placeholder — no
+    // prefix derived from the real username (which is structured and could
+    // reveal the account). The old "cust***" leaked the first 4 real chars.
+    expect(result).toContain("<PROXY_USER>");
+    expect(result).not.toContain("cust***");
+    expect(result).not.toContain(FULL_USER);
+  });
+
+  it("does not print targeting for isp (country is dropped from the username)", async () => {
+    // M7/isp: buildProxyUsername drops country for isp, so the output must not
+    // claim geo-targeting that was never applied.
+    const result = await novadaProxy({ type: "isp", country: "us", format: "url" });
+    expect(result).not.toContain("targeting:");
   });
 });
 
