@@ -14,7 +14,7 @@ across all major web scraping/research capabilities.
 ```
 NOVADA_API_KEY=          [already in your .mcp.json as novada-dev]
 BRIGHTDATA_TOKEN=        39fe5616-61ca-417a-b952-a059d2593e67
-FIRECRAWL_KEY=           fc-a897ecb6c3e54425a4acba11a399a735
+FIRECRAWL_KEY=           fc-REDACTED-set-FIRECRAWL_KEY-env
 TAVILY_KEY=              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
 OXYLABS_USER=            oxy001_4xGlt
 OXYLABS_PASS=            20260324_Berry
@@ -82,7 +82,7 @@ curl -X POST https://api.brightdata.com/datasets/v3/trigger?dataset_id=gd_... \
 ```bash
 # T1, T2 — scrape
 curl -X POST https://api.firecrawl.dev/v2/scrape \
-  -H "Authorization: Bearer fc-a897ecb6c3e54425a4acba11a399a735" \
+  -H "Authorization: Bearer fc-REDACTED-set-FIRECRAWL_KEY-env" \
   -H "Content-Type: application/json" \
   -d '{"url":"TARGET","formats":["markdown"]}'
 
@@ -90,7 +90,7 @@ curl -X POST https://api.firecrawl.dev/v2/scrape \
 
 # T5 — crawl
 curl -X POST https://api.firecrawl.dev/v1/crawl \
-  -H "Authorization: Bearer fc-a897ecb6c3e54425a4acba11a399a735" \
+  -H "Authorization: Bearer fc-REDACTED-set-FIRECRAWL_KEY-env" \
   -H "Content-Type: application/json" \
   -d '{"url":"TARGET","limit":3,"scrapeOptions":{"formats":["markdown"]}}'
 

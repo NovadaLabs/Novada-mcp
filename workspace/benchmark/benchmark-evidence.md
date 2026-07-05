@@ -488,6 +488,6 @@ Total measurements: 300
 - Novada API key: 1f35b477...adfa (last 4)
 - Novada Unblocker key: b27ad6e6...5e (last 2)
 - Oxylabs user: berryclare__KAZhJ
-- Firecrawl key: fc-a897ec...35
+- Firecrawl key: fc-REDACTED-set-FIRECRAWL_KEY-env...35
 - Tavily key: tvly-dev-3CVPRi...
 - BrightData: no proxy zones configured (T1-T4 failed), token 8a649e44...

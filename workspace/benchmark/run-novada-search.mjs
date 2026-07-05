@@ -22,7 +22,7 @@ const CREDS = {
     unblockerKey: "b27ad6e6834dd36407b00f4e502e055e",
   },
   brightdata: { token: "39fe5616-61ca-417a-b952-a059d2593e67" },
-  firecrawl: { key: "fc-a897ecb6c3e54425a4acba11a399a735" },
+  firecrawl: { key: "fc-REDACTED-set-FIRECRAWL_KEY-env" },
   tavily: { key: "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" },
   oxylabs: { user: "berryclare__KAZhJ", pass: "20260324_Berry" },
 };

@@ -22,7 +22,7 @@ const BUILD_DIR = resolve(__dirname, "../../build");
 // ─── Credentials ──────────────────────────────────────────────────────────────
 const NOVADA_KEY = "1f35b477c9e1802778ec64aee2a6adfa";
 const CREDS = {
-  firecrawl: { key: "fc-a897ecb6c3e54425a4acba11a399a735" },
+  firecrawl: { key: "fc-REDACTED-set-FIRECRAWL_KEY-env" },
   tavily:    { key: "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" },
   oxylabs:   { user: "berryclare__KAZhJ", pass: "20260324_Berry" },
 };
