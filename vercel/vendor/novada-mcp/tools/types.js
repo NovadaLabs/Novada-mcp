@@ -93,7 +93,7 @@ export const SearchParamsSchema = withCamelCaseAliases(z.object({
     enrich_top: z.boolean().optional()
         .describe("Auto-extract full content from the top result. Shorthand for extract_options.top_n=1. Adds ~2-4s latency. Default: false."),
     project: z.string().max(30).optional()
-        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
+        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
     extract_options: withCamelCaseAliases(z.object({
         format: z.enum(["text", "markdown", "html", "json"]).optional().default("markdown")
             .describe("Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
@@ -148,7 +148,7 @@ const _ExtractParamsInner = z.object({
     clean: z.boolean().optional()
         .describe("Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage."),
     project: z.string().max(30).optional()
-        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
+        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
 });
 /**
  * Public ExtractParamsSchema — wraps the inner schema with two preprocess layers:
@@ -213,7 +213,7 @@ export const ResearchParamsSchema = z.object({
     focus: z.string().optional()
         .describe("Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'."),
     project: z.string().max(30).optional()
-        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
+        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
 }).refine(data => !!(data.question || data.query), {
     message: "Either 'question' or 'query' must be provided",
 });
@@ -246,7 +246,7 @@ export const SiteCopyParamsSchema = withCamelCaseAliases(z.object({
     render: z.enum(["auto", "static", "render"]).default("auto")
         .describe("Rendering mode for each page fetch. 'auto' (default): static, escalate to render on JS-heavy detection. 'static': always static. 'render': always render (slower)."),
     project: z.string().max(30).optional()
-        .describe("Optional project name to group outputs under ~/Downloads/novada-mcp/<date>/<project>/site-copy/. Defaults to the site domain."),
+        .describe("Optional project name to group outputs under ~/Downloads/novada-mcp/<date>/<project>/site-copy/. Defaults to the site domain. (local stdio only; no effect on the hosted endpoint)"),
 }), {
     maxPages: "max_pages",
     selectPaths: "select_paths",
@@ -347,7 +347,7 @@ export const ScrapeParamsSchema = z.object({
     format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
         .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': clean structured records array — key fields (title/price/rating/url) surfaced, noise trimmed. 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 — paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
     project: z.string().max(30).optional()
-        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'."),
+        .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
 });
 /** CLI/SDK schema — all output formats */
 export const ScrapeParamsFullSchema = z.object({

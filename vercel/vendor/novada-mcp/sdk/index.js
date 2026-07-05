@@ -165,7 +165,7 @@ export class NovadaClient {
         });
     }
     /**
-     * Scrape structured data from 129 supported platforms.
+     * Scrape structured data from 13 supported platforms.
      * Returns raw records array plus the formatted string output.
      */
     async scrape(platform, operation, params = {}, options = {}) {

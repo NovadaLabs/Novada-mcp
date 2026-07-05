@@ -184,7 +184,7 @@ export function getPrompt(name, args) {
                 ``,
                 `Decision tree (top match wins):`,
                 `1. Don't know which page has the answer, or want current info across the web?`,
-                `   → novada_search (titles + snippets, 5 engines). Set enrich_top=true to auto-read the #1 result.`,
+                `   → novada_search (titles + snippets, 4 engines). Set enrich_top=true to auto-read the #1 result.`,
                 `2. Question needs synthesis from MANY sources (comparison, market scan, deep dive)?`,
                 `   → novada_research (parallel searches → extract top sources → cited report). One call replaces many search+extract calls.`,
                 `3. Have the exact URL and want its content (read/summarize/specific fields)?`,

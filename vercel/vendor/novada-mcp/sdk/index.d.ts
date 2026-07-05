@@ -45,7 +45,7 @@ export declare class NovadaClient {
         maxDepth?: number;
     }): Promise<MapResult>;
     /**
-     * Scrape structured data from 129 supported platforms.
+     * Scrape structured data from 13 supported platforms.
      * Returns raw records array plus the formatted string output.
      */
     scrape(platform: string, operation: string, params?: Record<string, unknown>, options?: {

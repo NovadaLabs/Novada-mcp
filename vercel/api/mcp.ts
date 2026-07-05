@@ -156,7 +156,7 @@ const HOSTED_VERSION = HOSTED_BUILD
 // tool implementations depend on Node-only modules: axios, cheerio,
 // playwright-core, exceljs, pdf-parse, and the MCP SDK uses EventEmitter.
 // Trade-off vs Edge: ~200ms cold start (vs ~50ms) + single-region (vs global edge),
-// but in exchange the entire 25-tool surface works without porting.
+// but in exchange the entire 15-tool surface works without porting.
 const FUNCTION_MAX_DURATION_S = 60; // novada_research can take 30-45s on deep mode
 export const config = {
   runtime: "nodejs",
@@ -234,18 +234,18 @@ function zodToMcpSchema(schema: any): Record<string, unknown> {
 
 // ─── Tool catalog ────────────────────────────────────────────────────────────
 const TOOLS = [
-  { name: "novada_search",              title: "Web Search",                 schema: SearchParamsSchema,              description: "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract." },
+  { name: "novada_search",              title: "Web Search",                 schema: SearchParamsSchema,              description: "Search the web via Google, Bing, DuckDuckGo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract." },
   { name: "novada_extract",             title: "Content Extractor",          schema: ExtractParamsSchema,             description: "Read clean content from one or more URLs. Use when you have a specific page URL and need its content. Handles anti-bot protection automatically. For raw HTML, use format='html'. For multiple pages on one site, use crawl instead." },
   { name: "novada_crawl",               title: "Site Crawler",               schema: CrawlParamsSchema,               description: "Read content from multiple pages on one site (up to 20). Use when you need an entire section of a website. Optionally run map first to discover target URLs." },
   { name: "novada_research",            title: "Deep Research",              schema: ResearchParamsSchema,            description: "Deep multi-source research: searches multiple angles, reads top sources, returns a synthesized report with citations. Use when you need comprehensive analysis of an open-ended topic (not a yes/no claim — use verify for that). Slower than a single search." },
   { name: "novada_map",                 title: "URL Mapper",                 schema: MapParamsSchema,                 description: "List all URLs on a website via sitemap or crawl. Use when you need to find the right page before crawl/extract. Returns URLs only, no content. Fast site reconnaissance." },
   { name: "novada_scrape",              title: "Platform Scraper",           schema: ScrapeParamsSchema,              description: "Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings — NOT general websites (use extract for those)." },
 
-  { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key." },
+  { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key. NOTE: country is accepted but not yet applied — the browser exit node is not geo-routed by this param today." },
   { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Not needed for extract/crawl — those handle proxies internally." },
   { name: "novada_discover",            title: "Tool Discovery",             schema: DiscoverParamsSchema,            description: "List all available Novada tools grouped by category." },
   { name: "novada_ai_monitor",          title: "AI Brand Monitor",           schema: AiMonitorParamsSchema,           description: "Search AI-company domains (chatgpt.com, perplexity.ai, anthropic.com, etc.) and the web for PUBLIC mentions & sentiment of a brand. NOTE: searches indexed public pages — it does NOT query the live models; a brand with few indexed pages shows low/zero mentions (not a measure of how the models actually respond)." },
-  { name: "novada_monitor",             title: "Page Change Monitor",        schema: MonitorParamsSchema,             description: "Track changes on a web page over time. Compares content hash and field-level diffs." },
+  { name: "novada_monitor",             title: "Page Change Monitor",        schema: MonitorParamsSchema,             description: "⚠️ Session-scoped only: on the hosted endpoint the baseline is per-invocation (in-memory), so use this for single-call change-diffs, not durable cross-call monitoring. Track changes on a web page over time. Compares content hash and field-level diffs." },
   { name: "novada_setup",               title: "Setup & Configuration",      schema: SetupParamsSchema,               description: "Check your API key and environment configuration. Use when you want to verify setup or see which Novada products are active. Auth-free, no quota used." },
   // ── Account / billing tools ──
   // 0.9.9: wallet_balance / wallet_usage_record / plan_balance_all / traffic_daily /
@@ -303,6 +303,7 @@ const TOOL_GROUPS: Record<string, string[]> = {
   core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_setup", "novada_account", "novada_monitor", "novada_discover"],
   search: ["novada_search"],
   scrape: ["novada_scrape", "novada_extract"],
+  scraper: ["novada_scrape", "novada_extract"],   // alias of `scrape` — matches npm group key so NOVADA_GROUPS config is portable across surfaces
   crawl: ["novada_crawl", "novada_map"],
   research: ["novada_research", "novada_discover", "novada_ai_monitor", "novada_monitor"],
   proxy: ["novada_proxy"],

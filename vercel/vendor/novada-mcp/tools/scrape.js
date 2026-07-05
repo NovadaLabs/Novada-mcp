@@ -812,7 +812,7 @@ export async function novadaScrape(params, apiKey) {
                     `- Use format='json' or format='csv' for downstream processing. Use format='excel' for a .xlsx spreadsheet.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- For structured scraping of other platforms, change platform and operation.`,
-                    `- Discover all 129 supported platforms and their operations: read novada://scraper-platforms resource.`,
+                    `- Discover all 13 supported platforms and their operations: read novada://scraper-platforms resource.`,
                     ``,
                     `## Chainable Output`,
                     `source_url: ${platform}/${operation}`,

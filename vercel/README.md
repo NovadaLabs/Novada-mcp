@@ -11,7 +11,7 @@ Client  ──HTTPS──▶  Vercel Edge Function (/mcp)  ──HTTPS──▶ 
 ```
 
 This is the **Vercel port** of the Cloudflare Worker at `../worker/`. Same
-behavior, same 25 tools, same auth/quota model. The CF Worker is kept as a
+behavior, same 15 tools, same auth/quota model. The CF Worker is kept as a
 fallback in case the Vercel deploy needs to be rolled back.
 
 **Why Vercel:** the CF Workers approach needs the root domain (`novada.com`)
@@ -21,9 +21,9 @@ CNAME — DNS stays on AWS, we just add `mcp.novada.com → cname.vercel-dns.com
 
 ## What you get
 
-- **One URL** for all 25 Novada tools (search, extract, crawl, research, map,
-  scrape, verify, unblock, proxy×7, browser×2, scraper×3, health×2, discover,
-  ai_monitor, monitor, setup).
+- **One URL** for all 15 Novada tools (search, extract, crawl, research, map,
+  scrape, browser, proxy, discover, ai_monitor, monitor, setup, account,
+  proxy_account_list, proxy_account_create).
 - **Two auth modes** simultaneously: `?token=…` query param and
   `Authorization: Bearer …` header.
 - **Per-token monthly quota** in Vercel KV (default 5000 calls/mo on free).
@@ -149,7 +149,7 @@ curl -X POST 'https://novada-mcpserver.vercel.app/mcp?token=sk-eu-novada-test123
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-You should see the 25-tool catalog in the response.
+You should see the 15-tool catalog in the response.
 
 Try a tool call:
 

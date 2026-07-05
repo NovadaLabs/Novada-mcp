@@ -20,7 +20,7 @@
 
 ### Search & extraction (2)
 
-- `novada_search`: web search via Google, Bing, DuckDuckGo, Yahoo, or Yandex — returns titles, URLs, snippets
+- `novada_search`: web search via Google, Bing, DuckDuckGo, or Yandex — returns titles, URLs, snippets
 - `novada_extract`: read clean content from one or more URLs; handles anti-bot protection automatically (JS-render / anti-bot paths require the Web Unblocker product to be activated on your account); `format='html'` for raw HTML
 
 ### Site data (3)
@@ -170,5 +170,5 @@ Full FAQ at https://mcp.novada.com/#faq. Key points:
 - **Same key everywhere.** One Novada API key works for the hosted MCP, `npx novada-mcp` local, and the Novada REST API. Per-call usage draws the same Novada balance.
 - **No separate MCP key needed.** Use your existing Novada API key.
 - **Free gateway cap vs balance.** The 1,000-calls/month free-gateway cap is an anti-abuse throttle on the hosted endpoint, independent of billing. Per-call usage always draws your Novada balance; top up at dashboard.novada.com.
-- **Hosted vs local.** Hosted = zero install, always latest, includes `novada_browser` (cloud CDP). Local (`npx novada-mcp`) = all 15 tools plus multi-step `novada_browser_flow`, no monthly gateway cap, you manage updates.
+- **Hosted vs local.** Hosted = zero install, always latest, includes `novada_browser` (cloud CDP). Local (`npx novada-mcp`) = all 22 tools plus multi-step `novada_browser_flow`, no monthly gateway cap, you manage updates.
 - **Key in URL vs header.** Both work identically. Prefer `Authorization: Bearer` header when storing configs in repos or sharing screens.

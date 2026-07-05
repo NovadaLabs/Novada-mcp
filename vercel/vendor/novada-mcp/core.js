@@ -284,15 +284,14 @@ Not for:
     },
     {
         name: "novada_scraper_submit",
-        description: `Submit an async scraping task. Returns a task_id — use novada_scraper_status to poll progress, then novada_scraper_result to retrieve data.
+        description: `Run a structured scrape of a platform operation. Returns the records inline in one synchronous call — there is no separate task_id to poll. (Compatibility alias: this now behaves exactly like novada_scrape.)
 
-**Best for:** Scraping platform operations that require async processing (rate-limited targets, long-running extractions).
-**Workflow:** submit → poll status → retrieve result. Three separate calls.
+**Best for:** Structured data from a platform operation (product/keyword/profile/repo lookups) in a single call.
 **Params:** platform (the scraper domain, e.g. 'amazon.com'), operation (the operation ID for that platform), and optional params (operation-specific key/values). These three are the ONLY accepted fields — this tool takes no URL and no category/type selector; the platform + operation pair alone determines what runs.
 **Valid platform values (scraper_name):** amazon.com, walmart.com, google.com, bing.com, duckduckgo.com, yandex.com, x.com, tiktok.com, instagram.com, facebook.com, youtube.com, linkedin.com, github.com. Read novada://scraper-platforms for the full operation IDs per platform.
-**Next step:** After calling this tool, use novada_scraper_status with the returned task_id to check progress.
-**Note:** If the endpoint returns a placeholder task_id, contact Novada support at support@novada.com to confirm operation availability.
-**Alternative:** For the 13 active platforms above (Amazon, TikTok, LinkedIn…), use novada_scrape instead — it's synchronous and returns results directly.`,
+**Next step:** The records are already in this response — no polling needed. novada_scraper_status / novada_scraper_result are retained only for old callers and just point back here.
+**Note:** If the endpoint returns no records, contact Novada support at support@novada.com to confirm operation availability.
+**Alternative:** novada_scrape is the canonical name for the same synchronous behavior.`,
         inputSchema: zodToMcpSchema(ScraperSubmitParamsSchema),
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -551,10 +550,11 @@ export async function dispatch(name, args, apiKey, ctx) {
             // Pass the active-tool subset so the catalog reflects only what's usable in this
             // session (NOVADA_TOOLS/NOVADA_GROUPS restrictions). Undefined → full registry.
             return novadaDiscover(validateDiscoverParams(args), ctx?.visibleTools);
-        // 0.9.4: async scraper trio removed from tools/list (upstream returns results INLINE;
-        // the poll endpoints never tracked /request tasks — NOV-697). Old names still work:
-        // submit runs the sync scrape and returns real records; status/result return a benign
-        // ok pointing to novada_scrape. No error status for old callers.
+        // The async scraper trio (submit/status/result) is still listed in the exported TOOLS
+        // array, but their behavior changed in 0.9.4: upstream returns results INLINE and the
+        // poll endpoints never tracked /request tasks (NOV-697). submit now runs the sync scrape
+        // and returns real records; status/result/task_mgmt return a benign ok pointing to
+        // novada_scrape (task_mgmt routes here as a stub). No error status for old callers.
         case "novada_scraper_submit":
             return novadaScrape(validateScrapeParams(args), apiKey);
         case "novada_scraper_status":
