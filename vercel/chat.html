@@ -239,9 +239,9 @@
     if (/^map\b/.test(low) || /\bsitemap\b/.test(low)) return { tool: 'novada_map', args: { url: url || text.replace(/^map\s*/i,'').trim() } };
     // extract
     if (/^extract\b/.test(low)) return { tool: 'novada_extract', args: { url: url || text.replace(/^extract\s*/i,'').trim() } };
-    // verify / fact-check  ("is ... true", "verify", "fact")
+    // verify / fact-check  ("is ... true", "verify", "fact") → deep research with citations
     if (/\bverify\b/.test(low) || /\bfact[\s-]?check\b/.test(low) || (/\bis\b/.test(low) && /\btrue\b/.test(low))) {
-      return { tool: 'novada_verify', args: { claim: text } };
+      return { tool: 'novada_research', args: { query: text, depth: 'balanced' } };
     }
     // scrape (explicit verb) OR a bare URL with no other intent
     if (/^scrape\b/.test(low)) return { tool: 'novada_scrape', args: { url: url || text.replace(/^scrape\s*/i,'').trim() } };
@@ -252,7 +252,6 @@
   function toolDescription(tool){
     const map = {
       novada_research: { en: 'researching & synthesizing a cited answer', zh: '研究并综合一份带引用的回答' },
-      novada_verify:   { en: 'fact-checking the claim',                  zh: '核实该陈述' },
       novada_scrape:   { en: 'scraping the page',                        zh: '抓取该页面' },
       novada_extract:  { en: 'extracting structured data',               zh: '抽取结构化数据' },
       novada_crawl:    { en: 'crawling the site',                        zh: '爬取该站点' },

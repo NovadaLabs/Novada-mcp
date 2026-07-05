@@ -13,7 +13,7 @@ function toggleTheme(){}
 <link rel="canonical" href="https://mcp.novada.com/playground" />
 <link rel="icon" href="https://www.novada.com/favicon.ico" />
 <meta property="og:title" content="Novada MCP — API Console" />
-<meta property="og:description" content="Run all 26 Novada MCP tools live. Inspect the request, send it, read the response — your key, your quota." />
+<meta property="og:description" content="Run Novada MCP tools live. Inspect the request, send it, read the response — your key, your quota." />
 <meta property="og:url" content="https://mcp.novada.com/playground" />
 <meta property="og:image" content="https://mcp.novada.com/og-image.png" />
 <meta name="twitter:card" content="summary_large_image" />
@@ -308,8 +308,8 @@ function toggleTheme(){}
 
 <!-- ANNOUNCEMENT BAR -->
 <div class="announcement-bar">
-  <span class="en">[ LIVE PLAYGROUND ] — Test all tools against mcp.novada.com. Your key, your quota. <a href="/#install">Install →</a></span>
-  <span class="zh">[ 在线试玩 ] — 直连 mcp.novada.com 测试全部工具。你的密钥,你的额度。<a href="/#install">立即接入 →</a></span>
+  <span class="en">[ v0.9.17 ] — 15 tools · one endpoint · one key · 1,000 free calls/month · <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh">[ v0.9.17 ] — 15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费 · <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
 </div>
 
 <!-- HEADER -->
@@ -320,14 +320,11 @@ function toggleTheme(){}
       <span class="pixel-font text-[10px]" style="color:#7749F1">MCP</span>
     </a>
     <nav class="hidden md:flex items-center gap-6">
-      <a href="/playground" class="nav-link" style="color:#2EBF79"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
-      <a href="/configure" class="nav-link"><span class="en">▸ CONFIGURE</span><span class="zh">▸ 配置</span></a>
-      <a href="/chat" class="nav-link"><span class="en">▸ CHAT</span><span class="zh">▸ 对话</span></a>
       <a href="/#install" class="nav-link"><span class="en">▸ INSTALL</span><span class="zh">▸ 接入</span></a>
       <a href="/tools" class="nav-link"><span class="en">▸ TOOLS</span><span class="zh">▸ 工具</span></a>
       <a href="/pricing" class="nav-link"><span class="en">▸ PRICING</span><span class="zh">▸ 价格</span></a>
       <a href="/faq" class="nav-link">▸ FAQ</a>
-      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="nav-link">▸ GITHUB</a>
+      <a href="/playground" class="nav-link" style="color:#2EBF79"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
     </nav>
     <div class="flex items-center gap-2.5">
       <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
@@ -431,8 +428,8 @@ function toggleTheme(){}
     </div>
 
     <p class="text-xs mt-4 leading-relaxed" style="color:#727082;font-family:'JetBrains Mono',monospace">
-      <span class="en">⚠️ Browser-side calls expose your key in the network tab — use it only for testing, call server-side in production. Browser tools (<span style="color:#7749F1">novada_browser*</span>) and PDF extraction require the local MCP (<span style="color:#7749F1">npx novada-mcp</span>).</span>
-      <span class="zh">⚠️ 浏览器端调用会在 network 标签暴露密钥 — 仅供测试,生产请走服务端。浏览器类工具 (<span style="color:#7749F1">novada_browser*</span>) 与 PDF 解析需本地 MCP (<span style="color:#7749F1">npx novada-mcp</span>)。</span>
+      <span class="en">⚠️ Browser-side calls expose your key in the network tab — use it only for testing, call server-side in production. <span style="color:#7749F1">novada_browser</span> runs on hosted; only multi-step <span style="color:#7749F1">novada_browser_flow</span> and PDF extraction require the local MCP (<span style="color:#7749F1">npx novada-mcp</span>).</span>
+      <span class="zh">⚠️ 浏览器端调用会在 network 标签暴露密钥 — 仅供测试,生产请走服务端。<span style="color:#7749F1">novada_browser</span> 在托管端运行;仅多步 <span style="color:#7749F1">novada_browser_flow</span> 与 PDF 解析需本地 MCP (<span style="color:#7749F1">npx novada-mcp</span>)。</span>
     </p>
 
     <div class="mt-8 text-center">
@@ -488,12 +485,15 @@ function toggleTheme(){}
   const pgReqCode = document.getElementById('pg-req-code');
   function hasKey(){ return tokenInput.value.trim().length>0; }
 
-  // ── Tool catalog (grouped) ──
+  // ── Tool catalog (grouped) — the 15 hosted tools ──
   const GROUPS = [
-    { label: 'Search', tools: ['novada_search'] },
-    { label: 'Scrape & Extract', tools: ['novada_scrape','novada_extract'] },
+    { label: 'Search & Extract', tools: ['novada_search','novada_extract'] },
     { label: 'Crawl & Map', tools: ['novada_crawl','novada_map'] },
-    { label: 'Research', tools: ['novada_research','novada_verify','novada_discover'] },
+    { label: 'Scrape', tools: ['novada_scrape'] },
+    { label: 'Research & Monitor', tools: ['novada_research','novada_discover','novada_ai_monitor','novada_monitor'] },
+    { label: 'Browser', tools: ['novada_browser'] },
+    { label: 'Proxy', tools: ['novada_proxy','novada_proxy_account_list','novada_proxy_account_create'] },
+    { label: 'Account & Config', tools: ['novada_setup','novada_account'] },
   ];
   // ── Scraper operation catalog (platform → operation + required params) ──
   const SCRAPE_PLATFORMS = [
@@ -562,12 +562,69 @@ https://www.brightdata.com/pricing</textarea></div>`,
       build: () => ({ url: val('pg-url'), max_pages: parseInt(val('pg-max'),10), max_depth: parseInt(val('pg-depth'),10) }),
     },
     novada_map: { render: () => urlField('https://www.tavily.com'), build: () => ({ url: val('pg-url') }) },
-    novada_verify: { render: () => `<div><label class="pg-label">${isZh()?'要核实的陈述':'Claim'}</label><input id="pg-q" class="pg-input" value="Novada has 100M+ residential IPs"></div>`, build: () => ({ claim: val('pg-q') }) },
     novada_research: {
       render: () => `<div><label class="pg-label">${isZh()?'研究主题':'Topic'}</label><input id="pg-q" class="pg-input" value="best web scraping APIs 2026"></div><div style="margin-top:12px"><label class="pg-label">Depth</label><select id="pg-depth-mode" class="pg-input"><option value="shallow">shallow (~10s)</option><option value="balanced" selected>balanced (~30s)</option><option value="deep">deep (~60s)</option></select></div>`,
       build: () => ({ query: val('pg-q'), depth: val('pg-depth-mode') }),
     },
-    novada_discover: { render: () => `<p class="text-xs" style="color:#424242;font-family:'JetBrains Mono',monospace">${isZh()?'围绕主题发现相关来源。输入一个查询:':'Find related sources for a topic:'}</p><div style="margin-top:8px"><label class="pg-label">${isZh()?'查询':'Query'}</label><input id="pg-q" class="pg-input" value="residential proxy providers"></div>`, build: () => ({ query: val('pg-q') }) },
+    novada_discover: { render: () => `<p class="text-xs" style="color:#424242;font-family:'JetBrains Mono',monospace">${isZh()?'列出所有可用的 Novada 工具(按类别)。无需参数:':'List all available Novada tools grouped by category. No arguments needed:'}</p>`, build: () => ({}) },
+    novada_ai_monitor: {
+      render: () => `<div><label class="pg-label">${isZh()?'品牌':'Brand'}</label><input id="pg-q" class="pg-input" value="novada"></div>`,
+      build: () => ({ brand: val('pg-q') }),
+    },
+    novada_monitor: {
+      render: () => `${urlField('https://www.firecrawl.dev/pricing')}<p class="text-xs" style="color:#727082;font-family:'JetBrains Mono',monospace;margin-top:8px">${isZh()?'首次调用建立基线,再次调用返回差异。':'First call sets a baseline; a later call returns the diff.'}</p>`,
+      build: () => ({ url: val('pg-url') }),
+    },
+    novada_browser: {
+      render: () => `<div><label class="pg-label">URL</label><input id="pg-url" class="pg-input" value="https://example.com"></div>
+        <p class="text-xs" style="color:#727082;font-family:'JetBrains Mono',monospace;margin-top:8px">${isZh()?'一次性云端浏览器任务:导航后返回快照。凭证由你的密钥自动分配。':'One-shot cloud browser task: navigate then return a snapshot. Credentials auto-provisioned from your key.'}</p>`,
+      build: () => ({ actions: [ { action: 'navigate', url: val('pg-url'), wait_until: 'domcontentloaded' }, { action: 'snapshot' } ] }),
+    },
+    novada_proxy: {
+      render: () => `<div class="pg-input-row" style="display:flex;gap:8px">
+          <div style="flex:1"><label class="pg-label">${isZh()?'类型':'Type'}</label><select id="pg-ptype" class="pg-input"><option value="residential">residential</option><option value="isp">isp</option><option value="datacenter">datacenter</option><option value="mobile">mobile</option><option value="static">static</option><option value="dedicated">dedicated</option></select></div>
+          <div style="width:120px"><label class="pg-label">${isZh()?'国家':'Country'}</label><input id="pg-pcountry" class="pg-input" value="us" placeholder="us"></div>
+        </div>
+        <div style="margin-top:12px;border:2px solid #E4DCFD;background:#F5F2FF;padding:14px">
+          <div class="pixel-font" style="font-size:8px;color:#7749F1;margin-bottom:8px">${isZh()?'如何使用返回的代理凭证':'HOW TO USE THE RETURNED CREDENTIALS'}</div>
+          <p class="text-xs" style="color:#424242;font-family:'JetBrains Mono',monospace;line-height:1.7;margin-bottom:10px">
+            ${isZh()
+              ? 'novada_proxy <b>不会</b>替你抓取或自动配置任何东西 — 它返回一组 <code style="color:#7749F1">user:pass@host:port</code> 代理凭证,供你在<b>自己的</b> HTTP 客户端(curl / requests / axios …)中使用。把返回的 endpoint 作为代理传给你的客户端即可。extract / crawl 无需此工具 — 它们内部已走代理。'
+              : 'novada_proxy does <b>not</b> fetch or auto-configure anything for you — it returns a <code style="color:#7749F1">user:pass@host:port</code> proxy credential to plug into <b>your own</b> HTTP client (curl / requests / axios …). Take the returned endpoint and pass it as the proxy to your client. Not needed for extract / crawl — those proxy internally.'}
+          </p>
+          <pre class="codeview" style="margin:0;box-shadow:none;border-left-width:3px;font-size:11.5px"># 1) call novada_proxy → it returns something like:
+#    http://USER:PASS@proxy.novada.com:PORT
+# 2) plug that endpoint into your own client:
+curl -x "http://USER:PASS@proxy.novada.com:PORT" https://api.ipify.org
+
+# python-requests
+proxies = {"http": "http://USER:PASS@proxy.novada.com:PORT",
+           "https": "http://USER:PASS@proxy.novada.com:PORT"}
+requests.get("https://api.ipify.org", proxies=proxies)</pre>
+        </div>`,
+      build: () => { const c = val('pg-pcountry').trim(); return Object.assign({ type: val('pg-ptype') }, c ? { country: c } : {}); },
+    },
+    novada_proxy_account_list: {
+      render: () => `<div class="pg-input-row" style="display:flex;gap:8px">
+          <div style="flex:1"><label class="pg-label">${isZh()?'产品':'Product'}</label><select id="pg-pprod" class="pg-input"><option value="1">1 — Residential</option><option value="2">2 — Rotating ISP</option><option value="3">3 — Rotating Datacenter</option><option value="4">4 — Unlimited</option><option value="9">9 — Mobile</option></select></div>
+          <div style="width:100px"><label class="pg-label">${isZh()?'每页':'Limit'}</label><input id="pg-plimit" type="number" class="pg-input" value="20" min="1" max="200"></div>
+        </div>`,
+      build: () => ({ product: val('pg-pprod'), page: 1, limit: parseInt(val('pg-plimit'),10) || 20 }),
+    },
+    novada_proxy_account_create: {
+      render: () => `<div><label class="pg-label">${isZh()?'产品':'Product'}</label><select id="pg-pprod" class="pg-input"><option value="1">1 — Residential</option><option value="2">2 — Rotating ISP</option><option value="3">3 — Rotating Datacenter</option><option value="4">4 — Unlimited</option><option value="9">9 — Mobile</option></select></div>
+        <div class="pg-input-row" style="display:flex;gap:8px;margin-top:12px">
+          <div style="flex:1"><label class="pg-label">${isZh()?'账户名':'Account'}</label><input id="pg-pacct" class="pg-input" value="my-sub-account"></div>
+          <div style="flex:1"><label class="pg-label">${isZh()?'密码':'Password'}</label><input id="pg-ppass" class="pg-input" value="Chang3-me-123"></div>
+        </div>
+        <p class="text-xs" style="color:#b45309;font-family:'JetBrains Mono',monospace;margin-top:10px">${isZh()?'⚠️ 这是写操作。默认返回预览;需人工批准后才带 confirm:true 真正创建。':'⚠️ Write action. Returns a dry-run preview by default; only creates with confirm:true after human approval.'}</p>`,
+      build: () => ({ product: val('pg-pprod'), account: val('pg-pacct'), password: val('pg-ppass') }),
+    },
+    novada_setup: { render: () => `<p class="text-xs" style="color:#424242;font-family:'JetBrains Mono',monospace">${isZh()?'检查你的 API 密钥与已激活产品。免鉴权,不消耗配额。无需参数:':'Check your API key and active products. Auth-free, no quota. No arguments needed:'}</p>`, build: () => ({}) },
+    novada_account: {
+      render: () => `<div><label class="pg-label">Section</label><select id="pg-asection" class="pg-input"><option value="summary" selected>summary</option><option value="balance">balance</option><option value="usage">usage</option><option value="plans">plans</option><option value="traffic">traffic</option></select></div><p class="text-xs" style="color:#727082;font-family:'JetBrains Mono',monospace;margin-top:8px">${isZh()?'单次调用的账户与账单面板。':'Single-call account & billing dashboard.'}</p>`,
+      build: () => ({ section: val('pg-asection') }),
+    },
   };
   function val(id){ const el=document.getElementById(id); return el?el.value:''; }
   function urlField(def){ return `<div><label class="pg-label">URL</label><input id="pg-url" class="pg-input" value="${def}"></div>`; }
@@ -578,7 +635,7 @@ https://www.brightdata.com/pricing</textarea></div>`,
     pgToolsEl.innerHTML = GROUPS.map(g =>
       `<div class="tool-group-label">${g.label}</div>` +
       g.tools.map(t => `<div class="pg-tool-pill${t===current?' active':''}" data-tool="${t}">${t.replace('novada_','')}</div>`).join('')
-    ).join('') + `<div class="tool-group-label">${isZh()?'更多':'More'}</div><a href="/tools" class="pg-tool-pill" style="color:#7749F1">${isZh()?'全部 26 个工具 →':'all 26 tools →'}</a>`;
+    ).join('') + `<div class="tool-group-label">${isZh()?'更多':'More'}</div><a href="/tools" class="pg-tool-pill" style="color:#7749F1">${isZh()?'工具详情 →':'tool details →'}</a>`;
   }
   function renderArgs(){ pgArgsEl.innerHTML = PG_TOOLS[current]?.render() ?? ''; refreshReqCode(); }
 

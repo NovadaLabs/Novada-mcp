@@ -8,7 +8,7 @@ function toggleTheme(){}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Pricing — Novada MCP</title>
-<meta name="description" content="Novada MCP pricing: 1,000 free tool calls per month, no credit card required. Simple, usage-based. Start free with all 25 web-data tools." />
+<meta name="description" content="Novada MCP pricing: 1,000 free tool calls per month, no credit card required. Simple, usage-based. Start free with all 15 web-data tools." />
 <link rel="canonical" href="https://mcp.novada.com/pricing" />
 <link rel="icon" href="https://www.novada.com/favicon.ico" />
 
@@ -16,7 +16,7 @@ function toggleTheme(){}
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Novada MCP" />
 <meta property="og:title" content="Pricing — Novada MCP" />
-<meta property="og:description" content="1,000 free tool calls per month. No credit card. All 25 web-data tools. Simple, usage-based pricing." />
+<meta property="og:description" content="1,000 free tool calls per month. No credit card. All 15 web-data tools. Simple, usage-based pricing." />
 <meta property="og:url" content="https://mcp.novada.com/pricing" />
 <meta property="og:image" content="https://mcp.novada.com/og-image.png" />
 <meta property="og:image:width" content="1200" />
@@ -26,7 +26,7 @@ function toggleTheme(){}
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Pricing — Novada MCP" />
-<meta name="twitter:description" content="1,000 free tool calls per month. No credit card. All 25 web-data tools." />
+<meta name="twitter:description" content="1,000 free tool calls per month. No credit card. All 15 web-data tools." />
 <meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -59,6 +59,20 @@ function toggleTheme(){}
   .pixel-container { max-width: 80rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
   .icon-sun { display: block; }
   .icon-moon { display: none; }
+
+  /* Announcement bar — unified dark-ink style across all pages */
+  .announcement-bar {
+    background: #011627;
+    border-bottom: 2px solid #7749F1;
+    color: #E4DCFD;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-align: center;
+    padding: 9px 1rem;
+    letter-spacing: 0.02em;
+  }
+  .announcement-bar a { color: #2EBF79; text-decoration: none; font-weight: 600; }
+  .announcement-bar a:hover { text-decoration: underline; }
   #lang-toggle {
     font-family: 'Press Start 2P', monospace; font-size: 8px;
     color: #424242; background: #F5F2FF; border: 2px solid #7749F1;
@@ -203,8 +217,8 @@ function toggleTheme(){}
 
 <!-- ANNOUNCEMENT BAR -->
 <div class="announcement-bar">
-  <span class="en">[ FREE TO START ] — 1,000 tool calls/month. No credit card. <a href="#free">Claim your key →</a></span>
-  <span class="zh">[ 免费开始 ] — 每月 1,000 次工具调用。无需信用卡。<a href="#free">领取密钥 →</a></span>
+  <span class="en">[ v0.9.17 ] — 15 tools · one endpoint · one key · 1,000 free calls/month · <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh">[ v0.9.17 ] — 15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费 · <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
 </div>
 
 <!-- HEADER -->
@@ -289,8 +303,8 @@ function toggleTheme(){}
           <li class="flex items-start gap-3">
             <span style="color:#7749F1;font-weight:700">▸</span>
             <span style="color:#424242">
-              <span class="en">All 25 tools available — <span style="color:#727082">browser tools run locally via <code class="pixel-code-inline">npx novada-mcp</code>, don't count against hosted quota</span></span>
-              <span class="zh">25 个工具全部可用 — <span style="color:#727082">浏览器工具通过 <code class="pixel-code-inline">npx novada-mcp</code> 本地运行，不占用托管额度</span></span>
+              <span class="en">All 15 tools available — <span style="color:#727082">including <code class="pixel-code-inline">novada_browser</code> (cloud CDP) on the hosted endpoint; multi-step <code class="pixel-code-inline">novada_browser_flow</code> runs locally via <code class="pixel-code-inline">npx novada-mcp</code></span></span>
+              <span class="zh">15 个工具全部可用 — <span style="color:#727082">包括托管端的 <code class="pixel-code-inline">novada_browser</code>(云端 CDP);多步 <code class="pixel-code-inline">novada_browser_flow</code> 需通过 <code class="pixel-code-inline">npx novada-mcp</code> 本地运行</span></span>
             </span>
           </li>
           <li class="flex items-start gap-3">
@@ -435,12 +449,12 @@ function toggleTheme(){}
       <div class="pixel-card p-6">
         <span class="pixel-rule-num mb-4">3</span>
         <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
-          <span class="en">BROWSER TOOLS = 0 QUOTA</span>
-          <span class="zh">浏览器工具不占配额</span>
+          <span class="en">SUCCESS-ONLY BILLING</span>
+          <span class="zh">仅成功调用计费</span>
         </h3>
         <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
-          <span class="en"><code class="pixel-code-inline">novada_browser</code> and <code class="pixel-code-inline">novada_browser_flow</code> run locally via <code class="pixel-code-inline">npx novada-mcp</code>. The hosted endpoint returns <code class="pixel-code-inline">501</code> for these — they are never dispatched to the Novada backend from the hosted URL.</span>
-          <span class="zh"><code class="pixel-code-inline">novada_browser</code> 与 <code class="pixel-code-inline">novada_browser_flow</code> 通过 <code class="pixel-code-inline">npx novada-mcp</code> 在本地执行。托管端对这两个工具返回 <code class="pixel-code-inline">501</code> — 不会从托管 URL 发起后端请求。</span>
+          <span class="en">Only successful tool calls count. <code class="pixel-code-inline">novada_browser</code> runs on the hosted endpoint (cloud CDP) and bills like any other tool. Only multi-step <code class="pixel-code-inline">novada_browser_flow</code> is hosted-unavailable and needs local <code class="pixel-code-inline">npx novada-mcp</code>.</span>
+          <span class="zh">仅成功的工具调用计入配额。<code class="pixel-code-inline">novada_browser</code> 在托管端运行(云端 CDP),与其他工具同样计费。仅多步的 <code class="pixel-code-inline">novada_browser_flow</code> 托管端不可用,需本地 <code class="pixel-code-inline">npx novada-mcp</code>。</span>
         </p>
       </div>
 
@@ -481,12 +495,12 @@ function toggleTheme(){}
         <span class="v">60 req / min / IP</span>
       </div>
       <div class="row">
-        <span class="k"><span class="en">Cost per call (all 25 tools)</span><span class="zh">每次调用费用(全部 25 个工具)</span></span>
+        <span class="k"><span class="en">Cost per call (all 15 tools)</span><span class="zh">每次调用费用(全部 15 个工具)</span></span>
         <span class="v">1 unit</span>
       </div>
       <div class="row">
-        <span class="k"><span class="en">Browser tools on hosted endpoint</span><span class="zh">托管端浏览器工具</span></span>
-        <span class="v"><span class="en">Local only — 0 quota</span><span class="zh">仅本地 — 0 配额</span></span>
+        <span class="k"><span class="en">Browser on hosted endpoint</span><span class="zh">托管端浏览器</span></span>
+        <span class="v"><span class="en">novada_browser: yes · flow: local</span><span class="zh">novada_browser:支持 · flow:本地</span></span>
       </div>
       <div class="row">
         <span class="k"><span class="en">Credit card required?</span><span class="zh">需要信用卡吗?</span></span>

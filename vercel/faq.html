@@ -9,7 +9,7 @@ function toggleTheme(){}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>FAQ — Novada MCP</title>
-<meta name="description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 25 web-data tools. Clients, pricing, data handling, open source, and more." />
+<meta name="description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 15 web-data tools. Clients, pricing, data handling, open source, and more." />
 <link rel="canonical" href="https://mcp.novada.com/faq" />
 <link rel="icon" href="https://www.novada.com/favicon.ico" />
 
@@ -17,17 +17,17 @@ function toggleTheme(){}
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Novada MCP" />
 <meta property="og:title" content="FAQ — Novada MCP" />
-<meta property="og:description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 25 web-data tools." />
+<meta property="og:description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 15 web-data tools." />
 <meta property="og:url" content="https://mcp.novada.com/faq" />
 <meta property="og:image" content="https://mcp.novada.com/og-image.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="Novada MCP — One URL. 25 web-data tools. Zero install. Endpoint: https://mcp.novada.com/mcp" />
+<meta property="og:image:alt" content="Novada MCP — One URL. 15 web-data tools. Zero install. Endpoint: https://mcp.novada.com/mcp" />
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="FAQ — Novada MCP" />
-<meta name="twitter:description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 25 web-data tools." />
+<meta name="twitter:description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 15 web-data tools." />
 <meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
 
 <!-- Structured data: FAQPage -->
@@ -48,8 +48,8 @@ function toggleTheme(){}
     },
     {
       "@type": "Question",
-      "name": "Why can't I use browser tools on the hosted endpoint?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Headless browsers (Playwright) don't run inside serverless edge functions. The hosted endpoint returns 501 with an agent_instruction telling the agent to switch to the local MCP via npx novada-mcp — same key, same tool names." }
+      "name": "Can I use the browser tool on the hosted endpoint?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. novada_browser runs on the hosted endpoint — it drives Novada's cloud browser over CDP (navigate, click, type, screenshot, snapshot), one shot per call. Only the multi-step novada_browser_flow (persistent session) is hosted-unavailable and needs the local MCP via npx novada-mcp — same key, same tool names." }
     },
     {
       "@type": "Question",
@@ -59,7 +59,7 @@ function toggleTheme(){}
     {
       "@type": "Question",
       "name": "What's the difference between hosted and npx novada-mcp?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Hosted = zero install, paste-a-URL, always latest, but no browser tools. Local npx novada-mcp = runs everything including Playwright browser flows, works offline-from-cloud, but you manage updates yourself." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Hosted = zero install, paste-a-URL, always latest; the cloud browser (novada_browser) runs on the hosted endpoint via CDP. Local npx novada-mcp = runs everything including multi-step Playwright flows (novada_browser_flow), works offline-from-cloud, but you manage updates yourself." }
     },
     {
       "@type": "Question",
@@ -332,8 +332,8 @@ function toggleTheme(){}
 
 <!-- ANNOUNCEMENT BAR -->
 <div class="announcement-bar">
-  <span class="en">[ PATCH v0.8.9 DEPLOYED ] — 8 tools equipped. 1,000 free calls/month. <a href="/#install">Install now →</a></span>
-  <span class="zh">[ 补丁 v0.8.9 已部署 ] — 8 个工具装备完毕。每月 1,000 次免费。<a href="/#install">立即接入 →</a></span>
+  <span class="en">[ v0.9.17 ] — 15 tools · one endpoint · one key · 1,000 free calls/month · <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh">[ v0.9.17 ] — 15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费 · <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
 </div>
 
 <!-- HEADER -->
@@ -405,12 +405,12 @@ function toggleTheme(){}
     <!-- Q3: Browser tools -->
     <details class="faq">
       <summary>
-        <span class="en">Why can't I use browser tools on the hosted endpoint?</span>
-        <span class="zh">为什么托管端无法使用浏览器工具?</span>
+        <span class="en">Can I use the browser tool on the hosted endpoint?</span>
+        <span class="zh">托管端可以使用浏览器工具吗?</span>
       </summary>
       <p>
-        <span class="en">Headless browsers (Playwright) don't run inside serverless edge functions. The hosted endpoint returns <code class="mono">501</code> with an <code class="mono">agent_instruction</code> telling the agent to switch to the local MCP via <code class="mono">npx novada-mcp</code> — same key, same tool names.</span>
-        <span class="zh">无头浏览器(Playwright)无法在 serverless 边缘函数中运行。托管端会返回 <code class="mono">501</code> 并附带 <code class="mono">agent_instruction</code>,引导 Agent 切换到本地 MCP <code class="mono">npx novada-mcp</code> — 同一密钥、同一工具名。</span>
+        <span class="en">Yes — <code class="mono">novada_browser</code> runs on the hosted endpoint. It drives Novada's cloud browser over CDP (navigate, click, type, screenshot, snapshot), one shot per call, with credentials auto-provisioned from your key. Only the multi-step <code class="mono">novada_browser_flow</code> (which holds a persistent session across calls) is hosted-unavailable — it returns <code class="mono">501</code> with an <code class="mono">agent_instruction</code> pointing to the local MCP via <code class="mono">npx novada-mcp</code>. Same key, same tool names.</span>
+        <span class="zh">可以 — <code class="mono">novada_browser</code> 在托管端运行。它通过 CDP 驱动 Novada 云端浏览器(导航、点击、输入、截图、快照),每次调用为一次性任务,凭证由你的密钥自动分配。仅多步的 <code class="mono">novada_browser_flow</code>(跨调用保持会话)在托管端不可用 — 返回 <code class="mono">501</code> 并附带 <code class="mono">agent_instruction</code>,引导到本地 MCP <code class="mono">npx novada-mcp</code>。同一密钥、同一工具名。</span>
       </p>
     </details>
 
@@ -433,8 +433,8 @@ function toggleTheme(){}
         <span class="zh">托管版与 npx novada-mcp 有何不同?</span>
       </summary>
       <p>
-        <span class="en">Hosted = zero install, paste-a-URL, always latest, but no browser tools. Local <code class="mono">npx novada-mcp</code> = runs everything including Playwright browser flows, works offline-from-cloud, but you manage updates yourself.</span>
-        <span class="zh">托管版 = 零安装、粘贴 URL、始终最新,但不支持浏览器工具。本地 <code class="mono">npx novada-mcp</code> = 全功能含 Playwright 浏览器流程、可离线使用,但需自行管理更新。</span>
+        <span class="en">Hosted = zero install, paste-a-URL, always latest; the cloud browser (<code class="mono">novada_browser</code>) runs on the hosted endpoint via CDP. Local <code class="mono">npx novada-mcp</code> = runs everything including multi-step Playwright flows (<code class="mono">novada_browser_flow</code>), works offline-from-cloud, but you manage updates yourself.</span>
+        <span class="zh">托管版 = 零安装、粘贴 URL、始终最新;云端浏览器(<code class="mono">novada_browser</code>)通过 CDP 在托管端运行。本地 <code class="mono">npx novada-mcp</code> = 全功能含多步 Playwright 流程(<code class="mono">novada_browser_flow</code>)、可离线使用,但需自行管理更新。</span>
       </p>
     </details>
 

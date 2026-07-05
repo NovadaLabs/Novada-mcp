@@ -285,22 +285,20 @@
   // ── Category catalog ──────────────────────────────────
   // `tools` = short-names (what goes into ?tools=). hosted = selectable for the hosted URL.
   const CATEGORIES = [
-    { id:'search', en:'Search', zh:'搜索', enDesc:'Web + SERP search.', zhDesc:'网页与 SERP 搜索。', hosted:true,
-      tools:['search'] },
-    { id:'scrape', en:'Scrape & Extract', zh:'抓取与提取', enDesc:'Render, scrape, and unblock single pages.', zhDesc:'渲染、抓取并解锁单个页面。', hosted:true,
-      tools:['scrape','extract','unblock'] },
+    { id:'search', en:'Search & Extract', zh:'搜索与提取', enDesc:'Web search and content extraction.', zhDesc:'网页搜索与内容提取。', hosted:true,
+      tools:['search','extract'] },
     { id:'crawl', en:'Crawl & Map', zh:'爬取与站点地图', enDesc:'Multi-page crawl and URL discovery.', zhDesc:'多页爬取与 URL 发现。', hosted:true,
       tools:['crawl','map'] },
-    { id:'research', en:'Research', zh:'研究', enDesc:'Deep research, fact-check, discovery, monitoring.', zhDesc:'深度研究、事实核查、来源发现与监控。', hosted:true,
-      tools:['research','verify','discover','ai_monitor','monitor'] },
-    { id:'scraper', en:'Scraper API', zh:'Scraper API', enDesc:'Async submit / status / result jobs.', zhDesc:'异步提交 / 状态 / 结果任务。', hosted:true,
-      tools:['scraper_submit','scraper_status','scraper_result'] },
-    { id:'proxy', en:'Proxies', zh:'代理', enDesc:'Residential, ISP, datacenter, mobile, static, dedicated.', zhDesc:'住宅、ISP、数据中心、移动、静态、独享。', hosted:true,
-      tools:['proxy','proxy_residential','proxy_isp','proxy_datacenter','proxy_mobile','proxy_static','proxy_dedicated'] },
-    { id:'account', en:'Account & Billing', zh:'账户与账单', enDesc:'Wallet, usage, plans, traffic, account summary.', zhDesc:'钱包、用量、套餐、流量与账户概览。', hosted:true,
-      tools:['wallet_balance','wallet_usage_record','plan_balance_all','proxy_account_list','proxy_account_create','traffic_daily','account_summary','capture_logs'] },
-    { id:'browser', en:'Browser — local only', zh:'浏览器 — 仅本地', enDesc:'Headful browser control. Runs via npx novada-mcp; returns 501 on hosted.', zhDesc:'有头浏览器控制。通过 npx novada-mcp 运行;托管端点返回 501。', hosted:false,
-      tools:['browser','browser_flow'] },
+    { id:'scrape', en:'Scrape', zh:'平台抓取', enDesc:'Structured data from known platforms.', zhDesc:'从已知平台获取结构化数据。', hosted:true,
+      tools:['scrape'] },
+    { id:'research', en:'Research & Monitor', zh:'研究与监测', enDesc:'Deep research, discovery, AI + page monitoring.', zhDesc:'深度研究、工具发现、AI 与页面监测。', hosted:true,
+      tools:['research','discover','ai_monitor','monitor'] },
+    { id:'browser', en:'Browser', zh:'浏览器', enDesc:'Cloud browser via CDP (novada_browser runs on hosted).', zhDesc:'通过 CDP 的云端浏览器(novada_browser 在托管端运行)。', hosted:true,
+      tools:['browser'] },
+    { id:'proxy', en:'Proxies', zh:'代理', enDesc:'Proxy credentials + sub-account management.', zhDesc:'代理凭证与子账户管理。', hosted:true,
+      tools:['proxy','proxy_account_list','proxy_account_create'] },
+    { id:'account', en:'Account & Config', zh:'账户与配置', enDesc:'Setup check + account & billing dashboard.', zhDesc:'配置检查与账户账单面板。', hosted:true,
+      tools:['setup','account'] },
   ];
 
   // Flat list of all hosted short-names (for "all selected → omit param")

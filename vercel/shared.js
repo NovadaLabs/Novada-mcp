@@ -212,11 +212,11 @@ var TOOL_TOOLTIPS = {
   'novada_search':   { rarity:'rare',     lore:'Queries the overworld. Returns structured loot.', stat:'Cooldown: none · Engines: 5' },
   'novada_extract':  { rarity:'uncommon', lore:'Mines content from any URL.', stat:'Auto-escalates: static → render → browser' },
   'novada_crawl':    { rarity:'uncommon', lore:'Explores entire site dungeons (max 20 pages).', stat:'Modes: BFS · DFS' },
-  'novada_scrape':   { rarity:'rare',     lore:'Extracts structured loot from known platforms.', stat:'Platforms: 13 · Ops: ~78' },
   'novada_research': { rarity:'epic',     lore:'Deep multi-source synthesis with citations.', stat:'Durability: ∞ · Depth: auto' },
-  'novada_verify':   { rarity:'uncommon', lore:'Fact-checks claims via 3 parallel angles.', stat:'Returns: supported/contested/unsupported' },
   'novada_map':      { rarity:'common',   lore:'Discovers all URLs in a domain dungeon.', stat:'Via: sitemap.xml · BFS crawl' },
-  'novada_monitor':  { rarity:'uncommon', lore:'Watches for page changes over time.', stat:'Tracks: content hash · field diffs' },
+  'novada_scrape':   { rarity:'rare',     lore:'Extracts structured loot from known platforms.', stat:'Platforms: 13 · Ops: ~78' },
+  'novada_browser':  { rarity:'epic',     lore:'Pilots a cloud browser via CDP — click, type, snapshot.', stat:'Hosted: cloud CDP · one-shot per call' },
+  'novada_proxy':    { rarity:'rare',     lore:'Hands your client residential/ISP/mobile proxy creds.', stat:'Types: 6 · 195+ countries' },
 };
 
 var RARITY_COLORS = { common:'#9d9d9d', uncommon:'#3df0ff', rare:'#9d7bff', epic:'#ff5cf0' };

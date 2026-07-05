@@ -9,7 +9,7 @@ function toggleTheme(){}
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Tools — Novada MCP</title>
-<meta name="description" content="All 26 Novada MCP tools — search, SERP, scrape, extract, crawl, map, research, verify, discover, async scraper API, 6 proxy types, and local browser tools — through one endpoint." />
+<meta name="description" content="All 15 Novada MCP tools — search, extract, crawl, research, map, scrape, browser, proxy, discover, ai_monitor, monitor, setup, account, and proxy sub-account management — through one endpoint." />
 <link rel="canonical" href="https://mcp.novada.com/tools" />
 <link rel="icon" href="https://www.novada.com/favicon.ico" />
 
@@ -17,7 +17,7 @@ function toggleTheme(){}
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Novada MCP" />
 <meta property="og:title" content="Tools — Novada MCP" />
-<meta property="og:description" content="26 tools across search, scraping, crawling, research, async scraper API, 6 proxy types, and browser automation. One endpoint, one key." />
+<meta property="og:description" content="15 tools across search, scraping, crawling, research, browser automation, proxies, and account management. One endpoint, one key." />
 <meta property="og:url" content="https://mcp.novada.com/tools" />
 <meta property="og:image" content="https://mcp.novada.com/og-image.png" />
 <meta property="og:image:width" content="1200" />
@@ -26,7 +26,7 @@ function toggleTheme(){}
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Tools — Novada MCP" />
-<meta name="twitter:description" content="26 tools across search, scraping, crawling, research, proxies, and browser automation. One endpoint, one key." />
+<meta name="twitter:description" content="15 tools across search, scraping, crawling, research, browser automation, proxies, and account management. One endpoint, one key." />
 <meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -342,8 +342,8 @@ function toggleTheme(){}
 
 <!-- ANNOUNCEMENT BAR -->
 <div class="announcement-bar">
-  <span class="en">[ INVENTORY UPDATED ] — 26 tools equipped. One endpoint, one key. <a href="/#install">Install now →</a></span>
-  <span class="zh">[ 库存已更新 ] — 26 个工具装备完毕。一个端点，一把密钥。<a href="/#install">立即接入 →</a></span>
+  <span class="en">[ v0.9.17 ] — 15 tools · one endpoint · one key · 1,000 free calls/month · <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh">[ v0.9.17 ] — 15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费 · <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
 </div>
 
 <!-- HEADER -->
@@ -378,118 +378,92 @@ function toggleTheme(){}
   <div class="pixel-container py-16 relative z-10 text-center">
     <div class="pixel-font text-[9px] mb-6 flex items-center justify-center gap-2" style="color:#2EBF79">
       <span class="live-dot"></span>
-      <span class="en">26 TOOLS · ONE ENDPOINT · ONE KEY</span>
-      <span class="zh">26 个工具 · 一个端点 · 一把密钥</span>
+      <span class="en">15 TOOLS · ONE ENDPOINT · ONE KEY</span>
+      <span class="zh">15 个工具 · 一个端点 · 一把密钥</span>
     </div>
     <h1 class="display-headline mb-6">
       <span class="en">[ TOOL <span class="accent">INVENTORY</span> ]</span>
       <span class="zh">[ 工具 <span class="accent">库存</span> ]</span>
     </h1>
     <p class="mx-auto mb-8 leading-relaxed" style="font-family:'JetBrains Mono',monospace;color:#424242;font-size:14px;max-width:560px">
-      <span class="en">26 tools. Each one a weapon for your agent. All callable through one endpoint — <span class="pixel-code-inline">https://mcp.novada.com/mcp</span> with your API key. See <a href="/#install" style="color:#7749F1;text-decoration:underline">Install</a>.</span>
-      <span class="zh">26 个工具，每一个都是你的 agent 的武器。全部通过同一端点调用 — <span class="pixel-code-inline">https://mcp.novada.com/mcp</span>，搭配你的 API 密钥。查看<a href="/#install" style="color:#7749F1;text-decoration:underline">接入指南</a>。</span>
+      <span class="en">15 tools. Each one a weapon for your agent. All callable through one endpoint — <span class="pixel-code-inline">https://mcp.novada.com/mcp</span> with your API key. See <a href="/#install" style="color:#7749F1;text-decoration:underline">Install</a>.</span>
+      <span class="zh">15 个工具，每一个都是你的 agent 的武器。全部通过同一端点调用 — <span class="pixel-code-inline">https://mcp.novada.com/mcp</span>，搭配你的 API 密钥。查看<a href="/#install" style="color:#7749F1;text-decoration:underline">接入指南</a>。</span>
     </p>
     <!-- stat pills -->
     <div class="flex flex-wrap justify-center gap-3">
       <span class="proof-pill">9 DATA</span>
-      <span class="proof-pill">3 ASYNC</span>
-      <span class="proof-pill">7 PROXY</span>
-      <span class="proof-pill" style="color:#b45309;border-color:#b45309">2 LOCAL</span>
+      <span class="proof-pill">1 BROWSER</span>
+      <span class="proof-pill">3 PROXY</span>
+      <span class="proof-pill">2 ACCOUNT</span>
     </div>
   </div>
 </section>
 
-<!-- ═══ SEARCH & SERP ═══ -->
+<!-- ═══ SEARCH & EXTRACT ═══ -->
 <section class="pixel-section-darker py-16">
   <div class="pixel-container">
-    <div class="cat-eyebrow">▸ SEARCH &amp; SERP <span class="cat-count">×2</span></div>
+    <div class="cat-eyebrow">▸ SEARCH &amp; EXTRACT <span class="cat-count">×2</span></div>
     <h2 class="pixel-heading mb-3">
-      <span class="en">Search &amp; SERP</span><span class="zh">搜索与 SERP</span>
+      <span class="en">Search &amp; Extract</span><span class="zh">搜索与提取</span>
     </h2>
     <p class="pixel-text mb-8 max-w-2xl" style="font-size:13px;line-height:1.6">
-      <span class="en">Query the web and retrieve structured search engine results. Use <span class="pixel-code-inline">search</span> for general content retrieval; use <span class="pixel-code-inline">serp</span> when you need raw, structured SERP JSON for analysis or ranking tasks.</span>
-      <span class="zh">查询网络内容或获取结构化搜索引擎结果。通用内容获取用 <span class="pixel-code-inline">search</span>；需要原始结构化 SERP JSON 用于分析或排名任务时使用 <span class="pixel-code-inline">serp</span>。</span>
+      <span class="en">Find pages and read them. Use <span class="pixel-code-inline">novada_search</span> to find relevant URLs across 5 engines; use <span class="pixel-code-inline">novada_extract</span> to read clean content from a URL you already have.</span>
+      <span class="zh">找到页面并读取内容。用 <span class="pixel-code-inline">novada_search</span> 跨 5 个引擎找到相关 URL；用 <span class="pixel-code-inline">novada_extract</span> 从已知 URL 读取干净内容。</span>
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
-      <!-- search -->
+      <!-- novada_search -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">search</div>
+        <div class="tool-slug">novada_search</div>
         <div class="rarity rarity-rare" style="margin-top:8px">RARE</div>
         <p class="tool-desc">
-          <span class="en">Web search across major engines. Returns clean text results with titles, URLs, and snippets. The primary tool for any question-answering or research task that starts from the open web.</span>
-          <span class="zh">跨主流引擎的网页搜索。返回带标题、URL 和摘要的纯文本结果。适合从公开网络出发的问答或研究任务。</span>
+          <span class="en">Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract.</span>
+          <span class="zh">通过 Google、Bing、DuckDuckGo、Yahoo 或 Yandex 搜索网页。需要找相关页面但不知道 URL 时使用。返回标题、URL 和摘要。需要整页内容时再用 extract。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
           <span class="en"><b>Use when</b> you need to find relevant pages from the open web.</span>
           <span class="zh"><b>使用场景</b>：需要从公开网络找到相关页面。</span>
         </div>
       </div>
-      <!-- serp -->
+      <!-- novada_extract -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">serp</div>
-        <div class="rarity rarity-rare" style="margin-top:8px">RARE</div>
+        <div class="tool-slug">novada_extract</div>
+        <div class="rarity rarity-epic" style="margin-top:8px">EPIC</div>
         <p class="tool-desc">
-          <span class="en">Structured Google / Bing SERP JSON. Returns organic results, ads, featured snippets, knowledge panels, and related searches as typed objects — ideal for SEO analysis and competitive intelligence.</span>
-          <span class="zh">结构化的 Google / Bing SERP JSON。返回自然结果、广告、精选摘要、知识面板和相关搜索的类型化对象 — 适合 SEO 分析和竞争情报。</span>
+          <span class="en">Read clean content from one or more URLs. Use when you have a specific page URL and need its content. Handles anti-bot protection automatically. For raw HTML, use format='html'. For multiple pages on one site, use crawl instead.</span>
+          <span class="zh">从一个或多个 URL 读取干净内容。已有具体页面 URL 并需要其内容时使用。自动处理反爬保护。需要原始 HTML 用 format='html'。同一站点多页请改用 crawl。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you need raw SERP JSON for SEO or ranking analysis.</span>
-          <span class="zh"><b>使用场景</b>：需要原始 SERP JSON 做 SEO 或排名分析。</span>
+          <span class="en"><b>Use when</b> you have a URL and need its clean content.</span>
+          <span class="zh"><b>使用场景</b>：已有 URL 并需要其干净内容。</span>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══ SCRAPE & EXTRACT ═══ -->
+<!-- ═══ SCRAPE ═══ -->
 <section class="pixel-section-dark py-16">
   <div class="pixel-container">
-    <div class="cat-eyebrow">▸ SCRAPE &amp; EXTRACT <span class="cat-count">×3</span></div>
+    <div class="cat-eyebrow">▸ PLATFORM SCRAPE <span class="cat-count">×1</span></div>
     <h2 class="pixel-heading mb-3">
-      <span class="en">Scrape &amp; Extract</span><span class="zh">抓取与提取</span>
+      <span class="en">Platform Scraper</span><span class="zh">平台抓取</span>
     </h2>
     <p class="pixel-text mb-8 max-w-2xl" style="font-size:13px;line-height:1.6">
-      <span class="en">Turn any URL into structured data. <span class="pixel-code-inline">scrape</span> gives clean Markdown prose; <span class="pixel-code-inline">extract</span> applies a schema to produce typed JSON fields; <span class="pixel-code-inline">unblock</span> handles JS-heavy or bot-protected pages by returning the fully rendered HTML.</span>
-      <span class="zh">将任意 URL 转化为结构化数据。<span class="pixel-code-inline">scrape</span> 输出干净的 Markdown 正文；<span class="pixel-code-inline">extract</span> 按 schema 生成类型化 JSON 字段；<span class="pixel-code-inline">unblock</span> 处理 JS 渲染或有反爬保护的页面并返回完整 HTML。</span>
+      <span class="en">Structured records from known platforms — not general web pages. For arbitrary URLs use <span class="pixel-code-inline">novada_extract</span> instead.</span>
+      <span class="zh">从已知平台获取结构化记录 — 而非通用网页。任意 URL 请改用 <span class="pixel-code-inline">novada_extract</span>。</span>
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
-      <!-- scrape -->
+      <!-- novada_scrape -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">scrape</div>
+        <div class="tool-slug">novada_scrape</div>
         <div class="rarity rarity-rare" style="margin-top:8px">RARE</div>
         <p class="tool-desc">
-          <span class="en">Single-URL clean Markdown content. Strips nav, ads, and boilerplate. Returns the main body in Markdown, ready to pass directly to an LLM context window.</span>
-          <span class="zh">单 URL 干净 Markdown 正文。去除导航、广告与无关内容，将主体内容以 Markdown 返回，可直接写入 LLM 上下文窗口。</span>
+          <span class="en">Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings — NOT general websites (use extract for those).</span>
+          <span class="zh">从 Amazon、Reddit、TikTok、LinkedIn、GitHub、YouTube、Twitter/X、Walmart 等平台获取结构化数据。需要电商商品、社交帖子或职位列表时使用 — 通用网站请用 extract。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you want readable Markdown from one known URL.</span>
-          <span class="zh"><b>使用场景</b>：想从单个已知 URL 拿到可读 Markdown。</span>
-        </div>
-      </div>
-      <!-- extract -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">extract</div>
-        <div class="rarity rarity-epic" style="margin-top:8px">EPIC</div>
-        <p class="tool-desc">
-          <span class="en">Schema-driven structured JSON extraction. Define the fields you want (e.g. price, title, date, author) and get back a typed JSON object — no XPath or CSS selectors needed.</span>
-          <span class="zh">按 schema 提取结构化 JSON。定义所需字段（如价格、标题、日期、作者），返回类型化 JSON 对象 — 无需 XPath 或 CSS 选择器。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you need specific typed fields, not the whole page.</span>
-          <span class="zh"><b>使用场景</b>：只要特定类型化字段，而非整页内容。</span>
-        </div>
-      </div>
-      <!-- unblock -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">unblock</div>
-        <div class="rarity rarity-epic" style="margin-top:8px">EPIC</div>
-        <p class="tool-desc">
-          <span class="en">Raw rendered HTML of blocked or JS-heavy pages. Bypasses common bot protection to return the fully rendered DOM — use when <code>scrape</code> returns incomplete content.</span>
-          <span class="zh">返回被封锁或 JS 渲染页面的完整 HTML。绕过常见反爬机制并返回完整渲染的 DOM — 当 <code>scrape</code> 返回内容不完整时使用。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> <code>scrape</code> comes back empty on a protected page.</span>
-          <span class="zh"><b>使用场景</b>：<code>scrape</code> 在受保护页面返回空内容时。</span>
+          <span class="en"><b>Use when</b> you need typed records from a known platform.</span>
+          <span class="zh"><b>使用场景</b>：需要来自已知平台的结构化记录。</span>
         </div>
       </div>
     </div>
@@ -504,30 +478,30 @@ function toggleTheme(){}
       <span class="en">Crawl &amp; Map</span><span class="zh">爬取与站点地图</span>
     </h2>
     <p class="pixel-text mb-8 max-w-2xl" style="font-size:13px;line-height:1.6">
-      <span class="en">Explore entire sites rather than a single page. <span class="pixel-code-inline">map</span> discovers all reachable URLs; <span class="pixel-code-inline">crawl</span> fetches and returns the content at each URL with configurable depth and scope.</span>
-      <span class="zh">探索整个网站而非单页。<span class="pixel-code-inline">map</span> 发现所有可达 URL；<span class="pixel-code-inline">crawl</span> 以可配置的深度和范围抓取并返回每个 URL 的内容。</span>
+      <span class="en">Explore entire sites rather than a single page. <span class="pixel-code-inline">novada_map</span> discovers all reachable URLs; <span class="pixel-code-inline">novada_crawl</span> fetches and returns the content at each URL with configurable depth and scope.</span>
+      <span class="zh">探索整个网站而非单页。<span class="pixel-code-inline">novada_map</span> 发现所有可达 URL；<span class="pixel-code-inline">novada_crawl</span> 以可配置的深度和范围抓取并返回每个 URL 的内容。</span>
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
-      <!-- crawl -->
+      <!-- novada_crawl -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">crawl</div>
+        <div class="tool-slug">novada_crawl</div>
         <div class="rarity rarity-epic" style="margin-top:8px">EPIC</div>
         <p class="tool-desc">
-          <span class="en">Multi-page crawl with depth control. Follows internal links from a seed URL and returns clean Markdown for each page up to the configured depth and page limit. Respects <code>robots.txt</code> by default.</span>
-          <span class="zh">可控深度的多页面爬取。从种子 URL 跟踪内部链接，并在配置的深度与页数限制内返回每页的干净 Markdown。默认遵守 <code>robots.txt</code>。</span>
+          <span class="en">Read content from multiple pages on one site (up to 20). Use when you need an entire section of a website. Optionally run map first to discover target URLs.</span>
+          <span class="zh">读取一个站点多个页面的内容（最多 20 页）。需要整块站点内容时使用。可先运行 map 发现目标 URL。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
           <span class="en"><b>Use when</b> you need content from many pages of one site.</span>
           <span class="zh"><b>使用场景</b>：需要一个站点多页的内容。</span>
         </div>
       </div>
-      <!-- map -->
+      <!-- novada_map -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">map</div>
+        <div class="tool-slug">novada_map</div>
         <div class="rarity rarity-common" style="margin-top:8px">COMMON</div>
         <p class="tool-desc">
-          <span class="en">Discover all URLs on a site. Returns a flat list of reachable URLs from the given root — useful as a first step before targeted scraping or to audit site structure.</span>
-          <span class="zh">发现站点上所有 URL。从给定根 URL 返回可达 URL 的平铺列表 — 适合定向抓取前的前置步骤或站点结构审计。</span>
+          <span class="en">List all URLs on a website via sitemap or crawl. Use when you need to find the right page before crawl/extract. Returns URLs only, no content. Fast site reconnaissance.</span>
+          <span class="zh">通过 sitemap 或爬取列出站点上所有 URL。在 crawl/extract 前需要找到正确页面时使用。仅返回 URL，不含内容。快速站点侦察。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
           <span class="en"><b>Use when</b> you need the URL list before scraping.</span>
@@ -538,77 +512,64 @@ function toggleTheme(){}
   </div>
 </section>
 
-<!-- ═══ RESEARCH & VERIFY ═══ -->
-<section class="pixel-section-dark py-16">
+<!-- ═══ RESEARCH & MONITOR ═══ -->
+<section class="pixel-section-darker py-16">
   <div class="pixel-container">
-    <div class="cat-eyebrow">▸ RESEARCH &amp; VERIFY <span class="cat-count">×5</span></div>
+    <div class="cat-eyebrow">▸ RESEARCH &amp; MONITOR <span class="cat-count">×4</span></div>
     <h2 class="pixel-heading mb-3">
-      <span class="en">Research &amp; Verify</span><span class="zh">研究与验证</span>
+      <span class="en">Research &amp; Monitor</span><span class="zh">研究与监测</span>
     </h2>
     <p class="pixel-text mb-8 max-w-2xl" style="font-size:13px;line-height:1.6">
-      <span class="en">Higher-level intelligence tools: autonomous multi-source research, fact-checking with confidence scoring, source discovery, AI brand monitoring, and real-time page change detection.</span>
-      <span class="zh">高级智能工具：自主多源研究、带置信度评分的事实核查、来源发现、AI 品牌监测及实时页面变更检测。</span>
+      <span class="en">Higher-level intelligence: autonomous multi-source research, tool discovery, AI brand-mention monitoring, and page change detection.</span>
+      <span class="zh">高级智能工具：自主多源研究、工具发现、AI 品牌提及监测及页面变更检测。</span>
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
-      <!-- research -->
+      <!-- novada_research -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">research</div>
+        <div class="tool-slug">novada_research</div>
         <div class="rarity rarity-legendary" style="margin-top:8px">LEGENDARY</div>
         <p class="tool-desc">
-          <span class="en">Deep multi-source research agent. Searches, fetches, and synthesizes information from multiple sources into a coherent answer with citations — equivalent to a junior analyst pass over the web.</span>
-          <span class="zh">多源深度研究 Agent。搜索、抓取并综合多个来源的信息，输出带引用的完整答案 — 相当于初级分析师的网络检索汇总。</span>
+          <span class="en">Deep multi-source research: searches multiple angles, reads top sources, returns a synthesized report with citations. Use when you need comprehensive analysis of an open-ended topic. Slower than a single search.</span>
+          <span class="zh">多源深度研究：从多个角度搜索、读取顶部来源、返回带引用的综合报告。需要对开放性主题做全面分析时使用。比单次搜索慢。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
           <span class="en"><b>Use when</b> a question needs synthesis across many sources.</span>
           <span class="zh"><b>使用场景</b>：问题需要跨多个来源综合。</span>
         </div>
       </div>
-      <!-- verify -->
+      <!-- novada_discover -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">verify</div>
+        <div class="tool-slug">novada_discover</div>
+        <div class="rarity rarity-common" style="margin-top:8px">COMMON</div>
+        <p class="tool-desc">
+          <span class="en">List all available Novada tools grouped by category. Use when an agent wants to see the full toolset it can call before choosing one.</span>
+          <span class="zh">按类别列出所有可用 Novada 工具。Agent 在选择工具前想查看完整可调用工具集时使用。</span>
+        </p>
+        <div class="use-when" style="margin-top:16px">
+          <span class="en"><b>Use when</b> you want the full list of callable tools.</span>
+          <span class="zh"><b>使用场景</b>：想查看完整可调用工具清单。</span>
+        </div>
+      </div>
+      <!-- novada_ai_monitor -->
+      <div class="pixel-card" style="padding:24px">
+        <div class="tool-slug">novada_ai_monitor</div>
         <div class="rarity rarity-epic" style="margin-top:8px">EPIC</div>
         <p class="tool-desc">
-          <span class="en">Source check and confidence scoring. Given a claim, searches the web for corroborating or contradicting evidence and returns a confidence score with supporting sources.</span>
-          <span class="zh">来源核验与置信度打分。针对给定声明，搜索网络中的支持或反驳证据，并返回带来源的置信度评分。</span>
+          <span class="en">Search AI-company domains (chatgpt.com, perplexity.ai, anthropic.com, …) and the web for public mentions &amp; sentiment of a brand. Searches indexed public pages — it does not query the live models.</span>
+          <span class="zh">搜索 AI 公司域名(chatgpt.com、perplexity.ai、anthropic.com 等)及网络上对某品牌的公开提及与情感。搜索已索引的公开页面 — 不查询实时模型。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you need to fact-check a claim with sources.</span>
-          <span class="zh"><b>使用场景</b>：需要用来源核查某个声明。</span>
+          <span class="en"><b>Use when</b> you track public brand mentions across AI-company sites.</span>
+          <span class="zh"><b>使用场景</b>：追踪品牌在 AI 公司站点上的公开提及。</span>
         </div>
       </div>
-      <!-- discover -->
+      <!-- novada_monitor -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">discover</div>
+        <div class="tool-slug">novada_monitor</div>
         <div class="rarity rarity-rare" style="margin-top:8px">RARE</div>
         <p class="tool-desc">
-          <span class="en">Find related sources for a topic. Given a seed URL or topic, surfaces authoritative sources, similar sites, and key references — useful for building a corpus or competitive research.</span>
-          <span class="zh">围绕主题发现相关来源。给定种子 URL 或主题，挖掘权威来源、相似网站和关键参考 — 适合构建语料库或竞争调研。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you're building a source list around a topic.</span>
-          <span class="zh"><b>使用场景</b>：围绕主题搭建来源清单。</span>
-        </div>
-      </div>
-      <!-- ai_monitor -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">ai_monitor</div>
-        <div class="rarity rarity-epic" style="margin-top:8px">EPIC</div>
-        <p class="tool-desc">
-          <span class="en">Monitor how AI models reference a brand. Tracks mentions, sentiment, and positioning of a brand or product across AI-generated content and model outputs over time.</span>
-          <span class="zh">监测 AI 模型如何引用品牌。追踪品牌或产品在 AI 生成内容和模型输出中的提及、情感倾向和定位变化。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you track brand presence inside AI outputs.</span>
-          <span class="zh"><b>使用场景</b>：追踪品牌在 AI 输出中的表现。</span>
-        </div>
-      </div>
-      <!-- monitor -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">monitor</div>
-        <div class="rarity rarity-rare" style="margin-top:8px">RARE</div>
-        <p class="tool-desc">
-          <span class="en">Detect page changes over time. Periodically checks a URL for content changes and surfaces diffs — useful for price tracking, news alerts, or compliance monitoring.</span>
-          <span class="zh">检测页面随时间的变化。定期检查 URL 内容并输出差异 — 适合价格追踪、新闻提醒或合规监控。</span>
+          <span class="en">Track changes on a web page over time. Compares content hash and field-level diffs — useful for price tracking, news alerts, or compliance monitoring.</span>
+          <span class="zh">跟踪网页随时间的变化。比较内容哈希与字段级差异 — 适合价格追踪、新闻提醒或合规监控。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
           <span class="en"><b>Use when</b> you watch a page for changes over time.</span>
@@ -619,236 +580,88 @@ function toggleTheme(){}
   </div>
 </section>
 
-<!-- ═══ SCRAPER API (ASYNC) ═══ -->
-<section class="pixel-section-darker py-16">
-  <div class="pixel-container">
-    <div class="cat-eyebrow">▸ SCRAPER API — ASYNC <span class="cat-count">×3</span></div>
-    <h2 class="pixel-heading mb-3">
-      <span class="en">Scraper API</span><span class="zh">Scraper API</span>
-    </h2>
-    <p class="pixel-text mb-8 max-w-2xl" style="font-size:13px;line-height:1.6">
-      <span class="en">Task-based async structured scraping of 129+ platforms (Amazon, LinkedIn, Google Maps, …). Submit a job, poll for status, retrieve the result — designed for high-volume or slow-rendering targets that would time out in a synchronous call.</span>
-      <span class="zh">基于任务的异步结构化抓取，支持 129+ 平台（亚马逊、LinkedIn、谷歌地图等）。提交任务 → 轮询状态 → 获取结果 — 专为高并发或渲染慢的目标设计，避免同步调用超时。</span>
-    </p>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
-      <!-- scraper_submit -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">scraper_submit</div>
-        <div class="rarity rarity-epic" style="margin-top:8px">EPIC · ASYNC</div>
-        <p class="tool-desc">
-          <span class="en">Submit an async scraper task. Specify the target platform and parameters; returns a <code>task_id</code> immediately. The task runs in the background across Novada's scraper infrastructure.</span>
-          <span class="zh">提交异步抓取任务。指定目标平台与参数，立即返回 <code>task_id</code>。任务在 Novada 抓取基础设施后台运行。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Step 1</b> — kick off a platform scrape job.</span>
-          <span class="zh"><b>第 1 步</b> — 启动平台抓取任务。</span>
-        </div>
-      </div>
-      <!-- scraper_status -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">scraper_status</div>
-        <div class="rarity rarity-common" style="margin-top:8px">COMMON · ASYNC</div>
-        <p class="tool-desc">
-          <span class="en">Poll a task's status by <code>task_id</code>. Returns <code>pending</code>, <code>running</code>, <code>completed</code>, or <code>failed</code>. Call this before retrieving results to avoid wasted quota.</span>
-          <span class="zh">通过 <code>task_id</code> 轮询任务状态。返回 <code>pending</code>、<code>running</code>、<code>completed</code> 或 <code>failed</code>。取结果前先调用以避免消耗额度。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Step 2</b> — poll until the job completes.</span>
-          <span class="zh"><b>第 2 步</b> — 轮询直至任务完成。</span>
-        </div>
-      </div>
-      <!-- scraper_result -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">scraper_result</div>
-        <div class="rarity rarity-epic" style="margin-top:8px">EPIC · ASYNC</div>
-        <p class="tool-desc">
-          <span class="en">Retrieve the completed result for a task. Returns the structured JSON payload from the scraper — platform-specific schema (product data, listing data, review data, etc.).</span>
-          <span class="zh">获取已完成任务的结果。返回抓取器输出的结构化 JSON — 根据平台有特定 schema（商品数据、列表数据、评论数据等）。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Step 3</b> — pull the structured payload.</span>
-          <span class="zh"><b>第 3 步</b> — 取出结构化结果。</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══ PROXIES ═══ -->
+<!-- ═══ ACCOUNT & CONFIG ═══ -->
 <section class="pixel-section-dark py-16">
   <div class="pixel-container">
-    <div class="cat-eyebrow">▸ PROXIES <span class="cat-count">×7</span></div>
+    <div class="cat-eyebrow">▸ ACCOUNT &amp; CONFIG <span class="cat-count">×2</span></div>
     <h2 class="pixel-heading mb-3">
-      <span class="en">Proxies</span><span class="zh">代理工具</span>
+      <span class="en">Account &amp; Config</span><span class="zh">账户与配置</span>
     </h2>
     <p class="pixel-text mb-8 max-w-2xl" style="font-size:13px;line-height:1.6">
-      <span class="en">One key unlocks six distinct proxy products plus a universal router. All tools share the same parameter surface — pass a URL and optional country/session parameters; get back the proxied response. 195+ countries, 100M+ residential IPs, sub-second rotation.</span>
-      <span class="zh">一把密钥解锁六种代理产品，外加一个通用路由器。所有工具参数一致 — 传入 URL 及可选的国家/会话参数，返回代理响应。覆盖 195+ 国家，1 亿+ 住宅 IP，毫秒级轮换。</span>
+      <span class="en">Check your setup and manage your account. <span class="pixel-code-inline">novada_setup</span> is auth-free and uses no quota; <span class="pixel-code-inline">novada_account</span> is your single billing &amp; wallet dashboard.</span>
+      <span class="zh">检查配置并管理账户。<span class="pixel-code-inline">novada_setup</span> 免鉴权且不消耗配额；<span class="pixel-code-inline">novada_account</span> 是你的统一账单与钱包面板。</span>
     </p>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:20px">
-      <!-- novada_proxy -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">
+      <!-- novada_setup -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">novada_proxy</div>
-        <div class="rarity rarity-legendary" style="margin-top:8px">LEGENDARY</div>
-        <p class="tool-desc">
-          <span class="en">Universal proxy router. Automatically selects the best proxy type for the target URL — the recommended default for agents that don't need to specify a product explicitly.</span>
-          <span class="zh">通用代理路由器。自动为目标 URL 选择最佳代理类型 — 适合无需显式指定产品的 Agent 的推荐默认选项。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you want the router to pick the proxy for you.</span>
-          <span class="zh"><b>使用场景</b>：让路由器自动为你选择代理。</span>
-        </div>
-      </div>
-      <!-- residential -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">novada_proxy_residential</div>
-        <div class="rarity rarity-epic" style="margin-top:8px">EPIC</div>
-        <p class="tool-desc">
-          <span class="en">Residential proxies. Routes requests through real consumer IP addresses. Highest trust score for geo-sensitive or heavily protected targets. 100M+ IPs across 195+ countries.</span>
-          <span class="zh">住宅代理。通过真实消费者 IP 路由请求。对地理敏感或重度保护目标信任度最高。195+ 国家，1 亿+ IP。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> the target heavily blocks datacenter IPs.</span>
-          <span class="zh"><b>使用场景</b>：目标重度封锁机房 IP。</span>
-        </div>
-      </div>
-      <!-- datacenter -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">novada_proxy_datacenter</div>
+        <div class="tool-slug">novada_setup</div>
         <div class="rarity rarity-common" style="margin-top:8px">COMMON</div>
         <p class="tool-desc">
-          <span class="en">Datacenter proxies. Fast, high-throughput proxies from commercial data centers. Best for speed-sensitive bulk crawls where residential trust level is not required.</span>
-          <span class="zh">机房代理。来自商业数据中心的高速、高吞吐代理。适合不需要住宅级信任、对速度敏感的批量爬取。</span>
+          <span class="en">Check your API key and environment configuration. Use when you want to verify setup or see which Novada products are active. Auth-free, no quota used.</span>
+          <span class="zh">检查你的 API 密钥与环境配置。想验证配置或查看哪些 Novada 产品已激活时使用。免鉴权，不消耗配额。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> speed matters more than trust score.</span>
-          <span class="zh"><b>使用场景</b>：速度优先于信任度。</span>
+          <span class="en"><b>Use when</b> you want to confirm your key &amp; active products.</span>
+          <span class="zh"><b>使用场景</b>：想确认密钥与已激活产品。</span>
         </div>
       </div>
-      <!-- ISP -->
+      <!-- novada_account -->
       <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">novada_proxy_isp</div>
+        <div class="tool-slug">novada_account</div>
         <div class="rarity rarity-rare" style="margin-top:8px">RARE</div>
         <p class="tool-desc">
-          <span class="en">ISP proxies. Static IPs assigned by real ISPs — combines the trust profile of residential IPs with the stability and speed of datacenter infrastructure.</span>
-          <span class="zh">ISP 代理。由真实 ISP 分配的静态 IP — 兼具住宅 IP 的信任度与机房基础设施的稳定性和速度。</span>
+          <span class="en">Single-call account &amp; billing dashboard. <code>section='summary'</code> gives wallet balance, plan quotas, recent capture logs, and health; other sections cover balance, usage history, per-product plans, and daily traffic.</span>
+          <span class="zh">一次调用的账户与账单面板。<code>section='summary'</code> 返回钱包余额、套餐配额、最近抓取日志与健康状态；其他 section 覆盖余额、用量历史、各产品套餐与每日流量。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you need residential trust with datacenter speed.</span>
-          <span class="zh"><b>使用场景</b>：既要住宅信任度又要机房速度。</span>
+          <span class="en"><b>Use when</b> you need balance, quota, or usage history.</span>
+          <span class="zh"><b>使用场景</b>：需要余额、配额或用量历史。</span>
         </div>
       </div>
-      <!-- dedicated -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">novada_proxy_dedicated</div>
-        <div class="rarity rarity-rare" style="margin-top:8px">RARE</div>
-        <p class="tool-desc">
-          <span class="en">Dedicated datacenter proxies. Exclusive IPs not shared with other users. Ideal for targets that blacklist shared IPs or for workflows requiring consistent session identity.</span>
-          <span class="zh">独享机房代理。不与其他用户共享的专用 IP。适合将共享 IP 列入黑名单的目标，或需要一致会话身份的工作流。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> you need an IP no one else touches.</span>
-          <span class="zh"><b>使用场景</b>：需要不与他人共享的独享 IP。</span>
-        </div>
-      </div>
-      <!-- static -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">novada_proxy_static</div>
-        <div class="rarity rarity-rare" style="margin-top:8px">RARE</div>
-        <p class="tool-desc">
-          <span class="en">Static residential proxies. Long-lived residential IPs that persist across requests — use when a site tracks session continuity or requires login state to be maintained.</span>
-          <span class="zh">静态住宅代理。跨请求持久存在的长效住宅 IP — 适用于追踪会话连续性或需要保持登录状态的网站。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> a site must see the same IP across requests.</span>
-          <span class="zh"><b>使用场景</b>：网站需要跨请求看到同一 IP。</span>
-        </div>
-      </div>
-      <!-- mobile -->
-      <div class="pixel-card" style="padding:24px">
-        <div class="tool-slug">novada_proxy_mobile</div>
-        <div class="rarity rarity-epic" style="margin-top:8px">EPIC</div>
-        <p class="tool-desc">
-          <span class="en">Mobile carrier proxies. Routes through 4G/5G mobile network IPs. Highest trust for mobile-first platforms and apps that differentiate between mobile and desktop traffic.</span>
-          <span class="zh">移动运营商代理。通过 4G/5G 移动网络 IP 路由。对区分移动端与桌面端流量的移动优先平台和应用信任度最高。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> the target treats mobile traffic differently.</span>
-          <span class="zh"><b>使用场景</b>：目标对移动流量区别对待。</span>
-        </div>
-      </div>
-    </div>
-    <!-- proxy product pills -->
-    <div class="flex flex-wrap gap-2 items-center" style="border:2px solid #E4DCFD;background:#F5F2FF;padding:16px">
-      <span class="pixel-font text-[8px]" style="color:#7749F1;margin-right:6px">
-        <span class="en">PRODUCTS:</span><span class="zh">产品:</span>
-      </span>
-      <span class="proof-pill">residential</span>
-      <span class="proof-pill">datacenter</span>
-      <span class="proof-pill">isp</span>
-      <span class="proof-pill">dedicated</span>
-      <span class="proof-pill">static</span>
-      <span class="proof-pill">mobile</span>
-      <span class="proof-pill" style="color:#2EBF79;border-color:#2EBF79">universal</span>
     </div>
   </div>
 </section>
 
-<!-- ═══ BROWSER (LOCAL-ONLY) ═══ -->
+<!-- ═══ BROWSER (HOSTED) ═══ -->
 <section class="pixel-section-darker py-16">
   <div class="pixel-container">
-    <div class="cat-eyebrow" style="color:#b45309">▸ BROWSER — LOCAL MCP ONLY <span class="cat-count" style="color:#b45309">×2</span></div>
+    <div class="cat-eyebrow">▸ BROWSER <span class="cat-count">×1</span></div>
     <h2 class="pixel-heading mb-3">
       <span class="en">Browser</span><span class="zh">浏览器工具</span>
     </h2>
     <p class="pixel-text mb-8 max-w-2xl" style="font-size:13px;line-height:1.6">
-      <span class="en">Playwright-powered headless browser and flow automation. These tools require the local MCP runtime and return <span class="pixel-code-inline">501 NOT_AVAILABLE_ON_HOSTED</span> on the cloud endpoint — see the callout below.</span>
-      <span class="zh">基于 Playwright 的无头浏览器和流程自动化工具。这些工具需要本地 MCP 运行时，在云端点会返回 <span class="pixel-code-inline">501 NOT_AVAILABLE_ON_HOSTED</span> — 详见下方提示框。</span>
+      <span class="en">Drive a real browser when a fetch isn't enough. <span class="pixel-code-inline">novada_browser</span> runs on the hosted endpoint via cloud CDP. Multi-step persistent flows (<span class="pixel-code-inline">novada_browser_flow</span>) run only under the local MCP — see the callout below.</span>
+      <span class="zh">当单纯抓取不够时驱动真实浏览器。<span class="pixel-code-inline">novada_browser</span> 通过云端 CDP 在托管端运行。多步持久流程(<span class="pixel-code-inline">novada_browser_flow</span>)仅在本地 MCP 下运行 — 详见下方提示框。</span>
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:32px">
       <!-- novada_browser -->
-      <div class="pixel-card" style="padding:24px;border-color:#b45309;box-shadow:6px 6px 0 rgba(180,83,9,0.35)">
+      <div class="pixel-card" style="padding:24px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-          <div class="tool-slug" style="color:#b45309">novada_browser</div>
-          <span class="rarity rarity-legendary" style="margin:0;flex-shrink:0">LOCAL ONLY</span>
+          <div class="tool-slug">novada_browser</div>
+          <span class="rarity rarity-rare" style="margin:0;flex-shrink:0">HOSTED</span>
         </div>
         <p class="tool-desc" style="margin-top:12px">
-          <span class="en">Headless browser automation. Navigate URLs, click elements, fill forms, take screenshots, and return the rendered DOM — powered by Playwright. Use when <code>scrape</code> or <code>unblock</code> can't handle the interaction flow.</span>
-          <span class="zh">无头浏览器自动化。导航 URL、点击元素、填写表单、截图并返回渲染后的 DOM — 基于 Playwright。当 <code>scrape</code> 或 <code>unblock</code> 无法处理交互流程时使用。</span>
+          <span class="en">Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key. Runs on the hosted endpoint.</span>
+          <span class="zh">通过 CDP 自动化 Novada 云端浏览器 — 导航、点击、输入、截图、快照。每次调用为一次性任务。凭证由你的 API 密钥自动分配。在托管端运行。</span>
         </p>
         <div class="use-when" style="margin-top:16px">
           <span class="en"><b>Use when</b> you need clicks/forms, not just a fetch.</span>
           <span class="zh"><b>使用场景</b>：需要点击/表单，而非单纯抓取。</span>
         </div>
       </div>
-      <!-- novada_browser_flow -->
-      <div class="pixel-card" style="padding:24px;border-color:#b45309;box-shadow:6px 6px 0 rgba(180,83,9,0.35)">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-          <div class="tool-slug" style="color:#b45309">novada_browser_flow</div>
-          <span class="rarity rarity-legendary" style="margin:0;flex-shrink:0">LOCAL ONLY</span>
-        </div>
-        <p class="tool-desc" style="margin-top:12px">
-          <span class="en">Multi-step browser flow automation. Define a sequence of browser actions (navigate → fill → click → wait → extract) and execute them atomically. Useful for login-gated scrapes or checkout flows.</span>
-          <span class="zh">多步骤浏览器流程自动化。定义动作序列（导航 → 填写 → 点击 → 等待 → 提取）并原子化执行。适合需要登录的抓取或结账流程。</span>
-        </p>
-        <div class="use-when" style="margin-top:16px">
-          <span class="en"><b>Use when</b> a login-gated flow needs multiple steps.</span>
-          <span class="zh"><b>使用场景</b>：需登录的流程需要多步骤。</span>
-        </div>
-      </div>
     </div>
 
-    <!-- Local fallback callout -->
+    <!-- Local flow callout -->
     <div class="warn-card p-6 sm:p-7 flex flex-col sm:flex-row items-start gap-5">
       <div class="text-2xl">⚠️</div>
       <div class="flex-1">
         <h3 class="pixel-font text-[11px] mb-3" style="color:#b45309;line-height:1.6">
-          <span class="en">NEED HEADLESS BROWSER TOOLS? INSTALL THE LOCAL MCP.</span>
-          <span class="zh">需要无头浏览器工具？请安装本地 MCP。</span>
+          <span class="en">NEED MULTI-STEP PERSISTENT FLOWS? INSTALL THE LOCAL MCP.</span>
+          <span class="zh">需要多步持久流程？请安装本地 MCP。</span>
         </h3>
         <p class="tool-desc mb-4" style="color:#92400e">
-          <span class="en"><code>novada_browser</code> and <code>novada_browser_flow</code> return <code>501 NOT_AVAILABLE_ON_HOSTED</code> with an <code>agent_instruction</code> pointing here — Playwright doesn't run on serverless edge. Everything else runs on the hosted endpoint.</span>
-          <span class="zh"><code>novada_browser</code> 与 <code>novada_browser_flow</code> 在托管端返回 <code>501 NOT_AVAILABLE_ON_HOSTED</code>，并附带 <code>agent_instruction</code> 指引到本地 — Playwright 无法在 serverless edge 运行。其他工具均可直接在托管端使用。</span>
+          <span class="en"><code>novada_browser</code> runs on the hosted endpoint. Only <code>novada_browser_flow</code> — which holds a persistent session across calls — returns <code>501 NOT_AVAILABLE_ON_HOSTED</code> with an <code>agent_instruction</code> pointing here, because a per-request serverless isolate can't keep a session alive.</span>
+          <span class="zh"><code>novada_browser</code> 在托管端运行。仅 <code>novada_browser_flow</code>(跨调用保持会话)返回 <code>501 NOT_AVAILABLE_ON_HOSTED</code> 并附带 <code>agent_instruction</code> 指引到本地 — 因为按请求隔离的 serverless 实例无法保持会话存活。</span>
         </p>
         <div class="code-block max-w-md">
           <button class="copy-btn" onclick="copyText('npx novada-mcp',this)">COPY</button>
@@ -859,81 +672,141 @@ function toggleTheme(){}
   </div>
 </section>
 
+<!-- ═══ PROXIES ═══ -->
+<section class="pixel-section-dark py-16">
+  <div class="pixel-container">
+    <div class="cat-eyebrow">▸ PROXIES <span class="cat-count">×3</span></div>
+    <h2 class="pixel-heading mb-3">
+      <span class="en">Proxies</span><span class="zh">代理工具</span>
+    </h2>
+    <p class="pixel-text mb-8 max-w-2xl" style="font-size:13px;line-height:1.6">
+      <span class="en"><span class="pixel-code-inline">novada_proxy</span> returns credentials for your own HTTP client — pick a type (residential / isp / datacenter / mobile / static / dedicated). Manage proxy sub-accounts with <span class="pixel-code-inline">novada_proxy_account_list</span> and <span class="pixel-code-inline">novada_proxy_account_create</span>. 195+ countries, 100M+ residential IPs.</span>
+      <span class="zh"><span class="pixel-code-inline">novada_proxy</span> 为你自己的 HTTP 客户端返回凭证 — 选择类型(residential / isp / datacenter / mobile / static / dedicated)。用 <span class="pixel-code-inline">novada_proxy_account_list</span> 与 <span class="pixel-code-inline">novada_proxy_account_create</span> 管理代理子账户。覆盖 195+ 国家，1 亿+ 住宅 IP。</span>
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:20px">
+      <!-- novada_proxy -->
+      <div class="pixel-card" style="padding:24px">
+        <div class="tool-slug">novada_proxy</div>
+        <div class="rarity rarity-legendary" style="margin-top:8px">LEGENDARY</div>
+        <p class="tool-desc">
+          <span class="en">Proxy credentials for your own HTTP clients. <code>type=residential|isp|datacenter|mobile|static|dedicated</code> (default residential). Not needed for extract/crawl — those handle proxies internally.</span>
+          <span class="zh">为你自己的 HTTP 客户端返回代理凭证。<code>type=residential|isp|datacenter|mobile|static|dedicated</code>(默认 residential)。extract/crawl 无需此工具 — 它们内部已处理代理。</span>
+        </p>
+        <div class="use-when" style="margin-top:16px">
+          <span class="en"><b>Use when</b> your own client needs proxy user:pass:endpoint.</span>
+          <span class="zh"><b>使用场景</b>：你自己的客户端需要代理 user:pass:endpoint。</span>
+        </div>
+      </div>
+      <!-- novada_proxy_account_list -->
+      <div class="pixel-card" style="padding:24px">
+        <div class="tool-slug">novada_proxy_account_list</div>
+        <div class="rarity rarity-common" style="margin-top:8px">COMMON</div>
+        <p class="tool-desc">
+          <span class="en">List proxy sub-accounts for a product (paginated). Use to audit or look up sub-account names before rotating credentials.</span>
+          <span class="zh">列出某产品的代理子账户(分页)。用于审计或在轮换凭证前查找子账户名称。</span>
+        </p>
+        <div class="use-when" style="margin-top:16px">
+          <span class="en"><b>Use when</b> you need to see existing proxy sub-accounts.</span>
+          <span class="zh"><b>使用场景</b>：需要查看已有代理子账户。</span>
+        </div>
+      </div>
+      <!-- novada_proxy_account_create -->
+      <div class="pixel-card" style="padding:24px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div class="tool-slug">novada_proxy_account_create</div>
+          <span class="rarity rarity-epic" style="margin:0;flex-shrink:0">WRITE</span>
+        </div>
+        <p class="tool-desc" style="margin-top:12px">
+          <span class="en">Create a proxy sub-account. Two-step confirm gate — pass <code>confirm:true</code> after human approval; without it, returns a dry-run preview instead of calling the API.</span>
+          <span class="zh">创建代理子账户。两步确认门 — 人工批准后传 <code>confirm:true</code>;不传则返回预览而非调用 API。</span>
+        </p>
+        <div class="use-when" style="margin-top:16px">
+          <span class="en"><b>Use when</b> you're provisioning a new proxy sub-account.</span>
+          <span class="zh"><b>使用场景</b>：需要开通新的代理子账户。</span>
+        </div>
+      </div>
+    </div>
+    <!-- proxy type pills -->
+    <div class="flex flex-wrap gap-2 items-center" style="border:2px solid #E4DCFD;background:#F5F2FF;padding:16px">
+      <span class="pixel-font text-[8px]" style="color:#7749F1;margin-right:6px">
+        <span class="en">TYPES:</span><span class="zh">类型:</span>
+      </span>
+      <span class="proof-pill">residential</span>
+      <span class="proof-pill">datacenter</span>
+      <span class="proof-pill">isp</span>
+      <span class="proof-pill">dedicated</span>
+      <span class="proof-pill">static</span>
+      <span class="proof-pill">mobile</span>
+    </div>
+  </div>
+</section>
+
 <!-- ═══ INVENTORY SUMMARY ═══ -->
 <section class="pixel-section-dark py-16">
   <div class="pixel-container">
     <div class="pixel-card" style="padding:36px 32px">
       <h2 class="pixel-heading mb-8">
-        <span class="en">[ FULL INVENTORY — 26 TOOLS ]</span>
-        <span class="zh">[ 完整库存 — 26 个工具 ]</span>
+        <span class="en">[ FULL INVENTORY — 15 TOOLS ]</span>
+        <span class="zh">[ 完整库存 — 15 个工具 ]</span>
       </h2>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:28px">
         <div>
-          <div class="inv-head"><span class="en">SEARCH &amp; SERP</span><span class="zh">搜索与 SERP</span></div>
+          <div class="inv-head"><span class="en">SEARCH &amp; EXTRACT</span><span class="zh">搜索与提取</span></div>
           <ul class="space-y-2">
-            <li class="inv-cell">▸ search</li>
-            <li class="inv-cell">▸ serp</li>
-          </ul>
-        </div>
-        <div>
-          <div class="inv-head"><span class="en">SCRAPE &amp; EXTRACT</span><span class="zh">抓取与提取</span></div>
-          <ul class="space-y-2">
-            <li class="inv-cell">▸ scrape</li>
-            <li class="inv-cell">▸ extract</li>
-            <li class="inv-cell">▸ unblock</li>
+            <li class="inv-cell">▸ novada_search</li>
+            <li class="inv-cell">▸ novada_extract</li>
           </ul>
         </div>
         <div>
           <div class="inv-head"><span class="en">CRAWL &amp; MAP</span><span class="zh">爬取与地图</span></div>
           <ul class="space-y-2">
-            <li class="inv-cell">▸ crawl</li>
-            <li class="inv-cell">▸ map</li>
+            <li class="inv-cell">▸ novada_crawl</li>
+            <li class="inv-cell">▸ novada_map</li>
           </ul>
         </div>
         <div>
-          <div class="inv-head"><span class="en">RESEARCH &amp; VERIFY</span><span class="zh">研究与验证</span></div>
+          <div class="inv-head"><span class="en">PLATFORM SCRAPE</span><span class="zh">平台抓取</span></div>
           <ul class="space-y-2">
-            <li class="inv-cell">▸ research</li>
-            <li class="inv-cell">▸ verify</li>
-            <li class="inv-cell">▸ discover</li>
-            <li class="inv-cell">▸ ai_monitor</li>
-            <li class="inv-cell">▸ monitor</li>
+            <li class="inv-cell">▸ novada_scrape</li>
           </ul>
         </div>
         <div>
-          <div class="inv-head"><span class="en">SCRAPER — ASYNC</span><span class="zh">异步 Scraper</span></div>
+          <div class="inv-head"><span class="en">RESEARCH &amp; MONITOR</span><span class="zh">研究与监测</span></div>
           <ul class="space-y-2">
-            <li class="inv-cell">▸ scraper_submit</li>
-            <li class="inv-cell">▸ scraper_status</li>
-            <li class="inv-cell">▸ scraper_result</li>
+            <li class="inv-cell">▸ novada_research</li>
+            <li class="inv-cell">▸ novada_discover</li>
+            <li class="inv-cell">▸ novada_ai_monitor</li>
+            <li class="inv-cell">▸ novada_monitor</li>
+          </ul>
+        </div>
+        <div>
+          <div class="inv-head"><span class="en">BROWSER</span><span class="zh">浏览器</span></div>
+          <ul class="space-y-2">
+            <li class="inv-cell">▸ novada_browser</li>
           </ul>
         </div>
         <div>
           <div class="inv-head"><span class="en">PROXIES</span><span class="zh">代理</span></div>
           <ul class="space-y-2">
             <li class="inv-cell">▸ novada_proxy</li>
-            <li class="inv-cell">▸ …_residential</li>
-            <li class="inv-cell">▸ …_datacenter</li>
-            <li class="inv-cell">▸ …_isp</li>
-            <li class="inv-cell">▸ …_dedicated</li>
-            <li class="inv-cell">▸ …_static</li>
-            <li class="inv-cell">▸ …_mobile</li>
+            <li class="inv-cell">▸ novada_proxy_account_list</li>
+            <li class="inv-cell">▸ novada_proxy_account_create</li>
           </ul>
         </div>
         <div>
-          <div class="inv-head" style="color:#b45309"><span class="en">BROWSER (LOCAL)</span><span class="zh">浏览器（本地）</span></div>
+          <div class="inv-head"><span class="en">ACCOUNT &amp; CONFIG</span><span class="zh">账户与配置</span></div>
           <ul class="space-y-2">
-            <li class="inv-cell" style="color:#92400e">▸ novada_browser</li>
-            <li class="inv-cell" style="color:#92400e">▸ novada_browser_flow</li>
+            <li class="inv-cell">▸ novada_setup</li>
+            <li class="inv-cell">▸ novada_account</li>
           </ul>
         </div>
         <div class="flex flex-col justify-center">
-          <div class="pixel-font" style="font-size:40px;color:#7749F1;text-shadow:3px 3px 0 rgba(119,73,241,0.25);line-height:1;margin-bottom:10px">26</div>
+          <div class="pixel-font" style="font-size:40px;color:#7749F1;text-shadow:3px 3px 0 rgba(119,73,241,0.25);line-height:1;margin-bottom:10px">15</div>
           <div class="pixel-text" style="font-size:12px;margin-bottom:16px">
             <span class="en">TOTAL TOOLS</span><span class="zh">个工具总计</span>
           </div>
-          <a href="https://www.novada.com" class="pixel-btn" style="font-size:8px;padding:10px 14px">
-            <span class="en">GET API KEY →</span><span class="zh">获取密钥 →</span>
+          <a href="https://dashboard.novada.com/api-key/" class="pixel-btn" style="font-size:8px;padding:10px 14px">
+            <span class="en">GET FREE KEY →</span><span class="zh">获取免费密钥 →</span>
           </a>
         </div>
       </div>
