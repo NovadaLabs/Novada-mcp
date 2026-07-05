@@ -4,6 +4,23 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.17] — 2026-07-05
+
+Purity/consistency release: a 3-round "claim vs reality" audit (~20 review agents) aligned every agent-facing description, count, and example with what the code actually does. No behavior change except two additive group-key aliases.
+
+### Fixed
+- **`?groups=` portability:** the scrape tool-group key was `scraper` on npm but `scrape` on hosted — an agent carrying its `NOVADA_GROUPS` config across surfaces silently got zero scrape tools. Both keys now work on both surfaces.
+- **Platform truth:** `novada_scrape` claims corrected from "129 platforms" to the real **13 platforms (~78 operations)**; removed phantom platforms (Reddit/Glassdoor/Zillow/Airbnb) from server.json, manifests, README, and the hosted playground preset (which errored 11006 on click).
+- **Engine truth:** Yahoo is not supported — removed from every surface that still advertised it (registry/discover, hosted tools/list, resources, prompts, website EN+中文); `novada_search` = 4 engines (Google, Bing, DuckDuckGo, Yandex).
+- **README/SKILL examples:** fabricated scrape operation-ids replaced with real `PLATFORM_OPERATIONS` keys (each verified); `select_paths` examples fixed to glob arrays (were regex strings that fail).
+- **Error-path honesty:** dead `novada_health_all()` recovery hints → `novada_account(section="summary")`; transient failures no longer misreported as permanent "not activated"; proxy success-path no longer echoes real username bytes; scrape 401/403 split.
+- **Description sync:** research returns extractive cited source material (not a synthesized report); extract `format=html` cap documented as 100K (was "10K"); scrape lists all 6 accepted formats and notes json is wrapper-fenced; `novada_monitor` on hosted carries a session-scoped caveat; browser/proxy `country` documented as accepted-but-not-applied.
+- **Site/billing copy:** removed fictional pricing claims; quota message now points to balance top-up; tool counts unified (hosted 15 / npm 22).
+
+> Note: 0.9.4–0.9.16 entries are being backfilled; see git history in the interim.
+
+---
+
 ## [0.9.3] — 2026-07-03
 
 P0 "one API key, everywhere" + agent-first correctness pass (Loop 1→2→3: audit → adversarial test → fix → review), shipped to npm + hosted. A single `NOVADA_API_KEY` now unlocks Search, Scraper, Extract, Web Unblocker, and (locally) Browser — including on the hosted `mcp.novada.com` endpoint, where the caller's key is now threaded to every product instead of falling back to the server account.
