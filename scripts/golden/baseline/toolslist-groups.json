@@ -57,15 +57,8 @@
     "novada_setup"
   ],
   "scraper": [
-    "novada_account",
-    "novada_crawl",
-    "novada_discover",
     "novada_extract",
-    "novada_map",
-    "novada_monitor",
-    "novada_research",
     "novada_scrape",
-    "novada_search",
     "novada_setup"
   ]
 }

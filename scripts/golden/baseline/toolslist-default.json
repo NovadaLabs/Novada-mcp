@@ -93,22 +93,34 @@
       "additionalProperties": false,
       "properties": {
         "brand": {
-          "description": "Brand or product name to monitor across AI models. E.g. 'novada', 'firecrawl', 'stripe'.",
+          "description": "Brand or product name to search for on AI-company public web domains. E.g. 'novada', 'firecrawl', 'stripe'.",
+          "maxLength": 200,
           "minLength": 1,
           "type": "string"
         },
         "models": {
-          "description": "AI models to check. Options: 'chatgpt', 'perplexity', 'grok', 'claude', 'gemini'. Default: ['chatgpt', 'perplexity', 'grok'].",
+          "description": "Domain groups to search (each key \u2192 a set of AI-company public web domains, e.g. 'chatgpt' \u2192 chatgpt.com + openai.com). This does NOT query the live AI models \u2014 it searches their indexed public pages. Options: 'chatgpt', 'perplexity', 'grok', 'claude', 'gemini'. Default: ['chatgpt', 'perplexity', 'grok'].",
           "items": {
+            "enum": [
+              "chatgpt",
+              "perplexity",
+              "grok",
+              "claude",
+              "gemini"
+            ],
             "type": "string"
           },
+          "maxItems": 5,
+          "minItems": 1,
           "type": "array"
         },
         "topics": {
-          "description": "Topic filters to narrow the search. E.g. ['pricing', 'comparison', 'recommendation']. Default: general brand mentions.",
+          "description": "Topic filter to narrow the search. Only the FIRST entry is used; the rest are ignored. E.g. ['pricing']. Default: general brand mentions.",
           "items": {
+            "maxLength": 200,
             "type": "string"
           },
+          "maxItems": 10,
           "type": "array"
         }
       },
@@ -126,7 +138,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Automate Novada's cloud browser via CDP \u2014 navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key.",
+    "description": "Automate Novada's cloud browser via CDP \u2014 navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key. NOTE: country is accepted but not yet applied \u2014 the browser exit node is not geo-routed by this param today.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -415,7 +427,7 @@
           "type": "array"
         },
         "country": {
-          "description": "ISO 2-letter country code for browser exit node (e.g. 'us', 'gb'). Required for platforms with geo-restrictions (TikTok is banned in India \u2014 use country='us'). Omit for no targeting.",
+          "description": "ISO 2-letter country code (e.g. 'us', 'gb'). NOTE: accepted but NOT yet applied \u2014 the browser exit node is not geo-routed by this param today. Do not rely on it for geo-restricted platforms.",
           "maxLength": 2,
           "minLength": 2,
           "type": "string"
@@ -581,7 +593,7 @@
         },
         "format": {
           "default": "markdown",
-          "description": "Output format. 'markdown' (default): structured readable output. 'text': plain text. 'html': raw HTML (truncated at 10K). 'json': structured JSON object with typed fields \u2014 best for programmatic agent consumption.",
+          "description": "Output format. 'markdown' (default): structured readable output. 'text': plain text. 'html': raw HTML (truncated at 100K chars by default; pass max_chars to adjust). 'json': structured JSON object with typed fields \u2014 best for programmatic agent consumption.",
           "enum": [
             "text",
             "markdown",
@@ -597,7 +609,7 @@
           "type": "integer"
         },
         "project": {
-          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'.",
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)",
           "maxLength": 30,
           "type": "string"
         },
@@ -718,7 +730,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Track changes on a web page over time. Compares content hash and field-level diffs.",
+    "description": "\u26a0\ufe0f Session-scoped only: on the hosted endpoint the baseline is per-invocation (in-memory), so use this for single-call change-diffs, not durable cross-call monitoring. Track changes on a web page over time. Compares content hash and field-level diffs.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -772,7 +784,7 @@
           "type": "string"
         },
         "country": {
-          "description": "ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country.",
+          "description": "ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country. NOTE: country targeting is NOT applied when type='isp' \u2014 it is silently ignored for that proxy type.",
           "pattern": "^[a-zA-Z]{2}$",
           "type": "string"
         },
@@ -956,7 +968,7 @@
       "properties": {
         "depth": {
           "default": "auto",
-          "description": "'quick'=3 searches, 'deep'=5-6, 'comprehensive'=8-10, 'auto'=server decides based on question complexity.",
+          "description": "'quick'=3 searches, 'deep'=6, 'comprehensive'=8-9, 'auto' (default)=picks quick or deep by question length \u2014 never comprehensive.",
           "enum": [
             "quick",
             "deep",
@@ -970,7 +982,7 @@
           "type": "string"
         },
         "project": {
-          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'.",
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)",
           "maxLength": 30,
           "type": "string"
         },
@@ -1003,7 +1015,7 @@
       "properties": {
         "format": {
           "default": "markdown",
-          "description": "Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': clean structured records array \u2014 key fields (title/price/rating/url) surfaced, noise trimmed. 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 \u2014 paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown).",
+          "description": "Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': structured records array \u2014 key fields (title/price/rating/url) surfaced, noise trimmed \u2014 returned inside a \"## Scrape Results\" wrapper as a fenced json block (not a bare object). 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 \u2014 paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown).",
           "enum": [
             "json",
             "csv",
@@ -1045,7 +1057,7 @@
           "type": "string"
         },
         "project": {
-          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'.",
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)",
           "maxLength": 30,
           "type": "string"
         },
@@ -1073,7 +1085,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract.",
+    "description": "Search the web via Google, Bing, DuckDuckGo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1087,7 +1099,7 @@
         },
         "engine": {
           "default": "google",
-          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yahoo': broad index. 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED \u2014 may return zero results; avoid.",
+          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED \u2014 may return zero results; avoid. 'yahoo': NOT SUPPORTED \u2014 returns an error; do not use.",
           "enum": [
             "google",
             "bing",
@@ -1179,7 +1191,7 @@
           "type": "integer"
         },
         "project": {
-          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'.",
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)",
           "maxLength": 30,
           "type": "string"
         },

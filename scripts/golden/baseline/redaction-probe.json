@@ -8,7 +8,7 @@
   "leaked": false,
   "note": "proxy.novada.pro hostname appears in response (expected public endpoint). leaked=True only if unmasked credentials precede @host.",
   "sample_markers": [
-    "Quota Exhausted"
+    "Free Gateway Cap Reached"
   ],
   "trigger_tool": "novada_proxy",
   "triggered": true

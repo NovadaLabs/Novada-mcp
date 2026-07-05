@@ -1,18 +1,18 @@
 {
   "extract_bad_url": {
     "error_markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "has_agent_instruction": true,
     "is_error": true,
-    "length_band": "xs"
+    "length_band": "s"
   },
   "search_missing_query": {
     "error_markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "has_agent_instruction": true,
     "is_error": true,
-    "length_band": "xs"
+    "length_band": "s"
   }
 }

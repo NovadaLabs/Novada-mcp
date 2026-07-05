@@ -2,15 +2,15 @@
   "novada_account_summary": {
     "length_band": "s",
     "markers": [
-      "Novada Account"
+      "Free Gateway Cap Reached"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_ai_monitor": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
@@ -18,34 +18,31 @@
   "novada_browser": {
     "length_band": "s",
     "markers": [
-      "Browser Session Results",
-      "Action 1: navigate [ok]",
-      "Action 2: evaluate [ok]",
-      "Agent Hints"
+      "Free Gateway Cap Reached"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_capture_logs": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_crawl": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_discover": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
@@ -53,33 +50,31 @@
   "novada_extract": {
     "length_band": "s",
     "markers": [
-      "Extracted Content",
-      "Example Domain",
-      "Agent Hints"
+      "Free Gateway Cap Reached"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_health": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_health_all": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_map": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
@@ -87,132 +82,127 @@
   "novada_monitor": {
     "length_band": "s",
     "markers": [
-      "Monitor: First Check",
-      "Agent Instruction"
+      "Free Gateway Cap Reached"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_plan_balance_all": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Plan Balances"
+      "Free Gateway Cap Reached"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_proxy": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_account_create": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_account_list": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_datacenter": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_dedicated": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_isp": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_mobile": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_residential": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_proxy_static": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_research": {
-    "length_band": "m",
+    "length_band": "s",
     "markers": [
-      "Research: what is anthropic",
-      "Researched source material for: what is anthropic",
-      "Key Findings",
-      "Sources",
-      "Agent Hints"
+      "Free Gateway Cap Reached"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_scrape": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_scraper_result": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_scraper_status": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_scraper_submit": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
@@ -220,10 +210,9 @@
   "novada_search": {
     "length_band": "s",
     "markers": [
-      "Search Results",
-      "Next Steps"
+      "Free Gateway Cap Reached"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_setup": {
@@ -238,41 +227,41 @@
     "structural": "markdown"
   },
   "novada_traffic_daily": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_unblock": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_verify": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
   },
   "novada_wallet_balance": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Wallet Balance"
+      "Free Gateway Cap Reached"
     ],
-    "status": "ok",
+    "status": "err",
     "structural": "markdown"
   },
   "novada_wallet_usage_record": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Quota Exhausted"
+      "Free Gateway Cap Reached"
     ],
     "status": "err",
     "structural": "markdown"
