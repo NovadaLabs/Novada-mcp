@@ -37,9 +37,9 @@ One server. One API key. Tools that cover every web data need an AI agent has:
 | Find information | `novada_search` | Web search across Google, Bing, DuckDuckGo, Yandex |
 | Read a page | `novada_extract` | Any URL → clean markdown, batch up to 10 in parallel |
 | Deep research | `novada_research` | One call → parallel searches → dedup → cited source material to reason over |
-| Crawl a site | `novada_crawl` | BFS/DFS up to 20 pages with regex path filtering |
+| Crawl a site | `novada_crawl` | BFS/DFS up to 20 pages with glob path filtering |
 | Discover URLs | `novada_map` | Sitemap + BFS discovery without reading content |
-| Platform data | `novada_scrape` | Amazon, LinkedIn, TikTok, GitHub, Zillow — 13 built-in platform scrapers, plus the wider Novada Scraper API |
+| Platform data | `novada_scrape` | Amazon, LinkedIn, TikTok, GitHub, Instagram — 13 built-in platform scrapers, plus the wider Novada Scraper API |
 | Monitor changes | `novada_monitor` | Track price/content/availability changes between checks |
 | Verify claims | `novada_verify` | Parallel fact-checking against live web sources |
 | Raw HTML | `novada_extract` (`format: "html"`) | JS render or full browser CDP for bot-protected pages |
@@ -125,7 +125,7 @@ novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price", "availabi
 | Tool | Purpose | Key Params | Example |
 |------|---------|-----------|---------|
 | `novada_extract` | Extract content from URL(s) | `url` (single or array), `format`, `render`, `fields` | `novada_extract({url: "https://example.com", fields: ["price", "rating"]})` |
-| `novada_crawl` | Crawl multiple pages from a domain | `url`, `max_pages`, `strategy`, `select_paths` | `novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: "/api/**"})` |
+| `novada_crawl` | Crawl multiple pages from a domain | `url`, `max_pages`, `strategy`, `select_paths` | `novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: ["/api/**"]})` |
 | `novada_map` | Discover URLs on a site | `url`, `search`, `limit` | `novada_map({url: "https://example.com", search: "pricing"})` |
 | `novada_monitor` | Detect page changes over time | `url`, `fields` | `novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price"]})` |
 
@@ -136,15 +136,12 @@ novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price", "availabi
 | Platform | Operation Examples | Data Returned |
 |----------|-------------------|---------------|
 | Amazon | `amazon_product_keywords`, `amazon_product_asin` | Title, price, rating, reviews, BSR, availability |
-| LinkedIn | `linkedin_company_information_url`, `linkedin_profile_url` | Company info, employee count, profile data |
-| TikTok | `tiktok_posts_url`, `tiktok_profile_url` | Video stats, engagement, profile data |
+| LinkedIn | `linkedin_company_information_url` | Company info, employee count, profile data |
+| TikTok | `tiktok_posts_url`, `tiktok_profiles_url` | Video stats, engagement, profile data |
 | GitHub | `github_repository_repo-url` | Stars, forks, issues, description, languages |
-| Reddit | `reddit_subreddit_posts` | Posts, scores, comments, timestamps |
-| Zillow | `zillow_property_url` | Price, beds, baths, sqft, Zestimate |
-| Glassdoor | `glassdoor_company_reviews_url` | Reviews, ratings, salary data |
 | YouTube | `youtube_video_search_label` | Video titles, views, duration, channel |
-| Instagram | `instagram_profile_url` | Posts, followers, engagement |
-| Google Shopping | `google_shopping_search` | Products, prices, merchants |
+| Instagram | `ins_profiles_profileurl` | Posts, followers, engagement |
+| Google Shopping | `google_shopping_keywords` | Products, prices, merchants |
 
 Full platform list: call `novada_discover` or read the `novada://scraper-platforms` MCP resource.
 
@@ -200,7 +197,7 @@ Extract company info, employee count, and industry data from LinkedIn company pa
 
 ### Content Extraction for LLM Training
 ```
-novada_crawl({url: "https://docs.example.com", max_pages: 20, select_paths: "/docs/.*"})
+novada_crawl({url: "https://docs.example.com", max_pages: 20, select_paths: ["/docs/**"]})
 ```
 Crawl documentation sites and extract clean markdown for fine-tuning datasets or knowledge bases.
 

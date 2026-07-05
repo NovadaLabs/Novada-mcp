@@ -70,7 +70,7 @@ export function readResource(uri: string): ReadResourceResult {
           text: `# Supported Search Engines
 
 google     — Best general-purpose engine, highest relevance. Default choice.
-bing       — Good alternative. Required for mkt-based locale targeting (sets mkt param automatically).
+bing       — CURRENTLY DEGRADED (may return zero results; avoid). Use google/duckduckgo instead.
 duckduckgo — Privacy-focused, no personalization bias. Good for neutral/unfiltered results.
 yahoo      — NOT SUPPORTED (returns an error; use google/duckduckgo instead).
 yandex     — Best for Russian-language content and Eastern European queries.
@@ -561,8 +561,8 @@ Example: novada_discover({})
 ## novada_scraper_submit
 Best for: submitting an async scraping job for platforms outside novada_scrape's 13 active platforms.
 Not for: synchronous extraction (use novada_scrape for supported platforms).
-Required: url, platform. Optional: operation, params, country.
-Example: novada_scraper_submit({url: "https://example.com", platform: "custom"})
+Required: platform, operation. Optional: params, country.
+Example: novada_scraper_submit({ platform: "amazon.com", operation: "amazon_product_keywords", params: { keyword: "wireless earbuds" } })
 
 ## novada_scraper_status
 Best for: polling status of an async scraping task submitted via novada_scraper_submit.

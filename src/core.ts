@@ -250,7 +250,7 @@ Not for:
 
 **Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
 **Not for:** General web pages not in the platform list — use novada_extract for arbitrary URLs instead.
-**Output formats:** "markdown" (default, agent-optimized table), "json" (structured, for programmatic use), "toon" (token-optimized pipe-separated format — 40-65% smaller than JSON/markdown, best for large result sets in context-constrained situations).
+**Output formats:** "markdown" (default, agent-optimized table), "json" (structured records array returned inside a "## Scrape Results" wrapper — a fenced json block, not a bare object), "toon" (token-optimized pipe-separated format — 40-65% smaller than JSON/markdown, best for large result sets in context-constrained situations), "csv" (inline CSV text), "excel" (inline .xlsx base64), "html" (inline HTML table).
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}
 **Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,

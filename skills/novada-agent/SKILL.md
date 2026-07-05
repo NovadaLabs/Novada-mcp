@@ -101,8 +101,8 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 - `url` — starting URL (root)
 - `max_pages` — 1-20 (default 5)
 - `strategy` — `bfs` (breadth-first, broad coverage) or `dfs` (depth-first, deep paths)
-- `select_paths` — regex patterns to restrict to specific paths, e.g. `["/docs/.*"]`
-- `exclude_paths` — regex patterns to skip, e.g. `["/blog/.*", "/changelog/.*"]`
+- `select_paths` — glob patterns to restrict to specific paths, e.g. `["/docs/**"]`
+- `exclude_paths` — glob patterns to skip, e.g. `["/blog/**", "/changelog/**"]`
 - `instructions` — natural language hint: `"only API reference pages"`
 
 **When NOT to use:**
@@ -115,7 +115,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
   "url": "https://docs.example.com",
   "max_pages": 10,
   "strategy": "bfs",
-  "select_paths": ["/api/.*"],
+  "select_paths": ["/api/**"],
   "instructions": "only API endpoint reference pages, skip tutorials"
 }
 ```

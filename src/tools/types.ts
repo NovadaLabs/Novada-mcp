@@ -157,7 +157,7 @@ const _ExtractParamsInner = z.object({
       "Returns a structured markdown document with one labeled section per URL (### [1/N] url). Single url param still returns a single markdown document."
     ),
   format: z.enum(["text", "markdown", "html", "json"]).default("markdown")
-    .describe("Output format. 'markdown' (default): structured readable output. 'text': plain text. 'html': raw HTML (truncated at 10K). 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
+    .describe("Output format. 'markdown' (default): structured readable output. 'text': plain text. 'html': raw HTML (truncated at 100K chars by default; pass max_chars to adjust). 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
   query: z.string().optional()
     .describe("Optional query for relevance context. Helps the calling agent focus on relevant sections."),
   render: z.enum(["auto", "static", "render", "js", "browser"]).default("auto")
@@ -244,7 +244,7 @@ export const ResearchParamsSchema = z.object({
   question: z.string().min(5, "Research question must be at least 5 characters").optional(),
   query: z.string().optional().describe("Alias for 'question' — use either"),
   depth: z.enum(["quick", "deep", "auto", "comprehensive"]).default("auto")
-    .describe("'quick'=3 searches, 'deep'=5-6, 'comprehensive'=8-10, 'auto'=server decides based on question complexity."),
+    .describe("'quick'=3 searches, 'deep'=6, 'comprehensive'=8-9, 'auto' (default)=picks quick or deep by question length — never comprehensive."),
   focus: z.string().optional()
     .describe("Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'."),
   project: z.string().max(30).optional()
@@ -445,7 +445,7 @@ const scrapeBase = {
 export const ScrapeParamsSchema = z.object({
   ...scrapeBase,
   format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
-    .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': clean structured records array — key fields (title/price/rating/url) surfaced, noise trimmed. 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 — paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
+    .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': structured records array — key fields (title/price/rating/url) surfaced, noise trimmed — returned inside a \"## Scrape Results\" wrapper as a fenced json block (not a bare object). 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 — paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
   project: z.string().max(30).optional()
     .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
 });
