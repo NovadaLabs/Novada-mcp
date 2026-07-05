@@ -191,7 +191,7 @@
       
       <h4>Added</h4>
       <ul>
-        <li><b><code>novada://scraper-platforms</code> MCP resource</b>: Full catalog of 129 supported scraper platforms with operation IDs and required params. Agents can now discover which platform/operation to use without reading external docs. Covers 10 categories: e-commerce, search engines, social media, jobs, real estate, finance, reviews, tech, travel, news.</li>
+        <li><b><code>novada://scraper-platforms</code> MCP resource</b>: Full catalog of 13 supported scraper platforms with operation IDs and required params. Agents can now discover which platform/operation to use without reading external docs. Covers 10 categories: e-commerce, search engines, social media, jobs, real estate, finance, reviews, tech, travel, news.</li>
         <li><b>Browser action <code>aria_snapshot</code></b>: Returns Playwright's accessibility tree as YAML — semantic role+name refs, ~70% smaller than raw HTML, stable selectors. Uses <code>page.ariaSnapshot()</code> (Playwright v1.46+ API). Better than <code>snapshot</code> for element discovery.</li>
         <li><b>MCP Prompt <code>scrape_platform_data</code></b>: Slash command guiding agents through platform/operation discovery → novada_scrape call → Error 11006 fallback workflow.</li>
         <li><b>MCP Prompt <code>browser_stateful_workflow</code></b>: Slash command guiding agents through aria_snapshot-first browser automation with session_id state management.</li>
@@ -279,7 +279,7 @@
       </ul>
       <h4>New Tools</h4>
       <ul>
-        <li><code>novada_scrape</code> — structured data from 129 platforms via Scraper API</li>
+        <li><code>novada_scrape</code> — structured data from 13 platforms via Scraper API</li>
         <li><code>novada_proxy</code> — proxy connection strings (url/env/curl)</li>
         <li><code>novada_verify</code> — fact-checking via multi-source search + evidence synthesis</li>
         <li><code>novada_unblock</code> — forced JS render via Web Unblocker or Browser API CDP</li>
@@ -352,7 +352,7 @@
       </ul>
       <h4>Added — Full 10-tool MCP</h4>
       <ul>
-        <li><code>novada_scrape</code> — structured data from 129 platforms via Scraper API. Outputs: markdown/json/csv/html/xlsx.</li>
+        <li><code>novada_scrape</code> — structured data from 13 platforms via Scraper API. Outputs: markdown/json/csv/html/xlsx.</li>
         <li><code>novada_proxy</code> — proxy connection strings in url/env/curl format. Country, city, session_id targeting.</li>
         <li><code>novada_verify</code> — fact-checking via multi-source search + evidence synthesis.</li>
         <li><code>novada_unblock</code> — forced JS render via Web Unblocker or Browser API CDP. 50K char truncation.</li>

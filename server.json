@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.NovadaLabs/novada-mcp",
-  "description": "Search the web (5 engines), extract content from any URL, crawl websites, map site structure, run multi-step research, scrape 129 platforms, verify factual claims, unblock anti-bot pages, automate browser workflows, and check API health — routed through 100M+ proxy IPs across 195 countries.",
+  "description": "Search the web (4 engines: Google, Bing, DuckDuckGo, Yandex), extract content from any URL, crawl websites, map site structure, run multi-step research, scrape 13 platforms, verify factual claims, unblock anti-bot pages, automate browser workflows, and check API health — routed through 100M+ proxy IPs across 195 countries.",
   "repository": {
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
@@ -10,7 +10,7 @@
   "tools": [
     {
       "name": "novada_search",
-      "description": "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Returns structured results with titles, URLs, snippets. Supports time range, date filters, domain include/exclude, and geo-targeting across 195 countries."
+      "description": "Search the web via 4 engines (Google, Bing, DuckDuckGo, Yandex). Returns structured results with titles, URLs, snippets. Supports time range, date filters, domain include/exclude, and geo-targeting across 195 countries."
     },
     {
       "name": "novada_extract",
@@ -18,7 +18,7 @@
     },
     {
       "name": "novada_crawl",
-      "description": "Crawl a website using BFS or DFS, extract content from multiple pages concurrently. Supports select_paths and exclude_paths regex filters, plus natural-language instructions for agent-side semantic filtering."
+      "description": "Crawl a website using BFS or DFS, extract content from multiple pages concurrently. Supports select_paths and exclude_paths glob filters, plus natural-language instructions for agent-side semantic filtering."
     },
     {
       "name": "novada_map",
@@ -34,7 +34,7 @@
     },
     {
       "name": "novada_scrape",
-      "description": "Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 129 platforms: Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more. Best for: E-commerce product data, social posts/comments, job listings, reviews, real estate, market data. Output formats: \"markdown\" (default, agent-optimized table), \"json\" (structured, for programmatic use)."
+      "description": "Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 13 platforms (~78 operations): Amazon, Walmart, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub. Best for: E-commerce product data, social posts/comments, job listings, reviews, real estate, market data. Output formats: \"markdown\" (default, agent-optimized table), \"json\" (structured, for programmatic use)."
     },
     {
       "name": "novada_verify",

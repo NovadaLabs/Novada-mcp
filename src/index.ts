@@ -40,11 +40,16 @@ const API_KEY = process.env.NOVADA_API_KEY?.trim();
 // Both set → union. Neither set → all tools (backward compatible).
 
 /** Category bundles — each group name expands to multiple tools */
+const SCRAPE_GROUP = ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"];
 const CATEGORY_MAP: Record<string, string[]> = {
   search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor", "novada_search_feedback"],
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
   browser: ["novada_browser", "novada_browser_flow"],
-  scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
+  // "scrape" and "scraper" are aliases for the same scrape-tool group — both keys are valid
+  // on both surfaces (hosted uses "scrape", local historically used "scraper") so a groups
+  // config is portable across surfaces. Do not remove either key.
+  scraper: SCRAPE_GROUP,
+  scrape:  SCRAPE_GROUP,
   health:  ["novada_discover", "novada_setup", "novada_session_stats"],
   account: ["novada_account", "novada_proxy_account_create", "novada_proxy_account_list", "novada_ip_whitelist", "novada_capture_apikey", "novada_scraper_task_mgmt", "novada_static_ip_mgmt"],
 };

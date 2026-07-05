@@ -125,7 +125,7 @@ novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price", "availabi
 | Tool | Purpose | Key Params | Example |
 |------|---------|-----------|---------|
 | `novada_extract` | Extract content from URL(s) | `url` (single or array), `format`, `render`, `fields` | `novada_extract({url: "https://example.com", fields: ["price", "rating"]})` |
-| `novada_crawl` | Crawl multiple pages from a domain | `url`, `max_pages`, `strategy`, `select_paths` | `novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: "/api/.*"})` |
+| `novada_crawl` | Crawl multiple pages from a domain | `url`, `max_pages`, `strategy`, `select_paths` | `novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: "/api/**"})` |
 | `novada_map` | Discover URLs on a site | `url`, `search`, `limit` | `novada_map({url: "https://example.com", search: "pricing"})` |
 | `novada_monitor` | Detect page changes over time | `url`, `fields` | `novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price"]})` |
 

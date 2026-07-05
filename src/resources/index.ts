@@ -72,7 +72,7 @@ export function readResource(uri: string): ReadResourceResult {
 google     — Best general-purpose engine, highest relevance. Default choice.
 bing       — Good alternative. Required for mkt-based locale targeting (sets mkt param automatically).
 duckduckgo — Privacy-focused, no personalization bias. Good for neutral/unfiltered results.
-yahoo      — Older index, occasionally surfaces different pages than Google.
+yahoo      — NOT SUPPORTED (returns an error; use google/duckduckgo instead).
 yandex     — Best for Russian-language content and Eastern European queries.
 
 ## Recommendation
@@ -487,7 +487,7 @@ docs/novada-api/scraper-operation-ids.md in this repo has additional param detai
 > 23 tools. Read this to pick the right one.
 
 ## novada_search
-Best for: web search when you have a question, not a URL. Returns titles+URLs+snippets from 5 engines.
+Best for: web search when you have a question, not a URL. Returns titles+URLs+snippets from 4 engines (Google, Bing, DuckDuckGo, Yandex).
 Not for: reading a URL you have (use novada_extract), or full reports (use novada_research).
 Required: query. Optional: engine (default google), num (default 10), time_range.
 Example: novada_search({query: "Claude MCP tutorial 2025", engine: "google", num: 5})

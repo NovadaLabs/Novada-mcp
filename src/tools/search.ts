@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
 import https from "https";
-import { USER_AGENT, cleanParams, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, type SearchIntent } from "../utils/index.js";
+import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, type SearchIntent } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
@@ -475,37 +475,6 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       .replace(/search_id: search-[0-9]+-[0-9]+/g, `search_id: ${freshId}`);
     return replayed;
   }
-
-  const rawParams: Record<string, string> = {
-    q: params.query,
-    api_key: apiKey,
-    engine,
-    num: String(params.num || 10),
-    country: params.country || "",
-    language: params.language || "",
-  };
-
-  // Bing: set locale-specific params
-  if (engine === "bing") {
-    if (!rawParams.country) rawParams.country = "us";
-    if (!rawParams.language) rawParams.language = "en";
-    rawParams.mkt = `${rawParams.language}-${rawParams.country.toUpperCase()}`;
-  }
-
-  // Time filtering
-  if (params.time_range) rawParams.time_range = params.time_range;
-  if (params.start_date) rawParams.start_date = params.start_date;
-  if (params.end_date) rawParams.end_date = params.end_date;
-
-  // Domain filtering
-  if (params.include_domains?.length) {
-    rawParams.include_domains = params.include_domains.slice(0, 10).join(",");
-  }
-  if (params.exclude_domains?.length) {
-    rawParams.exclude_domains = params.exclude_domains.slice(0, 10).join(",");
-  }
-
-  const cleaned = cleanParams(rawParams) as Record<string, string>;
 
   let scraperResults: NovadaSearchResult[] = [];
 

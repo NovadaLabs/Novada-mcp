@@ -57,5 +57,5 @@ ALWAYS read the `novada://scraper-platforms` resource before calling novada_scra
 ## When NOT to use novada_scrape
 
 - Arbitrary web pages → use novada_extract
-- Pages not in the 129-platform list → use novada_crawl
+- Pages not in the 13-platform list → use novada_crawl
 - After getting 11006 → this is a plan-tier error, don't retry
