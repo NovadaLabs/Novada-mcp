@@ -27,7 +27,7 @@
 
 - `novada_map`: list all URLs on a site via sitemap or crawl (URLs only, no content)
 - `novada_crawl`: read content from multiple pages on one site (up to 20 pages per call)
-- `novada_scrape`: structured data from platforms — Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more (13 platforms, ~78 operations)
+- `novada_scrape`: structured data from platforms — Amazon, Walmart, Google, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, and more (13 platforms, ~78 operations)
 
 ### Research & monitoring (4)
 

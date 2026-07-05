@@ -52,7 +52,7 @@ export const TOOL_REGISTRY = [
     },
     {
         name: "novada_research",
-        description: "Multi-step research: 3–10 parallel SERP queries, source deduplication, full content extraction from top URLs, returns cited report with findings summary",
+        description: "Multi-step research: 3–10 parallel SERP queries, source deduplication, full content extraction from top URLs; returns CITED SOURCE MATERIAL (numbered source passages) for you to compose the answer from — extractive, not a synthesized report",
         category: "Content Retrieval",
         status: "active",
     },
@@ -77,7 +77,7 @@ export const TOOL_REGISTRY = [
     // ─── Scraping & Verification ────────────────────────────────────────────
     {
         name: "novada_scrape",
-        description: "Extract structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.) in a single synchronous call; supports markdown/json/toon output",
+        description: "Extract structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output",
         category: "Scraping & Verification",
         status: "active",
     },

@@ -542,7 +542,7 @@ function toggleTheme(){}
   // ── Scraper operation catalog (platform → operation + required params) ──
   const SCRAPE_PLATFORMS = [
     { platform: 'amazon.com', operation: 'amazon_product_keywords', params: [ { key:'keyword', type:'string', default:'AI tools' }, { key:'num', type:'number', default:5 } ] },
-    { platform: 'reddit.com',  operation: 'reddit_subreddit_posts',  params: [ { key:'subreddit', type:'string', default:'programming' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'walmart.com', operation: 'walmart_product_keywords', params: [ { key:'keyword', type:'string', default:'wireless earbuds' }, { key:'num', type:'number', default:5 } ] },
     { platform: 'github.com',  operation: 'github_repository_repo-url', params: [ { key:'url', type:'string', default:'https://github.com/NovadaLabs/novada-mcpserver' } ] },
     { platform: 'youtube.com', operation: 'youtube_video_search_label', params: [ { key:'label', type:'string', default:'web scraping tutorial' }, { key:'num', type:'number', default:5 } ] },
     { platform: 'linkedin.com', operation: 'linkedin_company_information_url', params: [ { key:'url', type:'string', default:'https://www.linkedin.com/company/novada' } ] },
