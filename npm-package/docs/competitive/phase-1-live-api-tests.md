@@ -278,7 +278,7 @@ Contact support@novada.com to enable SERP access.
 
 ## Browser Tests (Loop 2 addition)
 
-Tested against: `wss://novada529MUW_2Q8WuZ-zone-browser:Dz0vkMW4Wkil@upg-scbr2.novada.com`
+Tested against: `wss://<NOVADA_BROWSER_WS_CREDS_REDACTED>@upg-scbr2.novada.com`
 SDK path: `build/tools/browser.js` — calls Playwright `chromium.connectOverCDP(wsEndpoint)`
 
 | Test | Actions | Latency | Quality | Status |

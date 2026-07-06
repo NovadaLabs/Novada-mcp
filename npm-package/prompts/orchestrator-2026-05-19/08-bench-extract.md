@@ -13,8 +13,8 @@ Measure real end-to-end latency of novada_extract across 5 different sites, 3 ro
 ## Method
 For each site, run 3 rounds:
 ```bash
-NOVADA_API_KEY="1f35b477c9e1802778ec64aee2a6adfa"
-NOVADA_WEB_UNBLOCKER_KEY="b27ad6e6834dd36407b00f4e502e055e"
+NOVADA_API_KEY="<NOVADA_API_KEY_REDACTED>"
+NOVADA_WEB_UNBLOCKER_KEY="<NOVADA_API_KEY_REDACTED>"
 
 # MCP tool call (measures full pipeline)
 START=$(python3 -c "import time; print(int(time.time()*1000))")

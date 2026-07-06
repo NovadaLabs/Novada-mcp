@@ -2,7 +2,7 @@
 
 ## Test Environment
 - Date: 2026-04-29
-- API Key: `****adfa` (1f35b477c9e1802778ec64aee2a6adfa)
+- API Key: `****adfa` (<NOVADA_API_KEY_REDACTED>)
 - Node: v24.14.0
 - Known env: NOVADA_BROWSER_WS not set, NOVADA_WEB_UNBLOCKER_KEY not set, NOVADA_PROXY_* not set
 - Build: `/Users/tongwu/Projects/novada-mcp/build/` (v0.8.3, pre-compiled)
@@ -29,7 +29,7 @@
 #### Test 1 — Full health check with real API key
 ```
 Tool: novada_health
-Input: novadaHealth("1f35b477c9e1802778ec64aee2a6adfa")
+Input: novadaHealth("<NOVADA_API_KEY_REDACTED>")
 Status: PASS
 Duration: 1015ms
 ```
@@ -195,7 +195,7 @@ Issues:
 #### Test 1 — example.com without WEB_UNBLOCKER_KEY
 ```
 Tool: novada_unblock
-Input: { url: "https://example.com" }, apiKey: "1f35b477..."
+Input: { url: "https://example.com" }, apiKey: "<NOVADA_API_KEY_REDACTED>..."
 Status: PASS (content returned correctly)
 Duration: 57ms
 Output: Raw HTML (528 chars)

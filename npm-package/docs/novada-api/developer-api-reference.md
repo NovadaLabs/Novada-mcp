@@ -24,10 +24,10 @@
 ### Direct API Key (Tier 1)
 ```bash
 # Submit endpoint accepts API key as Bearer token
-Authorization: Bearer 1f35b477c9e1802778ec64aee2a6adfa
+Authorization: Bearer <NOVADA_API_KEY_REDACTED>
 
 # Download endpoint uses apikey query param
-?apikey=1f35b477c9e1802778ec64aee2a6adfa
+?apikey=<NOVADA_API_KEY_REDACTED>
 ```
 
 ### OAuth Token (Tier 2) — NOT YET AVAILABLE TO US

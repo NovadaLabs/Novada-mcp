@@ -17,3 +17,23 @@ ETHAN_REPORT.md
 
 .claude/worktrees/
 lobe-chat-plugins/
+
+# Scratch / QA / probe families — local-only, never tracked (untracked 2026-07-06)
+qa-*.mjs
+qa_*.mjs
+probe-*.mjs
+probe*.mjs
+verify-*.mjs
+verify_*.mjs
+boundary_test*.mjs
+check_*.mjs
+client*.mjs
+cfg-verify-*.mjs
+live-repro-*.mjs
+test-p0.mjs
+workspace/
+workspace-reviews/
+benchmark/
+reviews/
+meeting-notes/
+.aam/

@@ -16,7 +16,7 @@
  *   Or: npm run test:bing-live
  */
 
-const API_KEY = process.env.NOVADA_API_KEY || '1f35b477c9e1802778ec64aee2a6adfa';
+const API_KEY = process.env.NOVADA_API_KEY || '<NOVADA_API_KEY_REDACTED>';
 
 if (!API_KEY) {
   console.error('NOVADA_API_KEY not set');

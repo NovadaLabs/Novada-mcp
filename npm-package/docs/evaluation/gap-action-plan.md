@@ -52,7 +52,7 @@ language     = params.language || "en"
 
 **Response format change:** Scraper API returns a different JSON shape. Need to read the actual response format when implementing (test with `curl` first).
 
-**New env var needed:** `NOVADA_SCRAPER_KEY=1f35b477c9e1802778ec64aee2a6adfa`  
+**New env var needed:** `NOVADA_SCRAPER_KEY=<NOVADA_API_KEY_REDACTED>`  
 Add to `~/.claude.json` alongside `NOVADA_API_KEY` and `NOVADA_UNBLOCKER_KEY`.
 
 **Error handling change:** New error codes from Scraper API — update `classifyError()` in `src/tools/types.ts` to handle them.

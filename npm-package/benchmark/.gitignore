@@ -1,8 +1,0 @@
-# Benchmark results contain raw data + potentially large JSON files
-results/*.json
-results/*.html
-results/*.csv
-
-# Exception: keep one curated, externally-auditable summary tracked (NOV-402).
-# This is the distilled per-scenario digest, not a bulky raw run dump.
-!results/latest-summary.json

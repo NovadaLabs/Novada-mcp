@@ -45,7 +45,7 @@ All tests used real credentials from `.env` (deleted before publish).
 ### ❌ Scraper API — Account Permissions
 - **Error:** `code: 11006 "Scraper error"` for all 129 platform scrapers
 - **Scope:** All platforms: amazon.com, google.com, reddit.com, tiktok.com, etc.
-- **Root cause:** Test API key (`1f35b477...`) does not have platform scraper access enabled
+- **Root cause:** Test API key (`<NOVADA_API_KEY_REDACTED>...`) does not have platform scraper access enabled
 - **Fix:** Enable on Novada dashboard or contact support@novada.com
 - **Code impact:** None — API format is correct, returns 11006 only for our test key
 - **Quality:** MEDIUM — endpoint and format confirmed, blocked by account permissions

@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-06  
 **Method:** 3 parallel sub-agents, same test suite, real API calls  
-**API Keys used:** Firecrawl `fc-186cc539...`, Tavily `tvly-dev-VZfYf...`, Novada `1f35b477...`
+**API Keys used:** Firecrawl `<FIRECRAWL_API_KEY_REDACTED>...`, Tavily `<TAVILY_API_KEY_REDACTED>...`, Novada `<NOVADA_API_KEY_REDACTED>...`
 
 ---
 

@@ -9,7 +9,7 @@ Location: ~/Projects/novada-mcp/
 Build: ~/Projects/novada-mcp/build/ (already compiled)
 
 ## API Key
-NOVADA_API_KEY=1f35b477c9e1802778ec64aee2a6adfa
+NOVADA_API_KEY=<NOVADA_API_KEY_REDACTED>
 
 ## Tools to Test
 - novada_extract (static + render modes)
@@ -24,7 +24,7 @@ Use node to call the built functions directly. Example pattern:
 ```bash
 cat > /tmp/test-tool.mjs << 'EOF'
 import { novadaExtract } from '/Users/tongwu/Projects/novada-mcp/build/tools/extract.js';
-const result = await novadaExtract({ url: "https://example.com", format: "markdown" }, "1f35b477c9e1802778ec64aee2a6adfa");
+const result = await novadaExtract({ url: "https://example.com", format: "markdown" }, "<NOVADA_API_KEY_REDACTED>");
 console.log(result.slice(0, 500));
 EOF
 node /tmp/test-tool.mjs
@@ -88,7 +88,7 @@ Write to: docs/review/2026-04-29/report-functional-core.md
 
 ## Test Environment
 - Date: 2026-04-29
-- API Key: 1f35b477...adfa
+- API Key: <NOVADA_API_KEY_REDACTED>...adfa
 - Build: v0.8.3
 
 ## Results Summary

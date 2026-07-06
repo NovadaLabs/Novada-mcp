@@ -2,7 +2,7 @@
 
 ## Test Environment
 - Date: 2026-04-29
-- API Key: 1f35b477...adfa
+- API Key: <NOVADA_API_KEY_REDACTED>...adfa
 - Build: v0.8.3 (pre-compiled at `/Users/tongwu/Projects/novada-mcp/build/`)
 - Node: v24.14.0
 - Method: Direct `node` invocation against built JS modules

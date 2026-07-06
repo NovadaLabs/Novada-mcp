@@ -2,7 +2,7 @@
 
 Orchestrated by: Claude (Sonnet)
 Project: novada-search v0.8.3 at ~/Projects/novada-mcp/
-API Key: 1f35b477c9e1802778ec64aee2a6adfa
+API Key: <NOVADA_API_KEY_REDACTED>
 
 ## Agent Roster
 

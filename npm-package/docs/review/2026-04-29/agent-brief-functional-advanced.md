@@ -9,7 +9,7 @@ Location: ~/Projects/novada-mcp/
 Build: ~/Projects/novada-mcp/build/ (already compiled)
 
 ## API Key
-NOVADA_API_KEY=1f35b477c9e1802778ec64aee2a6adfa
+NOVADA_API_KEY=<NOVADA_API_KEY_REDACTED>
 
 ## Tools to Test
 - novada_health (no key needed for some checks)
@@ -24,7 +24,7 @@ Use node directly against built JS:
 ```bash
 cat > /tmp/test-adv.mjs << 'EOF'
 import { novadaHealth } from '/Users/tongwu/Projects/novada-mcp/build/tools/health.js';
-const result = await novadaHealth({}, "1f35b477c9e1802778ec64aee2a6adfa");
+const result = await novadaHealth({}, "<NOVADA_API_KEY_REDACTED>");
 console.log(result);
 EOF
 node /tmp/test-adv.mjs
@@ -101,7 +101,7 @@ Write to: docs/review/2026-04-29/report-functional-advanced.md
 
 ## Test Environment
 - Date: 2026-04-29
-- API Key: 1f35b477...adfa  
+- API Key: <NOVADA_API_KEY_REDACTED>...adfa  
 - Known env: NOVADA_BROWSER_WS not set, NOVADA_WEB_UNBLOCKER_KEY not set
 
 ## Results Summary

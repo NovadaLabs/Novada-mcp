@@ -5,12 +5,12 @@ The `novada_proxy` tool returns "not configured" because NOVADA_PROXY_USER, NOVA
 
 ## Credentials (from memory)
 ```
-NOVADA_PROXY_USER=tongwu_TRDI7X
-NOVADA_PROXY_PASS=_Asd1644asd_
-NOVADA_PROXY_HOST=1b9b0a2b9011e022.vtv.na.novada.pro
+NOVADA_PROXY_USER=<NOVADA_PROXY_USER_REDACTED>
+NOVADA_PROXY_PASS=<NOVADA_PROXY_PASS_REDACTED>
+NOVADA_PROXY_HOST=<NOVADA_PROXY_HOST_REDACTED>
 NOVADA_PROXY_PORT=7777
 ```
-Full endpoint: `1b9b0a2b9011e022.vtv.na.novada.pro:7777`
+Full endpoint: `<NOVADA_PROXY_HOST_REDACTED>:7777`
 
 ## Fix
 1. Read `~/.claude/settings.json`
@@ -20,12 +20,12 @@ Full endpoint: `1b9b0a2b9011e022.vtv.na.novada.pro:7777`
 4. Add the proxy env vars to whichever config controls the MCP server environment:
    ```json
    "env": {
-     "NOVADA_API_KEY": "1f35b477c9e1802778ec64aee2a6adfa",
-     "NOVADA_PROXY_USER": "tongwu_TRDI7X",
-     "NOVADA_PROXY_PASS": "_Asd1644asd_",
-     "NOVADA_PROXY_ENDPOINT": "1b9b0a2b9011e022.vtv.na.novada.pro:7777",
-     "NOVADA_WEB_UNBLOCKER_KEY": "b27ad6e6834dd36407b00f4e502e055e",
-     "NOVADA_BROWSER_WS": "wss://novada529MUW_2Q8WuZ-zone-browser:Dz0vkMW4Wkil@upg-scbr2.novada.com"
+     "NOVADA_API_KEY": "<NOVADA_API_KEY_REDACTED>",
+     "NOVADA_PROXY_USER": "<NOVADA_PROXY_USER_REDACTED>",
+     "NOVADA_PROXY_PASS": "<NOVADA_PROXY_PASS_REDACTED>",
+     "NOVADA_PROXY_ENDPOINT": "<NOVADA_PROXY_HOST_REDACTED>:7777",
+     "NOVADA_WEB_UNBLOCKER_KEY": "<NOVADA_API_KEY_REDACTED>",
+     "NOVADA_BROWSER_WS": "wss://<NOVADA_BROWSER_WS_CREDS_REDACTED>@upg-scbr2.novada.com"
    }
    ```
 5. Note: This requires MCP server restart to take effect

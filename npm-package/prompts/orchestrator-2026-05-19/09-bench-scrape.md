@@ -10,7 +10,7 @@ Measure end-to-end latency of novada_scrape across 3 platforms, 3 rounds each. T
 
 ## Method
 ```bash
-NOVADA_API_KEY="1f35b477c9e1802778ec64aee2a6adfa"
+NOVADA_API_KEY="<NOVADA_API_KEY_REDACTED>"
 
 START=$(python3 -c "import time; print(int(time.time()*1000))")
 node -e "

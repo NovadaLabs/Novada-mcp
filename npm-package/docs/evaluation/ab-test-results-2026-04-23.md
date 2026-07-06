@@ -139,7 +139,7 @@ Default engine: bing (changed from google)
 
 ### Required Credentials
 ```
-NOVADA_SCRAPER_KEY=1f35b477c9e1802778ec64aee2a6adfa    # For task submission
+NOVADA_SCRAPER_KEY=<NOVADA_API_KEY_REDACTED>    # For task submission
 NOVADA_API_USERNAME=novada_c3dc3be46f7                   # For OAuth2 token
 NOVADA_API_SECRET=863270b49b2dc2f7f0c7d03f56247669       # For OAuth2 token
 ```
