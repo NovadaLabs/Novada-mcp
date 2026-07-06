@@ -1,19 +1,52 @@
+# ── Monorepo root .gitignore ──
+# Per-package ignores live in npm-package/.gitignore and hosted-server/.gitignore.
+# This file covers ONLY root-level scratch / local-only artifacts so they never
+# get tracked at the monorepo root.
+
+# OS / editor
+.DS_Store
+
+# Dependencies & build output (should only exist inside packages)
 node_modules/
 build/
 coverage/
-.env
-.env.local
 *.tgz
-.DS_Store
-.worktrees/
-COMPETITIVE_INTELLIGENCE.md
-ROADMAP.md
-WORK_LOG.md
-docs/TOKEN_EFFICIENCY.md
-claude-plugin.json
-BACKEND_ISSUES.md
-ETHAN_REPORT.md
-.mcp.json
 
+# Local worktrees & agent scratch
+.worktrees/
 .claude/worktrees/
 lobe-chat-plugins/
+
+# Backups produced during migrations
+*.bundle
+
+# Local-only strategy / working docs (never publish)
+ROADMAP.md
+COMPETITIVE_INTELLIGENCE*.md
+WORK_LOG*
+ETHAN_REPORT*
+BACKEND_ISSUES*
+claude-plugin.json
+
+# Local-only scratch dirs (should live under a package, not root)
+workspace/
+workspace-reviews/
+benchmark/
+
+# Root-level QA / probe scratch scripts (belong in a package, never at root)
+qa-*.mjs
+qa_*.mjs
+probe-*.mjs
+probe*.mjs
+verify-*.mjs
+verify_*.mjs
+boundary_test*.mjs
+check_*.mjs
+client*.mjs
+cfg-verify-*.mjs
+live-repro-*.mjs
+test-p0.mjs
+
+# Env
+.env
+.env.local
