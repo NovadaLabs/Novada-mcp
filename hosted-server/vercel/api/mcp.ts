@@ -360,7 +360,7 @@ interface TokenInfo {
 
 /**
  * Validate a Novada API key. Accepts any non-empty hex-like string (the standard
- * Novada API key format, e.g. "1f35b477c9e1802778ec64aee2a6adfa").
+ * Novada API key format, e.g. "sk-eu-novada-EXAMPLE0000").
  * TODO(sub2api): wire to sub2api for per-user plan/quota resolution.
  */
 async function validateToken(token: string, env: Env): Promise<TokenInfo> {
