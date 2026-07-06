@@ -1,3 +1,5 @@
+> **This folder IS the npm package published as `novada-mcp`** — a local stdio MCP server (`npx novada-mcp`). It lives inside the [novada-mcp monorepo](../README.md); the hosted mcp.novada.com wrapper is in [`../hosted-server/`](../hosted-server/README.md).
+
 # Novada MCP
 
 > **One MCP server. All web data.** Search, extract, crawl, scrape, proxy, and AI research — 22 curated tools behind a single `npx` command. Run it locally or call the hosted endpoint (15 tools).

@@ -1,3 +1,5 @@
+> **This folder IS the hosted deployment at mcp.novada.com** — an HTTP wrapper (auth, rate-limit) around [`../npm-package/`](../npm-package/README.md), deployed on Vercel. It lives inside the [novada-mcp monorepo](../README.md).
+
 # novada-mcpserver
 
 **Novada Hosted MCP server** — deployed at `https://mcp.novada.com/mcp`.
