@@ -35,8 +35,9 @@ set -euo pipefail
 
 # ─── paths ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRV="$(cd "$SCRIPT_DIR/.." && pwd)"          # novada-mcpserver root
-NPM="$(cd "$SRV/../novada-mcp" && pwd)"      # novada-mcp root
+SRV="$(cd "$SCRIPT_DIR/.." && pwd)"          # hosted-server/ (monorepo) — the Vercel deploy root
+REPO_ROOT="$(cd "$SRV/.." && pwd)"           # monorepo root
+NPM="$(cd "$REPO_ROOT/npm-package" && pwd)"  # npm-package/ — the novada-mcp source
 VEN="$SRV/vercel/vendor/novada-mcp"          # vendored build target
 GOLDEN_BASELINE="$SCRIPT_DIR/golden/baseline"
 GOLDEN_CAPTURE_PY="$SCRIPT_DIR/golden/capture-golden.py"
