@@ -449,7 +449,115 @@ export function normalizeProductRecord(
     }
   }
 
+  // ── subcategory_rank (S3) — upstream pollution + dedup (TOW2-238) ──────────
+  // Root cause: UPSTREAM. The scraper API sends polluted entries already in the
+  // raw JSON (JS artifacts like `"languageCode":"en_US"`, review text, "ASIN B"
+  // trailing page content). Entries are also duplicated 4–16× by the upstream
+  // parser. We apply a defensive filter here — pure projection of the raw JSON:
+  // keep only rows whose name looks like a real category (short, no JSON syntax,
+  // no prose sentences) and deduplicate by (rank, name) pair.
+  if (Array.isArray(raw.subcategory_rank) && raw.subcategory_rank.length > 0) {
+    out.subcategory_rank = filterSubcategoryRank(
+      raw.subcategory_rank as Array<Record<string, unknown>>,
+    );
+  }
+
+  // ── description (S4) — prefer `features` when description has UI chrome ────
+  // Root cause: UPSTREAM. The `description` field is a full-page text dump that
+  // includes "Add to Cart", navigation text, comparison tables, FAQs etc.
+  // The `features` array is the upstream's clean, structured product highlight
+  // bullets. When `description` contains known UI-chrome markers, replace it with
+  // the joined features bullets. If features is also empty, strip the chrome from
+  // description as a last resort rather than fabricating content.
+  if (typeof raw.description === "string" && descriptionHasChrome(raw.description)) {
+    const features = raw.features;
+    if (Array.isArray(features) && features.length > 0) {
+      out.description = features
+        .filter((f): f is string => typeof f === "string" && f.trim().length > 0)
+        .join(" | ");
+      out._description_source = "features";
+    } else {
+      // No clean alternative — strip known UI chrome patterns and mark it
+      out.description = stripDescriptionChrome(raw.description);
+      out._description_source = "stripped";
+    }
+  }
+
   return out;
+}
+
+// ── subcategory_rank helpers ────────────────────────────────────────────────
+
+/**
+ * Returns true when a subcategory_name value is clearly polluted with upstream
+ * page artefacts: JSON syntax characters, long prose, review sentences, or the
+ * "ASIN B..." trailing page text pattern.
+ */
+function isSubcategoryNamePolluted(name: string): boolean {
+  if (name.length > 80) return true;               // real category names are short
+  if (name.includes('":"')) return true;            // JSON fragment
+  if (name.includes("languageCode")) return true;   // JS i18n artefact
+  if (/ASIN\s+B[0-9A-Z]{9}/i.test(name)) return true; // trailing ASIN page text
+  // Sentence-like prose (contains typical sentence chars mid-string)
+  if (/[.!?]\s+[A-Z]/.test(name)) return true;
+  return false;
+}
+
+/**
+ * Filter and deduplicate a raw subcategory_rank array.
+ * Keeps only rows with a plausible short category name and a numeric rank.
+ * Deduplicates by (rank, normalized-name) pair.
+ */
+export function filterSubcategoryRank(
+  rows: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  const seen = new Set<string>();
+  const result: Array<Record<string, unknown>> = [];
+
+  for (const row of rows) {
+    const name = typeof row.subcategory_name === "string" ? row.subcategory_name.trim() : null;
+    const rank = row.subcategory_rank;
+    if (!name || name.length === 0) continue;
+    if (isSubcategoryNamePolluted(name)) continue;
+    // Rank must be a numeric string or number
+    const rankStr = String(rank ?? "").trim();
+    if (!rankStr || !/^\d+$/.test(rankStr)) continue;
+
+    const key = `${rankStr}:${name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ subcategory_name: name, subcategory_rank: rankStr });
+  }
+  return result;
+}
+
+// ── description helpers ─────────────────────────────────────────────────────
+
+/** UI-chrome markers that indicate the description is a full-page dump.
+ *  Note: upstream sometimes concatenates navigation tokens without whitespace
+ *  (e.g. "Previous pageNext page"), so we do NOT require a trailing word-boundary
+ *  on multi-word phrases like "Previous page".
+ */
+const DESCRIPTION_CHROME_PATTERNS = [
+  /\bAdd to Cart\b/i,
+  /\bPrevious page/i,    // no trailing \b — upstream omits space before "Next"
+  /\bNext page\b/i,
+  /\bAdd to Wish List\b/i,
+] as const;
+
+/** Returns true if the description contains known UI-chrome patterns. */
+export function descriptionHasChrome(description: string): boolean {
+  return DESCRIPTION_CHROME_PATTERNS.some(p => p.test(description));
+}
+
+/** Strip known UI-chrome tokens from description when no clean alternative exists. */
+function stripDescriptionChrome(description: string): string {
+  let out = description;
+  for (const p of DESCRIPTION_CHROME_PATTERNS) {
+    out = out.replace(new RegExp(p.source, "gi"), "");
+  }
+  // Collapse whitespace left behind
+  return out.replace(/\s{2,}/g, " ").trim();
 }
 
 function extractRecords(data: unknown): Record<string, unknown>[] {
