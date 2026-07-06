@@ -101,26 +101,99 @@ export function validateAccountParams(
 // ─── Card renderers ──────────────────────────────────────────────────────────
 
 /** Plan-status icon + label for a product row. */
-function planIcon(expired: boolean | undefined, unavailable: boolean | undefined, isError: boolean): string {
+function planIcon(
+  expired: boolean | undefined,
+  unavailable: boolean | undefined,
+  isError: boolean,
+  exhausted?: boolean,
+): string {
   if (unavailable) return "⛔ not provisioned";
   if (isError) return "⛔ error";
   if (expired) return "⚠️ EXPIRED";
+  if (exhausted) return "⚠️ exhausted";
   return "✅ active";
 }
 
 /** MB → human units: shows GB when ≥ 1024 */
 function mbToHuman(mb: number): string {
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-  return `${mb} MB`;
+  return `${mb.toFixed(1)} MB`;
 }
 
-/** Extract balance_mb from a plan balance object (various server shapes). */
-function extractBalanceMb(balance: unknown): number | undefined {
-  if (!balance || typeof balance !== "object") return undefined;
+/**
+ * Normalize the polymorphic `balance` field returned by the developer API.
+ *
+ * Three shapes exist:
+ *   1. Bare scalar (number)  — capture credits:  132.9091
+ *   2. Request-count object  — mobile:            { balance, times, total, used }
+ *   3. Bytes object          — residential/isp/datacenter/static: { balance: <bytes>, expire_time }
+ *
+ * Legacy test-fixture keys (balance_mb / remaining_mb / plan_mb) are still
+ * handled so existing unit tests keep passing.
+ */
+function extractBalanceInfo(balance: unknown): { display: string; exhausted: boolean } {
+  // ── 1. Bare scalar → capture credits ────────────────────────────────────
+  if (typeof balance === "number") {
+    const exhausted = balance <= 0;
+    return { display: `${balance.toFixed(2)} credits`, exhausted };
+  }
+
+  if (!balance || typeof balance !== "object") {
+    return { display: "—", exhausted: false };
+  }
+
   const b = balance as Record<string, unknown>;
-  if (typeof b.balance_mb === "number") return b.balance_mb;
-  if (typeof b.remaining_mb === "number") return b.remaining_mb;
-  if (typeof b.plan_mb === "number") return b.plan_mb;
+
+  // ── Legacy test-fixture keys (balance_mb / remaining_mb / plan_mb) ──────
+  if (typeof b.balance_mb === "number") {
+    const mb = b.balance_mb;
+    return { display: mbToHuman(mb), exhausted: mb <= 0 };
+  }
+  if (typeof b.remaining_mb === "number") {
+    const mb = b.remaining_mb;
+    return { display: mbToHuman(mb), exhausted: mb <= 0 };
+  }
+  if (typeof b.plan_mb === "number") {
+    const mb = b.plan_mb;
+    return { display: mbToHuman(mb), exhausted: mb <= 0 };
+  }
+
+  // ── 2. Mobile: request-count exhaustion (used >= total) ──────────────────
+  if (typeof b.total === "number" && typeof b.used === "number") {
+    const exhausted = b.used >= b.total;
+    let display: string;
+    if (typeof b.balance === "number") {
+      const mb = b.balance / (1024 * 1024);
+      display = mb >= 1 ? `${mbToHuman(mb)} (${b.used}/${b.total} req)` : `${b.used}/${b.total} req`;
+    } else {
+      display = `${b.used}/${b.total} req`;
+    }
+    return { display, exhausted };
+  }
+
+  // ── 3. Standard proxy shape: { balance: <bytes>, expire_time: ... } ─────
+  if (typeof b.balance === "number") {
+    const bytes = b.balance;
+    const mb = bytes / (1024 * 1024);
+    const exhausted = bytes <= 0;
+    return { display: mbToHuman(mb), exhausted };
+  }
+
+  return { display: "—", exhausted: false };
+}
+
+/**
+ * @deprecated Use extractBalanceInfo instead.
+ * Kept for the flattenSummaryJson caller that needs a raw MB number.
+ */
+function extractBalanceMb(balance: unknown): number | undefined {
+  const { display } = extractBalanceInfo(balance);
+  if (display === "—" || display.endsWith("credits") || display.includes("req")) return undefined;
+  // Parse the human string back to a number (GB→MB if needed)
+  const gbMatch = display.match(/^([\d.]+)\s*GB/);
+  if (gbMatch) return parseFloat(gbMatch[1]) * 1024;
+  const mbMatch = display.match(/^([\d.]+)\s*MB/);
+  if (mbMatch) return parseFloat(mbMatch[1]);
   return undefined;
 }
 
@@ -175,9 +248,10 @@ function renderSummaryCard(summaryData: Record<string, unknown>): string {
     const isErr = v.status === "error";
     const isUnavailable = v.unavailable === true;
     const isExpired = v.expired === true;
-    const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable);
-    const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
-    const balanceStr = balanceMb !== undefined ? mbToHuman(balanceMb) : "—";
+    const { display: balanceStr, exhausted } = typeof v.balance !== "undefined"
+      ? extractBalanceInfo(v.balance)
+      : { display: "—", exhausted: false };
+    const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
     const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
     lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
   }
@@ -321,9 +395,10 @@ function renderPlansCard(raw: Record<string, unknown>): string {
     const isErr = v.status === "error";
     const isUnavailable = v.unavailable === true;
     const isExpired = v.expired === true;
-    const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable);
-    const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
-    const balanceStr = balanceMb !== undefined ? mbToHuman(balanceMb) : "—";
+    const { display: balanceStr, exhausted } = typeof v.balance !== "undefined"
+      ? extractBalanceInfo(v.balance)
+      : { display: "—", exhausted: false };
+    const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
     const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
     lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
   }
@@ -382,12 +457,20 @@ function flattenSummaryJson(summaryData: Record<string, unknown>): Record<string
     const isErr = v.status === "error";
     const isUnavailable = v.unavailable === true;
     const isExpired = v.expired === true;
+    const { display: balanceHuman, exhausted } = typeof v.balance !== "undefined"
+      ? extractBalanceInfo(v.balance)
+      : { display: null as unknown as string, exhausted: false };
     const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
+    const derivedStatus = isUnavailable ? "not_provisioned"
+      : isErr ? "error"
+      : isExpired ? "expired"
+      : exhausted ? "exhausted"
+      : "active";
     flatPlans[key] = {
       name: PLAN_LABELS[key] ?? key,
-      status: isUnavailable ? "not_provisioned" : isErr ? "error" : isExpired ? "expired" : "active",
+      status: derivedStatus,
       balance_mb: balanceMb,
-      balance_human: balanceMb !== undefined ? mbToHuman(balanceMb) : null,
+      balance_human: balanceHuman ?? null,
       expires_at: typeof v.expires_at === "string" ? v.expires_at : null,
     };
   }

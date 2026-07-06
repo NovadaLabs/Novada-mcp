@@ -530,3 +530,147 @@ describe("novadaAccount — all plans expired", () => {
     expect((plans.active as string[]).length).toBe(0);
   });
 });
+
+// ─── RC2 — polymorphic balance shape tests ────────────────────────────────────
+
+/**
+ * Real API shapes from the Novada developer API:
+ *   residential/isp/datacenter: { balance: <bytes>, expire_time: <epoch> }
+ *   mobile:                     { balance: 0, times: 0, total: 100, used: 100 }
+ *   capture:                    132.9091  (bare scalar — credits)
+ */
+function makePlansJsonRealShapes(): string {
+  return JSON.stringify({
+    status: "ok",
+    summary: {
+      active_products: ["residential", "isp", "datacenter"],
+      expired_products: [],
+      unavailable_products: [],
+    },
+    per_product: {
+      // 10 GiB in bytes
+      residential: { status: "ok", balance: { balance: 10_737_418_240, expire_time: 9_999_999_999 }, expired: false, expires_at: "2099-12-31" },
+      // 512 MiB in bytes
+      isp: { status: "ok", balance: { balance: 536_870_912, expire_time: 9_999_999_999 }, expired: false, expires_at: "2099-12-31" },
+      // mobile: request exhausted (used == total)
+      mobile: { status: "ok", balance: { balance: 0, times: 0, total: 100, used: 100 }, expired: false, expires_at: "2099-12-31" },
+      // datacenter: 1.5 GiB
+      datacenter: { status: "ok", balance: { balance: 1_610_612_736, expire_time: 9_999_999_999 }, expired: false, expires_at: "2099-12-31" },
+      // capture: bare scalar (credits)
+      capture: { status: "ok", balance: 132.9091, expired: false, expires_at: null },
+    },
+    errors: [],
+  });
+}
+
+describe("RC2 — polymorphic balance shapes render correctly in plans card", () => {
+  beforeEach(() => {
+    mockedPlans.mockResolvedValue(makePlansJsonRealShapes());
+  });
+
+  it("residential bytes → GB in balance cell (not —)", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| Residential"));
+    expect(row).toBeTruthy();
+    expect(row).not.toContain("| — |");
+    expect(row).toMatch(/10\.0\s*GB/);
+  });
+
+  it("isp bytes → MB in balance cell (not —)", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| ISP"));
+    expect(row).toBeTruthy();
+    expect(row).not.toContain("| — |");
+    expect(row).toMatch(/512/);
+  });
+
+  it("datacenter bytes → GB in balance cell (not —)", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| Datacenter"));
+    expect(row).toBeTruthy();
+    expect(row).not.toContain("| — |");
+    expect(row).toMatch(/1\.5\s*GB/);
+  });
+
+  it("mobile exhausted (used=100/total=100) → ⚠️ exhausted status", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| Mobile"));
+    expect(row).toBeTruthy();
+    expect(row).toContain("exhausted");
+    expect(row).toContain("100/100 req");
+  });
+
+  it("capture bare scalar → credits display (not —)", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| Capture"));
+    expect(row).toBeTruthy();
+    // Row format: | Capture | <status> | <balance> | <expires> |
+    // Verify balance column (index 3 after split by |) is credits, not —
+    const cols = row!.split("|").map(s => s.trim());
+    expect(cols[3]).toContain("132.91 credits");
+  });
+
+  it("capture still shows ✅ active (credits > 0)", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| Capture"));
+    expect(row).toContain("✅ active");
+  });
+
+  it("residential shows ✅ active (not exhausted)", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| Residential"));
+    expect(row).toContain("✅ active");
+  });
+});
+
+describe("RC2 — polymorphic balance shapes in plans json format", () => {
+  beforeEach(() => {
+    mockedPlans.mockResolvedValue(makePlansJsonRealShapes());
+  });
+
+  it("mobile plans json passthrough contains used/total request counts", async () => {
+    // section=plans+json returns the raw API response (no flattening)
+    // so we verify the real shape passes through untouched
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "json" }));
+    const obj = JSON.parse(result) as Record<string, unknown>;
+    const pp = (obj.per_product as Record<string, unknown>);
+    const mobile = pp.mobile as Record<string, unknown>;
+    const bal = mobile.balance as Record<string, unknown>;
+    expect(bal.total).toBe(100);
+    expect(bal.used).toBe(100);
+  });
+});
+
+describe("RC2 — summary card uses real balance shapes", () => {
+  it("summary card shows GB for residential (not —)", async () => {
+    mockedSummary.mockResolvedValue(JSON.stringify({
+      status: "ok",
+      latency_ms: 150,
+      headline: "Wallet: €105.10",
+      sections: {
+        wallet: { status: "ok", balance: 105.10, currency: "€" },
+        plans: {
+          status: "ok",
+          summary: { active_products: ["residential"], expired_products: [], unavailable_products: [] },
+          per_product: {
+            residential: {
+              status: "ok",
+              balance: { balance: 10_737_418_240, expire_time: 9_999_999_999 },
+              expired: false,
+              expires_at: "2099-12-31",
+            },
+          },
+        },
+        capture_recent: { status: "ok", recent: [] },
+      },
+      errors: [],
+      agent_instruction: "test",
+    }));
+
+    const result = await novadaAccount(validateAccountParams({ section: "summary", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| Residential"));
+    expect(row).toBeTruthy();
+    expect(row).not.toContain("| — |");
+    expect(row).toMatch(/10\.0\s*GB/);
+  });
+});
