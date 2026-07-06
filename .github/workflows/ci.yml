@@ -3,6 +3,10 @@ name: CI
 on:
   workflow_dispatch:
 
+defaults:
+  run:
+    working-directory: npm-package
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,6 +23,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+          cache-dependency-path: npm-package/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -30,4 +35,4 @@ jobs:
         run: npm test
 
       - name: Lint
-        run: tsc --noEmit
+        run: npm run lint
