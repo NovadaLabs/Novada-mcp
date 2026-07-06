@@ -50,11 +50,16 @@ describe("normalizeProductRecord — TOW2-237 price + availability reconciliatio
     expect(out._price_source).toBe("reconciled");
   });
 
-  it("falls back to buybox unit_price when a listing has no variations", () => {
-    const rec = FIXTURE.find(r => r.asin === "B0GW2MWGKC")!; // variations: [], unit_price "$4.33"
+  it("does NOT promote per-unit price to listing price; surfaces it separately", () => {
+    // B0GW2MWGKC is a 2-pack with variations:[] and buybox unit_price "$4.33".
+    // unit_price is PER-UNIT (per-item in the pack), not the ~$8.67 listing price.
+    // Promoting it would mislead price-ranking agents, so final_price stays 0 and
+    // the per-unit value is surfaced on a separate, never-promoted breadcrumb.
+    const rec = FIXTURE.find(r => r.asin === "B0GW2MWGKC")!;
     const out = normalizeProductRecord(rec);
-    expect(out.final_price).toBe(4.33);
-    expect(out._price_source).toBe("reconciled");
+    expect(out.final_price).toBe(0); // NOT reconciled to the per-unit value
+    expect(out._price_source).toBeUndefined();
+    expect(out._unit_price_only).toBe(4.33);
   });
 
   it("reconciles is_available to true when availability string says In Stock", () => {
@@ -91,6 +96,12 @@ describe("normalizeProductRecord — TOW2-237 price + availability reconciliatio
     expect(out.is_available).toBe(false);
   });
 
+  it('does not false-positive on "Not available" (negative guard before positive regex)', () => {
+    const notAvail = { availability: "Not available", is_available: false, final_price: 0, variations: [] };
+    const out = normalizeProductRecord(notAvail);
+    expect(out.is_available).toBe(false);
+  });
+
   it("passes non-product records through untouched", () => {
     const searchRec = { title: "Some blog post", url: "https://example.com", snippet: "hello" };
     const out = normalizeProductRecord(searchRec);
@@ -112,11 +123,17 @@ describe("novadaScrape — end-to-end price surfaces in json output (TOW2-237)",
     const parsed = JSON.parse(jsonMatch![1]) as Record<string, unknown>[];
     expect(parsed.length).toBe(FIXTURE.length);
     for (const rec of parsed) {
-      // Every record now surfaces a real positive price...
-      expect(typeof rec.final_price).toBe("number");
-      expect(rec.final_price as number).toBeGreaterThan(0);
-      // ...and is_available agrees with the "In Stock" availability string.
+      // is_available agrees with the "In Stock" availability string on every record.
       expect(rec.is_available).toBe(true);
     }
+    // Records with a real LISTING price surface it (B0CFQ5T5F6→8.97, B088NRLMPV→9.99).
+    const withRealPrice = parsed.filter(r => (r.final_price as number) > 0);
+    expect(withRealPrice.length).toBe(2);
+    for (const rec of withRealPrice) expect(rec._price_source).toBe("reconciled");
+    // The 2-pack with only a per-unit price stays 0 and exposes _unit_price_only —
+    // it is NOT promoted to a misleading listing price.
+    const unitOnly = parsed.find(r => r.asin === "B0GW2MWGKC")!;
+    expect(unitOnly.final_price).toBe(0);
+    expect(unitOnly._unit_price_only).toBe(4.33);
   });
 });

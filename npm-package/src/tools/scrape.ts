@@ -343,20 +343,29 @@ function toPositiveNumber(v: unknown): number | null {
 function availabilityStringInStock(s: unknown): boolean {
   if (typeof s !== "string") return false;
   const t = s.toLowerCase();
+  // Negatives FIRST — the bare word "available" in the positive regex below would
+  // otherwise match "Not available", "Pre-order available", "Available from other
+  // sellers" and wrongly report in-stock. Guard those before the positive check.
   if (/out\s+of\s+stock|unavailable|currently\s+unavailable|sold\s+out/.test(t)) return false;
+  if (/\bnot\s+available|\bpre.?order/i.test(t)) return false;
   return /in\s+stock|only\s+\d+\s+left|available|ships?\s|leaves?\s+warehouse|usually\s+ships/.test(t);
 }
 
 /**
- * Derive a usable price for a single product record, preferring the most accurate
- * source. Precedence:
+ * Derive a usable LISTING price for a single product record, preferring the most
+ * accurate source. Precedence:
  *   1. existing flat final_price > 0            (upstream already correct — untouched)
  *   2. existing flat initial_price > 0          (list price when final is empty)
  *   3. buybox_prices.final_price > 0
  *   4. variation whose .asin === record.asin    (exact listed-item price)
  *   5. first variation with a price > 0
- *   6. buybox_prices.unit_price parsed to number (last resort: per-unit, still > 0)
- * Returns null when NO positive price is anywhere in the record.
+ * Returns null when NO positive LISTING price is anywhere in the record.
+ *
+ * NOTE: buybox_prices.unit_price is deliberately NOT a source here — it is a
+ * PER-UNIT price (per-cable / per-item in a multipack), not the listing price
+ * a shopper pays. Promoting it (e.g. $4.33 for a 2-pack whose listing is ~$8.67)
+ * misleads agents that rank by price — worse than leaving 0. The unit price is
+ * surfaced separately by normalizeProductRecord on `_unit_price_only`.
  */
 function derivePrice(r: Record<string, unknown>): number | null {
   const flatFinal = toPositiveNumber(r.final_price);
@@ -382,11 +391,6 @@ function derivePrice(r: Record<string, unknown>): number | null {
       const p = v ? toPositiveNumber(v.price) : null;
       if (p !== null) return p;
     }
-  }
-
-  if (buybox) {
-    const unit = toPositiveNumber(buybox.unit_price);
-    if (unit !== null) return unit;
   }
 
   return null;
@@ -422,8 +426,16 @@ export function normalizeProductRecord(
       // Keep `price` consistent when it is the empty/null the bug leaves behind.
       if (toPositiveNumber(raw.price) === null) out.price = derived;
       out._price_source = "reconciled";
+    } else {
+      // No real LISTING price anywhere → leave final_price as-is (do NOT invent a
+      // value). If a per-unit price exists, surface it on a SEPARATE breadcrumb so
+      // agents can see it without ever mistaking it for the listing price.
+      const buybox = (raw.buybox_prices && typeof raw.buybox_prices === "object")
+        ? (raw.buybox_prices as Record<string, unknown>)
+        : null;
+      const unit = buybox ? toPositiveNumber(buybox.unit_price) : null;
+      if (unit !== null) out._unit_price_only = unit;
     }
-    // else: genuinely no price anywhere → leave as-is (do NOT invent a value).
   } else {
     out._price_source = "upstream";
   }
