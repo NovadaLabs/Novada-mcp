@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "novada-mcp": "file:../../novada-mcp",
+    "novada-mcp": "file:../../npm-package",
     "zod": "^4.3.6"
   },
   "devDependencies": {

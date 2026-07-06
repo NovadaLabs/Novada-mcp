@@ -25,10 +25,13 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url)); // .../novada-mcpserver/scripts
-const REPO = path.resolve(HERE, "..");                     // .../novada-mcpserver
+const HERE = path.dirname(fileURLToPath(import.meta.url)); // .../hosted-server/scripts
+const REPO = path.resolve(HERE, "..");                     // .../hosted-server
+const REPO_ROOT = path.resolve(REPO, "..");                // monorepo root
 const VENDOR = path.join(REPO, "vercel", "vendor", "novada-mcp");
-const SRC = path.resolve(process.env.NOVADA_MCP_SRC || path.join(REPO, "..", "novada-mcp"));
+// Monorepo layout: the npm package source is the sibling npm-package/ (NOT the repo root,
+// which may contain a stale ignored build/ that would fool the existsSync guard below).
+const SRC = path.resolve(process.env.NOVADA_MCP_SRC || path.join(REPO_ROOT, "npm-package"));
 
 async function main() {
   const buildDir = path.join(SRC, "build");
