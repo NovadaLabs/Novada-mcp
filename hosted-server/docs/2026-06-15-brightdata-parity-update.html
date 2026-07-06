@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Update Record — BrightData Parity · 2026-06-15 · Novada MCP</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: { violet: { DEFAULT:'#6c40e2', 600:'#431fd5', 700:'#3a1ba0', 50:'#f5eeff', 100:'#e3daff', 200:'#c9b4fb', light:'#9863f0' }, ink:{ DEFAULT:'#191228', text:'#0a142f', 700:'#251f3d' }, slate:'#677489', paper:'#ffffff' },
+    fontFamily: { display:['Hanken Grotesk','Noto Sans SC','system-ui','sans-serif'], sans:['IBM Plex Sans','Noto Sans SC','system-ui','sans-serif'], mono:['IBM Plex Mono','monospace'] } } } };
+</script>
+<style>
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{font-family:'IBM Plex Sans','Noto Sans SC',system-ui,sans-serif;color:#0a142f;background:#fbfaff;line-height:1.6}
+  h1,h2,h3,.display{font-family:'Hanken Grotesk','Noto Sans SC',system-ui,sans-serif;letter-spacing:-0.01em}
+  body.lang-en .zh{display:none!important} body.lang-zh .en{display:none!important}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .container{max-width:880px;margin:0 auto;padding:40px 28px 80px}
+  h1{font-size:34px;font-weight:700;margin:0 0 6px}
+  h2{font-size:22px;font-weight:700;margin:38px 0 14px;padding-bottom:7px;border-bottom:2px solid #e3daff}
+  h3{font-size:16px;font-weight:600;margin:20px 0 6px}
+  code{font-family:'IBM Plex Mono',monospace;background:#f5eeff;color:#6c40e2;padding:2px 6px;border-radius:5px;font-size:.9em}
+  a{color:#6c40e2;text-decoration:none;border-bottom:1px solid #e3daff} a:hover{border-color:#6c40e2}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid #e3daff;vertical-align:top}
+  th{background:#f5eeff;font-weight:600;color:#251f3d}
+  .grad-text{background:linear-gradient(45deg,#9863f0,#6c40e2,#431fd5);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;font-family:'IBM Plex Mono',monospace}
+  .b-ship{background:#e6f7ef;color:#0b8a5a} .b-win{background:#f5eeff;color:#6c40e2} .b-gap{background:#fff4e6;color:#b06a00}
+  .card{background:#fff;border:1px solid #e3daff;border-radius:10px;padding:18px 20px;box-shadow:rgba(18,17,39,.06) 0 8px 30px;margin:10px 0}
+  .toggle{position:fixed;top:18px;right:18px;background:#191228;color:#fff;border:none;border-radius:999px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;z-index:50}
+  .lead{font-size:17px;color:#251f3d}
+  .muted{color:#677489;font-size:14px}
+  ul{padding-left:20px} li{margin:5px 0}
+  @media print{.toggle{display:none}}
+</style>
+</head>
+<body class="lang-en">
+<button class="toggle" id="lang-toggle">中 / EN</button>
+<div class="container">
+
+  <div class="badge b-ship" style="margin-bottom:14px">● 2026-06-15 · SHIPPED &amp; VERIFIED LIVE</div>
+  <h1 class="display">
+    <span class="en">Update Record — <span class="grad-text">BrightData Parity</span></span>
+    <span class="zh">更新记录 — <span class="grad-text">对齐 BrightData</span></span>
+  </h1>
+  <p class="muted">Novada Hosted MCP · mcp.novada.com · <span class="mono">commit 9fadcb6</span></p>
+
+  <!-- TL;DR -->
+  <div class="card" style="background:linear-gradient(135deg,#6c40e2,#431fd5);color:#fff;border:none">
+    <p class="lead" style="color:#fff;margin:0">
+      <span class="en">We cloned BrightData's MCP product surface (Configure picker + chat playground), made it Novada-style, and shipped two things BrightData's MCP <b>cannot do</b>: account/billing tools callable by an agent, and a slim-endpoint <code style="background:rgba(255,255,255,.15);color:#fff">?groups=</code> filter. All verified live.</span>
+      <span class="zh">我们克隆了 BrightData 的 MCP 产品界面(工具配置器 + 对话试玩台),改成 Novada 风格,并上线了两项 BrightData 的 MCP <b>做不到</b>的能力:Agent 可直接调用的账户/计费工具,以及精简端点 <code style="background:rgba(255,255,255,.15);color:#fff">?groups=</code> 过滤。全部已线上验证。</span>
+    </p>
+  </div>
+
+  <!-- WHAT SHIPPED -->
+  <h2><span class="en">What shipped this update</span><span class="zh">本次更新上线了什么</span></h2>
+
+  <h3><span class="badge b-win">LAYER A</span> &nbsp;<span class="en">Account &amp; billing tools — now on hosted</span><span class="zh">账户与计费工具 — 已上线托管端</span></h3>
+  <div class="card">
+    <p><span class="en">8 account tools are now callable on <code>mcp.novada.com</code>: <code>wallet_balance</code>, <code>wallet_usage_record</code>, <code>plan_balance_all</code>, <code>proxy_account_list</code>, <code>proxy_account_create</code> (write, confirm-gated), <code>traffic_daily</code>, <code>account_summary</code>, <code>capture_logs</code>. An agent can check its balance, audit traffic, and provision a proxy account — without the user leaving the chat.</span>
+    <span class="zh"><code>mcp.novada.com</code> 现已可调用 8 个账户工具:<code>wallet_balance</code>、<code>wallet_usage_record</code>、<code>plan_balance_all</code>、<code>proxy_account_list</code>、<code>proxy_account_create</code>(写操作,二次确认)、<code>traffic_daily</code>、<code>account_summary</code>、<code>capture_logs</code>。Agent 可查余额、审计流量、开通代理子账户 —— 用户无需离开对话。</span></p>
+    <p style="margin-top:8px"><b style="color:#0b8a5a">🔒 <span class="en">Security fix (gating)</span><span class="zh">安全修复(前置)</span>:</b>
+    <span class="en">the tools previously fell back to the <b>operator's</b> key — on pass-through hosting that would have leaked the operator's wallet to every customer. Fixed: the customer's own key is threaded through all 8. Verified — bogus key → <code>401</code> (no fallback), real key → correct balance.</span>
+    <span class="zh">这些工具此前会回退到<b>运营者</b>的密钥 —— 在透传托管下会把运营者钱包泄露给每个客户。已修复:8 个工具全部改用客户自己的密钥。已验证 —— 错误密钥 → <code>401</code>(不回退),正确密钥 → 返回正确余额。</span></p>
+  </div>
+
+  <h3><span class="badge b-win">LAYER B</span> &nbsp;<span class="en">Slim-endpoint filter <code>?tools=</code> / <code>?groups=</code></span><span class="zh">精简端点过滤 <code>?tools=</code> / <code>?groups=</code></span></h3>
+  <div class="card">
+    <p><span class="en">Matches BrightData's <code>?groups=</code> pattern. <code>mcp.novada.com/mcp?groups=search,scrape</code> serves only those tools — fewer tools = less agent context overhead and higher accuracy. 8 groups: search, scrape, crawl, research, scraper, proxy, account, browser.</span>
+    <span class="zh">对齐 BrightData 的 <code>?groups=</code> 模式。<code>mcp.novada.com/mcp?groups=search,scrape</code> 只暴露这些工具 —— 工具越少,Agent 上下文负担越小、准确率越高。8 个分组:search、scrape、crawl、research、scraper、proxy、account、browser。</span></p>
+  </div>
+
+  <h3><span class="badge b-ship">PAGE</span> &nbsp;<span class="en"><code>/configure</code> — tool picker → custom URL</span><span class="zh"><code>/configure</code> — 工具配置器 → 自定义 URL</span></h3>
+  <div class="card"><p class="muted"><span class="en">Novada clone of BrightData's "Configure MCP": per-category / per-tool picker that live-generates a scoped endpoint URL (now backed by the real Layer B filter). Own key, no demo token.</span><span class="zh">BrightData "Configure MCP" 的 Novada 克隆:按分类 / 按工具勾选,实时生成精简端点 URL(由真实的 Layer B 过滤支撑)。客户自有密钥,无演示 token。</span></p></div>
+
+  <h3><span class="badge b-ship">PAGE</span> &nbsp;<span class="en"><code>/chat</code> — conversational playground</span><span class="zh"><code>/chat</code> — 对话式试玩台</span></h3>
+  <div class="card"><p class="muted"><span class="en">Novada clone of BrightData's <code>/ai/playground-chat</code>: type a request, a transparent intent router picks one tool and runs it live, the answer renders in a chat bubble. Honestly labelled a "guided demo" — the full LLM agent runs in Claude/Cursor.</span><span class="zh">BrightData <code>/ai/playground-chat</code> 的 Novada 克隆:输入请求,透明意图路由选定一个工具并实时调用,结果以对话气泡呈现。诚实标注为"引导式演示" —— 完整的 LLM Agent 在 Claude/Cursor 中运行。</span></p></div>
+
+  <!-- VERIFY -->
+  <h2><span class="en">Live verification</span><span class="zh">线上验证</span></h2>
+  <table>
+    <thead><tr><th><span class="en">Check</span><span class="zh">检查项</span></th><th><span class="en">Result</span><span class="zh">结果</span></th></tr></thead>
+    <tbody>
+      <tr><td>tools/list <span class="muted">(hosted)</span></td><td><b>34</b> <span class="en">tools (26 data + 8 account)</span><span class="zh">个工具(26 数据 + 8 账户)</span></td></tr>
+      <tr><td><code>novada_wallet_balance</code> <span class="muted">live</span></td><td>✅ <span class="en">returns caller's balance $229.1 (own account via pass-through)</span><span class="zh">返回调用者余额 $229.1(透传,自有账户)</span></td></tr>
+      <tr><td><code>?groups=search,scrape</code></td><td>✅ <span class="en">filtered to 5 tools</span><span class="zh">过滤为 5 个工具</span></td></tr>
+      <tr><td><span class="en">Security: bogus key</span><span class="zh">安全:错误密钥</span></td><td>✅ <span class="en">401, no operator-key fallback</span><span class="zh">401,不回退运营者密钥</span></td></tr>
+      <tr><td>/configure · /chat</td><td>✅ HTTP 200</td></tr>
+    </tbody>
+  </table>
+
+  <!-- MATRIX -->
+  <h2><span class="en">Novada vs BrightData — where we catch up, where we're better</span><span class="zh">Novada vs BrightData — 哪里追平,哪里更强</span></h2>
+
+  <h3><span class="badge b-win">▲</span> <span class="en">Our advantages (already better)</span><span class="zh">我们的优势(已领先)</span></h3>
+  <ul>
+    <li><span class="en"><b>Account/billing AS MCP tools</b> — agent can check balance & provision accounts. BrightData has zero; theirs is website-only.</span><span class="zh"><b>账户/计费即 MCP 工具</b> — Agent 可查余额、开账户。BrightData 完全没有,只能在网站做。</span></li>
+    <li><span class="en"><b>Transparent API console</b> (Form ⇄ JSON-RPC ⇄ cURL) — BrightData's is a black-box chat. Better for agent-builders.</span><span class="zh"><b>透明 API 控制台</b>(Form ⇄ JSON-RPC ⇄ cURL)— BrightData 是黑盒对话。更利于开发者接入。</span></li>
+    <li><span class="en"><b>No vendor lock-in / no shared demo token</b> — customer runs on their own key from call #1.</span><span class="zh"><b>无供应商锁定 / 无共享演示 token</b> — 客户从第一次调用就用自己的密钥。</span></li>
+    <li><span class="en"><b>6 proxy-type tools</b> (residential/isp/datacenter/mobile/static/dedicated) as first-class MCP tools.</span><span class="zh"><b>6 种代理类型工具</b>(住宅/ISP/机房/移动/静态/独享)作为一等 MCP 工具。</span></li>
+    <li><span class="en"><b>Bilingual 中/EN</b> across the whole site — BrightData's MCP is English-only. Direct edge for China/APAC devs.</span><span class="zh"><b>全站中/EN 双语</b> — BrightData 的 MCP 仅英文。对中国/亚太开发者是直接优势。</span></li>
+    <li><span class="en"><b>Honesty as positioning</b> — explicit hosted-vs-local (501) markers, no fabricated metrics.</span><span class="zh"><b>以诚实为定位</b> — 明确标注托管/本地(501),不编造指标。</span></li>
+  </ul>
+
+  <h3><span class="badge b-gap">△</span> <span class="en">Remaining gaps (honest)</span><span class="zh">尚存差距(诚实列出)</span></h3>
+  <table>
+    <thead><tr><th><span class="en">Gap</span><span class="zh">差距</span></th><th><span class="en">Effort</span><span class="zh">工作量</span></th><th><span class="en">Status</span><span class="zh">状态</span></th></tr></thead>
+    <tbody>
+      <tr><td><span class="en">Configure-MCP picker + scoped URL</span><span class="zh">配置器 + 精简 URL</span></td><td>med</td><td><span class="badge b-ship">✓ shipped</span> <span class="en">(/configure + Layer B)</span></td></tr>
+      <tr><td><span class="en">Conversational chat playground</span><span class="zh">对话式试玩台</span></td><td>high</td><td><span class="badge b-ship">✓ shipped</span> <span class="en">(/chat, guided)</span></td></tr>
+      <tr><td><span class="en">"MCP Overview" at-a-glance dashboard (status + endpoint + checklist)</span><span class="zh">"MCP 总览"仪表盘(状态 + 端点 + 清单)</span></td><td>low</td><td><span class="en">next</span><span class="zh">待办</span></td></tr>
+      <tr><td><span class="en">Usage / Event-Log dashboard (requests, per-call log)</span><span class="zh">用量 / 事件日志仪表盘</span></td><td>high</td><td><span class="en">needs backend — will NOT fabricate; "coming soon" until KV usage is surfaced</span><span class="zh">需后端 —— 不编造数据;在 KV 用量接出前标注"即将上线"</span></td></tr>
+      <tr><td><span class="en">Per-tool "Try in console" deep-links from /tools</span><span class="zh">/tools 的"在控制台试用"深链</span></td><td>low</td><td><span class="en">next</span><span class="zh">待办</span></td></tr>
+    </tbody>
+  </table>
+
+  <!-- OPEN ITEMS -->
+  <h2><span class="en">Open items (need a human)</span><span class="zh">待办事项(需人工)</span></h2>
+  <ul>
+    <li><span class="en"><b>fudong</b> — 2 minor backend questions: <code>wallet_usage_record</code> returns count=11 but empty list; <code>traffic_daily</code> row field-name for summing MB. Non-blocking.</span><span class="zh"><b>fudong</b> — 2 个后端小问题:<code>wallet_usage_record</code> 返回 count=11 但列表为空;<code>traffic_daily</code> 每行用于求和 MB 的字段名。不阻塞。</span></li>
+    <li><span class="en"><b>Yixuan</b> — proxy-side items (per your note).</span><span class="zh"><b>Yixuan</b> — 代理侧事项(按你说的)。</span></li>
+    <li><span class="en"><b>Before public launch</b> — real customer-token validation (currently any valid Novada key works); dedicated <code>hosted-mcp-prod</code> upstream key.</span><span class="zh"><b>公开发布前</b> — 接入真实客户 token 校验(目前任意有效 Novada 密钥都可用);申请专用 <code>hosted-mcp-prod</code> 上游密钥。</span></li>
+  </ul>
+
+  <hr style="margin:40px 0 18px;border:none;border-top:2px solid #191228">
+  <p class="muted"><span class="en">Record kept per request — one bilingual HTML per update, Novada style. Toggle 中/EN top-right. Prev: <code>docs/2026-06-11-vercel-deploy-debug-log.html</code>.</span><span class="zh">按要求保留记录 —— 每次更新一份双语 HTML,Novada 风格。右上角切换 中/EN。上一份:<code>docs/2026-06-11-vercel-deploy-debug-log.html</code>。</span></p>
+</div>
+<script>
+  const b=document.body,t=document.getElementById('lang-toggle');
+  t.addEventListener('click',()=>{b.classList.toggle('lang-zh');b.classList.toggle('lang-en');t.textContent=b.classList.contains('lang-zh')?'EN / 中':'中 / EN';});
+</script>
+</body>
+</html>

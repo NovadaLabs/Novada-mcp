@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Novada Hosted MCP — 上线阻塞会议 · 2026-06-11</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --violet: #5b2eeb;
+    --violet-light: #f1edff;
+    --violet-mid: #e3daff;
+    --mint: #10d49c;
+    --mint-light: #e6fbf4;
+    --ink: #0c0a17;
+    --ink-700: #251f3d;
+    --paper: #fbfaff;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --amber: #d97706;
+    --amber-light: #fffbeb;
+    --gray: #6b6483;
+    --gray-light: #f3effd;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 880px; margin: 0 auto; padding: 48px 32px 64px; }
+  h1, h2, h3 { font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
+  h1 { font-size: 36px; font-weight: 700; margin: 0 0 8px; }
+  h2 { font-size: 24px; font-weight: 700; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--violet-mid); }
+  h3 { font-size: 18px; font-weight: 600; margin: 24px 0 8px; }
+  code { font-family: 'IBM Plex Mono', monospace; background: var(--violet-light); color: var(--violet); padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  pre { background: var(--ink); color: #e9e4ff; padding: 16px 20px; border-radius: 10px; overflow-x: auto; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.6; }
+  pre code { background: transparent; color: inherit; padding: 0; }
+  a { color: var(--violet); text-decoration: none; border-bottom: 1px solid var(--violet-mid); }
+  a:hover { border-bottom-color: var(--violet); }
+  .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 24px; border-bottom: 3px solid var(--ink); }
+  .header .meta { color: var(--gray); font-size: 14px; }
+  .header .meta b { color: var(--ink); }
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; font-family: 'IBM Plex Mono', monospace; }
+  .badge-status { background: var(--amber-light); color: var(--amber); border: 1px solid var(--amber); }
+  .badge-done { background: var(--mint-light); color: var(--mint); border: 1px solid var(--mint); }
+  .badge-blocked { background: var(--red-light); color: var(--red); border: 1px solid var(--red); }
+  .badge-kr { background: var(--violet-light); color: var(--violet); }
+
+  .tldr { background: linear-gradient(135deg, var(--violet) 0%, #4a23c9 100%); color: white; padding: 24px 28px; border-radius: 14px; margin: 24px 0; }
+  .tldr h2 { color: white; border: none; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.85; }
+  .tldr p { font-size: 17px; margin: 8px 0 0; }
+
+  .progress { display: flex; gap: 4px; margin: 16px 0; }
+  .progress div { flex: 1; height: 10px; border-radius: 4px; background: var(--gray-light); position: relative; }
+  .progress div.done { background: var(--mint); }
+  .progress div.partial { background: var(--amber); }
+  .progress div.blocked { background: var(--red); }
+  .progress-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--violet-mid); vertical-align: top; }
+  th { background: var(--violet-light); font-weight: 600; color: var(--ink-700); }
+  td.center { text-align: center; }
+  tr:last-child td { border-bottom: 2px solid var(--ink); }
+
+  .blocker { border: 2px solid var(--red); border-radius: 14px; padding: 24px 28px; margin: 20px 0; background: var(--red-light); }
+  .blocker h3 { margin-top: 0; color: var(--red); font-size: 20px; }
+  .blocker .who { font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: white; padding: 6px 10px; border-radius: 6px; display: inline-block; margin-bottom: 12px; }
+
+  .options { display: grid; gap: 12px; margin: 12px 0; }
+  .option { background: white; border: 1px solid var(--violet-mid); border-radius: 10px; padding: 16px 20px; }
+  .option.recommended { border-color: var(--mint); background: var(--mint-light); }
+  .option .opt-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .option .opt-title { font-weight: 600; font-family: 'Space Grotesk', sans-serif; font-size: 16px; }
+  .option .opt-cost { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--gray); }
+  .option .opt-trade { font-size: 13px; color: var(--ink-700); margin-top: 6px; }
+  .opt-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--mint); color: var(--ink); font-weight: 600; font-family: 'IBM Plex Mono', monospace; margin-left: 6px; }
+
+  .ask { background: var(--ink); color: white; padding: 24px 28px; border-radius: 14px; margin: 24px 0; }
+  .ask h2 { color: white; border: none; margin-top: 0; }
+  .ask ol { padding-left: 22px; }
+  .ask ol li { margin-bottom: 12px; line-height: 1.7; }
+  .ask strong { color: var(--mint); }
+  .ask code { background: rgba(255,255,255,0.1); color: #e9e4ff; }
+
+  .timeline { display: grid; grid-template-columns: 80px 1fr; gap: 8px 16px; margin: 16px 0; align-items: start; }
+  .timeline .when { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--gray); padding-top: 2px; }
+  .timeline .what { font-size: 14px; }
+
+  .footnote { font-size: 13px; color: var(--gray); margin-top: 8px; }
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding: 6px 0 6px 28px; position: relative; font-size: 14px; }
+  .checklist li::before { content: ""; position: absolute; left: 0; top: 10px; width: 16px; height: 16px; border-radius: 4px; }
+  .checklist li.done::before { background: var(--mint); content: "✓"; color: white; font-size: 12px; text-align: center; line-height: 16px; font-weight: 700; }
+  .checklist li.todo::before { background: white; border: 2px solid var(--violet-mid); }
+  .checklist li.blocked::before { background: var(--red); content: "✗"; color: white; font-size: 11px; text-align: center; line-height: 16px; font-weight: 700; }
+
+  .small { font-size: 13px; color: var(--gray); }
+
+  @media print {
+    body { background: white; font-size: 12px; }
+    .container { padding: 20px; max-width: none; }
+    h1 { font-size: 24px; }
+    h2 { font-size: 18px; margin-top: 20px; }
+    .tldr, .ask, .blocker { break-inside: avoid; }
+    pre { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>Novada Hosted MCP — 上线阻塞</h1>
+      <div class="meta">
+        会议时间:<b>2026-06-11</b> · 参会人:<b>tongwu</b>(orchestrator) · <b>fudong</b>(backend/DNS) · <b>yixuan</b>(product)
+      </div>
+      <div class="badge-row">
+        <span class="badge badge-kr">KR-5 · June OKR</span>
+        <span class="badge badge-status">95% 完成 · 2 项阻塞</span>
+        <span class="badge badge-done">代码 + Vercel 已就绪</span>
+      </div>
+    </div>
+    <div class="small" style="text-align:right;">
+      Ethan-flagged P0<br>
+      Target LIVE: <b>2026-06-11</b>
+    </div>
+  </div>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <h2>TL;DR · 一句话</h2>
+    <p><b>代码已部署 Vercel,落地页已上线 <code style="background:rgba(255,255,255,0.15);color:#e9e4ff;">novada-mcpserver.vercel.app</code> ,但客户访问入口 <code style="background:rgba(255,255,255,0.15);color:#e9e4ff;">mcp.novada.com/mcp</code> 还不能用 — 卡在 2 项需要人工授权的外部操作:Route 53 DNS + Vercel KV 计费选项。会议要确定:谁拿钥匙,选什么方案。</b></p>
+  </div>
+
+  <!-- PROGRESS -->
+  <h2>整体进度</h2>
+  <div class="progress">
+    <div class="done" title="代码"></div>
+    <div class="done" title="Vercel 项目"></div>
+    <div class="done" title="域名注册到项目"></div>
+    <div class="done" title="落地页 LIVE"></div>
+    <div class="done" title="审计完成"></div>
+    <div class="done" title="环境变量(部分)"></div>
+    <div class="done" title="Vercel build OK"></div>
+    <div class="blocked" title="KV 存储未连接"></div>
+    <div class="blocked" title="mcp.novada.com DNS 未解析"></div>
+    <div class="partial" title="端到端测试"></div>
+  </div>
+  <div class="progress-labels">
+    <span>代码就绪</span>
+    <span>2 项阻塞</span>
+    <span>LIVE</span>
+  </div>
+
+  <!-- DONE -->
+  <h2>✅ 已完成(为什么有信心明天就能 LIVE)</h2>
+  <ul class="checklist">
+    <li class="done">Vercel 项目 <code>novada-mcpserver</code> 部署成功,最新 commit <code>3cb6f9b</code>,build Ready</li>
+    <li class="done">5 项关键 patch 已落地(Edge → Node runtime / 浏览器工具 stub / KV wiring / IP 速率限制 / Token SHA256 指纹日志)</li>
+    <li class="done">落地页(violet/mint 设计)、OG 图、JSON-LD、llms.txt、try-it-now curl 块 — 全部上线在 <code>https://novada-mcpserver.vercel.app/</code></li>
+    <li class="done">域名 <code>mcp.novada.com</code> 已通过 <code>vercel domains add</code> 绑定到项目(Vercel 端已知此域名)</li>
+    <li class="done">6 个客户端安装片段(Claude Desktop / Claude Code / Cursor / Codex / Cline / Windsurf)逐一对照官方文档核对,无错</li>
+    <li class="done">环境变量已设 4 项:<code>NOVADA_API_KEY</code> / <code>STUB_AUTH_WARNING_ACCEPTED=true</code> / <code>RATE_LIMIT_PER_MIN=60</code> / <code>FREE_PLAN_MONTHLY_QUOTA=5000</code></li>
+    <li class="done">代码已 <code>git push</code>(commits <code>dd5bdf1</code> + <code>3cb6f9b</code>),GitHub 公开仓库 <code>NovadaLabs/novada-mcpserver</code> 同步</li>
+    <li class="done">KR-6(novada-mcp 本地包的 developer-api 工具)multipart 问题已修,本地分支 <code>kr6-account-tools</code>,等 smoke 测试</li>
+  </ul>
+
+  <!-- BLOCKER 1 -->
+  <h2>🛑 阻塞 #1 — Route 53 CNAME(DNS)</h2>
+  <div class="blocker">
+    <h3>问题</h3>
+    <p>客户连接的是 <code>https://mcp.novada.com/mcp</code>,但这个子域名还没解析。需要在 <b>novada.com 的 Route 53 hosted zone</b> 添加一条 CNAME 记录:</p>
+    <pre><code>Name:  mcp
+Type:  CNAME
+Value: cname.vercel-dns.com
+TTL:   300</code></pre>
+
+    <h3>谁能解决</h3>
+    <div class="who">需要:novada.com Route 53 hosted zone 的 AWS 控制台访问权限</div>
+    <p><b>已确认 novada.com 的 DNS 在 AWS Route 53</b>(<code>dig NS novada.com</code> 返回 <code>*.awsdns-*.org / .net / .com / .co.uk</code> 四个 NS),但 <b>不在 tongwu 的 <code>contact@prismma.ai</code> 个人 AWS 账户里</b>(那个账户 Hosted Zones 数量 = 0)。</p>
+    <p>所以这条 CNAME 必须由 <b>持有公司主 AWS 账户(novada.com hosted zone 所在账户)</b>的人来加。最可能是 fudong / 公司域内的运维同事。</p>
+
+    <h3>风险评估</h3>
+    <ul>
+      <li><b>新增子域,零风险:</b>只是给 novada.com 加一条新的 CNAME 子记录,不修改任何现有记录(www / api / mail 等),不动 NS / SOA,完全不会影响 novada.com 主站或邮箱。</li>
+      <li><b>可回滚:</b>1 秒内删除,DNS 在 TTL 300 秒内全球回退。</li>
+      <li><b>已多次实操:</b>类似操作公司其他子域名(api.novada.com 等)早已存在。</li>
+    </ul>
+
+    <h3>给 fudong 的具体步骤(<2 分钟)</h3>
+    <ol>
+      <li>登录 AWS 主账户 → Route 53 → Hosted zones → 选 <code>novada.com</code></li>
+      <li>点 <b>Create record</b></li>
+      <li>填:Name = <code>mcp</code>,Type = <code>CNAME</code>,Value = <code>cname.vercel-dns.com</code>,TTL = <code>300</code></li>
+      <li>Save。完。</li>
+    </ol>
+    <p class="footnote">⚠️ Vercel CLI 提示如果 CNAME 因任何原因不通,可以改用 A 记录:Type <code>A</code>,Value <code>76.76.21.21</code>。两种方式都行,CNAME 更"标准"。</p>
+  </div>
+
+  <!-- BLOCKER 2 -->
+  <h2>🛑 阻塞 #2 — Vercel KV 存储(决定方案 + 计费)</h2>
+  <div class="blocker">
+    <h3>问题</h3>
+    <p>MCP server 用 KV 来做两件事:<b>(a) 按 token 的月度调用配额(free 5000/月)、(b) 按 IP 的每分钟速率限制(默认 60 req/min)。</b>这两个值都必须存在某个共享 store 里(serverless 各个实例之间)。</p>
+    <p>目前 <code>/api/mcp</code> 返回 <code>FUNCTION_INVOCATION_FAILED</code>,根因是 <code>@vercel/kv</code> 模块在缺少 <code>KV_REST_API_URL</code> / <code>KV_REST_API_TOKEN</code> 时 import 阶段就崩溃。</p>
+    <p><b>今天发现:</b>Vercel 把 Upstash for Redis 的 free tier 取消了,新建一个独立的 Upstash KV 起步价 <b>$8/月</b>。</p>
+
+    <h3>三种方案,要选一种</h3>
+    <div class="options">
+
+      <div class="option recommended">
+        <div class="opt-head">
+          <span class="opt-title">方案 A — 复用现有 <code>prismma-redis</code> (Upstash Free)<span class="opt-tag">推荐</span></span>
+          <span class="opt-cost">$0 / 月</span>
+        </div>
+        <div class="opt-trade">
+          <b>原理:</b>团队里 <code>prismma-redis</code> 已经在 Upstash Free 上跑,目前只连了 prismma-ai。MCP server 用同一个 Redis 实例,但所有 key 加 <code>novada:</code> 前缀,与 Prismma 完全隔离。<br>
+          <b>需要做的:</b>(1) <code>vercel env pull</code> 从 prismma-ai 拿 KV 凭据 → (2) <code>vercel env add</code> 到 novada-mcpserver → (3) 改 10 行代码加 key prefix → (4) redeploy。约 10 分钟。<br>
+          <b>风险:</b>共享一个 Upstash 实例 — 如果 Prismma 流量爆发,Novada 也会跟着被限速。v1 演示完全够用;真生产再分。<br>
+          <b>需要 yixuan / Prismma 同意:</b>是,因为这是改 Prismma 的基础设施。
+        </div>
+      </div>
+
+      <div class="option">
+        <div class="opt-head">
+          <span class="opt-title">方案 B — 给 novada-mcpserver 单独开 KV</span>
+          <span class="opt-cost">$8 / 月起</span>
+        </div>
+        <div class="opt-trade">
+          <b>原理:</b>Vercel Storage → 新开一个 Upstash for Redis(或官方 Redis),最低 250MB / $8 月。<br>
+          <b>需要做的:</b>tongwu 在 Vercel dashboard 点 Create → 选 plan → 信用卡确认。约 3 分钟。<br>
+          <b>优点:</b>独立资源,与 Prismma 解耦。<br>
+          <b>缺点:</b>$8/月持续支出,Novada 还没收入。<br>
+          <b>需要 Ethan 同意计费:</b>是,如果走公司账。
+        </div>
+      </div>
+
+      <div class="option">
+        <div class="opt-head">
+          <span class="opt-title">方案 C — 改代码,让 MCP 在没有 KV 时优雅降级</span>
+          <span class="opt-cost">$0,但功能降级</span>
+        </div>
+        <div class="opt-trade">
+          <b>原理:</b>把 <code>@vercel/kv</code> 改为 lazy import,KV 缺失时直接跳过配额/速率检查,工具调用正常返回。<br>
+          <b>需要做的:</b>tongwu 改 ~30 行代码 + 重新部署。约 20 分钟。<br>
+          <b>缺点:</b>(1) 无配额跟踪 — 任何人拿到 token 可以无限调用;(2) 无速率限制 — 容易被滥用;(3) 违反 PROJECT_STATE.md §6 的 critical patch #4("fail loud, no silent degrade")。<br>
+          <b>建议:</b>只作为应急。如果 A 和 B 都临时拍不下来,先用 C 撑过明天的 demo,后面补 A 或 B。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASK -->
+  <div class="ask">
+    <h2>🎯 会议需要拍板的 3 件事</h2>
+    <ol>
+      <li><strong>DNS:</strong>fudong 是否能今晚 / 明天上午加这条 Route 53 CNAME?如果不是 fudong,谁有 novada.com hosted zone 的访问权?需要明确<b>姓名 + ETA</b>。</li>
+      <li><strong>KV:</strong>选方案 A(复用 prismma-redis,需 yixuan/Prismma 团队同意)、方案 B($8/月独立 KV,需 Ethan 批准计费)还是方案 C(降级上线,后续补)?<b>给一个明确选择 + 决策人。</b></li>
+      <li><strong>上线时间:</strong>如果 (1) 和 (2) 都能在明天解决,LIVE 时间能否定在 <b>2026-06-11 晚 / 06-12 上午</b>?如果要拖,Ethan 那边怎么回复?</li>
+    </ol>
+  </div>
+
+  <!-- POST-MEETING TIMELINE -->
+  <h2>📅 假设会议结束就拿到答案,上线时间线</h2>
+  <div class="timeline">
+    <div class="when">T+0</div>
+    <div class="what">会议结束,DNS 责任人 + KV 方案确定</div>
+
+    <div class="when">T+10min</div>
+    <div class="what">fudong / 运维 在 Route 53 加 CNAME · tongwu 同时执行 KV 方案(取决于选 A / B / C)</div>
+
+    <div class="when">T+30min</div>
+    <div class="what">tongwu 跑验证:<code>dig mcp.novada.com</code> + <code>curl -X POST .../mcp</code> + Claude Desktop 接入测试</div>
+
+    <div class="when">T+1h</div>
+    <div class="what">DNS 全球传播,SSL 证书 Vercel 自动签发完成</div>
+
+    <div class="when">T+2h</div>
+    <div class="what">LIVE 公告:tongwu 把落地页"Coming online" 改回 "Live on Vercel Edge",通知 Ethan + 准备目录提交</div>
+
+    <div class="when">明天<br>下午</div>
+    <div class="what">向 5 个 MCP 目录提交收录:Smithery / PulseMCP / Glama / mcpservers.org / Claude Directory(KR-5 M-5.2 阶段)</div>
+  </div>
+
+  <!-- BACKUP -->
+  <h2>🔧 如果会议没拍板 — 应急方案</h2>
+  <table>
+    <thead>
+      <tr><th>场景</th><th>应急做法</th><th>影响</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>DNS 拖到 06-13 之后</td>
+        <td>对外公开 <code>https://novada-mcpserver.vercel.app/api/mcp</code> 作为临时入口</td>
+        <td>中国大陆有 GFW DNS 污染(vercel.app 被劫持),海外用户可以用。等 mcp.novada.com 上线后回滚到正式入口。</td>
+      </tr>
+      <tr>
+        <td>KV 方案讨论延后</td>
+        <td>tongwu 走方案 C(降级)单方面 ship 给 Ethan 看 demo</td>
+        <td>能演示,但无速率限制 — token 必须只发给信任的人(Ethan / 内部),不能公开。</td>
+      </tr>
+      <tr>
+        <td>两个都卡住</td>
+        <td>本地 <code>npx novada-mcp</code> 走客户端模式 — Ethan 在自己机器装就能用</td>
+        <td>失去 "hosted server / zero install" 的卖点,但功能 100% 可用。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- APPENDIX -->
+  <h2>📎 技术附录(给 fudong)</h2>
+
+  <h3>当前架构</h3>
+  <pre><code>客户端(Claude Desktop / Cursor / Cline / Windsurf / Codex)
+    ↓  POST https://mcp.novada.com/mcp?token=sk-eu-novada-XXX
+    ↓  (也支持 Authorization: Bearer sk-eu-novada-XXX 请求头)
+Vercel Edge Function(Node.js runtime)
+    ↓  api/mcp.ts  ~551 行,Streamable HTTP transport(Anthropic 2025-03 spec)
+    ↓  - 校验 token(目前 STUB,后续接 sub2api)
+    ↓  - KV 取/写配额计数器(blocked 在这里)
+    ↓  - 分发到 25 个 novada-mcp tool handler
+Novada 后端(api.novada.com / api-m.novada.com / webunlocker.novada.com)
+    ↓  用 NOVADA_API_KEY env var 鉴权(目前是 tongwu 个人测试 key,后续换 hosted-mcp-prod 专用 key)</code></pre>
+
+  <h3>当前 Vercel 项目状态</h3>
+  <ul class="checklist">
+    <li class="done">Team: <code>novadateam-mvps</code>(Hobby plan)</li>
+    <li class="done">Project: <code>novada-mcpserver</code>,Root directory <code>vercel/</code></li>
+    <li class="done">Branch: <code>main</code> auto-deploy</li>
+    <li class="done">Production URL: <code>https://novada-mcpserver.vercel.app</code></li>
+    <li class="done">最新 deploy: <code>novada-mcpserver-8txyd9n8b-novadateam-mvps.vercel.app</code> · Ready</li>
+    <li class="done">Custom domain bound: <code>mcp.novada.com</code>(等 DNS)</li>
+    <li class="blocked">KV store not connected → <code>/api/mcp</code> 500</li>
+  </ul>
+
+  <h3>测试命令(DNS + KV 都解决后)</h3>
+  <pre><code># 1. DNS 解析检查
+dig mcp.novada.com CNAME +short @8.8.8.8
+# 期望:cname.vercel-dns.com.
+
+# 2. HTTPS handshake(Vercel 自动签 SSL)
+curl -I https://mcp.novada.com/
+# 期望:HTTP/2 200(返回落地页)
+
+# 3. MCP 协议 handshake
+curl -X POST https://mcp.novada.com/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-eu-novada-YOUR_KEY" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize",
+       "params":{"protocolVersion":"2025-03-26",
+                 "capabilities":{},
+                 "clientInfo":{"name":"smoke","version":"1.0"}}}'
+# 期望:返回 server capabilities + 25 tools</code></pre>
+
+  <h3>仓库 + 关键文件</h3>
+  <ul>
+    <li>GitHub: <a href="https://github.com/NovadaLabs/novada-mcpserver">github.com/NovadaLabs/novada-mcpserver</a></li>
+    <li>Vercel Dashboard: <a href="https://vercel.com/novadateam-mvps/novada-mcpserver">vercel.com/novadateam-mvps/novada-mcpserver</a></li>
+    <li>本地代码: <code>~/Projects/novada-mcpserver/</code></li>
+    <li>权威状态文档: <code>~/Projects/novada-mcpserver/PROJECT_STATE.md</code> + <code>HANDOFF.md</code></li>
+    <li>前次部署交接: <code>HANDOFF.md</code> 第 §0 节("5-minute path to LIVE")</li>
+  </ul>
+
+  <hr style="margin: 48px 0 24px; border: none; border-top: 2px solid var(--ink);">
+
+  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--gray);">
+    <div>文档生成:2026-06-10 晚 · orchestrator · 单页,可打印</div>
+    <div>会议链接 / 时间地点:<b>待补</b></div>
+  </div>
+</div>
+</body>
+</html>

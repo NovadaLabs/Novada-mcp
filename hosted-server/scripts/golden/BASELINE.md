@@ -1,0 +1,1 @@
+0.9.13-hosted (single-dispatch refactor) — canonical golden baseline. Rollback targets: 0.9.13=novada-mcpserver-haeueuos5-novadateam-mvps.vercel.app ; pre-refactor 0.9.12=novada-mcpserver-34oxbutrd-novadateam-mvps.vercel.app  (restore: npx vercel promote <url> --scope novadateam-mvps)

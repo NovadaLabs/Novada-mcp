@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();
+function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Novada MCP — One URL. 8 core web-data tools. Zero install.</title>
+<meta name="description" content="Novada Hosted MCP server. 8 core tools — search, scrape, extract, crawl, map, research, verify, monitor — through one URL. Drop into Claude Desktop, Cursor, Cline, Windsurf, Codex in 30 seconds." />
+<link rel="canonical" href="https://mcp.novada.com/" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Novada MCP" />
+<meta property="og:title" content="Novada MCP — One URL. 8 core web-data tools. Zero install." />
+<meta property="og:description" content="Hosted Streamable-HTTP MCP server with 8 core tools: search, scrape, extract, crawl, map, research, verify, monitor. Works with Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf." />
+<meta property="og:url" content="https://mcp.novada.com/" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Novada MCP — One URL. 8 core web-data tools. Zero install." />
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Novada MCP — One URL. 8 core web-data tools. Zero install." />
+<meta name="twitter:description" content="Hosted Streamable-HTTP MCP server with 8 core tools. One URL, zero install. 1,000 free calls/month." />
+<meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
+
+<!-- Structured data: SoftwareApplication -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Novada MCP",
+  "alternateName": "Novada Hosted MCP Server",
+  "description": "Remote Streamable-HTTP MCP server with 8 core web-data tools — search, scrape, extract, crawl, map, research, verify, monitor. One URL, zero install, works with Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Any (MCP-compatible client required)",
+  "url": "https://mcp.novada.com/",
+  "image": "https://mcp.novada.com/og-image.png",
+  "featureList": ["search", "scrape", "extract", "crawl", "map", "research", "verify", "monitor"],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD",
+    "description": "1,000 tool calls per month free. No credit card required."
+  },
+  "provider": {
+    "@type": "Organization",
+    "name": "Novada",
+    "sameAs": "https://www.novada.com"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Novada",
+    "sameAs": "https://www.novada.com"
+  }
+}
+</script>
+
+<!-- Structured data: FAQPage -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How is this different from calling the Novada REST API directly?",
+      "acceptedAnswer": { "@type": "Answer", "text": "The MCP endpoint exposes Novada tools through the Model Context Protocol so any MCP-compatible agent (Claude, Cursor, Cline, Codex) can discover and call them with a structured contract — no client SDK, no per-tool wrapper code. Underneath, it dispatches to the same Novada backend." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need a separate key for MCP?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. The same Novada API key works for the hosted MCP, the local npx novada-mcp, and the REST API. Quota counters are per token." }
+    },
+    {
+      "@type": "Question",
+      "name": "What's the difference between hosted and npx novada-mcp?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Hosted = zero install, paste-a-URL, always latest, but no browser tools. Local npx novada-mcp = runs everything including Playwright browser flows, works offline-from-cloud, but you manage updates yourself." }
+    }
+  ]
+}
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
+          ink: { DEFAULT: '#0a0818', text: '#0a0818', 800: '#110e24', 700: '#161230' },
+          slate: '#7a6faa',
+          paper: '#faf9ff',
+          'tint-cool': '#f3f0fb',
+        },
+        fontFamily: {
+          display: ['Nunito', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          sans: ['Nunito', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body class="lang-en">
+
+<!-- HEADER -->
+<header class="sticky top-0 z-50 backdrop-blur" style="background:var(--th-nav);border-bottom:1px solid var(--th-nav-border)">
+  <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2.5">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate">
+      <a href="#install" class="hover:text-ink transition"><span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools" class="hover:text-ink transition"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-ink transition"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="hover:text-ink transition"><span class="en">FAQ</span><span class="zh">常见问题</span></a>
+      <a href="/playground" class="text-violet font-semibold hover:text-violet-600 transition">
+        <span class="en">Playground</span><span class="zh">试玩</span>
+      </a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button id="lang-toggle" onclick="toggleLang()" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-lg transition">
+        <span class="en">Get API key</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO — full-width with side data flow panels -->
+<section class="grad-hero grid-bg" style="min-height:90vh;display:flex;align-items:center">
+  <!-- Data flow particles -->
+  <div class="data-particle"></div><div class="data-particle"></div><div class="data-particle"></div>
+  <div class="data-particle"></div><div class="data-particle"></div><div class="data-particle"></div>
+
+  <!-- Left data flow panel — floating tool names -->
+  <div class="hidden lg:block absolute left-0 top-0 bottom-0 w-64 overflow-hidden pointer-events-none z-0" style="opacity:0.4">
+    <div class="hero-side-scroll" style="animation:scroll-up 25s linear infinite">
+      <div class="font-mono text-xs leading-loose text-violet-200/40 pl-8 pt-20">
+        <div>novada_search <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ reranked: true</div>
+        <div class="mt-3">novada_extract <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ quality: 92/100</div>
+        <div class="mt-3">novada_crawl <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ pages: 12/20</div>
+        <div class="mt-3">novada_research <span class="text-yellow-400/40">→ running</span></div>
+        <div class="text-violet/30">│ sources: 8</div>
+        <div class="mt-3">novada_scrape <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ records: 47</div>
+        <div class="mt-3">novada_verify <span class="text-green-400/40">→ supported</span></div>
+        <div class="text-violet/30">│ confidence: 94</div>
+        <div class="mt-3">novada_map <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ urls: 156</div>
+        <div class="mt-3">novada_monitor <span class="text-blue-400/40">→ changed</span></div>
+        <div class="text-violet/30">│ fields: 3 diff</div>
+        <div class="mt-6">novada_search <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ reranked: true</div>
+        <div class="mt-3">novada_extract <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ quality: 88/100</div>
+        <div class="mt-3">novada_crawl <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ pages: 8/20</div>
+        <div class="mt-3">novada_research <span class="text-green-400/40">→ 200</span></div>
+        <div class="text-violet/30">│ cited: 12</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right data flow panel — JSON response fragments -->
+  <div class="hidden lg:block absolute right-0 top-0 bottom-0 w-64 overflow-hidden pointer-events-none z-0" style="opacity:0.35">
+    <div class="hero-side-scroll" style="animation:scroll-down 30s linear infinite">
+      <div class="font-mono text-xs leading-loose text-violet-200/40 pr-8 pt-12 text-right">
+        <div>{</div>
+        <div>&nbsp;&nbsp;"url": "example.com"</div>
+        <div>&nbsp;&nbsp;"quality": <span class="text-green-400/40">92</span></div>
+        <div>&nbsp;&nbsp;"chars": <span class="text-violet/50">47919</span></div>
+        <div>}</div>
+        <div class="mt-4">{</div>
+        <div>&nbsp;&nbsp;"verdict": "<span class="text-green-400/40">supported</span>"</div>
+        <div>&nbsp;&nbsp;"confidence": <span class="text-violet/50">94</span></div>
+        <div>}</div>
+        <div class="mt-4">{</div>
+        <div>&nbsp;&nbsp;"records": <span class="text-violet/50">47</span></div>
+        <div>&nbsp;&nbsp;"platform": "amazon"</div>
+        <div>&nbsp;&nbsp;"format": "json"</div>
+        <div>}</div>
+        <div class="mt-4">{</div>
+        <div>&nbsp;&nbsp;"urls_found": <span class="text-violet/50">156</span></div>
+        <div>&nbsp;&nbsp;"sitemap": <span class="text-green-400/40">true</span></div>
+        <div>}</div>
+        <div class="mt-4">{</div>
+        <div>&nbsp;&nbsp;"results": <span class="text-violet/50">10</span></div>
+        <div>&nbsp;&nbsp;"engine": "google"</div>
+        <div>&nbsp;&nbsp;"reranked": <span class="text-green-400/40">true</span></div>
+        <div>}</div>
+        <div class="mt-4">{</div>
+        <div>&nbsp;&nbsp;"sources": <span class="text-violet/50">8</span></div>
+        <div>&nbsp;&nbsp;"report": "ready"</div>
+        <div>&nbsp;&nbsp;"citations": <span class="text-violet/50">12</span></div>
+        <div>}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center content -->
+  <div class="w-full max-w-6xl mx-auto px-6 py-24 relative z-10">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+      <!-- Left: headline + buttons -->
+      <div class="lg:col-span-7 text-center lg:text-left">
+        <div class="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full border border-violet/20 bg-violet/5 text-xs font-semibold text-violet-200">
+          <span class="live-dot"></span>
+          <span class="en">Live on Vercel · 8 core tools</span>
+          <span class="zh">Vercel 部署 · 8 个核心工具</span>
+        </div>
+        <h1 class="text-4xl sm:text-5xl lg:text-[3.5rem] font-extrabold tracking-tight leading-[1.08] mb-6">
+          <span class="en">One URL.<br><span class="grad-text">8 core data tools.</span><br>Zero install.</span>
+          <span class="zh">一个 URL。<br><span class="grad-text">8 个核心数据工具。</span><br>零安装。</span>
+        </h1>
+        <p class="text-lg text-slate mb-8 leading-relaxed max-w-xl">
+          <span class="en">Search, scrape, extract, crawl, map, research, verify — through a single MCP endpoint. Drop into any AI client in 30 seconds.</span>
+          <span class="zh">搜索、抓取、提取、爬取、站点地图、研究、验证 — 全部通过一个 MCP 端点。30 秒接入任意 AI 客户端。</span>
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-4">
+          <a href="cursor://anysphere.cursor-deeplink/mcp/install?name=novada&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.novada.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20YOUR_API_KEY%22%7D%7D" class="btn-primary text-sm">
+            <span class="en">⚡ Install in Cursor</span><span class="zh">⚡ 安装到 Cursor</span>
+          </a>
+          <a href="vscode://anysphere.cursor-deeplink/mcp/install?name=novada&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.novada.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20YOUR_API_KEY%22%7D%7D" class="btn-secondary text-sm">
+            <span class="en">Install in VS Code</span><span class="zh">安装到 VS Code</span>
+          </a>
+        </div>
+        <p class="text-xs text-slate/60">
+          <span class="en">1,000 free calls/month · No credit card · Claude, Cursor, Codex, Cline, Windsurf</span>
+          <span class="zh">每月 1,000 次免费调用 · 无需信用卡 · Claude、Cursor、Codex、Cline、Windsurf</span>
+        </p>
+      </div>
+
+      <!-- Right: API response preview — shows what the endpoint actually returns -->
+      <div class="lg:col-span-5">
+        <div class="glow-card overflow-hidden">
+          <!-- IDE-style header bar -->
+          <div class="flex items-center justify-between px-5 py-3 border-b border-violet/25" style="background:rgba(108,64,226,0.12)">
+            <div class="flex items-center gap-3">
+              <div class="flex gap-1.5">
+                <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
+              </div>
+              <span class="text-[11px] font-mono text-violet/60 tracking-wide">tools/list response</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="live-dot"></span>
+              <span class="text-[10px] font-mono text-green-400/60">LIVE</span>
+            </div>
+          </div>
+          <!-- Response body — looks like real JSON-RPC output -->
+          <div class="p-5 font-mono text-[12.5px] leading-[1.8]" style="background:#161230">
+            <div class="text-slate/40">// 8 core tools available</div>
+            <div class="mt-2">
+              <span class="text-violet/50">{</span> <span class="text-violet-200/70">"tools"</span><span class="text-slate/40">:</span> <span class="text-violet/50">[</span>
+            </div>
+            <div class="pl-4 mt-1 space-y-0.5">
+              <div><span class="text-green-400/70">"novada_search"</span> <span class="text-slate/30">— web search via 5 engines</span></div>
+              <div><span class="text-green-400/70">"novada_extract"</span> <span class="text-slate/30">— read content from URL</span></div>
+              <div><span class="text-green-400/70">"novada_crawl"</span> <span class="text-slate/30">— multi-page site crawl</span></div>
+              <div><span class="text-green-400/70">"novada_scrape"</span> <span class="text-slate/30">— structured platform data</span></div>
+              <div><span class="text-green-400/70">"novada_research"</span> <span class="text-slate/30">— deep multi-source analysis</span></div>
+              <div><span class="text-green-400/70">"novada_verify"</span> <span class="text-slate/30">— fact-check claims</span></div>
+              <div><span class="text-green-400/70">"novada_map"</span> <span class="text-slate/30">— discover site URLs</span></div>
+              <div><span class="text-green-400/70">"novada_monitor"</span> <span class="text-slate/30">— track page changes</span></div>
+            </div>
+            <div class="mt-1"><span class="text-violet/50">] }</span></div>
+            <div class="mt-4 pt-3 border-t border-violet/10 flex items-center justify-between">
+              <button onclick="copyText('https://mcp.novada.com/YOUR_API_KEY/mcp', this)" class="text-[11px] bg-violet/15 hover:bg-violet/30 text-violet-200/80 px-3 py-1.5 rounded-lg transition border border-violet/20 hover:border-violet/40 font-semibold">
+                <span class="en">Copy endpoint</span><span class="zh">复制端点</span>
+              </button>
+              <span class="text-[10px] text-slate/30">Streamable HTTP · JSON-RPC 2.0</span>
+            </div>
+          </div>
+        </div>
+        <!-- Stats row below -->
+        <div class="grid grid-cols-3 gap-3 mt-4">
+          <div class="text-center px-3 py-2.5 rounded-lg border border-violet/10 bg-violet/5">
+            <div class="text-lg font-bold text-violet">8</div>
+            <div class="text-[10px] text-slate/50 font-mono"><span class="en">core tools</span><span class="zh">核心工具</span></div>
+          </div>
+          <div class="text-center px-3 py-2.5 rounded-lg border border-violet/10 bg-violet/5">
+            <div class="text-lg font-bold text-violet">195+</div>
+            <div class="text-[10px] text-slate/50 font-mono"><span class="en">countries</span><span class="zh">国家覆盖</span></div>
+          </div>
+          <div class="text-center px-3 py-2.5 rounded-lg border border-violet/10 bg-violet/5">
+            <div class="text-lg font-bold text-violet">100M+</div>
+            <div class="text-[10px] text-slate/50 font-mono"><span class="en">proxy IPs</span><span class="zh">代理 IP</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- NEON DIVIDER -->
+<hr class="neon-line">
+
+<!-- INSTALL TABS -->
+<section id="install" class="py-24">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center mb-14">
+      <div class="section-divider mb-6"></div>
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">
+        <span class="en"><span class="grad-text">Install in 30 seconds</span></span>
+        <span class="zh"><span class="grad-text">30 秒接入</span></span>
+      </h2>
+      <p class="text-slate max-w-xl mx-auto">
+        <span class="en">Pick your client. Copy the snippet. Replace <code class="mono text-violet">YOUR_API_KEY</code> with your real key.</span>
+        <span class="zh">选择客户端,复制片段,把 <code class="mono text-violet">YOUR_API_KEY</code> 替换为你的真实密钥。</span>
+      </p>
+    </div>
+
+    <div id="tabs" class="flex flex-wrap gap-2 justify-center mb-10 border border-violet/20 bg-violet/5 p-2 rounded-xl max-w-2xl mx-auto">
+      <button class="tab-btn active" data-tab="claude-desktop">Claude Desktop</button>
+      <button class="tab-btn" data-tab="claude-code">Claude Code</button>
+      <button class="tab-btn" data-tab="cursor">Cursor</button>
+      <button class="tab-btn" data-tab="codex">Codex</button>
+      <button class="tab-btn" data-tab="cline">Cline</button>
+      <button class="tab-btn" data-tab="windsurf">Windsurf</button>
+    </div>
+
+    <div class="max-w-4xl mx-auto">
+      <!-- Claude Desktop -->
+      <div class="tab-panel active" data-panel="claude-desktop">
+        <p class="text-sm text-slate mb-3">
+          <span class="en"><b>Option A -- Custom Connector UI</b> (Free, Pro, Max). Go to <b>Customize > Connectors > + > Add custom connector</b> and paste the URL.</span>
+          <span class="zh"><b>方式 A -- 自定义连接器界面</b>(Free、Pro、Max 均可)。进入 <b>Customize > Connectors > + > Add custom connector</b>,粘贴下方 URL。</span>
+        </p>
+        <div class="code-block mb-4">
+          <button class="copy-btn" onclick="copyText('https://mcp.novada.com/YOUR_API_KEY/mcp', this)">Copy</button>
+          <pre class="mono">https://mcp.novada.com/<span class="text-violet-200">YOUR_API_KEY</span>/mcp</pre>
+        </div>
+        <p class="text-sm text-slate mb-3 mt-6">
+          <span class="en"><b>Option B -- stdio bridge.</b> Edit <code class="mono">claude_desktop_config.json</code>:</span>
+          <span class="zh"><b>方式 B -- stdio 桥接。</b>编辑 <code class="mono">claude_desktop_config.json</code>:</span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('{&quot;mcpServers&quot;:{&quot;novada&quot;:{&quot;command&quot;:&quot;npx&quot;,&quot;args&quot;:[&quot;-y&quot;,&quot;mcp-remote&quot;,&quot;https://mcp.novada.com/mcp?token=YOUR_API_KEY&quot;]}}}', this)">Copy</button>
+<pre class="mono">{
+  "mcpServers": {
+    "novada": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.novada.com/mcp?token=<span class="text-violet-200">YOUR_API_KEY</span>"
+      ]
+    }
+  }
+}</pre>
+        </div>
+        <p class="text-xs text-slate mt-3">
+          <span class="en">Config: <code class="mono">~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) or <code class="mono">%APPDATA%\Claude\claude_desktop_config.json</code> (Windows).</span>
+          <span class="zh">配置文件:<code class="mono">~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) 或 <code class="mono">%APPDATA%\Claude\claude_desktop_config.json</code> (Windows)。</span>
+        </p>
+      </div>
+
+      <!-- Claude Code CLI -->
+      <div class="tab-panel" data-panel="claude-code">
+        <p class="text-sm text-slate mb-3">
+          <span class="en"><b>Recommended</b> -- pass the key as a header, scope to user so every project sees it:</span>
+          <span class="zh"><b>推荐方式</b> -- 使用请求头传递密钥,设为用户级作用域:</span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('claude mcp add --transport http novada https://mcp.novada.com/mcp --header &quot;Authorization: Bearer YOUR_API_KEY&quot; --scope user', this)">Copy</button>
+<pre class="mono"><span class="text-violet-200">$</span> claude mcp add --transport http novada \
+    https://mcp.novada.com/mcp \
+    --header <span class="text-violet-200">"Authorization: Bearer YOUR_API_KEY"</span> \
+    --scope user</pre>
+        </div>
+        <p class="text-xs text-slate mt-3">
+          <span class="en">Verify with <code class="mono">claude mcp list</code>. Without <code class="mono">--scope user</code> the server is registered only in the current project.</span>
+          <span class="zh">用 <code class="mono">claude mcp list</code> 验证。不加 <code class="mono">--scope user</code> 时仅当前项目可用。</span>
+        </p>
+      </div>
+
+      <!-- Cursor -->
+      <div class="tab-panel" data-panel="cursor">
+        <p class="text-sm text-slate mb-3">
+          <span class="en">Add to <code class="mono">~/.cursor/mcp.json</code>:</span>
+          <span class="zh">添加到 <code class="mono">~/.cursor/mcp.json</code>:</span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('{&quot;mcpServers&quot;:{&quot;novada&quot;:{&quot;url&quot;:&quot;https://mcp.novada.com/mcp?token=YOUR_API_KEY&quot;}}}', this)">Copy</button>
+<pre class="mono">{
+  "mcpServers": {
+    "novada": {
+      "url": "https://mcp.novada.com/mcp?token=<span class="text-violet-200">YOUR_API_KEY</span>"
+    }
+  }
+}</pre>
+        </div>
+        <p class="text-xs text-slate mt-3">
+          <span class="en">After saving, open <b>Cursor Settings > Features > Model Context Protocol</b> and confirm Novada toggles green.</span>
+          <span class="zh">保存后打开 <b>Cursor Settings > Features > Model Context Protocol</b>,确认 Novada 显示为绿色。</span>
+        </p>
+      </div>
+
+      <!-- Codex -->
+      <div class="tab-panel" data-panel="codex">
+        <p class="text-sm text-slate mb-3">
+          <span class="en">Add to <code class="mono">~/.codex/config.toml</code>:</span>
+          <span class="zh">添加到 <code class="mono">~/.codex/config.toml</code>:</span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('[mcp_servers.novada]\nurl = &quot;https://mcp.novada.com/mcp?token=YOUR_API_KEY&quot;', this)">Copy</button>
+<pre class="mono"><span class="text-violet-100">[mcp_servers.novada]</span>
+url = <span class="text-violet-200">"https://mcp.novada.com/mcp?token=YOUR_API_KEY"</span></pre>
+        </div>
+        <p class="text-xs text-slate mt-3">
+          <span class="en">To keep the key out of the file, use <code class="mono">bearer_token_env_var = "NOVADA_API_KEY"</code> against <code class="mono">https://mcp.novada.com/mcp</code>.</span>
+          <span class="zh">若不想将密钥写入文件,可改用 <code class="mono">bearer_token_env_var = "NOVADA_API_KEY"</code> 搭配 <code class="mono">https://mcp.novada.com/mcp</code>。</span>
+        </p>
+      </div>
+
+      <!-- Cline -->
+      <div class="tab-panel" data-panel="cline">
+        <p class="text-sm text-slate mb-3">
+          <span class="en">Edit <code class="mono">cline_mcp_settings.json</code> (Cline > MCP Servers > Edit):</span>
+          <span class="zh">编辑 <code class="mono">cline_mcp_settings.json</code>(Cline > MCP Servers > 编辑):</span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('{&quot;mcpServers&quot;:{&quot;novada&quot;:{&quot;type&quot;:&quot;streamableHttp&quot;,&quot;url&quot;:&quot;https://mcp.novada.com/mcp?token=YOUR_API_KEY&quot;}}}', this)">Copy</button>
+<pre class="mono">{
+  "mcpServers": {
+    "novada": {
+      "type": <span class="text-violet-200">"streamableHttp"</span>,
+      "url": "https://mcp.novada.com/mcp?token=<span class="text-violet-200">YOUR_API_KEY</span>"
+    }
+  }
+}</pre>
+        </div>
+        <p class="text-xs text-slate mt-3">
+          <span class="en"><code class="mono">"type": "streamableHttp"</code> must be explicit -- without it, Cline defaults to SSE.</span>
+          <span class="zh"><code class="mono">"type": "streamableHttp"</code> 必须显式写出,否则 Cline 默认走 SSE。</span>
+        </p>
+      </div>
+
+      <!-- Windsurf -->
+      <div class="tab-panel" data-panel="windsurf">
+        <p class="text-sm text-slate mb-3">
+          <span class="en">Edit <code class="mono">~/.codeium/windsurf/mcp_config.json</code>:</span>
+          <span class="zh">编辑 <code class="mono">~/.codeium/windsurf/mcp_config.json</code>:</span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('{&quot;mcpServers&quot;:{&quot;novada&quot;:{&quot;serverUrl&quot;:&quot;https://mcp.novada.com/mcp?token=YOUR_API_KEY&quot;}}}', this)">Copy</button>
+<pre class="mono">{
+  "mcpServers": {
+    "novada": {
+      "serverUrl": "https://mcp.novada.com/mcp?token=<span class="text-violet-200">YOUR_API_KEY</span>"
+    }
+  }
+}</pre>
+        </div>
+        <p class="text-xs text-slate mt-3">
+          <span class="en">Windsurf uses <code class="mono">serverUrl</code> (<code class="mono">url</code> also works). After saving, press the refresh button in the MCP panel.</span>
+          <span class="zh">Windsurf 使用 <code class="mono">serverUrl</code>(也兼容 <code class="mono">url</code>)。保存后在 MCP 面板按刷新。</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- NEON DIVIDER -->
+<hr class="neon-line">
+
+<!-- AGENT FRAMEWORKS -->
+<section id="frameworks" class="py-24">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center mb-14">
+      <div class="section-divider mb-6"></div>
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">
+        <span class="en"><span class="grad-text">Agent frameworks</span></span>
+        <span class="zh"><span class="grad-text">Agent 框架集成</span></span>
+      </h2>
+      <p class="text-slate max-w-xl mx-auto">
+        <span class="en">Point any MCP-aware framework at the same endpoint.</span>
+        <span class="zh">让任意支持 MCP 的框架指向同一端点。</span>
+      </p>
+    </div>
+
+    <div id="ftabs" class="flex flex-wrap gap-2 justify-center mb-10 border border-violet/20 bg-violet/5 p-2 rounded-xl max-w-xl mx-auto">
+      <button class="ftab-btn active" data-ftab="langchain">LangChain</button>
+      <button class="ftab-btn" data-ftab="llamaindex">LlamaIndex</button>
+      <button class="ftab-btn" data-ftab="openai">OpenAI Agents</button>
+      <button class="ftab-btn" data-ftab="crewai">CrewAI</button>
+      <button class="ftab-btn" data-ftab="n8n">n8n</button>
+    </div>
+
+    <div class="max-w-4xl mx-auto">
+      <!-- LangChain -->
+      <div class="ftab-panel active" data-fpanel="langchain">
+        <p class="text-sm text-slate mb-3">
+          <span class="en">Python -- <code class="mono">pip install langchain-mcp-adapters</code></span>
+          <span class="zh">Python -- <code class="mono">pip install langchain-mcp-adapters</code></span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('from langchain_mcp_adapters.client import MultiServerMCPClient\n\nclient = MultiServerMCPClient({\n    &quot;novada&quot;: {\n        &quot;transport&quot;: &quot;http&quot;,\n        &quot;url&quot;: &quot;https://mcp.novada.com/mcp&quot;,\n        &quot;headers&quot;: {&quot;Authorization&quot;: &quot;Bearer YOUR_NOVADA_API_KEY&quot;},\n    }\n})\ntools = await client.get_tools()', this)">Copy</button>
+<pre class="mono"><span class="text-violet-200">from</span> langchain_mcp_adapters.client <span class="text-violet-200">import</span> MultiServerMCPClient
+
+client = MultiServerMCPClient({
+    <span class="text-violet-200">"novada"</span>: {
+        <span class="text-violet-200">"transport"</span>: <span class="text-violet-200">"http"</span>,
+        <span class="text-violet-200">"url"</span>: <span class="text-violet-200">"https://mcp.novada.com/mcp"</span>,
+        <span class="text-violet-200">"headers"</span>: {<span class="text-violet-200">"Authorization"</span>: <span class="text-violet-200">"Bearer YOUR_NOVADA_API_KEY"</span>},
+    }
+})
+tools = <span class="text-violet-200">await</span> client.get_tools()</pre>
+        </div>
+      </div>
+
+      <!-- LlamaIndex -->
+      <div class="ftab-panel" data-fpanel="llamaindex">
+        <p class="text-sm text-slate mb-3">
+          <span class="en">Python -- <code class="mono">pip install llama-index-tools-mcp</code></span>
+          <span class="zh">Python -- <code class="mono">pip install llama-index-tools-mcp</code></span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('from llama_index.tools.mcp import BasicMCPClient, McpToolSpec\n\nclient = BasicMCPClient(\n    &quot;https://mcp.novada.com/mcp&quot;,\n    headers={&quot;Authorization&quot;: &quot;Bearer YOUR_NOVADA_API_KEY&quot;},\n)\ntools = await McpToolSpec(client=client).to_tool_list_async()', this)">Copy</button>
+<pre class="mono"><span class="text-violet-200">from</span> llama_index.tools.mcp <span class="text-violet-200">import</span> BasicMCPClient, McpToolSpec
+
+client = BasicMCPClient(
+    <span class="text-violet-200">"https://mcp.novada.com/mcp"</span>,
+    headers={<span class="text-violet-200">"Authorization"</span>: <span class="text-violet-200">"Bearer YOUR_NOVADA_API_KEY"</span>},
+)
+tools = <span class="text-violet-200">await</span> McpToolSpec(client=client).to_tool_list_async()</pre>
+        </div>
+      </div>
+
+      <!-- OpenAI Agents SDK -->
+      <div class="ftab-panel" data-fpanel="openai">
+        <p class="text-sm text-slate mb-3">
+          <span class="en">Python -- <code class="mono">pip install openai-agents</code></span>
+          <span class="zh">Python -- <code class="mono">pip install openai-agents</code></span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('from agents.mcp import MCPServerStreamableHttp\n\nserver = MCPServerStreamableHttp(\n    name=&quot;Novada MCP&quot;,\n    params={\n        &quot;url&quot;: &quot;https://mcp.novada.com/mcp&quot;,\n        &quot;headers&quot;: {&quot;Authorization&quot;: &quot;Bearer YOUR_NOVADA_API_KEY&quot;},\n    },\n    cache_tools_list=True,\n)', this)">Copy</button>
+<pre class="mono"><span class="text-violet-200">from</span> agents.mcp <span class="text-violet-200">import</span> MCPServerStreamableHttp
+
+server = MCPServerStreamableHttp(
+    name=<span class="text-violet-200">"Novada MCP"</span>,
+    params={
+        <span class="text-violet-200">"url"</span>: <span class="text-violet-200">"https://mcp.novada.com/mcp"</span>,
+        <span class="text-violet-200">"headers"</span>: {<span class="text-violet-200">"Authorization"</span>: <span class="text-violet-200">"Bearer YOUR_NOVADA_API_KEY"</span>},
+    },
+    cache_tools_list=<span class="text-violet-200">True</span>,
+)</pre>
+        </div>
+      </div>
+
+      <!-- CrewAI -->
+      <div class="ftab-panel" data-fpanel="crewai">
+        <p class="text-sm text-slate mb-3">
+          <span class="en">Python -- <code class="mono">pip install crewai-tools</code></span>
+          <span class="zh">Python -- <code class="mono">pip install crewai-tools</code></span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('from crewai_tools import MCPServerAdapter\n\nparams = {\n    &quot;url&quot;: &quot;https://mcp.novada.com/mcp&quot;,\n    &quot;transport&quot;: &quot;streamable-http&quot;,\n    &quot;headers&quot;: {&quot;Authorization&quot;: &quot;Bearer YOUR_NOVADA_API_KEY&quot;},\n}\nwith MCPServerAdapter(params) as tools:\n    agent = Agent(..., tools=tools)', this)">Copy</button>
+<pre class="mono"><span class="text-violet-200">from</span> crewai_tools <span class="text-violet-200">import</span> MCPServerAdapter
+
+params = {
+    <span class="text-violet-200">"url"</span>: <span class="text-violet-200">"https://mcp.novada.com/mcp"</span>,
+    <span class="text-violet-200">"transport"</span>: <span class="text-violet-200">"streamable-http"</span>,
+    <span class="text-violet-200">"headers"</span>: {<span class="text-violet-200">"Authorization"</span>: <span class="text-violet-200">"Bearer YOUR_NOVADA_API_KEY"</span>},
+}
+<span class="text-violet-200">with</span> MCPServerAdapter(params) <span class="text-violet-200">as</span> tools:
+    agent = Agent(..., tools=tools)</pre>
+        </div>
+      </div>
+
+      <!-- n8n -->
+      <div class="ftab-panel" data-fpanel="n8n">
+        <p class="text-sm text-slate mb-3">
+          <span class="en"><b>MCP Client Tool</b> node. Bridge Streamable-HTTP via <code class="mono">mcp-remote</code>:</span>
+          <span class="zh"><b>MCP Client Tool</b> 节点。用 <code class="mono">mcp-remote</code> 桥接:</span>
+        </p>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyText('npx mcp-remote https://mcp.novada.com/mcp --header &quot;Authorization: Bearer YOUR_NOVADA_API_KEY&quot;', this)">Copy</button>
+<pre class="mono"><span class="text-violet-200">$</span> npx mcp-remote https://mcp.novada.com/mcp \
+    --header <span class="text-violet-200">"Authorization: Bearer YOUR_NOVADA_API_KEY"</span></pre>
+        </div>
+        <p class="text-xs text-slate mt-3">
+          <span class="en">Then set the node's <b>SSE Endpoint</b> to the local bridge URL (e.g. <code class="mono">http://localhost:3000/sse</code>).</span>
+          <span class="zh">然后在节点的 <b>SSE Endpoint</b> 填本地桥接地址(如 <code class="mono">http://localhost:3000/sse</code>)。</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- NEON DIVIDER -->
+<hr class="neon-line">
+
+<!-- WHY HOSTED -->
+<section class="py-24">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center mb-14">
+      <div class="section-divider mb-6"></div>
+      <h2 class="text-3xl sm:text-4xl font-bold mb-3">
+        <span class="en"><span class="grad-text">Why hosted MCP?</span></span>
+        <span class="zh"><span class="grad-text">为什么用托管 MCP?</span></span>
+      </h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="glow-card p-8">
+        <div class="w-11 h-11 rounded-xl bg-violet/10 text-violet flex items-center justify-center mb-5" style="box-shadow:0 0 12px rgba(108,64,226,0.2)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        </div>
+        <h3 class="font-bold text-lg mb-2"><span class="en">Zero install</span><span class="zh">零安装</span></h3>
+        <p class="text-sm text-slate leading-relaxed">
+          <span class="en">Just paste a URL. No npm, no env vars, no rebuilds. Works on any machine in 30 seconds.</span>
+          <span class="zh">只需粘贴一个 URL,无需 npm、无需环境变量。任何机器 30 秒接入。</span>
+        </p>
+      </div>
+      <div class="glow-card p-8">
+        <div class="w-11 h-11 rounded-xl bg-violet/10 text-violet flex items-center justify-center mb-5" style="box-shadow:0 0 12px rgba(108,64,226,0.2)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+        </div>
+        <h3 class="font-bold text-lg mb-2"><span class="en">Always latest</span><span class="zh">始终最新</span></h3>
+        <p class="text-sm text-slate leading-relaxed">
+          <span class="en">Tools update server-side. New features and fixes land without a redeploy on your side.</span>
+          <span class="zh">工具在服务端更新,新功能和修复无需你重新部署即可生效。</span>
+        </p>
+      </div>
+      <div class="glow-card p-8">
+        <div class="w-11 h-11 rounded-xl bg-violet/10 text-violet flex items-center justify-center mb-5" style="box-shadow:0 0 12px rgba(108,64,226,0.2)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m13 2-3 7h7l-9 13 3-8H4l9-12Z"/></svg>
+        </div>
+        <h3 class="font-bold text-lg mb-2"><span class="en">Edge-deployed</span><span class="zh">边缘部署</span></h3>
+        <p class="text-sm text-slate leading-relaxed">
+          <span class="en">Runs on Vercel with global PoPs. Latency tracks the user, not the data center.</span>
+          <span class="zh">运行于 Vercel,具备全球节点。延迟随用户位置就近响应。</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- NEON DIVIDER -->
+<hr class="neon-line">
+
+<!-- FOOTER -->
+<footer class="py-16" style="background:#08061a">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="flex flex-col md:flex-row items-center justify-between gap-8">
+      <div class="flex items-center gap-3">
+        <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-6 brightness-0 invert opacity-80" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-lg font-bold text-white'}))" />
+        <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet/10 px-2 py-1 rounded border border-violet/20">MCP</span>
+      </div>
+      <nav class="flex flex-wrap items-center gap-8 text-sm text-white/50">
+        <a href="https://www.npmjs.com/package/novada-mcp" class="hover:text-violet transition font-mono text-xs">npm</a>
+        <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet transition font-mono text-xs">GitHub</a>
+        <a href="https://www.novada.com" class="hover:text-violet transition font-mono text-xs">novada.com</a>
+        <a href="https://dashboard.novada.com" class="hover:text-violet transition font-mono text-xs">
+          <span class="en">dashboard</span><span class="zh">控制台</span>
+        </a>
+      </nav>
+      <div class="text-xs text-white/25 font-mono">
+        &copy; 2026 Novada · <span class="en">Streamable HTTP</span><span class="zh">Streamable HTTP</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div id="toast" class="toast"><span class="en">Copied</span><span class="zh">已复制</span></div>
+
+<script src="shared.js" defer></script>
+</body>
+</html>

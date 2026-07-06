@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Novada Hosted MCP — Deploy Debug Log · 2026-06-11</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --violet: #5b2eeb;
+    --violet-light: #f1edff;
+    --violet-mid: #e3daff;
+    --mint: #10d49c;
+    --mint-light: #e6fbf4;
+    --ink: #0c0a17;
+    --ink-700: #251f3d;
+    --paper: #fbfaff;
+    --red: #dc2626;
+    --red-light: #fef2f2;
+    --amber: #d97706;
+    --amber-light: #fffbeb;
+    --gray: #6b6483;
+    --gray-light: #f3effd;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.6;
+    font-size: 14px;
+  }
+  .container { max-width: 920px; margin: 0 auto; padding: 40px 28px 64px; }
+  h1, h2, h3 { font-family: 'Space Grotesk', system-ui, sans-serif; letter-spacing: -0.01em; }
+  h1 { font-size: 32px; font-weight: 700; margin: 0 0 8px; }
+  h2 { font-size: 22px; font-weight: 700; margin: 36px 0 14px; padding-bottom: 6px; border-bottom: 2px solid var(--violet-mid); }
+  h3 { font-size: 16px; font-weight: 600; margin: 18px 0 6px; }
+  code { font-family: 'IBM Plex Mono', monospace; background: var(--violet-light); color: var(--violet); padding: 2px 5px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: var(--ink); color: #e9e4ff; padding: 14px 18px; border-radius: 10px; overflow-x: auto; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; line-height: 1.55; }
+  pre code { background: transparent; color: inherit; padding: 0; }
+  a { color: var(--violet); text-decoration: none; border-bottom: 1px solid var(--violet-mid); }
+
+  .header { padding-bottom: 20px; border-bottom: 3px solid var(--ink); display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+  .meta { color: var(--gray); font-size: 13px; }
+  .meta b { color: var(--ink); }
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; font-family: 'IBM Plex Mono', monospace; }
+  .badge-fixed { background: var(--mint-light); color: var(--mint); border: 1px solid var(--mint); }
+  .badge-amber { background: var(--amber-light); color: var(--amber); border: 1px solid var(--amber); }
+  .badge-info { background: var(--violet-light); color: var(--violet); border: 1px solid var(--violet); }
+
+  .tldr { background: linear-gradient(135deg, var(--violet) 0%, #4a23c9 100%); color: white; padding: 22px 26px; border-radius: 12px; margin: 22px 0; }
+  .tldr h2 { color: white; border: none; margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.85; }
+  .tldr p { margin: 0; font-size: 15px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--violet-mid); vertical-align: top; }
+  th { background: var(--violet-light); font-weight: 600; color: var(--ink-700); }
+  td code { font-size: 11px; }
+
+  .bug { border-left: 3px solid var(--mint); background: white; border-radius: 8px; padding: 16px 20px; margin: 10px 0; box-shadow: 0 1px 3px rgba(91,46,235,0.05); }
+  .bug.amber { border-left-color: var(--amber); }
+  .bug.red { border-left-color: var(--red); }
+  .bug h3 { margin: 0 0 8px; display: flex; align-items: center; gap: 10px; }
+  .bug-num { background: var(--mint); color: var(--ink); font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+  .bug.amber .bug-num { background: var(--amber); color: white; }
+  .bug.red .bug-num { background: var(--red); color: white; }
+  .bug-meta { font-size: 12px; color: var(--gray); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+  .bug p { margin: 6px 0; font-size: 13.5px; }
+  .bug pre { font-size: 11.5px; margin: 6px 0; }
+  .bug-section { margin-top: 6px; }
+  .bug-section b { color: var(--ink-700); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .timeline-grid { display: grid; grid-template-columns: 110px 1fr; gap: 6px 14px; margin: 14px 0; font-size: 13px; }
+  .timeline-grid .when { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--gray); padding-top: 2px; }
+
+  .footnote { font-size: 12px; color: var(--gray); margin-top: 6px; font-style: italic; }
+
+  .lesson { background: var(--mint-light); border-left: 3px solid var(--mint); padding: 12px 18px; border-radius: 6px; margin: 8px 0; font-size: 13.5px; }
+  .lesson b { color: var(--mint); display: block; margin-bottom: 2px; }
+
+  @media print {
+    body { background: white; font-size: 11px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; }
+    .bug, .tldr, .lesson { break-inside: avoid; }
+    pre { font-size: 9px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>Vercel Deploy Debug Log</h1>
+      <div class="meta">
+        Project: <b>NovadaLabs/novada-mcpserver</b> · Branch: <b>main</b> · Domain: <b>mcp.novada.com</b> · Date: <b>2026-06-11</b>
+      </div>
+      <div class="badge-row">
+        <span class="badge badge-fixed">7 bugs fixed</span>
+        <span class="badge badge-amber">1 bug remaining</span>
+        <span class="badge badge-info">~3 hr debug session</span>
+        <span class="badge badge-info">8 commits</span>
+      </div>
+    </div>
+    <div style="text-align:right; font-size:12px; color:var(--gray);">
+      Sister doc:<br>
+      <a href="./2026-06-11-deploy-meeting-blockers.html">deploy-meeting-blockers.html</a>
+    </div>
+  </div>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <h2>TL;DR · One paragraph</h2>
+    <p>The hosted MCP server had been returning <code style="background:rgba(255,255,255,0.15);color:#e9e4ff;">FUNCTION_INVOCATION_FAILED</code> since the original 2026-06-02 deploy (9 days). Debug session uncovered <b>seven independent module-init bugs</b> (any one alone would crash the function) and <b>five silently-empty environment variables</b> (Vercel CLI's <code style="background:rgba(255,255,255,0.15);color:#e9e4ff;">--sensitive</code> flag has a stdin bug that saves empty strings). All 7 module-init bugs are fixed and committed. The 8th bug (MCP SDK transport API mismatch — Fetch vs Node) is the only thing between us and customer-usable LIVE state.</p>
+  </div>
+
+  <!-- TIMELINE -->
+  <h2>Session Timeline</h2>
+  <div class="timeline-grid">
+    <div class="when">~15:30</div>
+    <div>User: "Ethan asking — can we ship today?" Probed state. DNS pending, KV pending, function crashing.</div>
+    <div class="when">~15:50</div>
+    <div>fudong added Route 53 CNAME. DNS resolves globally.</div>
+    <div class="when">~16:15</div>
+    <div>User provided Upstash REST creds (free tier, direct signup, not via Vercel Marketplace).</div>
+    <div class="when">~16:25</div>
+    <div>Vercel CLI <code>env add</code> via stdin pipe: silently saves empty value. 5 vars affected.</div>
+    <div class="when">~16:45</div>
+    <div>Discovered 5 env vars all empty (<code>type:sensitive</code>). Recreated as <code>type:encrypted</code> via REST API.</div>
+    <div class="when">~17:00</div>
+    <div>Pulled actual deploy logs. First real error: <code>Cannot find module '../package.json'</code>.</div>
+    <div class="when">~17:00-17:55</div>
+    <div>Discovered + fixed bugs 1–7 (one fresh error per redeploy). Each commit reveals the next.</div>
+    <div class="when">~17:55</div>
+    <div>Function boots cleanly! Returns proper JSON-RPC envelope. 8th bug (MCP transport) remains.</div>
+  </div>
+
+  <!-- THE 7 FIXED BUGS -->
+  <h2>Seven Module-Init Bugs (all fixed)</h2>
+  <p class="footnote">Each bug crashed the function before any auth/dispatch code ran. Vercel hid them all behind a generic "FUNCTION_INVOCATION_FAILED" page. Only <code>vercel logs &lt;deployment-url&gt; --no-branch --since 5m --expand</code> revealed the actual stack traces.</p>
+
+  <div class="bug">
+    <h3><span class="bug-num">#1</span> Missing <code>vendor/package.json</code></h3>
+    <div class="bug-meta">commit 2b50312 · "Cannot find module '../package.json'"</div>
+    <div class="bug-section"><b>What broke</b><br>
+    <code>vercel/vendor/novada-mcp/config.js</code> does <code>_require("../package.json")</code> to read its version. The original 2026-06-02 vendor commit copied <code>build/*</code> but not the parent <code>package.json</code>. Module init throws.</div>
+    <div class="bug-section"><b>Fix</b><br>
+    Added minimal <code>vercel/vendor/package.json</code> with <code>name</code> + <code>version</code> fields.</div>
+  </div>
+
+  <div class="bug">
+    <h3><span class="bug-num">#2</span> Stale vendored novada-mcp build</h3>
+    <div class="bug-meta">commit 83efcb7 · "does not provide an export named 'AiMonitorParamsSchema'"</div>
+    <div class="bug-section"><b>What broke</b><br>
+    Vendored <code>tools/types.js</code> was from before <code>AiMonitorParamsSchema</code> was added upstream. <code>api/mcp.ts</code> imports the new symbol but it doesn't exist in vendor.</div>
+    <div class="bug-section"><b>Fix</b><br>
+    <code>rsync -a --delete</code> from upstream <code>~/Projects/novada-mcp/build/</code>. Now matches v0.8.0 (merge commit 839890c).</div>
+    <div class="bug-section"><b>Side note</b><br>
+    The prior HARD RULE about KR-6 staying local was lifted by upstream merge — confirmed safe to vendor.</div>
+  </div>
+
+  <div class="bug red">
+    <h3><span class="bug-num">#3</span> rsync clobbered browser stubs</h3>
+    <div class="bug-meta">commit c4079bd · "Cannot find package 'playwright-core'"</div>
+    <div class="bug-section"><b>What broke</b><br>
+    The 2026-06-02 deploy stubbed <code>vendor/novada-mcp/utils/browser.js</code> + 2 sibling files to drop <code>playwright-core</code> (the 50MB Hobby tier limit fix). Bug #2's rsync overwrote those stubs with the real playwright-importing code.</div>
+    <div class="bug-section"><b>Fix</b><br>
+    <code>git checkout 36512bc -- &lt;3 files&gt;</code> restored the stubs verbatim from the original stub commit.</div>
+    <div class="bug-section"><b>Lesson</b><br>
+    Future vendor-refresh: either <code>--exclude</code> the stubs or restore them immediately post-rsync.</div>
+  </div>
+
+  <div class="bug">
+    <h3><span class="bug-num">#4</span> Missing <code>type: "module"</code> in vendor shim</h3>
+    <div class="bug-meta">commit e379584 · "does not provide an export named 'X'"</div>
+    <div class="bug-section"><b>What broke</b><br>
+    Even after re-vendoring, the same ESM-export error persisted. Diagnosed by running <code>node --input-type=module -e 'import(...)' </code> locally — Node warned: <i>"Module type of types.js is not specified and it doesn't parse as CommonJS"</i>. The vendor <code>package.json</code> shim was missing <code>"type": "module"</code>, so Node defaulted to CommonJS, which can't see ESM <code>export</code> statements.</div>
+    <div class="bug-section"><b>Fix</b><br>
+    Added <code>"type": "module"</code> to <code>vercel/vendor/package.json</code>.</div>
+  </div>
+
+  <div class="bug">
+    <h3><span class="bug-num">#5</span> pdfjs-dist DOM globals missing in Node</h3>
+    <div class="bug-meta">commit 66447d8 · "ReferenceError: DOMMatrix is not defined"</div>
+    <div class="bug-section"><b>What broke</b><br>
+    Chain: <code>api/mcp.ts</code> → <code>vendor/.../tools/extract.js</code> → <code>pdf-parse</code> → <code>pdfjs-dist</code> → references <code>DOMMatrix</code>/<code>ImageData</code>/<code>Path2D</code> at module top-level. None exist in Node. First attempt put polyfills inline at top of <code>api/mcp.ts</code>, but ESM hoists <code>import</code> statements before any other code — so pdfjs crashed before the polyfill ran.</div>
+    <div class="bug-section"><b>Fix</b><br>
+    Extracted polyfills to separate <code>vercel/api/_polyfills.js</code>, imported as the very first side-effect import in <code>api/mcp.ts</code>. ESM resolves imports in source order; polyfills are in place before pdfjs loads.</div>
+    <div class="bug-section"><b>Lesson</b><br>
+    Inline polyfills don't work in ESM. They must be in a separately imported file listed first.</div>
+  </div>
+
+  <div class="bug">
+    <h3><span class="bug-num">#6</span> <code>new URL(request.url)</code> fails on Node runtime</h3>
+    <div class="bug-meta">commit acfa798 · "TypeError: Invalid URL { input: '/mcp' }"</div>
+    <div class="bug-section"><b>What broke</b><br>
+    Vercel Edge: <code>request.url</code> is an absolute URL. Vercel Node: it's the path only (<code>"/mcp"</code>), per Node IncomingMessage convention. <code>new URL("/mcp")</code> requires a base.</div>
+    <div class="bug-section"><b>Fix</b><br>
+    Provide a base URL from the Host header: <code>new URL(req.url, `https://${req.headers.host}`)</code>. Works in both runtimes — Edge ignores the base, Node uses it.</div>
+  </div>
+
+  <div class="bug">
+    <h3><span class="bug-num">#7</span> Fetch API vs Node IncomingMessage</h3>
+    <div class="bug-meta">commit 6e93e5c · "request.headers.get is not a function"</div>
+    <div class="bug-section"><b>What broke</b><br>
+    The handler body was written for Fetch API (<code>request.headers.get(...)</code>, <code>new Response(...)</code>) but Vercel Node runtime invokes with Node's <code>IncomingMessage</code>/<code>ServerResponse</code>. Different interface entirely.</div>
+    <div class="bug-section"><b>Fix</b><br>
+    Added a Node↔Fetch adapter at the boundary: default export is Node-style (<code>req, res</code>), converts to Fetch <code>Request</code>, calls the original handler (renamed <code>fetchHandler</code>), converts <code>Response</code> back to Node res.</div>
+  </div>
+
+  <div class="bug amber">
+    <h3><span class="bug-num">#8</span> <i>(remaining)</i> MCP SDK transport: Fetch vs Node</h3>
+    <div class="bug-meta">PENDING · "Cannot read properties of undefined (reading 'headersSent')"</div>
+    <div class="bug-section"><b>What's broken</b><br>
+    Line 617-618 of <code>api/mcp.ts</code>:
+<pre><code>// @ts-expect-error — transport.handleRequest accepts Fetch Request/Response
+//   when running in Workers/edge runtimes via the SDK's edge shim.
+const response: Response = await transport.handleRequest(request);</code></pre>
+    The <code>@ts-expect-error</code> comment is from the original author: <i>"I know this is type-wrong but I'm betting it works in an edge runtime."</i> On Vercel Node, the MCP SDK's <code>StreamableHTTPServerTransport.handleRequest</code> expects Node-style <code>(req, res)</code> and writes the response stream directly to <code>res</code>. It does <code>res.headersSent</code> on <code>undefined</code> (because we passed only a Fetch Request).</div>
+    <div class="bug-section"><b>Status</b><br>
+    Function fully boots, receives requests, returns JSON-RPC envelopes. The MCP protocol dispatch is the only missing piece. Fix in progress.</div>
+  </div>
+
+  <!-- ENV VAR BUG -->
+  <h2>Bonus Discovery — 5 silently-empty env vars</h2>
+  <div class="bug red">
+    <h3><span class="bug-num">CLI</span> <code>vercel env add</code> stdin bug for sensitive type</h3>
+    <div class="bug-meta">v53.2.0 · undocumented</div>
+    <div class="bug-section"><b>Symptom</b><br>
+    Running <code>echo "value" | vercel env add NAME production --sensitive --force</code> succeeds (exit 0, "Added env var") but the actual saved value is the empty string. <code>vercel env pull</code> confirms: <code>NAME=""</code>.</div>
+    <div class="bug-section"><b>Scope of damage</b><br>
+    All 5 env vars set this way during project setup 8 days ago + 2 we set today were empty: <code>KV_REST_API_URL</code>, <code>KV_REST_API_TOKEN</code>, <code>STUB_AUTH_WARNING_ACCEPTED</code>, <code>RATE_LIMIT_PER_MIN</code>, <code>FREE_PLAN_MONTHLY_QUOTA</code>. The 6th (<code>NOVADA_API_KEY</code>) was set via the dashboard UI and was correct.</div>
+    <div class="bug-section"><b>Fix</b><br>
+    Bypassed CLI entirely — used Vercel REST API directly:
+<pre><code>DELETE /v9/projects/{id}/env/{envId}      # remove broken sensitive ones
+POST   /v10/projects/{id}/env?upsert=true # create as type:encrypted</code></pre>
+    Verified via <code>vercel env pull</code> — values now non-empty. Script saved at <code>~/Projects/novada-mcpserver/scripts/</code> (no, not yet — TODO if needed).</div>
+    <div class="bug-section"><b>Lesson</b><br>
+    For Vercel env vars: use the dashboard UI or REST API. Avoid CLI's <code>--sensitive</code> flag entirely. The "sensitive" type is also worse operationally — values can't be retrieved even by admins, breaking <code>vercel env pull</code> workflows.</div>
+  </div>
+
+  <!-- LESSONS -->
+  <h2>Lessons / Patterns Worth Remembering</h2>
+
+  <div class="lesson"><b>L1 · Generic "FUNCTION_INVOCATION_FAILED" hides everything</b>
+  Always immediately get the deployment URL via API + run <code>vercel logs &lt;url&gt; --no-follow --no-branch --since 5m --expand</code>. The branch filter defaults to "main" but returns nothing if the function is in error state. <code>--no-branch</code> + the deployment URL gets the real stack trace.</div>
+
+  <div class="lesson"><b>L2 · ESM module init order is unforgiving</b>
+  <code>import</code> statements hoist to the top of the module BEFORE any other code runs. Polyfills, monkey-patches, env setup — all must be in a separately imported file listed FIRST in the import order.</div>
+
+  <div class="lesson"><b>L3 · Edge runtime ≠ Node runtime for request shape</b>
+  Code that works on Cloudflare Workers / Vercel Edge will break on Vercel Node Functions because <code>request.url</code> is path-only and <code>request.headers</code> is a plain object (no <code>.get()</code>). Either commit to one runtime end-to-end, or write a small adapter at the boundary.</div>
+
+  <div class="lesson"><b>L4 · Vendor refreshes need a checklist</b>
+  When <code>rsync</code>-ing upstream <code>build/</code> into <code>vercel/vendor/</code>, three things must be preserved or re-applied: (1) browser-tool stubs that drop playwright-core, (2) <code>vendor/package.json</code> with <code>type:module</code>, (3) any environment-specific patches. Future vendor-refresh script should restore these post-rsync.</div>
+
+  <div class="lesson"><b>L5 · MCP SDK is Node-first; Fetch API requires explicit shim</b>
+  <code>StreamableHTTPServerTransport.handleRequest</code> defaults to Node <code>(req, res)</code> signature. The "edge shim" the original author referenced doesn't exist as of <code>@modelcontextprotocol/sdk@^1.26.0</code>. Either use Node objects end-to-end OR implement the JSON-RPC dispatch manually (bypass transport).</div>
+
+  <!-- COMMITS REFERENCE -->
+  <h2>Commit Reference</h2>
+  <table>
+    <thead><tr><th>Hash</th><th>Subject</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>2b50312</code></td><td>fix(vercel): add vendor/package.json shim</td><td>Bug #1 — missing module</td></tr>
+      <tr><td><code>83efcb7</code></td><td>fix(vercel): refresh vendored novada-mcp from upstream main (v0.8.0)</td><td>Bug #2 — stale exports</td></tr>
+      <tr><td><code>c4079bd</code></td><td>fix(vercel): restore browser-tool stubs blown away by vendor refresh</td><td>Bug #3 — playwright-core leaked back</td></tr>
+      <tr><td><code>e379584</code></td><td>fix(vercel): add type:module to vendor shim</td><td>Bug #4 — ESM resolution</td></tr>
+      <tr><td><code>5f73e0c</code></td><td>fix(vercel): polyfill DOMMatrix/ImageData/Path2D for pdfjs-dist (inline)</td><td>Bug #5 attempt 1 — ESM hoisting defeated it</td></tr>
+      <tr><td><code>66447d8</code></td><td>fix(vercel): move pdfjs DOM polyfills to separate side-effect import</td><td>Bug #5 final fix</td></tr>
+      <tr><td><code>acfa798</code></td><td>fix(vercel): use base URL when parsing request.url (Node runtime quirk)</td><td>Bug #6</td></tr>
+      <tr><td><code>6e93e5c</code></td><td>fix(vercel): adapt Node IncomingMessage/ServerResponse → Fetch Request/Response</td><td>Bug #7</td></tr>
+    </tbody>
+  </table>
+
+  <h2>What's Next</h2>
+  <p><b>Refactor handler entry to be Node-style end-to-end</b>, then call <code>transport.handleRequest(req, res)</code> with Node objects. Estimated 30–45 min. Once that lands, the endpoint is customer-usable and we can flip the landing hero pill from "Coming online" back to "Live on Vercel Edge", close Linear INC-98, and update KR-5 OKR % from 30% → 60%.</p>
+
+  <hr style="margin: 36px 0 20px; border: none; border-top: 2px solid var(--ink);">
+  <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--gray);">
+    <div>Log compiled: 2026-06-11 evening · orchestrator-Claude (sonnet/opus pair)</div>
+    <div>Status: 7/8 bugs fixed · 1 in progress</div>
+  </div>
+</div>
+</body>
+</html>

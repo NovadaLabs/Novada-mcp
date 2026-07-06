@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Configure your MCP — Novada MCP</title>
+<meta name="description" content="Pick the Novada MCP tools your agent needs and get a slim endpoint URL. Fewer tools = less token overhead per request. Hosted at mcp.novada.com/mcp with your own key." />
+<link rel="canonical" href="https://mcp.novada.com/configure" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+<meta property="og:title" content="Configure your MCP — Novada" />
+<meta property="og:description" content="Per-category or per-tool picker that generates a custom mcp.novada.com endpoint URL filtered with ?tools=. Fewer tools, leaner agent context." />
+<meta property="og:url" content="https://mcp.novada.com/configure" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      colors: {
+        violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
+        ink: { DEFAULT: '#191228', text: '#0a142f', 800: '#161226', 700: '#251f3d' },
+        slate: '#677489', paper: '#ffffff', 'tint-cool': '#f7f8fc',
+      },
+      fontFamily: {
+        display: ['Hanken Grotesk', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['IBM Plex Sans', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
+    } },
+  };
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'IBM Plex Sans', 'Noto Sans SC', system-ui, sans-serif; color: #0a142f; background: #f7f8fc; }
+  h1, h2, h3, .display { font-family: 'Hanken Grotesk', 'Noto Sans SC', system-ui, sans-serif; letter-spacing: -0.01em; }
+  body.lang-en .zh { display: none !important; }
+  body.lang-zh .en { display: none !important; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #191228; color: white; padding: 10px 18px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 100; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ─── Configure ───────────────────────────────────────── */
+  .console { border: 1px solid #e7e2f5; border-radius: 12px; background: #fff; box-shadow: rgba(18,17,39,0.06) 0 10px 40px 0; overflow: hidden; }
+  .cfg-label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #677489; margin-bottom: 5px; font-weight: 600; }
+  .cfg-input { width: 100%; padding: 9px 12px; font-size: 13px; border: 1px solid #e7e2f5; border-radius: 8px; background: #fff; font-family: 'IBM Plex Mono', monospace; color: #0a142f; }
+  .cfg-input:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.10); }
+
+  /* segmented toggle (Per category / Per tool) */
+  .seg { display: inline-flex; border: 1px solid #e7e2f5; border-radius: 8px; overflow: hidden; }
+  .seg button { padding: 7px 16px; font-size: 13px; font-weight: 600; background: #fff; color: #677489; cursor: pointer; border: none; transition: background .12s; }
+  .seg button.on { background: #191228; color: #fff; }
+
+  /* category card */
+  .cat-card { border: 1px solid #eee6fb; border-radius: 10px; background: #fff; transition: border-color .12s, box-shadow .12s; }
+  .cat-card.sel { border-color: #c9b4fb; box-shadow: 0 0 0 3px rgba(108,64,226,0.06); }
+  .cat-head { display: flex; align-items: flex-start; gap: 11px; padding: 14px 16px; cursor: pointer; }
+  .cat-title { font-size: 14.5px; font-weight: 700; color: #0a142f; font-family: 'Hanken Grotesk','Noto Sans SC',sans-serif; }
+  .cat-sub { font-size: 12px; color: #677489; margin-top: 2px; }
+  .cat-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 14px 51px; }
+  .tool-chip { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #251f3d; background: #f5eeff; border: 1px solid #e3daff; border-radius: 6px; padding: 2px 8px; }
+  .tool-chip.local { background: #f1f0f5; border-color: #e7e2f5; color: #97a0b0; }
+
+  /* per-tool flat list */
+  .tool-row { display: flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: background .1s; }
+  .tool-row:hover { background: #f7f8fc; }
+  .tool-row .tname { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #251f3d; }
+  .tool-row.local .tname { color: #97a0b0; }
+  .grp-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: #97a0b0; font-weight: 700; padding: 14px 14px 4px; display: flex; align-items: center; justify-content: space-between; }
+  .grp-head a { color: #6c40e2; text-transform: none; letter-spacing: 0; font-weight: 600; cursor: pointer; }
+  .grp-head a:hover { text-decoration: underline; }
+
+  /* checkbox */
+  .cbx { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; min-width: 18px; border: 1.5px solid #c9b4fb; border-radius: 5px; background: #fff; cursor: pointer; position: relative; transition: background .1s, border-color .1s; margin-top: 1px; }
+  .cbx:checked { background: #6c40e2; border-color: #6c40e2; }
+  .cbx:checked::after { content: ''; position: absolute; left: 5px; top: 1.5px; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .cbx:disabled { background: #f1f0f5; border-color: #e7e2f5; cursor: not-allowed; }
+  .cbx:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(108,64,226,0.18); }
+
+  /* summary / url */
+  .summary { position: sticky; top: 88px; }
+  .url-box { background: #191228; color: #e9e4ff; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; line-height: 1.7; padding: 14px 16px; border-radius: 10px; white-space: pre-wrap; word-break: break-all; }
+  .url-box .tok { color: #c9b4fb; }
+  .url-box .prm { color: #9863f0; }
+  .btn-primary { background: #191228; color: #fff; font-weight: 700; border-radius: 10px; padding: 10px 18px; font-size: 13px; transition: background .15s; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+  .btn-primary:hover { background: #6c40e2; }
+  .btn-secondary { background: #fff; color: #0a142f; font-weight: 600; border: 1px solid #e7e2f5; border-radius: 10px; padding: 10px 18px; font-size: 13px; transition: all .15s; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+  .btn-secondary:hover { border-color: #6c40e2; color: #6c40e2; background: #f5eeff; }
+  .count-num { font-family: 'Hanken Grotesk','Noto Sans SC',sans-serif; font-weight: 800; font-size: 32px; color: #6c40e2; line-height: 1; }
+  .key-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .key-need { background: #f1f0f5; color: #677489; }
+  .key-ok { background: #f5eeff; color: #6c40e2; }
+  .grad-text { background: linear-gradient(45deg,#9863f0 0,#6c40e2 51%,#431fd5 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+</style>
+</head>
+<body class="lang-en">
+
+<!-- HEADER -->
+<header class="sticky top-0 z-50 bg-paper/90 backdrop-blur border-b border-violet-100">
+  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-ink-700">
+      <a href="/playground" class="inline-flex items-center gap-1.5 text-ink-700 hover:text-violet">
+        <span class="en">Playground</span><span class="zh">在线试玩</span>
+      </a>
+      <a href="/configure" class="text-violet font-semibold"><span class="en">Configure</span><span class="zh">配置</span></a>
+      <a href="/#install" class="hover:text-violet"><span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">定价</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <button id="lang-toggle" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
+        <span class="en">Get API key</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-5 py-10">
+
+  <!-- Title row -->
+  <div class="mb-7">
+    <a href="/" class="text-sm hover:text-violet transition" style="color:#677489">← <span class="en">Back to home</span><span class="zh">返回首页</span></a>
+    <h1 class="text-2xl sm:text-3xl font-bold mt-2 display" style="color:#0a142f">
+      <span class="en">Configure your <span class="grad-text">MCP</span></span>
+      <span class="zh">配置你的 <span class="grad-text">MCP</span></span>
+    </h1>
+    <p class="text-sm sm:text-base mt-2 max-w-3xl leading-relaxed" style="color:#677489">
+      <span class="en">Pick only the tools you want — get a slim endpoint URL. Fewer tools mean a smaller tool list in every request, so your agent spends fewer tokens on definitions and chooses faster.</span>
+      <span class="zh">只勾选你需要的工具,即可生成一个精简的端点 URL。工具越少,每次请求里的工具清单越短,你的 Agent 在定义上消耗的 token 更少、选择更快。</span>
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+
+    <!-- LEFT: picker -->
+    <div class="console p-5">
+      <!-- Mode toggle + API key -->
+      <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
+        <div>
+          <span class="cfg-label"><span class="en">Group by</span><span class="zh">分组方式</span></span>
+          <div class="seg" id="cfg-mode">
+            <button data-mode="category" class="on"><span class="en">Per category</span><span class="zh">按分类</span></button>
+            <button data-mode="tool"><span class="en">Per tool</span><span class="zh">按工具</span></button>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <button id="cfg-select-all" class="btn-secondary" style="padding:6px 12px"><span class="en">Select all</span><span class="zh">全选</span></button>
+          <button id="cfg-clear-all" class="btn-secondary" style="padding:6px 12px"><span class="en">Clear all</span><span class="zh">清空</span></button>
+        </div>
+      </div>
+
+      <!-- API key -->
+      <div class="mb-5">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="cfg-label" style="margin:0"><span class="en">Your API key</span><span class="zh">你的 API 密钥</span></span>
+          <span id="cfg-key-status" class="key-badge key-need"></span>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <input id="cfg-token" type="password" autocomplete="off" spellcheck="false" placeholder="sk-eu-novada-…" class="cfg-input" style="flex:1;min-width:220px" />
+          <button id="cfg-save-key" class="btn-primary" style="padding:9px 16px"><span class="en">Save</span><span class="zh">保存</span></button>
+          <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="btn-secondary" style="padding:9px 16px"><span class="en">Get key</span><span class="zh">获取密钥</span></a>
+        </div>
+        <p class="text-xs mt-1.5" style="color:#97a0b0">
+          <span class="en">Your own Novada key. Stored only in this browser (localStorage) — never sent anywhere except the endpoint itself.</span>
+          <span class="zh">填入你自己的 Novada 密钥。仅保存在本浏览器(localStorage)— 除端点本身外不会发送到任何地方。</span>
+        </p>
+      </div>
+
+      <!-- Per-tool search (hidden in category mode) -->
+      <div id="cfg-search-wrap" class="mb-3" style="display:none">
+        <input id="cfg-search" class="cfg-input" placeholder="Filter tools… (search, proxy, wallet)" style="font-family:'IBM Plex Sans',sans-serif" />
+      </div>
+
+      <!-- Picker body -->
+      <div id="cfg-picker"></div>
+    </div>
+
+    <!-- RIGHT: summary -->
+    <div class="summary">
+      <div class="console p-5">
+        <div class="flex items-baseline justify-between mb-1">
+          <span class="cfg-label" style="margin:0"><span class="en">Summary</span><span class="zh">配置概览</span></span>
+        </div>
+        <div class="flex items-end gap-3 mb-1">
+          <span class="count-num" id="cfg-count">0</span>
+          <span class="text-sm mb-1" style="color:#677489"><span class="en">tools selected</span><span class="zh">个工具已选</span></span>
+        </div>
+        <p class="text-xs mb-4" style="color:#97a0b0" id="cfg-count-note"></p>
+
+        <div class="rounded-lg p-3 mb-4" style="background:#f5eeff;border:1px solid #e3daff">
+          <p class="text-xs font-semibold" style="color:#6c40e2">
+            <span class="en">1,000 free gateway calls / month · then pay-as-you-go</span><span class="zh">每月 1,000 次免费网关调用 · 之后按用量付费</span>
+          </p>
+          <p class="text-xs mt-1" style="color:#677489">
+            <span class="en">Same key works hosted or local. No card required to start. Per-call usage draws your Novada balance.</span>
+            <span class="zh">同一密钥可用于托管或本地。无需绑卡即可开始。每次调用按用量从 Novada 余额扣费。</span>
+          </p>
+        </div>
+
+        <span class="cfg-label"><span class="en">Your endpoint URL</span><span class="zh">你的端点 URL</span></span>
+        <div class="url-box mb-3" id="cfg-url"></div>
+
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <button id="cfg-copy" class="btn-primary"><span class="en">Copy URL</span><span class="zh">复制 URL</span></button>
+          <a id="cfg-open-pg" href="/playground" class="btn-secondary"><span class="en">Open in Playground →</span><span class="zh">在试玩台打开 →</span></a>
+        </div>
+
+        <p class="text-xs leading-relaxed" style="color:#97a0b0">
+          <span class="en">The hosted endpoint reads <code class="mono" style="color:#6c40e2">?tools=</code> / <code class="mono" style="color:#6c40e2">?groups=</code> to filter the toolset. When every tool is selected the param is omitted and you get the full endpoint.</span>
+          <span class="zh">托管端点会读取 <code class="mono" style="color:#6c40e2">?tools=</code> / <code class="mono" style="color:#6c40e2">?groups=</code> 来过滤工具集。当全部工具都被选中时,该参数会被省略,返回完整端点。</span>
+        </p>
+        <p class="text-xs mt-2" style="color:#97a0b0">
+          <span class="en"><code class="mono">novada_browser</code> (one-shot cloud CDP) runs on the hosted endpoint. Only the multi-step <code class="mono">novada_browser_flow</code> (persistent session) requires the local MCP — <code class="mono">npx novada-mcp</code>.</span>
+          <span class="zh"><code class="mono">novada_browser</code>(一次性云端 CDP)在托管端运行。仅多步的 <code class="mono">novada_browser_flow</code>(持久会话)需要本地 MCP —— <code class="mono">npx novada-mcp</code>。</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Why slim note -->
+  <div class="console p-5 mt-6 grid grid-cols-1 sm:grid-cols-3 gap-5">
+    <div>
+      <h3 class="text-sm font-bold mb-1" style="color:#0a142f"><span class="en">Leaner context</span><span class="zh">更精简的上下文</span></h3>
+      <p class="text-xs leading-relaxed" style="color:#677489"><span class="en">Every tool ships its JSON schema to the model on each turn. Trim the list to what your agent actually uses.</span><span class="zh">每个工具每一轮都会把 JSON schema 发给模型。把清单裁剪到 Agent 真正会用到的工具。</span></p>
+    </div>
+    <div>
+      <h3 class="text-sm font-bold mb-1" style="color:#0a142f"><span class="en">Sharper tool choice</span><span class="zh">更准的工具选择</span></h3>
+      <p class="text-xs leading-relaxed" style="color:#677489"><span class="en">Fewer near-duplicate options means the model picks the right tool more reliably.</span><span class="zh">相近选项更少,模型挑对工具的概率更高。</span></p>
+    </div>
+    <div>
+      <h3 class="text-sm font-bold mb-1" style="color:#0a142f"><span class="en">One key, one URL</span><span class="zh">一把密钥,一个 URL</span></h3>
+      <p class="text-xs leading-relaxed" style="color:#677489"><span class="en">Paste the generated URL straight into your MCP client config. Swap the toolset anytime by regenerating.</span><span class="zh">把生成的 URL 直接粘贴进你的 MCP 客户端配置。随时重新生成即可更换工具集。</span></p>
+    </div>
+  </div>
+</main>
+
+<footer class="bg-ink text-white/65 py-12">
+  <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-6 brightness-0 invert opacity-90" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-lg font-bold text-white display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet-200 bg-violet/10 px-2 py-1 rounded">MCP</span>
+    </div>
+    <nav class="flex flex-wrap items-center gap-6 text-sm">
+      <a href="/configure" class="hover:text-violet"><span class="en">Configure</span><span class="zh">配置</span></a>
+      <a href="/#install" class="hover:text-violet"><span class="en">Install</span><span class="zh">接入</span></a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">定价</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
+      <a href="/playground" class="hover:text-violet"><span class="en">Playground</span><span class="zh">在线试玩</span></a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+      <a href="https://www.npmjs.com/package/novada-mcp" class="hover:text-violet">npm</a>
+    </nav>
+    <div class="text-xs text-white/50">
+      © 2026 Novada · <span class="text-violet-200">Built for AI agents.</span>
+    </div>
+  </div>
+</footer>
+
+<div id="toast" class="toast">Copied ✓</div>
+
+<script>
+  const body = document.body;
+  const langBtn = document.getElementById('lang-toggle');
+  const isZh = () => body.classList.contains('lang-zh');
+  langBtn.addEventListener('click', () => {
+    body.classList.toggle('lang-zh'); body.classList.toggle('lang-en');
+    langBtn.textContent = isZh() ? 'EN / 中' : '中 / EN';
+    renderPicker(); refreshSummary();
+  });
+  const toast = document.getElementById('toast'); let toastTimer;
+  function showToast(m){ toast.textContent=m; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),1500); }
+
+  const CFG_ENDPOINT = 'https://mcp.novada.com/mcp';
+  const LS_KEY = 'novada_mcp_api_key';
+
+  // ── Category catalog ──────────────────────────────────
+  // `tools` = short-names (what goes into ?tools=). hosted = selectable for the hosted URL.
+  const CATEGORIES = [
+    { id:'search', en:'Search & Extract', zh:'搜索与提取', enDesc:'Web search and content extraction.', zhDesc:'网页搜索与内容提取。', hosted:true,
+      tools:['search','extract'] },
+    { id:'crawl', en:'Crawl & Map', zh:'爬取与站点地图', enDesc:'Multi-page crawl and URL discovery.', zhDesc:'多页爬取与 URL 发现。', hosted:true,
+      tools:['crawl','map'] },
+    { id:'scrape', en:'Scrape', zh:'平台抓取', enDesc:'Structured data from known platforms.', zhDesc:'从已知平台获取结构化数据。', hosted:true,
+      tools:['scrape'] },
+    { id:'research', en:'Research & Monitor', zh:'研究与监测', enDesc:'Deep research, discovery, AI + page monitoring.', zhDesc:'深度研究、工具发现、AI 与页面监测。', hosted:true,
+      tools:['research','discover','ai_monitor','monitor'] },
+    { id:'browser', en:'Browser', zh:'浏览器', enDesc:'Cloud browser via CDP (novada_browser runs on hosted).', zhDesc:'通过 CDP 的云端浏览器(novada_browser 在托管端运行)。', hosted:true,
+      tools:['browser'] },
+    { id:'proxy', en:'Proxies', zh:'代理', enDesc:'Proxy credentials + sub-account management.', zhDesc:'代理凭证与子账户管理。', hosted:true,
+      tools:['proxy','proxy_account_list','proxy_account_create'] },
+    { id:'account', en:'Account & Config', zh:'账户与配置', enDesc:'Setup check + account & billing dashboard.', zhDesc:'配置检查与账户账单面板。', hosted:true,
+      tools:['setup','account'] },
+  ];
+
+  // Flat list of all hosted short-names (for "all selected → omit param")
+  const ALL_HOSTED = CATEGORIES.filter(c=>c.hosted).flatMap(c=>c.tools);
+
+  // State: set of selected short-names (hosted only). Default = all hosted selected.
+  let selected = new Set(ALL_HOSTED);
+  let mode = 'category';
+
+  const picker = document.getElementById('cfg-picker');
+  const searchWrap = document.getElementById('cfg-search-wrap');
+  const searchInput = document.getElementById('cfg-search');
+
+  function catState(cat){
+    const sel = cat.tools.filter(t=>selected.has(t)).length;
+    if (sel===0) return 'none';
+    if (sel===cat.tools.length) return 'all';
+    return 'some';
+  }
+
+  // ── Render: per-category ──
+  function renderCategory(){
+    picker.innerHTML = CATEGORIES.map(cat => {
+      const st = catState(cat);
+      const checked = st==='all' ? 'checked' : '';
+      const indet = st==='some';
+      const disabled = !cat.hosted ? 'disabled' : '';
+      const chips = cat.tools.map(t =>
+        `<span class="tool-chip${cat.hosted?'':' local'}">${t}</span>`).join('');
+      const localTag = cat.hosted ? '' :
+        `<span class="ml-2 text-[10px] font-semibold align-middle" style="color:#97a0b0">${isZh()?'· 本地 / npx novada-mcp':'· local / npx novada-mcp'}</span>`;
+      return `<div class="cat-card mb-3${st!=='none'&&cat.hosted?' sel':''}" data-cat="${cat.id}">
+        <label class="cat-head">
+          <input type="checkbox" class="cbx cat-cbx" data-cat="${cat.id}" ${checked} ${disabled} ${indet?'data-indet="1"':''}>
+          <span style="flex:1">
+            <span class="cat-title">${isZh()?cat.zh:cat.en}</span>${localTag}
+            <span class="cat-sub">${isZh()?cat.zhDesc:cat.enDesc} <span style="color:#97a0b0">· ${cat.tools.length} ${isZh()?'个工具':(cat.tools.length===1?'tool':'tools')}</span></span>
+          </span>
+        </label>
+        <div class="cat-tools">${chips}</div>
+      </div>`;
+    }).join('');
+    // apply indeterminate state
+    picker.querySelectorAll('.cat-cbx[data-indet]').forEach(c=>{ c.indeterminate = true; });
+  }
+
+  // ── Render: per-tool (flat, grouped, searchable) ──
+  function renderTool(){
+    const q = (searchInput.value||'').trim().toLowerCase();
+    let html = '';
+    CATEGORIES.forEach(cat => {
+      const matched = cat.tools.filter(t => !q || ('novada_'+t).includes(q) || t.includes(q));
+      if (matched.length===0) return;
+      const localTag = cat.hosted ? '' : ` <span style="color:#97a0b0;font-weight:600">· ${isZh()?'本地':'local'}</span>`;
+      const allShown = matched.every(t=>selected.has(t));
+      const toggleLabel = cat.hosted
+        ? `<a data-grptoggle="${cat.id}">${allShown ? (isZh()?'取消全选':'deselect') : (isZh()?'全选':'select all')}</a>`
+        : '';
+      html += `<div class="grp-head"><span>${isZh()?cat.zh:cat.en}${localTag}</span>${toggleLabel}</div>`;
+      html += matched.map(t => {
+        const full = 'novada_'+t;
+        const checked = selected.has(t) ? 'checked' : '';
+        const disabled = cat.hosted ? '' : 'disabled';
+        return `<label class="tool-row${cat.hosted?'':' local'}">
+          <input type="checkbox" class="cbx tool-cbx" data-tool="${t}" ${checked} ${disabled}>
+          <span class="tname">${full}</span>
+        </label>`;
+      }).join('');
+    });
+    if (!html) html = `<p class="text-sm py-6 text-center" style="color:#97a0b0">${isZh()?'没有匹配的工具':'No tools match'}</p>`;
+    picker.innerHTML = html;
+  }
+
+  function renderPicker(){
+    searchWrap.style.display = mode==='tool' ? '' : 'none';
+    if (mode==='category') renderCategory(); else renderTool();
+  }
+
+  // ── Interactions ──
+  document.getElementById('cfg-mode').addEventListener('click', e => {
+    const b = e.target.closest('button[data-mode]'); if(!b) return;
+    mode = b.dataset.mode;
+    document.querySelectorAll('#cfg-mode button').forEach(x=>x.classList.toggle('on', x.dataset.mode===mode));
+    renderPicker(); refreshSummary();
+  });
+
+  picker.addEventListener('change', e => {
+    const cat = e.target.closest('.cat-cbx');
+    if (cat){
+      const c = CATEGORIES.find(x=>x.id===cat.dataset.cat);
+      if (cat.checked) c.tools.forEach(t=>selected.add(t));
+      else c.tools.forEach(t=>selected.delete(t));
+      renderCategory(); refreshSummary(); return;
+    }
+    const tool = e.target.closest('.tool-cbx');
+    if (tool){
+      if (tool.checked) selected.add(tool.dataset.tool);
+      else selected.delete(tool.dataset.tool);
+      refreshSummary(); return;
+    }
+  });
+
+  // per-tool group select / deselect link
+  picker.addEventListener('click', e => {
+    const a = e.target.closest('a[data-grptoggle]'); if(!a) return;
+    e.preventDefault();
+    const c = CATEGORIES.find(x=>x.id===a.dataset.grptoggle); if(!c||!c.hosted) return;
+    const allShown = c.tools.every(t=>selected.has(t));
+    if (allShown) c.tools.forEach(t=>selected.delete(t));
+    else c.tools.forEach(t=>selected.add(t));
+    renderTool(); refreshSummary();
+  });
+
+  searchInput.addEventListener('input', () => renderTool());
+
+  document.getElementById('cfg-select-all').addEventListener('click', () => {
+    selected = new Set(ALL_HOSTED); renderPicker(); refreshSummary();
+  });
+  document.getElementById('cfg-clear-all').addEventListener('click', () => {
+    selected = new Set(); renderPicker(); refreshSummary();
+  });
+
+  // ── Key handling ──
+  const tokenInput = document.getElementById('cfg-token');
+  const keyStatus = document.getElementById('cfg-key-status');
+  function hasKey(){ return tokenInput.value.trim().length>0; }
+  function maskedKey(){
+    return 'sk-eu-novada-••••';
+  }
+  function refreshKey(){
+    if (!hasKey()){ keyStatus.textContent = isZh()?'未填写':'NO KEY'; keyStatus.className='key-badge key-need'; }
+    else { keyStatus.textContent = isZh()?'已就绪':'READY'; keyStatus.className='key-badge key-ok'; }
+  }
+  tokenInput.value = localStorage.getItem(LS_KEY) || '';
+  document.getElementById('cfg-save-key').addEventListener('click', () => {
+    const v = tokenInput.value.trim();
+    if (v){ localStorage.setItem(LS_KEY, v); showToast(isZh()?'已保存到本地':'Saved locally ✓'); }
+    else { localStorage.removeItem(LS_KEY); showToast(isZh()?'已清除':'Cleared'); }
+    refreshKey(); refreshSummary();
+  });
+  tokenInput.addEventListener('input', () => { refreshKey(); refreshSummary(); });
+
+  // ── Summary + URL ──
+  const urlBox = document.getElementById('cfg-url');
+  const countEl = document.getElementById('cfg-count');
+  const countNote = document.getElementById('cfg-count-note');
+  const openPg = document.getElementById('cfg-open-pg');
+
+  // ordered selected short-names (catalog order, hosted only)
+  function selectedList(){ return ALL_HOSTED.filter(t => selected.has(t)); }
+
+  // build URL with a key string (real or placeholder), returns plain string
+  function buildUrl(keyStr){
+    const list = selectedList();
+    const allSelected = list.length === ALL_HOSTED.length;
+    let url = `${CFG_ENDPOINT}?token=${keyStr}`;
+    if (!allSelected && list.length>0) url += `&tools=${list.join(',')}`;
+    return url;
+  }
+  // the real URL we copy: real key if entered, else YOUR_KEY placeholder
+  function copyUrl(){
+    const key = hasKey() ? encodeURIComponent(tokenInput.value.trim()) : 'YOUR_KEY';
+    return buildUrl(key);
+  }
+
+  function refreshSummary(){
+    const list = selectedList();
+    const n = list.length;
+    const allSelected = n === ALL_HOSTED.length;
+    countEl.textContent = n;
+
+    // count note
+    if (n===0) countNote.innerHTML = isZh()
+      ? '至少选择一个工具来生成过滤后的端点。'
+      : 'Select at least one tool to generate a filtered endpoint.';
+    else if (allSelected) countNote.innerHTML = isZh()
+      ? `已选全部 ${ALL_HOSTED.length} 个托管工具 — URL 省略 <code class="mono">&tools=</code>。`
+      : `All ${ALL_HOSTED.length} hosted tools — URL omits <code class="mono">&tools=</code>.`;
+    else countNote.innerHTML = isZh()
+      ? `${n} / ${ALL_HOSTED.length} 个托管工具 · 更精简的工具清单。`
+      : `${n} of ${ALL_HOSTED.length} hosted tools · leaner tool list.`;
+
+    // displayed URL (always masks the key, even if entered)
+    const displayKey = hasKey() ? maskedKey() : 'YOUR_KEY';
+    let display = `${CFG_ENDPOINT}?token=<span class="tok">${displayKey}</span>`;
+    if (!allSelected && n>0) display += `<span class="prm">&tools=</span>${list.join(',')}`;
+    urlBox.innerHTML = display;
+
+    // Open in Playground link (carries no key; tools as hint)
+    openPg.href = (!allSelected && n>0) ? `/playground?tools=${list.join(',')}` : '/playground';
+
+    // Disable Copy / Open when nothing is selected (avoid emitting a misleading full-toolset URL)
+    const copyBtn = document.getElementById('cfg-copy');
+    copyBtn.disabled = (n === 0);
+    copyBtn.style.opacity = (n === 0) ? '0.45' : '';
+    copyBtn.style.cursor = (n === 0) ? 'not-allowed' : '';
+    openPg.style.pointerEvents = (n === 0) ? 'none' : '';
+    openPg.style.opacity = (n === 0) ? '0.45' : '';
+  }
+
+  document.getElementById('cfg-copy').addEventListener('click', async () => {
+    if (selectedList().length === 0) { showToast(isZh()?'请至少选择一个工具':'Select at least one tool'); return; }
+    try { await navigator.clipboard.writeText(copyUrl()); showToast(isZh()?'已复制 URL ✓':'URL copied ✓'); }
+    catch { showToast(isZh()?'复制失败':'Copy failed'); }
+  });
+
+  // init
+  renderPicker(); refreshKey(); refreshSummary();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "is_error": true,
+  "leak_checks": {
+    "internal_api_m": false,
+    "proxy_host_with_unmasked_creds": false,
+    "unmasked_user_pass_at_host": false
+  },
+  "leaked": false,
+  "note": "proxy.novada.pro hostname appears in response (expected public endpoint). leaked=True only if unmasked credentials precede @host.",
+  "sample_markers": [
+    "Free Gateway Cap Reached"
+  ],
+  "trigger_tool": "novada_proxy",
+  "triggered": true
+}

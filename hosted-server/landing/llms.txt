@@ -1,0 +1,164 @@
+# Novada MCP
+
+> Novada Hosted MCP is a remote Streamable-HTTP Model Context Protocol server at `https://mcp.novada.com/mcp` that exposes 25 web-data tools — web search, SERP, scrape, extract, site map, multi-page crawl, source verification, topic discovery, deep research, and 6 proxy variants — through a single authenticated URL. Designed for AI agents running in Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf, or any MCP-compatible client. Zero install required; paste the URL and go.
+
+## Endpoint
+
+- URL: `https://mcp.novada.com/mcp`
+- Auth (option A): query param `?token=YOUR_API_KEY`
+- Auth (option B): header `Authorization: Bearer YOUR_API_KEY` (preferred — keeps key out of logs and screen-shares)
+- Transport: Streamable HTTP per MCP March 2025 spec
+- Free tier: 1,000 tool calls / month per token, no credit card required
+- Rate limit: 60 requests / minute per IP
+- Infrastructure: Vercel Edge, 195+ countries, auto-SSL
+
+## Tools
+
+25 tools total. All callable on the hosted endpoint except `novada_browser` and `novada_browser_flow` (see Browser tools section).
+
+### First-class data tools (9)
+
+- `search`: web search across major search engines
+- `serp`: structured Google / Bing SERP result JSON
+- `scrape`: single-URL clean markdown content extraction
+- `extract`: schema-driven structured JSON extraction from a URL
+- `map`: discover all URLs on a site (sitemap)
+- `crawl`: multi-page crawl with configurable depth
+- `verify`: source credibility check with confidence scoring
+- `discover`: find related sources for a topic
+- `research`: deep multi-source research agent
+
+### Proxy variants (6)
+
+- `novada_proxy_residential`: residential IP proxy
+- `novada_proxy_datacenter`: datacenter IP proxy
+- `novada_proxy_isp`: ISP proxy
+- `novada_proxy_dedicated`: dedicated proxy
+- `novada_proxy_static`: static IP proxy
+- `novada_proxy_universal`: universal proxy
+
+### Browser tools (2 — local only)
+
+- `novada_browser`: headless browser page interaction
+- `novada_browser_flow`: multi-step headless browser flow automation
+
+## Install
+
+### Claude Desktop (Option A — Custom Connector UI)
+
+In Claude Desktop: Customize → Connectors → + → Add custom connector
+
+URL to paste: `https://mcp.novada.com/mcp?token=YOUR_API_KEY`
+
+### Claude Desktop (Option B — stdio bridge via mcp-remote)
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "novada": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.novada.com/mcp?token=YOUR_API_KEY"]
+    }
+  }
+}
+```
+
+### Claude Code
+
+```bash
+claude mcp add --transport http novada https://mcp.novada.com/mcp \
+  --header "Authorization: Bearer YOUR_API_KEY" \
+  --scope user
+```
+
+Verify with `claude mcp list` or `claude mcp get novada`.
+
+### Cursor
+
+Add to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in project root for project scope):
+
+```json
+{
+  "mcpServers": {
+    "novada": {
+      "url": "https://mcp.novada.com/mcp?token=YOUR_API_KEY"
+    }
+  }
+}
+```
+
+### Codex
+
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.novada]
+url = "https://mcp.novada.com/mcp?token=YOUR_API_KEY"
+```
+
+To keep the key out of the file: set `bearer_token_env_var = "NOVADA_API_KEY"` and use `https://mcp.novada.com/mcp` as the URL.
+
+### Cline
+
+Edit `cline_mcp_settings.json` (Cline → MCP Servers → Edit):
+
+```json
+{
+  "mcpServers": {
+    "novada": {
+      "type": "streamableHttp",
+      "url": "https://mcp.novada.com/mcp?token=YOUR_API_KEY"
+    }
+  }
+}
+```
+
+Note: `"type": "streamableHttp"` must be explicit; without it Cline defaults to SSE.
+
+### Windsurf
+
+Edit `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "novada": {
+      "serverUrl": "https://mcp.novada.com/mcp?token=YOUR_API_KEY"
+    }
+  }
+}
+```
+
+## Browser tools
+
+`novada_browser` and `novada_browser_flow` are NOT available on the hosted endpoint. Playwright cannot run inside serverless edge functions. Calling either tool on the hosted endpoint returns:
+
+```
+501 NOT_AVAILABLE_ON_HOSTED
+agent_instruction: Install the local MCP via `npx novada-mcp` and use the same API key.
+```
+
+To use browser tools, run the local MCP instead:
+
+```bash
+npx novada-mcp
+```
+
+The same `YOUR_API_KEY` key works. All 25 tools including browser flows are available locally.
+
+## Source / repo
+
+- GitHub: https://github.com/NovadaLabs/novada-mcpserver
+- npm (local MCP): https://www.npmjs.com/package/novada-mcp (`npx novada-mcp`)
+- Sign up / get API key: https://www.novada.com/signup
+
+## FAQ
+
+Full FAQ at https://mcp.novada.com/#faq. Key points:
+
+- **Same key everywhere.** One Novada API key works for the hosted MCP, `npx novada-mcp` local, and the Novada REST API. Quota counts per token.
+- **No separate MCP key needed.** Use your existing Novada API key.
+- **Hosted vs local.** Hosted = zero install, always latest, no browser tools. Local (`npx novada-mcp`) = all 25 tools including Playwright flows, you manage updates.
+- **Key in URL vs header.** Both work identically. Prefer `Authorization: Bearer` header when storing configs in repos or sharing screens.

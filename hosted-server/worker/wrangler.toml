@@ -1,0 +1,33 @@
+name = "novada-mcp-hosted"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace for per-token monthly quota counters + per-IP rate limit counters.
+# Create with: wrangler kv namespace create NOVADA_MCP_QUOTA
+# Then paste the returned id below — wrangler will refuse to deploy with empty id.
+[[kv_namespaces]]
+binding = "NOVADA_MCP_QUOTA"
+id = ""
+
+[vars]
+NOVADA_API_BASE = "https://api.novada.com"
+LOG_LEVEL = "info"
+FREE_PLAN_MONTHLY_QUOTA = "5000"
+# Per-IP rate limit (calls/minute). Generous default for legitimate agents.
+RATE_LIMIT_PER_MIN = "60"
+# 🔴 STUB AUTH GATE — flip to "true" only after reading PRE_LAUNCH_CHECKLIST.md.
+# As long as this is "false", the worker refuses every request with 503 to
+# prevent accidental production deploys with stub token validation.
+STUB_AUTH_WARNING_ACCEPTED = "false"
+
+# Secrets (set via `wrangler secret put`, NOT here):
+# - NOVADA_API_KEY   ← upstream Novada API key (required, worker returns 500 without it)
+
+# Custom domain — uncomment after the CNAME mcp.novada.com is in Cloudflare:
+# routes = [{ pattern = "mcp.novada.com/mcp", custom_domain = true }]
+
+# Optional: Analytics Engine binding for usage events
+# [[analytics_engine_datasets]]
+# binding = "NOVADA_MCP_USAGE"
+# dataset = "novada_mcp_usage"

@@ -1,0 +1,92 @@
+{
+  "runDate": "2026-06-22",
+  "config": {
+    "providers": [
+      "novada"
+    ],
+    "categories": [
+      "static"
+    ],
+    "limit": 5,
+    "timeout": 30000,
+    "outputDir": "/Users/tongwu/Projects/novada-mcp/benchmark/results"
+  },
+  "results": [
+    {
+      "provider": "novada",
+      "category": "static",
+      "url": "https://en.wikipedia.org/wiki/Artificial_intelligence",
+      "success": true,
+      "latencyMs": 841,
+      "charCount": 22136,
+      "qualityScore": 9,
+      "timestamp": "2026-06-22T08:14:03.944Z"
+    },
+    {
+      "provider": "novada",
+      "category": "static",
+      "url": "https://en.wikipedia.org/wiki/Large_language_model",
+      "success": true,
+      "latencyMs": 433,
+      "charCount": 24992,
+      "qualityScore": 9,
+      "timestamp": "2026-06-22T08:14:06.132Z"
+    },
+    {
+      "provider": "novada",
+      "category": "static",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+      "success": true,
+      "latencyMs": 238,
+      "charCount": 17364,
+      "qualityScore": 10,
+      "timestamp": "2026-06-22T08:14:06.766Z"
+    },
+    {
+      "provider": "novada",
+      "category": "static",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML",
+      "success": true,
+      "latencyMs": 83,
+      "charCount": 16281,
+      "qualityScore": 10,
+      "timestamp": "2026-06-22T08:14:07.205Z"
+    },
+    {
+      "provider": "novada",
+      "category": "static",
+      "url": "https://docs.python.org/3/tutorial/index.html",
+      "success": true,
+      "latencyMs": 124,
+      "charCount": 25000,
+      "qualityScore": 9,
+      "timestamp": "2026-06-22T08:14:07.489Z"
+    }
+  ],
+  "aggregated": [
+    {
+      "provider": "novada",
+      "category": "static",
+      "totalUrls": 5,
+      "successCount": 5,
+      "successRate": 1,
+      "latencyP50": 238,
+      "latencyP95": 759.3999999999999,
+      "latencyP99": 824.6800000000001,
+      "avgCharCount": 21155,
+      "avgQualityScore": 9.4,
+      "costPerRequest": 0.001
+    }
+  ],
+  "summary": [
+    {
+      "provider": "novada",
+      "overallSuccessRate": 1,
+      "overallLatencyP50": 238,
+      "overallLatencyP95": 759.3999999999999,
+      "overallAvgQuality": 9.4,
+      "overallAvgChars": 21155,
+      "estimatedCostPer1k": 1
+    }
+  ]
+}

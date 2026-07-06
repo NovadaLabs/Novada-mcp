@@ -1,0 +1,203 @@
+#!/usr/bin/env node
+/**
+ * novadaCLI — Direct command-line access to Novada web data tools.
+ *
+ * Usage:
+ *   novadasearch "best AI frameworks 2025"
+ *   novadaextract https://example.com
+ *   novadacrawl https://docs.example.com --pages 10
+ *   novadamap https://example.com --search "api"
+ *   novadaresearch "How do AI agents use web scraping?"
+ */
+import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaProxy, novadaScrape, novadaVerify, novadaHealth, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParamsFull, validateVerifyParams } from "./tools/index.js";
+import { VERSION } from "./config.js";
+const API_KEY = process.env.NOVADA_API_KEY;
+const HELP = `novadav${VERSION} — Novada web data CLI
+
+Usage:
+  novadasearch <query> [--engine google] [--num 10] [--country us] [--time day|week|month|year]
+              [--include domain1,domain2] [--exclude domain1,domain2]
+  novadaextract <url> [--format markdown|text|html] [--render auto|static|render|browser]
+  novadacrawl <url> [--max-pages 5] [--strategy bfs|dfs] [--render auto|static|render]
+              [--select "/docs/.*,/api/.*"] [--exclude-paths "/blog/.*"]
+              [--instructions "only API reference pages"]
+  novadamap <url> [--search <term>] [--limit 50] [--max-depth 2]
+  novadaresearch <question> [--depth auto|quick|deep|comprehensive] [--focus "technical"]
+  novadaproxy [--type residential|mobile|isp|datacenter] [--country us] [--format url|env|curl]
+  novadascrape --platform amazon.com --operation amazon_product_keywords --keyword "iphone 16"
+              [--num 10] [--format markdown|json|csv|html|xlsx] [--limit 20]
+  novadaverify "<claim>" [--context "as of 2024"]
+  novadahealth
+
+Environment:
+  NOVADA_API_KEY          Required. Scraper API key.
+  NOVADA_BROWSER_WS       Optional. wss://user:pass@upg-scbr.novada.com (Browser API)
+  NOVADA_PROXY_USER       Optional. Proxy username (from dashboard)
+  NOVADA_PROXY_PASS       Optional. Proxy password
+  NOVADA_PROXY_ENDPOINT   Optional. Proxy host:port
+
+Examples:
+  novadasearch "GPT-5 release" --time week --country us
+  novadasearch "best AI tools" --include "github.com,arxiv.org"
+  novadaextract https://example.com --format markdown
+  novadaextract https://example.com --render browser
+  novadacrawl https://docs.example.com --max-pages 10 --select "/api/.*"
+  novadacrawl https://docs.example.com --instructions "only quickstart pages"
+  novadamap https://example.com --search "pricing" --max-depth 3
+  novadaresearch "How do AI agents use web scraping?" --depth deep --focus "production use cases"
+  novadaproxy --type residential --country us --format env
+  novadascrape --platform amazon.com --operation amazon_product_keywords --keyword "iphone 16" --num 5 --format csv
+  novadascrape --platform github.com --operation github_repository_repo-url --url "https://github.com/anthropics/anthropic-sdk-python"
+  novadaverify "The Eiffel Tower is 330 meters tall" --context "as of 2024"
+`;
+function parseArgs(args) {
+    let positional = "";
+    const flags = {};
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (arg.startsWith("--")) {
+            const eqIdx = arg.indexOf("=");
+            if (eqIdx !== -1) {
+                // --flag=value syntax
+                flags[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
+            }
+            else if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                // --flag value syntax
+                flags[arg.slice(2)] = args[i + 1];
+                i++;
+            }
+            else {
+                // boolean flag (no value) — set to "true"
+                flags[arg.slice(2)] = "true";
+            }
+        }
+        else if (!positional) {
+            positional = arg;
+        }
+    }
+    return { positional, flags };
+}
+async function main() {
+    const [command, ...rest] = process.argv.slice(2);
+    if (!command || command === "--help" || command === "-h") {
+        console.log(HELP);
+        process.exit(0);
+    }
+    if (command === "--version" || command === "-v") {
+        console.log(`novadav${VERSION}`);
+        process.exit(0);
+    }
+    if (!API_KEY && command !== "proxy") {
+        console.error("Error: NOVADA_API_KEY not set. Get your key at https://www.novada.com");
+        process.exit(1);
+    }
+    const { positional, flags } = parseArgs(rest);
+    const noPositionalCommands = new Set(["proxy", "scrape", "health"]);
+    if (!positional && !noPositionalCommands.has(command)) {
+        console.error(`Error: ${command} requires an argument. Run 'novada --help' for usage.`);
+        process.exit(1);
+    }
+    try {
+        let result;
+        switch (command) {
+            case "search":
+                result = await novadaSearch(validateSearchParams({
+                    query: positional,
+                    engine: flags.engine || "google",
+                    num: flags.num ? parseInt(flags.num) : 10,
+                    country: flags.country || "",
+                    language: flags.language || "",
+                    time_range: flags.time,
+                    start_date: flags.from,
+                    end_date: flags.to,
+                    include_domains: flags.include ? flags.include.split(",").map((d) => d.trim()) : undefined,
+                    exclude_domains: flags.exclude ? flags.exclude.split(",").map((d) => d.trim()) : undefined,
+                }), API_KEY);
+                break;
+            case "extract":
+                result = await novadaExtract(validateExtractParams({
+                    url: positional,
+                    format: flags.format || "markdown",
+                    render: flags.render || "auto",
+                }), API_KEY);
+                break;
+            case "crawl":
+                result = await novadaCrawl(validateCrawlParams({
+                    url: positional,
+                    max_pages: flags["max-pages"]
+                        ? parseInt(flags["max-pages"])
+                        : flags.pages
+                            ? parseInt(flags.pages)
+                            : 5,
+                    strategy: flags.strategy || "bfs",
+                    render: flags.render || "auto",
+                    instructions: flags.instructions,
+                    select_paths: flags.select ? flags.select.split(",").map((p) => p.trim()) : undefined,
+                    exclude_paths: flags["exclude-paths"] ? flags["exclude-paths"].split(",").map((p) => p.trim()) : undefined,
+                }), API_KEY);
+                break;
+            case "map":
+                result = await novadaMap(validateMapParams({
+                    url: positional,
+                    search: flags.search,
+                    limit: flags.limit ? parseInt(flags.limit) : 50,
+                    max_depth: flags["max-depth"] ? parseInt(flags["max-depth"]) : 2,
+                }), API_KEY);
+                break;
+            case "research":
+                result = await novadaResearch(validateResearchParams({
+                    question: positional,
+                    depth: flags.depth || "auto",
+                    focus: flags.focus,
+                }), API_KEY);
+                break;
+            case "proxy": {
+                const params = validateProxyParams({
+                    type: flags.type || "residential",
+                    country: flags.country,
+                    format: flags.format || "url",
+                    session_id: flags.session,
+                });
+                result = await novadaProxy(params);
+                break;
+            }
+            case "scrape": {
+                // Build params object from remaining flags (pass-through for operation-specific params)
+                const { platform, operation, format, limit, ...rest } = flags;
+                const opParams = {};
+                for (const [k, v] of Object.entries(rest)) {
+                    // Try to coerce numeric values
+                    const num = Number(v);
+                    opParams[k] = isNaN(num) || v === "" ? v : num;
+                }
+                result = await novadaScrape(validateScrapeParamsFull({
+                    platform,
+                    operation,
+                    params: opParams,
+                    format: format || "markdown",
+                    limit: limit ? parseInt(limit) : 20,
+                }), API_KEY);
+                break;
+            }
+            case "verify":
+                result = await novadaVerify(validateVerifyParams({
+                    claim: positional,
+                    context: flags.context,
+                }), API_KEY);
+                break;
+            case "health":
+                result = await novadaHealth(API_KEY);
+                break;
+            default:
+                console.error(`Unknown command: ${command}. Run 'novada --help' for usage.`);
+                process.exit(1);
+        }
+        console.log(result);
+    }
+    catch (error) {
+        console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        process.exit(1);
+    }
+}
+main();
+//# sourceMappingURL=cli.js.map

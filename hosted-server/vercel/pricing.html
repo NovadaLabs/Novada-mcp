@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+document.documentElement.setAttribute('data-theme','light');
+function toggleTheme(){}
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pricing — Novada MCP</title>
+<meta name="description" content="Novada MCP pricing: 1,000 free gateway calls/month (no credit card), then pay-as-you-go on your Novada balance. All 15 web-data tools, one key, one endpoint." />
+<link rel="canonical" href="https://mcp.novada.com/pricing" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Novada MCP" />
+<meta property="og:title" content="Pricing — Novada MCP" />
+<meta property="og:description" content="1,000 free gateway calls/month (no credit card), then pay-as-you-go on your Novada balance. All 15 web-data tools, one key." />
+<meta property="og:url" content="https://mcp.novada.com/pricing" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Novada MCP Pricing — 1,000 free gateway calls/month, then pay-as-you-go" />
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Pricing — Novada MCP" />
+<meta name="twitter:description" content="1,000 free gateway calls/month (no credit card), then pay-as-you-go on your Novada balance. All 15 web-data tools." />
+<meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          violet: { DEFAULT: '#7749F1', dark: '#271472', light: '#9360EF', 50: '#F5F2FF', 100: '#E4DCFD' },
+          ink: { DEFAULT: '#011627', mid: '#424242', muted: '#727082' },
+          green: '#2EBF79',
+        },
+        fontFamily: {
+          pixel: ['"Press Start 2P"', 'monospace'],
+          display: ['"Press Start 2P"', 'monospace'],
+          sans: ['"JetBrains Mono"', 'Noto Sans SC', 'ui-monospace', 'monospace'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<link rel="stylesheet" href="shared.css">
+<style>
+  body { background: #fff; color: #011627; }
+  .pixel-font { font-family: 'Press Start 2P', monospace; line-height: 1.5; }
+  .pixel-container { max-width: 80rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
+  .icon-sun { display: block; }
+  .icon-moon { display: none; }
+
+  /* Announcement bar — unified dark-ink style across all pages */
+  /* ── Announcement bar — pixel / Minecraft hotbar (all pages) ── */
+  .announcement-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    background: #7749F1;               /* Novada violet hotbar */
+    color: #fff;
+    font-family: 'Press Start 2P', 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1.9;
+    text-align: center;
+    padding: 9px 14px;
+    letter-spacing: 0.02em;
+    /* hard pixel bevel: inner light/dark edges + blocky bottom rail */
+    box-shadow: inset 0 2px 0 0 #B39DFB, inset 0 -2px 0 0 #271472;
+    border-bottom: 3px solid #271472;
+    image-rendering: pixelated;
+  }
+  /* framed [ vX.Y.Z ] version chip — inset pixel block */
+  .announcement-bar .ab-ver {
+    display: inline-block;
+    padding: 3px 7px;
+    background: #271472;
+    color: #E4DCFD;
+    box-shadow: inset 2px 2px 0 0 #9360EF, inset -2px -2px 0 0 #05002b;
+    white-space: nowrap;
+  }
+  .announcement-bar .ab-msg { color: #F5F2FF; }
+  /* blinking green live block */
+  .announcement-bar .ab-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: #2EBF79;
+    box-shadow: 0 0 0 2px #271472;
+    animation: ab-blink 1.2s steps(2, jump-none) infinite;
+    vertical-align: middle;
+  }
+  @keyframes ab-blink { 0%,60%{opacity:1} 61%,100%{opacity:.35} }
+  @media (prefers-reduced-motion: reduce) { .announcement-bar .ab-dot { animation: none; } }
+  .announcement-bar a {
+    color: #2EBF79;
+    text-decoration: none;
+    padding: 3px 7px;
+    background: #011627;
+    box-shadow: inset 2px 2px 0 0 #3ad98f, inset -2px -2px 0 0 #05271a;
+    white-space: nowrap;
+    transition: transform 0.05s steps(2);
+  }
+  .announcement-bar a:hover { color: #fff; background: #2EBF79; transform: translate(-1px,-1px); }
+  .announcement-bar a:active { transform: translate(1px,1px); }
+  @media (max-width: 640px) {
+    .announcement-bar { font-size: 8px; gap: 6px 8px; padding: 8px 10px; }
+  }
+  #lang-toggle {
+    font-family: 'Press Start 2P', monospace; font-size: 8px;
+    color: #424242; background: #F5F2FF; border: 2px solid #7749F1;
+    padding: 8px 10px; cursor: pointer; box-shadow: 2px 2px 0 #271472;
+  }
+  #lang-toggle:hover { background: #E4DCFD; }
+  .footer-link {
+    font-family: 'Press Start 2P', monospace; font-size: 8px;
+    color: #424242; text-decoration: none; transition: color 0.1s;
+  }
+  .footer-link:hover { color: #7749F1; }
+
+  /* Text + inline code */
+  .pixel-text { font-family: 'JetBrains Mono', monospace; color: #424242; }
+  .pixel-muted { color: #727082; }
+  .pixel-code-inline { font-family: 'JetBrains Mono', monospace; color: #7749F1; background: #F5F2FF; padding: 1px 5px; border: 1px solid #E4DCFD; }
+
+  /* Hero — light pixel grid, no scanline darkening */
+  .pixel-hero {
+    background:
+      radial-gradient(circle at 20% 20%, rgba(119,73,241,0.10), transparent 45%),
+      radial-gradient(circle at 85% 70%, rgba(46,191,121,0.08), transparent 40%),
+      #F5F2FF;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 2px solid #7749F1;
+  }
+  .pixel-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(119,73,241,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(119,73,241,0.07) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  [data-particle] {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: #7749F1;
+    z-index: 1;
+    animation: float-particle 6s ease-in-out infinite;
+  }
+  [data-particle]:nth-child(1){ top:20%; left:10%; background:#9360EF; animation-delay:0s; }
+  [data-particle]:nth-child(2){ top:65%; left:18%; background:#2EBF79; animation-delay:1.2s; }
+  [data-particle]:nth-child(3){ top:30%; left:88%; background:#7749F1; animation-delay:2.4s; }
+  [data-particle]:nth-child(4){ top:75%; left:82%; background:#2EBF79; animation-delay:0.6s; }
+  @keyframes float-particle {
+    0%,100% { transform: translateY(0) translateX(0); opacity: 0.35; }
+    50% { transform: translateY(-18px) translateX(6px); opacity: 0.9; }
+  }
+
+  .pixel-h1 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(20px, 3.4vw, 34px);
+    line-height: 1.4;
+    color: #011627;
+    text-shadow: 3px 3px 0 #E4DCFD;
+  }
+  .pixel-h1 .accent { color: #7749F1; }
+
+  .live-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: #2EBF79;
+    box-shadow: 0 0 8px rgba(46,191,121,0.6);
+    animation: blink-dot 1.2s steps(2) infinite;
+  }
+  @keyframes blink-dot { 0%,49%{opacity:1;} 50%,100%{opacity:0.25;} }
+
+  /* Sections + headings */
+  .pixel-section-dark { background: #fff; }
+  .pixel-section-darker { background: #F5F2FF; }
+  .pixel-heading {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(15px, 2.4vw, 22px);
+    color: #011627;
+    text-shadow: 2px 2px 0 #E4DCFD;
+  }
+  .pixel-eyebrow {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: #7749F1;
+    letter-spacing: 0.04em;
+  }
+
+  /* Cards */
+  .pixel-card {
+    background: #fff;
+    border: 2px solid #7749F1;
+    box-shadow: 6px 6px 0 #E4DCFD;
+  }
+  .pixel-tier {
+    position: relative;
+    background: #fff;
+    border: 3px solid #7749F1;
+    box-shadow: 6px 6px 0 #E4DCFD;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .pixel-tier:hover {
+    transform: translateY(-4px);
+    box-shadow: 6px 10px 0 #E4DCFD;
+  }
+  .pixel-tier.tier-free {
+    border-color: #2EBF79;
+    box-shadow: 6px 6px 0 rgba(46,191,121,0.25);
+  }
+  .pixel-tier.tier-free:hover {
+    box-shadow: 6px 10px 0 rgba(46,191,121,0.3);
+  }
+
+  .pixel-rule-num {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: #fff;
+    background: #7749F1;
+    width: 40px; height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 2px solid #271472;
+    box-shadow: 3px 3px 0 #E4DCFD;
+  }
+
+  /* Quick-reference table */
+  .pixel-table { border: 2px solid #7749F1; box-shadow: 6px 6px 0 #E4DCFD; background: #fff; }
+  .pixel-table .row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; padding: 14px 18px; border-bottom: 2px solid #E4DCFD;
+  }
+  .pixel-table .row:last-child { border-bottom: none; }
+  .pixel-table .row .k { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #424242; }
+  .pixel-table .row .v { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #7749F1; font-weight: 600; text-align: right; }
+  .pixel-table .thead {
+    padding: 12px 18px; border-bottom: 2px solid #7749F1; background: #F5F2FF;
+    font-family: 'Press Start 2P', monospace; font-size: 9px; color: #7749F1; letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body class="lang-en">
+
+<!-- ANNOUNCEMENT BAR -->
+<div class="announcement-bar" role="region" aria-label="Announcement">
+  <span class="ab-dot" aria-hidden="true"></span>
+  <span class="en"><span class="ab-ver">[ v0.9.17 ]</span> <span class="ab-msg">15 tools · one endpoint · one key · 1,000 free gateway calls/mo · then balance</span> <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh"><span class="ab-ver">[ v0.9.17 ]</span> <span class="ab-msg">15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费网关调用 · 之后按余额扣费</span> <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
+</div>
+
+<!-- HEADER -->
+<header class="nav-bar">
+  <div class="pixel-container h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-3 flex-shrink-0">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[12px] text-white'}))" />
+      <span class="pixel-font text-[10px]" style="color:#424242">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-6">
+      <a href="/#install" class="nav-link"><span class="en">▸ INSTALL</span><span class="zh">▸ 接入</span></a>
+      <a href="/tools" class="nav-link"><span class="en">▸ TOOLS</span><span class="zh">▸ 工具</span></a>
+      <a href="/pricing" class="nav-link active"><span class="en">▸ PRICING</span><span class="zh">▸ 价格</span></a>
+      <a href="/faq" class="nav-link">▸ FAQ</a>
+      <a href="/playground" class="nav-link" style="color:#7749F1"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
+    </nav>
+    <div class="flex items-center gap-2.5">
+      <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button id="lang-toggle" onclick="toggleLang()">中 / EN</button>
+      <a href="https://www.novada.com" class="pixel-btn-sm hidden sm:inline-flex">
+        <span class="en">GET API KEY</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- PAGE HERO -->
+<section class="pixel-hero">
+  <div data-particle></div>
+  <div data-particle></div>
+  <div data-particle></div>
+  <div data-particle></div>
+  <div class="pixel-container relative z-10 text-center" style="padding-top:80px;padding-bottom:64px">
+    <div class="pixel-font text-[10px] mb-6 flex items-center justify-center gap-2" style="color:#7749F1">
+      <span class="live-dot"></span>
+      <span class="en">SIMPLE · USAGE-BASED · START FREE</span>
+      <span class="zh">简单 · 按用量计费 · 免费开始</span>
+    </div>
+    <h1 class="pixel-h1 mb-6">
+      <span class="en">[ <span class="accent">PRICING</span> ]</span>
+      <span class="zh">[ <span class="accent">价格</span> ]</span>
+    </h1>
+    <p class="pixel-text mx-auto" style="font-size:14px;max-width:560px;line-height:1.7">
+      <span class="en">Free to start — 1,000 gateway calls/month, then pay-as-you-go on your Novada balance. One key, one endpoint — the same balance covers MCP, REST, and proxy.</span>
+      <span class="zh">免费开始 — 每月 1,000 次免费网关调用，之后按用量从 Novada 余额扣费。一把密钥，一个端点 — 同一余额覆盖 MCP、REST 与代理。</span>
+    </p>
+  </div>
+</section>
+
+<!-- PRICING TIERS -->
+<section id="tiers" class="pixel-section-dark py-20">
+  <div class="pixel-container">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-4xl mx-auto items-start">
+
+      <!-- FREE TIER (centerpiece, cyan accent) -->
+      <div id="free" class="pixel-tier tier-free p-8 sm:p-10">
+        <!-- Label row -->
+        <div class="flex items-center gap-3 mb-5 flex-wrap">
+          <span class="pixel-font text-[10px]" style="color:#7749F1">
+            <span class="en">FREE TIER</span><span class="zh">免费额度</span>
+          </span>
+          <span class="pixel-font text-[7px]" style="color:#fff;background:#2EBF79;padding:5px 8px;border:2px solid #271472">
+            <span class="en">NO CREDIT CARD</span><span class="zh">无需信用卡</span>
+          </span>
+        </div>
+
+        <!-- Big number -->
+        <div class="pixel-font mb-4" style="font-size:clamp(20px,3vw,30px);color:#011627;text-shadow:2px 2px 0 #271472;line-height:1.3">
+          <span class="en">1,000 CALLS<br><span style="color:#7749F1;font-size:0.6em">/ MONTH FREE</span></span>
+          <span class="zh">每月 1,000 次<br><span style="color:#7749F1;font-size:0.6em">免费网关调用</span></span>
+        </div>
+        <p class="pixel-text mb-7" style="font-size:13px;line-height:1.7">
+          <span class="en">1,000 free calls/month through the hosted gateway — an anti-abuse cap, independent of your balance. No credit card to start. Beyond that, it's pay-as-you-go on your Novada balance (the same balance as REST &amp; proxy).</span>
+          <span class="zh">通过托管网关每月 1,000 次免费调用 — 这是防滥用上限，与余额独立。无需信用卡即可开始。超出后按用量从 Novada 余额扣费(与 REST、代理共用同一余额)。</span>
+        </p>
+        <!-- OWNER: real pay-as-you-go rates + narrative here -->
+        <p class="pixel-text mb-7" style="font-size:12px;line-height:1.6;color:#727082">
+          <span class="en">Per-call usage draws your Novada balance at Novada's standard rates. Some tools make multiple upstream calls (e.g. <code class="pixel-code-inline">novada_research</code>, <code class="pixel-code-inline">novada_crawl</code>) and draw proportionally.</span>
+          <span class="zh">每次调用按 Novada 标准费率从余额扣费。部分工具会发起多次上游调用(如 <code class="pixel-code-inline">novada_research</code>、<code class="pixel-code-inline">novada_crawl</code>),按比例扣费。</span>
+        </p>
+
+        <!-- Bullet list -->
+        <ul class="space-y-3 mb-8" style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6">
+          <li class="flex items-start gap-3">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en">All 15 tools available — <span style="color:#727082">including <code class="pixel-code-inline">novada_browser</code> (cloud CDP) on the hosted endpoint; multi-step <code class="pixel-code-inline">novada_browser_flow</code> runs locally via <code class="pixel-code-inline">npx novada-mcp</code></span></span>
+              <span class="zh">15 个工具全部可用 — <span style="color:#727082">包括托管端的 <code class="pixel-code-inline">novada_browser</code>(云端 CDP);多步 <code class="pixel-code-inline">novada_browser_flow</code> 需通过 <code class="pixel-code-inline">npx novada-mcp</code> 本地运行</span></span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en">60 requests / minute per IP</span>
+              <span class="zh">每 IP 60 次/分钟速率限制</span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en">Hosted on Vercel Edge — global PoPs, auto-SSL, zero ops</span>
+              <span class="zh">运行于 Vercel Edge — 全球节点，自动 SSL，零运维</span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en">Same key works with <code class="pixel-code-inline">npx novada-mcp</code> locally — the local server has no free-gateway cap (per-call usage still draws your balance)</span>
+              <span class="zh">同一密钥直接用于本地 <code class="pixel-code-inline">npx novada-mcp</code> — 本地不受免费网关上限限制(每次调用仍从余额扣费)</span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en">Free-gateway cap resets monthly (UTC), per API token</span>
+              <span class="zh">免费网关上限每月(UTC)重置，以 API Token 为单位计算</span>
+            </span>
+          </li>
+        </ul>
+
+        <a href="https://www.novada.com" class="pixel-btn">
+          <span class="en">⚡ GET YOUR API KEY</span><span class="zh">⚡ 获取你的 API 密钥</span>
+        </a>
+      </div>
+
+      <!-- NEED MORE / PAID TIER (violet) -->
+      <div id="more" class="pixel-tier p-8 sm:p-10">
+        <!-- Label row -->
+        <div class="flex items-center gap-3 mb-5 flex-wrap">
+          <span class="pixel-font text-[10px]" style="color:#424242">
+            <span class="en">NEED MORE?</span><span class="zh">需要更多?</span>
+          </span>
+          <span class="pixel-font text-[7px]" style="color:#fff;background:#7749F1;padding:5px 8px;border:2px solid #271472">
+            <span class="en">PRODUCTION</span><span class="zh">生产级</span>
+          </span>
+        </div>
+
+        <!-- Big number -->
+        <div class="pixel-font mb-4" style="font-size:clamp(20px,3vw,30px);color:#011627;text-shadow:2px 2px 0 #271472;line-height:1.3">
+          <span class="en">HIGHER<br><span style="color:#7749F1;font-size:0.6em">LIMITS</span></span>
+          <span class="zh">更高<br><span style="color:#7749F1;font-size:0.6em">额度</span></span>
+        </div>
+        <p class="pixel-text mb-7" style="font-size:13px;line-height:1.7">
+          <span class="en">The free gateway cap gets you moving — production agents run on pay-as-you-go. Top up your Novada balance in the dashboard to cover per-call usage; the same balance powers REST, proxy, and MCP. Need a higher free-gateway cap for high-volume pipelines? Contact sales.</span>
+          <span class="zh">免费网关上限用于快速上手 — 生产级 Agent 按用量付费运行。在控制台为 Novada 余额充值即可覆盖每次调用的用量;同一余额同时驱动 REST、代理与 MCP。高频流水线需要更高的免费网关上限?请联系销售。</span>
+        </p>
+
+        <!-- Bullet list -->
+        <ul class="space-y-3 mb-8" style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6">
+          <li class="flex items-start gap-3">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en"><span style="color:#011627;font-weight:600">Same key everywhere</span> — hosted MCP, local <code class="pixel-code-inline">npx novada-mcp</code>, and REST API. No separate billing accounts.</span>
+              <span class="zh"><span style="color:#011627;font-weight:600">一把密钥通用</span> — 托管 MCP、本地 <code class="pixel-code-inline">npx novada-mcp</code> 与 REST API，无需分别注册账单账户。</span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en"><span style="color:#011627;font-weight:600">No rollover</span> — the free-gateway call cap resets at the start of each month (UTC) and does not carry over. Your Novada balance is separate — it carries over and is spent per call.</span>
+              <span class="zh"><span style="color:#011627;font-weight:600">上限不滚存</span> — 免费网关调用上限每月(UTC)初重置，不滚存到下个月。Novada 余额独立计算 — 余额会滚存,按每次调用扣费。</span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span style="color:#7749F1;font-weight:700">▸</span>
+            <span style="color:#424242">
+              <span class="en"><span style="color:#011627;font-weight:600">No vendor lock-in</span> — MCP is an open protocol. Your agent code stays the same if you switch hosts or move to local <code class="pixel-code-inline">npx novada-mcp</code> — same tool names, same key.</span>
+              <span class="zh"><span style="color:#011627;font-weight:600">无供应商锁定</span> — MCP 是开放协议。切换宿主或移至本地 <code class="pixel-code-inline">npx novada-mcp</code> 时 Agent 代码不变 — 相同工具名、相同密钥。</span>
+            </span>
+          </li>
+        </ul>
+
+        <div class="flex flex-col sm:flex-row gap-3">
+          <a href="https://www.novada.com/pricing" class="pixel-btn-dark">
+            <span class="en">VIEW OPTIONS →</span><span class="zh">查看方案 →</span>
+          </a>
+          <a href="https://www.novada.com" class="pixel-btn-dark" style="box-shadow:4px 4px 0 #271472">
+            <span class="en">ABOUT NOVADA</span><span class="zh">了解 NOVADA</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- HOW USAGE IS COUNTED -->
+<section id="usage" class="pixel-section-darker py-20" style="border-top:2px solid #E4DCFD;border-bottom:2px solid #E4DCFD">
+  <div class="pixel-container">
+    <div class="text-center mb-14">
+      <p class="pixel-eyebrow mb-4">[ RULES ]</p>
+      <h2 class="pixel-heading mb-4">
+        <span class="en">HOW USAGE IS COUNTED</span>
+        <span class="zh">用量如何计算</span>
+      </h2>
+      <p class="pixel-text mx-auto" style="font-size:13px;max-width:520px;line-height:1.7">
+        <span class="en">Two separate meters: the free-gateway call cap (1 per call) and your Novada balance (per-call usage, proportional to work done).</span>
+        <span class="zh">两套独立计量:免费网关调用上限(每次调用计 1 次)与 Novada 余额(按实际用量扣费)。</span>
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
+      <!-- Rule 1 -->
+      <div class="pixel-card p-6">
+        <span class="pixel-rule-num mb-4">1</span>
+        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
+          <span class="en">GATEWAY CAP: 1 PER CALL</span>
+          <span class="zh">网关上限:每次调用计 1</span>
+        </h3>
+        <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
+          <span class="en">Each successful MCP tool call counts as 1 against the free-gateway monthly cap, regardless of tool. This is only the anti-abuse counter — your actual cost is drawn from your Novada balance (Rule 3), where some tools do more upstream work.</span>
+          <span class="zh">每次成功的 MCP 工具调用在免费网关月度上限中计为 1 次,与具体工具无关。这只是防滥用计数器 — 实际费用从 Novada 余额扣除(见规则 3),部分工具会发起更多上游工作。</span>
+        </p>
+      </div>
+
+      <!-- Rule 2 -->
+      <div class="pixel-card p-6">
+        <span class="pixel-rule-num mb-4">2</span>
+        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
+          <span class="en">CAP = PER TOKEN, MONTHLY</span>
+          <span class="zh">上限按 TOKEN 每月计</span>
+        </h3>
+        <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
+          <span class="en">The free-gateway cap is attached to your API key, not an IP or device. The same key works across Claude Desktop, Claude Code, Cursor, and local <code class="pixel-code-inline">npx novada-mcp</code> — but the cap applies only to the hosted gateway; the local server has no monthly gateway cap.</span>
+          <span class="zh">免费网关上限绑定在你的 API 密钥上,与 IP 或设备无关。同一密钥可用于 Claude Desktop、Claude Code、Cursor 和本地 <code class="pixel-code-inline">npx novada-mcp</code> — 但该上限仅作用于托管网关;本地服务不受月度网关上限限制。</span>
+        </p>
+      </div>
+
+      <!-- Rule 3 -->
+      <div class="pixel-card p-6">
+        <span class="pixel-rule-num mb-4">3</span>
+        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
+          <span class="en">BALANCE: PAY-AS-YOU-GO</span>
+          <span class="zh">余额:按用量付费</span>
+        </h3>
+        <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
+          <span class="en">Each call draws per-call usage from your Novada balance at standard rates. Some tools make multiple upstream calls and draw proportionally — e.g. <code class="pixel-code-inline">novada_research</code> reads several sources and <code class="pixel-code-inline">novada_crawl</code> fetches many pages in one call. Failed calls don't count against the free-gateway cap (it's refunded), though any upstream work already done may still draw balance.</span>
+          <span class="zh">每次调用按标准费率从 Novada 余额扣除用量。部分工具会发起多次上游调用并按比例扣费 — 例如 <code class="pixel-code-inline">novada_research</code> 会读取多个来源、<code class="pixel-code-inline">novada_crawl</code> 单次调用抓取多页。失败调用不计入免费网关上限(会退还),但已完成的上游工作仍可能扣除余额。</span>
+        </p>
+      </div>
+
+      <!-- Rule 4 -->
+      <div class="pixel-card p-6">
+        <span class="pixel-rule-num mb-4">4</span>
+        <h3 class="pixel-font mt-4 mb-3" style="font-size:11px;color:#011627;line-height:1.5">
+          <span class="en">RATE: 60 REQ / MIN / IP</span>
+          <span class="zh">速率:每 IP 60 次/分钟</span>
+        </h3>
+        <p class="pixel-text" style="font-size:12.5px;line-height:1.65">
+          <span class="en">The hosted endpoint enforces 60 requests per minute per source IP, independent of the gateway cap. Requests that exceed the rate limit receive <code class="pixel-code-inline">429 Too Many Requests</code> and are not counted against your free-gateway cap. (This 429 is the <em>only</em> case the server returns 429 — reaching the monthly gateway cap returns a normal tool-error result, not 429.)</span>
+          <span class="zh">托管端对每个来源 IP 每分钟限制 60 次请求，与免费网关上限独立计算。超出速率限制的请求返回 <code class="pixel-code-inline">429 Too Many Requests</code>，不计入免费网关上限。(这是服务器<em>唯一</em>返回 429 的情形 — 达到月度网关上限时返回的是普通工具错误结果,而非 429。)</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick reference table -->
+    <div class="mt-12 max-w-4xl mx-auto pixel-table">
+      <div class="thead">
+        <span class="en">QUICK REFERENCE</span>
+        <span class="zh">快速参考</span>
+      </div>
+      <div class="row">
+        <span class="k"><span class="en">Free gateway calls / month</span><span class="zh">每月免费网关调用</span></span>
+        <span class="v">1,000</span>
+      </div>
+      <div class="row">
+        <span class="k"><span class="en">Gateway cap counter</span><span class="zh">网关上限计数单位</span></span>
+        <span class="v"><span class="en">Per API token</span><span class="zh">按 API Token</span></span>
+      </div>
+      <div class="row">
+        <span class="k"><span class="en">Cap reset</span><span class="zh">上限重置</span></span>
+        <span class="v"><span class="en">Monthly (UTC)</span><span class="zh">每月(UTC)</span></span>
+      </div>
+      <div class="row">
+        <span class="k"><span class="en">Rate limit</span><span class="zh">速率限制</span></span>
+        <span class="v">60 req / min / IP</span>
+      </div>
+      <div class="row">
+        <span class="k"><span class="en">Per-call cost</span><span class="zh">每次调用费用</span></span>
+        <span class="v"><span class="en">Pay-as-you-go (balance)</span><span class="zh">按用量(余额)</span></span>
+      </div>
+      <div class="row">
+        <span class="k"><span class="en">Browser on hosted endpoint</span><span class="zh">托管端浏览器</span></span>
+        <span class="v"><span class="en">novada_browser: yes · flow: local</span><span class="zh">novada_browser:支持 · flow:本地</span></span>
+      </div>
+      <div class="row">
+        <span class="k"><span class="en">Credit card required?</span><span class="zh">需要信用卡吗?</span></span>
+        <span class="v"><span class="en">No</span><span class="zh">不需要</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="py-12" style="background:#011627;border-top:2px solid #7749F1">
+  <div class="pixel-container flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img-footer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[11px] text-white'}))" />
+      <span class="pixel-font text-[8px]" style="color:#424242">MCP</span>
+    </div>
+    <nav class="flex flex-wrap items-center justify-center gap-8">
+      <a href="/#install" class="footer-link"><span class="en">INSTALL</span><span class="zh">接入</span></a>
+      <a href="/tools" class="footer-link"><span class="en">TOOLS</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="footer-link" style="color:#7749F1"><span class="en">PRICING</span><span class="zh">价格</span></a>
+      <a href="/faq" class="footer-link">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="footer-link">GitHub</a>
+      <a href="https://www.npmjs.com/package/novada-mcp" class="footer-link">npm</a>
+    </nav>
+    <span class="pixel-font text-[8px]" style="color:#424242">© 2026 NOVADA</span>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div id="toast" class="toast"><span class="en">Copied</span><span class="zh">已复制</span></div>
+
+<script src="shared.js" defer></script>
+</body>
+</html>

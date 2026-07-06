@@ -1,0 +1,50 @@
+{
+  "novada_browser_flow": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_browser_flow",
+    "refused": true
+  },
+  "novada_capture_apikey": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_capture_apikey",
+    "refused": true
+  },
+  "novada_ip_whitelist": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_ip_whitelist",
+    "refused": true
+  },
+  "novada_scraper_task_mgmt": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_scraper_task_mgmt",
+    "refused": true
+  },
+  "novada_search_feedback": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_search_feedback",
+    "refused": true
+  },
+  "novada_session_stats": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_session_stats",
+    "refused": true
+  },
+  "novada_site_copy": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_site_copy",
+    "refused": true
+  },
+  "novada_static_ip_mgmt": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_static_ip_mgmt",
+    "refused": true
+  }
+}

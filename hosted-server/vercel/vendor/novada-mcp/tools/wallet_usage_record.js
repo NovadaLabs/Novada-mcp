@@ -1,0 +1,67 @@
+// Wraps POST /v1/wallet/usage_record on developer-api.novada.com.
+import { z } from "zod";
+import { devApiPost, withDateRangeCompat } from "../_core/developer_api.js";
+// ─── Schema & Types ──────────────────────────────────────────────────────────
+export const WalletUsageRecordParamsSchema = z.object({
+    start_time: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional()
+        .describe("Inclusive start date in YYYY-MM-DD. Defaults to 30 days ago on the server side. NOTE: this tool transparently emits both `start_time` and the server's typo'd `strat_time` for forward compat."),
+    end_time: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional()
+        .describe("Inclusive end date YYYY-MM-DD. Defaults to today."),
+    page: z
+        .number()
+        .int()
+        .positive()
+        .default(1)
+        .describe("1-based page index."),
+    page_size: z
+        .number()
+        .int()
+        .positive()
+        .max(200)
+        .default(50)
+        .describe("Page size, max 200."),
+});
+export function validateWalletUsageRecordParams(args) {
+    return WalletUsageRecordParamsSchema.parse(args ?? {});
+}
+/**
+ * Fetch paginated wallet usage / transaction records from the developer-api.
+ * Emits both `start_time` and the server's typo'd `strat_time` for forward compat.
+ */
+export async function novadaWalletUsageRecord(params, apiKey) {
+    const { start_time, end_time, page, page_size } = params;
+    // INC-193: Always send date range defaults (30 days) — server returns count but empty list
+    // when no date range is provided, causing the count=41/list=[] anomaly.
+    // Note: wallet endpoint uses `limit` (not `page_size`) — confirmed by regression test.
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const defaultStart = thirtyDaysAgo.toISOString().slice(0, 10);
+    const defaultEnd = now.toISOString().slice(0, 10);
+    const body = withDateRangeCompat({ page, limit: page_size }, { start: start_time ?? defaultStart, end: end_time ?? defaultEnd });
+    const data = await devApiPost("/v1/wallet/usage_record", body, { apiKey });
+    // Anomaly check: server sometimes returns count > 0 but an empty list
+    // (smoke-verified 2026-06-03). Surface this so agents don't conclude
+    // "no data" when there actually IS data on a different page.
+    let data_anomaly;
+    if (data !== null && typeof data === "object" && !Array.isArray(data)) {
+        const obj = data;
+        const count = typeof obj.count === "number" ? obj.count : undefined;
+        const list = Array.isArray(obj.list) ? obj.list : undefined;
+        if (count !== undefined && count > 0 && list !== undefined && list.length === 0) {
+            data_anomaly = `Server reports count=${count} but page ${page} list is empty. Try a lower page index, larger page_size, or a wider date range. The count value comes from server.`;
+        }
+    }
+    return JSON.stringify({
+        status: "ok",
+        data,
+        ...(data_anomaly ? { data_anomaly } : {}),
+        agent_instruction: "Returns paginated wallet transactions. For total spend per product use novada_account(section=\"traffic\"); for current product balances use novada_account(section=\"plans\").",
+    }, null, 2);
+}
+//# sourceMappingURL=wallet_usage_record.js.map

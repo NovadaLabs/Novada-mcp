@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+try { localStorage.setItem('theme','light'); } catch(e) {}
+document.documentElement.setAttribute('data-theme','light');
+function toggleTheme(){}
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FAQ — Novada MCP</title>
+<meta name="description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 15 web-data tools. Clients, pricing, data handling, open source, and more." />
+<link rel="canonical" href="https://mcp.novada.com/faq" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Novada MCP" />
+<meta property="og:title" content="FAQ — Novada MCP" />
+<meta property="og:description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 15 web-data tools." />
+<meta property="og:url" content="https://mcp.novada.com/faq" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Novada MCP — One URL. 15 web-data tools. Zero install. Endpoint: https://mcp.novada.com/mcp" />
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="FAQ — Novada MCP" />
+<meta name="twitter:description" content="Frequently asked questions about Novada MCP — hosted Streamable-HTTP MCP server with 15 web-data tools." />
+<meta name="twitter:image" content="https://mcp.novada.com/og-image.png" />
+
+<!-- Structured data: FAQPage -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How is this different from calling the Novada REST API directly?",
+      "acceptedAnswer": { "@type": "Answer", "text": "The MCP endpoint exposes Novada tools through the Model Context Protocol so any MCP-compatible agent (Claude, Cursor, Cline, Codex…) can discover and call them with a structured contract — no client SDK, no per-tool wrapper code. Underneath, it dispatches to the same Novada backend." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need a separate key for MCP?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. The same Novada API key works for the hosted MCP, the local npx novada-mcp, and the REST API. Quota counters are per token." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use the browser tool on the hosted endpoint?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. novada_browser runs on the hosted endpoint — it drives Novada's cloud browser over CDP (navigate, click, type, screenshot, snapshot), one shot per call. Only the multi-step novada_browser_flow (persistent session) is hosted-unavailable and needs the local MCP via npx novada-mcp — same key, same tool names." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I send the key as a header instead of a URL query?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Authorization: Bearer YOUR_API_KEY against https://mcp.novada.com/mcp works identically. Prefer the header when sharing screens or storing client configs in repos." }
+    },
+    {
+      "@type": "Question",
+      "name": "What's the difference between hosted and npx novada-mcp?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Hosted = zero install, paste-a-URL, always latest; the cloud browser (novada_browser) runs on the hosted endpoint via CDP. Local npx novada-mcp = runs everything including multi-step Playwright flows (novada_browser_flow), works offline-from-cloud, but you manage updates yourself." }
+    },
+    {
+      "@type": "Question",
+      "name": "Which MCP clients are supported?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Claude Desktop, Claude Code, Cursor, Codex, Cline, and Windsurf. See the Install page for per-client config snippets." }
+    },
+    {
+      "@type": "Question",
+      "name": "Where is my data / where does it run?",
+      "acceptedAnswer": { "@type": "Answer", "text": "The hosted MCP server runs on Vercel Edge (global PoPs, auto-SSL). Each request dispatches to Novada's backend. Your API key is used only as a call token — we do not store your API key or request payloads (URLs, queries, arguments). We log minimal operational telemetry: tool name, a hashed token fingerprint, and timing, plus error diagnostics via Sentry." }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens when I hit the free quota?",
+      "acceptedAnswer": { "@type": "Answer", "text": "The free hosted gateway allows 1,000 calls/month per API key (an anti-abuse cap, independent of your balance). When you reach it, the tool call returns a normal result with an error notice (not an HTTP 429 — that status is only for the 60-req/min IP rate limit). The cap resets at the start of next month (UTC), or run the local npx novada-mcp server which has no monthly gateway cap. Either way, per-call usage draws your Novada balance — top up at dashboard.novada.com if it runs low." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is it open source?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The hosted server repository is public at github.com/NovadaLabs/novada-mcpserver. The underlying tools come from the novada-mcp npm package." }
+    }
+  ]
+}
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          violet: { DEFAULT: '#7749F1', dark: '#271472', light: '#9360EF', 50: '#F5F2FF', 100: '#E4DCFD' },
+          ink: { DEFAULT: '#011627', mid: '#424242', muted: '#727082' },
+          green: '#2EBF79',
+        },
+        fontFamily: {
+          pixel: ['"Press Start 2P"', 'monospace'],
+          display: ['"Press Start 2P"', 'monospace'],
+          sans: ['"JetBrains Mono"', 'Noto Sans SC', 'ui-monospace', 'monospace'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<link rel="stylesheet" href="shared.css">
+<style>
+  body { background: #fff; color: #011627; }
+  .pixel-font { font-family: 'Press Start 2P', monospace; line-height: 1.5; }
+  .pixel-container { max-width: 80rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
+
+  /* Announcement bar */
+  /* ── Announcement bar — pixel / Minecraft hotbar (all pages) ── */
+  .announcement-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    background: #7749F1;               /* Novada violet hotbar */
+    color: #fff;
+    font-family: 'Press Start 2P', 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1.9;
+    text-align: center;
+    padding: 9px 14px;
+    letter-spacing: 0.02em;
+    /* hard pixel bevel: inner light/dark edges + blocky bottom rail */
+    box-shadow: inset 0 2px 0 0 #B39DFB, inset 0 -2px 0 0 #271472;
+    border-bottom: 3px solid #271472;
+    image-rendering: pixelated;
+  }
+  /* framed [ vX.Y.Z ] version chip — inset pixel block */
+  .announcement-bar .ab-ver {
+    display: inline-block;
+    padding: 3px 7px;
+    background: #271472;
+    color: #E4DCFD;
+    box-shadow: inset 2px 2px 0 0 #9360EF, inset -2px -2px 0 0 #05002b;
+    white-space: nowrap;
+  }
+  .announcement-bar .ab-msg { color: #F5F2FF; }
+  /* blinking green live block */
+  .announcement-bar .ab-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: #2EBF79;
+    box-shadow: 0 0 0 2px #271472;
+    animation: ab-blink 1.2s steps(2, jump-none) infinite;
+    vertical-align: middle;
+  }
+  @keyframes ab-blink { 0%,60%{opacity:1} 61%,100%{opacity:.35} }
+  @media (prefers-reduced-motion: reduce) { .announcement-bar .ab-dot { animation: none; } }
+  .announcement-bar a {
+    color: #2EBF79;
+    text-decoration: none;
+    padding: 3px 7px;
+    background: #011627;
+    box-shadow: inset 2px 2px 0 0 #3ad98f, inset -2px -2px 0 0 #05271a;
+    white-space: nowrap;
+    transition: transform 0.05s steps(2);
+  }
+  .announcement-bar a:hover { color: #fff; background: #2EBF79; transform: translate(-1px,-1px); }
+  .announcement-bar a:active { transform: translate(1px,1px); }
+  @media (max-width: 640px) {
+    .announcement-bar { font-size: 8px; gap: 6px 8px; padding: 8px 10px; }
+  }
+
+  /* Nav */
+  .nav-bar {
+    background: rgba(255,255,255,0.92);
+    border-bottom: 2px solid #E4DCFD;
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .nav-link {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: #424242;
+    text-decoration: none;
+    letter-spacing: 0.03em;
+    transition: color 0.15s;
+  }
+  .nav-link:hover { color: #7749F1; }
+  .nav-link.active { color: #7749F1; }
+  .logo-img { height: 26px; width: auto; }
+  .logo-img-footer { height: 22px; width: auto; }
+
+  .pixel-btn-sm {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #fff;
+    background: #7749F1;
+    padding: 8px 14px;
+    border: 2px solid #271472;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    transition: background 0.1s steps(2);
+    box-shadow: 3px 3px 0 #271472;
+  }
+  .pixel-btn-sm:hover { background: #9360EF; }
+
+  /* FAQ hero */
+  .faq-hero {
+    background: #F5F2FF;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 2px solid #7749F1;
+  }
+  .faq-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(119,73,241,0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(119,73,241,0.08) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .faq-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(22px, 4vw, 40px);
+    line-height: 1.4;
+    color: #011627;
+    text-shadow: 3px 3px 0 rgba(119,73,241,0.25);
+  }
+
+  /* FAQ accordion */
+  .faq-body { background: #fff; }
+  details.faq {
+    background: #fff;
+    border: 2px solid #7749F1;
+    box-shadow: 3px 3px 0 #271472;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    transition: box-shadow 0.1s, transform 0.1s, border-color 0.1s;
+  }
+  details.faq:hover { border-color: #9360EF; box-shadow: 4px 6px 0 #271472; }
+  details.faq[open] { border-color: #7749F1; }
+  details.faq summary {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    line-height: 1.7;
+    color: #011627;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  details.faq summary::-webkit-details-marker { display: none; }
+  details.faq summary::before {
+    content: '▸';
+    color: #7749F1;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+  details.faq[open] summary::before { transform: rotate(90deg); }
+  details.faq p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: #424242;
+    margin-top: 16px;
+    line-height: 1.75;
+  }
+  details.faq p a { color: #7749F1; text-decoration: underline; font-weight: 600; }
+  details.faq p a:hover { color: #271472; }
+  details.faq code.mono {
+    font-family: 'JetBrains Mono', monospace;
+    color: #7749F1;
+    background: #F5F2FF;
+    padding: 1px 5px;
+    border: 1px solid #E4DCFD;
+    font-size: 12.5px;
+  }
+
+  /* CTA card */
+  .cta-card {
+    background: #fff;
+    border: 2px solid #7749F1;
+    box-shadow: 6px 6px 0 #271472;
+  }
+  .cta-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(14px, 2.4vw, 18px);
+    color: #011627;
+    text-shadow: 2px 2px 0 rgba(119,73,241,0.2);
+    line-height: 1.5;
+  }
+  .pixel-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: #fff;
+    background: #7749F1;
+    padding: 14px 20px;
+    border: 2px solid #271472;
+    box-shadow: 4px 4px 0 #271472;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    transition: transform 0.08s, box-shadow 0.08s;
+    letter-spacing: 0.02em;
+  }
+  .pixel-btn:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #271472; }
+  .pixel-btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #271472; }
+  .pixel-btn-dark {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: #7749F1;
+    background: #F5F2FF;
+    padding: 14px 20px;
+    border: 2px solid #7749F1;
+    box-shadow: 4px 4px 0 #271472;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    transition: transform 0.08s, box-shadow 0.08s, color 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .pixel-btn-dark:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #271472; background: #E4DCFD; }
+  .pixel-btn-dark:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #271472; }
+  .live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #2EBF79;
+    box-shadow: 0 0 8px #2EBF79;
+    animation: blink-dot 1.2s steps(2) infinite;
+  }
+  @keyframes blink-dot { 0%,49%{opacity:1;} 50%,100%{opacity:0.25;} }
+
+  /* Footer */
+  .footer-link {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #424242;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: color 0.15s;
+  }
+  .footer-link:hover { color: #7749F1; }
+
+  #lang-toggle {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #424242;
+    background: #F5F2FF;
+    border: 2px solid #7749F1;
+    padding: 8px 10px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    box-shadow: 2px 2px 0 #271472;
+    transition: background 0.15s;
+  }
+  #lang-toggle:hover { background: #E4DCFD; }
+  .theme-btn { display: none; }
+
+  .icon-sun { display: block; }
+  .icon-moon { display: none; }
+</style>
+</head>
+<body class="lang-en">
+
+<!-- ANNOUNCEMENT BAR -->
+<div class="announcement-bar" role="region" aria-label="Announcement">
+  <span class="ab-dot" aria-hidden="true"></span>
+  <span class="en"><span class="ab-ver">[ v0.9.17 ]</span> <span class="ab-msg">15 tools · one endpoint · one key · 1,000 free gateway calls/mo · then balance</span> <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh"><span class="ab-ver">[ v0.9.17 ]</span> <span class="ab-msg">15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费网关调用 · 之后按余额扣费</span> <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
+</div>
+
+<!-- HEADER -->
+<header class="nav-bar">
+  <div class="pixel-container h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-3 flex-shrink-0">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[12px] text-white'}))" />
+      <span class="pixel-font text-[10px]" style="color:#7749F1">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-6">
+      <a href="/#install" class="nav-link"><span class="en">▸ INSTALL</span><span class="zh">▸ 接入</span></a>
+      <a href="/tools" class="nav-link"><span class="en">▸ TOOLS</span><span class="zh">▸ 工具</span></a>
+      <a href="/pricing" class="nav-link"><span class="en">▸ PRICING</span><span class="zh">▸ 价格</span></a>
+      <a href="/faq" class="nav-link active">▸ FAQ</a>
+      <a href="/playground" class="nav-link" style="color:#2EBF79"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
+    </nav>
+    <div class="flex items-center gap-2.5">
+      <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button id="lang-toggle" onclick="toggleLang()">中 / EN</button>
+      <a href="https://www.novada.com" class="pixel-btn-sm hidden sm:inline-flex">
+        <span class="en">GET API KEY</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="faq-hero" style="padding:80px 0 60px">
+  <div class="pixel-container text-center relative z-10">
+    <h1 class="faq-title" style="margin-bottom:20px">[ FAQ ]</h1>
+    <p style="font-family:'JetBrains Mono',monospace;color:#424242;font-size:14px;line-height:1.7">
+      <span class="en">Everything you need to know about Novada MCP — clients, keys, data, limits, and open source.</span>
+      <span class="zh">关于 Novada MCP 你需要了解的一切 — 客户端、密钥、数据、配额与开源。</span>
+    </p>
+  </div>
+</section>
+
+<!-- FAQ ENTRIES -->
+<section class="faq-body" style="padding:60px 0">
+  <div class="pixel-container" style="max-width:800px">
+
+    <!-- Q1: REST API vs MCP -->
+    <details class="faq">
+      <summary>
+        <span class="en">How is this different from calling the Novada REST API directly?</span>
+        <span class="zh">这和直接调用 Novada REST API 有什么区别?</span>
+      </summary>
+      <p>
+        <span class="en">The MCP endpoint exposes Novada tools through the Model Context Protocol so any MCP-compatible agent (Claude, Cursor, Cline, Codex…) can discover and call them with a structured contract — no client SDK, no per-tool wrapper code. Underneath, it dispatches to the same Novada backend.</span>
+        <span class="zh">MCP 端点通过 Model Context Protocol 暴露 Novada 工具,任何兼容 MCP 的 Agent(Claude、Cursor、Cline、Codex 等)都能以结构化协议自动发现与调用 — 无需客户端 SDK,无需逐工具封装代码。底层仍由 Novada 后端处理。</span>
+      </p>
+    </details>
+
+    <!-- Q2: Separate key? -->
+    <details class="faq">
+      <summary>
+        <span class="en">Do I need a separate key for MCP?</span>
+        <span class="zh">MCP 需要单独的密钥吗?</span>
+      </summary>
+      <p>
+        <span class="en">No. The same Novada API key works for the hosted MCP, the local <code class="mono">npx novada-mcp</code>, and the REST API. Quota counters are per token.</span>
+        <span class="zh">不需要。同一把 Novada API Key 同时适用于托管 MCP、本地 <code class="mono">npx novada-mcp</code> 与 REST API。额度按 Token 计算。</span>
+      </p>
+    </details>
+
+    <!-- Q3: Browser tools -->
+    <details class="faq">
+      <summary>
+        <span class="en">Can I use the browser tool on the hosted endpoint?</span>
+        <span class="zh">托管端可以使用浏览器工具吗?</span>
+      </summary>
+      <p>
+        <span class="en">Yes — <code class="mono">novada_browser</code> runs on the hosted endpoint. It drives Novada's cloud browser over CDP (navigate, click, type, screenshot, snapshot), one shot per call, with credentials auto-provisioned from your key. Only the multi-step <code class="mono">novada_browser_flow</code> (which holds a persistent session across calls) is hosted-unavailable — it returns <code class="mono">501</code> with an <code class="mono">agent_instruction</code> pointing to the local MCP via <code class="mono">npx novada-mcp</code>. Same key, same tool names.</span>
+        <span class="zh">可以 — <code class="mono">novada_browser</code> 在托管端运行。它通过 CDP 驱动 Novada 云端浏览器(导航、点击、输入、截图、快照),每次调用为一次性任务,凭证由你的密钥自动分配。仅多步的 <code class="mono">novada_browser_flow</code>(跨调用保持会话)在托管端不可用 — 返回 <code class="mono">501</code> 并附带 <code class="mono">agent_instruction</code>,引导到本地 MCP <code class="mono">npx novada-mcp</code>。同一密钥、同一工具名。</span>
+      </p>
+    </details>
+
+    <!-- Q4: Header auth -->
+    <details class="faq">
+      <summary>
+        <span class="en">Can I send the key as a header instead of a URL query?</span>
+        <span class="zh">能否用请求头代替 URL 查询参数传递密钥?</span>
+      </summary>
+      <p>
+        <span class="en">Yes. <code class="mono">Authorization: Bearer YOUR_API_KEY</code> against <code class="mono">https://mcp.novada.com/mcp</code> works identically. Prefer the header when sharing screens or storing client configs in repos.</span>
+        <span class="zh">可以。对 <code class="mono">https://mcp.novada.com/mcp</code> 使用 <code class="mono">Authorization: Bearer YOUR_API_KEY</code> 效果相同。分享屏幕或将客户端配置纳入仓库时,推荐使用请求头方式。</span>
+      </p>
+    </details>
+
+    <!-- Q5: Hosted vs npx -->
+    <details class="faq">
+      <summary>
+        <span class="en">What's the difference between hosted and npx novada-mcp?</span>
+        <span class="zh">托管版与 npx novada-mcp 有何不同?</span>
+      </summary>
+      <p>
+        <span class="en">Hosted = zero install, paste-a-URL, always latest; the cloud browser (<code class="mono">novada_browser</code>) runs on the hosted endpoint via CDP. Local <code class="mono">npx novada-mcp</code> = runs everything including multi-step Playwright flows (<code class="mono">novada_browser_flow</code>), works offline-from-cloud, but you manage updates yourself.</span>
+        <span class="zh">托管版 = 零安装、粘贴 URL、始终最新;云端浏览器(<code class="mono">novada_browser</code>)通过 CDP 在托管端运行。本地 <code class="mono">npx novada-mcp</code> = 全功能含多步 Playwright 流程(<code class="mono">novada_browser_flow</code>)、可离线使用,但需自行管理更新。</span>
+      </p>
+    </details>
+
+    <!-- Q6: Supported clients -->
+    <details class="faq">
+      <summary>
+        <span class="en">Which MCP clients are supported?</span>
+        <span class="zh">支持哪些 MCP 客户端?</span>
+      </summary>
+      <p>
+        <span class="en">Claude Desktop, Claude Code, Cursor, Codex, Cline, and Windsurf are all supported. See the <a href="/#install">Install page</a> for per-client config snippets you can copy and paste.</span>
+        <span class="zh">支持 Claude Desktop、Claude Code、Cursor、Codex、Cline 与 Windsurf。请前往<a href="/#install">接入页面</a>查看各客户端的可复制配置片段。</span>
+      </p>
+    </details>
+
+    <!-- Q7: Data / privacy -->
+    <details class="faq">
+      <summary>
+        <span class="en">Where is my data processed and where does it run?</span>
+        <span class="zh">我的数据在哪里处理?服务运行在哪里?</span>
+      </summary>
+      <p>
+        <span class="en">The hosted MCP server runs on Vercel Edge (global PoPs, auto-SSL). Each request dispatches to Novada's backend for tool execution. Your API key is used only as a call token — we do not store your API key or your request payloads (URLs, queries, arguments). We do log minimal operational telemetry: the tool name, a hashed token fingerprint, and timing (for abuse-prevention and ops), plus error diagnostics via Sentry.</span>
+        <span class="zh">托管 MCP 服务器运行于 Vercel Edge(全球节点,自动 SSL)。每次请求均分发至 Novada 后端执行工具。你的 API 密钥仅用作调用凭证 — 我们不存储你的 API 密钥或请求内容(URL、查询、参数)。我们会记录最少的运维遥测:工具名称、经过哈希的密钥指纹与耗时(用于防滥用与运维),以及通过 Sentry 记录的错误诊断。</span>
+      </p>
+    </details>
+
+    <!-- Q8: Quota exceeded -->
+    <details class="faq">
+      <summary>
+        <span class="en">What happens when I hit the free quota?</span>
+        <span class="zh">免费额度用完后会怎样?</span>
+      </summary>
+      <p>
+        <span class="en">The free hosted gateway allows 1,000 calls/month per API key — an anti-abuse cap, independent of your Novada balance. When you reach it, the tool call returns a normal JSON-RPC result flagged as an error (<em>not</em> an HTTP <code class="mono">429</code> — that status is reserved for the 60-req/min per-IP rate limit). The cap resets at the start of next month (UTC). To keep going now, run the local <code class="mono">npx novada-mcp</code> server, which has no monthly gateway cap. Either way, per-call usage draws your Novada balance — <a href="https://dashboard.novada.com/">top up in the dashboard</a> if your balance runs low.</span>
+        <span class="zh">免费托管网关每月允许每把 API 密钥调用 1,000 次 — 这是防滥用上限,与 Novada 余额独立。达到后,工具调用会返回一个标记为错误的正常 JSON-RPC 结果(<em>不是</em> HTTP <code class="mono">429</code> — 该状态仅用于每 IP 每分钟 60 次的速率限制)。上限在下月初(UTC)重置。若想立即继续,可运行本地 <code class="mono">npx novada-mcp</code>,它没有月度网关上限。无论哪种方式,每次调用都会按用量从 Novada 余额扣费 — 余额不足时请<a href="https://dashboard.novada.com/">在控制台充值</a>。</span>
+      </p>
+    </details>
+
+    <!-- Q9: Open source -->
+    <details class="faq">
+      <summary>
+        <span class="en">Is Novada MCP open source?</span>
+        <span class="zh">Novada MCP 是开源的吗?</span>
+      </summary>
+      <p>
+        <span class="en">Yes. The hosted server repository is public at <a href="https://github.com/NovadaLabs/novada-mcpserver">github.com/NovadaLabs/novada-mcpserver</a>. The underlying tool implementations come from the <a href="https://www.npmjs.com/package/novada-mcp">novada-mcp npm package</a>.</span>
+        <span class="zh">是的。托管服务器仓库已公开于 <a href="https://github.com/NovadaLabs/novada-mcpserver">github.com/NovadaLabs/novada-mcpserver</a>。底层工具实现来自 <a href="https://www.npmjs.com/package/novada-mcp">novada-mcp npm 包</a>。</span>
+      </p>
+    </details>
+
+    <!-- CTA -->
+    <div class="cta-card" style="margin-top:48px;padding:36px 32px;text-align:center">
+      <h2 class="cta-title" style="margin-bottom:14px">
+        <span class="en">Still have questions?</span>
+        <span class="zh">还有疑问?</span>
+      </h2>
+      <p style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#424242;margin-bottom:24px;line-height:1.7">
+        <span class="en">Open an issue on GitHub or try the live playground with your own key.</span>
+        <span class="zh">在 GitHub 提 Issue,或用你自己的密钥打开在线 Playground 试一试。</span>
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <a href="https://github.com/NovadaLabs/novada-mcpserver/issues" class="pixel-btn">
+          <span class="en">OPEN ISSUE →</span><span class="zh">提 ISSUE →</span>
+        </a>
+        <a href="/playground" class="pixel-btn-dark">
+          <span class="live-dot"></span>
+          <span class="en">TRY PLAYGROUND</span><span class="zh">打开 PLAYGROUND</span>
+        </a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="py-12" style="background:#011627;border-top:2px solid #7749F1">
+  <div class="pixel-container flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img-footer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[11px] text-white'}))" />
+      <span class="pixel-font text-[8px]" style="color:#E4DCFD">MCP</span>
+    </div>
+    <nav class="flex flex-wrap items-center justify-center gap-8">
+      <a href="https://www.npmjs.com/package/novada-mcp" class="footer-link" style="color:#E4DCFD">npm</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="footer-link" style="color:#E4DCFD">GitHub</a>
+      <a href="https://www.novada.com" class="footer-link" style="color:#E4DCFD">novada.com</a>
+      <a href="https://www.novada.com" class="footer-link" style="color:#E4DCFD"><span class="en">API DASHBOARD</span><span class="zh">控制台</span></a>
+    </nav>
+    <span class="pixel-font text-[8px]" style="color:#E4DCFD">© 2026 NOVADA</span>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div id="toast" class="toast"><span class="en">Copied</span><span class="zh">已复制</span></div>
+
+<script src="shared.js" defer></script>
+</body>
+</html>

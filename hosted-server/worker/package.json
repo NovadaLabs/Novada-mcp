@@ -1,0 +1,25 @@
+{
+  "name": "novada-mcp-hosted",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker hosting Novada MCP as a remote Streamable HTTP endpoint at https://mcp.novada.com/mcp",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run --outdir=dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "novada-mcp": "file:../../novada-mcp",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "typescript": "^5.5.4",
+    "wrangler": "^4.0.0"
+  }
+}

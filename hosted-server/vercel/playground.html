@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+try { localStorage.setItem('theme','light'); } catch(e) {}
+document.documentElement.setAttribute('data-theme','light');
+function toggleTheme(){}
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Playground — Novada MCP</title>
+<meta name="description" content="API console for the Novada Hosted MCP server. Enter your key, pick a tool, inspect the JSON-RPC / cURL request, and run it live against mcp.novada.com." />
+<link rel="canonical" href="https://mcp.novada.com/playground" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+<meta property="og:title" content="Novada MCP — API Console" />
+<meta property="og:description" content="Run Novada MCP tools live. Inspect the request, send it, read the response — your key, your quota." />
+<meta property="og:url" content="https://mcp.novada.com/playground" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          violet: { DEFAULT: '#7749F1', dark: '#271472', light: '#9360EF', 50: '#F5F2FF', 100: '#E4DCFD' },
+          ink: { DEFAULT: '#011627', mid: '#424242', muted: '#727082' },
+          green: '#2EBF79',
+        },
+        fontFamily: {
+          pixel: ['"Press Start 2P"', 'monospace'],
+          display: ['"Press Start 2P"', 'monospace'],
+          sans: ['"JetBrains Mono"', 'Noto Sans SC', 'ui-monospace', 'monospace'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<link rel="stylesheet" href="shared.css">
+<style>
+  body { background: #fff; color: #011627; }
+  .pixel-font { font-family: 'Press Start 2P', monospace; line-height: 1.5; }
+  .pixel-container { max-width: 80rem; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
+
+  /* ─── Announcement bar ──────────── */
+  /* ── Announcement bar — pixel / Minecraft hotbar (all pages) ── */
+  .announcement-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    background: #7749F1;               /* Novada violet hotbar */
+    color: #fff;
+    font-family: 'Press Start 2P', 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1.9;
+    text-align: center;
+    padding: 9px 14px;
+    letter-spacing: 0.02em;
+    /* hard pixel bevel: inner light/dark edges + blocky bottom rail */
+    box-shadow: inset 0 2px 0 0 #B39DFB, inset 0 -2px 0 0 #271472;
+    border-bottom: 3px solid #271472;
+    image-rendering: pixelated;
+  }
+  /* framed [ vX.Y.Z ] version chip — inset pixel block */
+  .announcement-bar .ab-ver {
+    display: inline-block;
+    padding: 3px 7px;
+    background: #271472;
+    color: #E4DCFD;
+    box-shadow: inset 2px 2px 0 0 #9360EF, inset -2px -2px 0 0 #05002b;
+    white-space: nowrap;
+  }
+  .announcement-bar .ab-msg { color: #F5F2FF; }
+  /* blinking green live block */
+  .announcement-bar .ab-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: #2EBF79;
+    box-shadow: 0 0 0 2px #271472;
+    animation: ab-blink 1.2s steps(2, jump-none) infinite;
+    vertical-align: middle;
+  }
+  @keyframes ab-blink { 0%,60%{opacity:1} 61%,100%{opacity:.35} }
+  @media (prefers-reduced-motion: reduce) { .announcement-bar .ab-dot { animation: none; } }
+  .announcement-bar a {
+    color: #2EBF79;
+    text-decoration: none;
+    padding: 3px 7px;
+    background: #011627;
+    box-shadow: inset 2px 2px 0 0 #3ad98f, inset -2px -2px 0 0 #05271a;
+    white-space: nowrap;
+    transition: transform 0.05s steps(2);
+  }
+  .announcement-bar a:hover { color: #fff; background: #2EBF79; transform: translate(-1px,-1px); }
+  .announcement-bar a:active { transform: translate(1px,1px); }
+  @media (max-width: 640px) {
+    .announcement-bar { font-size: 8px; gap: 6px 8px; padding: 8px 10px; }
+  }
+
+  /* ─── Nav ───────────────────────── */
+  .nav-bar {
+    background: rgba(255,255,255,0.92);
+    border-bottom: 2px solid #E4DCFD;
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .nav-link {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: #424242;
+    text-decoration: none;
+    letter-spacing: 0.03em;
+    transition: color 0.15s;
+  }
+  .nav-link:hover { color: #7749F1; }
+  .logo-img { height: 26px; width: auto; }
+  .logo-img-footer { height: 22px; width: auto; }
+
+  .pixel-btn-sm {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #fff;
+    background: #7749F1;
+    padding: 8px 14px;
+    border: 2px solid #271472;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    transition: background 0.1s steps(2);
+    box-shadow: 3px 3px 0 #271472;
+  }
+  .pixel-btn-sm:hover { background: #9360EF; }
+
+  .footer-link {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #424242;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: color 0.15s;
+  }
+  .footer-link:hover { color: #7749F1; }
+
+  #lang-toggle {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #424242;
+    background: #F5F2FF;
+    border: 2px solid #7749F1;
+    padding: 8px 10px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    box-shadow: 2px 2px 0 #271472;
+    transition: background 0.15s;
+  }
+  #lang-toggle:hover { background: #E4DCFD; }
+  .theme-btn { display: none; }
+
+  .icon-sun { display: block; }
+  .icon-moon { display: none; }
+
+  /* Playground page wrapper */
+  .pg-page { background: #F5F2FF; min-height: 100vh; padding: 40px 0; }
+  .pg-title { font-family: 'Press Start 2P', monospace; font-size: 1.2rem; color: #7749F1; margin-bottom: 8px; text-align: center; line-height: 1.6; }
+
+  /* Card surfaces */
+  .pg-card { background: #fff; }
+
+  /* ─── Playground pixel controls ──────────────────────── */
+  .pg-console { box-shadow: 0 0 0 2px #7749F1, 4px 4px 0 #271472; }
+
+  .pg-label {
+    display: block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #424242;
+    margin-bottom: 7px;
+    line-height: 1.6;
+  }
+  .pg-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    border: 2px solid #E4DCFD;
+    background: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    color: #011627;
+    transition: border-color .12s steps(2), box-shadow .12s;
+  }
+  .pg-input:focus { outline: none; border-color: #7749F1; box-shadow: 0 0 0 2px rgba(119,73,241,0.35); }
+  select.pg-input { cursor: pointer; }
+
+  /* tool pills / rail */
+  .pg-tool-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: #424242;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background .1s steps(2), color .1s;
+  }
+  .pg-tool-pill::before { content: '▸'; color: #9360EF; font-size: 11px; }
+  .pg-tool-pill:hover { background: #F5F2FF; color: #011627; }
+  .pg-tool-pill.active { background: #F5F2FF; border-left-color: #7749F1; color: #7749F1; }
+  .pg-tool-pill.active::before { color: #7749F1; }
+
+  .tool-group-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #7749F1;
+    padding: 14px 12px 6px;
+  }
+
+  /* panel chrome */
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 11px 16px;
+    border-bottom: 2px solid #E4DCFD;
+    background: #F5F2FF;
+  }
+
+  .seg { display: inline-flex; border: 2px solid #E4DCFD; overflow: hidden; }
+  .seg button {
+    padding: 5px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: #fff;
+    color: #727082;
+    cursor: pointer;
+    border: none;
+    transition: background .1s steps(2), color .1s;
+  }
+  .seg button.on { background: #7749F1; color: #fff; }
+
+  .method-chip {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    background: #7749F1;
+    color: #fff;
+    padding: 4px 8px;
+    letter-spacing: 0.03em;
+    box-shadow: 2px 2px 0 #271472;
+  }
+  .status-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 9px;
+  }
+  .status-ok  { background: rgba(46,191,121,0.14); color: #2EBF79; box-shadow: inset 0 0 0 1px #2EBF79; }
+  .status-err { background: rgba(255,77,77,0.14); color: #d92626; box-shadow: inset 0 0 0 1px #d92626; }
+  .status-idle{ background: #F5F2FF; color: #727082; box-shadow: inset 0 0 0 1px #E4DCFD; }
+  .meta-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #424242; }
+
+  .send-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: #fff;
+    background: #7749F1;
+    padding: 12px 20px;
+    border: 2px solid #271472;
+    box-shadow: 4px 4px 0 #271472;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    transition: transform 0.08s, box-shadow 0.08s;
+    letter-spacing: 0.02em;
+  }
+  .send-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #271472; }
+  .send-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 #271472; }
+  .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .codeview {
+    background: #011627;
+    border-left: 4px solid #7749F1;
+    color: #E4DCFD;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    padding: 14px 16px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    box-shadow: 0 0 0 2px #7749F1;
+  }
+
+  .key-badge {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    padding: 5px 9px;
+    letter-spacing: 0.03em;
+  }
+  .key-need { background: #F5F2FF; color: #727082; box-shadow: inset 0 0 0 2px #E4DCFD; }
+  .key-ok   { background: rgba(46,191,121,0.12); color: #2EBF79; box-shadow: inset 0 0 0 2px #2EBF79; }
+
+  .save-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #fff;
+    background: #7749F1;
+    padding: 10px 12px;
+    border: 2px solid #271472;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.1s steps(2);
+    box-shadow: 2px 2px 0 #271472;
+  }
+  .save-btn:hover { background: #9360EF; }
+  .ghost-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #7749F1;
+    background: #F5F2FF;
+    padding: 10px 12px;
+    border: 2px solid #7749F1;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .ghost-btn:hover { background: #E4DCFD; }
+</style>
+</head>
+<body class="lang-en">
+
+<!-- ANNOUNCEMENT BAR -->
+<div class="announcement-bar" role="region" aria-label="Announcement">
+  <span class="ab-dot" aria-hidden="true"></span>
+  <span class="en"><span class="ab-ver">[ v0.9.17 ]</span> <span class="ab-msg">15 tools · one endpoint · one key · 1,000 free gateway calls/mo · then balance</span> <a href="https://dashboard.novada.com/api-key/">Get free key →</a></span>
+  <span class="zh"><span class="ab-ver">[ v0.9.17 ]</span> <span class="ab-msg">15 个工具 · 一个端点 · 一把密钥 · 每月 1,000 次免费网关调用 · 之后按余额扣费</span> <a href="https://dashboard.novada.com/api-key/">领取免费密钥 →</a></span>
+</div>
+
+<!-- HEADER -->
+<header class="nav-bar">
+  <div class="pixel-container h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-3 flex-shrink-0">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[12px] text-white'}))" />
+      <span class="pixel-font text-[10px]" style="color:#7749F1">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-6">
+      <a href="/#install" class="nav-link"><span class="en">▸ INSTALL</span><span class="zh">▸ 接入</span></a>
+      <a href="/tools" class="nav-link"><span class="en">▸ TOOLS</span><span class="zh">▸ 工具</span></a>
+      <a href="/pricing" class="nav-link"><span class="en">▸ PRICING</span><span class="zh">▸ 价格</span></a>
+      <a href="/faq" class="nav-link">▸ FAQ</a>
+      <a href="/playground" class="nav-link" style="color:#2EBF79"><span class="en">▸ PLAY</span><span class="zh">▸ 试玩</span></a>
+    </nav>
+    <div class="flex items-center gap-2.5">
+      <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button id="lang-toggle" onclick="toggleLang()">中 / EN</button>
+      <a href="https://www.novada.com" class="pixel-btn-sm hidden sm:inline-flex">
+        <span class="en">GET API KEY</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- PLAYGROUND -->
+<div class="pg-page">
+  <div class="pixel-container">
+
+    <h1 class="pg-title">
+      [ LIVE PLAYGROUND ]
+    </h1>
+    <p style="font-family:'JetBrains Mono',monospace;color:#424242;font-size:13px;text-align:center;margin-bottom:20px">
+      <span class="en">Test tools directly. No install required.</span>
+      <span class="zh">直接测试工具,无需安装。</span>
+    </p>
+    <p style="font-family:'JetBrains Mono',monospace;color:#727082;font-size:12px;text-align:center;margin-bottom:28px">
+      <span class="en">Live against <span style="color:#7749F1">POST https://mcp.novada.com/mcp</span> — the same endpoint your agent calls.</span>
+      <span class="zh">直连 <span style="color:#7749F1">POST https://mcp.novada.com/mcp</span> — 你的 Agent 调用的同一端点。</span>
+    </p>
+
+    <!-- API key bar -->
+    <div class="pixel-card pg-card" style="margin-bottom:20px">
+      <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="pg-label" style="margin:0">
+              <span class="en">API KEY</span><span class="zh">API 密钥</span> <span style="color:#7749F1">*</span>
+            </span>
+            <span id="pg-key-status" class="key-badge key-need"></span>
+          </div>
+          <input id="pg-token" type="password" autocomplete="off" spellcheck="false" placeholder="sk-eu-novada-…" class="pg-input" />
+        </div>
+        <div class="flex gap-2">
+          <button id="pg-save-key" class="save-btn">
+            <span class="en">SAVE</span><span class="zh">保存</span>
+          </button>
+          <a href="https://www.novada.com" class="ghost-btn">
+            <span class="en">GET KEY</span><span class="zh">获取</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Console -->
+    <div class="pixel-card pg-console pg-card" style="padding:0;overflow:hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-[220px_1fr]">
+        <!-- LEFT: tool rail -->
+        <div id="pg-tools" class="overflow-y-auto" style="max-height:640px;border-bottom:2px solid #E4DCFD" data-rail></div>
+
+        <!-- RIGHT: request + response -->
+        <div class="flex flex-col" style="min-width:0">
+          <!-- Request -->
+          <div class="panel-head">
+            <div class="flex items-center gap-2">
+              <span class="method-chip">POST</span>
+              <span class="mono text-xs" style="color:#424242">/mcp · tools/call</span>
+            </div>
+            <div class="seg" id="pg-req-view">
+              <button data-view="form" class="on">Form</button>
+              <button data-view="jsonrpc">JSON-RPC</button>
+              <button data-view="curl">cURL</button>
+            </div>
+          </div>
+          <div class="p-4">
+            <div id="pg-args" class="space-y-3"></div>
+            <pre id="pg-req-code" class="codeview" style="display:none; max-height:220px; margin-top:0"></pre>
+          </div>
+          <div class="px-4 pb-4 flex items-center gap-3 flex-wrap">
+            <button id="pg-run" class="send-btn"><span class="pg-run-label">▶ <span class="en">SEND</span><span class="zh">发送</span></span></button>
+            <span id="pg-hint" class="text-xs" style="color:#727082;font-family:'JetBrains Mono',monospace"></span>
+          </div>
+
+          <!-- Response -->
+          <div class="panel-head" style="border-top:2px solid #E4DCFD">
+            <div class="flex items-center gap-3 flex-wrap">
+              <span class="pixel-font" style="font-size:8px;color:#7749F1"><span class="en">RESPONSE</span><span class="zh">响应</span></span>
+              <span id="pg-status" class="status-chip status-idle">—</span>
+              <span id="pg-meta" class="meta-mono"></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="seg" id="pg-resp-view">
+                <button data-rview="pretty" class="on"><span class="en">Output</span><span class="zh">输出</span></button>
+                <button data-rview="raw">JSON</button>
+              </div>
+              <button id="pg-copy" class="text-xs hover:underline" style="color:#7749F1;font-family:'JetBrains Mono',monospace">Copy</button>
+            </div>
+          </div>
+          <pre id="pg-output" class="codeview" style="min-height:200px; max-height:420px; border-left:none; box-shadow:none;"><span style="color:#2EBF79">// Pick a tool, enter your key, hit Send.</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-xs mt-4 leading-relaxed" style="color:#727082;font-family:'JetBrains Mono',monospace">
+      <span class="en">⚠️ Browser-side calls expose your key in the network tab — use it only for testing, call server-side in production. <span style="color:#7749F1">novada_browser</span> runs on hosted; only multi-step <span style="color:#7749F1">novada_browser_flow</span> and PDF extraction require the local MCP (<span style="color:#7749F1">npx novada-mcp</span>).</span>
+      <span class="zh">⚠️ 浏览器端调用会在 network 标签暴露密钥 — 仅供测试,生产请走服务端。<span style="color:#7749F1">novada_browser</span> 在托管端运行;仅多步 <span style="color:#7749F1">novada_browser_flow</span> 与 PDF 解析需本地 MCP (<span style="color:#7749F1">npx novada-mcp</span>)。</span>
+    </p>
+
+    <div class="mt-8 text-center">
+      <p style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#424242"><span class="en">Ready to wire it into your agent?</span><span class="zh">准备接入你的 Agent?</span></p>
+      <a href="/#install" class="pixel-btn-sm mt-3" style="font-size:8px"><span class="en">INSTALL GUIDE</span><span class="zh">查看接入指南</span></a>
+    </div>
+
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="py-12" style="background:#011627;border-top:2px solid #7749F1">
+  <div class="pixel-container flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="logo-img-footer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'pixel-font text-[11px] text-white'}))" />
+      <span class="pixel-font text-[8px]" style="color:#E4DCFD">MCP</span>
+    </div>
+    <nav class="flex flex-wrap items-center justify-center gap-8">
+      <a href="https://www.npmjs.com/package/novada-mcp" class="footer-link" style="color:#E4DCFD">npm</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="footer-link" style="color:#E4DCFD">GitHub</a>
+      <a href="https://www.novada.com" class="footer-link" style="color:#E4DCFD">novada.com</a>
+      <a href="https://www.novada.com" class="footer-link" style="color:#E4DCFD"><span class="en">API DASHBOARD</span><span class="zh">控制台</span></a>
+    </nav>
+    <span class="pixel-font text-[8px]" style="color:#E4DCFD">© 2026 NOVADA</span>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div id="toast" class="toast"><span class="en">Copied</span><span class="zh">已复制</span></div>
+
+<script src="shared.js" defer></script>
+<script>
+  const isZh = () => document.body.classList.contains('lang-zh');
+  // Re-render playground UI after language toggle (shared.js handles the class swap)
+  document.addEventListener('click', e => {
+    if (e.target.closest('#lang-toggle')) {
+      setTimeout(() => { renderTools(); renderArgs(); syncReqView(); }, 0);
+    }
+  });
+  function showToast(m){ if (typeof _showToast === 'function') _showToast(m); }
+
+  const PG_ENDPOINT = 'https://mcp.novada.com/mcp';
+  const LS_KEY = 'novada_mcp_api_key';
+  const tokenInput = document.getElementById('pg-token');
+  const keyStatus = document.getElementById('pg-key-status');
+  const pgToolsEl = document.getElementById('pg-tools');
+  const pgArgsEl = document.getElementById('pg-args');
+  const pgRunBtn = document.getElementById('pg-run');
+  const pgOutput = document.getElementById('pg-output');
+  const pgStatus = document.getElementById('pg-status');
+  const pgMeta = document.getElementById('pg-meta');
+  const pgHint = document.getElementById('pg-hint');
+  const pgReqCode = document.getElementById('pg-req-code');
+  function hasKey(){ return tokenInput.value.trim().length>0; }
+
+  // ── Tool catalog (grouped) — the 15 hosted tools ──
+  const GROUPS = [
+    { label: 'Search & Extract', tools: ['novada_search','novada_extract'] },
+    { label: 'Crawl & Map', tools: ['novada_crawl','novada_map'] },
+    { label: 'Scrape', tools: ['novada_scrape'] },
+    { label: 'Research & Monitor', tools: ['novada_research','novada_discover','novada_ai_monitor','novada_monitor'] },
+    { label: 'Browser', tools: ['novada_browser'] },
+    { label: 'Proxy', tools: ['novada_proxy','novada_proxy_account_list','novada_proxy_account_create'] },
+    { label: 'Account & Config', tools: ['novada_setup','novada_account'] },
+  ];
+  // ── Scraper operation catalog (platform → operation + required params) ──
+  const SCRAPE_PLATFORMS = [
+    { platform: 'amazon.com', operation: 'amazon_product_keywords', params: [ { key:'keyword', type:'string', default:'AI tools' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'walmart.com', operation: 'walmart_product_keywords', params: [ { key:'keyword', type:'string', default:'wireless earbuds' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'github.com',  operation: 'github_repository_repo-url', params: [ { key:'url', type:'string', default:'https://github.com/NovadaLabs/novada-mcpserver' } ] },
+    { platform: 'youtube.com', operation: 'youtube_video_search_label', params: [ { key:'label', type:'string', default:'web scraping tutorial' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'linkedin.com', operation: 'linkedin_company_information_url', params: [ { key:'url', type:'string', default:'https://www.linkedin.com/company/novada' } ] },
+    { platform: 'tiktok.com',  operation: 'tiktok_posts_url', params: [ { key:'url', type:'string', default:'https://www.tiktok.com/@novada' } ] },
+  ];
+  let extractMode = 'single';
+
+  const PG_TOOLS = {
+    novada_search: {
+      render: () => `<div><label class="pg-label">${isZh()?'查询':'Query'}</label><input id="pg-q" class="pg-input" value="firecrawl vs brightdata pricing"></div>
+        <div class="pg-input-row" style="display:flex;gap:8px"><div style="flex:1"><label class="pg-label">Engine</label><select id="pg-engine" class="pg-input"><option>google</option><option>bing</option><option>duckduckgo</option></select></div><div style="width:110px"><label class="pg-label">Num</label><select id="pg-num" class="pg-input"><option>3</option><option selected>5</option><option>10</option></select></div></div>`,
+      build: () => ({ query: val('pg-q'), engine: val('pg-engine'), num: parseInt(val('pg-num'),10) }),
+    },
+    novada_scrape: {
+      render: () => {
+        const plat = val('pg-scrape-platform') || SCRAPE_PLATFORMS[0].platform;
+        const cfg = SCRAPE_PLATFORMS.find(p => p.platform === plat) || SCRAPE_PLATFORMS[0];
+        const platOpts = SCRAPE_PLATFORMS.map(p => `<option value="${p.platform}"${p.platform===plat?' selected':''}>${p.platform}</option>`).join('');
+        const paramFields = cfg.params.map(f =>
+          f.type === 'number'
+            ? `<div style="width:110px"><label class="pg-label">${f.key}</label><input id="pg-sp-${f.key}" type="number" class="pg-input" value="${f.default}" min="1" max="50"></div>`
+            : `<div style="flex:1"><label class="pg-label">${f.key}</label><input id="pg-sp-${f.key}" class="pg-input" value="${f.default}"></div>`
+        ).join('');
+        return `<div><label class="pg-label">${isZh()?'平台':'Platform'}</label><select id="pg-scrape-platform" class="pg-input" data-rerender>${platOpts}</select></div>
+          <div style="margin-top:12px"><label class="pg-label">${isZh()?'操作':'Operation'}</label><input id="pg-scrape-op" class="pg-input" value="${cfg.operation}" readonly style="opacity:.75;cursor:not-allowed"></div>
+          <div class="pg-input-row" style="display:flex;gap:8px;margin-top:12px">${paramFields}</div>`;
+      },
+      build: () => {
+        const plat = val('pg-scrape-platform') || SCRAPE_PLATFORMS[0].platform;
+        const cfg = SCRAPE_PLATFORMS.find(p => p.platform === plat) || SCRAPE_PLATFORMS[0];
+        const params = {};
+        let limit = 5;
+        cfg.params.forEach(f => {
+          const raw = val(`pg-sp-${f.key}`);
+          const value = f.type === 'number' ? (parseInt(raw, 10) || f.default) : raw;
+          params[f.key] = value;
+          if (f.key === 'num') limit = value;
+        });
+        return { platform: cfg.platform, operation: cfg.operation, params, limit, format: 'markdown' };
+      },
+    },
+    novada_extract: {
+      render: () => `<div class="seg" id="pg-extract-mode" style="margin-bottom:12px">
+          <button data-emode="single" class="${extractMode==='single'?'on':''}">${isZh()?'单个':'Single'}</button>
+          <button data-emode="batch" class="${extractMode==='batch'?'on':''}">${isZh()?'批量':'Batch'}</button>
+        </div>
+        <div id="pg-extract-single" style="display:${extractMode==='single'?'':'none'}">${urlField('https://www.firecrawl.dev/pricing')}</div>
+        <div id="pg-extract-batch" style="display:${extractMode==='batch'?'':'none'}"><label class="pg-label">${isZh()?'批量 URL(每行一个,最多 10 个)':'Batch URLs (one per line, max 10)'}</label><textarea id="pg-urls" class="pg-input" rows="4" style="resize:vertical">https://www.firecrawl.dev/pricing
+https://www.tavily.com
+https://www.brightdata.com/pricing</textarea></div>`,
+      build: () => {
+        if (extractMode === 'batch') {
+          const list = val('pg-urls').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10);
+          return { url: list };
+        }
+        return { url: val('pg-url') };
+      },
+    },
+    novada_crawl: {
+      render: () => `${urlField('https://www.tavily.com')}<div class="pg-input-row" style="display:flex;gap:8px;margin-top:12px"><div style="flex:1"><label class="pg-label">Max pages</label><input id="pg-max" type="number" class="pg-input" value="5" min="1" max="20"></div><div style="flex:1"><label class="pg-label">Max depth</label><input id="pg-depth" type="number" class="pg-input" value="2" min="1" max="5"></div></div>`,
+      build: () => ({ url: val('pg-url'), max_pages: parseInt(val('pg-max'),10), max_depth: parseInt(val('pg-depth'),10) }),
+    },
+    novada_map: { render: () => urlField('https://www.tavily.com'), build: () => ({ url: val('pg-url') }) },
+    novada_research: {
+      render: () => `<div><label class="pg-label">${isZh()?'研究主题':'Topic'}</label><input id="pg-q" class="pg-input" value="best web scraping APIs 2026"></div><div style="margin-top:12px"><label class="pg-label">Depth</label><select id="pg-depth-mode" class="pg-input"><option value="shallow">shallow (~10s)</option><option value="balanced" selected>balanced (~30s)</option><option value="deep">deep (~60s)</option></select></div>`,
+      build: () => ({ query: val('pg-q'), depth: val('pg-depth-mode') }),
+    },
+    novada_discover: { render: () => `<p class="text-xs" style="color:#424242;font-family:'JetBrains Mono',monospace">${isZh()?'列出所有可用的 Novada 工具(按类别)。无需参数:':'List all available Novada tools grouped by category. No arguments needed:'}</p>`, build: () => ({}) },
+    novada_ai_monitor: {
+      render: () => `<div><label class="pg-label">${isZh()?'品牌':'Brand'}</label><input id="pg-q" class="pg-input" value="novada"></div>`,
+      build: () => ({ brand: val('pg-q') }),
+    },
+    novada_monitor: {
+      render: () => `${urlField('https://www.firecrawl.dev/pricing')}<p class="text-xs" style="color:#727082;font-family:'JetBrains Mono',monospace;margin-top:8px">${isZh()?'首次调用建立基线,再次调用返回差异。':'First call sets a baseline; a later call returns the diff.'}</p>`,
+      build: () => ({ url: val('pg-url') }),
+    },
+    novada_browser: {
+      render: () => `<div><label class="pg-label">URL</label><input id="pg-url" class="pg-input" value="https://example.com"></div>
+        <p class="text-xs" style="color:#727082;font-family:'JetBrains Mono',monospace;margin-top:8px">${isZh()?'一次性云端浏览器任务:导航后返回快照。凭证由你的密钥自动分配。':'One-shot cloud browser task: navigate then return a snapshot. Credentials auto-provisioned from your key.'}</p>`,
+      build: () => ({ actions: [ { action: 'navigate', url: val('pg-url'), wait_until: 'domcontentloaded' }, { action: 'snapshot' } ] }),
+    },
+    novada_proxy: {
+      render: () => `<div class="pg-input-row" style="display:flex;gap:8px">
+          <div style="flex:1"><label class="pg-label">${isZh()?'类型':'Type'}</label><select id="pg-ptype" class="pg-input"><option value="residential">residential</option><option value="isp">isp</option><option value="datacenter">datacenter</option><option value="mobile">mobile</option><option value="static">static</option><option value="dedicated">dedicated</option></select></div>
+          <div style="width:120px"><label class="pg-label">${isZh()?'国家':'Country'}</label><input id="pg-pcountry" class="pg-input" value="us" placeholder="us"></div>
+        </div>
+        <div style="margin-top:12px;border:2px solid #E4DCFD;background:#F5F2FF;padding:14px">
+          <div class="pixel-font" style="font-size:8px;color:#7749F1;margin-bottom:8px">${isZh()?'如何使用返回的代理凭证':'HOW TO USE THE RETURNED CREDENTIALS'}</div>
+          <p class="text-xs" style="color:#424242;font-family:'JetBrains Mono',monospace;line-height:1.7;margin-bottom:10px">
+            ${isZh()
+              ? 'novada_proxy <b>不会</b>替你抓取或自动配置任何东西 — 它返回一组 <code style="color:#7749F1">user:pass@host:port</code> 代理凭证,供你在<b>自己的</b> HTTP 客户端(curl / requests / axios …)中使用。把返回的 endpoint 作为代理传给你的客户端即可。extract / crawl 无需此工具 — 它们内部已走代理。'
+              : 'novada_proxy does <b>not</b> fetch or auto-configure anything for you — it returns a <code style="color:#7749F1">user:pass@host:port</code> proxy credential to plug into <b>your own</b> HTTP client (curl / requests / axios …). Take the returned endpoint and pass it as the proxy to your client. Not needed for extract / crawl — those proxy internally.'}
+          </p>
+          <pre class="codeview" style="margin:0;box-shadow:none;border-left-width:3px;font-size:11.5px"># 1) call novada_proxy → it returns something like:
+#    http://USER:PASS@proxy.novada.com:PORT
+# 2) plug that endpoint into your own client:
+curl -x "http://USER:PASS@proxy.novada.com:PORT" https://api.ipify.org
+
+# python-requests
+proxies = {"http": "http://USER:PASS@proxy.novada.com:PORT",
+           "https": "http://USER:PASS@proxy.novada.com:PORT"}
+requests.get("https://api.ipify.org", proxies=proxies)</pre>
+        </div>`,
+      build: () => { const c = val('pg-pcountry').trim(); return Object.assign({ type: val('pg-ptype') }, c ? { country: c } : {}); },
+    },
+    novada_proxy_account_list: {
+      render: () => `<div class="pg-input-row" style="display:flex;gap:8px">
+          <div style="flex:1"><label class="pg-label">${isZh()?'产品':'Product'}</label><select id="pg-pprod" class="pg-input"><option value="1">1 — Residential</option><option value="2">2 — Rotating ISP</option><option value="3">3 — Rotating Datacenter</option><option value="4">4 — Unlimited</option><option value="9">9 — Mobile</option></select></div>
+          <div style="width:100px"><label class="pg-label">${isZh()?'每页':'Limit'}</label><input id="pg-plimit" type="number" class="pg-input" value="20" min="1" max="200"></div>
+        </div>`,
+      build: () => ({ product: val('pg-pprod'), page: 1, limit: parseInt(val('pg-plimit'),10) || 20 }),
+    },
+    novada_proxy_account_create: {
+      render: () => `<div><label class="pg-label">${isZh()?'产品':'Product'}</label><select id="pg-pprod" class="pg-input"><option value="1">1 — Residential</option><option value="2">2 — Rotating ISP</option><option value="3">3 — Rotating Datacenter</option><option value="4">4 — Unlimited</option><option value="9">9 — Mobile</option></select></div>
+        <div class="pg-input-row" style="display:flex;gap:8px;margin-top:12px">
+          <div style="flex:1"><label class="pg-label">${isZh()?'账户名':'Account'}</label><input id="pg-pacct" class="pg-input" value="my-sub-account"></div>
+          <div style="flex:1"><label class="pg-label">${isZh()?'密码':'Password'}</label><input id="pg-ppass" class="pg-input" value="Chang3-me-123"></div>
+        </div>
+        <p class="text-xs" style="color:#b45309;font-family:'JetBrains Mono',monospace;margin-top:10px">${isZh()?'⚠️ 这是写操作。默认返回预览;需人工批准后才带 confirm:true 真正创建。':'⚠️ Write action. Returns a dry-run preview by default; only creates with confirm:true after human approval.'}</p>`,
+      build: () => ({ product: val('pg-pprod'), account: val('pg-pacct'), password: val('pg-ppass') }),
+    },
+    novada_setup: { render: () => `<p class="text-xs" style="color:#424242;font-family:'JetBrains Mono',monospace">${isZh()?'检查你的 API 密钥与已激活产品。免鉴权,不消耗配额。无需参数:':'Check your API key and active products. Auth-free, no quota. No arguments needed:'}</p>`, build: () => ({}) },
+    novada_account: {
+      render: () => `<div><label class="pg-label">Section</label><select id="pg-asection" class="pg-input"><option value="summary" selected>summary</option><option value="balance">balance</option><option value="usage">usage</option><option value="plans">plans</option><option value="traffic">traffic</option></select></div><p class="text-xs" style="color:#727082;font-family:'JetBrains Mono',monospace;margin-top:8px">${isZh()?'单次调用的账户与账单面板。':'Single-call account & billing dashboard.'}</p>`,
+      build: () => ({ section: val('pg-asection') }),
+    },
+  };
+  function val(id){ const el=document.getElementById(id); return el?el.value:''; }
+  function urlField(def){ return `<div><label class="pg-label">URL</label><input id="pg-url" class="pg-input" value="${def}"></div>`; }
+
+  let current = 'novada_search';
+
+  function renderTools(){
+    pgToolsEl.innerHTML = GROUPS.map(g =>
+      `<div class="tool-group-label">${g.label}</div>` +
+      g.tools.map(t => `<div class="pg-tool-pill${t===current?' active':''}" data-tool="${t}">${t.replace('novada_','')}</div>`).join('')
+    ).join('') + `<div class="tool-group-label">${isZh()?'更多':'More'}</div><a href="/tools" class="pg-tool-pill" style="color:#7749F1">${isZh()?'工具详情 →':'tool details →'}</a>`;
+  }
+  function renderArgs(){ pgArgsEl.innerHTML = PG_TOOLS[current]?.render() ?? ''; refreshReqCode(); }
+
+  pgToolsEl.addEventListener('click', e => {
+    const it = e.target.closest('.pg-tool-pill[data-tool]'); if(!it) return;
+    current = it.dataset.tool; renderTools(); renderArgs();
+  });
+  pgArgsEl.addEventListener('input', refreshReqCode);
+  // Re-render the args form when a control marked [data-rerender] changes (e.g. scrape platform).
+  pgArgsEl.addEventListener('change', e => {
+    if (e.target.closest('[data-rerender]')) renderArgs();
+  });
+  // Extract mode toggle (Single / Batch) — restyle segment, swap fields, refresh preview.
+  pgArgsEl.addEventListener('click', e => {
+    const b = e.target.closest('#pg-extract-mode button[data-emode]'); if(!b) return;
+    extractMode = b.dataset.emode;
+    renderArgs();
+  });
+
+  // ── request preview (Form / JSON-RPC / cURL) ──
+  let reqView = 'form';
+  function buildArgs(){ try { return PG_TOOLS[current].build(); } catch { return {}; } }
+  function rpcBody(){ return { jsonrpc:'2.0', id:1, method:'tools/call', params:{ name: current, arguments: buildArgs() } }; }
+  function refreshReqCode(){
+    if (reqView === 'form') return;
+    const bodyObj = rpcBody();
+    if (reqView === 'jsonrpc') {
+      pgReqCode.textContent = JSON.stringify(bodyObj, null, 2);
+    } else { // curl — mask key
+      pgReqCode.textContent =
+`curl -X POST https://mcp.novada.com/mcp \\
+  -H "Authorization: Bearer sk-eu-novada-••••" \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -d '${JSON.stringify(bodyObj)}'`;
+    }
+  }
+  function syncReqView(){
+    document.querySelectorAll('#pg-req-view button').forEach(b => b.classList.toggle('on', b.dataset.view===reqView));
+    pgArgsEl.style.display = reqView==='form' ? '' : 'none';
+    pgReqCode.style.display = reqView==='form' ? 'none' : '';
+    refreshReqCode();
+  }
+  document.getElementById('pg-req-view').addEventListener('click', e => {
+    const b=e.target.closest('button[data-view]'); if(!b) return; reqView=b.dataset.view; syncReqView();
+  });
+
+  // ── response view (Output / JSON) ──
+  let respView = 'pretty'; let lastResult = null;
+  function renderResp(){
+    if (!lastResult) return;
+    if (respView === 'raw') { pgOutput.textContent = JSON.stringify(lastResult.full, null, 2); }
+    else { pgOutput.textContent = lastResult.pretty; }
+  }
+  document.getElementById('pg-resp-view').addEventListener('click', e => {
+    const b=e.target.closest('button[data-rview]'); if(!b) return; respView=b.dataset.rview;
+    document.querySelectorAll('#pg-resp-view button').forEach(x=>x.classList.toggle('on',x.dataset.rview===respView));
+    renderResp();
+  });
+
+  // ── key handling ──
+  function refreshKey(){
+    if (!hasKey()){ keyStatus.textContent=isZh()?'需要密钥':'KEY REQUIRED'; keyStatus.className='key-badge key-need'; }
+    else { keyStatus.textContent=isZh()?'已就绪':'READY'; keyStatus.className='key-badge key-ok'; }
+    pgRunBtn.disabled = !hasKey();
+    pgHint.textContent = hasKey() ? '' : (isZh()?'↑ 先填入你的 API 密钥':'↑ enter your API key first');
+  }
+  tokenInput.value = localStorage.getItem(LS_KEY) || '';
+  document.getElementById('pg-save-key').addEventListener('click', () => {
+    const v=tokenInput.value.trim();
+    if(v){ localStorage.setItem(LS_KEY,v); showToast(isZh()?'已保存到本地':'Saved locally ✓'); }
+    else { localStorage.removeItem(LS_KEY); showToast(isZh()?'已清除':'Cleared'); }
+    refreshKey();
+  });
+  tokenInput.addEventListener('input', refreshKey);
+
+  // ── send ──
+  pgRunBtn.addEventListener('click', async () => {
+    const token = tokenInput.value.trim();
+    if(!token){ showToast(isZh()?'请先填入密钥':'Enter your API key first'); return; }
+    pgRunBtn.disabled = true;
+    pgRunBtn.querySelector('.pg-run-label').innerHTML = '⏳ '+(isZh()?'发送中…':'Sending…');
+    pgStatus.textContent='…'; pgStatus.className='status-chip status-idle'; pgMeta.textContent='';
+    pgOutput.textContent = isZh()?'请求 mcp.novada.com 中…':'Calling mcp.novada.com…';
+    const t0 = performance.now();
+    try {
+      const res = await fetch(`${PG_ENDPOINT}?token=${encodeURIComponent(token)}`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Accept':'application/json, text/event-stream' },
+        body: JSON.stringify(rpcBody()),
+      });
+      const data = await res.json();
+      const ms = Math.round(performance.now()-t0);
+      const ok = res.ok && !data.error;
+      pgStatus.textContent = `${res.status} ${ok?'OK':'ERR'}`;
+      pgStatus.className = 'status-chip ' + (ok?'status-ok':'status-err');
+      const quota = data?.result?._meta?.quota_remaining;
+      pgMeta.textContent = `${ms}ms` + (quota!==undefined?` · quota ${quota}`:'');
+      const pretty = data.error ? JSON.stringify(data.error,null,2) : (data?.result?.content?.[0]?.text || JSON.stringify(data.result,null,2));
+      lastResult = { full: data, pretty };
+      renderResp();
+    } catch(err){
+      pgStatus.textContent='network'; pgStatus.className='status-chip status-err';
+      lastResult = { full:{error:String(err)}, pretty:String(err) }; renderResp();
+    } finally {
+      pgRunBtn.querySelector('.pg-run-label').innerHTML = '▶ '+(isZh()?'发送':'SEND');
+      refreshKey();
+    }
+  });
+  document.getElementById('pg-copy').addEventListener('click', async () => {
+    try{ await navigator.clipboard.writeText(pgOutput.textContent); showToast('Copied ✓'); }catch{ showToast('Copy failed'); }
+  });
+
+  // init
+  renderTools(); renderArgs(); refreshKey(); syncReqView();
+</script>
+
+<!-- Motion layer: Lenis smooth-scroll -->
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
+<script>
+  const lenis = new Lenis({ duration: 1.1, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
+  function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
+  requestAnimationFrame(raf);
+</script>
+
+</body>
+</html>

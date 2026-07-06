@@ -1,0 +1,484 @@
+/* ================================================================
+   shared.css — Novada MCP · Cyberpunk Data Flow Edition
+   Round fonts · Violet glow · Grid backgrounds · Data flow particles
+   ================================================================ */
+
+/* ── Theme variables ─────────────────────────────────────────── */
+:root {
+  --th-bg: #0a0818;
+  --th-surface: #110e24;
+  --th-card: #161230;
+  --th-ink: #e8e0ff;
+  --th-ink-mid: #b0a8d8;
+  --th-ink-muted: #7a6faa;
+  --th-vborder: rgba(108, 64, 226, 0.25);
+  --th-nav: rgba(10, 8, 24, 0.88);
+  --th-nav-border: rgba(108, 64, 226, 0.2);
+  --th-hero-grad: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(108, 64, 226, 0.25) 0%, transparent 70%);
+  --th-glow: rgba(108, 64, 226, 0.4);
+  --th-glow-soft: rgba(108, 64, 226, 0.08);
+  --section-gap: 6rem;
+}
+
+/* Light mode — warm grays with purple tint */
+[data-theme="light"] {
+  --th-bg: #f5f3fa;
+  --th-surface: #edeaf5;
+  --th-card: #ffffff;
+  --th-ink: #1a1530;
+  --th-ink-mid: #3d3660;
+  --th-ink-muted: #6b6490;
+  --th-vborder: rgba(108, 64, 226, 0.15);
+  --th-nav: rgba(245, 243, 250, 0.92);
+  --th-nav-border: rgba(108, 64, 226, 0.12);
+  --th-hero-grad: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(108, 64, 226, 0.12) 0%, transparent 70%);
+  --th-glow: rgba(108, 64, 226, 0.2);
+  --th-glow-soft: rgba(108, 64, 226, 0.04);
+}
+
+/* Light mode: tinted tab container backgrounds */
+[data-theme="light"] .bg-violet\/5 {
+  background: rgba(108, 64, 226, 0.08) !important;
+}
+
+/* ── Base ────────────────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Nunito', 'Noto Sans SC', system-ui, sans-serif;
+  color: var(--th-ink);
+  background: var(--th-bg);
+  letter-spacing: -0.005em;
+  line-height: 1.8;
+  font-size: 16px;
+}
+
+h1, h2, h3 {
+  font-family: 'Nunito', 'Noto Sans SC', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+
+.mono { font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace; }
+
+/* ── Language toggle ─────────────────────────────────────────── */
+body.lang-en .zh { display: none !important; }
+body.lang-zh .en { display: none !important; }
+
+/* ── Data flow background — random flowing lines ─────────────── */
+.grid-bg {
+  position: relative;
+  overflow: hidden;
+}
+.grid-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    /* Diagonal data flow lines — random angles and positions */
+    linear-gradient(35deg, transparent 48%, rgba(108,64,226,0.06) 49%, rgba(108,64,226,0.06) 51%, transparent 52%),
+    linear-gradient(155deg, transparent 46%, rgba(108,64,226,0.04) 47%, rgba(108,64,226,0.04) 49%, transparent 50%),
+    linear-gradient(75deg, transparent 44%, rgba(108,64,226,0.05) 45%, rgba(108,64,226,0.05) 47%, transparent 48%),
+    linear-gradient(120deg, transparent 52%, rgba(108,64,226,0.03) 53%, rgba(108,64,226,0.03) 55%, transparent 56%),
+    linear-gradient(200deg, transparent 38%, rgba(108,64,226,0.04) 39%, rgba(108,64,226,0.04) 41%, transparent 42%);
+  background-size: 400px 400px, 350px 350px, 500px 500px, 300px 300px, 450px 450px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+  animation: flow-drift 20s linear infinite;
+}
+@keyframes flow-drift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-50px, -30px); }
+}
+
+/* ── Hero gradient + glow ────────────────────────────────────── */
+.grad-hero {
+  background: var(--th-hero-grad);
+  position: relative;
+  overflow: hidden;
+}
+.grad-hero::after {
+  content: '';
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(108, 64, 226, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Gradient text ───────────────────────────────────────────── */
+.grad-text {
+  background: linear-gradient(135deg, #b388ff 0%, #9863f0 30%, #6c40e2 60%, #431fd5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ── Glow border card — purple frame with light ──────────────── */
+.glow-card {
+  background: var(--th-card);
+  border: 2px solid rgba(108, 64, 226, 0.35);
+  border-radius: 16px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  box-shadow: 0 0 20px rgba(108, 64, 226, 0.1), 0 0 60px rgba(108, 64, 226, 0.05);
+}
+.glow-card:hover {
+  border-color: rgba(108, 64, 226, 0.7);
+  box-shadow: 0 0 30px rgba(108, 64, 226, 0.2), 0 0 80px rgba(108, 64, 226, 0.08), 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Neon accent line ────────────────────────────────────────── */
+.neon-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--th-glow), transparent);
+  border: none;
+  margin: 0;
+}
+
+/* ── Theme button ────────────────────────────────────────────── */
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--th-vborder);
+  cursor: pointer;
+  background: transparent;
+  color: var(--th-ink);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  padding: 0;
+}
+.theme-btn:hover {
+  background: var(--th-glow-soft);
+  border-color: rgba(108, 64, 226, 0.4);
+  box-shadow: 0 0 12px var(--th-glow-soft);
+}
+.theme-btn .icon-sun { display: block; }
+.theme-btn .icon-moon { display: none; }
+[data-theme="light"] .theme-btn .icon-sun { display: none; }
+[data-theme="light"] .theme-btn .icon-moon { display: block; }
+
+/* ── Code / terminal — unified palette ───────────────────────── */
+.code-block {
+  background: #13102a;
+  color: #e2d9ff;
+  border: 1px solid rgba(108, 64, 226, 0.2);
+  border-left: 3px solid #6c40e2;
+  border-radius: 12px;
+  position: relative;
+  box-shadow: 0 0 20px rgba(108, 64, 226, 0.06);
+}
+.code-block pre {
+  padding: 18px 56px 18px 18px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.65;
+  font-family: 'JetBrains Mono', monospace;
+  color: #e2d9ff;
+}
+
+/* Consistent styling for ALL pre/monospace code elements */
+pre {
+  background: #13102a;
+  color: #e2d9ff;
+  border-radius: 12px;
+}
+
+/* Syntax highlight classes inside code blocks */
+.code-block .text-violet-200,
+.code-block .text-violet-100 {
+  color: #b388ff !important;
+}
+
+/* ── Response card body (hero JSON preview) ──────────────────── */
+.response-card-body {
+  background: #161230;
+  color: #d4ccee;
+}
+.response-card-body .text-green-400\/70,
+.response-card-body .text-green-400\/60 {
+  color: #7c5fff !important;
+}
+.response-card-body .text-slate\/40,
+.response-card-body .text-slate\/30 {
+  color: #6b6490 !important;
+}
+.response-card-body .text-violet\/50 {
+  color: #9b7dff !important;
+}
+.response-card-body .text-violet-200\/70 {
+  color: #b388ff !important;
+}
+
+/* Fallback: style the hero response panel via inline-style override */
+/* The hero panel uses style="background:#0c0920" — override with higher specificity */
+.glow-card > div[style*="background:#0c0920"],
+.glow-card > div[style*="background: #0c0920"] {
+  background: #161230 !important;
+  color: #d4ccee !important;
+}
+
+/* Tool names in hero response card */
+.glow-card > div[style*="0c0920"] .text-green-400\/70 {
+  color: #7c5fff !important;
+}
+
+/* Comments in hero response card */
+.glow-card > div[style*="0c0920"] .text-slate\/40,
+.glow-card > div[style*="0c0920"] .text-slate\/30 {
+  color: #6b6490 !important;
+}
+
+/* ── Copy button ─────────────────────────────────────────────── */
+.copy-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(108, 64, 226, 0.15);
+  color: #e2d9ff;
+  border: 1px solid rgba(108, 64, 226, 0.3);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+}
+.copy-btn:hover {
+  background: #6c40e2;
+  border-color: #6c40e2;
+  color: white;
+  box-shadow: 0 0 12px rgba(108, 64, 226, 0.4);
+}
+.copy-btn.copied { background: #6c40e2; border-color: #6c40e2; color: white; }
+
+/* ── Tab buttons & panels ────────────────────────────────────── */
+.tab-btn {
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--th-ink-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.tab-btn:hover {
+  color: var(--th-ink);
+  background: var(--th-glow-soft);
+  border-color: var(--th-vborder);
+}
+.tab-btn.active {
+  background: linear-gradient(135deg, #6c40e2, #431fd5);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(108, 64, 226, 0.3);
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Framework tabs ──────────────────────────────────────────── */
+.ftab-btn {
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--th-ink-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.ftab-btn:hover { color: var(--th-ink); background: var(--th-glow-soft); }
+.ftab-btn.active {
+  background: linear-gradient(135deg, #6c40e2, #431fd5);
+  color: white;
+  box-shadow: 0 0 16px rgba(108, 64, 226, 0.3);
+}
+.ftab-panel { display: none; }
+.ftab-panel.active { display: block; }
+
+/* ── Tool card (used for "Why hosted" cards too) ─────────────── */
+.tool-card {
+  background: var(--th-card);
+  border: 1px solid var(--th-vborder);
+  border-radius: 16px;
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+}
+.tool-card:hover {
+  border-color: rgba(108, 64, 226, 0.5);
+  box-shadow: 0 0 30px var(--th-glow-soft), 0 8px 32px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* ── Toast notification ──────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: linear-gradient(135deg, #6c40e2, #431fd5);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  z-index: 100;
+  box-shadow: 0 0 20px rgba(108, 64, 226, 0.4);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Pill ────────────────────────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--th-vborder);
+  background: var(--th-glow-soft);
+}
+
+/* ── Hero side panel scroll animations ────────────────────────── */
+@keyframes scroll-up {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+@keyframes scroll-down {
+  0% { transform: translateY(-50%); }
+  100% { transform: translateY(0); }
+}
+.hero-side-scroll {
+  will-change: transform;
+}
+
+/* ── Data flow particle animation ────────────────────────────── */
+@keyframes float-up {
+  0% { transform: translateY(100vh) scale(0); opacity: 0; }
+  20% { opacity: 0.6; }
+  80% { opacity: 0.3; }
+  100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+}
+.data-particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #6c40e2;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(108, 64, 226, 0.6);
+  animation: float-up linear infinite;
+  pointer-events: none;
+}
+.data-particle:nth-child(1) { left: 10%; animation-duration: 8s; animation-delay: 0s; }
+.data-particle:nth-child(2) { left: 25%; animation-duration: 12s; animation-delay: 2s; }
+.data-particle:nth-child(3) { left: 40%; animation-duration: 10s; animation-delay: 4s; }
+.data-particle:nth-child(4) { left: 60%; animation-duration: 14s; animation-delay: 1s; }
+.data-particle:nth-child(5) { left: 75%; animation-duration: 9s; animation-delay: 3s; }
+.data-particle:nth-child(6) { left: 90%; animation-duration: 11s; animation-delay: 5s; }
+
+/* ── Pulse dot (live indicator) ──────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 64, 226, 0.6); }
+  50% { box-shadow: 0 0 0 6px rgba(108, 64, 226, 0); }
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: #6c40e2;
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* ── FAQ details ─────────────────────────────────────────────── */
+details.faq summary { list-style: none; cursor: pointer; }
+details.faq summary::-webkit-details-marker { display: none; }
+details.faq summary::after {
+  content: '+';
+  float: right;
+  font-weight: 300;
+  font-size: 22px;
+  line-height: 1;
+  color: #6c40e2;
+  transition: transform 0.2s ease;
+}
+details.faq[open] summary::after { content: '\2212'; }
+
+/* ── Motion layer ────────────────────────────────────────────── */
+.js-anim .hero-animate { opacity: 0; }
+.js-anim .sf { opacity: 0; transform: translateY(30px); }
+
+/* ── CTA button — primary violet glow ────────────────────────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, #7c4dff, #6c40e2, #5a2dd6);
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-size: 15px;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(108, 64, 226, 0.3);
+}
+.btn-primary:hover {
+  box-shadow: 0 0 30px rgba(108, 64, 226, 0.5), 0 4px 16px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: var(--th-ink);
+  background: transparent;
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-size: 15px;
+  border: 1px solid var(--th-vborder);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  border-color: rgba(108, 64, 226, 0.5);
+  box-shadow: 0 0 16px var(--th-glow-soft);
+  background: var(--th-glow-soft);
+}
+
+/* ── Section divider ─────────────────────────────────────────── */
+.section-divider {
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #6c40e2, #9863f0);
+  border-radius: 2px;
+  margin: 0 auto;
+}
+
+/* ── Scrollbar (cyberpunk) ───────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--th-bg); }
+::-webkit-scrollbar-thumb { background: rgba(108, 64, 226, 0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(108, 64, 226, 0.5); }
+
+/* ── Selection color ─────────────────────────────────────────── */
+::selection { background: rgba(108, 64, 226, 0.3); color: white; }

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>
+(function(){var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);})();
+function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);}
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Playground — Novada MCP</title>
+<meta name="description" content="API console for the Novada Hosted MCP server. Enter your key, pick a tool, inspect the JSON-RPC / cURL request, and run it live against mcp.novada.com." />
+<link rel="canonical" href="https://mcp.novada.com/playground" />
+<link rel="icon" href="https://www.novada.com/favicon.ico" />
+<meta property="og:title" content="Novada MCP — API Console" />
+<meta property="og:description" content="Run all 26 Novada MCP tools live. Inspect the request, send it, read the response — your key, your quota." />
+<meta property="og:url" content="https://mcp.novada.com/playground" />
+<meta property="og:image" content="https://mcp.novada.com/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          violet: { DEFAULT: '#6c40e2', 600: '#431fd5', 700: '#3a1ba0', 50: '#f5eeff', 100: '#e3daff', 200: '#c9b4fb', light: '#9863f0' },
+          ink: { DEFAULT: '#0a0818', text: '#0a0818', 800: '#110e24', 700: '#161230' },
+          slate: '#7a6faa',
+          paper: '#faf9ff',
+          'tint-cool': '#f3f0fb',
+        },
+        fontFamily: {
+          display: ['Nunito', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          sans: ['Nunito', 'Noto Sans SC', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ─── Playground-specific dark-mode overrides ─────────── */
+  [data-theme="dark"] header{background:var(--th-nav)!important;border-color:var(--th-nav-border)!important;}
+  [data-theme="dark"] .bg-white{background:var(--th-card)!important;}
+  [data-theme="dark"] .text-ink{color:var(--th-ink)!important;}
+  [data-theme="dark"] .text-ink-700{color:var(--th-ink-mid)!important;}
+  [data-theme="dark"] .border-violet-100{border-color:var(--th-vborder)!important;}
+
+  /* ─── Console ─────────────────────────────────────────── */
+  .console { border: 1px solid #e7e2f5; border-radius: 12px; background: #fff; box-shadow: rgba(18,17,39,0.06) 0 10px 40px 0; overflow: hidden; }
+  .pg-input { width: 100%; padding: 9px 12px; font-size: 13px; border: 1px solid #e7e2f5; border-radius: 8px; background: #fff; font-family: 'JetBrains Mono', monospace; color: var(--th-ink); }
+  .pg-input:focus { outline: none; border-color: #6c40e2; box-shadow: 0 0 0 3px rgba(108,64,226,0.10); }
+  .pg-label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--th-ink-muted); margin-bottom: 5px; font-weight: 600; }
+  /* tool rail */
+  .tool-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--th-ink); cursor: pointer; border-left: 2px solid transparent; transition: background .12s; }
+  .tool-item:hover { background: #f5eeff; }
+  .tool-item.active { background: #f5eeff; border-left-color: #6c40e2; color: #6c40e2; font-weight: 600; }
+  .tool-group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--th-ink-muted); padding: 12px 12px 4px; font-weight: 700; }
+  /* request/response */
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #eee6fb; background: #fbfaff; }
+  .seg { display: inline-flex; border: 1px solid #e7e2f5; border-radius: 7px; overflow: hidden; }
+  .seg button { padding: 4px 11px; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: #fff; color: var(--th-ink-muted); cursor: pointer; border: none; }
+  .seg button.on { background: #191228; color: #fff; }
+  .codeview { background: #191228; color: #e9e4ff; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.6; padding: 14px 16px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .method-chip { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; background: #6c40e2; color: #fff; padding: 2px 8px; border-radius: 5px; letter-spacing: 0.03em; }
+  .status-chip { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 5px; }
+  .status-ok { background: #e6f7ef; color: #0b8a5a; }
+  .status-err { background: #fdeaea; color: #c0392b; }
+  .status-idle { background: #f1f0f5; color: var(--th-ink-muted); }
+  .meta-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--th-ink-muted); }
+  .send-btn { background: #191228; color: #fff; font-weight: 700; border-radius: 8px; padding: 9px 18px; font-size: 13px; transition: background .15s; display: inline-flex; align-items: center; gap: 7px; }
+  .send-btn:hover:not(:disabled) { background: #6c40e2; }
+  .send-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .key-badge { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .key-need { background: #f1f0f5; color: var(--th-ink-muted); }
+  .key-ok { background: #f5eeff; color: #6c40e2; }
+</style>
+</head>
+<body class="lang-en">
+
+<!-- HEADER -->
+<header class="sticky top-0 z-50 backdrop-blur" style="background:var(--th-nav);border-bottom:1px solid var(--th-nav-border)">
+  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <img src="https://www.novada.com/images/header/header-logo1.svg" alt="Novada" class="h-7" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Novada',className:'text-xl font-bold text-ink display'}))" />
+      <span class="text-[11px] font-semibold tracking-wider text-violet bg-violet-50 px-2 py-1 rounded">MCP</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-ink-700">
+      <a href="/playground" class="inline-flex items-center gap-1.5 text-violet font-semibold">
+        <span class="w-1.5 h-1.5 rounded-full bg-violet animate-pulse"></span>
+        <span class="en">Playground</span><span class="zh">在线试玩</span>
+      </a>
+      <a href="/configure" class="hover:text-violet"><span class="en">Configure</span><span class="zh">配置</span></a>
+      <a href="/chat" class="hover:text-violet"><span class="en">Chat</span><span class="zh">对话</span></a>
+
+      <a href="/#install" class="hover:text-violet">Install</a>
+      <a href="/tools" class="hover:text-violet"><span class="en">Tools</span><span class="zh">工具</span></a>
+      <a href="/pricing" class="hover:text-violet"><span class="en">Pricing</span><span class="zh">价格</span></a>
+      <a href="/faq" class="hover:text-violet">FAQ</a>
+      <a href="https://github.com/NovadaLabs/novada-mcpserver" class="hover:text-violet">GitHub</a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <button class="theme-btn" aria-label="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button id="lang-toggle" onclick="toggleLang()" class="text-xs font-semibold border border-violet-100 hover:border-violet hover:text-violet px-3 py-1.5 rounded-full transition">中 / EN</button>
+      <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="hidden sm:inline-flex items-center text-sm font-semibold bg-ink hover:bg-violet text-white px-4 py-2 rounded-[10px] transition">
+        <span class="en">Get API key</span><span class="zh">获取密钥</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-5 py-10">
+
+  <!-- Title row -->
+  <div class="flex items-end justify-between flex-wrap gap-3 mb-5">
+    <div>
+      <a href="/" class="text-sm hover:text-violet transition" style="color:#677489">← <span class="en">Back to home</span><span class="zh">返回首页</span></a>
+      <h1 class="text-2xl sm:text-3xl font-bold mt-2 display" style="color:#0a142f">
+        <span class="en">API Console</span><span class="zh">API 控制台</span>
+      </h1>
+      <p class="text-sm mt-1" style="color:#677489">
+        <span class="en">Live against <code class="mono text-violet">POST https://mcp.novada.com/mcp</code> — the same endpoint your agent calls.</span>
+        <span class="zh">直连 <code class="mono text-violet">POST https://mcp.novada.com/mcp</code> — 你的 Agent 调用的同一端点。</span>
+      </p>
+    </div>
+    <!-- API key -->
+    <div class="w-full sm:w-auto">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="pg-label" style="margin:0">
+          <span class="en">API key</span><span class="zh">API 密钥</span> <span class="text-violet">*</span>
+        </span>
+        <span id="pg-key-status" class="key-badge key-need"></span>
+      </div>
+      <div class="flex gap-2">
+        <input id="pg-token" type="password" autocomplete="off" spellcheck="false" placeholder="sk-eu-novada-…" class="pg-input" style="width:280px;max-width:60vw" />
+        <button id="pg-save-key" class="px-3 py-2 text-xs font-semibold bg-ink hover:bg-violet text-white rounded-lg transition whitespace-nowrap">
+          <span class="en">Save</span><span class="zh">保存</span>
+        </button>
+        <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="px-3 py-2 text-xs font-semibold border border-violet-100 text-violet rounded-lg hover:border-violet transition whitespace-nowrap flex items-center">
+          <span class="en">Get key</span><span class="zh">获取</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Console -->
+  <div class="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-0 console">
+    <!-- LEFT: tool rail -->
+    <div id="pg-tools" class="border-b lg:border-b-0 lg:border-r border-violet-100 bg-white overflow-y-auto" style="max-height:640px"></div>
+
+    <!-- RIGHT: request + response -->
+    <div class="flex flex-col" style="min-width:0">
+      <!-- Request -->
+      <div class="panel-head">
+        <div class="flex items-center gap-2">
+          <span class="method-chip">POST</span>
+          <span class="mono text-xs" style="color:#677489">/mcp · tools/call</span>
+        </div>
+        <div class="seg" id="pg-req-view">
+          <button data-view="form" class="on">Form</button>
+          <button data-view="jsonrpc">JSON-RPC</button>
+          <button data-view="curl">cURL</button>
+        </div>
+      </div>
+      <div class="p-4">
+        <div id="pg-args" class="space-y-3"></div>
+        <pre id="pg-req-code" class="codeview rounded-lg" style="display:none; max-height:220px; margin-top:0"></pre>
+      </div>
+      <div class="px-4 pb-4 flex items-center gap-3">
+        <button id="pg-run" class="send-btn"><span class="pg-run-label">▶ <span class="en">Send</span><span class="zh">发送</span></span></button>
+        <span id="pg-hint" class="text-xs" style="color:#97a0b0"></span>
+      </div>
+
+      <!-- Response -->
+      <div class="panel-head" style="border-top:1px solid #eee6fb">
+        <div class="flex items-center gap-3">
+          <span class="text-xs font-semibold" style="color:#0a142f"><span class="en">Response</span><span class="zh">响应</span></span>
+          <span id="pg-status" class="status-chip status-idle">—</span>
+          <span id="pg-meta" class="meta-mono"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="seg" id="pg-resp-view">
+            <button data-rview="pretty" class="on"><span class="en">Output</span><span class="zh">输出</span></button>
+            <button data-rview="raw">JSON</button>
+          </div>
+          <button id="pg-copy" class="text-xs text-violet hover:underline">Copy</button>
+        </div>
+      </div>
+      <pre id="pg-output" class="codeview" style="min-height:200px; max-height:420px;"><span style="color:#677489">// Pick a tool, enter your key, hit Send.</span></pre>
+    </div>
+  </div>
+
+  <p class="text-xs mt-4 leading-relaxed" style="color:#97a0b0">
+    <span class="en">⚠️ Browser-side calls expose your key in the network tab — use it only for testing, call server-side in production. Browser tools (<code class="mono">novada_browser*</code>) and PDF extraction require the local MCP (<code class="mono">npx novada-mcp</code>).</span>
+    <span class="zh">⚠️ 浏览器端调用会在 network 标签暴露密钥 — 仅供测试,生产请走服务端。浏览器类工具 (<code class="mono">novada_browser*</code>) 与 PDF 解析需本地 MCP (<code class="mono">npx novada-mcp</code>)。</span>
+  </p>
+
+  <div class="mt-8 text-center">
+    <p class="text-sm" style="color:#677489"><span class="en">Ready to wire it into your agent?</span><span class="zh">准备接入你的 Agent?</span></p>
+    <a href="/#install" class="inline-flex items-center justify-center mt-3 border border-violet-100 hover:border-violet text-ink hover:text-violet font-semibold px-6 py-2.5 rounded-[10px] transition"><span class="en">Install guide</span><span class="zh">查看接入指南</span></a>
+  </div>
+</main>
+
+<div id="toast" class="toast">Copied ✓</div>
+
+<script src="shared.js" defer></script>
+<script>
+  const isZh = () => document.body.classList.contains('lang-zh');
+  // Re-render playground UI after language toggle (shared.js handles the class swap)
+  document.addEventListener('click', e => {
+    if (e.target.closest('#lang-toggle')) {
+      setTimeout(() => { renderTools(); renderArgs(); syncReqView(); }, 0);
+    }
+  });
+  function showToast(m){ _showToast(m); }
+
+  const PG_ENDPOINT = 'https://mcp.novada.com/mcp';
+  const LS_KEY = 'novada_mcp_api_key';
+  const tokenInput = document.getElementById('pg-token');
+  const keyStatus = document.getElementById('pg-key-status');
+  const pgToolsEl = document.getElementById('pg-tools');
+  const pgArgsEl = document.getElementById('pg-args');
+  const pgRunBtn = document.getElementById('pg-run');
+  const pgOutput = document.getElementById('pg-output');
+  const pgStatus = document.getElementById('pg-status');
+  const pgMeta = document.getElementById('pg-meta');
+  const pgHint = document.getElementById('pg-hint');
+  const pgReqCode = document.getElementById('pg-req-code');
+  function hasKey(){ return tokenInput.value.trim().length>0; }
+
+  // ── Tool catalog (grouped) ──
+  const GROUPS = [
+    { label: 'Search', tools: ['novada_search'] },
+    { label: 'Scrape & Extract', tools: ['novada_scrape','novada_extract'] },
+    { label: 'Crawl & Map', tools: ['novada_crawl','novada_map'] },
+    { label: 'Research', tools: ['novada_research','novada_verify','novada_discover'] },
+  ];
+  // ── Scraper operation catalog (platform → operation + required params) ──
+  const SCRAPE_PLATFORMS = [
+    { platform: 'amazon.com', operation: 'amazon_product_keywords', params: [ { key:'keyword', type:'string', default:'AI tools' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'reddit.com',  operation: 'reddit_subreddit_posts',  params: [ { key:'subreddit', type:'string', default:'programming' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'github.com',  operation: 'github_repository_repo-url', params: [ { key:'url', type:'string', default:'https://github.com/NovadaLabs/novada-mcpserver' } ] },
+    { platform: 'youtube.com', operation: 'youtube_video_search_label', params: [ { key:'label', type:'string', default:'web scraping tutorial' }, { key:'num', type:'number', default:5 } ] },
+    { platform: 'linkedin.com', operation: 'linkedin_company_information_url', params: [ { key:'url', type:'string', default:'https://www.linkedin.com/company/novada' } ] },
+    { platform: 'tiktok.com',  operation: 'tiktok_posts_url', params: [ { key:'url', type:'string', default:'https://www.tiktok.com/@novada' } ] },
+  ];
+  let extractMode = 'single';
+
+  const PG_TOOLS = {
+    novada_search: {
+      render: () => `<div><label class="pg-label">${isZh()?'查询':'Query'}</label><input id="pg-q" class="pg-input" value="firecrawl vs brightdata pricing"></div>
+        <div class="pg-input-row" style="display:flex;gap:8px"><div style="flex:1"><label class="pg-label">Engine</label><select id="pg-engine" class="pg-input"><option>google</option><option>bing</option><option>duckduckgo</option></select></div><div style="width:110px"><label class="pg-label">Num</label><select id="pg-num" class="pg-input"><option>3</option><option selected>5</option><option>10</option></select></div></div>`,
+      build: () => ({ query: val('pg-q'), engine: val('pg-engine'), num: parseInt(val('pg-num'),10) }),
+    },
+    novada_scrape: {
+      render: () => {
+        const plat = val('pg-scrape-platform') || SCRAPE_PLATFORMS[0].platform;
+        const cfg = SCRAPE_PLATFORMS.find(p => p.platform === plat) || SCRAPE_PLATFORMS[0];
+        const platOpts = SCRAPE_PLATFORMS.map(p => `<option value="${p.platform}"${p.platform===plat?' selected':''}>${p.platform}</option>`).join('');
+        const paramFields = cfg.params.map(f =>
+          f.type === 'number'
+            ? `<div style="width:110px"><label class="pg-label">${f.key}</label><input id="pg-sp-${f.key}" type="number" class="pg-input" value="${f.default}" min="1" max="50"></div>`
+            : `<div style="flex:1"><label class="pg-label">${f.key}</label><input id="pg-sp-${f.key}" class="pg-input" value="${f.default}"></div>`
+        ).join('');
+        return `<div><label class="pg-label">${isZh()?'平台':'Platform'}</label><select id="pg-scrape-platform" class="pg-input" data-rerender>${platOpts}</select></div>
+          <div style="margin-top:12px"><label class="pg-label">${isZh()?'操作':'Operation'}</label><input id="pg-scrape-op" class="pg-input" value="${cfg.operation}" readonly style="opacity:.75;cursor:not-allowed"></div>
+          <div class="pg-input-row" style="display:flex;gap:8px;margin-top:12px">${paramFields}</div>`;
+      },
+      build: () => {
+        const plat = val('pg-scrape-platform') || SCRAPE_PLATFORMS[0].platform;
+        const cfg = SCRAPE_PLATFORMS.find(p => p.platform === plat) || SCRAPE_PLATFORMS[0];
+        const params = {};
+        let limit = 5;
+        cfg.params.forEach(f => {
+          const raw = val(`pg-sp-${f.key}`);
+          const value = f.type === 'number' ? (parseInt(raw, 10) || f.default) : raw;
+          params[f.key] = value;
+          if (f.key === 'num') limit = value;
+        });
+        return { platform: cfg.platform, operation: cfg.operation, params, limit, format: 'markdown' };
+      },
+    },
+    novada_extract: {
+      render: () => `<div class="seg" id="pg-extract-mode" style="margin-bottom:12px">
+          <button data-emode="single" class="${extractMode==='single'?'on':''}">${isZh()?'单个':'Single'}</button>
+          <button data-emode="batch" class="${extractMode==='batch'?'on':''}">${isZh()?'批量':'Batch'}</button>
+        </div>
+        <div id="pg-extract-single" style="display:${extractMode==='single'?'':'none'}">${urlField('https://www.firecrawl.dev/pricing')}</div>
+        <div id="pg-extract-batch" style="display:${extractMode==='batch'?'':'none'}"><label class="pg-label">${isZh()?'批量 URL(每行一个,最多 10 个)':'Batch URLs (one per line, max 10)'}</label><textarea id="pg-urls" class="pg-input" rows="4" style="resize:vertical">https://www.firecrawl.dev/pricing
+https://www.tavily.com
+https://www.brightdata.com/pricing</textarea></div>`,
+      build: () => {
+        if (extractMode === 'batch') {
+          const list = val('pg-urls').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10);
+          return { url: list };
+        }
+        return { url: val('pg-url') };
+      },
+    },
+    novada_crawl: {
+      render: () => `${urlField('https://www.tavily.com')}<div class="pg-input-row" style="display:flex;gap:8px;margin-top:12px"><div style="flex:1"><label class="pg-label">Max pages</label><input id="pg-max" type="number" class="pg-input" value="5" min="1" max="20"></div><div style="flex:1"><label class="pg-label">Max depth</label><input id="pg-depth" type="number" class="pg-input" value="2" min="1" max="5"></div></div>`,
+      build: () => ({ url: val('pg-url'), max_pages: parseInt(val('pg-max'),10), max_depth: parseInt(val('pg-depth'),10) }),
+    },
+    novada_map: { render: () => urlField('https://www.tavily.com'), build: () => ({ url: val('pg-url') }) },
+    novada_verify: { render: () => `<div><label class="pg-label">${isZh()?'要核实的陈述':'Claim'}</label><input id="pg-q" class="pg-input" value="Novada has 100M+ residential IPs"></div>`, build: () => ({ claim: val('pg-q') }) },
+    novada_research: {
+      render: () => `<div><label class="pg-label">${isZh()?'研究主题':'Topic'}</label><input id="pg-q" class="pg-input" value="best web scraping APIs 2026"></div><div style="margin-top:12px"><label class="pg-label">Depth</label><select id="pg-depth-mode" class="pg-input"><option value="shallow">shallow (~10s)</option><option value="balanced" selected>balanced (~30s)</option><option value="deep">deep (~60s)</option></select></div>`,
+      build: () => ({ query: val('pg-q'), depth: val('pg-depth-mode') }),
+    },
+    novada_discover: { render: () => `<p class="text-xs" style="color:#677489">${isZh()?'围绕主题发现相关来源。输入一个查询:':'Find related sources for a topic:'}</p><div style="margin-top:8px"><label class="pg-label">${isZh()?'查询':'Query'}</label><input id="pg-q" class="pg-input" value="residential proxy providers"></div>`, build: () => ({ query: val('pg-q') }) },
+  };
+  function val(id){ const el=document.getElementById(id); return el?el.value:''; }
+  function urlField(def){ return `<div><label class="pg-label">URL</label><input id="pg-url" class="pg-input" value="${def}"></div>`; }
+
+  let current = 'novada_search';
+
+  function renderTools(){
+    pgToolsEl.innerHTML = GROUPS.map(g =>
+      `<div class="tool-group-label">${g.label}</div>` +
+      g.tools.map(t => `<div class="tool-item${t===current?' active':''}" data-tool="${t}">${t.replace('novada_','')}</div>`).join('')
+    ).join('') + `<div class="tool-group-label">${isZh()?'更多':'More'}</div><a href="/tools" class="tool-item" style="color:#677489">${isZh()?'全部 26 个工具 →':'all 26 tools →'}</a>`;
+  }
+  function renderArgs(){ pgArgsEl.innerHTML = PG_TOOLS[current]?.render() ?? ''; refreshReqCode(); }
+
+  pgToolsEl.addEventListener('click', e => {
+    const it = e.target.closest('.tool-item[data-tool]'); if(!it) return;
+    current = it.dataset.tool; renderTools(); renderArgs();
+  });
+  pgArgsEl.addEventListener('input', refreshReqCode);
+  // Re-render the args form when a control marked [data-rerender] changes (e.g. scrape platform).
+  pgArgsEl.addEventListener('change', e => {
+    if (e.target.closest('[data-rerender]')) renderArgs();
+  });
+  // Extract mode toggle (Single / Batch) — restyle segment, swap fields, refresh preview.
+  pgArgsEl.addEventListener('click', e => {
+    const b = e.target.closest('#pg-extract-mode button[data-emode]'); if(!b) return;
+    extractMode = b.dataset.emode;
+    renderArgs();
+  });
+
+  // ── request preview (Form / JSON-RPC / cURL) ──
+  let reqView = 'form';
+  function buildArgs(){ try { return PG_TOOLS[current].build(); } catch { return {}; } }
+  function rpcBody(){ return { jsonrpc:'2.0', id:1, method:'tools/call', params:{ name: current, arguments: buildArgs() } }; }
+  function refreshReqCode(){
+    if (reqView === 'form') return;
+    const bodyObj = rpcBody();
+    if (reqView === 'jsonrpc') {
+      pgReqCode.textContent = JSON.stringify(bodyObj, null, 2);
+    } else { // curl — mask key
+      pgReqCode.textContent =
+`curl -X POST https://mcp.novada.com/mcp \\
+  -H "Authorization: Bearer sk-eu-novada-••••" \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -d '${JSON.stringify(bodyObj)}'`;
+    }
+  }
+  function syncReqView(){
+    document.querySelectorAll('#pg-req-view button').forEach(b => b.classList.toggle('on', b.dataset.view===reqView));
+    pgArgsEl.style.display = reqView==='form' ? '' : 'none';
+    pgReqCode.style.display = reqView==='form' ? 'none' : '';
+    refreshReqCode();
+  }
+  document.getElementById('pg-req-view').addEventListener('click', e => {
+    const b=e.target.closest('button[data-view]'); if(!b) return; reqView=b.dataset.view; syncReqView();
+  });
+
+  // ── response view (Output / JSON) ──
+  let respView = 'pretty'; let lastResult = null;
+  function renderResp(){
+    if (!lastResult) return;
+    if (respView === 'raw') { pgOutput.textContent = JSON.stringify(lastResult.full, null, 2); }
+    else { pgOutput.textContent = lastResult.pretty; }
+  }
+  document.getElementById('pg-resp-view').addEventListener('click', e => {
+    const b=e.target.closest('button[data-rview]'); if(!b) return; respView=b.dataset.rview;
+    document.querySelectorAll('#pg-resp-view button').forEach(x=>x.classList.toggle('on',x.dataset.rview===respView));
+    renderResp();
+  });
+
+  // ── key handling ──
+  function refreshKey(){
+    if (!hasKey()){ keyStatus.textContent=isZh()?'需要密钥':'KEY REQUIRED'; keyStatus.className='key-badge key-need'; }
+    else { keyStatus.textContent=isZh()?'已就绪':'READY'; keyStatus.className='key-badge key-ok'; }
+    pgRunBtn.disabled = !hasKey();
+    pgHint.textContent = hasKey() ? '' : (isZh()?'↑ 先填入你的 API 密钥':'↑ enter your API key first');
+  }
+  tokenInput.value = localStorage.getItem(LS_KEY) || '';
+  document.getElementById('pg-save-key').addEventListener('click', () => {
+    const v=tokenInput.value.trim();
+    if(v){ localStorage.setItem(LS_KEY,v); showToast(isZh()?'已保存到本地':'Saved locally ✓'); }
+    else { localStorage.removeItem(LS_KEY); showToast(isZh()?'已清除':'Cleared'); }
+    refreshKey();
+  });
+  tokenInput.addEventListener('input', refreshKey);
+
+  // ── send ──
+  pgRunBtn.addEventListener('click', async () => {
+    const token = tokenInput.value.trim();
+    if(!token){ showToast(isZh()?'请先填入密钥':'Enter your API key first'); return; }
+    pgRunBtn.disabled = true;
+    pgRunBtn.querySelector('.pg-run-label').innerHTML = '⏳ '+(isZh()?'发送中…':'Sending…');
+    pgStatus.textContent='…'; pgStatus.className='status-chip status-idle'; pgMeta.textContent='';
+    pgOutput.textContent = isZh()?'请求 mcp.novada.com 中…':'Calling mcp.novada.com…';
+    const t0 = performance.now();
+    try {
+      const res = await fetch(`${PG_ENDPOINT}?token=${encodeURIComponent(token)}`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Accept':'application/json, text/event-stream' },
+        body: JSON.stringify(rpcBody()),
+      });
+      const data = await res.json();
+      const ms = Math.round(performance.now()-t0);
+      const ok = res.ok && !data.error;
+      pgStatus.textContent = `${res.status} ${ok?'OK':'ERR'}`;
+      pgStatus.className = 'status-chip ' + (ok?'status-ok':'status-err');
+      const quota = data?.result?._meta?.quota_remaining;
+      pgMeta.textContent = `${ms}ms` + (quota!==undefined?` · quota ${quota}`:'');
+      const pretty = data.error ? JSON.stringify(data.error,null,2) : (data?.result?.content?.[0]?.text || JSON.stringify(data.result,null,2));
+      lastResult = { full: data, pretty };
+      renderResp();
+    } catch(err){
+      pgStatus.textContent='network'; pgStatus.className='status-chip status-err';
+      lastResult = { full:{error:String(err)}, pretty:String(err) }; renderResp();
+    } finally {
+      pgRunBtn.querySelector('.pg-run-label').innerHTML = '▶ '+(isZh()?'发送':'Send');
+      refreshKey();
+    }
+  });
+  document.getElementById('pg-copy').addEventListener('click', async () => {
+    try{ await navigator.clipboard.writeText(pgOutput.textContent); showToast('Copied ✓'); }catch{ showToast('Copy failed'); }
+  });
+
+  // init
+  renderTools(); renderArgs(); refreshKey(); syncReqView();
+</script>
+
+<!-- Motion layer: Lenis smooth-scroll -->
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
+<script>
+  const lenis = new Lenis({ duration: 1.1, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
+  function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
+  requestAnimationFrame(raf);
+</script>
+
+</body>
+</html>

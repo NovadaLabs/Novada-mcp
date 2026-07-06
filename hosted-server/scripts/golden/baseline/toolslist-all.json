@@ -1,0 +1,1255 @@
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Single-call account & billing dashboard. section='summary' (default): wallet balance + plan quotas + recent capture logs + health entitlements. section='balance': wallet balance only. section='usage': paginated transaction history. section='plans': per-product plan balances (residential/isp/etc). section='traffic': daily proxy consumption. Pass start_time/end_time (YYYY-MM-DD) and products=[...] for traffic/plans. Aliases: wallet_balance, wallet_usage_record, plan_balance_all, traffic_daily, capture_logs, account_summary, health, health_all.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "end_time": {
+          "description": "Inclusive end date YYYY-MM-DD (usage/traffic sections only).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "format": {
+          "default": "card",
+          "description": "Output format. 'card' (default): human-readable markdown card \u2014 scannable headline, status table with icons, expired plans highlighted. 'json': clean flat structured object for programmatic use \u2014 no data.data nesting, human-readable values, errors[] aggregated.",
+          "enum": [
+            "card",
+            "json"
+          ],
+          "type": "string"
+        },
+        "mode": {
+          "description": "Deprecated and ignored \u2014 the account card always shows full detail. Accepted only for backward compatibility with older clients.",
+          "enum": [
+            "quick",
+            "full"
+          ],
+          "type": "string"
+        },
+        "page": {
+          "default": 1,
+          "description": "1-based page index (usage section only).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "page_size": {
+          "default": 50,
+          "description": "Page size, max 200 (usage section only).",
+          "exclusiveMinimum": 0,
+          "maximum": 200,
+          "type": "integer"
+        },
+        "products": {
+          "description": "Subset of products to query (plans/traffic sections only). plans: residential|isp|mobile|datacenter|static|capture. traffic: residential|isp|mobile|datacenter|static.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "section": {
+          "default": "summary",
+          "description": "Which account data to fetch. 'summary' (default): full dashboard \u2014 wallet balance + plan balances + recent capture logs + health entitlements (proxy/browser). 'balance': master wallet balance (currency). 'usage': paginated wallet usage/transaction history. 'plans': per-product plan balances (residential/isp/mobile/datacenter/static/capture). 'traffic': daily proxy traffic consumption.",
+          "enum": [
+            "summary",
+            "balance",
+            "usage",
+            "plans",
+            "traffic"
+          ],
+          "type": "string"
+        },
+        "start_time": {
+          "description": "Inclusive start date YYYY-MM-DD (usage/traffic sections only).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "section",
+        "format",
+        "page",
+        "page_size"
+      ],
+      "type": "object"
+    },
+    "name": "novada_account"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search AI-company domains (chatgpt.com, perplexity.ai, anthropic.com, etc.) and the web for PUBLIC mentions & sentiment of a brand. NOTE: searches indexed public pages \u2014 it does NOT query the live models; a brand with few indexed pages shows low/zero mentions (not a measure of how the models actually respond).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "brand": {
+          "description": "Brand or product name to search for on AI-company public web domains. E.g. 'novada', 'firecrawl', 'stripe'.",
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "models": {
+          "description": "Domain groups to search (each key \u2192 a set of AI-company public web domains, e.g. 'chatgpt' \u2192 chatgpt.com + openai.com). This does NOT query the live AI models \u2014 it searches their indexed public pages. Options: 'chatgpt', 'perplexity', 'grok', 'claude', 'gemini'. Default: ['chatgpt', 'perplexity', 'grok'].",
+          "items": {
+            "enum": [
+              "chatgpt",
+              "perplexity",
+              "grok",
+              "claude",
+              "gemini"
+            ],
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "type": "array"
+        },
+        "topics": {
+          "description": "Topic filter to narrow the search. Only the FIRST entry is used; the rest are ignored. E.g. ['pricing']. Default: general brand mentions.",
+          "items": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "maxItems": 10,
+          "type": "array"
+        }
+      },
+      "required": [
+        "brand"
+      ],
+      "type": "object"
+    },
+    "name": "novada_ai_monitor"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Automate Novada's cloud browser via CDP \u2014 navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key. NOTE: country is accepted but not yet applied \u2014 the browser exit node is not geo-routed by this param today.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "description": "Array of browser actions to execute sequentially. Max 20 per call. Each action MUST use the discriminated union format: {action: \"<type>\", ...fields}. Examples: {action: \"navigate\", url: \"https://example.com\"} | {action: \"click\", selector: \"#btn\"} | {action: \"type\", selector: \"#input\", text: \"hello\"} | {action: \"wait\", ms: 2000} | {action: \"screenshot\"} | {action: \"aria_snapshot\"}. Do NOT use string format (\"navigate\") or object-key format ({navigate: \"url\"}) \u2014 both are invalid.",
+          "items": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "navigate",
+                    "type": "string"
+                  },
+                  "url": {
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "wait_until": {
+                    "default": "domcontentloaded",
+                    "description": "Page load event to wait for. Default 'domcontentloaded' works for most sites including SPAs (X, TikTok). Avoid 'networkidle' for SPAs \u2014 they continuously poll and never reach networkidle, causing a 30s timeout.",
+                    "enum": [
+                      "load",
+                      "domcontentloaded",
+                      "networkidle"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "url",
+                  "wait_until"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "click",
+                    "type": "string"
+                  },
+                  "selector": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "selector"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "type",
+                    "type": "string"
+                  },
+                  "selector": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "selector",
+                  "text"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "screenshot",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "snapshot",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "aria_snapshot",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "evaluate",
+                    "type": "string"
+                  },
+                  "script": {
+                    "description": "JavaScript expression to evaluate in the page context. Max 2000 chars. ASCII only. Must not make network requests.",
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "script"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "wait",
+                    "type": "string"
+                  },
+                  "ms": {
+                    "description": "Milliseconds to wait (100\u201330000). Example: {action: \"wait\", ms: 2000}",
+                    "maximum": 30000,
+                    "minimum": 100,
+                    "type": "integer"
+                  },
+                  "selector": {
+                    "description": "CSS selector to wait for (e.g. '#results'). If omitted, waits for ms milliseconds.",
+                    "type": "string"
+                  },
+                  "timeout": {
+                    "description": "Alias for ms \u2014 prefer ms for clarity. Example: {action: \"wait\", timeout: 2000}",
+                    "maximum": 30000,
+                    "minimum": 100,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "scroll",
+                    "type": "string"
+                  },
+                  "direction": {
+                    "default": "down",
+                    "enum": [
+                      "down",
+                      "up",
+                      "bottom",
+                      "top"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "direction"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "hover",
+                    "type": "string"
+                  },
+                  "selector": {
+                    "description": "CSS selector to hover over.",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "selector"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "press_key",
+                    "type": "string"
+                  },
+                  "key": {
+                    "description": "Key to press. E.g. 'Enter', 'Tab', 'Escape', 'ArrowDown', 'Space'. Follows Playwright key names.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "selector": {
+                    "description": "Optional CSS selector to focus before pressing the key.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "key"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "select",
+                    "type": "string"
+                  },
+                  "selector": {
+                    "description": "CSS selector for the <select> element.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "The option value (or label text) to select.",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "selector",
+                  "value"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "close_session",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "const": "list_sessions",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "type": "array"
+        },
+        "country": {
+          "description": "ISO 2-letter country code (e.g. 'us', 'gb'). NOTE: accepted but NOT yet applied \u2014 the browser exit node is not geo-routed by this param today. Do not rely on it for geo-restricted platforms.",
+          "maxLength": 2,
+          "minLength": 2,
+          "type": "string"
+        },
+        "session_id": {
+          "description": "Optional session ID for persistent browser state across calls. Reuses the same browser page (cookies, localStorage, login state). Warm reuse is ~5x faster (~1.5s vs ~8s cold start). Sessions expire after 10 minutes of inactivity.",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 60000,
+          "description": "Total timeout for all actions in ms. Default 60000.",
+          "maximum": 120000,
+          "minimum": 5000,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "actions",
+        "timeout"
+      ],
+      "type": "object"
+    },
+    "name": "novada_browser"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Read content from multiple pages on one site (up to 20). Use when you need an entire section of a website. Optionally run map first to discover target URLs.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "exclude_paths": {
+          "description": "Glob patterns for URL paths to skip entirely. '*' matches within a path segment, '**' matches across segments. E.g. ['/blog/**', '/changelog/**'].",
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use.",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "type": "string"
+        },
+        "instructions": {
+          "description": "Natural language hint for which pages to prioritize. E.g. 'only API reference pages', 'skip blog and changelog'. Applied as path-level filtering; semantic filtering is agent-side.",
+          "type": "string"
+        },
+        "max_pages": {
+          "default": 5,
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "render": {
+          "default": "auto",
+          "description": "Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (slower, handles JS sites).",
+          "enum": [
+            "auto",
+            "static",
+            "render"
+          ],
+          "type": "string"
+        },
+        "select_paths": {
+          "description": "Glob patterns to restrict crawled URL paths. '*' matches within a path segment, '**' matches across segments, '?' matches one char. E.g. ['/docs/**', '/api/**'].",
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "strategy": {
+          "default": "bfs",
+          "description": "Crawl traversal order. 'bfs' (default): breadth-first \u2014 visits all pages at current depth before going deeper, good for broad discovery. 'dfs': depth-first \u2014 follows links deeply before backtracking, good for exploring specific paths.",
+          "enum": [
+            "bfs",
+            "dfs"
+          ],
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "max_pages",
+        "strategy",
+        "format",
+        "render"
+      ],
+      "type": "object"
+    },
+    "name": "novada_crawl"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "List all available Novada tools grouped by category.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "Optional category filter. One of: 'Content Retrieval', 'Scraping & Verification', 'Proxy', 'Browser & Rendering', 'Account & Billing', 'Health & Discovery'. Omit to list all tools.",
+          "enum": [
+            "Content Retrieval",
+            "Scraping & Verification",
+            "Proxy",
+            "Browser & Rendering",
+            "Account & Billing",
+            "Health & Discovery"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "novada_discover"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Read clean content from one or more URLs. Use when you have a specific page URL and need its content. Handles anti-bot protection automatically. For raw HTML, use format='html'. For multiple pages on one site, use crawl instead.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "clean": {
+          "description": "Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage.",
+          "type": "boolean"
+        },
+        "fields": {
+          "description": "Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured readable output. 'text': plain text. 'html': raw HTML (truncated at 100K chars by default; pass max_chars to adjust). 'json': structured JSON object with typed fields \u2014 best for programmatic agent consumption.",
+          "enum": [
+            "text",
+            "markdown",
+            "html",
+            "json"
+          ],
+          "type": "string"
+        },
+        "max_chars": {
+          "description": "Maximum characters to return (default: 25000, max: 100000). When content exceeds this limit, it is truncated and content_truncated:true plus total_chars are emitted. Raise up to 100000 only when you need the full page \u2014 do not set 100000 by default.",
+          "maximum": 100000,
+          "minimum": 1000,
+          "type": "integer"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "query": {
+          "description": "Optional query for relevance context. Helps the calling agent focus on relevant sections.",
+          "type": "string"
+        },
+        "render": {
+          "default": "auto",
+          "description": "Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS).",
+          "enum": [
+            "auto",
+            "static",
+            "render",
+            "js",
+            "browser"
+          ],
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "type": "string"
+            },
+            {
+              "items": {
+                "format": "uri",
+                "type": "string"
+              },
+              "maxItems": 10,
+              "minItems": 1,
+              "type": "array"
+            }
+          ],
+          "description": "URL or array of URLs (max 10) to extract. Batch mode processes in parallel. Accepted shapes: single string, array of strings, or use the urls alias."
+        },
+        "urls": {
+          "description": "Array of URLs to extract in parallel (max 10). Alias for url when passing multiple URLs. Use for batch research workflows extracting from several pages in one call. Returns a structured markdown document with one labeled section per URL (### [1/N] url). Single url param still returns a single markdown document.",
+          "items": {
+            "format": "uri",
+            "type": "string"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "type": "array"
+        },
+        "wait_for": {
+          "description": "CSS selector to wait for before capturing content (browser mode only). E.g. '.price', '#product-title', '[data-testid=price]'. Delays capture until the element appears in the DOM. Max wait: 15s.",
+          "type": "string"
+        },
+        "wait_ms": {
+          "description": "Fixed milliseconds to wait after page load before capturing content. Use wait_for (CSS selector) instead when possible \u2014 it is more reliable. wait_ms is a fallback for pages with no stable selector. Max: 30000ms.",
+          "maximum": 30000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "url",
+        "format",
+        "render"
+      ],
+      "type": "object"
+    },
+    "name": "novada_extract"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "List all URLs on a website via sitemap or crawl. Use when you need to find the right page before crawl/extract. Returns URLs only, no content. Fast site reconnaissance.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "include_subdomains": {
+          "default": false,
+          "type": "boolean"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_depth": {
+          "default": 2,
+          "description": "Link-hops from root to follow. Default 2. Higher = more pages found but slower.",
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "search": {
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "limit",
+        "include_subdomains",
+        "max_depth"
+      ],
+      "type": "object"
+    },
+    "name": "novada_map"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "\u26a0\ufe0f Session-scoped only: on the hosted endpoint the baseline is per-invocation (in-memory), so use this for single-call change-diffs, not durable cross-call monitoring. Track changes on a web page over time. Compares content hash and field-level diffs.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "description": "Specific fields to track for changes (e.g. ['price', 'availability', 'rating']). When provided, change detection focuses on these fields. Without fields, tracks full page content hash.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): human-readable change report. 'json': structured object for programmatic agent use.",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "type": "string"
+        },
+        "url": {
+          "description": "URL to monitor for changes. E.g. a product page, pricing page, or any content page.",
+          "format": "uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "format"
+      ],
+      "type": "object"
+    },
+    "name": "novada_monitor"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Not needed for extract/crawl \u2014 those handle proxies internally.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "city": {
+          "description": "City name for city-level targeting. Requires country to be set.",
+          "maxLength": 50,
+          "pattern": "^[a-zA-Z\\s\\-]+$",
+          "type": "string"
+        },
+        "country": {
+          "description": "ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country. NOTE: country targeting is NOT applied when type='isp' \u2014 it is silently ignored for that proxy type.",
+          "pattern": "^[a-zA-Z]{2}$",
+          "type": "string"
+        },
+        "format": {
+          "default": "url",
+          "description": "Output format. 'url': proxy URL string. 'env': shell export commands. 'curl': curl --proxy flag.",
+          "enum": [
+            "url",
+            "env",
+            "curl"
+          ],
+          "type": "string"
+        },
+        "session_id": {
+          "description": "Session ID for sticky routing \u2014 same session_id returns same IP across requests.",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "type": "string"
+        },
+        "type": {
+          "default": "residential",
+          "description": "Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static' for a dedicated ISP IP (same IP every request, requires session_id), 'dedicated' for an exclusive datacenter IP (not shared, requires session_id).",
+          "enum": [
+            "residential",
+            "isp",
+            "datacenter",
+            "mobile",
+            "static",
+            "dedicated"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "format"
+      ],
+      "type": "object"
+    },
+    "name": "novada_proxy"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Create a proxy sub-account. Two-step confirm gate (pass confirm:true after human approval).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "description": "REQUIRED. Sub-account name. 3-64 chars, alphanumeric + underscore/hyphen only.",
+          "maxLength": 64,
+          "minLength": 3,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "type": "string"
+        },
+        "confirm": {
+          "const": true,
+          "description": "REQUIRED for execution. Pass `true` ONLY after the human user has approved this account creation. If omitted, the tool returns a dry-run preview instead of calling the API.",
+          "type": "boolean"
+        },
+        "limit_flow": {
+          "description": "Optional data cap in GB, as a string (e.g. \"10\" = 10 GB). Omit for no cap. Server expects string, not number.",
+          "type": "string"
+        },
+        "password": {
+          "description": "REQUIRED. Sub-account password. 8-64 chars. Will be sent to server in multipart body \u2014 caller decides storage.",
+          "maxLength": 64,
+          "minLength": 8,
+          "type": "string"
+        },
+        "product": {
+          "description": "REQUIRED. Product type code as string: 1=Residential, 2=Rotating ISP, 3=Rotating Datacenter, 4=Unlimited, 7=Unblocker, 9=Mobile. Must match a product provisioned on the account.",
+          "enum": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "7",
+            "9"
+          ],
+          "type": "string"
+        },
+        "remark": {
+          "description": "Optional note/label for this sub-account.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "status": {
+          "default": "1",
+          "description": "REQUIRED. Account status: \"1\" = active (default), \"-3\" = personal disabled.",
+          "enum": [
+            "1",
+            "-3"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "product",
+        "account",
+        "password",
+        "status"
+      ],
+      "type": "object"
+    },
+    "name": "novada_proxy_account_create"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "List proxy sub-accounts for a product (paginated).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "description": "Optional filter \u2014 exact-match account name. (API field is `account`, not `username`.)",
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "description": "Entries per page, max 200. (API field is `limit`, not `page_size`.)",
+          "exclusiveMinimum": 0,
+          "maximum": 200,
+          "type": "integer"
+        },
+        "page": {
+          "default": 1,
+          "description": "1-based page index.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "product": {
+          "description": "REQUIRED. Product type code as string: 1=Residential, 2=Rotating ISP, 3=Rotating Datacenter, 4=Unlimited, 7=Unblocker, 9=Mobile. Must match a product provisioned on the account.",
+          "enum": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "7",
+            "9"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "description": "Optional filter: \"1\" = active, \"-3\" = disabled. Omit for both.",
+          "enum": [
+            "1",
+            "-3"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "product",
+        "page",
+        "limit"
+      ],
+      "type": "object"
+    },
+    "name": "novada_proxy_account_list"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Deep multi-source research: searches multiple angles, reads top sources, returns a synthesized report with citations. Use when you need comprehensive analysis of an open-ended topic (not a yes/no claim \u2014 use verify for that). Slower than a single search.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "default": "auto",
+          "description": "'quick'=3 searches, 'deep'=6, 'comprehensive'=8-9, 'auto' (default)=picks quick or deep by question length \u2014 never comprehensive.",
+          "enum": [
+            "quick",
+            "deep",
+            "auto",
+            "comprehensive"
+          ],
+          "type": "string"
+        },
+        "focus": {
+          "description": "Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'.",
+          "type": "string"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "query": {
+          "description": "Alias for 'question' \u2014 use either",
+          "type": "string"
+        },
+        "question": {
+          "minLength": 5,
+          "type": "string"
+        }
+      },
+      "required": [
+        "depth"
+      ],
+      "type": "object"
+    },
+    "name": "novada_research"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings \u2014 NOT general websites (use extract for those).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': structured records array \u2014 key fields (title/price/rating/url) surfaced, noise trimmed \u2014 returned inside a \"## Scrape Results\" wrapper as a fenced json block (not a bare object). 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 \u2014 paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown).",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Scraping operation ID. Examples: 'amazon_product_keywords', 'amazon_product_asin', 'tiktok_posts_url', 'linkedin_company_information_url', 'github_repository_repo-url', 'twitter_profile_username', 'youtube_video_search_label'. Read novada://scraper-platforms resource for the complete list with required params.",
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters. E.g. { keyword: 'iphone 16', num: 5 } for keyword search, { url: 'https://...' } for URL-based ops, { asin: 'B09...' } for ASIN lookup.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "platform": {
+          "description": "Platform domain to scrape. E.g. 'amazon.com', 'reddit.com', 'tiktok.com', 'linkedin.com', 'google.com'.",
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9._\\-]+$",
+          "type": "string"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. When provided, skips submitting a new scrape task and fetches the result of this existing task_id directly \u2014 no new billable task is created. Use this to resume a previous novada_scrape call that returned status:processing without incurring a duplicate charge. platform and operation are still required (used for display only when resuming).",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "operation",
+        "params",
+        "limit",
+        "format"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Search the web via Google, Bing, DuckDuckGo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "default": "",
+          "type": "string"
+        },
+        "end_date": {
+          "description": "ISO date YYYY-MM-DD. Return results published on or before this date.",
+          "type": "string"
+        },
+        "engine": {
+          "default": "google",
+          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED \u2014 may return zero results; avoid. 'yahoo': NOT SUPPORTED \u2014 returns an error; do not use.",
+          "enum": [
+            "google",
+            "bing",
+            "duckduckgo",
+            "yahoo",
+            "yandex"
+          ],
+          "type": "string"
+        },
+        "enrich_top": {
+          "description": "Auto-extract full content from the top result. Shorthand for extract_options.top_n=1. Adds ~2-4s latency. Default: false.",
+          "type": "boolean"
+        },
+        "exclude_domains": {
+          "description": "Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "exclude_social": {
+          "description": "When true, hard-drop social and press-release results (facebook, linkedin, x/twitter, instagram, tiktok, reddit, quora, medium, prnewswire, businesswire, globenewswire, prweb, einpresswire) from the response after fetching.",
+          "type": "boolean"
+        },
+        "extract_options": {
+          "additionalProperties": false,
+          "description": "When provided, automatically extracts content from the top top_n search result URLs and appends it to each result. Eliminates a separate novada_extract call. Note: adds latency proportional to top_n * extract_latency. Use top_n=1-3 for most queries.",
+          "properties": {
+            "fields": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "format": {
+              "default": "markdown",
+              "description": "Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields \u2014 best for programmatic agent consumption.",
+              "enum": [
+                "text",
+                "markdown",
+                "html",
+                "json"
+              ],
+              "type": "string"
+            },
+            "max_chars": {
+              "maximum": 100000,
+              "minimum": 1000,
+              "type": "integer"
+            },
+            "top_n": {
+              "default": 3,
+              "description": "Number of top search results to auto-extract. Default: 3. Max: 10.",
+              "maximum": 10,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "format",
+            "top_n"
+          ],
+          "type": "object"
+        },
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use.",
+          "enum": [
+            "markdown",
+            "json"
+          ],
+          "type": "string"
+        },
+        "include_domains": {
+          "description": "Only return results from these domains. E.g. ['github.com', 'arxiv.org']. Max 10.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "language": {
+          "default": "",
+          "type": "string"
+        },
+        "num": {
+          "default": 10,
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "query": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_type": {
+          "description": "Bias result authority. 'research'/'official': prepend social+PR domains to the query exclusions and boost authoritative sources (*.gov, *.edu, sec.gov, arxiv.org, reuters.com, wikipedia.org, nature.com \u2026). 'social': keep social results (no down-rank). 'news'/'any'/omitted: mild default reranking. Independent of, and combined with, automatic query-intent detection.",
+          "enum": [
+            "any",
+            "news",
+            "research",
+            "official",
+            "social"
+          ],
+          "type": "string"
+        },
+        "start_date": {
+          "description": "ISO date YYYY-MM-DD. Return results published on or after this date.",
+          "type": "string"
+        },
+        "time_range": {
+          "description": "Limit results to a time window. 'day'=last 24h, 'week'=last 7 days, 'month'=last 30 days, 'year'=last 12 months.",
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "year"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "query",
+        "engine",
+        "num",
+        "country",
+        "language",
+        "format"
+      ],
+      "type": "object"
+    },
+    "name": "novada_search"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Check your API key and environment configuration. Use when you want to verify setup or see which Novada products are active. Auth-free, no quota used.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "novada_setup"
+  }
+]
