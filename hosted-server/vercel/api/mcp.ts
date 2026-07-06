@@ -675,7 +675,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // withWallClock races the Promise against the 56s wall-clock budget.
       const result = await withWallClock(
         name,
-        dispatch(name, argsObj, apiKey, { onProgress: undefined }),
+        // TOW2-240: pass visibleToolNames so dispatch can suppress agent_instructions
+        // that reference tools absent from this endpoint (e.g. novada_search_feedback).
+        dispatch(name, argsObj, apiKey, { onProgress: undefined, visibleTools: visibleToolNames }),
       );
 
       logUsage(env, ctx.token, name, true, Date.now() - started);

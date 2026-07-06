@@ -404,7 +404,17 @@ engine: yahoo | status: unsupported | suggested_alternatives: google, duckduckgo
 /** Counter incremented on each search call; used as a lightweight search_id seed. */
 let _searchCounter = 0;
 
-export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
+export interface NovadaSearchOptions {
+  /**
+   * Whether the `novada_search_feedback` tool is reachable in the current
+   * runtime. Defaults to `true` (npm / stdio server where the tool is always
+   * registered). Set to `false` on the hosted endpoint so the agent_instruction
+   * never points at a tool it cannot call (TOW2-240 / search-C fix).
+   */
+  feedbackToolAvailable?: boolean;
+}
+
+export async function novadaSearch(params: SearchParams, apiKey: string, options?: NovadaSearchOptions): Promise<string> {
   // Trim BEFORE the required check so a whitespace-only query ('   ') is rejected
   // with the same validation error as empty — no live call, no quota burn. The
   // trimmed value is reused for the rest of the request so we never send padding
@@ -838,7 +848,13 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
         if (rExt.extract_error) result.extract_error = rExt.extract_error;
         return result;
       }),
-      agent_instruction: `Search complete. search_id: ${searchId} — pass to novada_search_feedback to record quality. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.`,
+      // TOW2-240 / search-C: only emit the feedback instruction when the tool is
+      // reachable in the current runtime (defaults true → npm server unchanged).
+      // On the hosted endpoint feedbackToolAvailable=false so the agent is never
+      // told to call a tool that is not in the hosted 15-tool whitelist.
+      agent_instruction: (options?.feedbackToolAvailable ?? true)
+        ? `Search complete. search_id: ${searchId} — pass to novada_search_feedback to record quality. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.`
+        : `Search complete. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.`,
     };
     // F6b: surface the count of enrichment failures when non-zero
     if (enrichFailedCount > 0) {

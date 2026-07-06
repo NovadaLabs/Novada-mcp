@@ -620,7 +620,14 @@ export async function dispatch(
 
   switch (name) {
     case "novada_search":
-      return novadaSearch(validateSearchParams(args), apiKey!);
+      // TOW2-240: pass feedbackToolAvailable so search.ts omits the
+      // novada_search_feedback agent_instruction when the tool is absent from
+      // the active tool set (e.g. the hosted 15-tool endpoint).
+      return novadaSearch(validateSearchParams(args), apiKey!, {
+        feedbackToolAvailable: ctx?.visibleTools
+          ? ctx.visibleTools.has("novada_search_feedback")
+          : true,
+      });
     case "novada_extract":
       return novadaExtract(validateExtractParams(args), apiKey!);
     case "novada_crawl":
