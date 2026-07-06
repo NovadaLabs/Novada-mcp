@@ -1,0 +1,328 @@
+[
+  {
+    "asin": "B0CFQ5T5F6",
+    "title": "LISEN USB C to USB C Cable, 5-Pack [3.3/3.3/6.6/6.6/10FT] for iPhone 17 Charger Cord, 60W C to C Cable Fast Charging for iPad, iPhone 16 15 Pro Max, Galaxy S25/S24 USBC to USBC Cable Gifts for Men",
+    "currency": "USD",
+    "price": null,
+    "initial_price": 0,
+    "final_price": 0,
+    "buybox_prices": {
+      "final_price": 0,
+      "initial_price": 0,
+      "discount": null,
+      "unit_price": "$0.30"
+    },
+    "availability": "In Stock",
+    "is_available": false,
+    "in_stock": null,
+    "variations": [
+      {
+        "name": "3.3+6.6+10FT Multicolored",
+        "asin": "B0CM96SZXP",
+        "color": "Multicolored",
+        "image": "https://m.media-amazon.com/images/I/51rMi42DLuL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+6.6+10FT",
+        "price": 9.99
+      },
+      {
+        "name": "3.3+3.3+3.3+3.3+3.3FT Black",
+        "asin": "B0CGNK4LTT",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/51V51kH1OEL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+3.3+3.3+3.3FT",
+        "price": 13.99
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+10FT White",
+        "asin": "B0CGNJ12QJ",
+        "color": "White",
+        "image": "https://m.media-amazon.com/images/I/51Zwl-pA0PL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+10FT",
+        "price": 11.99
+      },
+      {
+        "name": "10+10+10FT Multicolored",
+        "asin": "B0CM96S94S",
+        "color": "Multicolored",
+        "image": "https://m.media-amazon.com/images/I/41xfNuF+sHL._AC_.jpg",
+        "currency": "USD",
+        "size": "10+10+10FT",
+        "price": 14.99
+      },
+      {
+        "name": "0.5+0.5+0.5+0.5+0.5FT Black",
+        "asin": "B0GDF7DWS8",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/51F6k8A9ZeL._AC_.jpg",
+        "currency": "USD",
+        "size": "0.5+0.5+0.5+0.5+0.5FT",
+        "price": 9.99
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+6.6+10FT Black",
+        "asin": "B0CLLTMPMH",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/51MK-8alvOL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+6.6+10FT",
+        "price": 16.74
+      },
+      {
+        "name": "3.3+3.3+3.3FT Multicolored",
+        "asin": "B0CM9CKY5J",
+        "color": "Multicolored",
+        "image": "https://m.media-amazon.com/images/I/4113SplC4tL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+3.3FT",
+        "price": 7.99
+      },
+      {
+        "name": "3.3+3.3+3.3+3.3+3.3FT (Pack of 2) Black",
+        "asin": "B0GHHL4V5C",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/41evF1OTHQL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+3.3+3.3+3.3FT (Pack of 2)",
+        "price": 23.98
+      },
+      {
+        "name": "10+10+10+10+10FT Black",
+        "asin": "B0GCJ1P6KH",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/616XnxBnB5L._AC_.jpg",
+        "currency": "USD",
+        "size": "10+10+10+10+10FT",
+        "price": 29.99
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+10FT Purple",
+        "asin": "B0CLLTB55R",
+        "color": "Purple",
+        "image": "https://m.media-amazon.com/images/I/51wYQ6fUZxL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+10FT",
+        "price": 12.99
+      },
+      {
+        "name": "6.6+6.6+6.6+6.6+6.6FT Black",
+        "asin": "B0CGNKC4TC",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/61H2bOwmCWL._AC_.jpg",
+        "currency": "USD",
+        "size": "6.6+6.6+6.6+6.6+6.6FT",
+        "price": 15.99
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+10FT Multicolored",
+        "asin": "B0CLLSTTFW",
+        "color": "Multicolored",
+        "image": "https://m.media-amazon.com/images/I/516Zf6e4gwL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+10FT",
+        "price": 11.99
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+10FT Orange",
+        "asin": "B0GCK3JKW3",
+        "color": "Orange",
+        "image": "https://m.media-amazon.com/images/I/51iwQg6YJFL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+10FT",
+        "price": 16.99
+      },
+      {
+        "name": "6.6FT+6.6FT+6.6FT Black",
+        "asin": "B0CJRNJQ6C",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/51AUZCJ40TL._AC_.jpg",
+        "currency": "USD",
+        "size": "6.6FT+6.6FT+6.6FT",
+        "price": 8.99
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+10FT Pink",
+        "asin": "B0GCH821GK",
+        "color": "Pink",
+        "image": "https://m.media-amazon.com/images/I/51Yfa6HDdkL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+10FT",
+        "price": 13.99
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+10FT Midnight",
+        "asin": "B0F93GRN3Q",
+        "color": "Midnight",
+        "image": "https://m.media-amazon.com/images/I/61t40Pm6x4L._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+10FT",
+        "price": 14.99
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+10FT Black",
+        "asin": "B0CFQ5T5F6",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/516hG1AW5ZL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+10FT",
+        "price": 8.97
+      },
+      {
+        "name": "3.3+3.3+6.6+6.6+10FT Blue",
+        "asin": "B0GCKFNWMN",
+        "color": "Blue",
+        "image": "https://m.media-amazon.com/images/I/51mjpGqR75L._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3+3.3+6.6+6.6+10FT",
+        "price": 16.99
+      }
+    ]
+  },
+  {
+    "asin": "B088NRLMPV",
+    "title": "Anker USB C to USB C Cable, Type-C 60W Fast Charging Cable (6 FT, 2Pack) for iPhone 17 Series, iPad mini 6 and More (Black)",
+    "currency": "USD",
+    "price": null,
+    "initial_price": 0,
+    "final_price": 0,
+    "buybox_prices": {
+      "final_price": 0,
+      "initial_price": 0,
+      "discount": null,
+      "unit_price": "$5.00"
+    },
+    "availability": "In Stock",
+    "is_available": false,
+    "in_stock": null,
+    "variations": [
+      {
+        "name": "3.3FT*2 Black",
+        "asin": "B088NMR44C",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/41SxZjmE8+L._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3FT*2",
+        "price": 9.99
+      },
+      {
+        "name": "3.3FT*2 (Pack of 2) Red",
+        "asin": "B0GGLTGND9",
+        "color": "Red",
+        "image": "https://m.media-amazon.com/images/I/413PmYEiIqL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3FT*2 (Pack of 2)",
+        "price": 19.98
+      },
+      {
+        "name": "1FT*2 (Pack of 2) Black",
+        "asin": "B0GGMTJ4VR",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/31hP6CT9SnL._AC_.jpg",
+        "currency": "USD",
+        "size": "1FT*2 (Pack of 2)",
+        "price": 17.98
+      },
+      {
+        "name": "3.3FT*2 (Pack of 2) Silver",
+        "asin": "B0GGLG71FT",
+        "color": "Silver",
+        "image": "https://m.media-amazon.com/images/I/41-b5u9ednL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3FT*2 (Pack of 2)",
+        "price": 19.98
+      },
+      {
+        "name": "3.3FT*2 Red",
+        "asin": "B088NVYZ66",
+        "color": "Red",
+        "image": "https://m.media-amazon.com/images/I/416xbIj+JKL._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3FT*2",
+        "price": 9.99
+      },
+      {
+        "name": "6FT*2 Silver",
+        "asin": "B088N7KPZN",
+        "color": "Silver",
+        "image": "https://m.media-amazon.com/images/I/41RDRHE5XnL._AC_.jpg",
+        "currency": "USD",
+        "size": "6FT*2",
+        "price": 12.99
+      },
+      {
+        "name": "3.3FT*2 Silver",
+        "asin": "B08BYBFQ62",
+        "color": "Silver",
+        "image": "https://m.media-amazon.com/images/I/41Xdlpmns-L._AC_.jpg",
+        "currency": "USD",
+        "size": "3.3FT*2",
+        "price": 9.99
+      },
+      {
+        "name": "1FT*2 Black",
+        "asin": "B0CFZNZN25",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/31LseYlZ1qL._AC_.jpg",
+        "currency": "USD",
+        "size": "1FT*2",
+        "price": 8.99
+      },
+      {
+        "name": "6FT*2 Red",
+        "asin": "B088NLK5P5",
+        "color": "Red",
+        "image": "https://m.media-amazon.com/images/I/51RBmz09TPL._AC_.jpg",
+        "currency": "USD",
+        "size": "6FT*2",
+        "price": 12.99
+      },
+      {
+        "name": "6FT*2 Black",
+        "asin": "B088NRLMPV",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/512+rDPw5UL._AC_.jpg",
+        "currency": "USD",
+        "size": "6FT*2",
+        "price": 9.99
+      },
+      {
+        "name": "6FT*5 Black",
+        "asin": "B0CFZDHRPP",
+        "color": "Black",
+        "image": "https://m.media-amazon.com/images/I/51rcbU3XZKL._AC_.jpg",
+        "currency": "USD",
+        "size": "6FT*5",
+        "price": 17.99
+      },
+      {
+        "name": "6FT*2 (Pack of 2) Red",
+        "asin": "B0GGM6MQFV",
+        "color": "Red",
+        "image": "https://m.media-amazon.com/images/I/41GWCrOUqTL._AC_.jpg",
+        "currency": "USD",
+        "size": "6FT*2 (Pack of 2)",
+        "price": 25.98
+      }
+    ]
+  },
+  {
+    "asin": "B0GW2MWGKC",
+    "title": "iPhone 17 16 Pro Charger Fast Charging 6.6/10ft Long Braided USB C to C Cord,2 Pack 20W PD Type C Chargers Fast Charging Cable for iPhone17/17 Pro/17ProMax/Air/16/16e/15,iPad Pro,AirM3/M2/5/4,11/10th",
+    "currency": "USD",
+    "price": null,
+    "initial_price": 0,
+    "final_price": 0,
+    "buybox_prices": {
+      "final_price": 0,
+      "initial_price": 0,
+      "discount": null,
+      "unit_price": "$4.33"
+    },
+    "availability": "In Stock",
+    "is_available": false,
+    "in_stock": null,
+    "variations": []
+  }
+]

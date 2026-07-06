@@ -311,6 +311,135 @@ function flattenRecord(obj: unknown, prefix = "", depth = 0): Record<string, str
   return result;
 }
 
+// ─── Product price + availability normalization (TOW2-237) ──────────────────
+// Some platform scrapers (notably Amazon: amazon_product_keywords /
+// amazon_product_asin) return the flat `final_price`/`initial_price` as 0 and
+// `is_available: false` even when the listing is genuinely in stock with a real
+// price — the real price lives in `variations[].price` and the availability is
+// stated in the `availability` STRING ("In Stock"). Walmart populates the flat
+// fields correctly, so this pass is a no-op there. We reconcile ONLY when the
+// upstream flat field is empty/zero — never overwriting a real upstream number.
+//
+// This is a pure projection of the API json (no HTML re-parsing): we surface the
+// price the API already returned, just from the correct nested location, and make
+// `is_available` agree with the `availability` string.
+
+interface AmazonVariation { asin?: unknown; price?: unknown }
+
+/** Coerce a value to a positive finite number, or null. Accepts "$8.97"/"8.97"/8.97. */
+function toPositiveNumber(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) && v > 0 ? v : null;
+  if (typeof v === "string") {
+    // Strip currency symbols / thousands separators, keep digits + decimal point.
+    const cleaned = v.replace(/[^0-9.]/g, "");
+    if (cleaned === "") return null;
+    const n = Number.parseFloat(cleaned);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return null;
+}
+
+/** Truthy in-stock signal from a free-text availability string ("In Stock", "Only 3 left"). */
+function availabilityStringInStock(s: unknown): boolean {
+  if (typeof s !== "string") return false;
+  const t = s.toLowerCase();
+  if (/out\s+of\s+stock|unavailable|currently\s+unavailable|sold\s+out/.test(t)) return false;
+  return /in\s+stock|only\s+\d+\s+left|available|ships?\s|leaves?\s+warehouse|usually\s+ships/.test(t);
+}
+
+/**
+ * Derive a usable price for a single product record, preferring the most accurate
+ * source. Precedence:
+ *   1. existing flat final_price > 0            (upstream already correct — untouched)
+ *   2. existing flat initial_price > 0          (list price when final is empty)
+ *   3. buybox_prices.final_price > 0
+ *   4. variation whose .asin === record.asin    (exact listed-item price)
+ *   5. first variation with a price > 0
+ *   6. buybox_prices.unit_price parsed to number (last resort: per-unit, still > 0)
+ * Returns null when NO positive price is anywhere in the record.
+ */
+function derivePrice(r: Record<string, unknown>): number | null {
+  const flatFinal = toPositiveNumber(r.final_price);
+  if (flatFinal !== null) return flatFinal;
+  const flatInitial = toPositiveNumber(r.initial_price);
+  if (flatInitial !== null) return flatInitial;
+
+  const buybox = (r.buybox_prices && typeof r.buybox_prices === "object")
+    ? (r.buybox_prices as Record<string, unknown>)
+    : null;
+  if (buybox) {
+    const bbFinal = toPositiveNumber(buybox.final_price);
+    if (bbFinal !== null) return bbFinal;
+  }
+
+  const variations = Array.isArray(r.variations) ? (r.variations as AmazonVariation[]) : [];
+  if (variations.length > 0) {
+    const selfAsin = r.asin;
+    const match = variations.find(v => v && v.asin !== undefined && v.asin === selfAsin);
+    const matchPrice = match ? toPositiveNumber(match.price) : null;
+    if (matchPrice !== null) return matchPrice;
+    for (const v of variations) {
+      const p = v ? toPositiveNumber(v.price) : null;
+      if (p !== null) return p;
+    }
+  }
+
+  if (buybox) {
+    const unit = toPositiveNumber(buybox.unit_price);
+    if (unit !== null) return unit;
+  }
+
+  return null;
+}
+
+/**
+ * Reconcile price + availability on a product record in place-safe fashion
+ * (returns a NEW object; never mutates the input). Fills `final_price` (and
+ * `price`) from derivePrice ONLY when the flat field is currently empty/zero, and
+ * makes `is_available` agree with the `availability` string when the two disagree.
+ * A `_price_source` breadcrumb records where the surfaced price came from so agents
+ * (and QA) can see when a value was reconciled vs passed through untouched.
+ */
+export function normalizeProductRecord(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  // Only touch records that actually look like product records (have at least one
+  // of the price/availability fields we know how to reconcile). Search/social
+  // records pass through untouched.
+  const hasPriceShape =
+    "final_price" in raw || "initial_price" in raw || "buybox_prices" in raw || "variations" in raw;
+  const hasAvailShape = "availability" in raw || "is_available" in raw;
+  if (!hasPriceShape && !hasAvailShape) return raw;
+
+  const out: Record<string, unknown> = { ...raw };
+
+  // ── Price ──
+  const flatFinalOk = toPositiveNumber(raw.final_price) !== null;
+  if (!flatFinalOk) {
+    const derived = derivePrice(raw);
+    if (derived !== null) {
+      out.final_price = derived;
+      // Keep `price` consistent when it is the empty/null the bug leaves behind.
+      if (toPositiveNumber(raw.price) === null) out.price = derived;
+      out._price_source = "reconciled";
+    }
+    // else: genuinely no price anywhere → leave as-is (do NOT invent a value).
+  } else {
+    out._price_source = "upstream";
+  }
+
+  // ── Availability ── reconcile the boolean to the human-readable string when they
+  // disagree. The string is the trustworthy signal for these product scrapers.
+  if (hasAvailShape) {
+    const strInStock = availabilityStringInStock(raw.availability);
+    if (strInStock && raw.is_available !== true) {
+      out.is_available = true;
+    }
+  }
+
+  return out;
+}
+
 function extractRecords(data: unknown): Record<string, unknown>[] {
   if (Array.isArray(data)) {
     return data.map(item =>
@@ -812,6 +941,11 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       );
     }
   }
+  // TOW2-237: reconcile price + availability BEFORE any format derives from the
+  // records, so json / markdown / csv / excel / html / toon all surface the real
+  // price and a trustworthy is_available. Pure projection of the API json — no-op
+  // for platforms (e.g. Walmart) whose flat fields are already populated.
+  rawRecords = rawRecords.map(r => normalizeProductRecord(r));
   const records = rawRecords.slice(0, limit).map(r => flattenRecord(r)) as Record<string, unknown>[];
 
   if (records.length === 0) {
