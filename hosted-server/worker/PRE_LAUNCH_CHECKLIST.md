@@ -18,7 +18,7 @@ Read this before flipping `STUB_AUTH_WARNING_ACCEPTED = "true"` in `wrangler.tom
 Parent `novada-mcp` package depends on `axios`, `playwright-core`, `exceljs`, `pdf-parse`, `cheerio`. CF Workers has a **1 MB script size limit (3 MB compressed)**. Run before deploy:
 
 ```bash
-cd ~/Projects/novada-mcp/hosted/worker
+cd ~/Projects/novada-mcp/hosted-server/worker
 npx wrangler deploy --dry-run --outdir=./dist
 ls -lh dist/
 ```

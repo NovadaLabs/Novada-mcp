@@ -4,33 +4,39 @@
 
 **Novada Hosted MCP server** — deployed at `https://mcp.novada.com/mcp`.
 
-This is the **deployment surface** for Novada's existing MCP tools (which live in [`novada-mcp`](https://github.com/NovadaLabs/novada-mcp) npm package). It wraps those tools in a remote Streamable HTTP MCP transport so AI clients (Claude Desktop / Cursor / Cline / Windsurf / VS Code) can use them via one URL — zero install.
+This is the **deployment surface** for Novada's MCP tools (whose source lives in the sibling [`../npm-package/`](../npm-package/README.md) — the `novada-mcp` package). It wraps those tools in a remote Streamable HTTP MCP transport so AI clients (Claude Desktop / Cursor / Cline / Windsurf / VS Code) can use them via one URL — zero install.
 
-## Repo layout
+## Layout (inside the monorepo)
 
 ```
-novada-mcpserver/
-├── vercel/            ← ACTIVE — Vercel Edge Function (deployed)
-│   ├── api/mcp.ts
-│   ├── vercel.json
-│   └── README.md      ← deploy walkthrough
-├── worker/            ← FALLBACK — CF Workers port (kept for reference, blocked by CF subdomain limitation)
-├── landing/           ← novada.com/mcp install landing page
-├── docs/              ← 5 user/ops docs (README, ARCHITECTURE, INSTALL, DEPLOY, DIRECTORIES)
-└── scripts/           ← reserved
+novada-mcp/                ← monorepo root
+├── npm-package/           ← the novada-mcp package (tool source) — SIBLING of this folder
+└── hosted-server/         ← THIS folder — the mcp.novada.com deployment
+    ├── vercel/            ← ACTIVE — Vercel Node.js function (deployed)
+    │   ├── api/mcp.ts     ← auth + rate-limit + token validation
+    │   ├── vendor/        ← GENERATED — vendored build of ../npm-package (do NOT hand-edit)
+    │   ├── vercel.json
+    │   └── README.md      ← deploy walkthrough
+    ├── worker/            ← DORMANT — CF Workers port (reference only, not deployed)
+    ├── landing/           ← novada.com/mcp install landing page
+    ├── docs/              ← user/ops docs (ARCHITECTURE, INSTALL, DEPLOY, DIRECTORIES)
+    └── scripts/           ← deploy-hosted.sh, sync-to-hosted.mjs, golden/ baseline
 ```
+
+The vendored build in `vercel/vendor/novada-mcp/` is regenerated from `../npm-package` by
+`scripts/sync-to-hosted.mjs` (`cd vercel && npm run sync:hosted`) — never edit it by hand.
 
 ## Deploy quickstart
 
-See `vercel/README.md` for full walkthrough. TL;DR:
+See `vercel/README.md` for the full walkthrough, or run the gated one-shot
+`scripts/deploy-hosted.sh` (build → vendor → gates → deploy → verify). TL;DR for a
+fresh Vercel project:
 
-1. Push this repo to GitHub.
-2. Import in Vercel → set Root Directory to `vercel/`.
-3. Add env vars + Vercel KV.
-4. CNAME `mcp.novada.com` → `cname.vercel-dns.com` at AWS Route 53.
+1. Point Vercel at this monorepo → set Root Directory to `hosted-server/vercel/`.
+2. Add env vars + Vercel KV.
+3. CNAME `mcp.novada.com` → `cname.vercel-dns.com` at AWS Route 53.
 
 ## Related
 
 - npm package: [`novada-mcp`](https://npmjs.com/package/novada-mcp) (the local MCP server — runs via `npx novada-mcp`)
-- Source: [`NovadaLabs/novada-mcp`](https://github.com/NovadaLabs/novada-mcp)
-- This repo wraps that package's tools behind an HTTP endpoint at the edge.
+- Source: [`../npm-package/`](../npm-package/README.md) (same monorepo — this folder wraps its built tools behind an HTTP endpoint at the edge)

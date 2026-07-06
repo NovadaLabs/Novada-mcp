@@ -41,12 +41,12 @@ Client  ──HTTPS──▶  Cloudflare Worker (/mcp)  ──HTTPS──▶  No
 ## 1. Install
 
 ```bash
-cd ~/Projects/novada-mcp/hosted/worker
+cd ~/Projects/novada-mcp/hosted-server/worker
 npm install
 ```
 
-> The package depends on the parent `novada-mcp` via `file:../..`. Run
-> `npm run build` in `~/Projects/novada-mcp` first so `build/` exists.
+> The package depends on the npm package via `file:../../npm-package`. Run
+> `npm run build` in `~/Projects/novada-mcp/npm-package` first so `build/` exists.
 
 ## 2. Authenticate Wrangler
 
