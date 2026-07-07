@@ -67,7 +67,7 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
 
   it("registry names EXACTLY match the wired TOOLS names (fails loudly on drift)", () => {
     // TOW2-256: TOOLS now DERIVES from REGISTERED_TOOL_NAMES — the filter in core.ts
-    // means dispatch-only aliases (proxy variants, scraper stubs, novada_verify, etc.)
+    // means dispatch-only aliases (proxy variants, scraper stubs, etc.)
     // are NOT in the wired TOOLS array at all. No alias exclusion needed here: the
     // invariant is simply wiredNames === registryNames (exact set equality).
     //
