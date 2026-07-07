@@ -498,6 +498,8 @@ function isSubcategoryNamePolluted(name: string): boolean {
   if (name.includes('":"')) return true;            // JSON fragment
   if (name.includes("languageCode")) return true;   // JS i18n artefact
   if (/ASIN\s+B[0-9A-Z]{9}/i.test(name)) return true; // trailing ASIN page text
+  if (/\bASIN\b/i.test(name)) return true;          // any "ASIN" word (page leak)
+  if (/Best Sellers Rank/i.test(name)) return true; // BSR label leaked into name
   // Sentence-like prose (contains typical sentence chars mid-string)
   if (/[.!?]\s+[A-Z]/.test(name)) return true;
   return false;

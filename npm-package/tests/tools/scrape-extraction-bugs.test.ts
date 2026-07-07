@@ -198,13 +198,17 @@ describe("normalizeProductRecord — S3 subcategory_rank cleanup via fixture", (
     expect(outSr.length).toBeLessThan(rawSr.length);
   });
 
-  it("item 1 (heavy dups B0GW2MWGKC): 42 raw entries collapse to ≤5 clean", () => {
+  it("item 1 (heavy dups B0GW2MWGKC): 42 raw entries collapse to ≤2 clean unique categories", () => {
+    // Raw has 42 entries: 2 distinct patterns ("Cell Phones & Accessories" rank=3153
+    // and "Cell Phone Wall Chargers ASIN B..." rank=294) each repeated 21×. The ASIN-
+    // containing entry is also polluted so after filtering only ≤2 real categories remain.
+    // Bound is 2 so a filter regression (passing many dups through) cannot silently pass.
     const raw = FIXTURE[IDX_HEAVY_SR_DUPS];
     const rawSr = raw.subcategory_rank as Array<unknown>;
     expect(rawSr.length).toBe(42);
     const out = normalizeProductRecord(raw);
     const outSr = out.subcategory_rank as Array<unknown>;
-    expect(outSr.length).toBeLessThanOrEqual(5);
+    expect(outSr.length).toBeLessThanOrEqual(2);
   });
 
   it("item 2 (Apple cable): subcategory_rank is empty — passthrough unchanged", () => {
