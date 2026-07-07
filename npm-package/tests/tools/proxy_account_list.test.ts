@@ -166,3 +166,30 @@ describe("novadaProxyAccountList — pure projection (TOW2-251)", () => {
     expect(keys).toContain("products");
   });
 });
+
+// ─── apiKey forwarding via dispatch (TOW2-251, reviewer LOW) ───────────────────
+
+describe("novada_proxy_account_list — caller apiKey forwarding (dispatch)", () => {
+  it("forwards an explicit caller apiKey through to devApiPost opts", async () => {
+    mockList([QUOTA]);
+    const { dispatch } = await import("../../src/core.js");
+    await dispatch("novada_proxy_account_list", { product: "1" }, "caller-key-1234");
+    // devApiPost(path, body, opts) — opts.apiKey must be the caller key.
+    const call = mockedPost.mock.calls.at(-1);
+    expect(call).toBeTruthy();
+    const opts = call![2] as { apiKey?: string } | undefined;
+    expect(opts?.apiKey).toBe("caller-key-1234");
+  });
+
+  it("falls back to env resolution when no caller apiKey is supplied", async () => {
+    mockList([QUOTA]);
+    const { dispatch } = await import("../../src/core.js");
+    await dispatch("novada_proxy_account_list", { product: "1" });
+    const call = mockedPost.mock.calls.at(-1);
+    expect(call).toBeTruthy();
+    // No caller key → opts.apiKey is undefined; devApiPost resolves from env
+    // (getDeveloperApiKey) internally. We assert the tool did NOT inject a key.
+    const opts = call![2] as { apiKey?: string } | undefined;
+    expect(opts?.apiKey).toBeUndefined();
+  });
+});
