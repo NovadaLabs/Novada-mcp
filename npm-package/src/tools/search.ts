@@ -528,10 +528,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         : detectIntent(params.query);
 
   try {
-    if (engine === "bing") {
-      // Bing uses is_auto_push=false and may return HTML synchronously or a task_id
-      scraperResults = await submitBingSearch(apiKey, effectiveQuery);
-    } else {
+    {
       const engineCfg = ENGINE_MAP[engine];
       const submitted = await submitSearchScrapeTask(
         apiKey,

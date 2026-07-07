@@ -67,10 +67,12 @@ export const IpWhitelistParamsSchema = z
     // ── "list" params ──
     start_time: z
       .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional()
       .describe('Start datetime filter for action="list" (e.g. "2026-01-01").'),
     end_time: z
       .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional()
       .describe('End datetime filter for action="list" (e.g. "2026-12-31").'),
     lock: z

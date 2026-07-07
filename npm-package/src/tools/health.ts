@@ -132,12 +132,12 @@ export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "qui
     .then(raw => {
       const parsed = JSON.parse(raw) as { status?: string; data?: { balance?: number; currency?: string } };
       const balance = parsed?.data?.balance;
-      const currency = parsed?.data?.currency ?? "€";
+      const currency = parsed?.data?.currency;
       return { balance: typeof balance === "number" ? balance : undefined, currency, error: undefined as string | undefined };
     })
     .catch((e: unknown) => ({
       balance: undefined as number | undefined,
-      currency: "€",
+      currency: undefined as string | undefined,
       error: e instanceof Error ? e.message : String(e),
     }));
 
@@ -165,8 +165,8 @@ export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "qui
     ? `Error fetching balance: ${wallet.error.slice(0, 80)}`
     : wallet.balance !== undefined
       ? wallet.balance > 0
-        ? `${wallet.currency}${wallet.balance.toFixed(2)} — funds Search, Extract, Scraper, Unblock (pay-per-use)`
-        : `${wallet.currency}0.00 — top up at https://dashboard.novada.com to re-enable pay-per-use tools`
+        ? `${wallet.currency ?? ""}${wallet.balance.toFixed(2)} — funds Search, Extract, Scraper, Unblock (pay-per-use)`
+        : `${wallet.currency ?? ""}0.00 — top up at https://dashboard.novada.com to re-enable pay-per-use tools`
       : "Balance unknown";
 
   const walletFundedProducts: ProductStatus[] = [
@@ -253,7 +253,7 @@ export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "qui
   lines.push(`- ${headline}`);
 
   if (wallet.balance !== undefined) {
-    const suffix = wallet.balance > 0 ? `(${wallet.currency}${wallet.balance.toFixed(2)} wallet)` : "(empty wallet)";
+    const suffix = wallet.balance > 0 ? `(${wallet.currency ?? ""}${wallet.balance.toFixed(2)} wallet)` : "(empty wallet)";
     lines.push(`- Pay-per-use tools (Search/Extract/Scraper/Unblock): ${walletStatus === "available" ? "funded" : "needs top-up"} ${suffix}`);
   }
 

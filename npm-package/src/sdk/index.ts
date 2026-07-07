@@ -30,7 +30,7 @@ export class NovadaClient {
   /** Search the web. Returns typed array of results. */
   async search(
     query: string,
-    options: { engine?: "google" | "bing" | "duckduckgo"; num?: number; country?: string; timeRange?: "day" | "week" | "month" | "year" } = {}
+    options: { engine?: "google" | "duckduckgo" | "yandex"; num?: number; country?: string; timeRange?: "day" | "week" | "month" | "year" } = {}
   ): Promise<SearchResult[]> {
     return withCredentials(this.toolCreds, async () => {
       const raw = await novadaSearch(

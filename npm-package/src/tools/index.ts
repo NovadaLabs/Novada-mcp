@@ -19,7 +19,6 @@ export { novadaProxyDedicated, validateProxyDedicatedParams, ProxyDedicatedParam
 export type { ProxyDedicatedParams } from "./proxy_dedicated.js";
 export { novadaScrape } from "./scrape.js";
 export { novadaVerify } from "./verify.js";
-export { novadaUnblock } from "./unblock.js";
 export { novadaBrowser } from "./browser.js";
 export { novadaHealth } from "./health.js";
 export { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "./discover.js";

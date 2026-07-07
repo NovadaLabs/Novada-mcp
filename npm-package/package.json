@@ -68,7 +68,7 @@
   ],
   "author": "Novada <support@novada.com>",
   "license": "MIT",
-  "homepage": "https://www.novada.com",
+  "homepage": "https://novada.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/NovadaLabs/novada-mcp.git"

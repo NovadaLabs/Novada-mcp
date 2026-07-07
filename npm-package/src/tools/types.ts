@@ -89,8 +89,8 @@ const safeUrl = z.string()
 
 export const SearchParamsSchema = withCamelCaseAliases(z.object({
   query: z.string().min(1, "Search query is required"),
-  engine: z.enum(["google", "bing", "duckduckgo", "yandex"]).default("google")
-    .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED — may return zero results; avoid."),
+  engine: z.enum(["google", "duckduckgo", "yandex"]).default("google")
+    .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content."),
   num: z.number().int().min(1).max(20).default(10),
   country: z.string().default(""),
   language: z.string().default(""),
@@ -131,6 +131,9 @@ export const SearchParamsSchema = withCamelCaseAliases(z.object({
   timeRange: "time_range",
   startDate: "start_date",
   endDate: "end_date",
+  // T4: start_time/end_time are aliases for start_date/end_date (consistency with dev-api tools)
+  start_time: "start_date",
+  end_time: "end_date",
   includeDomains: "include_domains",
   excludeDomains: "exclude_domains",
   sourceType: "source_type",
@@ -389,7 +392,7 @@ export const ProxyParamsSchema = withCamelCaseAliases(z.object({
   session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
     .describe("Session ID for sticky routing — same session_id returns same IP across requests."),
   format: z.enum(["url", "env", "curl"]).default("url")
-    .describe("Output format. 'url': proxy URL string. 'env': shell export commands. 'curl': curl --proxy flag."),
+    .describe("Output SHAPE of the returned proxy config — not a data content format. 'url': proxy URL string (default). 'env': shell export commands. 'curl': curl --proxy flag."),
 }), { sessionId: "session_id" });
 
 export type ProxyParams = z.infer<typeof ProxyParamsSchema>;

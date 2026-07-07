@@ -164,11 +164,11 @@ function zodToMcpSchema(schema: any): Record<string, unknown> {
 const _TOOL_DEFINITIONS: Array<{ name: string; description: string; inputSchema: Record<string, unknown>; annotations: Record<string, boolean> }> = [
   {
     name: "novada_search",
-    description: `Search the web via 4 working engines (Google, Bing, DuckDuckGo, Yandex). Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
+    description: `Search the web and get clean, ready-to-use content. Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
 
 **Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.
 **Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).
-**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yandex are fallbacks and can be markedly slower; 'bing' is currently degraded — avoid it.
+**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yandex are fallbacks and can be markedly slower.
 **Domain filtering:** includeDomains/excludeDomains are applied by injecting \`site:domain\` operators into the query (not API-side filtering).
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
     inputSchema: zodToMcpSchema(SearchParamsSchema),
@@ -264,6 +264,7 @@ Not for:
 **Output formats:** "markdown" (default, agent-optimized table), "json" (structured records array returned inside a "## Scrape Results" wrapper — a fenced json block, not a bare object), "toon" (token-optimized pipe-separated format — 40-65% smaller than JSON/markdown, best for large result sets in context-constrained situations), "csv" (inline CSV text), "excel" (inline .xlsx base64), "html" (inline HTML table).
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}
 **Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.
+**Resume slow-platform scrapes:** Pass \`task_id\` from a previous call that returned status:processing to fetch its result without submitting a new billable task. platform and operation are still required (display only when resuming).
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
     inputSchema: zodToMcpSchema(ScrapeParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
@@ -377,7 +378,7 @@ Not for:
 
 **Best for:** Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions.
 **Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_extract with format="html").
-**Actions:** navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call.
+**Actions:** navigate, click, type, screenshot, snapshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call. snapshot = full DOM text; aria_snapshot = smaller semantic tree (prefer aria_snapshot for most extraction tasks).
 **Sessions:** Pass session_id to reuse the same browser page (cookies, login) across calls. Persistent cross-call sessions are reliable only on the local/long-lived server; on the hosted serverless endpoint treat each call as one-shot (a session_id may not survive between calls). Use close_session to release early.
 **Auth:** NOVADA_API_KEY (auto-provisions Browser API credentials). NOVADA_BROWSER_WS is optional — set it to override auto-provision.
 **Platform note:** Use wait with domcontentloaded (never networkidle) for SPAs. (The \`country\` param is accepted but NOT yet applied to the browser exit node — do not rely on it for geo-routing.)
@@ -722,7 +723,7 @@ export async function dispatch(
     case "novada_scraper_task_mgmt":
       return JSON.stringify({
         status: "ok",
-        message: "The async scraper flow was replaced in 0.9.4 — novada_scrape now returns results inline in one call.",
+        message: "The async scraper flow was replaced — novada_scrape now returns results inline in one call.",
         agent_instruction: "Call novada_scrape with { platform, operation, params } to get the records directly. No polling needed.",
       }, null, 2);
     case "novada_browser_flow":
@@ -772,7 +773,7 @@ export async function dispatch(
       return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey);
     default:
       throw new Error(
-        `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback`
+        `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt`
       );
   }
 }
