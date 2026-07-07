@@ -621,6 +621,22 @@ describe("RC2 — polymorphic balance shapes render correctly in plans card", ()
     const row = result.split("\n").find(l => l.startsWith("| Residential"));
     expect(row).toContain("✅ active");
   });
+
+  it("mobile total=0 && used=0 → NOT exhausted (unprovisioned/fresh plan)", async () => {
+    mockedPlans.mockResolvedValue(JSON.stringify({
+      status: "ok",
+      summary: { active_products: ["mobile"], expired_products: [], unavailable_products: [] },
+      per_product: {
+        mobile: { status: "ok", balance: { balance: 0, times: 0, total: 0, used: 0 }, expired: false, expires_at: "2099-12-31" },
+      },
+      errors: [],
+    }));
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const row = result.split("\n").find(l => l.startsWith("| Mobile"));
+    expect(row).toBeTruthy();
+    expect(row).not.toContain("exhausted");
+    expect(row).toContain("✅ active");
+  });
 });
 
 describe("RC2 — polymorphic balance shapes in plans json format", () => {

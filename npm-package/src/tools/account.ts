@@ -159,8 +159,9 @@ function extractBalanceInfo(balance: unknown): { display: string; exhausted: boo
   }
 
   // ── 2. Mobile: request-count exhaustion (used >= total) ──────────────────
+  // total=0 means unprovisioned/fresh — not exhausted; only flag when total>0 && used>=total
   if (typeof b.total === "number" && typeof b.used === "number") {
-    const exhausted = b.used >= b.total;
+    const exhausted = b.total > 0 && b.used >= b.total;
     let display: string;
     if (typeof b.balance === "number") {
       const mb = b.balance / (1024 * 1024);
