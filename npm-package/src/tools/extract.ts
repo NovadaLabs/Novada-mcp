@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
-import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitleFrom, extractDescriptionFrom, extractLinksFrom, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredDataFrom, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT, detectKuferAvailability, truncatePreservingTable } from "../utils/index.js";
+import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitleFrom, extractDescriptionFrom, extractLinksFrom, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredDataFrom, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT, detectKuferAvailability, truncatePreservingTable, stripBoilerplate } from "../utils/index.js";
 import type { FieldResult } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import { saveOutput } from "../utils/output.js";
@@ -1108,7 +1108,12 @@ async function extractSingleInner(
   // NOV-671: use table-preserving truncation — when a table sits in the last ~30%
   // of content and would be cut, we trim boilerplate above and keep the table intact.
   const totalChars = mainContent.length;
-  let displayContent = mainContent;
+  // Item 4 (TOW2-241): when clean=true the main-content extraction removes nav/footer,
+  // but docs-site chrome ("Copy page", "YesNo", "⌘I", anchor-link marks) still leaks
+  // through as inline text. Apply stripBoilerplate on the clean path before truncation
+  // so the chrome never appears in the agent-facing output.
+  // Root cause: OUR CODE — the clean path did not call stripBoilerplate on output.
+  let displayContent = params.clean === true ? stripBoilerplate(mainContent) : mainContent;
   let contentTruncated = false;
   if (displayContent.length > maxChars) {
     displayContent = truncatePreservingTable(displayContent, maxChars);

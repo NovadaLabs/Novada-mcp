@@ -391,16 +391,6 @@ activating the Scraper API enables search.
 - \`novada_research\` — multi-source research using extract-based discovery
 - \`novada_map\` + \`novada_extract\` — discover and read pages from a known site`;
 
-const YAHOO_UNAVAILABLE = `## Search Unavailable — Yahoo
-
-Yahoo Search is not available on this account.
-
-## Agent Hints
-- Use engine="google" (fast, reliable) — same query syntax, equivalent results. engine="duckduckgo" also works.
-
-## Agent Notice — Engine Unavailable
-engine: yahoo | status: unsupported | suggested_alternatives: google, duckduckgo`;
-
 /** Counter incremented on each search call; used as a lightweight search_id seed. */
 let _searchCounter = 0;
 
@@ -437,11 +427,6 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   // honour `num` will return more candidates to absorb dedup/filter shrinkage.
   const requestedNum = params.num || 10;
   const overFetchNum = Math.min(requestedNum + 10, 40);
-
-  // Yahoo has no scraper-API path — return a clear redirect message immediately.
-  if (engine === "yahoo") {
-    return YAHOO_UNAVAILABLE;
-  }
 
   // Cache key must include every param that changes the result set, otherwise
   // two searches differing only by (e.g.) exclude_social collide and return
@@ -489,9 +474,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   let scraperResults: NovadaSearchResult[] = [];
 
   // H3: an unrecognized engine value is USER INPUT, not an account defect.
-  // (yahoo is handled above with its own card.) Returning the entitlement
-  // message here falsely told the agent their key was broken when they merely
-  // passed a bad enum. Emit a clear invalid-parameter message listing valid engines.
+  // Returning the entitlement message here falsely told the agent their key was
+  // broken when they merely passed a bad enum. Emit a clear invalid-parameter
+  // message listing valid engines.
   if (!SCRAPER_SEARCH_ENGINES.has(engine)) {
     const valid = [...SCRAPER_SEARCH_ENGINES].join(", ");
     return [
@@ -916,22 +901,42 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     ``,
   ];
 
+  // Item 3: track seen snippets to detect when Google falls back to the same
+  // meta-description for multiple results. Duplicates are NOT dropped (the result
+  // still has value) but are flagged with a note so agents aren't misled.
+  const seenSnippets = new Set<string>();
+
   for (let i = 0; i < reranked.length; i++) {
     const r = reranked[i];
     const rawUrl = r.url || r.link;
     if (!rawUrl) continue; // Skip results with no URL — would render as "N/A" and break agents
     let url = unwrapBingUrl(rawUrl);
 
-    // Strip pagination UI text from snippets
-    const rawSnippet = r.description || r.snippet || "";
+    // Item 2: strip inline HTML tags from snippets preserving word-boundary spaces.
+    // Tag-boundary joins (e.g. <b>is</b> an) without a space produce "isan". Replace
+    // each tag with a single space then collapse runs so we don't introduce double-spaces.
+    const rawSnippet = (r.description || r.snippet || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/  +/g, " ")
+      .trim();
+
+    // Strip trailing UI text ("Read more", "More")
     const fullSnippet = rawSnippet
       .replace(/\.{3}\s*Read\s+more\s*$/i, "...")
       .replace(/\s+Read\s+more\s*$/i, "")
       .replace(/\s+More\s*$/i, "")
       .trim();
-    const cleanSnippet = fullSnippet.length > 400
-      ? fullSnippet.slice(0, 397) + "..."
-      : fullSnippet || "No description";
+
+    // Item 3: detect duplicate snippets (Google meta-description fallback).
+    // Normalise to lower-case for the equality check; keep the original text.
+    const snippetKey = fullSnippet.toLowerCase().slice(0, 200);
+    const isDuplicate = snippetKey.length > 0 && seenSnippets.has(snippetKey);
+    if (snippetKey.length > 0) seenSnippets.add(snippetKey);
+
+    const snippetDisplay = isDuplicate ? `${fullSnippet} [snippet repeated — upstream fallback]` : fullSnippet;
+    const cleanSnippet = snippetDisplay.length > 400
+      ? snippetDisplay.slice(0, 397) + "..."
+      : snippetDisplay || "No description";
 
     lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
     if (r.published || r.date) lines.push(`published: ${r.published || r.date}`);

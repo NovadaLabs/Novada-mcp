@@ -301,8 +301,19 @@ function flattenRecord(obj: unknown, prefix = "", depth = 0): Record<string, str
         });
         if (v.length > cap) result[`${key}._count`] = `${v.length} total (showing first ${cap})`;
       } else {
+        // Item 5 (TOW2-241): join primitives with "; ". The upstream API may return
+        // values that already contain "、" (Chinese ideographic comma) — that is
+        // upstream-origin, not our separator. We use ASCII "; " for our own joins.
+        // Truncate at a word boundary to avoid cutting mid-token (e.g. "In Stock"→"In").
         const joined = v.map(x => String(x ?? "")).join("; ");
-        result[key] = joined.length > 200 ? joined.slice(0, 200) + "...(truncated)" : joined;
+        if (joined.length > 200) {
+          // Find last space at or before char 197 to avoid mid-word cuts.
+          const cutAt = joined.lastIndexOf(" ", 197);
+          const truncAt = cutAt > 100 ? cutAt : 197; // fall back to hard cut if no space nearby
+          result[key] = joined.slice(0, truncAt) + "...(truncated)";
+        } else {
+          result[key] = joined;
+        }
       }
     } else {
       result[key] = String(v ?? "");
