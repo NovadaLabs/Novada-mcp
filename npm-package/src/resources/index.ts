@@ -72,7 +72,6 @@ export function readResource(uri: string): ReadResourceResult {
 google     — Best general-purpose engine, highest relevance. Default choice.
 bing       — CURRENTLY DEGRADED (may return zero results; avoid). Use google/duckduckgo instead.
 duckduckgo — Privacy-focused, no personalization bias. Good for neutral/unfiltered results.
-yahoo      — NOT SUPPORTED (returns an error; use google/duckduckgo instead).
 yandex     — Best for Russian-language content and Eastern European queries.
 
 ## Recommendation

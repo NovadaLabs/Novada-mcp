@@ -43,9 +43,13 @@ describe("validateSearchParams", () => {
   });
 
   it("accepts all valid engines", () => {
-    for (const engine of ["google", "bing", "duckduckgo", "yahoo", "yandex"]) {
+    for (const engine of ["google", "bing", "duckduckgo", "yandex"]) {
       expect(() => validateSearchParams({ query: "test", engine })).not.toThrow();
     }
+  });
+
+  it("rejects yahoo (removed engine)", () => {
+    expect(() => validateSearchParams({ query: "test", engine: "yahoo" })).toThrow();
   });
 
   it("throws on num out of range", () => {
