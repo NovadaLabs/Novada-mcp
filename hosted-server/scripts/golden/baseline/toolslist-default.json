@@ -1099,12 +1099,11 @@
         },
         "engine": {
           "default": "google",
-          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED \u2014 may return zero results; avoid. 'yahoo': NOT SUPPORTED \u2014 returns an error; do not use.",
+          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED \u2014 may return zero results; avoid.",
           "enum": [
             "google",
             "bing",
             "duckduckgo",
-            "yahoo",
             "yandex"
           ],
           "type": "string"
