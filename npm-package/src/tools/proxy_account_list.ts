@@ -82,7 +82,7 @@ const FLOW_PRODUCTS: Array<{ suffix: string; label: string }> = [
   { suffix: "browser", label: "browser" },
 ];
 
-/** Bytes → human units (MB when < 1 GB, else GB). Matches account.ts mbToHuman scale. */
+/** Bytes → human units (MB when < 1 GB, else GB). Same divisor as account.ts mbToHuman (1024*1024) but 2 decimal places instead of 1. */
 function bytesToHuman(bytes: number): string {
   const mb = bytes / (1024 * 1024);
   if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
@@ -123,7 +123,10 @@ function projectAccount(raw: Record<string, unknown>): Record<string, unknown> {
   const account = typeof raw.account === "string" ? raw.account : undefined;
   const statusCode = num("status");
   const status = statusCode === 1 ? "active" : statusCode === -3 ? "disabled" : String(raw.status ?? "unknown");
-  const remark = typeof raw.remark === "string" && raw.remark.length > 0 ? raw.remark : undefined;
+  const remark =
+    typeof raw.remark === "string" && raw.remark.trim().length > 0
+      ? raw.remark.trim()
+      : undefined;
 
   return {
     account,
