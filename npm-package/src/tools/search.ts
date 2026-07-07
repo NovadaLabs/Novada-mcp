@@ -40,7 +40,7 @@ const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 const _searchCache = new Map<string, { result: string; ts: number }>();
 const SEARCH_CACHE_TTL = 60_000;
 
-const SCRAPER_SEARCH_ENGINES = new Set(["google", "bing", "duckduckgo", "yandex"]);
+const SCRAPER_SEARCH_ENGINES = new Set(["google", "duckduckgo", "yandex"]);
 
 interface ScraperSearchEngine {
   scraper_name: string;
@@ -51,7 +51,6 @@ interface ScraperSearchEngine {
 
 const ENGINE_MAP: Record<string, ScraperSearchEngine> = {
   google:     { scraper_name: "google.com",     scraper_id: "google_search", query_param: "q",       supports_num: true  },
-  bing:       { scraper_name: "bing.com",        scraper_id: "bing_search",   query_param: "q",       supports_num: false },
   duckduckgo: { scraper_name: "duckduckgo.com",  scraper_id: "duckduckgo",    query_param: "q",       supports_num: true  },
   yandex:     { scraper_name: "yandex.com",      scraper_id: "yandex",        query_param: "keyword", supports_num: false },
 };
@@ -610,7 +609,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         search_id: `search-${Date.now()}-${++_searchCounter}`,
         hints: [
           "Try a broader or rephrased query",
-          "Try a different engine: engine=\"google\" (fast, reliable fallback), or engine=\"duckduckgo\" / \"yandex\". Avoid engine=\"bing\" — currently degraded.",
+          "Try a different engine: engine=\"google\" (fast, reliable fallback), or engine=\"duckduckgo\" / \"yandex\".",
           "Use novada_research for multi-source investigation",
           "Use novada_map + novada_extract if you have a known site",
         ],
@@ -627,7 +626,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         ``,
         `## Agent Hints`,
         `- Try a broader or rephrased query`,
-        `- Try a different engine: engine="google" (fast, reliable fallback), or engine="duckduckgo" / "yandex". Avoid engine="bing" — currently degraded.`,
+        `- Try a different engine: engine="google" (fast, reliable fallback), or engine="duckduckgo" / "yandex".`,
         `- Use novada_research for multi-source investigation`,
         `- Use novada_map + novada_extract if you have a known site`,
       ].join("\n");

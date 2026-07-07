@@ -79,6 +79,8 @@ export const AccountParamsSchema = z
         "traffic: residential|isp|mobile|datacenter|static.",
       ),
   })
+  // .strip() (not .strict()): silently drop unknown keys so old callers passing the
+  // removed `mode` param don't error; trade-off = typo'd params are dropped, not rejected.
   .strip();
 
 export type AccountParams = z.infer<typeof AccountParamsSchema>;

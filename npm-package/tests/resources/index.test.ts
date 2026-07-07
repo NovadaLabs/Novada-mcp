@@ -77,9 +77,13 @@ describe("readResource() — novada://engines", () => {
     expect(text).toContain("google");
   });
 
-  it("contains bing", () => {
+  it("does not list bing as a supported engine (removed)", () => {
     const text = readResource("novada://engines").contents[0].text;
-    expect(text).toContain("bing");
+    // bing.com scraper platform still appears in scraper-platforms resource (it's a valid
+    // platform for novada_scrape), but bing must not be listed as a search engine option.
+    // Check it's absent from the engines section specifically (before the first ##).
+    const enginesSection = text.split("##")[0];
+    expect(enginesSection).not.toContain("bing       —");
   });
 
   it("contains duckduckgo", () => {

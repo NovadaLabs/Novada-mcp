@@ -70,7 +70,6 @@ export function readResource(uri: string): ReadResourceResult {
           text: `# Supported Search Engines
 
 google     — Best general-purpose engine, highest relevance. Default choice.
-bing       — CURRENTLY DEGRADED (may return zero results; avoid). Use google/duckduckgo instead.
 duckduckgo — Privacy-focused, no personalization bias. Good for neutral/unfiltered results.
 yandex     — Best for Russian-language content and Eastern European queries.
 
