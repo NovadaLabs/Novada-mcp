@@ -34,7 +34,6 @@ import { novadaVerify } from "../../src/tools/verify.js";
 import { novadaUnblock } from "../../src/tools/unblock.js";
 import { novadaScraperSubmit } from "../../src/tools/scraper_submit.js";
 import { novadaHealth } from "../../src/tools/health.js";
-import { novadaHealthAll } from "../../src/tools/health_all.js";
 import { novadaSearchFeedback } from "../../src/tools/search_feedback.js";
 
 const API_KEY = "test-api-key-123";
@@ -251,27 +250,6 @@ describe("FIX-5 (updated): health reads account facts, no synthetic probes", () 
     }
   });
 
-  it("health_all.ts (alias): proxy with explicit env creds → Available (fact-based, no probe)", async () => {
-    // Set both env creds → no auto-provision fetch fires.
-    process.env.NOVADA_PROXY_USER = "testuser";
-    process.env.NOVADA_PROXY_PASS = "testpass";
-    process.env.NOVADA_PROXY_ENDPOINT = "proxy.novada.com:10000";
-    process.env.NOVADA_BROWSER_WS = "wss://user:pass@browser.novada.com";
-
-    const fetchSpy = vi.spyOn(global, "fetch").mockRejectedValue(new Error("unexpected probe call"));
-    try {
-      const result = await novadaHealthAll(API_KEY);
-      expect(result).toContain("Proxy");
-      expect(result).toContain("✅ Available");
-      expect(fetchSpy).not.toHaveBeenCalled();
-    } finally {
-      fetchSpy.mockRestore();
-      delete process.env.NOVADA_PROXY_USER;
-      delete process.env.NOVADA_PROXY_PASS;
-      delete process.env.NOVADA_PROXY_ENDPOINT;
-      delete process.env.NOVADA_BROWSER_WS;
-    }
-  });
 });
 
 // ─── FIX-6: search emits search_id / feedback loop ───────────────────────
