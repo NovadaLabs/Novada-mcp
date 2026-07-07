@@ -657,6 +657,50 @@ describe("RC2 — polymorphic balance shapes in plans json format", () => {
   });
 });
 
+// ─── TOW2-252 — account identity line ─────────────────────────────────────────
+
+describe("TOW2-252 — account identity line", () => {
+  it("summary card appends identity line with masked key tail (≤4 chars)", async () => {
+    const result = await novadaAccount(
+      validateAccountParams({ section: "summary", format: "card" }),
+      "sk-test-abcdWXYZ",
+    );
+    expect(result).toContain("account:");
+    // key tail = last 4 chars only, prefixed with the ellipsis marker
+    expect(result).toContain("key …WXYZ");
+    // must NOT contain more than the last-4 of the key
+    expect(result).not.toContain("abcdWXYZ");
+    // as-of timestamp present (ISO)
+    expect(result).toMatch(/as of \d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("summary json includes account_identity with masked key + as-of", async () => {
+    const result = await novadaAccount(
+      validateAccountParams({ section: "summary", format: "json" }),
+      "sk-test-abcdWXYZ",
+    );
+    const obj = JSON.parse(result) as Record<string, unknown>;
+    const identity = obj.account_identity as string;
+    expect(typeof identity).toBe("string");
+    expect(identity).toContain("key …WXYZ");
+    expect(identity).not.toContain("abcdWXYZ");
+    expect(identity).toMatch(/as of \d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("identity line never leaks more than the last 4 key chars", async () => {
+    const longKey = "novada_dev_1234567890_SECRETTAIL9999";
+    const result = await novadaAccount(
+      validateAccountParams({ section: "summary", format: "json" }),
+      longKey,
+    );
+    const obj = JSON.parse(result) as Record<string, unknown>;
+    const identity = obj.account_identity as string;
+    expect(identity).toContain("…9999");
+    expect(identity).not.toContain("SECRETTAIL");
+    expect(identity).not.toContain("1234567890");
+  });
+});
+
 describe("RC2 — summary card uses real balance shapes", () => {
   it("summary card shows GB for residential (not —)", async () => {
     mockedSummary.mockResolvedValue(JSON.stringify({

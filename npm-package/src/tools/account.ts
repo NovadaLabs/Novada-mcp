@@ -98,6 +98,49 @@ export function validateAccountParams(
   return AccountParamsSchema.parse(args ?? {});
 }
 
+// ─── Account identity line (TOW2-252) ──────────────────────────────────────────
+//
+// One identity line on balance-bearing outputs so an agent/user can tell WHOSE
+// balance this is and HOW FRESH it is. Shape:
+//   `key …<last4> · as of <ISO>`   (uid prepended when known)
+//
+// uid: the balance/wallet/summary envelopes do NOT carry uid — only the
+// proxy_account_list rows do. Per the pure mandate we do NOT add a new API call
+// just to fetch uid, so uid is omitted here (with a note) rather than faked.
+// key tail: last 4 chars of the active key (dev key preferred, else NOVADA_API_KEY,
+// else the caller-supplied key). NEVER more than 4 chars.
+// as-of: the envelope's own timestamp if present, else now at fetch.
+
+/** Last-4 tail of the active key; empty string when no key is resolvable. */
+function keyTail(callerApiKey?: string): string {
+  const key =
+    callerApiKey?.trim() ||
+    process.env.NOVADA_DEVELOPER_API_KEY?.trim() ||
+    process.env.NOVADA_API_KEY?.trim() ||
+    "";
+  return key.length >= 4 ? key.slice(-4) : key;
+}
+
+/**
+ * Build the single account-identity line.
+ * `asOf` — envelope timestamp if the API provided one, else current fetch time.
+ * `uid`  — only when a caller genuinely has it (proxy paths); omitted otherwise.
+ */
+function buildAccountIdentity(
+  callerApiKey?: string,
+  opts: { uid?: number | string; asOf?: string } = {},
+): string {
+  const parts: string[] = [];
+  if (opts.uid !== undefined && opts.uid !== null && String(opts.uid).length > 0) {
+    parts.push(`uid ${opts.uid}`);
+  }
+  const tail = keyTail(callerApiKey);
+  if (tail) parts.push(`key …${tail}`);
+  const asOf = opts.asOf ?? new Date().toISOString();
+  parts.push(`as of ${asOf}`);
+  return parts.join(" · ");
+}
+
 // ─── Card renderers ──────────────────────────────────────────────────────────
 
 /** Plan-status icon + label for a product row. */
@@ -655,12 +698,21 @@ export async function novadaAccount(
           "Full account snapshot: wallet balance, plan quotas, recent capture activity, and product entitlements (proxy/browser/wallet-funded).",
       };
 
+      // TOW2-252: identity line — whose balance + how fresh. No envelope timestamp
+      // in the summary payload, so as-of = fetch time; uid unavailable without a
+      // new call, so omitted.
+      const identity = buildAccountIdentity(apiKey);
+
       if (format === "card") {
-        return renderSummaryCard(merged);
+        const card = renderSummaryCard(merged);
+        // Append the identity line to the wallet-bearing card.
+        return `${card}\n\n*account: ${identity}*`;
       }
 
-      // json: flatten into clean structure
-      return JSON.stringify(flattenSummaryJson(merged), null, 2);
+      // json: flatten into clean structure + one identity field
+      const flat = flattenSummaryJson(merged);
+      flat.account_identity = identity;
+      return JSON.stringify(flat, null, 2);
     }
 
     case "balance": {

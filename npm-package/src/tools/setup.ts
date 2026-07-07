@@ -37,6 +37,19 @@ const URL_PROXY     = "https://dashboard.novada.com/overview/proxy/";
 
 type KeyState = "ready" | "present_but_invalid" | "not_set";
 
+/**
+ * TOW2-252: account-identity suffix for the wallet balance line — key tail +
+ * as-of. uid is not available from the wallet envelope and we do NOT add an API
+ * call just to fetch it, so it is omitted here. Key tail is never more than 4 chars.
+ */
+function identitySuffix(effectiveKey: string | undefined): string {
+  const tail = effectiveKey && effectiveKey.length >= 4 ? effectiveKey.slice(-4) : (effectiveKey ?? "");
+  const asOf = new Date().toISOString();
+  return tail
+    ? ` · account: key …${tail} · as of ${asOf}`
+    : ` · account: as of ${asOf}`;
+}
+
 interface Validation {
   state: KeyState;
   balanceLine?: string;   // human line describing wallet balance (ready state)
@@ -63,8 +76,8 @@ async function validateKey(effectiveKey: string | undefined): Promise<Validation
     const currency = typeof parsed?.data?.currency === "string" ? parsed.data.currency : "";
     if (typeof balance === "number") {
       const balanceLine = balance > 0
-        ? `Wallet balance: ${currency}${balance.toFixed(2)} (currency as shown in your dashboard) — enough to start testing.`
-        : `Wallet balance: ${currency}0.00 (currency as shown in your dashboard) — top up at ${URL_DASHBOARD} to run pay-per-use tools.`;
+        ? `Wallet balance: ${currency}${balance.toFixed(2)} (currency as shown in your dashboard) — enough to start testing.${identitySuffix(effectiveKey)}`
+        : `Wallet balance: ${currency}0.00 (currency as shown in your dashboard) — top up at ${URL_DASHBOARD} to run pay-per-use tools.${identitySuffix(effectiveKey)}`;
       return { state: "ready", balanceLine };
     }
     // Key was accepted (no auth error) but balance shape was unexpected — still
