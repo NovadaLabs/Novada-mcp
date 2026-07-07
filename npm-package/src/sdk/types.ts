@@ -1,6 +1,6 @@
 /** Config for NovadaClient */
 export interface NovadaClientConfig {
-  /** Novada Scraper API key. Required. Get one at https://www.novada.com */
+  /** Novada Scraper API key. Required. Get one at https://novada.com */
   scraperApiKey: string;
   /**
    * Optional: Novada Web Unblocker key (separate from scraperApiKey).

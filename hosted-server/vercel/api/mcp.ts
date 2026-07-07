@@ -462,6 +462,49 @@ async function refundQuota(tokenHash: string, env: Env): Promise<void> {
   }
 }
 
+// ─── First-run notice (TOW2-242) ─────────────────────────────────────────────
+// One-time onboarding notice, shown EXACTLY ONCE per token on the hosted endpoint.
+// The canonical copy + stdio logic live in the vendored module
+// ../vendor/novada-mcp/utils/first-run-notice.ts (FIRST_RUN_NOTICE). We do NOT
+// import it here: the vendor dir is regenerated at deploy time and is stale between
+// deploys, so importing would break the local tsc gate. Per the TOW2-242 design's
+// explicit fallback, we duplicate ONLY the constant inline (KEEP IN SYNC with the
+// module) and implement a KV-backed store here (KV is hosted-only). To remove the
+// feature on hosted: delete this block + the two call sites below (grep TOW2-242).
+const FIRST_RUN_NOTICE =
+  "💡 First time using Novada MCP? Get your own API key + $10 free credits at https://novada.com — this notice shows only once.";
+
+// 180-day TTL: a returning token inside the window stays "noticed"; beyond it the KV
+// key GCs and the notice may show once more. Acceptable for a soft onboarding nudge.
+const FIRST_RUN_TTL_SECONDS = 60 * 60 * 24 * 180;
+
+/**
+ * Returns the first-run notice for this token on its FIRST hosted call, else null.
+ *
+ * Fail-quiet contract (mirrors the vendored module):
+ *  - Kill switch env set → null (never emit).
+ *  - KV unavailable / any KV error → treat as already-noticed → null (never spam,
+ *    never block a tool result).
+ *  - Mark-before-return: SET the flag BEFORE returning the notice so a crash can't
+ *    double-show it. Key is `noticed:<12-hex token fingerprint>` — never the raw
+ *    token (KV keys can surface in logs; see tokenFingerprint / tokenKvHash).
+ */
+async function maybeGetFirstRunNoticeHosted(token: string): Promise<string | null> {
+  if (process.env.NOVADA_DISABLE_FIRST_RUN_NOTICE) return null;
+  try {
+    const fp = await tokenFingerprint(token);
+    const key = `noticed:${fp}`;
+    // SET only if absent (NX). `nx:true` returns null when the key already exists →
+    // already noticed. A truthy result means we just claimed the first-run slot.
+    const claimed = await kv.set(key, Date.now(), { nx: true, ex: FIRST_RUN_TTL_SECONDS });
+    if (!claimed) return null;
+    return FIRST_RUN_NOTICE;
+  } catch {
+    // KV missing/errored → fail quiet as "already noticed" so we never block or spam.
+    return null;
+  }
+}
+
 function extractToken(req: Request): string | null {
   // Vercel Node.js Functions: req.url is path-only ("/mcp"). Vercel Edge: it's
   // the absolute URL. Provide a base so URL parsing works in both runtimes.
@@ -666,7 +709,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
         const sanitized = sanitizeHostedOutput(result);
-        return { content: [{ type: "text" as const, text: sanitized }] };
+        // TOW2-242: first-run notice on this successful path too (separate block).
+        const discoverContent = [{ type: "text" as const, text: sanitized }];
+        const discoverNotice = await maybeGetFirstRunNoticeHosted(ctx.token);
+        if (discoverNotice) discoverContent.push({ type: "text" as const, text: discoverNotice });
+        return { content: discoverContent };
       }
 
       // ── Single dispatch call (replaces the old hand-maintained switch) ──
@@ -687,8 +734,14 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const quotaFooter = remaining < monthlyQuota * 0.2
         ? `\n\n---\n⚠ Quota: ${remaining}/${monthlyQuota} calls remaining this month.`
         : "";
+      // TOW2-242: one-time first-run notice — SEPARATE content block (never
+      // concatenated into the result text, which would corrupt JSON outputs),
+      // ONLY on this successful path. Fails quiet → never throws.
+      const content = [{ type: "text" as const, text: sanitized + quotaFooter }];
+      const notice = await maybeGetFirstRunNoticeHosted(ctx.token);
+      if (notice) content.push({ type: "text" as const, text: notice });
       return {
-        content: [{ type: "text" as const, text: sanitized + quotaFooter }],
+        content,
         _meta: { quota_remaining: remaining },
       };
     } catch (error) {

@@ -260,7 +260,8 @@ describe("Round 6: Error quality — agent hints", () => {
     const { readFileSync } = await import("fs");
     const indexSrc = readFileSync(new URL("../../src/index.ts", import.meta.url), "utf8");
     expect(indexSrc).toContain("NOVADA_API_KEY is not set");
-    expect(indexSrc).toContain("https://www.novada.com");
+    // TOW2-242: signup front door normalized www.novada.com → novada.com.
+    expect(indexSrc).toContain("https://novada.com");
   });
 
   it("truncated content: hint tells agent how to get more content", async () => {

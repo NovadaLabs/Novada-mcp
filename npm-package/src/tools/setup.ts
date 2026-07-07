@@ -20,11 +20,17 @@ export function validateSetupParams(raw: Record<string, unknown>): SetupParams {
 }
 
 // ─── Canonical URLs (reused from the codebase — do NOT invent new paths) ──────
-//   REGISTER / free credits : https://dashboard.novada.com  (dashboard home + overview)
+//   REGISTER / $10 free credits : https://novada.com  (public signup front door — TOW2-242)
+//   TOP UP / dashboard home      : https://dashboard.novada.com  (billing / overview)
 //   GET AN API KEY          : https://dashboard.novada.com/api-key/  (errors.ts INVALID_API_KEY template)
 //   BROWSER API WS          : https://dashboard.novada.com/overview/browser/  (health.ts)
 //   PROXY                   : https://dashboard.novada.com/overview/proxy/    (health.ts)
 const URL_DASHBOARD = "https://dashboard.novada.com";
+// TOW2-242: signup/registration front door is novada.com (NOT dashboard.*, NOT
+// mcp.novada.com). New testers get an API key + $10 free credits here. This is a
+// deliberate always-on onboarding lookup — no once-logic (that's the first-run
+// notice module's job).
+const URL_SIGNUP    = "https://novada.com";
 const URL_API_KEY   = "https://dashboard.novada.com/api-key/";
 const URL_BROWSER   = "https://dashboard.novada.com/overview/browser/";
 const URL_PROXY     = "https://dashboard.novada.com/overview/proxy/";
@@ -139,7 +145,7 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
   if (state === "not_set") {
     L.push("## Get started in 3 steps");
     L.push("");
-    L.push(`1. **Register** at ${URL_DASHBOARD} — free credits are included so you can test right away.`);
+    L.push(`1. **Register** at ${URL_SIGNUP} — get your own API key + $10 free credits so you can test right away.`);
     L.push(`2. **Copy your API key** from ${URL_API_KEY}`);
     L.push("3. **Add it to your MCP client**, then restart it:");
     L.push("");
@@ -165,7 +171,7 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
     L.push("`NOVADA_API_KEY` env var in your MCP client config, then restart the client.");
     if (validation.detail) L.push(`> Detail: ${validation.detail}`);
     L.push("");
-    L.push(`If you don't have an account yet, register at ${URL_DASHBOARD} (free credits included).`);
+    L.push(`If you don't have an account yet, register at ${URL_SIGNUP} — API key + $10 free credits included.`);
     L.push("");
   } else {
     // ready
@@ -203,11 +209,11 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
       ? "Key is valid. You may call any tool. Suggest the user try novada_search or novada_extract; call novada_account for balance/quotas."
       : state === "present_but_invalid"
         ? `Do NOT retry other tools yet — the key is invalid. Tell the user to get a valid key at ${URL_API_KEY} and update NOVADA_API_KEY in their MCP client config, then restart. This is a setup step, not a tool failure.`
-        : `No key yet. Tell the user to register at ${URL_DASHBOARD} (free credits included), copy their API key from ${URL_API_KEY}, add it as NOVADA_API_KEY in their MCP client config, and restart. Do not treat this as an error — it is the normal first-run state.`;
+        : `No key yet. Tell the user to register at ${URL_SIGNUP} (API key + $10 free credits included), copy their API key from ${URL_API_KEY}, add it as NOVADA_API_KEY in their MCP client config, and restart. Do not treat this as an error — it is the normal first-run state.`;
 
   L.push("## Agent");
   L.push(`key_state: ${state}`);
-  L.push(`register_url: ${URL_DASHBOARD}`);
+  L.push(`register_url: ${URL_SIGNUP}`);
   L.push(`api_key_url: ${URL_API_KEY}`);
   L.push(`core_tools: ${CORE_TOOLS.map(t => t.tool).join(", ")}`);
   L.push(`agent_instruction: ${agentInstruction}`);
