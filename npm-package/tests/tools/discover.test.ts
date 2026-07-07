@@ -24,26 +24,35 @@ import {
   REGISTERED_TOOL_NAMES,
 } from "../../src/tools/registry.js";
 import { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "../../src/tools/discover.js";
-import { PROXY_ALIAS_MAP } from "../../src/tools/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Extract the tool names declared in the `TOOLS = [ ... ]` array in src/core.ts.
- * This is the server's authoritative ListTools surface. We slice from `const TOOLS = [`
- * to the first top-level `];` so we never pick up names from other arrays (CATEGORY_MAP
- * values, the --help block, etc.).
+ * Extract the tool names declared in the `_TOOL_DEFINITIONS = [ ... ]` array in src/core.ts.
+ * This is the FULL dispatch-capable set (visible + hidden). The exported `TOOLS` array
+ * is derived from this by filtering to REGISTERED_TOOL_NAMES — so the structural invariant
+ * is: every registry name has a _TOOL_DEFINITIONS entry (no ghost schemas) and the test
+ * asserts wiredNames === registryNames after that filter is applied implicitly by the derive.
+ *
+ * We read source text (not import) to avoid booting the MCP server.
  */
 function readWiredToolNames(): string[] {
   const indexPath = resolve(__dirname, "../../src/core.ts");
   const src = readFileSync(indexPath, "utf8");
-  const start = src.indexOf("const TOOLS = [");
-  expect(start, "could not locate `const TOOLS = [` in src/core.ts").toBeGreaterThan(-1);
+  // _TOOL_DEFINITIONS contains ALL dispatchable tool schemas; TOOLS derives from it.
+  // We want the names that TOOLS will expose: those in both _TOOL_DEFINITIONS AND the registry.
+  // Rather than re-implementing the filter here, read _TOOL_DEFINITIONS names and the test
+  // assertion will compare against registryNames directly (exact equality).
+  const start = src.indexOf("const _TOOL_DEFINITIONS");
+  expect(start, "could not locate `const _TOOL_DEFINITIONS` in src/core.ts").toBeGreaterThan(-1);
   const end = src.indexOf("\n];", start);
-  expect(end, "could not locate end of TOOLS array in src/core.ts").toBeGreaterThan(start);
+  expect(end, "could not locate end of _TOOL_DEFINITIONS array in src/core.ts").toBeGreaterThan(start);
   const block = src.slice(start, end);
-  const names = [...block.matchAll(/name:\s*"(novada_[a-z_]+)"/g)].map((m) => m[1]);
-  return names;
+  const allDefinedNames = [...block.matchAll(/name:\s*"(novada_[a-z_]+)"/g)].map((m) => m[1]);
+  // Mirror the core.ts filter: only names in the registry are exported as TOOLS.
+  // This makes this parser match EXACTLY what TOOLS.filter(REGISTERED_TOOL_NAMES) produces.
+  const registrySet = new Set(TOOL_REGISTRY.map((t) => t.name));
+  return allDefinedNames.filter((n) => registrySet.has(n));
 }
 
 describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
@@ -57,35 +66,24 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
   });
 
   it("registry names EXACTLY match the wired TOOLS names (fails loudly on drift)", () => {
-    // 0.9.4: backward-compat aliases are intentionally WIRED (old callers still work)
-    // but NOT registered (removed from tools/list to shrink the surface). Exclude them.
-    const ALIAS_NAMES = new Set<string>([
-      ...Object.keys(PROXY_ALIAS_MAP),  // novada_proxy_residential/isp/datacenter/mobile/static/dedicated
-      "novada_health_all",              // → novada_account(section="summary")
-      "novada_scraper_submit",          // → novada_scrape (sync inline)
-      "novada_scraper_status",          // → benign ok (async flow removed)
-      "novada_scraper_result",          // → benign ok
-      "novada_scraper_task_mgmt",       // → benign ok
-      "novada_verify",                  // 0.9.8: cut from tools/list (low value + verdict-quality issues); handler kept functional (hidden), no error for old callers
-      // 0.9.9: folded into novada_account — hidden from list, aliases still work
-      "novada_wallet_balance",          // → novada_account(section="balance")
-      "novada_wallet_usage_record",     // → novada_account(section="usage")
-      "novada_plan_balance_all",        // → novada_account(section="plans")
-      "novada_traffic_daily",           // → novada_account(section="traffic")
-      "novada_capture_logs",            // → novada_account(section="summary")
-      "novada_account_summary",         // → novada_account(section="summary")
-      "novada_health",                  // → novada_account(section="summary")
-      "novada_unblock",                 // Phase-3 fold → novada_extract(format:"html", render mapped from method)
-    ]);
-    const wiredSet = new Set(wiredNames.filter((n) => !ALIAS_NAMES.has(n)));
+    // TOW2-256: TOOLS now DERIVES from REGISTERED_TOOL_NAMES — the filter in core.ts
+    // means dispatch-only aliases (proxy variants, scraper stubs, novada_verify, etc.)
+    // are NOT in the wired TOOLS array at all. No alias exclusion needed here: the
+    // invariant is simply wiredNames === registryNames (exact set equality).
+    //
+    // Structural guarantee: adding a name to _TOOL_DEFINITIONS without also adding it
+    // to TOOL_REGISTRY keeps it hidden automatically. The reverse — adding to registry
+    // without a definition — surfaces it as an empty schema, which is caught by the
+    // "every wired tool is in registry" direction of this assertion.
+    const wiredSet = new Set(wiredNames);
     const registrySet = new Set(registryNames);
 
     const ghosts = [...registrySet].filter((n) => !wiredSet.has(n)); // in registry, not wired
-    const missing = [...wiredSet].filter((n) => !registrySet.has(n)); // wired (non-alias), not in registry
+    const missing = [...wiredSet].filter((n) => !registrySet.has(n)); // wired, not in registry
 
-    expect(ghosts, `registry lists tools that are NOT wired in src/index.ts TOOLS: ${ghosts.join(", ")}`).toEqual([]);
-    expect(missing, `src/index.ts wires tools missing from TOOL_REGISTRY: ${missing.join(", ")}`).toEqual([]);
-    // Exact set equality (order-independent), aliases excluded.
+    expect(ghosts, `registry lists tools NOT present in src/core.ts TOOLS (add definition or remove from registry): ${ghosts.join(", ")}`).toEqual([]);
+    expect(missing, `src/core.ts TOOLS includes tools missing from TOOL_REGISTRY (add to registry or remove from _TOOL_DEFINITIONS): ${missing.join(", ")}`).toEqual([]);
+    // Exact set equality (order-independent). No alias filtering needed — TOOLS is derived.
     expect([...registrySet].sort()).toEqual([...wiredSet].sort());
   });
 

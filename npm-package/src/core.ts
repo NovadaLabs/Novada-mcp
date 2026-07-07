@@ -5,10 +5,16 @@
  * Safe to import from any transport (stdio index.ts, hosted mcp.ts, tests).
  *
  * Exports:
- *   TOOLS          — the MCP tool catalog (array literal, verbatim from index.ts)
+ *   TOOLS          — the MCP tool catalog, DERIVED from REGISTERED_TOOL_NAMES so it can
+ *                    never drift from registry.ts. Tools in _TOOL_DEFINITIONS whose name
+ *                    is absent from the registry are dispatch-only (hidden from ListTools).
  *   HIDDEN_ALIASES — tool names dispatched but intentionally absent from TOOLS
  *   dispatch()     — name → validated → tool fn → string result
  *                    THROWS on unknown tool and on tool errors (no envelope, no catch)
+ *
+ * Single source of truth: registry.ts controls the visible set. Add a name there to
+ * surface it; remove a name there to hide it. _TOOL_DEFINITIONS holds the full
+ * MCP schema for every dispatchable tool (visible + hidden).
  */
 
 import {
@@ -40,6 +46,7 @@ import {
   validateBrowserParams,
   validateDiscoverParams,
   validateBrowserFlowParams,
+  REGISTERED_TOOL_NAMES,
 } from "./tools/index.js";
 import type { ProgressReporter } from "./tools/crawl.js";
 import {
@@ -149,8 +156,12 @@ function zodToMcpSchema(schema: any): Record<string, unknown> {
 }
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
+// _TOOL_DEFINITIONS holds the full MCP schema (description + inputSchema + annotations)
+// for EVERY dispatchable tool — both visible (in registry) and hidden (dispatch-only).
+// Do NOT export this directly. The public `TOOLS` below derives from registry.
 
-export const TOOLS = [
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _TOOL_DEFINITIONS: Array<{ name: string; description: string; inputSchema: Record<string, unknown>; annotations: Record<string, boolean> }> = [
   {
     name: "novada_search",
     description: `Search the web via 4 working engines (Google, Bing, DuckDuckGo, Yandex). Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
@@ -348,6 +359,7 @@ Not for:
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
+    // dispatch-only: not in registry → hidden from ListTools; handler kept functional pending owner decision on verdict-quality direction
     name: "novada_verify",
     description: `Use when you have a factual claim and need to check if it's supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data.
 
@@ -586,26 +598,53 @@ Detect changes on a web page over time. Extracts content, computes a hash, compa
   },
 ];
 
+/**
+ * TOOLS — the MCP ListTools surface, DERIVED from the registry.
+ *
+ * Only entries whose `name` appears in REGISTERED_TOOL_NAMES are exported here.
+ * Everything else in _TOOL_DEFINITIONS remains dispatchable (the switch handles
+ * all names) but is hidden from agents' tool lists — no ListTools drift possible.
+ *
+ * To surface a new tool: add it to TOOL_REGISTRY in registry.ts AND add its
+ * definition to _TOOL_DEFINITIONS above. To hide one: remove it from TOOL_REGISTRY.
+ * Never edit this export directly.
+ */
+export const TOOLS = _TOOL_DEFINITIONS.filter((t) => REGISTERED_TOOL_NAMES.has(t.name));
+
 // ─── Hidden Aliases ────────────────────────────────────────────────────────
 // Names dispatched via switch but intentionally absent from TOOLS/ListTools.
-// These are backward-compat aliases, deprecated tool names, and the auth-free
-// pre-gate tools (novada_setup, novada_session_stats, novada_search_feedback
-// are handled before dispatch() is called in index.ts and are also in TOOLS —
-// they do NOT appear here since they ARE in TOOLS).
+// Includes: backward-compat aliases, deprecated tool names, and the 11 tools
+// hidden from the visible surface in TOW2-256 T1+T2:
+//   - 6 proxy variants → novadaProxy(type=...)
+//   - 4 scraper stubs  → novadaScrape / benign stub
+//   - novada_verify     → novadaVerify (dispatch-only, pending owner decision)
 
 export const HIDDEN_ALIASES: ReadonlySet<string> = new Set([
-  // Hidden alias: maps to novada_extract(format:"html")
+  // Backward-compat aliases → novada_extract(format:"html")
   "novada_unblock",
-  // Hidden aliases: map to novada_account(section="summary")
+  // Backward-compat aliases → novada_account(section=...)
   "novada_health",
   "novada_health_all",
-  // Hidden backward-compat aliases for novada_account sections
   "novada_wallet_balance",
   "novada_wallet_usage_record",
   "novada_traffic_daily",
   "novada_plan_balance_all",
   "novada_capture_logs",
   "novada_account_summary",
+  // Proxy type variants → novada_proxy(type=...) [TOW2-256 T2]
+  "novada_proxy_residential",
+  "novada_proxy_isp",
+  "novada_proxy_datacenter",
+  "novada_proxy_mobile",
+  "novada_proxy_static",
+  "novada_proxy_dedicated",
+  // Scraper stubs → dispatch preserved but description was misleading [TOW2-256 T1]
+  "novada_scraper_submit",
+  "novada_scraper_status",
+  "novada_scraper_result",
+  "novada_scraper_task_mgmt",
+  // Verdict-quality pending owner decision — dispatch preserved [TOW2-256 T2]
+  "novada_verify",
 ]);
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────

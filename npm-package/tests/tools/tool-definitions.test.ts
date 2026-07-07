@@ -30,18 +30,20 @@ interface ToolSegment {
 }
 
 /**
- * Slice src/core.ts into per-tool segments from `const TOOLS = [` up to the first
- * top-level `];`, so we never pick up `name:` keys from other arrays (CATEGORY_MAP,
- * the --help block, etc.).
+ * Slice src/core.ts into per-tool segments from `const _TOOL_DEFINITIONS = [` up to
+ * the first top-level `];`, so we never pick up `name:` keys from other arrays.
+ * _TOOL_DEFINITIONS holds ALL dispatchable tool schemas (visible + hidden);
+ * the exported TOOLS array derives from it by filtering to REGISTERED_TOOL_NAMES.
+ * Annotation contracts apply to ALL definitions, so we read the full set.
  */
 function readToolSegments(): ToolSegment[] {
   const indexPath = resolve(__dirname, "../../src/core.ts");
   const src = readFileSync(indexPath, "utf8");
-  const start = src.indexOf("const TOOLS = [");
-  expect(start, "could not locate `const TOOLS = [` in src/core.ts").toBeGreaterThan(-1);
+  const start = src.indexOf("const _TOOL_DEFINITIONS");
+  expect(start, "could not locate `const _TOOL_DEFINITIONS` in src/core.ts").toBeGreaterThan(-1);
   const after = src.slice(start);
   const endRel = after.search(/\n\];/);
-  expect(endRel, "could not locate end of TOOLS array").toBeGreaterThan(-1);
+  expect(endRel, "could not locate end of _TOOL_DEFINITIONS array").toBeGreaterThan(-1);
   const block = after.slice(0, endRel);
 
   const re = /name:\s*"([a-z_]+)"/g;
@@ -57,8 +59,9 @@ function readToolSegments(): ToolSegment[] {
 
 const segments = readToolSegments();
 
-describe("tool definitions (src/index.ts TOOLS)", () => {
-  it("declares at least the full tool surface", () => {
+describe("tool definitions (src/core.ts _TOOL_DEFINITIONS)", () => {
+  it("declares at least the full dispatchable tool set", () => {
+    // _TOOL_DEFINITIONS contains all tools (visible + hidden). 22 in registry + 11 hidden = 33.
     expect(segments.length).toBeGreaterThanOrEqual(30);
   });
 

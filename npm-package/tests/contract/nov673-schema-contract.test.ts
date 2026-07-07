@@ -31,8 +31,9 @@ function readIndexSrc(): string {
 
 function readToolsBlock(): string {
   const src = readFileSync(resolve(__dirname, "../../src/core.ts"), "utf8");
-  const start = src.indexOf("const TOOLS = [");
-  if (start === -1) throw new Error("could not locate `const TOOLS = [` in src/core.ts");
+  // _TOOL_DEFINITIONS holds ALL tool schemas (visible + hidden); annotation contracts apply to all.
+  const start = src.indexOf("const _TOOL_DEFINITIONS");
+  if (start === -1) throw new Error("could not locate `const _TOOL_DEFINITIONS` in src/core.ts");
   const after = src.slice(start);
   let depth = 0;
   let i = after.indexOf("[");

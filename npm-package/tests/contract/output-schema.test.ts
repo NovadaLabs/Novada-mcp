@@ -21,15 +21,19 @@ import { dirname, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/** Extract the TOOLS array block from src/core.ts as text. */
+/** Extract the _TOOL_DEFINITIONS array block from src/core.ts as text.
+ * _TOOL_DEFINITIONS holds ALL dispatchable tool schemas (visible + hidden);
+ * the exported TOOLS array derives from it by filtering to REGISTERED_TOOL_NAMES.
+ * outputSchema contracts apply to all definitions, so we read the full set.
+ */
 function readToolsBlock(): string {
   const indexPath = resolve(__dirname, "../../src/core.ts");
   const src = readFileSync(indexPath, "utf8");
-  const start = src.indexOf("const TOOLS = [");
-  if (start === -1) throw new Error("could not locate `const TOOLS = [` in src/core.ts");
+  const start = src.indexOf("const _TOOL_DEFINITIONS");
+  if (start === -1) throw new Error("could not locate `const _TOOL_DEFINITIONS` in src/core.ts");
   const after = src.slice(start);
   const endRel = after.search(/\n\];/);
-  if (endRel === -1) throw new Error("could not locate end of TOOLS array in src/core.ts");
+  if (endRel === -1) throw new Error("could not locate end of _TOOL_DEFINITIONS array in src/core.ts");
   return after.slice(0, endRel);
 }
 
