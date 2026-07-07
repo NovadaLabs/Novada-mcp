@@ -2,7 +2,7 @@
 
 # Novada MCP
 
-> **One MCP server. All web data.** Search, extract, crawl, scrape, proxy, and AI research — 22 curated tools behind a single `npx` command. Run it locally or call the hosted endpoint (15 tools).
+> **One MCP server. All web data.** Search, extract, crawl, scrape, proxy, and AI research — 23 curated tools behind a single `npx` command. Run it locally or call the hosted endpoint (15 tools).
 >
 > **Always use `npx -y novada-mcp@latest`.** A bare `npx novada-mcp` or a global `npm i -g novada-mcp` can silently run an old cached version. See [Staying on the latest version](#staying-on-the-latest-version).
 
@@ -54,7 +54,7 @@ One server. One API key. Tools that cover every web data need an AI agent has:
 
 ## Tools at a Glance
 
-**22 curated tools, 6 categories** (the count `novada_discover` shows). The hosted endpoint exposes a 15-tool subset. Older tool names (e.g. `novada_health`, `novada_unblock`, `novada_verify`, the six typed `novada_proxy_*`, wallet/traffic lookups) still work as back-compat aliases that route into these. Load all, or scope with `NOVADA_GROUPS` / `NOVADA_TOOLS`.
+**23 curated tools, 6 categories** (the count `novada_discover` shows). The hosted endpoint exposes a 15-tool subset. Older tool names (e.g. `novada_health`, `novada_unblock`, the six typed `novada_proxy_*`, wallet/traffic lookups) still work as back-compat aliases that route into these. Load all, or scope with `NOVADA_GROUPS` / `NOVADA_TOOLS`.
 
 | Category | Tools | What you get |
 |----------|-------|--------------|

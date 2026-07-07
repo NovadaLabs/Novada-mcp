@@ -360,7 +360,6 @@ Not for:
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
-    // dispatch-only: not in registry → hidden from ListTools; handler kept functional pending owner decision on verdict-quality direction
     name: "novada_verify",
     description: `Use when you have a factual claim and need to check if it's supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data.
 
@@ -614,11 +613,10 @@ export const TOOLS = _TOOL_DEFINITIONS.filter((t) => REGISTERED_TOOL_NAMES.has(t
 
 // ─── Hidden Aliases ────────────────────────────────────────────────────────
 // Names dispatched via switch but intentionally absent from TOOLS/ListTools.
-// Includes: backward-compat aliases, deprecated tool names, and the 11 tools
+// Includes: backward-compat aliases, deprecated tool names, and the 10 tools
 // hidden from the visible surface in TOW2-256 T1+T2:
 //   - 6 proxy variants → novadaProxy(type=...)
 //   - 4 scraper stubs  → novadaScrape / benign stub
-//   - novada_verify     → novadaVerify (dispatch-only, pending owner decision)
 
 export const HIDDEN_ALIASES: ReadonlySet<string> = new Set([
   // Backward-compat aliases → novada_extract(format:"html")
@@ -644,8 +642,6 @@ export const HIDDEN_ALIASES: ReadonlySet<string> = new Set([
   "novada_scraper_status",
   "novada_scraper_result",
   "novada_scraper_task_mgmt",
-  // Verdict-quality pending owner decision — dispatch preserved [TOW2-256 T2]
-  "novada_verify",
 ]);
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────

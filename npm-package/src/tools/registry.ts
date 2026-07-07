@@ -106,6 +106,12 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     category: "Scraping & Verification",
     status: "active",
   },
+  {
+    name: "novada_verify",
+    description: "Check a factual claim against 3 parallel web searches (supporting, skeptical, fact-check angles); returns verdict: supported / unsupported / contested / insufficient_data with confidence 0–100. Signal-based, not definitive.",
+    category: "Scraping & Verification",
+    status: "active",
+  },
   // ─── Proxy ──────────────────────────────────────────────────────────────
   {
     name: "novada_proxy",
