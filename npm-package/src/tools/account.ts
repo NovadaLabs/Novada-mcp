@@ -289,7 +289,9 @@ function renderSummaryCard(summaryData: Record<string, unknown>): string {
       ? extractBalanceInfo(v.balance)
       : { display: "—", exhausted: false };
     const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
-    const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
+    // API returns expires_at_human (e.g. "2026-07-08"); expires_at field is absent
+    const expiresStr = typeof v.expires_at_human === "string" ? v.expires_at_human
+                     : typeof v.expires_at === "string" ? v.expires_at : "—";
     lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
   }
 
@@ -380,14 +382,20 @@ function renderUsageCard(raw: Record<string, unknown>): string {
   for (const item of list.slice(0, 20)) {
     if (!item || typeof item !== "object") continue;
     const t = item as Record<string, unknown>;
-    const date = typeof t.created_at === "string" ? t.created_at.slice(0, 10)
-                : typeof t.date === "string" ? t.date : "—";
+    // created_at is a UNIX integer from the API (not a string)
+    const date = typeof t.created_at === "number"
+                  ? new Date(t.created_at * 1000).toISOString().slice(0, 10)
+                  : typeof t.created_at === "string" ? t.created_at.slice(0, 10)
+                  : typeof t.date === "string" ? t.date : "—";
     const desc = typeof t.remark === "string" ? t.remark
                : typeof t.description === "string" ? t.description
                : typeof t.type === "string" ? t.type : "—";
-    const amtRaw = typeof t.amount === "number" ? t.amount
-                 : typeof t.price === "number" ? t.price : undefined;
-    const currency = typeof t.currency === "string" ? t.currency : "";
+    // API uses pay_money; fall back to amount/price/money for defensive coverage
+    const amtRaw = typeof t.pay_money === "number" ? t.pay_money
+                 : typeof t.amount === "number" ? t.amount
+                 : typeof t.price === "number" ? t.price
+                 : typeof t.money === "number" ? t.money : undefined;
+    const currency = typeof t.currency === "string" && t.currency ? t.currency : "$";
     const amt = amtRaw !== undefined ? `${currency}${amtRaw.toFixed ? amtRaw.toFixed(2) : amtRaw}` : "—";
     lines.push(`| ${date} | ${desc} | ${amt} |`);
   }
@@ -436,7 +444,9 @@ function renderPlansCard(raw: Record<string, unknown>): string {
       ? extractBalanceInfo(v.balance)
       : { display: "—", exhausted: false };
     const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
-    const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
+    // API returns expires_at_human (e.g. "2026-07-08"); expires_at field is absent
+    const expiresStr = typeof v.expires_at_human === "string" ? v.expires_at_human
+                     : typeof v.expires_at === "string" ? v.expires_at : "—";
     lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
   }
 
@@ -508,7 +518,9 @@ function flattenSummaryJson(summaryData: Record<string, unknown>): Record<string
       status: derivedStatus,
       balance_mb: balanceMb,
       balance_human: balanceHuman ?? null,
-      expires_at: typeof v.expires_at === "string" ? v.expires_at : null,
+      // API per-product entries carry expires_at_human; expires_at is absent
+      expires_at: typeof v.expires_at_human === "string" ? v.expires_at_human
+                : typeof v.expires_at === "string" ? v.expires_at : null,
     };
   }
 

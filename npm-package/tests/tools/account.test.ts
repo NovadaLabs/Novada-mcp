@@ -734,3 +734,159 @@ describe("RC2 — summary card uses real balance shapes", () => {
     expect(row).toMatch(/10\.0\s*GB/);
   });
 });
+
+// ─── TOW2-256 — usage card unix timestamp + pay_money field ──────────────────
+// Regression tests for the live-caught bugs where:
+//   1. created_at is a UNIX integer (not a string) so date always showed "—"
+//   2. pay_money is the amount field (not `amount`) so amount always showed "—"
+
+function makeUsageJsonRealShape(): string {
+  return JSON.stringify({
+    status: "ok",
+    data: {
+      count: 3,
+      list: [
+        {
+          created_at: 1783159831,  // unix int — key regression shape
+          updated_at: 1783159832,
+          id: 104976,
+          order_type: "capture",
+          money: 55,
+          service_charge: 0,
+          pay_money: 55,           // real amount field
+          currency: "",            // empty string — fallback to $
+          description: "Capture-novada_c3dc3be46f7-额度-$55.00",
+        },
+        {
+          created_at: 1782805759,
+          pay_money: 14,
+          currency: "",
+          description: "Isp-5GB-novada_c3dc3be46f7-$14.00",
+        },
+        {
+          created_at: 1780908118,
+          pay_money: 25.3,
+          currency: "",
+          description: "Residential-10GB-novada_c3dc3be46f7-$25.30",
+        },
+      ],
+    },
+  });
+}
+
+describe("TOW2-256 — usage card unix timestamp + pay_money (live-caught regression)", () => {
+  beforeEach(() => {
+    mockedUsage.mockResolvedValue(makeUsageJsonRealShape());
+  });
+
+  it("Date column shows YYYY-MM-DD (not '—') when created_at is a unix integer", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "usage", format: "card" }));
+    const rows = result.split("\n").filter(l => l.startsWith("| 20"));
+    // All 3 rows should start with a date like 2026-...
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row).not.toMatch(/^\| —/);
+      expect(row).toMatch(/^\| 20\d\d-\d\d-\d\d/);
+    }
+  });
+
+  it("Amount column shows dollars (not '—') when pay_money is the field", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "usage", format: "card" }));
+    // None of the amount cells should be "—"
+    const rows = result.split("\n").filter(l => l.startsWith("| 20"));
+    for (const row of rows) {
+      const cols = row.split("|").map(s => s.trim());
+      // cols[3] is Amount
+      expect(cols[3]).not.toBe("—");
+      expect(cols[3]).toMatch(/\d+\.\d\d/);
+    }
+  });
+
+  it("specific first row: date=2026-05-04, amount=$55.00, desc contains 'Capture'", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "usage", format: "card" }));
+    // 1783159831 * 1000 = July 4 2026 UTC
+    expect(result).toContain("2026-07-04");
+    expect(result).toContain("$55.00");
+    expect(result).toContain("Capture");
+  });
+
+  it("empty-string currency falls back to '$' prefix", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "usage", format: "card" }));
+    expect(result).toContain("$55.00");
+  });
+});
+
+// ─── TOW2-256 — plans card expires_at_human field ────────────────────────────
+// Regression: plans per-product uses expires_at_human (not expires_at)
+
+function makePlansJsonRealExpiry(): string {
+  return JSON.stringify({
+    status: "ok",
+    summary: {
+      active_products: ["residential", "datacenter"],
+      expired_products: ["isp"],
+      unavailable_products: [],
+    },
+    per_product: {
+      residential: {
+        status: "ok",
+        balance: { balance: 9_999_919_335, expire_time: 1783500119 },
+        expired: false,
+        expires_at_human: "2026-07-08",   // real field from live API
+        // expires_at is NOT present
+      },
+      isp: {
+        status: "ok",
+        balance: { balance: 0, expire_time: 1779991018 },
+        expired: true,
+        expires_at_human: "2026-05-28",
+      },
+      datacenter: {
+        status: "ok",
+        balance: { balance: 5_000_000_000, expire_time: 1785397759 },
+        expired: false,
+        expires_at_human: "2026-07-30",
+      },
+    },
+    errors: [],
+  });
+}
+
+describe("TOW2-256 — plans card expires_at_human (live-caught regression)", () => {
+  beforeEach(() => {
+    mockedPlans.mockResolvedValue(makePlansJsonRealExpiry());
+  });
+
+  it("Expires column shows real date (not '—') when expires_at_human is present", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const residentialRow = result.split("\n").find(l => l.startsWith("| Residential"));
+    expect(residentialRow).toBeTruthy();
+    const cols = residentialRow!.split("|").map(s => s.trim());
+    // cols[4] is Expires
+    expect(cols[4]).toBe("2026-07-08");
+  });
+
+  it("expired ISP row shows correct expiry date (not '—')", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const ispRow = result.split("\n").find(l => l.startsWith("| ISP"));
+    expect(ispRow).toBeTruthy();
+    expect(ispRow).toContain("2026-05-28");
+  });
+
+  it("datacenter row shows correct expiry date", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const dcRow = result.split("\n").find(l => l.startsWith("| Datacenter"));
+    expect(dcRow).toBeTruthy();
+    expect(dcRow).toContain("2026-07-30");
+  });
+
+  it("no Expires cell shows '—' when expires_at_human is present on all products", async () => {
+    const result = await novadaAccount(validateAccountParams({ section: "plans", format: "card" }));
+    const tableRows = result.split("\n").filter(l => l.match(/^\| (Residential|ISP|Datacenter)/));
+    expect(tableRows).toHaveLength(3);
+    for (const row of tableRows) {
+      const cols = row.split("|").map(s => s.trim());
+      expect(cols[4]).not.toBe("—");
+    }
+  });
+});
