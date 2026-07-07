@@ -722,7 +722,7 @@ export async function dispatch(
     case "novada_account_summary":
       return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
     case "novada_proxy_account_create":
-      return novadaProxyAccountCreate(validateProxyAccountCreateParams(args));
+      return novadaProxyAccountCreate(validateProxyAccountCreateParams(args), apiKey);
     case "novada_proxy_account_list":
       return novadaProxyAccountList(validateProxyAccountListParams(args), apiKey);
     case "novada_ip_whitelist":
