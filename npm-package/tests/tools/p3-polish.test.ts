@@ -27,10 +27,14 @@ describe("Item 1 — yahoo removed from engine enum", () => {
     expect(() => validateSearchParams({ query: "test", engine: "yahoo" })).toThrow(ZodError);
   });
 
-  it("validateSearchParams accepts the 4 remaining engines", () => {
-    for (const engine of ["google", "bing", "duckduckgo", "yandex"] as const) {
+  it("validateSearchParams accepts the 3 remaining engines", () => {
+    for (const engine of ["google", "duckduckgo", "yandex"] as const) {
       expect(() => validateSearchParams({ query: "test", engine })).not.toThrow();
     }
+  });
+
+  it("validateSearchParams rejects 'bing' as engine (ZodError)", () => {
+    expect(() => validateSearchParams({ query: "test", engine: "bing" as never })).toThrow(ZodError);
   });
 });
 

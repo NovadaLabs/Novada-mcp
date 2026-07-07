@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios, { AxiosError } from "axios";
 import { novadaSearch } from "../../src/tools/search.js";
+import { validateSearchParams } from "../../src/tools/types.js";
 import * as extractModule from "../../src/tools/extract.js";
 import { NovadaErrorCode } from "../../src/_core/errors.js";
 
@@ -242,71 +243,9 @@ describe("novadaSearch", () => {
     expect(q).toContain("-site:reddit.com");
   });
 
-  // ─── Bing-specific regression tests ─────────────────────────────────────────
+  // ─── Bing removed from engine enum (TOW2-256 T3.2) ──────────────────────────
 
-  it("Bing: uses a_auto_push=false (not is_auto_push)", async () => {
-    // regression: wrong param name caused null response every time
-    mockedAxios.post.mockResolvedValue({
-      data: { code: 0, data: { data: { task_id: "task-bing-1" } } },
-    });
-    mockedAxios.get.mockResolvedValue({
-      data: { organic_results: [{ title: "Bing Result", url: "https://bing.com/r", description: "A snippet" }] },
-    });
-
-    await novadaSearch({ query: "test", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
-
-    const postBody = mockedAxios.post.mock.calls[0][1] as URLSearchParams;
-    expect(postBody.get("a_auto_push")).toBe("false");
-    expect(postBody.get("is_auto_push")).toBeNull(); // must NOT use the wrong field
-  });
-
-  it("Bing: retries on null data and succeeds on second attempt", async () => {
-    // regression: ~20% of Bing calls return data.data.data=null — retry must recover
-    mockedAxios.post
-      .mockResolvedValueOnce({ data: { code: 0, data: { data: null } } })          // null → retry
-      .mockResolvedValueOnce({ data: { code: 0, data: { data: { task_id: "task-bing-retry" } } } }); // succeeds
-
-    mockedAxios.get.mockResolvedValue({
-      data: { organic_results: [{ title: "Retried Bing", url: "https://example.com", description: "Desc" }] },
-    });
-
-    const result = await novadaSearch({ query: "bing-retry-unique", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
-    expect(result).toContain("Retried Bing");
-    expect(mockedAxios.post).toHaveBeenCalledTimes(2); // one retry
-  });
-
-  it("Bing: falls back to HTML parsing when no task_id", async () => {
-    const bingHtml = `<ul><li class="b_algo"><h2><a href="https://example.com/bing">Bing HTML Title</a></h2><div class="b_caption"><p>HTML snippet</p></div></li></ul>`;
-    mockedAxios.post.mockResolvedValue({
-      data: { code: 0, data: { data: { html: bingHtml } } }, // html present, no task_id
-    });
-
-    const result = await novadaSearch({ query: "bing-html-unique", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
-    expect(result).toContain("Bing HTML Title");
-    expect(result).toContain("https://example.com/bing");
-  });
-
-  it("Bing: returns empty gracefully after 3 null responses (no crash)", async () => {
-    mockedAxios.post.mockResolvedValue({ data: { code: 0, data: { data: null } } });
-
-    const result = await novadaSearch({ query: "bing-null-unique", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
-    expect(result).toContain("No results found for:");
-    expect(mockedAxios.post).toHaveBeenCalledTimes(3); // all 3 retries exhausted
-  });
-
-  it("Bing: task_id resolved from inner.data.task_id (not inner.task_id)", async () => {
-    // regression: task_id is one level deeper than the google path
-    mockedAxios.post.mockResolvedValue({
-      data: { code: 0, data: { data: { task_id: "deep-task-id" } } }, // data.data.task_id
-    });
-    mockedAxios.get.mockResolvedValue({
-      data: { organic_results: [{ title: "Deep Path", url: "https://deep.com", description: "d" }] },
-    });
-
-    const result = await novadaSearch({ query: "bing-deep-unique", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
-    expect(result).toContain("Deep Path");
-    // Verify the get call used the task_id from the deep path
-    const getUrl = mockedAxios.get.mock.calls[0][0] as string;
-    expect(getUrl).toContain("deep-task-id");
+  it("rejects engine:'bing' with ZodError (bing removed from enum)", () => {
+    expect(() => validateSearchParams({ query: "test", engine: "bing" as never })).toThrow();
   });
 });

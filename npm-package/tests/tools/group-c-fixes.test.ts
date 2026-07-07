@@ -7,10 +7,6 @@ import { NovadaErrorCode } from "../../src/_core/errors.js";
 
 // ─── Mock axios (used by search, research, scraper_submit) ─────────────────
 vi.mock("axios");
-// ─── Mock playwright-core so unblock.ts can be imported ───────────────────
-vi.mock("playwright-core", () => ({
-  chromium: { connectOverCDP: vi.fn() },
-}));
 // ─── Mock billing sub-tools so health tests don't hit the network ──────────
 vi.mock("../../src/tools/wallet_balance.js", () => ({
   novadaWalletBalance: vi.fn().mockResolvedValue(
@@ -31,7 +27,6 @@ import axios from "axios";
 import { novadaSearch } from "../../src/tools/search.js";
 import { novadaResearch } from "../../src/tools/research.js";
 import { novadaVerify } from "../../src/tools/verify.js";
-import { novadaUnblock } from "../../src/tools/unblock.js";
 import { novadaScraperSubmit } from "../../src/tools/scraper_submit.js";
 import { novadaHealth } from "../../src/tools/health.js";
 import { novadaSearchFeedback } from "../../src/tools/search_feedback.js";
@@ -40,15 +35,9 @@ const API_KEY = "test-api-key-123";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Provide Web Unblocker key so unblock can call the render path
-  process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
   delete process.env.NOVADA_BROWSER_WS;
   delete process.env.NOVADA_PROXY_USER;
   delete process.env.NOVADA_PROXY_ENDPOINT;
-});
-
-afterEach(() => {
-  delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
 });
 
 // ─── FIX-2: Unbounded input / DoS — search ────────────────────────────────
@@ -133,34 +122,8 @@ describe("FIX-2: scraper_submit params payload cap", () => {
   });
 });
 
-// ─── FIX-3: Unblock timeout honored ──────────────────────────────────────
-
-describe("FIX-3: unblock timeout honored", () => {
-  it("returns structured error (not transport -32001) when timeout fires", async () => {
-    // Make the render hang forever
-    vi.mocked(axios).post.mockImplementation(() =>
-      new Promise((resolve) => setTimeout(() => resolve({ data: { code: 0, data: { code: 200, html: "<html/>" } } }), 5000))
-    );
-
-    // Set a very short timeout (50ms) — should fire before the mocked response
-    const startMs = Date.now();
-    await expect(novadaUnblock({
-      url: "https://slow-site.com",
-      method: "render",
-      timeout: 50,
-    }, API_KEY)).rejects.toMatchObject({ name: "NovadaError", code: NovadaErrorCode.URL_UNREACHABLE });
-    // Should bail out well before the 5s mock delay
-    expect(Date.now() - startMs).toBeLessThan(2000);
-  }, 5000);
-
-  it("caps user timeout at 120s ceiling (does not raise timeout above ceiling)", () => {
-    // Verify the cap logic inline without actually waiting
-    const userTimeout = 999999;
-    const CEILING = 120_000;
-    const actual = Math.min(userTimeout, CEILING);
-    expect(actual).toBe(CEILING);
-  });
-});
+// ─── FIX-3: novada_unblock removed — tool deleted (dispatch re-implements inline) ─
+// Tests removed: unblock.ts no longer exists. Timeout cap logic is now inline in core.ts.
 
 // ─── FIX-4: verify.ts injection sanitization ─────────────────────────────
 

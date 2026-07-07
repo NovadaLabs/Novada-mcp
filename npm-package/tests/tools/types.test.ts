@@ -28,8 +28,8 @@ describe("validateSearchParams", () => {
   });
 
   it("preserves provided optional fields", () => {
-    const result = validateSearchParams({ query: "test", engine: "bing", num: 5, country: "us" });
-    expect(result.engine).toBe("bing");
+    const result = validateSearchParams({ query: "test", engine: "duckduckgo", num: 5, country: "us" });
+    expect(result.engine).toBe("duckduckgo");
     expect(result.num).toBe(5);
     expect(result.country).toBe("us");
   });
