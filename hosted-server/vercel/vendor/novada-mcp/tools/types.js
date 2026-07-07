@@ -69,8 +69,8 @@ const safeUrl = z.string()
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
 export const SearchParamsSchema = withCamelCaseAliases(z.object({
     query: z.string().min(1, "Search query is required"),
-    engine: z.enum(["google", "bing", "duckduckgo", "yahoo", "yandex"]).default("google")
-        .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED — may return zero results; avoid. 'yahoo': NOT SUPPORTED — returns an error; do not use."),
+    engine: z.enum(["google", "bing", "duckduckgo", "yandex"]).default("google")
+        .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED — may return zero results; avoid."),
     num: z.number().int().min(1).max(20).default(10),
     country: z.string().default(""),
     language: z.string().default(""),

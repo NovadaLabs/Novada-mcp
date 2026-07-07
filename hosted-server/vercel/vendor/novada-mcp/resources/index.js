@@ -48,7 +48,6 @@ export function readResource(uri) {
 google     — Best general-purpose engine, highest relevance. Default choice.
 bing       — CURRENTLY DEGRADED (may return zero results; avoid). Use google/duckduckgo instead.
 duckduckgo — Privacy-focused, no personalization bias. Good for neutral/unfiltered results.
-yahoo      — NOT SUPPORTED (returns an error; use google/duckduckgo instead).
 yandex     — Best for Russian-language content and Eastern European queries.
 
 ## Recommendation
@@ -198,7 +197,7 @@ You need to fact-check whether a claim is true or false?
   → novada_verify
 
 You have a URL blocked by anti-bot protection and need JS-rendered content directly?
-  → novada_unblock (or novada_extract with render="render" — same backend, unblock is dedicated)
+  → novada_extract with render="render" (Web Unblocker; add format="html" if you need raw HTML)
 
 You need to interact with a page (click buttons, fill forms, navigate, screenshot)?
   → novada_browser
@@ -227,7 +226,7 @@ Which Novada products are active on your API key?
 | novada_proxy_mobile       | 4G/5G mobile IP                      | Proxy config string     | Minimal    |
 | novada_proxy_dedicated    | exclusive IP, clean reputation       | Proxy config string     | Minimal    |
 | novada_verify             | a factual claim to check             | Verdict + evidence URLs | Medium     |
-| novada_unblock            | a URL blocked by anti-bot            | JS-rendered content     | Medium-High|
+| novada_extract render=render | a URL blocked by anti-bot         | JS-rendered content     | Medium-High|
 | novada_browser            | interactive page actions             | Action result           | High       |
 | novada_health             | check which products are active      | Status table + links    | Minimal    |
 | novada_discover           | need full tool catalog               | Tool catalog JSON       | Low        |
@@ -270,7 +269,7 @@ novada_scrape with platform='amazon.com', operation='amazon_product_keywords'
 ### When novada_extract returns empty or minimal content
 → Page may be JS-heavy: retry with render="render"
 → Anti-bot detection: retry with render="browser"
-→ Still empty: try novada_unblock with method="browser"
+→ Still empty: retry novada_extract with render="render" and format="html" for raw HTML/DOM
 
 ### When novada_scrape returns Error 11006
 → Scraper API not activated on this account
@@ -507,11 +506,11 @@ Not for: open questions (use novada_research).
 Required: claim (min 10 chars). Optional: context.
 Example: novada_verify({claim: "OpenAI released GPT-5 in 2025", context: "AI industry"})
 
-## novada_unblock
-Best for: raw HTML from a bot-protected or JS-heavy page when you need the DOM, not cleaned text.
-Not for: cleaned text extraction (use novada_extract with render=render).
-Required: url. Optional: method (render/browser), country, wait_for, timeout.
-Example: novada_unblock({url: "https://example.com/protected", method: "render"})
+## novada_extract (raw HTML / bot-protected)
+Best for: raw HTML from a bot-protected or JS-heavy page when you need the DOM, not cleaned text — use render="render" (Web Unblocker) with format="html".
+Not for: cleaned text extraction (use novada_extract with render="render", default format).
+Required: url. Optional: render (auto/static/render/browser), format (markdown/html), country, wait_for, timeout.
+Example: novada_extract({url: "https://example.com/protected", render: "render", format: "html"})
 
 ## novada_browser
 Best for: interactive flows — login, click, fill forms, screenshot, scrape behind user actions.
@@ -587,7 +586,7 @@ Platform data (Amazon/TikTok etc.) → novada_scrape
 Async scraping job → novada_scraper_submit → novada_scraper_status → novada_scraper_result
 Complex question → novada_research
 Fact check → novada_verify
-Raw HTML/DOM → novada_unblock
+Raw HTML/DOM → novada_extract with render="render" and format="html"
 Click/interact → novada_browser
 Residential proxy → novada_proxy_residential
 ISP/static/datacenter/mobile/dedicated proxy → novada_proxy_{type}

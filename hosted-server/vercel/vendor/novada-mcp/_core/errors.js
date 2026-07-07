@@ -264,7 +264,7 @@ export function classifyError(error) {
         if (msg.includes("401") || msg.includes("api_key") || msg.includes("unauthorized") || msg.includes("invalid_api_key")) {
             return new NovadaError({
                 code: NovadaErrorCode.INVALID_API_KEY,
-                message: "Invalid or missing API key. Get one at https://www.novada.com",
+                message: "Invalid or missing API key. Get one at https://novada.com",
                 agent_instruction: INSTRUCTIONS[NovadaErrorCode.INVALID_API_KEY],
                 retryable: false,
             });

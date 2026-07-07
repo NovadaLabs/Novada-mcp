@@ -12,6 +12,7 @@ import { listPrompts, getPrompt } from "./prompts/index.js";
 import { listResources, readResource } from "./resources/index.js";
 import { checkProxyConfiguration } from "./utils/domains.js";
 import { resolveProxyCredentials } from "./utils/credentials.js";
+import { maybeGetFirstRunNotice } from "./utils/first-run-notice.js";
 const API_KEY = process.env.NOVADA_API_KEY?.trim();
 // ─── Tool & Group Filtering ──────────────────────────────────────────────────
 // NOVADA_TOOLS="extract,search,crawl"  → only these tools (comma-separated, short or full names)
@@ -205,7 +206,7 @@ class NovadaMCPServer {
                                 "Error [INVALID_API_KEY]: NOVADA_API_KEY is not set.",
                                 "failure_class: auth",
                                 "retry_recommended: false",
-                                `agent_instruction: "Call novada_setup for step-by-step setup instructions and exact config snippets for your MCP client. Get a key at https://www.novada.com"`,
+                                `agent_instruction: "Call novada_setup for step-by-step setup instructions and exact config snippets for your MCP client. Get a key at https://novada.com"`,
                             ].join("\n"),
                         }],
                     isError: true,
@@ -230,7 +231,15 @@ class NovadaMCPServer {
                     ? new Set(ACTIVE_TOOLS.map(t => t.name))
                     : undefined;
                 const result = await dispatch(name, args, API_KEY, { onProgress, visibleTools });
-                return { content: [{ type: "text", text: result }] };
+                // TOW2-242: one-time first-run notice. Appended as a SEPARATE content block
+                // (never concatenated into `result` — that would corrupt JSON-format outputs)
+                // and ONLY on a successful dispatch. All logic + copy lives in the module;
+                // this is the ~2-line glue. maybeGetFirstRunNotice() fails quiet → never throws.
+                const content = [{ type: "text", text: result }];
+                const notice = await maybeGetFirstRunNotice();
+                if (notice)
+                    content.push({ type: "text", text: notice });
+                return { content };
             }
             catch (error) {
                 // Zod validation errors → clear, structured message for the agent including

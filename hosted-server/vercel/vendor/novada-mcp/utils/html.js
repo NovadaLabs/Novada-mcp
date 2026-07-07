@@ -400,6 +400,9 @@ const BOILERPLATE_PHRASES = [
     "Building an AI startup?",
     "On this page",
     "Was this page helpful?",
+    // clean-mode UI chrome seen in rendered docs/tool pages (TOW2-241):
+    "YesNo", // inline feedback widget rendered as text
+    "⌘I", // keyboard-shortcut icon leaking into markdown
 ];
 /**
  * Strip docs-site boilerplate from cleaned markdown before running quality signals.

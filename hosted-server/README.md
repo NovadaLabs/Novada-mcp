@@ -1,8 +1,8 @@
 > **This folder IS the hosted deployment at mcp.novada.com** — an HTTP wrapper (auth, rate-limit) around [`../npm-package/`](../npm-package/README.md), deployed on Vercel. It lives inside the [novada-mcp monorepo](../README.md).
 
-# novada-mcpserver
+# hosted-server (mcp.novada.com)
 
-**Novada Hosted MCP server** — deployed at `https://mcp.novada.com/mcp`.
+**Novada Hosted MCP server** — deployed at `https://mcp.novada.com/mcp`. (History: merged from the former standalone `novada-mcpserver` repo on 2026-07-06.)
 
 This is the **deployment surface** for Novada's MCP tools (whose source lives in the sibling [`../npm-package/`](../npm-package/README.md) — the `novada-mcp` package). It wraps those tools in a remote Streamable HTTP MCP transport so AI clients (Claude Desktop / Cursor / Cline / Windsurf / VS Code) can use them via one URL — zero install.
 
@@ -18,13 +18,15 @@ novada-mcp/                ← monorepo root
     │   ├── vercel.json
     │   └── README.md      ← deploy walkthrough
     ├── worker/            ← DORMANT — CF Workers port (reference only, not deployed)
-    ├── landing/           ← novada.com/mcp install landing page
+    ├── landing/           ← novada.com/mcp landing page — DEPLOYED SEPARATELY, NOT by this Vercel project (the mcp.novada.com pages live in vercel/*.html)
     ├── docs/              ← user/ops docs (ARCHITECTURE, INSTALL, DEPLOY, DIRECTORIES)
     └── scripts/           ← deploy-hosted.sh, sync-to-hosted.mjs, golden/ baseline
 ```
 
-The vendored build in `vercel/vendor/novada-mcp/` is regenerated from `../npm-package` by
-`scripts/sync-to-hosted.mjs` (`cd vercel && npm run sync:hosted`) — never edit it by hand.
+The vendored build in `vercel/vendor/novada-mcp/` is regenerated from `../npm-package` — never edit it by hand.
+Two ways to regenerate, same result: `scripts/deploy-hosted.sh` vendors inline as part of a full release
+(build → vendor → gates → deploy → golden verify), while `scripts/sync-to-hosted.mjs` (`cd vercel && npm run sync:hosted`)
+is the standalone re-vendor for local iteration WITHOUT deploying.
 
 ## Deploy quickstart
 

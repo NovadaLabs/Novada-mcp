@@ -5,7 +5,6 @@ export declare const SearchParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unkno
         google: "google";
         bing: "bing";
         duckduckgo: "duckduckgo";
-        yahoo: "yahoo";
         yandex: "yandex";
     }>>;
     num: z.ZodDefault<z.ZodNumber>;

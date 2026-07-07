@@ -137,7 +137,9 @@ export async function novadaAccountSummary(_params, apiKey) {
     const unavailableCount = planSummary?.unavailable_products?.length ?? 0;
     const headline = [];
     if (walletBalance !== undefined) {
-        headline.push(`Wallet: €${walletBalance.toFixed(2)}`);
+        // API omits currency — print the bare number, never invent €/$.
+        const currency = typeof walletSection.currency === "string" ? walletSection.currency : "";
+        headline.push(`Wallet: ${currency}${walletBalance.toFixed(2)}`);
     }
     else if (!wallet.ok) {
         headline.push(`Wallet: error`);
@@ -148,7 +150,7 @@ export async function novadaAccountSummary(_params, apiKey) {
     // ─── Agent instruction ──────────────────────────────────────────────────
     let agent_instruction = "Account snapshot — wallet (currency), plans (per-product MB quotas), and recent capture activity.";
     if (allExpired && walletBalance && walletBalance > 0) {
-        agent_instruction = `User has €${walletBalance.toFixed(2)} in wallet but ALL flow plans are expired. Suggest the user purchase a new plan at https://dashboard.novada.com to unlock proxy traffic again. Capture is funded separately.`;
+        agent_instruction = `User has ${typeof walletSection.currency === "string" ? walletSection.currency : ""}${walletBalance.toFixed(2)} in wallet (currency as shown in their dashboard) but ALL flow plans are expired. Suggest the user purchase a new plan at https://dashboard.novada.com to unlock proxy traffic again. Capture is funded separately.`;
     }
     else if (!wallet.ok || !plans.ok || !capture.ok) {
         agent_instruction = "Partial fetch — some sections errored. See sections.*.error for details. Call the individual tools directly to retry just the failing sections.";

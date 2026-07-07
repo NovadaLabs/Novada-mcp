@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { z } from "zod";
 import { novadaExtract } from "./extract.js";
 import { redactSecrets } from "../_core/errors.js";
+import { isExtractionFailureSentinel } from "../utils/runtime.js";
 /**
  * Extract the stable page body from novadaExtract output for change detection.
  *
@@ -279,11 +280,14 @@ export async function novadaMonitor(params, apiKey) {
         return formatError(params.url, now, redactSecrets(message), params.format);
     }
     // C8 Fix: Detect extraction failure sentinels BEFORE baselining.
-    // novadaExtract returns "## Extract Failed" / "## Extraction Error" as a
-    // string (not a throw) for certain failure modes (DNS failure, timeout, etc.).
+    // novadaExtract returns "## Extract Failed" / "## Extraction Error" /
+    // "## Browser Mode Unavailable" as a string (not a throw) for certain failure
+    // modes (DNS failure, timeout, hosted browser-tier unavailable, etc.).
     // Without this guard, the error string gets hashed and stored as a baseline;
     // a varying error message on the next call falsely reports "changed".
-    if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
+    // Sentinel list is single-sourced in utils/runtime.ts so a future 4th sentinel
+    // can't slip through here again.
+    if (isExtractionFailureSentinel(content)) {
         // Surface the error text directly. The extraction already formatted a full
         // agent-oriented error block; re-use it rather than duplicating the message.
         const firstLine = content.split("\n").find((l) => l.startsWith("Error:") || l.startsWith("error:")) ?? "";

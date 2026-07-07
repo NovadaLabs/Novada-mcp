@@ -25,6 +25,23 @@ type SubmitOutcome = {
  */
 export declare function submitScrapeTask(apiKey: string, scraper_name: string, scraper_id: string, params: Record<string, unknown>): Promise<SubmitOutcome>;
 /**
+ * Reconcile price + availability on a product record in place-safe fashion
+ * (returns a NEW object; never mutates the input). Fills `final_price` (and
+ * `price`) from derivePrice ONLY when the flat field is currently empty/zero, and
+ * makes `is_available` agree with the `availability` string when the two disagree.
+ * A `_price_source` breadcrumb records where the surfaced price came from so agents
+ * (and QA) can see when a value was reconciled vs passed through untouched.
+ */
+export declare function normalizeProductRecord(raw: Record<string, unknown>): Record<string, unknown>;
+/**
+ * Filter and deduplicate a raw subcategory_rank array.
+ * Keeps only rows with a plausible short category name and a numeric rank.
+ * Deduplicates by (rank, normalized-name) pair.
+ */
+export declare function filterSubcategoryRank(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>>;
+/** Returns true if the description contains known UI-chrome patterns. */
+export declare function descriptionHasChrome(description: string): boolean;
+/**
  * Curate flattened records for tabular display (csv / excel / html):
  *   1. Drop columns whose non-empty values are majority base64 blobs (useless + fragile).
  *   2. Reorder so curated key columns (title/price/rating/url/…) lead.

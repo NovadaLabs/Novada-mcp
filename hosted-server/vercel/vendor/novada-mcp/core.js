@@ -53,7 +53,7 @@ export const TOOLS = [
 
 **Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.
 **Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).
-**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yandex are fallbacks and can be markedly slower; 'bing' is currently degraded — avoid it. 'yahoo' is NOT supported — it returns an error, do not use it.
+**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yandex are fallbacks and can be markedly slower; 'bing' is currently degraded — avoid it.
 **Domain filtering:** includeDomains/excludeDomains are applied by injecting \`site:domain\` operators into the query (not API-side filtering).
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(SearchParamsSchema),
@@ -506,7 +506,14 @@ export async function dispatch(name, args, apiKey, ctx) {
     const onProgress = ctx?.onProgress;
     switch (name) {
         case "novada_search":
-            return novadaSearch(validateSearchParams(args), apiKey);
+            // TOW2-240: pass feedbackToolAvailable so search.ts omits the
+            // novada_search_feedback agent_instruction when the tool is absent from
+            // the active tool set (e.g. the hosted 15-tool endpoint).
+            return novadaSearch(validateSearchParams(args), apiKey, {
+                feedbackToolAvailable: ctx?.visibleTools
+                    ? ctx.visibleTools.has("novada_search_feedback")
+                    : true,
+            });
         case "novada_extract":
             return novadaExtract(validateExtractParams(args), apiKey);
         case "novada_crawl":
@@ -601,9 +608,9 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_account_summary":
             return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
         case "novada_proxy_account_create":
-            return novadaProxyAccountCreate(validateProxyAccountCreateParams(args));
+            return novadaProxyAccountCreate(validateProxyAccountCreateParams(args), apiKey);
         case "novada_proxy_account_list":
-            return novadaProxyAccountList(validateProxyAccountListParams(args));
+            return novadaProxyAccountList(validateProxyAccountListParams(args), apiKey);
         case "novada_ip_whitelist":
             return novadaIpWhitelist(validateIpWhitelistParams(args));
         case "novada_capture_apikey":

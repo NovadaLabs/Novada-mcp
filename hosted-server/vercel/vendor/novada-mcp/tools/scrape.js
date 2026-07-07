@@ -220,8 +220,20 @@ function flattenRecord(obj, prefix = "", depth = 0) {
                     result[`${key}._count`] = `${v.length} total (showing first ${cap})`;
             }
             else {
+                // Item 5 (TOW2-241): join primitives with "; ". The upstream API may return
+                // values that already contain "、" (Chinese ideographic comma) — that is
+                // upstream-origin, not our separator. We use ASCII "; " for our own joins.
+                // Truncate at a word boundary to avoid cutting mid-token (e.g. "In Stock"→"In").
                 const joined = v.map(x => String(x ?? "")).join("; ");
-                result[key] = joined.length > 200 ? joined.slice(0, 200) + "...(truncated)" : joined;
+                if (joined.length > 200) {
+                    // Find last space at or before char 197 to avoid mid-word cuts.
+                    const cutAt = joined.lastIndexOf(" ", 197);
+                    const truncAt = cutAt > 100 ? cutAt : 197; // fall back to hard cut if no space nearby
+                    result[key] = joined.slice(0, truncAt) + "...(truncated)";
+                }
+                else {
+                    result[key] = joined;
+                }
             }
         }
         else {
@@ -229,6 +241,240 @@ function flattenRecord(obj, prefix = "", depth = 0) {
         }
     }
     return result;
+}
+/** Coerce a value to a positive finite number, or null. Accepts "$8.97"/"8.97"/8.97. */
+function toPositiveNumber(v) {
+    if (typeof v === "number")
+        return Number.isFinite(v) && v > 0 ? v : null;
+    if (typeof v === "string") {
+        // Strip currency symbols / thousands separators, keep digits + decimal point.
+        const cleaned = v.replace(/[^0-9.]/g, "");
+        if (cleaned === "")
+            return null;
+        const n = Number.parseFloat(cleaned);
+        return Number.isFinite(n) && n > 0 ? n : null;
+    }
+    return null;
+}
+/** Truthy in-stock signal from a free-text availability string ("In Stock", "Only 3 left"). */
+function availabilityStringInStock(s) {
+    if (typeof s !== "string")
+        return false;
+    const t = s.toLowerCase();
+    // Negatives FIRST — the bare word "available" in the positive regex below would
+    // otherwise match "Not available", "Pre-order available", "Available from other
+    // sellers" and wrongly report in-stock. Guard those before the positive check.
+    if (/out\s+of\s+stock|unavailable|currently\s+unavailable|sold\s+out/.test(t))
+        return false;
+    if (/\bnot\s+available|\bpre.?order/i.test(t))
+        return false;
+    return /in\s+stock|only\s+\d+\s+left|available|ships?\s|leaves?\s+warehouse|usually\s+ships/.test(t);
+}
+/**
+ * Derive a usable LISTING price for a single product record, preferring the most
+ * accurate source. Precedence:
+ *   1. existing flat final_price > 0            (upstream already correct — untouched)
+ *   2. existing flat initial_price > 0          (list price when final is empty)
+ *   3. buybox_prices.final_price > 0
+ *   4. variation whose .asin === record.asin    (exact listed-item price)
+ *   5. first variation with a price > 0
+ * Returns null when NO positive LISTING price is anywhere in the record.
+ *
+ * NOTE: buybox_prices.unit_price is deliberately NOT a source here — it is a
+ * PER-UNIT price (per-cable / per-item in a multipack), not the listing price
+ * a shopper pays. Promoting it (e.g. $4.33 for a 2-pack whose listing is ~$8.67)
+ * misleads agents that rank by price — worse than leaving 0. The unit price is
+ * surfaced separately by normalizeProductRecord on `_unit_price_only`.
+ */
+function derivePrice(r) {
+    const flatFinal = toPositiveNumber(r.final_price);
+    if (flatFinal !== null)
+        return flatFinal;
+    const flatInitial = toPositiveNumber(r.initial_price);
+    if (flatInitial !== null)
+        return flatInitial;
+    const buybox = (r.buybox_prices && typeof r.buybox_prices === "object")
+        ? r.buybox_prices
+        : null;
+    if (buybox) {
+        const bbFinal = toPositiveNumber(buybox.final_price);
+        if (bbFinal !== null)
+            return bbFinal;
+    }
+    const variations = Array.isArray(r.variations) ? r.variations : [];
+    if (variations.length > 0) {
+        const selfAsin = r.asin;
+        const match = variations.find(v => v && v.asin !== undefined && v.asin === selfAsin);
+        const matchPrice = match ? toPositiveNumber(match.price) : null;
+        if (matchPrice !== null)
+            return matchPrice;
+        for (const v of variations) {
+            const p = v ? toPositiveNumber(v.price) : null;
+            if (p !== null)
+                return p;
+        }
+    }
+    return null;
+}
+/**
+ * Reconcile price + availability on a product record in place-safe fashion
+ * (returns a NEW object; never mutates the input). Fills `final_price` (and
+ * `price`) from derivePrice ONLY when the flat field is currently empty/zero, and
+ * makes `is_available` agree with the `availability` string when the two disagree.
+ * A `_price_source` breadcrumb records where the surfaced price came from so agents
+ * (and QA) can see when a value was reconciled vs passed through untouched.
+ */
+export function normalizeProductRecord(raw) {
+    // Only touch records that actually look like product records (have at least one
+    // of the price/availability fields we know how to reconcile). Search/social
+    // records pass through untouched.
+    const hasPriceShape = "final_price" in raw || "initial_price" in raw || "buybox_prices" in raw || "variations" in raw;
+    const hasAvailShape = "availability" in raw || "is_available" in raw;
+    if (!hasPriceShape && !hasAvailShape)
+        return raw;
+    const out = { ...raw };
+    // ── Price ──
+    const flatFinalOk = toPositiveNumber(raw.final_price) !== null;
+    if (!flatFinalOk) {
+        const derived = derivePrice(raw);
+        if (derived !== null) {
+            out.final_price = derived;
+            // Keep `price` consistent when it is the empty/null the bug leaves behind.
+            if (toPositiveNumber(raw.price) === null)
+                out.price = derived;
+            out._price_source = "reconciled";
+        }
+        else {
+            // No real LISTING price anywhere → leave final_price as-is (do NOT invent a
+            // value). If a per-unit price exists, surface it on a SEPARATE breadcrumb so
+            // agents can see it without ever mistaking it for the listing price.
+            const buybox = (raw.buybox_prices && typeof raw.buybox_prices === "object")
+                ? raw.buybox_prices
+                : null;
+            const unit = buybox ? toPositiveNumber(buybox.unit_price) : null;
+            if (unit !== null)
+                out._unit_price_only = unit;
+        }
+    }
+    else {
+        out._price_source = "upstream";
+    }
+    // ── Availability ── reconcile the boolean to the human-readable string when they
+    // disagree. The string is the trustworthy signal for these product scrapers.
+    if (hasAvailShape) {
+        const strInStock = availabilityStringInStock(raw.availability);
+        if (strInStock && raw.is_available !== true) {
+            out.is_available = true;
+        }
+    }
+    // ── subcategory_rank (S3) — upstream pollution + dedup (TOW2-238) ──────────
+    // Root cause: UPSTREAM. The scraper API sends polluted entries already in the
+    // raw JSON (JS artifacts like `"languageCode":"en_US"`, review text, "ASIN B"
+    // trailing page content). Entries are also duplicated 4–16× by the upstream
+    // parser. We apply a defensive filter here — pure projection of the raw JSON:
+    // keep only rows whose name looks like a real category (short, no JSON syntax,
+    // no prose sentences) and deduplicate by (rank, name) pair.
+    if (Array.isArray(raw.subcategory_rank) && raw.subcategory_rank.length > 0) {
+        out.subcategory_rank = filterSubcategoryRank(raw.subcategory_rank);
+    }
+    // ── description (S4) — prefer `features` when description has UI chrome ────
+    // Root cause: UPSTREAM. The `description` field is a full-page text dump that
+    // includes "Add to Cart", navigation text, comparison tables, FAQs etc.
+    // The `features` array is the upstream's clean, structured product highlight
+    // bullets. When `description` contains known UI-chrome markers, replace it with
+    // the joined features bullets. If features is also empty, strip the chrome from
+    // description as a last resort rather than fabricating content.
+    if (typeof raw.description === "string" && descriptionHasChrome(raw.description)) {
+        const features = raw.features;
+        if (Array.isArray(features) && features.length > 0) {
+            out.description = features
+                .filter((f) => typeof f === "string" && f.trim().length > 0)
+                .join(" | ");
+            out._description_source = "features";
+        }
+        else {
+            // No clean alternative — strip known UI chrome patterns and mark it
+            out.description = stripDescriptionChrome(raw.description);
+            out._description_source = "stripped";
+        }
+    }
+    return out;
+}
+// ── subcategory_rank helpers ────────────────────────────────────────────────
+/**
+ * Returns true when a subcategory_name value is clearly polluted with upstream
+ * page artefacts: JSON syntax characters, long prose, review sentences, or the
+ * "ASIN B..." trailing page text pattern.
+ */
+function isSubcategoryNamePolluted(name) {
+    if (name.length > 80)
+        return true; // real category names are short
+    if (name.includes('":"'))
+        return true; // JSON fragment
+    if (name.includes("languageCode"))
+        return true; // JS i18n artefact
+    if (/ASIN\s+B[0-9A-Z]{9}/i.test(name))
+        return true; // trailing ASIN page text
+    if (/\bASIN\b/i.test(name))
+        return true; // any "ASIN" word (page leak)
+    if (/Best Sellers Rank/i.test(name))
+        return true; // BSR label leaked into name
+    // Sentence-like prose (contains typical sentence chars mid-string)
+    if (/[.!?]\s+[A-Z]/.test(name))
+        return true;
+    return false;
+}
+/**
+ * Filter and deduplicate a raw subcategory_rank array.
+ * Keeps only rows with a plausible short category name and a numeric rank.
+ * Deduplicates by (rank, normalized-name) pair.
+ */
+export function filterSubcategoryRank(rows) {
+    const seen = new Set();
+    const result = [];
+    for (const row of rows) {
+        const name = typeof row.subcategory_name === "string" ? row.subcategory_name.trim() : null;
+        const rank = row.subcategory_rank;
+        if (!name || name.length === 0)
+            continue;
+        if (isSubcategoryNamePolluted(name))
+            continue;
+        // Rank must be a numeric string or number
+        const rankStr = String(rank ?? "").trim();
+        if (!rankStr || !/^\d+$/.test(rankStr))
+            continue;
+        const key = `${rankStr}:${name.toLowerCase()}`;
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        result.push({ subcategory_name: name, subcategory_rank: rankStr });
+    }
+    return result;
+}
+// ── description helpers ─────────────────────────────────────────────────────
+/** UI-chrome markers that indicate the description is a full-page dump.
+ *  Note: upstream sometimes concatenates navigation tokens without whitespace
+ *  (e.g. "Previous pageNext page"), so we do NOT require a trailing word-boundary
+ *  on multi-word phrases like "Previous page".
+ */
+const DESCRIPTION_CHROME_PATTERNS = [
+    /\bAdd to Cart\b/i,
+    /\bPrevious page/i, // no trailing \b — upstream omits space before "Next"
+    /\bNext page\b/i,
+    /\bAdd to Wish List\b/i,
+];
+/** Returns true if the description contains known UI-chrome patterns. */
+export function descriptionHasChrome(description) {
+    return DESCRIPTION_CHROME_PATTERNS.some(p => p.test(description));
+}
+/** Strip known UI-chrome tokens from description when no clean alternative exists. */
+function stripDescriptionChrome(description) {
+    let out = description;
+    for (const p of DESCRIPTION_CHROME_PATTERNS) {
+        out = out.replace(new RegExp(p.source, "gi"), "");
+    }
+    // Collapse whitespace left behind
+    return out.replace(/\s{2,}/g, " ").trim();
 }
 function extractRecords(data) {
     if (Array.isArray(data)) {
@@ -477,7 +723,8 @@ export function preflightScrape(platform, operation, params) {
         const opList = validOps.join(", ");
         return new NovadaError({
             code: NovadaErrorCode.INVALID_PARAMS,
-            message: `Unknown operation '${operation}' for platform '${platform}'. Operation IDs are exact and cannot be guessed.`,
+            message: `Unknown operation '${operation}' for platform '${platform}'. Operation IDs are exact and cannot be guessed. ` +
+                `Valid operations for ${platform}: ${opList}`,
             agent_instruction: `Use one of the valid operations for ${platform}: ${opList}. ` +
                 `Read novada://scraper-platforms for the full list with required params. Do not retry with the same operation id.`,
             retryable: false,
@@ -670,6 +917,11 @@ export async function novadaScrape(params, apiKey) {
                     `This is usually transient — retry once, or try a different operation / verify the target URL.`, `error_code:${errCode}`);
             }
         }
+        // TOW2-237: reconcile price + availability BEFORE any format derives from the
+        // records, so json / markdown / csv / excel / html / toon all surface the real
+        // price and a trustworthy is_available. Pure projection of the API json — no-op
+        // for platforms (e.g. Walmart) whose flat fields are already populated.
+        rawRecords = rawRecords.map(r => normalizeProductRecord(r));
         const records = rawRecords.slice(0, limit).map(r => flattenRecord(r));
         if (records.length === 0) {
             return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;

@@ -15,14 +15,32 @@ export function validateSetupParams(raw) {
     }
 }
 // ─── Canonical URLs (reused from the codebase — do NOT invent new paths) ──────
-//   REGISTER / free credits : https://dashboard.novada.com  (dashboard home + overview)
+//   REGISTER / $10 free credits : https://novada.com  (public signup front door — TOW2-242)
+//   TOP UP / dashboard home      : https://dashboard.novada.com  (billing / overview)
 //   GET AN API KEY          : https://dashboard.novada.com/api-key/  (errors.ts INVALID_API_KEY template)
 //   BROWSER API WS          : https://dashboard.novada.com/overview/browser/  (health.ts)
 //   PROXY                   : https://dashboard.novada.com/overview/proxy/    (health.ts)
 const URL_DASHBOARD = "https://dashboard.novada.com";
+// TOW2-242: signup/registration front door is novada.com (NOT dashboard.*, NOT
+// mcp.novada.com). New testers get an API key + $10 free credits here. This is a
+// deliberate always-on onboarding lookup — no once-logic (that's the first-run
+// notice module's job).
+const URL_SIGNUP = "https://novada.com";
 const URL_API_KEY = "https://dashboard.novada.com/api-key/";
 const URL_BROWSER = "https://dashboard.novada.com/overview/browser/";
 const URL_PROXY = "https://dashboard.novada.com/overview/proxy/";
+/**
+ * TOW2-252: account-identity suffix for the wallet balance line — key tail +
+ * as-of. uid is not available from the wallet envelope and we do NOT add an API
+ * call just to fetch it, so it is omitted here. Key tail is never more than 4 chars.
+ */
+function identitySuffix(effectiveKey) {
+    const tail = effectiveKey && effectiveKey.length >= 4 ? effectiveKey.slice(-4) : (effectiveKey ?? "");
+    const asOf = new Date().toISOString();
+    return tail
+        ? ` · account: key …${tail} · as of ${asOf}`
+        : ` · account: as of ${asOf}`;
+}
 /**
  * Cheap, authoritative key check: read the master wallet balance — the same
  * billing endpoint novada_account already uses. This is a
@@ -38,11 +56,13 @@ async function validateKey(effectiveKey) {
         const raw = await novadaWalletBalance({}, effectiveKey);
         const parsed = JSON.parse(raw);
         const balance = parsed?.data?.balance;
-        const currency = parsed?.data?.currency ?? "€";
+        // The wallet API does NOT return a currency field. Never invent one (€/$):
+        // print the bare number and note the dashboard shows the real currency.
+        const currency = typeof parsed?.data?.currency === "string" ? parsed.data.currency : "";
         if (typeof balance === "number") {
             const balanceLine = balance > 0
-                ? `Wallet balance: ${currency}${balance.toFixed(2)} — enough to start testing.`
-                : `Wallet balance: ${currency}0.00 — top up at ${URL_DASHBOARD} to run pay-per-use tools.`;
+                ? `Wallet balance: ${currency}${balance.toFixed(2)} (currency as shown in your dashboard) — enough to start testing.${identitySuffix(effectiveKey)}`
+                : `Wallet balance: ${currency}0.00 (currency as shown in your dashboard) — top up at ${URL_DASHBOARD} to run pay-per-use tools.${identitySuffix(effectiveKey)}`;
             return { state: "ready", balanceLine };
         }
         // Key was accepted (no auth error) but balance shape was unexpected — still
@@ -114,7 +134,7 @@ export async function novadaSetup(_params, callerApiKey) {
     if (state === "not_set") {
         L.push("## Get started in 3 steps");
         L.push("");
-        L.push(`1. **Register** at ${URL_DASHBOARD} — free credits are included so you can test right away.`);
+        L.push(`1. **Register** at ${URL_SIGNUP} — get your own API key + $10 free credits so you can test right away.`);
         L.push(`2. **Copy your API key** from ${URL_API_KEY}`);
         L.push("3. **Add it to your MCP client**, then restart it:");
         L.push("");
@@ -142,7 +162,7 @@ export async function novadaSetup(_params, callerApiKey) {
         if (validation.detail)
             L.push(`> Detail: ${validation.detail}`);
         L.push("");
-        L.push(`If you don't have an account yet, register at ${URL_DASHBOARD} (free credits included).`);
+        L.push(`If you don't have an account yet, register at ${URL_SIGNUP} — API key + $10 free credits included.`);
         L.push("");
     }
     else {
@@ -180,10 +200,10 @@ export async function novadaSetup(_params, callerApiKey) {
         ? "Key is valid. You may call any tool. Suggest the user try novada_search or novada_extract; call novada_account for balance/quotas."
         : state === "present_but_invalid"
             ? `Do NOT retry other tools yet — the key is invalid. Tell the user to get a valid key at ${URL_API_KEY} and update NOVADA_API_KEY in their MCP client config, then restart. This is a setup step, not a tool failure.`
-            : `No key yet. Tell the user to register at ${URL_DASHBOARD} (free credits included), copy their API key from ${URL_API_KEY}, add it as NOVADA_API_KEY in their MCP client config, and restart. Do not treat this as an error — it is the normal first-run state.`;
+            : `No key yet. Tell the user to register at ${URL_SIGNUP} (API key + $10 free credits included), copy their API key from ${URL_API_KEY}, add it as NOVADA_API_KEY in their MCP client config, and restart. Do not treat this as an error — it is the normal first-run state.`;
     L.push("## Agent");
     L.push(`key_state: ${state}`);
-    L.push(`register_url: ${URL_DASHBOARD}`);
+    L.push(`register_url: ${URL_SIGNUP}`);
     L.push(`api_key_url: ${URL_API_KEY}`);
     L.push(`core_tools: ${CORE_TOOLS.map(t => t.tool).join(", ")}`);
     L.push(`agent_instruction: ${agentInstruction}`);

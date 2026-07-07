@@ -43,6 +43,15 @@ export declare function resolveSearchResults(apiKey: string, submitted: SubmitSe
 export declare function pollSearchResult(apiKey: string, taskId: string): Promise<Record<string, unknown>>;
 /** Parse scraper API result data into NovadaSearchResult[]. */
 export declare function parseScraperSearchResults(data: Record<string, unknown>): NovadaSearchResult[];
-export declare function novadaSearch(params: SearchParams, apiKey: string): Promise<string>;
+export interface NovadaSearchOptions {
+    /**
+     * Whether the `novada_search_feedback` tool is reachable in the current
+     * runtime. Defaults to `true` (npm / stdio server where the tool is always
+     * registered). Set to `false` on the hosted endpoint so the agent_instruction
+     * never points at a tool it cannot call (TOW2-240 / search-C fix).
+     */
+    feedbackToolAvailable?: boolean;
+}
+export declare function novadaSearch(params: SearchParams, apiKey: string, options?: NovadaSearchOptions): Promise<string>;
 export {};
 //# sourceMappingURL=search.d.ts.map

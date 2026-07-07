@@ -51,4 +51,21 @@ export declare function isBrowserAvailableOnRuntime(): boolean;
  *                    Defaults to "render" for backward-compat.
  */
 export declare function getBrowserUnavailableError(paramValue?: string, fieldName?: string): string;
+/**
+ * Markdown-heading prefixes that novadaExtract (and its browser-tier fallback)
+ * emit as a STRING instead of throwing, to signal a failed extraction:
+ *  - "## Extract Failed"        — extract.ts caught-exception path
+ *  - "## Extraction Error"      — extract.ts TOTAL_REQUEST_CEILING timeout path
+ *  - "## Browser Mode Unavailable" — getBrowserUnavailableError() above (hosted/no-WS)
+ *
+ * Consumers that baseline or diff extract output (monitor.ts) MUST treat any of
+ * these as a failure, NOT as page content — otherwise the error text gets hashed
+ * and stored as a baseline, producing false "changed" reports on the next call.
+ *
+ * Single source of truth: add any future sentinel prefix here and every consumer
+ * using isExtractionFailureSentinel() picks it up automatically.
+ */
+export declare const EXTRACTION_FAILURE_SENTINELS: readonly ["## Extract Failed", "## Extraction Error", "## Browser Mode Unavailable"];
+/** True when `content` is one of the extraction-failure sentinel strings above. */
+export declare function isExtractionFailureSentinel(content: string): boolean;
 //# sourceMappingURL=runtime.d.ts.map

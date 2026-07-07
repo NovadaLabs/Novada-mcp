@@ -4,7 +4,7 @@
 # WHAT IT DOES (5 phases):
 #   1. BUILD   — tsc type-check + npm build + core smoke-test (novada-mcp repo)
 #   2. VENDOR  — rsync build/ into vercel/vendor + copy package.json
-#   3. GATES   — vendor core loads, barrel has ≥50 keys, mcpserver tsc clean
+#   3. GATES   — vendor core loads, barrel has ≥50 keys, hosted-server tsc clean
 #   4. DEPLOY  — vercel deploy --prod from repo ROOT (not vercel/ — avoids the /vercel/vercel path bug)
 #   5. VERIFY  — curl live serverInfo.version, capture golden snapshot, TWO-TIER diff vs baseline:
 #               HARD GATE (zero-diff = pass): 7 deterministic files — refused-set (firewall),
@@ -140,9 +140,9 @@ import('./vendor/novada-mcp/tools/index.js')
     abort "tools/index.js barrel failed — vendored build is incomplete or has import errors"
 fi
 
-echo "[GATES] mcpserver tsc type-check..."
+echo "[GATES] hosted-server tsc type-check..."
 if ! ./node_modules/.bin/tsc --noEmit; then
-    abort "mcpserver tsc failed — the vendored types are incompatible with vercel/api/. Fix before deploying."
+    abort "hosted-server tsc failed — the vendored types are incompatible with vercel/api/. Fix before deploying."
 fi
 
 echo "[GATES] ✓ all hosted gates passed"

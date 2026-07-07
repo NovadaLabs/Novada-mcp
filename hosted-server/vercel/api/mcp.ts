@@ -143,7 +143,7 @@ import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
 //     (A hardcoded "0.8.2-hosted" once silently drifted two releases behind the
 //     vendored 0.8.4; deriving guarantees this part always tracks the shipped tools.)
 //   • HOSTED_BUILD tags a server-ONLY deploy that ships no npm change — e.g. this
-//     version-derive fix lives only in novada-mcpserver, so npm stays 0.8.4 while
+//     version-derive fix lives only in hosted-server/, so npm stays 0.8.4 while
 //     the hosted build is "t1". Bump it per server-only deploy; reset to "t1" (or "")
 //     whenever the vendored package version changes.
 const HOSTED_BUILD = "";

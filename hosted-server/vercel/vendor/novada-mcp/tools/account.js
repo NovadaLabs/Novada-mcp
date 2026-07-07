@@ -83,34 +83,134 @@ export const AccountParamsSchema = z
 export function validateAccountParams(args) {
     return AccountParamsSchema.parse(args ?? {});
 }
+// ─── Account identity line (TOW2-252) ──────────────────────────────────────────
+//
+// One identity line on balance-bearing outputs so an agent/user can tell WHOSE
+// balance this is and HOW FRESH it is. Shape:
+//   `key …<last4> · as of <ISO>`   (uid prepended when known)
+//
+// uid: the balance/wallet/summary envelopes do NOT carry uid — only the
+// proxy_account_list rows do. Per the pure mandate we do NOT add a new API call
+// just to fetch uid, so uid is omitted here (with a note) rather than faked.
+// key tail: last 4 chars of the active key (dev key preferred, else NOVADA_API_KEY,
+// else the caller-supplied key). NEVER more than 4 chars.
+// as-of: the envelope's own timestamp if present, else now at fetch.
+/** Last-4 tail of the active key; empty string when no key is resolvable. */
+function keyTail(callerApiKey) {
+    const key = callerApiKey?.trim() ||
+        process.env.NOVADA_DEVELOPER_API_KEY?.trim() ||
+        process.env.NOVADA_API_KEY?.trim() ||
+        "";
+    return key.length >= 4 ? key.slice(-4) : key;
+}
+/**
+ * Build the single account-identity line.
+ * `asOf` — envelope timestamp if the API provided one, else current fetch time.
+ * `uid`  — only when a caller genuinely has it (proxy paths); omitted otherwise.
+ */
+function buildAccountIdentity(callerApiKey, opts = {}) {
+    const parts = [];
+    if (opts.uid !== undefined && opts.uid !== null && String(opts.uid).length > 0) {
+        parts.push(`uid ${opts.uid}`);
+    }
+    const tail = keyTail(callerApiKey);
+    if (tail)
+        parts.push(`key …${tail}`);
+    const asOf = opts.asOf ?? new Date().toISOString();
+    parts.push(`as of ${asOf}`);
+    return parts.join(" · ");
+}
 // ─── Card renderers ──────────────────────────────────────────────────────────
 /** Plan-status icon + label for a product row. */
-function planIcon(expired, unavailable, isError) {
+function planIcon(expired, unavailable, isError, exhausted) {
     if (unavailable)
         return "⛔ not provisioned";
     if (isError)
         return "⛔ error";
     if (expired)
         return "⚠️ EXPIRED";
+    if (exhausted)
+        return "⚠️ exhausted";
     return "✅ active";
 }
 /** MB → human units: shows GB when ≥ 1024 */
 function mbToHuman(mb) {
     if (mb >= 1024)
         return `${(mb / 1024).toFixed(1)} GB`;
-    return `${mb} MB`;
+    return `${mb.toFixed(1)} MB`;
 }
-/** Extract balance_mb from a plan balance object (various server shapes). */
-function extractBalanceMb(balance) {
-    if (!balance || typeof balance !== "object")
-        return undefined;
+/**
+ * Normalize the polymorphic `balance` field returned by the developer API.
+ *
+ * Three shapes exist:
+ *   1. Bare scalar (number)  — capture credits:  132.9091
+ *   2. Request-count object  — mobile:            { balance, times, total, used }
+ *   3. Bytes object          — residential/isp/datacenter/static: { balance: <bytes>, expire_time }
+ *
+ * Legacy test-fixture keys (balance_mb / remaining_mb / plan_mb) are still
+ * handled so existing unit tests keep passing.
+ */
+function extractBalanceInfo(balance) {
+    // ── 1. Bare scalar → capture credits ────────────────────────────────────
+    if (typeof balance === "number") {
+        const exhausted = balance <= 0;
+        return { display: `${balance.toFixed(2)} credits`, exhausted };
+    }
+    if (!balance || typeof balance !== "object") {
+        return { display: "—", exhausted: false };
+    }
     const b = balance;
-    if (typeof b.balance_mb === "number")
-        return b.balance_mb;
-    if (typeof b.remaining_mb === "number")
-        return b.remaining_mb;
-    if (typeof b.plan_mb === "number")
-        return b.plan_mb;
+    // ── Legacy test-fixture keys (balance_mb / remaining_mb / plan_mb) ──────
+    if (typeof b.balance_mb === "number") {
+        const mb = b.balance_mb;
+        return { display: mbToHuman(mb), exhausted: mb <= 0 };
+    }
+    if (typeof b.remaining_mb === "number") {
+        const mb = b.remaining_mb;
+        return { display: mbToHuman(mb), exhausted: mb <= 0 };
+    }
+    if (typeof b.plan_mb === "number") {
+        const mb = b.plan_mb;
+        return { display: mbToHuman(mb), exhausted: mb <= 0 };
+    }
+    // ── 2. Mobile: request-count exhaustion (used >= total) ──────────────────
+    // total=0 means unprovisioned/fresh — not exhausted; only flag when total>0 && used>=total
+    if (typeof b.total === "number" && typeof b.used === "number") {
+        const exhausted = b.total > 0 && b.used >= b.total;
+        let display;
+        if (typeof b.balance === "number") {
+            const mb = b.balance / (1024 * 1024);
+            display = mb >= 1 ? `${mbToHuman(mb)} (${b.used}/${b.total} req)` : `${b.used}/${b.total} req`;
+        }
+        else {
+            display = `${b.used}/${b.total} req`;
+        }
+        return { display, exhausted };
+    }
+    // ── 3. Standard proxy shape: { balance: <bytes>, expire_time: ... } ─────
+    if (typeof b.balance === "number") {
+        const bytes = b.balance;
+        const mb = bytes / (1024 * 1024);
+        const exhausted = bytes <= 0;
+        return { display: mbToHuman(mb), exhausted };
+    }
+    return { display: "—", exhausted: false };
+}
+/**
+ * @deprecated Use extractBalanceInfo instead.
+ * Kept for the flattenSummaryJson caller that needs a raw MB number.
+ */
+function extractBalanceMb(balance) {
+    const { display } = extractBalanceInfo(balance);
+    if (display === "—" || display.endsWith("credits") || display.includes("req"))
+        return undefined;
+    // Parse the human string back to a number (GB→MB if needed)
+    const gbMatch = display.match(/^([\d.]+)\s*GB/);
+    if (gbMatch)
+        return parseFloat(gbMatch[1]) * 1024;
+    const mbMatch = display.match(/^([\d.]+)\s*MB/);
+    if (mbMatch)
+        return parseFloat(mbMatch[1]);
     return undefined;
 }
 /** Render the summary section as a human card. */
@@ -128,9 +228,10 @@ function renderSummaryCard(summaryData) {
     if (headline) {
         // Wallet balance from headline or wallet section
         const walletBalance = typeof wallet?.balance === "number" ? wallet.balance : undefined;
-        const currency = typeof wallet?.currency === "string" ? wallet.currency : "€";
+        // No currency field from the API → print bare number, do not invent €/$.
+        const currency = typeof wallet?.currency === "string" ? wallet.currency : "";
         if (walletBalance !== undefined) {
-            lines.push(`**Wallet:** ${currency}${walletBalance.toFixed(2)}`);
+            lines.push(`**Wallet:** ${currency}${walletBalance.toFixed(2)} *(currency as shown in your dashboard)*`);
         }
     }
     lines.push("");
@@ -157,9 +258,10 @@ function renderSummaryCard(summaryData) {
         const isErr = v.status === "error";
         const isUnavailable = v.unavailable === true;
         const isExpired = v.expired === true;
-        const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable);
-        const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
-        const balanceStr = balanceMb !== undefined ? mbToHuman(balanceMb) : "—";
+        const { display: balanceStr, exhausted } = typeof v.balance !== "undefined"
+            ? extractBalanceInfo(v.balance)
+            : { display: "—", exhausted: false };
+        const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
         const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
         lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
     }
@@ -209,10 +311,11 @@ function renderSummaryCard(summaryData) {
 function renderBalanceCard(raw) {
     const data = raw.data;
     const balance = typeof data?.balance === "number" ? data.balance : undefined;
-    const currency = typeof data?.currency === "string" ? data.currency : "€";
+    // No currency field from the API → print bare number, do not invent €/$.
+    const currency = typeof data?.currency === "string" ? data.currency : "";
     if (balance === undefined)
         return "**Wallet balance:** unavailable";
-    return `## Wallet Balance\n\n**${currency}${balance.toFixed(2)}** available\n\n*Use \`section=plans\` for per-product MB quotas.*`;
+    return `## Wallet Balance\n\n**${currency}${balance.toFixed(2)}** available *(currency as shown in your dashboard)*\n\n*Use \`section=plans\` for per-product MB quotas.*`;
 }
 /** Render wallet usage as a markdown table card. */
 function renderUsageCard(raw) {
@@ -247,7 +350,7 @@ function renderUsageCard(raw) {
                 : typeof t.type === "string" ? t.type : "—";
         const amtRaw = typeof t.amount === "number" ? t.amount
             : typeof t.price === "number" ? t.price : undefined;
-        const currency = typeof t.currency === "string" ? t.currency : "€";
+        const currency = typeof t.currency === "string" ? t.currency : "";
         const amt = amtRaw !== undefined ? `${currency}${amtRaw.toFixed ? amtRaw.toFixed(2) : amtRaw}` : "—";
         lines.push(`| ${date} | ${desc} | ${amt} |`);
     }
@@ -285,9 +388,10 @@ function renderPlansCard(raw) {
         const isErr = v.status === "error";
         const isUnavailable = v.unavailable === true;
         const isExpired = v.expired === true;
-        const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable);
-        const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
-        const balanceStr = balanceMb !== undefined ? mbToHuman(balanceMb) : "—";
+        const { display: balanceStr, exhausted } = typeof v.balance !== "undefined"
+            ? extractBalanceInfo(v.balance)
+            : { display: "—", exhausted: false };
+        const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
         const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
         lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
     }
@@ -341,12 +445,20 @@ function flattenSummaryJson(summaryData) {
         const isErr = v.status === "error";
         const isUnavailable = v.unavailable === true;
         const isExpired = v.expired === true;
+        const { display: balanceHuman, exhausted } = typeof v.balance !== "undefined"
+            ? extractBalanceInfo(v.balance)
+            : { display: null, exhausted: false };
         const balanceMb = typeof v.balance !== "undefined" ? extractBalanceMb(v.balance) : undefined;
+        const derivedStatus = isUnavailable ? "not_provisioned"
+            : isErr ? "error"
+                : isExpired ? "expired"
+                    : exhausted ? "exhausted"
+                        : "active";
         flatPlans[key] = {
             name: PLAN_LABELS[key] ?? key,
-            status: isUnavailable ? "not_provisioned" : isErr ? "error" : isExpired ? "expired" : "active",
+            status: derivedStatus,
             balance_mb: balanceMb,
-            balance_human: balanceMb !== undefined ? mbToHuman(balanceMb) : null,
+            balance_human: balanceHuman ?? null,
             expires_at: typeof v.expires_at === "string" ? v.expires_at : null,
         };
     }
@@ -358,9 +470,10 @@ function flattenSummaryJson(summaryData) {
         status: summaryData.status,
         wallet: {
             balance: typeof wallet?.balance === "number" ? wallet.balance : null,
-            currency: typeof wallet?.currency === "string" ? wallet.currency : "€",
+            // API omits currency → report null, never an invented €/$.
+            currency: typeof wallet?.currency === "string" ? wallet.currency : null,
             balance_human: typeof wallet?.balance === "number"
-                ? `${typeof wallet?.currency === "string" ? wallet.currency : "€"}${wallet.balance.toFixed(2)}`
+                ? `${typeof wallet?.currency === "string" ? wallet.currency : ""}${wallet.balance.toFixed(2)}`
                 : null,
         },
         plans: {
@@ -510,11 +623,19 @@ export async function novadaAccount(params, apiKey) {
                 agent_instruction: summaryData.agent_instruction ??
                     "Full account snapshot: wallet balance, plan quotas, recent capture activity, and product entitlements (proxy/browser/wallet-funded).",
             };
+            // TOW2-252: identity line — whose balance + how fresh. No envelope timestamp
+            // in the summary payload, so as-of = fetch time; uid unavailable without a
+            // new call, so omitted.
+            const identity = buildAccountIdentity(apiKey);
             if (format === "card") {
-                return renderSummaryCard(merged);
+                const card = renderSummaryCard(merged);
+                // Append the identity line to the wallet-bearing card.
+                return `${card}\n\n*account: ${identity}*`;
             }
-            // json: flatten into clean structure
-            return JSON.stringify(flattenSummaryJson(merged), null, 2);
+            // json: flatten into clean structure + one identity field
+            const flat = flattenSummaryJson(merged);
+            flat.account_identity = identity;
+            return JSON.stringify(flat, null, 2);
         }
         case "balance": {
             const result = await withAccountFallback(() => novadaWalletBalance({}, apiKey), format, "balance");

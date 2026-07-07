@@ -88,7 +88,7 @@ async function main() {
         process.exit(0);
     }
     if (!API_KEY && command !== "proxy") {
-        console.error("Error: NOVADA_API_KEY not set. Get your key at https://www.novada.com");
+        console.error("Error: NOVADA_API_KEY not set. Get your key at https://novada.com");
         process.exit(1);
     }
     const { positional, flags } = parseArgs(rest);
