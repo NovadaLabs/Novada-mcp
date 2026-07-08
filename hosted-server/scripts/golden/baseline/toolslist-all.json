@@ -24,14 +24,6 @@
           ],
           "type": "string"
         },
-        "mode": {
-          "description": "Deprecated and ignored \u2014 the account card always shows full detail. Accepted only for backward compatibility with older clients.",
-          "enum": [
-            "quick",
-            "full"
-          ],
-          "type": "string"
-        },
         "page": {
           "default": 1,
           "description": "1-based page index (usage section only).",
@@ -583,7 +575,7 @@
           "type": "boolean"
         },
         "fields": {
-          "description": "Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching.",
+          "description": "Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). ADVISORY / confidence-gated: each field returns {value, source, confidence}. Source priority is structured-first \u2014 JSON-LD \u2192 infobox/table/microdata \u2192 anchored pattern \u2192 loose scan LAST. A match below the confidence floor (loose proximity scan) is SUPPRESSED: value=null with low_confidence:true + the rejected candidate in low_confidence_value, rather than emitting a confidently-wrong guess. Treat a resolved value as a strong hint, not ground truth \u2014 check the source/confidence, and re-read the content or retry with render='render' when a field is null/low_confidence.",
           "items": {
             "minLength": 1,
             "type": "string"
@@ -790,7 +782,7 @@
         },
         "format": {
           "default": "url",
-          "description": "Output format. 'url': proxy URL string. 'env': shell export commands. 'curl': curl --proxy flag.",
+          "description": "Output SHAPE of the returned proxy config \u2014 not a data content format. 'url': proxy URL string (default). 'env': shell export commands. 'curl': curl --proxy flag.",
           "enum": [
             "url",
             "env",
@@ -1099,10 +1091,9 @@
         },
         "engine": {
           "default": "google",
-          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED \u2014 may return zero results; avoid.",
+          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content.",
           "enum": [
             "google",
-            "bing",
             "duckduckgo",
             "yandex"
           ],

@@ -18,10 +18,10 @@
     "refused": true
   },
   "novada_scraper_task_mgmt": {
-    "code": "TOOL_NOT_ENABLED",
+    "code": "other",
     "isError": true,
     "name": "novada_scraper_task_mgmt",
-    "refused": true
+    "refused": false
   },
   "novada_search_feedback": {
     "code": "TOOL_NOT_ENABLED",
