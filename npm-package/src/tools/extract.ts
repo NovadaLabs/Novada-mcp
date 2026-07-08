@@ -1236,7 +1236,11 @@ async function extractSingleInner(
               value: r.source === "unresolved" ? null : r.value,
               source: r.source,
               confidence: r.confidence,
-              ...(r.source === "unresolved" && r.agent_instruction ? { agent_instruction: r.agent_instruction } : {}),
+              // TOW2-258: a below-floor candidate is suppressed (value null) but surfaced
+              // transparently so the agent can see what was rejected and why.
+              ...(r.low_confidence ? { low_confidence: true } : {}),
+              ...(r.low_confidence_value !== undefined ? { low_confidence_value: r.low_confidence_value } : {}),
+              ...((r.source === "unresolved" || r.low_confidence) && r.agent_instruction ? { agent_instruction: r.agent_instruction } : {}),
               ...(r.warning ? { warning: r.warning } : {}),
             },
           ]))
@@ -1361,6 +1365,10 @@ async function extractSingleInner(
         const sourceTag = sourceAnnotation(r.source);
         if (r.source === "unresolved") {
           lines.push(`${r.field}: — *(unresolved)*${r.agent_instruction ? ` — ${r.agent_instruction}` : ""}`);
+        } else if (r.low_confidence) {
+          // TOW2-258: a below-floor candidate is suppressed (value null) but the rejected
+          // candidate is shown so the agent knows what was found and why it was not trusted.
+          lines.push(`${r.field}: — *(low_confidence: suppressed candidate "${r.low_confidence_value}", conf:${r.confidence.toFixed(2)})*${r.agent_instruction ? ` — ${r.agent_instruction}` : ""}`);
         } else {
           // P0-3: Strip *(pattern)* annotation from the field value itself
           const cleanValue = typeof r.value === "string"

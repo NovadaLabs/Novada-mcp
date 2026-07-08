@@ -166,7 +166,7 @@ const _ExtractParamsInner = z.object({
   render: z.enum(["auto", "static", "render", "js", "browser"]).default("auto")
     .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS)."),
   fields: z.array(z.string().min(1)).max(20).optional()
-    .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching."),
+    .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). ADVISORY / confidence-gated: each field returns {value, source, confidence}. Source priority is structured-first — JSON-LD → infobox/table/microdata → anchored pattern → loose scan LAST. A match below the confidence floor (loose proximity scan) is SUPPRESSED: value=null with low_confidence:true + the rejected candidate in low_confidence_value, rather than emitting a confidently-wrong guess. Treat a resolved value as a strong hint, not ground truth — check the source/confidence, and re-read the content or retry with render='render' when a field is null/low_confidence."),
   max_chars: z.number().int().min(1000).max(100000).optional()
     .describe(
       "Maximum characters to return (default: 25000, max: 100000). " +

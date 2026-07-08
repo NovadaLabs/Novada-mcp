@@ -330,3 +330,80 @@ describe("extractFields — NOV #13 cart-total is not the product price", () => 
     expect(r.value).toBe("$99.00");
   });
 });
+
+describe("extractFields — TOW2-258 confidence gate (loose proximity scan is suppressed)", () => {
+  // Root cause: on en.wikipedia.org/wiki/Eiffel_Tower, extractFields(["height",...]) returned
+  // height="81" at confidence 0.60 — the number-near-label proximity scan (numberNearLabel)
+  // grabbed a stray "81" ~40 chars after the bare word "height" in prose ("...height as an 81
+  // storey building..."), with no structural label→value binding. Real height is 330 m.
+  // Meanwhile architect + completed resolved correctly from the infobox at 0.85.
+  //
+  // Fixture below faithfully mirrors the real page: the infobox carries "Architect" and
+  // "Completed" as th/td rows (structured → 0.85), but "Height" is only a section-header
+  // th with no matching td value, so the structural layers miss it and the loose markdown
+  // proximity scan is the only thing that "finds" a number. That scan is now tagged
+  // "proximity" (0.5), which is below FIELD_CONFIDENCE_FLOOR (0.6), so its hit is suppressed.
+  const EIFFEL_INFOBOX_HTML = `
+    <table class="infobox vcard">
+      <tbody>
+        <tr><th colspan="2" class="infobox-header">Eiffel Tower</th></tr>
+        <tr><th scope="row" class="infobox-label">Architect</th><td class="infobox-data">Stephen Sauvestre</td></tr>
+        <tr><th scope="row" class="infobox-label">Completed</th><td class="infobox-data">31 March 1889</td></tr>
+        <tr><th colspan="2" class="infobox-header">Height</th></tr>
+        <tr><th scope="row" class="infobox-label">Tip</th><td class="infobox-data">330 m (1,083 ft)</td></tr>
+      </tbody>
+    </table>`;
+  // The exact prose fragment from the real page that the proximity scan latched onto.
+  const EIFFEL_MARKDOWN = `# Eiffel Tower
+
+It was the first structure in the world to surpass both the 200-metre and 300-metre
+mark in height. Described as the world's tallest artificial structure until 1930, it is
+about the same height as an 81 storey building.
+
+The Eiffel Tower is 330 metres (1,083 ft) tall, about the same height as an 81-storey building.
+Architect: Stephen Sauvestre. Completed: 31 March 1889.`;
+
+  it("height is NOT emitted as the confidently-wrong '81' — suppressed with a low_confidence marker", () => {
+    const results = extractFields(["height", "architect", "completed"], null, EIFFEL_MARKDOWN, EIFFEL_INFOBOX_HTML);
+    const height = results.find(r => r.field === "height")!;
+
+    // The headline value must never be the wrong sub-threshold "81".
+    expect(height.value).not.toBe("81");
+    expect(height.value).not.toBe("81 m");
+    // Honest absence: the loose proximity hit is suppressed, not emitted as truth.
+    expect(height.value).toBeNull();
+    expect(height.low_confidence).toBe(true);
+    // Transparency: the rejected candidate is preserved so the agent can still see it.
+    expect(height.low_confidence_value).toBeDefined();
+    expect(height.confidence).toBeLessThan(0.6);
+    expect(height.agent_instruction).toBeDefined();
+  });
+
+  it("architect + completed still resolve correctly from the infobox at high confidence", () => {
+    const results = extractFields(["height", "architect", "completed"], null, EIFFEL_MARKDOWN, EIFFEL_INFOBOX_HTML);
+    const architect = results.find(r => r.field === "architect")!;
+    const completed = results.find(r => r.field === "completed")!;
+
+    expect(architect.value).toBe("Stephen Sauvestre");
+    expect(architect.source).toBe("infobox");
+    expect(architect.confidence).toBeGreaterThanOrEqual(0.6);
+
+    expect(completed.value).toBe("31 March 1889");
+    expect(completed.source).toBe("infobox");
+    expect(completed.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it("a real structured 'Height' infobox row is NOT over-gated — it resolves normally", () => {
+    // Guard against the fix over-correcting: when height DOES have a structured label→value
+    // binding, it must resolve at full infobox confidence (the gate only suppresses the
+    // loose proximity tier, never the structured layers).
+    const html = `<table class="infobox vcard"><tbody>
+      <tr><th scope="row" class="infobox-label">Height</th><td>330 m (1,083 ft)</td></tr>
+    </tbody></table>`;
+    const r = extractFields(["height"], null, EIFFEL_MARKDOWN, html)[0];
+    expect(r.value).toBe("330 m (1,083 ft)");
+    expect(r.source).toBe("infobox");
+    expect(r.low_confidence).toBeUndefined();
+    expect(r.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+});
