@@ -9,6 +9,7 @@
     "deploy": "vercel deploy --prod",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.mjs\"",
     "sync:hosted": "node ../scripts/sync-to-hosted.mjs"
   },
   "dependencies": {

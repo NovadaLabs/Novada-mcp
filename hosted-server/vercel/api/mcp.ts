@@ -134,7 +134,7 @@ import { NovadaError, NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.
 // L3 unified-key: populate the request-scoped credential store with the caller's key so
 // store-reading resolvers (getWebUnblockerKey → store.apiKey, resolveProxyCredentials,
 // resolveBrowserWs) use the CALLER's key on hosted instead of falling back to server env.
-import { withCredentials } from "../vendor/novada-mcp/utils/credentials.js";
+import { withCredentials, resolveBrowserWs } from "../vendor/novada-mcp/utils/credentials.js";
 // MCP prompts (tool-selection decision trees) — same module the npm server uses (1:1 parity). Static, safe on serverless.
 import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
 
@@ -196,7 +196,6 @@ function withWallClock<T>(toolName: string, p: Promise<T>): Promise<T> {
 
 // ─── Env shape (read from process.env on Vercel) ─────────────────────────────
 // Required env vars:
-//   NOVADA_API_KEY            ← upstream Novada API key (vercel env add ...)
 //   KV_REST_API_URL           ← auto-injected when KV store is linked
 //   KV_REST_API_TOKEN         ← auto-injected when KV store is linked
 //   STUB_AUTH_WARNING_ACCEPTED ← "true" to unlock the worker (stub gate)
@@ -208,7 +207,6 @@ interface Env {
   NOVADA_API_BASE: string;
   LOG_LEVEL: string;
   FREE_PLAN_MONTHLY_QUOTA: string;
-  NOVADA_API_KEY?: string;
   STUB_AUTH_WARNING_ACCEPTED?: string;
   RATE_LIMIT_PER_MIN?: string;
 }
@@ -218,11 +216,61 @@ function readEnv(): Env {
     NOVADA_API_BASE: process.env.NOVADA_API_BASE || "https://api.novada.com",
     LOG_LEVEL: process.env.LOG_LEVEL || "info",
     FREE_PLAN_MONTHLY_QUOTA: process.env.FREE_PLAN_MONTHLY_QUOTA || "1000",
-    NOVADA_API_KEY: process.env.NOVADA_API_KEY,
     STUB_AUTH_WARNING_ACCEPTED: process.env.STUB_AUTH_WARNING_ACCEPTED,
     RATE_LIMIT_PER_MIN: process.env.RATE_LIMIT_PER_MIN,
   };
 }
+
+// ─── Server-key neutralization (TOW2-249) ────────────────────────────────────
+// OWNER DECISION: on the hosted endpoint the customer pays for their OWN Novada
+// consumption from their OWN key (the URL ?token= / Bearer). The server account
+// must NEVER fund a caller's upstream calls.
+//
+// The vendored tool logic resolves upstream credentials through a chain that
+// falls back to server env vars when the request-scoped caller key is absent:
+//   • _core/developer_api.getDeveloperApiKey()  → NOVADA_DEVELOPER_API_KEY ?? NOVADA_API_KEY
+//   • utils/credentials.getWebUnblockerKey()     → … ?? NOVADA_WEB_UNBLOCKER_KEY ?? NOVADA_API_KEY
+//   • utils/credentials.resolveProxyCredentials()→ NOVADA_PROXY_* (env creds even take PRIORITY)
+//   • utils/credentials.resolveBrowserWs()       → … ?? NOVADA_API_KEY  (does NOT read store.apiKey)
+// A hosted dispatch that dropped the caller key (novada_browser / novada_proxy —
+// core.dispatch calls them without the apiKey arg) would otherwise silently bill
+// the SERVER account through one of these fallbacks.
+//
+// Rather than fork tool logic (it has one home — npm-package/src), we make the
+// server-owned consumption creds physically unreachable IN THIS PROCESS: strip
+// them from process.env once at module load so the ONLY key any resolver can find
+// is the caller's, carried via the AsyncLocalStorage store (withCredentials) and
+// the explicit dispatch arg. Idempotent (same server value every request) and
+// serverless-isolate-safe. Ops/transport vars (KV_*, SENTRY_*, RATE_LIMIT_*,
+// STUB_AUTH_*, FREE_PLAN_*) are untouched.
+//
+// NOVADA_BROWSER_WS is captured first so the error-path redactor keeps its
+// exact-string scrub (the generic user:pass@host + *.novada.com rules still apply
+// regardless). To re-introduce a deliberate server-funded free tier, do it via a
+// NEW explicitly-named var — never by restoring these consumption fallbacks.
+const SERVER_BROWSER_WS_SNAPSHOT = process.env.NOVADA_BROWSER_WS?.trim() || "";
+const SERVER_CONSUMPTION_ENV_VARS = [
+  "NOVADA_API_KEY",
+  "NOVADA_DEVELOPER_API_KEY",
+  "NOVADA_WEB_UNBLOCKER_KEY",
+  "NOVADA_BROWSER_WS",
+  "NOVADA_PROXY_USER",
+  "NOVADA_PROXY_PASS",
+  "NOVADA_PROXY_ENDPOINT",
+  "NOVADA_RESIDENTIAL_PROXY_USER",
+  "NOVADA_RESIDENTIAL_PROXY_PASS",
+  "NOVADA_RESIDENTIAL_PROXY_ENDPOINT",
+  "NOVADA_AUTH_USER",
+  "NOVADA_AUTH_PASS",
+] as const;
+
+function stripServerConsumptionCreds(): void {
+  for (const name of SERVER_CONSUMPTION_ENV_VARS) {
+    if (name in process.env) delete process.env[name];
+  }
+}
+// Run once at cold start — before any request resolves a tool credential.
+stripServerConsumptionCreds();
 
 // ─── Zod → MCP JSON Schema ───────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -579,9 +627,11 @@ const PUBLIC_NOVADA_HOSTS = new Set([
 
 function redactHostedSecrets(msg: string): string {
   let out = msg;
-  // 1. Exact NOVADA_BROWSER_WS value (contains user:pass@host) — redact first.
-  const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
-  if (browserWs) out = out.split(browserWs).join("[browser-ws-endpoint]");
+  // 1. Exact server NOVADA_BROWSER_WS value (contains user:pass@host) — redact first.
+  // The var itself is stripped from process.env at cold start (TOW2-249), so we use
+  // the pre-strip snapshot; the generic user:pass@host + *.novada.com rules below
+  // still scrub any per-caller browser WS regardless.
+  if (SERVER_BROWSER_WS_SNAPSHOT) out = out.split(SERVER_BROWSER_WS_SNAPSHOT).join("[browser-ws-endpoint]");
   // 2. URL userinfo in any scheme (http/https/ws/wss): strip `user:pass@`.
   out = out.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^/@\s:]+(?::[^/@\s]*)?@/gi, "$1");
   // 3. Internal *.novada.com hosts not on the public allowlist → placeholder.
@@ -680,10 +730,29 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       };
     }
 
+    // Browser caller-key billing (TOW2-249 CHALLENGE): core.dispatch calls novadaBrowser
+    // WITHOUT the apiKey arg, and resolveBrowserWs reads store.browserWs / NOVADA_BROWSER_WS
+    // but NOT store.apiKey — so with the server NOVADA_API_KEY stripped, an unprovisioned
+    // browser call would resolve to null ("Not Configured") instead of billing the caller.
+    // Pre-resolve the caller's Browser WSS here (auto-fetch via THEIR key, product=10;
+    // tenant-safe per-key cache) and seed it into the store so novadaBrowser uses it. If the
+    // caller has no Browser entitlement this stays undefined and the tool returns its own
+    // "Not Configured" message — no server-account fallback either way.
+    let browserWs: string | undefined;
+    if (name === "novada_browser") {
+      // Bound the auto-provision round-trip: it runs BEFORE the withWallClock guard,
+      // so a hung management API could otherwise push total latency toward the 60s
+      // Vercel function limit. 4s cap → null → the tool emits its own "Not Configured".
+      browserWs = (await Promise.race([
+        resolveBrowserWs(apiKey).catch(() => null),
+        new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+      ])) ?? undefined;
+    }
+
     // Wrap the whole dispatch so the caller's apiKey populates the AsyncLocalStorage
     // credential store for every store-reading resolver underneath (Web Unblocker / proxy /
     // browser). store.run() transparently propagates the inner return values and rejections.
-    return await withCredentials({ apiKey }, async () => {
+    return await withCredentials({ apiKey, browserWs }, async () => {
     try {
 
       // ── Browser-flow explicit refusal (BEFORE dispatch — no quota burned for it) ──
@@ -1061,14 +1130,14 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   const token = extractToken(request);
   if (!token) {
     return jsonError(401, "MISSING_TOKEN",
-      "Missing token. Pass ?token=YOUR_API_KEY or Authorization: Bearer YOUR_API_KEY.",
-      "Get your API key at https://dashboard.novada.com/overview/scraper/api-playground/");
+      "Missing API key. Pass your own Novada API key as ?token=YOUR_KEY or Authorization: Bearer YOUR_KEY — the hosted endpoint bills each call to your own Novada balance.",
+      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.");
   }
   const info = await validateToken(token, env);
   if (!info.valid) {
     return jsonError(401, "INVALID_TOKEN",
-      "Invalid API key. Use your Novada API key (32-char hex string from the dashboard).",
-      "Get your API key at https://dashboard.novada.com/overview/scraper/api-playground/");
+      "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the token.",
+      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.");
   }
 
   // Per-IP rate limit — slow down abusive loops from an authenticated key.
@@ -1080,14 +1149,18 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
       "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.");
   }
 
-  // Upstream Novada API key — use the customer's own key (pass-through model).
-  // The customer's token IS their Novada API key. Their own account balance is used.
-  // Fallback to env var NOVADA_API_KEY only for backward compat / operator testing.
-  const apiKey = token || env.NOVADA_API_KEY?.trim();
+  // Upstream Novada API key — the customer's own key, and ONLY their own key
+  // (TOW2-249 pass-through model). The caller's token IS their Novada API key and
+  // every upstream call is billed to THEIR balance. There is deliberately NO
+  // server-env fallback: funding a caller's consumption from the server account is
+  // the exact bug this fixes, and the server consumption creds are stripped from
+  // process.env at cold start anyway (see stripServerConsumptionCreds). `token` is
+  // already validated non-empty above (401 otherwise); the guard is defensive.
+  const apiKey = token?.trim();
   if (!apiKey) {
-    return jsonError(500, "FUNCTION_MISCONFIGURED",
-      "No API key available. Provide your Novada API key via the URL.",
-      "Get your API key at https://dashboard.novada.com/overview/scraper/api-playground/");
+    return jsonError(401, "MISSING_TOKEN",
+      "No Novada API key provided. Pass your own key as ?token=YOUR_KEY (or Authorization: Bearer YOUR_KEY) — the hosted endpoint bills each call to your own Novada balance and never to a shared account.",
+      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.");
   }
 
   // Optional tool-set filter from ?tools= / ?groups= (BrightData-style slim endpoint).
