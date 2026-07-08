@@ -4,6 +4,63 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.21] — 2026-07-08
+
+Agent-first simplification: the visible tool surface was reduced from 33 to 23 tools derived from a single registry source, with all hidden tools still dispatchable. Accompanied by a honesty pass across engine lists, account card content, and param docs, plus live-caught card field fixes (TOW2-256).
+
+### Changed
+- **Surface consolidation (33 → 23 tools):** visible tools now derive from a single registry; 6 proxy variant tools and 4 scraper stub tools are hidden from the default surface but remain fully dispatchable via `NOVADA_TOOLS`. Eliminates routing confusion and duplicate discovery entries.
+- **`novada_verify` restored to visible set:** owner decision — kept accessible on the default surface.
+- **`agent_instruction` scope tightened:** only the 5 universal API-key errors carry `agent_instruction`; business-logic errors no longer emit it.
+
+### Fixed
+- **Account card live-caught:** usage card date/amount fields corrected to match the real API response shape; `plans[].expires_at` now populated instead of "—".
+- **Bing removed from search engines:** `novada_search` no longer advertises Bing as an option; removed from every surface that still listed it (degraded backend, returns zero results).
+- **`novada_account` honesty:** no invented currency in the account card; dead `mode` param removed.
+- **`task_id` resume + browser snapshot documented:** `task_id` resume path and browser aria_snapshot usage documented in tool descriptions.
+- **Date-param aliases:** `start_time`/`end_time` aliased consistently across account tools.
+- **Dead `unblock.ts` removed** (had been accidentally resurrected; deleted again alongside its test).
+
+### Docs
+- Customer-facing README updated to reflect 23-tool surface; `novada_verify` re-added to catalog.
+
+---
+
+## [0.9.20] — 2026-07-07
+
+Proxy account list clean-up and account identity line (TOW2-251, TOW2-252).
+
+### Fixed
+- **`novada_proxy_account_list` pure projection:** response no longer includes a lying `*_balance:0` blob from the raw API; only the intended fields are surfaced.
+- **Account identity line:** the account card now shows which API key is in use (masked `...last4`) and the as-of timestamp, so agents can confirm they are operating under the right credential.
+- **`apiKey` forwarding aligned:** `proxy_account_list` and `proxy_account_create` now forward the caller's `apiKey` to the developer API, consistent with all sibling tools.
+
+---
+
+## [0.9.19] — 2026-07-07
+
+One-time first-run notice (TOW2-242).
+
+### Added
+- **First-run notice:** new users see a one-time message on first tool invocation — "$10 free credits at novada.com" — shown exactly once per install, then suppressed.
+
+---
+
+## [0.9.18] — 2026-07-07
+
+Diagnostic fix campaign across scrape, account, and search tools (TOW2-236~241).
+
+### Fixed
+- **`novada_scrape` Amazon price:** real listing price now surfaced from product variations (was returning 0 when the main price field was absent); `unit_price` is no longer promoted to listing price.
+- **`novada_scrape` availability:** `is_available` and `availability` fields reconciled — previously inconsistent across response shapes; negative availability strings handled correctly.
+- **`novada_scrape` subcategory rank pollution:** `subcategory_rank` entries that leaked ASIN or BSR data into the field are filtered out; product `description` cleaned of trailing noise.
+- **`novada_account` polymorphic balance:** the account card no longer renders "—" for plan balances on mobile or other non-standard balance shapes; balance field is resolved across all polymorphic response variants.
+- **`novada_search` dangling feedback instruction:** `novada_search` no longer emits a trailing `novada_search_feedback` `agent_instruction` when the feedback tool is unreachable, preventing phantom tool calls.
+- **Yahoo removed:** Yahoo is unsupported — removed from engine enum, schemas, docs, and all surfaces that still listed it.
+- **P3 polish:** snippet whitespace and deduplication, extract Chrome UA, field separator consistency.
+
+---
+
 ## [0.9.17] — 2026-07-05
 
 Purity/consistency release: a 3-round "claim vs reality" audit (~20 review agents) aligned every agent-facing description, count, and example with what the code actually does. No behavior change except two additive group-key aliases.
