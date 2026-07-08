@@ -1178,7 +1178,9 @@ async function extractSingleInner(
   // Compute extraction_quality label from fill-rate (resolved fields / requested fields)
   let extractionQuality: "high" | "partial" | "low" | "none" | "n/a" = "n/a";
   if (fieldResults && fieldResults.length > 0) {
-    const matched = fieldResults.filter(r => r.source !== "unresolved").length;
+    // TOW2-258: a low_confidence-suppressed field has value=null (source still "proximity"/etc.);
+    // it is NOT a resolved value, so exclude it from the fill-rate that drives extraction_quality.
+    const matched = fieldResults.filter(r => r.source !== "unresolved" && !r.low_confidence).length;
     const total = fieldResults.length;
     if (matched === total) {
       extractionQuality = "high";
@@ -1407,13 +1409,20 @@ async function extractSingleInner(
     }
   }
 
-  // Extraction Diagnostics — emit only when fields were requested and at least one is null
+  // Extraction Diagnostics — emit when fields were requested and at least one has a null value.
+  // TOW2-258: a low_confidence suppression has value=null but source!=="unresolved", so gate on
+  // the null value (not the source) — otherwise an all-low-confidence page skips diagnostics.
   let hasNoHeadingMatchField = false;
-  if (fieldResults && fieldResults.some(r => r.source === "unresolved")) {
+  if (fieldResults && fieldResults.some(r => r.value === null)) {
     lines.push(``, `---`, `## Extraction Diagnostics`);
     for (const r of fieldResults) {
-      if (r.source !== "unresolved") {
+      if (r.source !== "unresolved" && !r.low_confidence) {
         lines.push(`- ${r.field}: matched ✓ (via ${r.source}, conf:${r.confidence.toFixed(2)})`);
+      } else if (r.low_confidence) {
+        // Suppressed low-confidence candidate: show what was found + why it was not trusted.
+        const attemptedList = r.attempted && r.attempted.length > 0 ? r.attempted.join(" → ") : "none";
+        lines.push(`- ${r.field}: suppressed (low_confidence, via ${r.source}, conf:${r.confidence.toFixed(2)}) — candidate: ${r.low_confidence_value ?? "n/a"} — attempted: ${attemptedList}`);
+        if (r.agent_instruction) lines.push(`  agent_instruction: ${r.agent_instruction}`);
       } else {
         const attemptedList = r.attempted && r.attempted.length > 0 ? r.attempted.join(" → ") : "none";
         // Heading reason adds color to the "why" but the authoritative trail is `attempted`.

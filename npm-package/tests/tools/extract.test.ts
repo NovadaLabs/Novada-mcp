@@ -601,6 +601,71 @@ describe("field extraction window — full content, not display-truncated", () =
   });
 });
 
+// TOW2-258 review: a low_confidence-suppressed field must NOT count toward extraction_quality
+// and MUST be shown as suppressed in the markdown Extraction Diagnostics block.
+describe("TOW2-258 review — low_confidence field: excluded from quality, shown in diagnostics", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCache();
+  });
+
+  // 'height' has no structural label→value binding, so it falls to the loose proximity scan
+  // which grabs a stray "81" ("...height as an 81 storey building...") → suppressed (conf 0.5).
+  // 'author' resolves cleanly via an anchored pattern (conf 0.6). So 1 of 2 fields is a real
+  // match: quality must be "partial", NOT "high".
+  const MIXED_HTML = `
+    <html><head><title>Structure facts</title></head>
+    <body><main>
+      <h1>Structure facts</h1>
+      <p>Author: Jane Researcher wrote this detailed report about the tower and its surroundings, which is long enough to pass the content threshold for extraction. Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore.</p>
+      <p>The structure is about the same height as an 81 storey building nearby.</p>
+    </main></body></html>`;
+
+  it("markdown: extraction_quality is 'partial' NOT 'high' — the suppressed height is not counted as matched", async () => {
+    mockedAxios.get.mockResolvedValue({ data: MIXED_HTML });
+    const result = await novadaExtract({
+      url: "https://tow2258-quality.example/doc",
+      format: "markdown",
+      fields: ["height", "author"],
+    }, API_KEY);
+
+    // author resolved, height suppressed → 1-of-2, so "partial", never "high".
+    expect(result).toContain("extraction_quality: partial");
+    expect(result).not.toContain("extraction_quality: high");
+  });
+
+  it("JSON: the suppressed height field is surfaced transparently (value null + low_confidence markers)", async () => {
+    mockedAxios.get.mockResolvedValue({ data: MIXED_HTML });
+    const result = await novadaExtract({
+      url: "https://tow2258-json.example/doc",
+      format: "json",
+      fields: ["height", "author"],
+    }, API_KEY);
+    const parsed = JSON.parse(result);
+
+    expect(parsed.fields.height.value).toBeNull();
+    expect(parsed.fields.height.low_confidence).toBe(true);
+    expect(parsed.fields.height.low_confidence_value).toBe("81");
+    // author is a genuine match.
+    expect(parsed.fields.author.value).toContain("Jane Researcher");
+  });
+
+  it("markdown: the suppressed height appears in Extraction Diagnostics as 'suppressed (low_confidence...)'", async () => {
+    mockedAxios.get.mockResolvedValue({ data: MIXED_HTML });
+    const result = await novadaExtract({
+      url: "https://tow2258-diag.example/doc",
+      format: "markdown",
+      fields: ["height", "author"],
+    }, API_KEY);
+
+    expect(result).toContain("## Extraction Diagnostics");
+    expect(result).toMatch(/height: suppressed \(low_confidence, via proximity/);
+    expect(result).toContain("candidate: 81");
+    // The genuine match is still marked matched.
+    expect(result).toMatch(/author: matched ✓/);
+  });
+});
+
 // F2: Cloudflare interstitial on forced render= path must NOT return status:success.
 // A Cloudflare block page is several KB (well above the old 2000-char guard), so the
 // old code set usedMode="render" and passed it to quality scoring → quality:40, content_ok:true.
