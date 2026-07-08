@@ -762,7 +762,7 @@ export async function dispatch(
     case "novada_proxy_account_list":
       return novadaProxyAccountList(validateProxyAccountListParams(args), apiKey);
     case "novada_ip_whitelist":
-      return novadaIpWhitelist(validateIpWhitelistParams(args));
+      return novadaIpWhitelist(validateIpWhitelistParams(args), apiKey);
     case "novada_capture_apikey":
       return novadaCaptureApikey(validateCaptureApikeyParams(args), apiKey);
     case "novada_static_ip_mgmt":
