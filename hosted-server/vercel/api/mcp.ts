@@ -260,6 +260,12 @@ const SERVER_CONSUMPTION_ENV_VARS = [
   "NOVADA_RESIDENTIAL_PROXY_USER",
   "NOVADA_RESIDENTIAL_PROXY_PASS",
   "NOVADA_RESIDENTIAL_PROXY_ENDPOINT",
+  // proxy_static.js / proxy_dedicated.js read these directly from process.env — each
+  // holds IP:PORT:USER:PASS lines. Neither is set on hosted today (no live leak), but
+  // an operator setting one later would silently reopen a server-funded + credential-
+  // disclosure path, so strip them to honor "server consumption creds unreachable".
+  "NOVADA_STATIC_PROXY_LIST",
+  "NOVADA_DEDICATED_PROXY_LIST",
   "NOVADA_AUTH_USER",
   "NOVADA_AUTH_PASS",
 ] as const;
