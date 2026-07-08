@@ -157,10 +157,15 @@ const HOSTED_VERSION = HOSTED_BUILD
 // playwright-core, exceljs, pdf-parse, and the MCP SDK uses EventEmitter.
 // Trade-off vs Edge: ~200ms cold start (vs ~50ms) + single-region (vs global edge),
 // but in exchange the entire 15-tool surface works without porting.
-const FUNCTION_MAX_DURATION_S = 60; // novada_research can take 30-45s on deep mode
+// TOW2-257 (partial): raised from 60 → 300 on Pro plan (team org).
+// Pro Vercel allows up to 800s; 300s is a practical safe ceiling for MCP streaming.
+// This gives novada_research (deep mode ~30-45s) and novada_scrape (slow platforms
+// that used to exceed the 56s cap) much more headroom without the 45s internal poll
+// ceiling ever being the bottleneck.
+const FUNCTION_MAX_DURATION_S = 300;
 export const config = {
   runtime: "nodejs",
-  maxDuration: 60, // MUST be a literal — Vercel statically parses this `config` export and cannot resolve an identifier (keep in sync with FUNCTION_MAX_DURATION_S above)
+  maxDuration: 300, // MUST be a literal — Vercel statically parses this `config` export and cannot resolve an identifier (keep in sync with FUNCTION_MAX_DURATION_S above)
 };
 
 // #5: per-tool wall-clock budget, set a few seconds UNDER maxDuration. If a tool
@@ -169,24 +174,39 @@ export const config = {
 // envelope — the client NEVER sees the bare HTTP 504 Vercel emits on a hard kill,
 // which is not valid JSON-RPC and breaks MCP clients. The tool-level config.ts
 // ceilings (≤50s) are the primary guard; this is defense in depth.
-const TOOL_WALL_CLOCK_MS = (FUNCTION_MAX_DURATION_S - 4) * 1000; // ~56s
+const TOOL_WALL_CLOCK_MS = (FUNCTION_MAX_DURATION_S - 4) * 1000; // ~296s after TOW2-257 raise
+
+// Scrape-specific cap: novada_scrape's internal POLL_TIMEOUT_MS (45s) + submit overhead
+// normally completes well under the function wall-clock. This guard fires only if the
+// upstream stalls past all tool-level ceilings. The message is scrape-aware: it mentions
+// task_id resume so the caller does NOT lose the in-flight task and can resume for free.
+const SCRAPE_TOOLS = new Set(["novada_scrape", "novada_scraper_submit"]);
 
 /**
  * Race a tool promise against the wall-clock budget. On timeout, reject with a
  * structured NovadaError (TASK_PENDING — transient + retryable) so the call still
  * returns a JSON-RPC error envelope instead of being hard-killed into a bare 504.
+ * For scrape tools: include task_id resume hint and no-recharge reminder.
  */
 function withWallClock<T>(toolName: string, p: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const guard = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
+      const isScrape = SCRAPE_TOOLS.has(toolName);
+      const agent_instruction = isScrape
+        ? `The scrape task was still running when the hosted endpoint hit its wall-clock budget. ` +
+          `If the tool returned a task_id before this error, re-call novada_scrape with that task_id ` +
+          `(no new charge — it skips re-submit and goes straight to polling). ` +
+          `If no task_id was returned, retry the call. ` +
+          `For operations that reliably exceed the hosted cap, use the local MCP server ` +
+          `(\`npx novada-mcp\`) which has no per-call wall-clock limit.`
+        : `The hosted endpoint wall-clock budget (${TOOL_WALL_CLOCK_MS / 1000}s) was reached. ` +
+          `Retry with a narrower request (fewer URLs, render="static", a smaller depth/limit), ` +
+          `or run the local MCP server (\`npx novada-mcp\`) which has no per-call wall-clock cap.`;
       reject(new NovadaError({
         code: NovadaErrorCode.TASK_PENDING,
         message: `${toolName} exceeded the hosted ${TOOL_WALL_CLOCK_MS / 1000}s time budget and was stopped before the function timed out.`,
-        agent_instruction:
-          `The hosted endpoint caps each call below the serverless function limit. ` +
-          `Retry with a narrower request (fewer URLs, render="static", a smaller depth/limit), ` +
-          `or run the local MCP server (\`npx novada-mcp\`) which has no per-call wall-clock cap.`,
+        agent_instruction,
         retryable: true,
       }));
     }, TOOL_WALL_CLOCK_MS);
