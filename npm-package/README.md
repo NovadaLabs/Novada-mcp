@@ -64,6 +64,7 @@ novada_research({question: "how do MCP servers work?"}) — parallel multi-sourc
 | Tool | When to use |
 |------|-------------|
 | `novada_scrape` | Structured data from 13 platform scrapers in one call: Amazon, Walmart, LinkedIn, TikTok, YouTube, Instagram, GitHub, Google, Bing, DuckDuckGo, Yandex, X, Facebook. Returns clean records (markdown/json/csv). |
+| `novada_verify` | Fact-check a claim: runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict — supported / unsupported / contested / insufficient_data — with a confidence signal. |
 | `novada_ai_monitor` | Search indexed public pages on AI-company domains (openai.com, perplexity.ai, anthropic.com, grok.com) for brand mentions and sentiment. **Searches indexed pages only — does NOT query live AI models.** |
 | `novada_monitor` | Detect page changes over time. First call sets a baseline; subsequent calls return changed/unchanged with optional field-level diffs. Session-scoped — baseline is lost on server restart. |
 
