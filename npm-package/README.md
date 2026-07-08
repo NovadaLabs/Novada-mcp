@@ -45,7 +45,7 @@ novada_research({question: "how do MCP servers work?"}) — parallel multi-sourc
 
 ## Tool catalog
 
-**23 tools across 6 categories.** Call `novada_discover` from any MCP client to list them with descriptions.
+**23 curated tools across 6 categories.** Call `novada_discover` from any MCP client to list them with descriptions.
 
 ### Content retrieval
 
