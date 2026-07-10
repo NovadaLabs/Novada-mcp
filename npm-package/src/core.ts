@@ -263,6 +263,7 @@ Not for:
 **Not for:** General web pages not in the platform list — use novada_extract for arbitrary URLs instead.
 **Output formats:** "markdown" (default, agent-optimized table), "json" (structured records array returned inside a "## Scrape Results" wrapper — a fenced json block, not a bare object), "toon" (token-optimized pipe-separated format — 40-65% smaller than JSON/markdown, best for large result sets in context-constrained situations), "csv" (inline CSV text), "excel" (inline .xlsx base64), "html" (inline HTML table).
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}
+**Amazon price fields:** trust \`final_price\`/\`price\` (check \`_price_source\`); \`initial_price\` and \`buybox_prices.final_price\` are frequently 0 by design, not a bug; \`buybox_prices.unit_price\` is raw upstream per-unit data and may be empty/inconsistent — never treat it as the listing price.
 **Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.
 **Resume slow-platform scrapes:** Pass \`task_id\` from a previous call that returned status:processing to fetch its result without submitting a new billable task. platform and operation are still required (display only when resuming).
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,

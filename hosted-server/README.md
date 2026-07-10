@@ -18,7 +18,7 @@ novada-mcp/                ← monorepo root
     │   ├── vercel.json
     │   └── README.md      ← deploy walkthrough
     ├── worker/            ← DORMANT — CF Workers port (reference only, not deployed)
-    ├── landing/           ← novada.com/mcp landing page — DEPLOYED SEPARATELY, NOT by this Vercel project (the mcp.novada.com pages live in vercel/*.html)
+    ├── landing/           ← novada.com/mcp landing page — DEPLOYED SEPARATELY, NOT by this Vercel project (mcp.novada.com is a bare API/MCP endpoint, no marketing pages)
     ├── docs/              ← user/ops docs (ARCHITECTURE, INSTALL, DEPLOY, DIRECTORIES)
     └── scripts/           ← deploy-hosted.sh, sync-to-hosted.mjs, golden/ baseline
 ```

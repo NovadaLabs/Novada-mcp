@@ -626,6 +626,29 @@ async function refundQuota(tokenHash: string, env: Env): Promise<void> {
   }
 }
 
+// ─── Account graceful-degradation quota refund ───────────────────────────────
+// novadaAccount's withAccountFallback() (npm-package/src/tools/account.ts) catches
+// dev-api business-code failures (e.g. "No approval received") and returns a FRIENDLY,
+// isError:false dashboard-pointer response instead of throwing — so the success path
+// below would otherwise charge quota for a call that returned no real account data.
+// Detect the two stable degradation markers it emits (card format + json format) and
+// refund instead of silently charging. Scoped to the novada_account tool family only —
+// every dispatch name that routes to novadaAccount() in core.ts's dispatch switch
+// shares this exact output shape, so this is the same bug wherever it's reached from.
+const ACCOUNT_DEGRADATION_MARKERS = [
+  "Couldn't read your account via the API right now.", // card format (unavailableCard)
+  "Account data temporarily unavailable.",              // json format (withAccountFallback)
+];
+const ACCOUNT_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "novada_account", "novada_wallet_balance", "novada_wallet_usage_record",
+  "novada_traffic_daily", "novada_plan_balance_all", "novada_capture_logs",
+  "novada_account_summary", "novada_health", "novada_health_all",
+]);
+function isAccountDegradedResponse(toolName: string, text: string): boolean {
+  if (!ACCOUNT_TOOL_NAMES.has(toolName)) return false;
+  return ACCOUNT_DEGRADATION_MARKERS.some((marker) => text.includes(marker));
+}
+
 // ─── First-run notice (TOW2-242) ─────────────────────────────────────────────
 // One-time onboarding notice, shown EXACTLY ONCE per token on the hosted endpoint.
 // The canonical copy + stdio logic live in the vendored module
@@ -914,10 +937,18 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
       logUsage(env, ctx.token, name, true, Date.now() - started);
       const sanitized = sanitizeHostedOutput(result);
-      // Append quota footer only when quota is running low (< 20% of monthly)
       const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
-      const quotaFooter = remaining < monthlyQuota * 0.2
-        ? `\n\n---\n⚠ Quota: ${remaining}/${monthlyQuota} calls remaining this month.`
+      // novada_account's graceful-degradation path returns a friendly, isError:false
+      // dashboard-pointer card/json (no real account data) instead of throwing — refund
+      // the quota charged before dispatch so a degraded call doesn't cost the customer.
+      let effectiveRemaining = remaining;
+      if (isAccountDegradedResponse(name, sanitized)) {
+        await refundQuota(ctx.tokenHash, env);
+        effectiveRemaining = Math.min(monthlyQuota, remaining + 1);
+      }
+      // Append quota footer only when quota is running low (< 20% of monthly)
+      const quotaFooter = effectiveRemaining < monthlyQuota * 0.2
+        ? `\n\n---\n⚠ Quota: ${effectiveRemaining}/${monthlyQuota} calls remaining this month.`
         : "";
       // TOW2-242: one-time first-run notice — SEPARATE content block (never
       // concatenated into the result text, which would corrupt JSON outputs),
@@ -927,7 +958,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       if (notice) content.push({ type: "text" as const, text: notice });
       return {
         content,
-        _meta: { quota_remaining: remaining },
+        _meta: { quota_remaining: effectiveRemaining },
       };
     } catch (error) {
       // Alert-gating (noise reduction): handled transient/user errors record a
@@ -1191,10 +1222,21 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
 
   // Vercel rewrites /mcp -> /api/mcp, so both pathnames must be accepted here.
   // Path-based auth: /:key/mcp is also valid (Firecrawl pattern for Claude.ai).
-  // We also expose a health probe on / and /health for ops.
+  // We also expose a health probe on /health for ops.
   const pathname = url.pathname;
 
-  if (pathname === "/" || pathname === "/health" || pathname === "/api/health") {
+  if (pathname === "/") {
+    return new Response(
+      JSON.stringify({
+        name: "Novada MCP",
+        endpoint: "https://mcp.novada.com/mcp",
+        documentation_url: "https://novada.com/products/novada-mcp/",
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  }
+
+  if (pathname === "/health" || pathname === "/api/health") {
     return new Response(JSON.stringify({ ok: true, service: "novada-mcp-hosted", endpoint: "/mcp" }), {
       headers: { "content-type": "application/json" },
     });

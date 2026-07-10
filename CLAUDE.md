@@ -18,6 +18,7 @@ This repo is a **monorepo** with two artifacts. Read the routing table before ed
 
 ## Rules
 
+- **`mcp.novada.com` is a bare API endpoint** (since 2026-07-10, matching Bright Data/Firecrawl/Tavily) — `vercel.json` routes everything except `/mcp` and `/:key/mcp` through a catch-all `/(.*)` → `api/mcp.ts`, which returns a bare JSON pointer at `/` and a clean 404 for anything unmatched. No marketing HTML lives here anymore — that content is `hosted-server/landing/` (separate deploy target for novada.com, out of scope for this project). **If Vercel Analytics or Speed Insights is ever enabled on this project, add an explicit `/_vercel/(.*)` passthrough rule ABOVE the catch-all in `vercel.json` first** — otherwise the catch-all will swallow `/_vercel/insights/*` and `/_vercel/speed-insights/*` before Vercel's own routes get a chance.
 - **Never edit `hosted-server/vercel/vendor/` by hand.** It is *generated* by `deploy-hosted.sh` (which builds `npm-package/` and rsyncs its `build/` output into the vendor dir). Hand edits will be overwritten on the next deploy.
 - **REDLINE:** no npm publish, no `vercel deploy`, no version bump, no push without explicit owner approval.
 - Tool logic has ONE home: `npm-package/src/`. The hosted server consumes the built artifact — it never forks tool behavior.

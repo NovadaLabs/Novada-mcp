@@ -3,7 +3,10 @@
   "cleanUrls": true,
   "rewrites": [
     { "source": "/:key/mcp", "destination": "/api/mcp?pathKey=:key" },
-    { "source": "/mcp", "destination": "/api/mcp" }
+    { "source": "/mcp", "destination": "/api/mcp" },
+    { "source": "/health", "destination": "/api/mcp" },
+    { "source": "/", "destination": "/api/mcp" },
+    { "source": "/(.*)", "destination": "/api/mcp" }
   ],
   "headers": [
     {

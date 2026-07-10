@@ -4,6 +4,19 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.24] — 2026-07-10
+
+`mcp.novada.com` is now a bare API endpoint (matching Bright Data / Firecrawl / Tavily), plus a quota-fairness fix and clearer price-field documentation.
+
+### Changed
+- **`mcp.novada.com` stripped to a pure MCP endpoint.** Removed the marketing mini-site (index/faq/pricing/tools/playground/chat/configure pages) that previously lived alongside the API — every path other than `/mcp` and `/:key/mcp` now returns a bare JSON pointer (`{name, endpoint, documentation_url}`) or a clean 404, matching how comparable MCP/API providers structure their endpoint subdomain. The marketing content's future home is `novada.com` (tracked separately — out of scope for this repo).
+
+### Fixed
+- **Hosted free-gateway quota is no longer charged on a degraded `novada_account` response.** When `novada_account` (and its composed sub-tools: wallet balance, usage, plans, traffic, capture logs, summary, health) gracefully degrades due to an upstream Novada API hiccup, the call is now refunded instead of silently consuming the customer's monthly quota for a response that didn't contain real data.
+- **`novada_scrape` price-field reliability documented.** The tool description and `novada://scraper-platforms` resource now explain which Amazon price fields are trustworthy (`final_price`/`price`, check `_price_source`) versus frequently-zero-by-design (`initial_price`, `buybox_prices.final_price`) versus raw/unreliable upstream data (`buybox_prices.unit_price`) — previously this precedence only existed in code comments, invisible to callers.
+
+---
+
 ## [0.9.23] — 2026-07-10
 
 Static-ISP account reporting fixed to match how the product is actually billed, plus real upstream token verification on the hosted endpoint (with a KV cache to keep it fast).

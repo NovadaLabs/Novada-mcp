@@ -354,6 +354,12 @@ have 0 scenes and will return error 11006. Use novada_extract for unsupported pl
 - amazon_seller_url                → params: { url: string }
 - amazon_product-list_keywords-domain → params: { keyword: string }
 
+Price field reliability: trust 'final_price'/'price' (check '_price_source': "reconciled" means
+we derived it from variations[]/buybox_prices because upstream's flat field was 0/empty).
+'initial_price' and 'buybox_prices.final_price' are frequently 0 by design — expected, not a bug.
+'buybox_prices.unit_price' is raw upstream per-unit data (e.g. price-per-cable in a multipack) and
+may be empty/inconsistent — never treat it as the listing price.
+
 ### walmart.com (platform_id=21)
 - walmart_product_url              → params: { url: string }
 - walmart_product_category-url     → params: { url: string }
