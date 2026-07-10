@@ -1,4 +1,8 @@
-// Aggregates daily traffic consumption across all 5 Novada proxy products in parallel.
+// Aggregates daily traffic consumption across all 4 flow-metered Novada proxy
+// products in parallel. static ISP is excluded — it's billed per-IP (lifecycle),
+// not by traffic volume, so /v1/static_flow/consume_log 404s even for accounts
+// with active static_house orders (confirmed via raw devApiPost smoke test).
+// Use novada_static_ip_mgmt or novada_account(section="plans") for static instead.
 
 import { z } from "zod";
 import { devApiParallel, withDateRangeCompat } from "../_core/developer_api.js";
@@ -10,7 +14,6 @@ const FLOW_ENDPOINTS = [
   { key: "isp",         path: "/v1/isp_flow/consume_log" },
   { key: "mobile",      path: "/v1/mobile_flow/mobile_flow_use" },
   { key: "datacenter",  path: "/v1/dc_flow/consume_log" },
-  { key: "static",      path: "/v1/static_flow/consume_log" },
 ] as const;
 
 type ProductKey = (typeof FLOW_ENDPOINTS)[number]["key"];
@@ -34,7 +37,7 @@ export const TrafficDailyParamsSchema = z.object({
     .array(z.enum(["residential", "isp", "mobile", "datacenter", "static"]))
     .optional()
     .describe(
-      "Subset of proxy products to query. Omit to query ALL 5 in parallel.",
+      "Subset of proxy products to query. Omit to query all 4 flow-metered products (static ISP is billed per-IP, not by traffic — always returned as inapplicable rather than queried).",
     ),
 }).strict();
 
@@ -87,18 +90,24 @@ interface PerProductSummary {
   total_mb?: number;
   raw?: unknown;
   error?: string;
+  /** Set for "static" — it's billed per-IP, not by traffic volume, so no consume_log call is made. */
+  applicable?: boolean;
+  reason?: string;
 }
 
 /**
- * Fan out daily traffic consumption queries across all 5 Novada proxy products
- * (residential, isp, mobile, datacenter, static) in parallel, then aggregate
- * totals. Partial failures are tolerated — each product's outcome is reported
- * independently in per_product[<name>] and errors[].
+ * Fan out daily traffic consumption queries across the 4 flow-metered Novada
+ * proxy products (residential, isp, mobile, datacenter) in parallel, then
+ * aggregate totals. Partial failures are tolerated — each product's outcome
+ * is reported independently in per_product[<name>] and errors[]. "static" is
+ * never queried — it's billed per-IP, not by traffic — and is reported as
+ * inapplicable instead.
  */
 export async function novadaTrafficDaily(
   params: TrafficDailyParams,
   apiKey?: string,
 ): Promise<string> {
+  const wantStatic = !params.products?.length || params.products.includes("static");
   const selected = params.products?.length
     ? FLOW_ENDPOINTS.filter(e =>
         (params.products as ProductKey[]).includes(e.key),
@@ -145,7 +154,15 @@ export async function novadaTrafficDaily(
     }
   }
 
-  const allFailed = errors.length === selected.length;
+  if (wantStatic) {
+    summary.static = {
+      status: "ok",
+      applicable: false,
+      reason: "static ISP is billed per-IP (see novada_account section=\"plans\"), not by traffic volume",
+    };
+  }
+
+  const allFailed = selected.length > 0 && errors.length === selected.length;
   const status: "ok" | "partial" | "all_failed" =
     errors.length === 0 ? "ok" : allFailed ? "all_failed" : "partial";
 
@@ -161,7 +178,7 @@ export async function novadaTrafficDaily(
       errors: errors.length ? errors : undefined,
       agent_instruction:
         errors.length === 0
-          ? "Daily traffic aggregated across all 5 products. Each per_product.raw contains the original per-day breakdown returned by the developer-api."
+          ? "Daily traffic aggregated across flow-metered products. Each per_product.raw contains the original per-day breakdown returned by the developer-api. static ISP (if requested) is reported separately as applicable:false — it's billed per-IP, not by traffic."
           : "Some products failed — see errors[] for details. Successful products are in per_product[<name>].raw. Common cause: that product is not provisioned on this account.",
     },
     null,

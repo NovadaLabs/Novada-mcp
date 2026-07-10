@@ -4,6 +4,32 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.23] — 2026-07-10
+
+Static-ISP account reporting fixed to match how the product is actually billed, plus real upstream token verification on the hosted endpoint (with a KV cache to keep it fast).
+
+### Fixed
+- **Static-ISP no longer reports a bare 404.** `novada_account section="plans"` and `section="traffic"` were calling the flow-metered balance/traffic endpoints (`static_flow/balance`, `static_flow/consume_log`) for the static-ISP product — endpoints that structurally do not apply, since static-ISP is billed per-IP (open/renew/list), not by traffic volume. `plans` now reports static via `static_house/list` (active IP count, region breakdown); `traffic` now returns `applicable: false` with an explanation instead of a raw 404.
+- **`traffic_daily` all-failed false positive:** requesting `products:["static"]` alone previously reported `all_failed: true` even though nothing failed, because the selected-product count was miscounted after static was removed from the flow fan-out. Fixed.
+
+### Security (hosted)
+- **`validateToken` now performs real upstream verification** against Novada's API instead of a format-only check (≥16 alphanumeric chars). Root cause: a misconfigured MCP connector was accepted with a token belonging to a different Novada account, and nothing flagged it because the server never confirmed the key was real. An explicit upstream rejection now returns 401 immediately, before any tool dispatch. A timeout or network error does not reject (fails open to the prior behavior) so hosted availability isn't coupled to upstream latency.
+- **Verification result is cached (Vercel KV, 90s TTL, hashed key)** so this adds a real network call only on a token's first use per cache window — not on every single tool call. Failure/timeout outcomes are never cached.
+
+---
+
+## [0.9.22] — 2026-07-09
+
+Caller-key billing fix (P0) — customers now consume against their own Novada API key on the hosted endpoint, never a fallback server key — plus an extract confidence-gate fix and a hosted timeout increase.
+
+### Fixed
+- **Caller-key billing (P0):** the hosted endpoint no longer falls back to a server-side `NOVADA_API_KEY` when a caller's token is absent — `stripServerConsumptionCreds()` deletes all server consumption credentials from the process environment at cold start, so there is no fallback target. A missing or invalid token now returns 401 and points to novada.com; every billable call is charged against the caller's own key.
+- **`novada_extract` `fields` confidence gate:** the proximity-based field extractor could return a low-confidence value (e.g. picking a stray number out of unrelated prose) without flagging it. Extraction now applies a confidence floor — sub-floor values are returned as `value: null` with `low_confidence: true` and the original guess preserved as `low_confidence_value`, and are excluded from the extraction-quality count.
+- **`novada_ip_whitelist` apiKey forwarding:** the tool now forwards the caller's own API key to the whitelist dispatch instead of relying on server defaults.
+- **Hosted 56s wall-clock cap raised to 300s** (Vercel `maxDuration` 60→300) to reduce timeouts on slower operations; scrape tool guidance updated to recommend narrower params / `render=static` / the local server for still-slow jobs.
+
+---
+
 ## [0.9.21] — 2026-07-08
 
 Agent-first simplification: the visible tool surface was reduced from 33 to 23 tools derived from a single registry source, with all hidden tools still dispatchable. Accompanied by a honesty pass across engine lists, account card content, and param docs, plus live-caught card field fixes (TOW2-256).

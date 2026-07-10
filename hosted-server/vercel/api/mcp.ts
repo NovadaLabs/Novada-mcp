@@ -131,6 +131,9 @@ import {
 } from "../vendor/novada-mcp/tools/index.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
 import { NovadaError, NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.js";
+// Real upstream key verification for validateToken — same wallet-balance probe
+// novada_setup already uses to confirm "does this key actually work".
+import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
 // L3 unified-key: populate the request-scoped credential store with the caller's key so
 // store-reading resolvers (getWebUnblockerKey → store.apiKey, resolveProxyCredentials,
 // resolveBrowserWs) use the CALLER's key on hosted instead of falling back to server env.
@@ -432,18 +435,105 @@ interface TokenInfo {
   quota_remaining: number;
 }
 
+// Root-cause incident: a misconfigured connector carried a format-valid token
+// belonging to a DIFFERENT Novada account. The old format-only check accepted
+// it and silently proxied every call to the wrong account — nobody noticed
+// until they inspected their wallet balance. Real verification below closes
+// that gap: a real upstream call, cheap/fast, that fails loudly on rejection.
+const TOKEN_VERIFY_TIMEOUT_MS = 3_500;
+
+// Hosted runs stateless-per-request (no session reuse across calls — see module
+// header), so without a cache EVERY tool call from EVERY customer would pay a live
+// upstream round-trip to api-m.novada.com just to re-confirm a key it already
+// confirmed moments ago. This short-TTL cache reuses the last EXPLICIT upstream
+// verdict (pass or explicit reject) so repeat calls from the same key skip the
+// upstream call entirely and pay only a KV read (same infra already used for the
+// quota/rate-limit counters below — no second caching technology introduced).
+// TTL picked in the middle of the 60-120s range: long enough to absorb a hot
+// key's typical per-minute call burst, short enough that a key disabled mid-session
+// is re-checked well within the same working session.
+const TOKEN_VERIFY_CACHE_TTL_S = 90;
+
+interface CachedTokenVerify {
+  valid: boolean;
+  verified: boolean;
+}
+
+/** Best-effort cache write — a KV hiccup here must never block the auth decision already made. */
+async function cacheTokenVerify(cacheKey: string, result: CachedTokenVerify): Promise<void> {
+  try {
+    await kv.set(cacheKey, result, { ex: TOKEN_VERIFY_CACHE_TTL_S });
+  } catch {
+    /* best-effort — a caching failure must not surface over the (already-decided) auth result */
+  }
+}
+
 /**
- * Validate a Novada API key. Accepts any non-empty hex-like string (the standard
- * Novada API key format, e.g. "sk-eu-novada-EXAMPLE0000").
+ * Validate a Novada API key: format check, then a REAL upstream probe against
+ * the wallet-balance endpoint (the same cheap "does this key work" call
+ * novada_setup already uses — one lightweight read, no side effects), fronted
+ * by a short-TTL cache of the last explicit verdict (see TOKEN_VERIFY_CACHE_TTL_S).
+ *
+ * - Format invalid → reject immediately, no upstream call, no cache read/write.
+ * - Cache hit (valid TTL) → reuse the last explicit verdict, no upstream call.
+ * - Upstream explicitly rejects the key (INVALID_API_KEY) → reject, cache the rejection.
+ * - Upstream accepts the key → cache the pass.
+ * - Upstream times out / network error (NOT an explicit rejection) → do NOT
+ *   hard-fail the request on a flaky upstream; fall back to the format-only
+ *   pass so the endpoint doesn't become less available than before this
+ *   change. `verified: false` marks this path distinctly so it can be told
+ *   apart from a clean pass in logs. This outcome is NEVER cached — it is a
+ *   transient failure, not a real verification result, and caching it would
+ *   suppress a real check for the full TTL if the flake clears a moment later.
  * TODO(sub2api): wire to sub2api for per-user plan/quota resolution.
  */
-async function validateToken(token: string, env: Env): Promise<TokenInfo> {
+async function validateToken(token: string, env: Env): Promise<TokenInfo & { verified: boolean }> {
   // Accept any non-empty token that looks like a valid API key (alphanumeric, 16+ chars).
   if (!token || token.length < 16 || !/^[a-zA-Z0-9_\-]+$/.test(token)) {
-    return { valid: false, plan: "free", quota_remaining: 0 };
+    return { valid: false, plan: "free", quota_remaining: 0, verified: false };
   }
   const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
-  return { valid: true, plan: "free", quota_remaining: monthlyQuota };
+
+  // tokenKvHash (not the plaintext key) is the cache key — same rule as the quota
+  // counters: the plaintext API key must never be a KV key (see tokenKvHash).
+  const cacheKey = `tokver:${await tokenKvHash(token)}`;
+  try {
+    const cached = await kv.get<CachedTokenVerify>(cacheKey);
+    if (cached) {
+      return {
+        valid: cached.valid,
+        plan: "free",
+        quota_remaining: cached.valid ? monthlyQuota : 0,
+        verified: cached.verified,
+      };
+    }
+  } catch {
+    // KV read failure — fall through to a live upstream check; never block auth on cache.
+  }
+
+  try {
+    await devApiPost("/v1/wallet/balance", {}, { apiKey: token, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS });
+    await cacheTokenVerify(cacheKey, { valid: true, verified: true });
+    return { valid: true, plan: "free", quota_remaining: monthlyQuota, verified: true };
+  } catch (e) {
+    if (e instanceof NovadaError && e.code === NovadaErrorCode.INVALID_API_KEY) {
+      // Explicit auth rejection from Novada — this key does not belong to any
+      // account (or was disabled). Fail fast; do NOT fall through to dispatch.
+      await cacheTokenVerify(cacheKey, { valid: false, verified: true });
+      return { valid: false, plan: "free", quota_remaining: 0, verified: true };
+    }
+    // Timeout / network / transient upstream failure — NOT a rejection. Falling
+    // back to format-only here (rather than failing the request) keeps the
+    // hosted endpoint's availability decoupled from developer-api's uptime.
+    // `verified: false` lets logs distinguish "we didn't actually check" from
+    // a clean pass, without blocking the caller. Deliberately NOT cached (see
+    // function doc above).
+    console.error(JSON.stringify({
+      evt: "token_verify_fallback",
+      reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
+    }));
+    return { valid: true, plan: "free", quota_remaining: monthlyQuota, verified: false };
+  }
 }
 
 /**
@@ -1161,9 +1251,15 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   }
   const info = await validateToken(token, env);
   if (!info.valid) {
-    return jsonError(401, "INVALID_TOKEN",
-      "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the token.",
-      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.");
+    // `verified` distinguishes a real upstream rejection (key is well-formed but
+    // Novada doesn't recognize it — e.g. wrong account, disabled key) from a
+    // bare format failure (too short / bad charset), so the agent gets an
+    // accurate diagnosis instead of always being told "check the format".
+    const message = info.verified
+      ? "Your API key is not a valid or active Novada API key. It was rejected by the Novada account API — verify you copied the correct key from your OWN Novada account."
+      : "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the token.";
+    return jsonError(401, "INVALID_TOKEN", message,
+      "Check your key at https://dashboard.novada.com/api-key/ — make sure it belongs to YOUR account, not a different one. Get a Novada API key with $10 free credits at https://novada.com if you don't have one.");
   }
 
   // Per-IP rate limit — slow down abusive loops from an authenticated key.

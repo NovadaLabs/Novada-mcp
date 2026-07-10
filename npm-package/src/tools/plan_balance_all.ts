@@ -1,27 +1,36 @@
-// Aggregates per-product balances across all Novada flow products (5 proxy + 1 capture) in parallel.
+// Aggregates per-product balances across all Novada flow products (4 flow-metered
+// proxy products + capture) in parallel, plus a per-IP lifecycle summary for static ISP.
+//
+// static ISP is NOT a flow-metered product — it's billed per-IP
+// (static_house/{open,list,export,renew} track which IPs you own + expiry), unlike
+// the other 4 proxy products which are billed by traffic volume via *_flow/balance.
+// Calling /v1/static_flow/balance 404s even for accounts with active static_house
+// orders (confirmed via raw devApiPost smoke test), so it's handled separately below
+// via static_house/list instead of the generic flow-balance fan-out.
 
 import { z } from "zod";
-import { devApiParallel } from "../_core/developer_api.js";
+import { devApiParallel, devApiPost } from "../_core/developer_api.js";
 
 // ─── Endpoint table ──────────────────────────────────────────────────────────
 
-const BALANCE_ENDPOINTS = [
+const FLOW_BALANCE_ENDPOINTS = [
   { key: "residential", path: "/v1/residential_flow/balance" },
   { key: "isp",         path: "/v1/isp_flow/balance" },
   { key: "mobile",      path: "/v1/mobile_flow/mobile_flow_balance" },
   { key: "datacenter",  path: "/v1/dc_flow/balance" },
-  { key: "static",      path: "/v1/static_flow/balance" },
   { key: "capture",     path: "/v1/capture/get_balance" },
 ] as const;
 
-type ProductKey = typeof BALANCE_ENDPOINTS[number]["key"];
+const ALL_PRODUCT_KEYS = ["residential", "isp", "mobile", "datacenter", "static", "capture"] as const;
+
+type ProductKey = typeof ALL_PRODUCT_KEYS[number];
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 
 export const PlanBalanceAllParamsSchema = z
   .object({
     products: z
-      .array(z.enum(["residential", "isp", "mobile", "datacenter", "static", "capture"]))
+      .array(z.enum(ALL_PRODUCT_KEYS))
       .optional()
       .describe("Subset of products to query. Omit to query ALL 6 in parallel."),
   })
@@ -69,21 +78,69 @@ function enrichBalance(raw: unknown): { expired?: boolean; expires_at_human?: st
 }
 
 /**
+ * static ISP is billed per-IP (not by traffic volume) — summarize ownership
+ * via static_house/list instead of a flow-balance call. Region breakdown is
+ * best-effort: the list-item shape isn't documented beyond page/limit/total,
+ * so we only aggregate a `region` field if the server actually includes one.
+ */
+async function fetchStaticIpSummary(apiKey?: string): Promise<PerProductResult> {
+  try {
+    const data = await devApiPost<{ list?: unknown[] | null; total?: number }>(
+      "/v1/static_house/list",
+      { page: 1, limit: 200 },
+      { apiKey },
+    );
+    const list = Array.isArray(data.list) ? data.list : [];
+    const region_breakdown: Record<string, number> = {};
+    for (const item of list) {
+      if (item !== null && typeof item === "object") {
+        const region = (item as Record<string, unknown>).region;
+        if (typeof region === "string" && region) {
+          region_breakdown[region] = (region_breakdown[region] ?? 0) + 1;
+        }
+      }
+    }
+    const active_ip_count = typeof data.total === "number" ? data.total : list.length;
+    return {
+      status: "ok",
+      balance: {
+        billing_model: "per_ip_lifecycle",
+        active_ip_count,
+        region_breakdown,
+        raw: data,
+      },
+    };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return {
+      status: "error",
+      error: `No static ISP IPs provisioned (billed per-IP, not by traffic — see novada_static_ip_mgmt to open one). Underlying error: ${errMsg}`,
+      unavailable: true,
+    };
+  }
+}
+
+/**
  * Query balance endpoints across all (or a chosen subset of) Novada flow
- * products in parallel. Never hard-fails — partial errors are surfaced in
- * `errors[]` while successful per-product balances are returned alongside.
+ * products in parallel, plus a per-IP lifecycle summary for static ISP. Never
+ * hard-fails — partial errors are surfaced in `errors[]` while successful
+ * per-product balances are returned alongside.
  */
 export async function novadaPlanBalanceAll(
   params: PlanBalanceAllParams,
   apiKey?: string,
 ): Promise<string> {
+  const wantStatic = !params.products?.length || params.products.includes("static");
   const requested = params.products?.length
-    ? BALANCE_ENDPOINTS.filter(e => params.products!.includes(e.key as ProductKey))
-    : BALANCE_ENDPOINTS;
+    ? FLOW_BALANCE_ENDPOINTS.filter(e => params.products!.includes(e.key as ProductKey))
+    : FLOW_BALANCE_ENDPOINTS;
 
   const selected = requested.map(e => ({ key: e.key, path: e.path, body: {} }));
 
-  const results = await devApiParallel<unknown>(selected, { apiKey });
+  const [flowResults, staticResult] = await Promise.all([
+    devApiParallel<unknown>(selected, { apiKey }),
+    wantStatic ? fetchStaticIpSummary(apiKey) : null,
+  ]);
 
   const summary: Record<string, PerProductResult> = {};
   const errors: Array<{ product: string; error: string }> = [];
@@ -91,7 +148,7 @@ export async function novadaPlanBalanceAll(
   const unavailable_products: string[] = [];
   const active_products: string[] = [];
 
-  for (const r of results) {
+  for (const r of flowResults) {
     if (r.ok) {
       const enriched = enrichBalance(r.data);
       summary[r.key] = { status: "ok", balance: r.data, ...enriched };
@@ -106,13 +163,25 @@ export async function novadaPlanBalanceAll(
     }
   }
 
+  if (staticResult) {
+    summary.static = staticResult;
+    if (staticResult.status === "ok") {
+      active_products.push("static");
+    } else {
+      if (staticResult.unavailable) unavailable_products.push("static");
+      errors.push({ product: "static", error: staticResult.error });
+    }
+  }
+
+  const totalSelected = selected.length + (wantStatic ? 1 : 0);
+
   // Treat unavailable-products as not a "real" error for status-summarising
   // purposes — they're known account state, not transient failures.
   const realErrors = errors.filter(e => !unavailable_products.includes(e.product));
   const overall =
     realErrors.length === 0
       ? "ok"
-      : realErrors.length === selected.length - unavailable_products.length
+      : realErrors.length === totalSelected - unavailable_products.length
         ? "all_failed"
         : "partial";
 
