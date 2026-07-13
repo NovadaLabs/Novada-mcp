@@ -140,6 +140,11 @@ import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
 import { withCredentials, resolveBrowserWs } from "../vendor/novada-mcp/utils/credentials.js";
 // MCP prompts (tool-selection decision trees) — same module the npm server uses (1:1 parity). Static, safe on serverless.
 import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
+// Paid-tier gateway cap exemption (P0, PRD 2026-07-13): meta tools never counted/
+// blocked; over-cap calls pass when the account has real payment history (orders
+// primary, positive balance as OR-fallback). Plan resolution is LAZY — nothing is
+// looked up for keys under the cap.
+import { enforceGatewayCap, resolvePlan } from "./_plan.js";
 
 // Hosted server version = `<vendored npm version>.<server build tag>-hosted`.
 //   • The npm-version part is DERIVED from the vendored package — NEVER hardcoded.
@@ -457,6 +462,13 @@ const TOKEN_VERIFY_CACHE_TTL_S = 90;
 interface CachedTokenVerify {
   valid: boolean;
   verified: boolean;
+  /**
+   * Wallet balance captured from the verification probe (P0 paid-tier fix):
+   * reused as the over-cap OR-fallback signal so the cap boundary doesn't pay
+   * a second /v1/wallet/balance round-trip. Optional — absent on the
+   * format-only fallback path and on older cache entries.
+   */
+  balance?: number;
 }
 
 /** Best-effort cache write — a KV hiccup here must never block the auth decision already made. */
@@ -487,7 +499,7 @@ async function cacheTokenVerify(cacheKey: string, result: CachedTokenVerify): Pr
  *   suppress a real check for the full TTL if the flake clears a moment later.
  * TODO(sub2api): wire to sub2api for per-user plan/quota resolution.
  */
-async function validateToken(token: string, env: Env): Promise<TokenInfo & { verified: boolean }> {
+async function validateToken(token: string, env: Env): Promise<TokenInfo & { verified: boolean; balance?: number }> {
   // Accept any non-empty token that looks like a valid API key (alphanumeric, 16+ chars).
   if (!token || token.length < 16 || !/^[a-zA-Z0-9_\-]+$/.test(token)) {
     return { valid: false, plan: "free", quota_remaining: 0, verified: false };
@@ -505,6 +517,7 @@ async function validateToken(token: string, env: Env): Promise<TokenInfo & { ver
         plan: "free",
         quota_remaining: cached.valid ? monthlyQuota : 0,
         verified: cached.verified,
+        balance: cached.balance,
       };
     }
   } catch {
@@ -512,9 +525,12 @@ async function validateToken(token: string, env: Env): Promise<TokenInfo & { ver
   }
 
   try {
-    await devApiPost("/v1/wallet/balance", {}, { apiKey: token, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS });
-    await cacheTokenVerify(cacheKey, { valid: true, verified: true });
-    return { valid: true, plan: "free", quota_remaining: monthlyQuota, verified: true };
+    const data = await devApiPost("/v1/wallet/balance", {}, { apiKey: token, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS }) as { balance?: unknown };
+    // P0 paid-tier fix: keep the balance the probe already fetched — the over-cap
+    // gate reuses it as the OR-fallback signal instead of a second upstream call.
+    const balance = typeof data?.balance === "number" ? data.balance : undefined;
+    await cacheTokenVerify(cacheKey, { valid: true, verified: true, balance });
+    return { valid: true, plan: "free", quota_remaining: monthlyQuota, verified: true, balance };
   } catch (e) {
     if (e instanceof NovadaError && e.code === NovadaErrorCode.INVALID_API_KEY) {
       // Explicit auth rejection from Novada — this key does not belong to any
@@ -626,28 +642,11 @@ async function refundQuota(tokenHash: string, env: Env): Promise<void> {
   }
 }
 
-// ─── Account graceful-degradation quota refund ───────────────────────────────
-// novadaAccount's withAccountFallback() (npm-package/src/tools/account.ts) catches
-// dev-api business-code failures (e.g. "No approval received") and returns a FRIENDLY,
-// isError:false dashboard-pointer response instead of throwing — so the success path
-// below would otherwise charge quota for a call that returned no real account data.
-// Detect the two stable degradation markers it emits (card format + json format) and
-// refund instead of silently charging. Scoped to the novada_account tool family only —
-// every dispatch name that routes to novadaAccount() in core.ts's dispatch switch
-// shares this exact output shape, so this is the same bug wherever it's reached from.
-const ACCOUNT_DEGRADATION_MARKERS = [
-  "Couldn't read your account via the API right now.", // card format (unavailableCard)
-  "Account data temporarily unavailable.",              // json format (withAccountFallback)
-];
-const ACCOUNT_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "novada_account", "novada_wallet_balance", "novada_wallet_usage_record",
-  "novada_traffic_daily", "novada_plan_balance_all", "novada_capture_logs",
-  "novada_account_summary", "novada_health", "novada_health_all",
-]);
-function isAccountDegradedResponse(toolName: string, text: string): boolean {
-  if (!ACCOUNT_TOOL_NAMES.has(toolName)) return false;
-  return ACCOUNT_DEGRADATION_MARKERS.some((marker) => text.includes(marker));
-}
+// NOTE (P0 paid-tier fix): the old "account graceful-degradation quota refund"
+// block that lived here (charge-then-refund via degradation-marker sniffing) is
+// GONE — the whole novada_account family is CAP_EXEMPT now (see ./_plan.ts
+// CAP_EXEMPT_TOOLS / ACCOUNT_TOOL_NAMES), so those calls are never charged and
+// there is nothing to refund.
 
 // ─── First-run notice (TOW2-242) ─────────────────────────────────────────────
 // One-time onboarding notice, shown EXACTLY ONCE per token on the hosted endpoint.
@@ -781,7 +780,7 @@ function redactHostedSecrets(msg: string): string {
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────
-function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null }): Server {
+function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; balance?: number }): Server {
   const server = new Server(
     { name: "novada", version: HOSTED_VERSION },
     { capabilities: { tools: {}, prompts: {} } },
@@ -844,30 +843,50 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       }
     }
 
-    // Decrement quota BEFORE the call so abusive loops can't burn free credits.
-    const remaining = await decrementQuota(ctx.tokenHash, env, "free");
-    if (remaining < 0) {
+    // Gateway cap gate (P0 paid-tier fix, PRD 2026-07-13). Quota is still charged
+    // BEFORE the call so abusive loops can't burn free credits, but:
+    //   • CAP_EXEMPT_TOOLS (setup/discover/account family) are never counted and
+    //     never blocked — a cap-exhausted key can always self-diagnose.
+    //   • Over the cap, paid accounts pass: orders-derived plan is the primary
+    //     signal (lazily resolved, KV-cached), positive balance the OR-fallback
+    //     (reusing the balance validateToken already fetched when available).
+    //   • Keys under the cap incur ZERO plan lookups (lazy trigger; pre-warm
+    //     fires asynchronously past PREFETCH_THRESHOLD).
+    const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
+    const gate = await enforceGatewayCap({
+      toolName: name,
+      monthlyQuota,
+      ctxBalance: ctx.balance,
+      deps: {
+        decrementQuota: (plan) => decrementQuota(ctx.tokenHash, env, plan),
+        resolvePlan: () => resolvePlan(apiKey, ctx.tokenHash),
+        fetchBalance: async () => {
+          const d = await devApiPost("/v1/wallet/balance", {}, { apiKey, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS }) as { balance?: unknown };
+          return typeof d?.balance === "number" ? d.balance : 0;
+        },
+      },
+    });
+    if (!gate.allowed) {
       return {
         content: [{
           type: "text" as const,
           text: [
             "## Free Gateway Cap Reached",
             "",
-            `This hosted gateway allows ${parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10)} free calls/month per API key (an anti-abuse cap, independent of your Novada balance). That monthly cap is now used up.`,
-            "",
-            "Note: this cap is separate from billing. Every successful call already draws per-call usage from your own Novada balance; the cap just limits calls through the free hosted gateway.",
+            `This hosted gateway allows ${monthlyQuota} free calls/month per API key. Your key has used them up — and has no payment history and no remaining balance, so the paid exemption does not apply.`,
             "",
             "**Options:**",
             "1. The free-gateway cap resets at the start of next month — or run a local MCP server now (no monthly gateway cap): `npx novada-mcp@latest` with the same API key (calls still draw your Novada balance).",
-            "2. Top up your Novada balance at https://dashboard.novada.com/ (covers per-call usage; does not raise the free-gateway cap).",
+            "2. Top up at https://dashboard.novada.com/ — a positive balance takes effect on your NEXT call (balance is checked live when you're over the cap); purchase-history classification may take up to ~6 hours.",
             "3. Need a higher gateway cap? Contact sales@novada.com.",
             "",
-            "agent_instruction: free_gateway_cap_reached | retry_recommended: false | resets: start_of_next_month | alternatives: run local MCP via `npx novada-mcp@latest` (same key, no gateway cap) OR wait for monthly reset. This cap is independent of billing — per-call usage draws your Novada balance; top up at https://dashboard.novada.com/ if balance is low.",
+            "agent_instruction: free_gateway_cap_reached | retry_recommended: false (unless the user just topped up — then retry immediately; live balance check applies) | resets: start_of_next_month | alternatives: run local MCP via `npx novada-mcp@latest` (same key, no gateway cap) OR top up at https://dashboard.novada.com/ (positive balance exempts on the next call; purchase-history classification within ~6h) OR wait for monthly reset.",
           ].join("\n"),
         }],
         isError: true,
       };
     }
+    const remaining = gate.remaining;
 
     // Browser caller-key billing (TOW2-249 CHALLENGE): core.dispatch calls novadaBrowser
     // WITHOUT the apiKey arg, and resolveBrowserWs reads store.browserWs / NOVADA_BROWSER_WS
@@ -899,7 +918,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // Vercel serverless isolates cannot hold that state. Early-exit + refund (NOV-578).
       if (name === "novada_browser_flow") {
         logUsage(env, ctx.token, name, false, Date.now() - started);
-        await refundQuota(ctx.tokenHash, env);
+        if (gate.charged) await refundQuota(ctx.tokenHash, env);
         return {
           content: [{
             type: "text" as const,
@@ -937,18 +956,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
       logUsage(env, ctx.token, name, true, Date.now() - started);
       const sanitized = sanitizeHostedOutput(result);
-      const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
-      // novada_account's graceful-degradation path returns a friendly, isError:false
-      // dashboard-pointer card/json (no real account data) instead of throwing — refund
-      // the quota charged before dispatch so a degraded call doesn't cost the customer.
-      let effectiveRemaining = remaining;
-      if (isAccountDegradedResponse(name, sanitized)) {
-        await refundQuota(ctx.tokenHash, env);
-        effectiveRemaining = Math.min(monthlyQuota, remaining + 1);
-      }
-      // Append quota footer only when quota is running low (< 20% of monthly)
-      const quotaFooter = effectiveRemaining < monthlyQuota * 0.2
-        ? `\n\n---\n⚠ Quota: ${effectiveRemaining}/${monthlyQuota} calls remaining this month.`
+      // Quota footer only when a real free-plan charge happened AND quota is
+      // running low (< 20% of monthly). Cap-exempt tools were never charged and
+      // over-cap-exempted (paid) calls aren't bound by the cap — a scary
+      // "0/1000 remaining" footer would be wrong for both.
+      const quotaFooter = (gate.charged && !gate.overCapAllowed && remaining < monthlyQuota * 0.2)
+        ? `\n\n---\n⚠ Quota: ${remaining}/${monthlyQuota} calls remaining this month.`
         : "";
       // TOW2-242: one-time first-run notice — SEPARATE content block (never
       // concatenated into the result text, which would corrupt JSON outputs),
@@ -958,7 +971,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       if (notice) content.push({ type: "text" as const, text: notice });
       return {
         content,
-        _meta: { quota_remaining: effectiveRemaining },
+        // quota_remaining only for real free-plan charges: exempt tools were
+        // never charged, and an over-cap-exempted (paid) call would report a
+        // misleading 0 — paid accounts aren't bound by the cap.
+        ...(gate.charged && !gate.overCapAllowed ? { _meta: { quota_remaining: remaining } } : {}),
       };
     } catch (error) {
       // Alert-gating (noise reduction): handled transient/user errors record a
@@ -989,7 +1005,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // The tool failed (validation / upstream / transport) → no useful work done, so
       // refund the quota decremented before the call. Failed calls must not burn customer
       // credits (NOV-578). refundQuota is best-effort and swallows its own errors.
-      await refundQuota(ctx.tokenHash, env);
+      // Guarded by gate.charged: cap-exempt tools were never charged — an
+      // unconditional refund here would walk their counter DOWN and mint free calls.
+      if (gate.charged) await refundQuota(ctx.tokenHash, env);
       if (error instanceof ZodError) {
         const issues = error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
         return {
@@ -1337,7 +1355,9 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // Build a fresh server + transport per request (stateless mode). Edge
   // functions are per-request isolates with no shared memory — same pattern
   // as the CF Worker port.
-  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools });
+  // `balance` rides along from the validateToken probe (90s-TTL cached) so the
+  // over-cap OR-fallback usually needs no extra upstream round-trip.
+  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, balance: info.balance });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,
