@@ -86,6 +86,8 @@ import {
   ListToolsRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { ZodError } from "zod";
 import { kv } from "@vercel/kv";
@@ -140,6 +142,10 @@ import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
 import { withCredentials, resolveBrowserWs } from "../vendor/novada-mcp/utils/credentials.js";
 // MCP prompts (tool-selection decision trees) — same module the npm server uses (1:1 parity). Static, safe on serverless.
 import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
+// MCP resources (catalog data: scraper platforms, search engines, countries, etc.)
+// Same module the npm stdio server uses — pure functions, safe on serverless.
+// Resources consume ZERO quota: self-diagnosis/catalog data must never be gated.
+import { listResources, readResource } from "../vendor/novada-mcp/resources/index.js";
 // Paid-tier gateway cap exemption (P0, PRD 2026-07-13): meta tools never counted/
 // blocked; over-cap calls pass when the account has real payment history (orders
 // primary, positive balance as OR-fallback). Plan resolution is LAZY — nothing is
@@ -757,6 +763,41 @@ function sanitizeHostedOutput(text: string): string {
   return result.trim();
 }
 
+// ─── Truthful gateway status footer (ITEM 6 / Phase D) ──────────────────────
+// Every successful tool response carries exactly ONE of three status lines.
+// The lines encode the real access regime for this call — agents and users can
+// always see how quota was consumed (or not) without guessing.
+//
+// gate semantics from enforceGatewayCap:
+//   charged=true  overCapAllowed=false → real free-plan decrement (under cap)
+//   charged=false overCapAllowed=true  → paid account, no cap applies
+//   charged=false overCapAllowed=false → cap-exempt meta tool (never decremented)
+//
+// PRINCIPLE: "A confident wrong value is worse than no field."
+// Per-call cost cannot be computed truthfully (no per-call billing signal from
+// upstream — verified 2026-07-13). Report cost as explicitly unknown, NEVER
+// a number. The dashboard link gives users the authoritative view.
+function buildStatusFooter(
+  gate: { charged: boolean; overCapAllowed: boolean; remaining: number },
+  monthlyQuota: number,
+): string {
+  if (gate.charged && !gate.overCapAllowed) {
+    // Free-plan call that consumed one quota unit.
+    return `\n\n---\n⚠ gateway: ${gate.remaining}/${monthlyQuota} free calls remaining this month · cost: unknown — see dashboard.novada.com`;
+  }
+  if (gate.overCapAllowed) {
+    // Paid account: cap does not apply. No N/M counter — it would be meaningless.
+    return `\n\n---\ngateway: uncapped (paid account) · cost: unknown — see dashboard.novada.com`;
+  }
+  // Cap-exempt meta tool (novada_setup, novada_discover, novada_account family):
+  // the quota counter was never touched.
+  return `\n\n---\ngateway: free call — no quota consumed`;
+}
+
+// Sentinel gate object for the novada_setup path, which exits BEFORE the gate is
+// evaluated. novada_setup is auth-free and always exempt — use the exempt footer.
+const SETUP_GATE = { charged: false, overCapAllowed: false, remaining: 0 };
+
 // ─── Credential / internal-host redaction for the hosted error path (#2-hosted) ──
 // A raw upstream error string (axios message, response body, stack) can carry the
 // customer's credential as URL userinfo (`https://user:pass@host`) or an INTERNAL
@@ -795,7 +836,7 @@ function redactHostedSecrets(msg: string): string {
 function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; balance?: number }): Server {
   const server = new Server(
     { name: "novada", version: HOSTED_VERSION },
-    { capabilities: { tools: {}, prompts: {} } },
+    { capabilities: { tools: {}, prompts: {}, resources: {} } },
   );
 
   const isHosted = !!(process.env.VERCEL || process.env.VERCEL_ENV);
@@ -848,7 +889,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         // Pass the caller's token so setup validates the CUSTOMER's key (not the server env fallback).
         const result = await novadaSetup(validateSetupParams(argsObj), ctx.token);
         logUsage(env, ctx.token, name, true, Date.now() - started);
-        return { content: [{ type: "text" as const, text: result }] };
+        // SETUP_GATE is the exempt sentinel — novada_setup exits before the real gate is evaluated.
+        // monthlyQuota is declared below (after this early-return block) — inline it here.
+        const setupMonthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
+        const setupFooter = buildStatusFooter(SETUP_GATE, setupMonthlyQuota);
+        return { content: [{ type: "text" as const, text: result + setupFooter }] };
       } catch (e) {
         logUsage(env, ctx.token, name, false, Date.now() - started);
         return { content: [{ type: "text" as const, text: String(e) }], isError: true };
@@ -948,8 +993,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
         const sanitized = sanitizeHostedOutput(result);
+        const discoverFooter = buildStatusFooter(gate, monthlyQuota);
         // TOW2-242: first-run notice on this successful path too (separate block).
-        const discoverContent = [{ type: "text" as const, text: sanitized }];
+        const discoverContent = [{ type: "text" as const, text: sanitized + discoverFooter }];
         const discoverNotice = await maybeGetFirstRunNoticeHosted(ctx.token);
         if (discoverNotice) discoverContent.push({ type: "text" as const, text: discoverNotice });
         return { content: discoverContent };
@@ -968,17 +1014,17 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
       logUsage(env, ctx.token, name, true, Date.now() - started);
       const sanitized = sanitizeHostedOutput(result);
-      // Quota footer only when a real free-plan charge happened AND quota is
-      // running low (< 20% of monthly). Cap-exempt tools were never charged and
-      // over-cap-exempted (paid) calls aren't bound by the cap — a scary
-      // "0/1000 remaining" footer would be wrong for both.
-      const quotaFooter = (gate.charged && !gate.overCapAllowed && remaining < monthlyQuota * 0.2)
-        ? `\n\n---\n⚠ Quota: ${remaining}/${monthlyQuota} calls remaining this month.`
-        : "";
+      // Truthful status footer — every successful response carries exactly ONE line:
+      //   free-plan under cap → "⚠ gateway: N/M free calls remaining this month · cost: unknown…"
+      //   paid/uncapped        → "gateway: uncapped (paid account) · cost: unknown…"
+      //   cap-exempt meta tool → "gateway: free call — no quota consumed"
+      // The 20%-threshold suppression is gone: the footer is always present so agents
+      // and users always see their access regime (cost-visibility invariant, Phase D).
+      const statusFooter = buildStatusFooter(gate, monthlyQuota);
       // TOW2-242: one-time first-run notice — SEPARATE content block (never
       // concatenated into the result text, which would corrupt JSON outputs),
       // ONLY on this successful path. Fails quiet → never throws.
-      const content = [{ type: "text" as const, text: sanitized + quotaFooter }];
+      const content = [{ type: "text" as const, text: sanitized + statusFooter }];
       const notice = await maybeGetFirstRunNoticeHosted(ctx.token);
       if (notice) content.push({ type: "text" as const, text: notice });
       return {
@@ -1089,6 +1135,29 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     const { name, arguments: args } = request.params;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return getPrompt(name, (args as Record<string, string>) || {}) as any;
+  });
+
+  // MCP resources — zero quota (catalog/self-diagnosis data must never be gated).
+  // Reuses the vendored listResources / readResource implementations from the npm
+  // package — same content the stdio server exposes, 1:1 parity.
+  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return listResources() as any;
+  });
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const { uri } = request.params;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return readResource(uri) as any;
+    } catch (err) {
+      // Convert "Unknown resource URI" from readResource into a clean JSON-RPC error
+      // instead of letting it propagate as an unhandled exception (MCP SDK would
+      // surface a -32603 Internal Error; a -32602 Invalid Params is more accurate).
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        error: { code: -32602, message: msg },
+      };
+    }
   });
 
   return server;
