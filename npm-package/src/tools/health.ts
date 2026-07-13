@@ -5,8 +5,11 @@
  * + plan balances) via the same billing API endpoints already used by
  * novada_account_summary / novada_plan_balance_all / novada_wallet_balance.
  *
- * No synthetic product probes. No credit cost. To confirm a specific tool works
- * end-to-end, call that tool directly.
+ * DEFAULT (no probe): entitlement/provisioning status only — does NOT verify live
+ * render capability. No credit cost. Pass probe:true for a real render test.
+ *
+ * probe:true: performs ONE minimal real render call billed to your account against
+ * https://example.com via the Novada Web Unblocker. Reports the OBSERVED result.
  */
 import { novadaWalletBalance } from "./wallet_balance.js";
 import { novadaPlanBalanceAll } from "./plan_balance_all.js";
@@ -16,6 +19,31 @@ import {
   getProxyCredentials,
   getBrowserWs,
 } from "../utils/credentials.js";
+import { fetchWithRender } from "../utils/http.js";
+
+// ─── Render probe (opt-in, billed) ───────────────────────────────────────────
+
+/**
+ * Performs ONE minimal real render call through the caller's Novada key against
+ * https://example.com via the Web Unblocker. Exported so unit tests can mock it
+ * via vi.mock("../../src/utils/http.js").
+ *
+ * This function MUST NOT be called unless probe:true is explicitly passed — it
+ * is billed to the caller's account.
+ */
+export async function _performRenderProbe(apiKey: string): Promise<{ ok: boolean; detail: string }> {
+  try {
+    const response = await fetchWithRender("https://example.com", apiKey, {
+      tool: "health_probe" as never,
+      timeout: 10000,
+    });
+    const ok = response.status >= 200 && response.status < 300;
+    return { ok, detail: `HTTP ${response.status}` };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, detail: msg.slice(0, 120) };
+  }
+}
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
@@ -121,10 +149,12 @@ async function browserStatus(apiKey: string): Promise<ProductStatus> {
  *
  * mode="quick": wallet balance + proxy/browser entitlement only (fast, no plan details).
  * mode="full" : quick + per-product proxy plan balances with expiry dates.
+ * probe       : when true, performs ONE real render call (billed) to verify live
+ *               render capability. Defaults to false (entitlement-only, no billing).
  *
  * novada_health_all is an alias for novada_health(mode="full").
  */
-export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "quick"): Promise<string> {
+export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "quick", probe = false): Promise<string> {
   const maskedKey = apiKey.length >= 4 ? `****${apiKey.slice(-4)}` : "****";
 
   // ── 1. Fetch wallet and (if full) plan balances in parallel ──────────────
@@ -184,15 +214,21 @@ export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "qui
     browser,
   ];
 
-  // ── 4. Format markdown output ──────────────────────────────────────────────
+  // ── 4a. Optional render probe (probe:true only — billed) ─────────────────
+  let probeResult: { ok: boolean; detail: string } | null = null;
+  if (probe) {
+    probeResult = await _performRenderProbe(apiKey);
+  }
+
+  // ── 4b. Format markdown output ────────────────────────────────────────────
   const lines: string[] = [
     "## Novada API — Account Status",
     "",
     `api_key: ${maskedKey}`,
     `checked: ${new Date().toISOString()}`,
     "",
-    "> Reports account entitlement + balance (authoritative, no synthetic probes, no credit cost).",
-    "> To confirm a specific tool works end-to-end, call that tool directly.",
+    "> ⚠️ Entitlement/provisioning status only — does NOT verify live render capability.",
+    "> Pass `probe:true` for a real test (billed 1 render call to your account).",
     "",
     "| Product | Status | Notes |",
     "|---------|--------|-------|",
@@ -238,6 +274,24 @@ export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "qui
         const expiresAt = val.expires_at ?? val.expires_at_human ?? "—";
         lines.push(`| ${label} | ${planStatus} | ${balanceMb} | ${expiresAt} |`);
       }
+    }
+  }
+
+  // ── 4c. Render probe results (probe:true only) ────────────────────────────
+  if (probeResult !== null) {
+    lines.push("");
+    lines.push("### Render Probe");
+    lines.push("");
+    lines.push(`> ⚠️ probe performed 1 real render call billed to your account`);
+    lines.push("");
+    lines.push(`render_probe:`);
+    lines.push(`  attempted: true`);
+    lines.push(`  ok: ${probeResult.ok}`);
+    lines.push(`  detail: ${probeResult.detail}`);
+    if (!probeResult.ok) {
+      lines.push("");
+      lines.push(`> ❌ Render probe FAILED — do not assume live render capability is working.`);
+      lines.push(`> Detail: ${probeResult.detail}`);
     }
   }
 

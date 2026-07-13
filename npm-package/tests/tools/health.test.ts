@@ -227,11 +227,11 @@ describe("novadaHealth (facts-based)", () => {
     expect(result).toContain("|---------|--------|-------|");
   });
 
-  it("includes authoritative-data disclaimer", async () => {
+  it("includes authoritative-data disclaimer (entitlement-only, probe:true for real test)", async () => {
     const result = await novadaHealth(API_KEY);
 
-    expect(result).toContain("no synthetic probes");
-    expect(result).toContain("no credit cost");
+    expect(result).toContain("does NOT verify live render capability");
+    expect(result).toContain("probe:true");
   });
 
   it("wallet error → error status for pay-per-use row", async () => {
