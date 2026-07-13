@@ -192,3 +192,64 @@ test("mcp.ts: _meta.quota_remaining semantics unchanged (present only for charge
     "_meta.quota_remaining must only be emitted for real free-plan charges",
   );
 });
+
+// ─── FIX 1: ReadResourceRequestSchema handler must THROW, not return, errors ─
+//
+// Background: in the MCP SDK, a handler that RETURNS a value produces a
+// JSON-RPC "result" response. Only a THROWN value (or McpError) produces a
+// JSON-RPC "error" response that clients can distinguish from success.
+// The old code returned `{ error: { code: -32602, message } }` which was
+// serialised as a successful result with an error-shaped body.
+
+test("mcp.ts ReadResourceRequestSchema handler: throws McpError for unknown URI, not returns", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  // The handler must contain `throw new McpError(ErrorCode.InvalidParams`
+  assert.ok(
+    src.includes("throw new McpError(ErrorCode.InvalidParams"),
+    "ReadResourceRequestSchema catch block must throw new McpError(ErrorCode.InvalidParams, ...) — not return an error-shaped object",
+  );
+});
+
+test("mcp.ts ReadResourceRequestSchema handler: old 'return { error:' form is absent", () => {
+  // Extract the ReadResource handler section from the source file.
+  const src = readFileSync(MCP_TS, "utf8");
+  const startIdx = src.indexOf("server.setRequestHandler(ReadResourceRequestSchema");
+  assert.ok(startIdx !== -1, "ReadResourceRequestSchema handler must be present in mcp.ts");
+  // Scan forward to find the closing });
+  const handlerSection = src.slice(startIdx, startIdx + 600);
+  assert.doesNotMatch(
+    handlerSection,
+    /return\s*\{\s*\n?\s*error\s*:/,
+    "ReadResourceRequestSchema catch block must NOT return an error-shaped object — it must throw McpError",
+  );
+});
+
+// Unit-level handler fence: import vendor readResource + SDK McpError; verify
+// that wrapping readResource(unknownUri) with the new throw-pattern produces a
+// McpError (code -32602), not a plain return value.
+const { McpError, ErrorCode } = await import("@modelcontextprotocol/sdk/types.js");
+
+test("ReadResource handler behaviour: unknown URI throws McpError with InvalidParams code", async () => {
+  const { readResource } = await import(VENDOR_RESOURCES);
+
+  // Simulate the registered handler's try/catch logic (mirrors mcp.ts post-fix).
+  async function simulateHandler(uri) {
+    try {
+      return readResource(uri);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new McpError(ErrorCode.InvalidParams, msg);
+    }
+  }
+
+  // Must throw (not return) for an unknown URI.
+  await assert.rejects(
+    () => simulateHandler("novada://does-not-exist"),
+    (err) => {
+      assert.ok(err instanceof McpError,                  "thrown error must be McpError");
+      assert.strictEqual(err.code, ErrorCode.InvalidParams, "error code must be -32602 (InvalidParams)");
+      assert.ok(err.message.includes("Unknown resource URI"), "message must include 'Unknown resource URI'");
+      return true;
+    },
+  );
+});

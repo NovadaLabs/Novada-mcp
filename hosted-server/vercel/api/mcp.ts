@@ -88,6 +88,8 @@ import {
   GetPromptRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  McpError,
+  ErrorCode,
 } from "@modelcontextprotocol/sdk/types.js";
 import { ZodError } from "zod";
 import { kv } from "@vercel/kv";
@@ -1150,13 +1152,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return readResource(uri) as any;
     } catch (err) {
-      // Convert "Unknown resource URI" from readResource into a clean JSON-RPC error
-      // instead of letting it propagate as an unhandled exception (MCP SDK would
-      // surface a -32603 Internal Error; a -32602 Invalid Params is more accurate).
+      // Convert "Unknown resource URI" from readResource into a JSON-RPC error by
+      // THROWING McpError — returning an error-shaped object would be serialised as a
+      // successful result.  The MCP SDK only produces a JSON-RPC error response when
+      // the handler throws; -32602 InvalidParams is accurate for an unknown URI.
       const msg = err instanceof Error ? err.message : String(err);
-      return {
-        error: { code: -32602, message: msg },
-      };
+      throw new McpError(ErrorCode.InvalidParams, msg);
     }
   });
 

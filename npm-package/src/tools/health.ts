@@ -21,6 +21,42 @@ import {
 } from "../utils/credentials.js";
 import { fetchWithRender } from "../utils/http.js";
 
+// ─── Shared prose helpers (re-used by health.ts output and core.ts dispatch) ─
+
+/**
+ * Disclaimer appended to every health output (default + probe paths).
+ * Exported so the dispatch layer in core.ts can append it to novadaAccount
+ * output without duplicating the wording.
+ */
+export const HEALTH_PROBE_DISCLAIMER =
+  "> ⚠️ Entitlement/provisioning status only — does NOT verify live render capability.\n> Pass `probe:true` for a real test (billed 1 render call to your account).";
+
+/**
+ * Format the render probe section appended when probe:true.
+ * Exported so core.ts can reuse the exact same wording.
+ */
+export function formatProbeSection(result: { ok: boolean; detail: string }): string {
+  const lines = [
+    "",
+    "### Render Probe",
+    "",
+    "> ⚠️ probe performed 1 real render call billed to your account",
+    "",
+    "render_probe:",
+    "  attempted: true",
+    `  ok: ${result.ok}`,
+    `  detail: ${result.detail}`,
+  ];
+  if (!result.ok) {
+    lines.push(
+      "",
+      "> ❌ Render probe FAILED — do not assume live render capability is working.",
+      `> Detail: ${result.detail}`,
+    );
+  }
+  return lines.join("\n");
+}
+
 // ─── Render probe (opt-in, billed) ───────────────────────────────────────────
 
 /**
@@ -227,8 +263,8 @@ export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "qui
     `api_key: ${maskedKey}`,
     `checked: ${new Date().toISOString()}`,
     "",
-    "> ⚠️ Entitlement/provisioning status only — does NOT verify live render capability.",
-    "> Pass `probe:true` for a real test (billed 1 render call to your account).",
+    // Reuse shared disclaimer constant — same wording as core.ts dispatch path.
+    ...HEALTH_PROBE_DISCLAIMER.split("\n"),
     "",
     "| Product | Status | Notes |",
     "|---------|--------|-------|",
@@ -279,20 +315,8 @@ export async function novadaHealth(apiKey: string, mode: "quick" | "full" = "qui
 
   // ── 4c. Render probe results (probe:true only) ────────────────────────────
   if (probeResult !== null) {
-    lines.push("");
-    lines.push("### Render Probe");
-    lines.push("");
-    lines.push(`> ⚠️ probe performed 1 real render call billed to your account`);
-    lines.push("");
-    lines.push(`render_probe:`);
-    lines.push(`  attempted: true`);
-    lines.push(`  ok: ${probeResult.ok}`);
-    lines.push(`  detail: ${probeResult.detail}`);
-    if (!probeResult.ok) {
-      lines.push("");
-      lines.push(`> ❌ Render probe FAILED — do not assume live render capability is working.`);
-      lines.push(`> Detail: ${probeResult.detail}`);
-    }
+    // Reuse shared formatProbeSection — same wording as core.ts dispatch path.
+    lines.push(...formatProbeSection(probeResult).split("\n"));
   }
 
   // ── 5. Summary + headline ──────────────────────────────────────────────────
