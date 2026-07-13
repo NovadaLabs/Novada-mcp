@@ -158,7 +158,7 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
 
   const warnings: string[] = [];
   if (params.type === "isp" && params.country) {
-    warnings.push(`country param is accepted but silently ignored for type="isp" — ISP proxies do not support country targeting on this product (received: "${params.country}")`);
+    warnings.push(`country accepted but not applied on this endpoint — do not rely on geo-routing for type="isp" (received: "${params.country}")`);
   }
   const warningsBlock = warnings.length > 0 ? [`## Warnings`, JSON.stringify(warnings), ``] : [];
 
