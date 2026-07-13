@@ -17,7 +17,8 @@
  * MCP schema for every dispatchable tool (visible + hidden).
  */
 import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateDiscoverParams, validateBrowserFlowParams, REGISTERED_TOOL_NAMES, } from "./tools/index.js";
-import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, } from "./tools/types.js";
+import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, validateHealthParams, } from "./tools/types.js";
+import { _performRenderProbe, HEALTH_PROBE_DISCLAIMER, formatProbeSection, } from "./tools/health.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
 import { BrowserFlowParamsSchema } from "./tools/browser_flow.js";
 import { MonitorParamsSchema } from "./tools/monitor.js";
@@ -576,13 +577,18 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_browser":
             return novadaBrowser(validateBrowserParams(args));
         // novada_health and novada_health_all are hidden aliases → novada_account(section="summary")
-        case "novada_health": {
-            // mode param removed from account (was a no-op) — always routes to full summary
-            return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
+        // plus an honest disclaimer and optional render probe (probe:true, billed).
+        case "novada_health":
+        case "novada_health_all": {
+            const { probe } = validateHealthParams(args);
+            const base = await novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
+            const disclaimer = "\n\n" + HEALTH_PROBE_DISCLAIMER;
+            if (!probe)
+                return base + disclaimer;
+            // probe:true — perform ONE real render call billed to the caller's account.
+            const probeResult = await _performRenderProbe(apiKey ?? "");
+            return base + disclaimer + formatProbeSection(probeResult);
         }
-        case "novada_health_all":
-            // Alias: novada_health_all → novada_account(section="summary") for back-compat
-            return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
         case "novada_discover":
             // Pass the active-tool subset so the catalog reflects only what's usable in this
             // session (NOVADA_TOOLS/NOVADA_GROUPS restrictions). Undefined → full registry.

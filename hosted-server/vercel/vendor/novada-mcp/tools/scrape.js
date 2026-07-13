@@ -252,7 +252,10 @@ function flattenRecord(obj, prefix = "", depth = 0) {
             }
         }
         else {
-            result[key] = String(v ?? "");
+            // ITEM 3: surface null as the string "null" so toon/csv/markdown output
+            // distinguishes "price unknown" from "" (empty string). undefined fields
+            // keep their existing "" representation.
+            result[key] = v === null ? "null" : String(v ?? "");
         }
     }
     return result;
@@ -412,6 +415,40 @@ export function normalizeProductRecord(raw) {
             out.description = stripDescriptionChrome(raw.description);
             out._description_source = "stripped";
         }
+    }
+    // ── Null out lying-zero price fields (ITEM 3) ─────────────────────────────
+    // Amazon and similar scrapers return 0 or "" for initial_price and
+    // buybox_prices.{final_price,unit_price} when the upstream field is absent.
+    // Principle: "unknown numeric → null, never 0 or ''". On these platforms a
+    // price of exactly $0 is not semantically possible — 0 always means absent.
+    //
+    // initial_price: 0 / "" → null (was-zero = not populated by upstream)
+    if ("initial_price" in raw) {
+        const ip = raw.initial_price;
+        if (ip !== null && ip !== undefined && toPositiveNumber(ip) === null) {
+            out.initial_price = null;
+        }
+    }
+    // buybox_prices: reconcile final_price when 0; null unit_price when "" / 0.
+    const outBuyboxRaw = (raw.buybox_prices &&
+        typeof raw.buybox_prices === "object" &&
+        !Array.isArray(raw.buybox_prices)) ? raw.buybox_prices : null;
+    if (outBuyboxRaw) {
+        const newBuybox = { ...outBuyboxRaw };
+        // buybox_prices.final_price: 0/empty → reconcile from record's derived
+        // listing price (same precedence: final_price > initial_price > variations);
+        // else null. The derivePrice call skips the 0 buybox value automatically
+        // because toPositiveNumber(0) === null.
+        if (toPositiveNumber(outBuyboxRaw.final_price) === null) {
+            const trustworthy = derivePrice(raw);
+            newBuybox.final_price = trustworthy !== null ? trustworthy : null;
+        }
+        // buybox_prices.unit_price: "" / 0 → null (absent signal, not a real price)
+        const rawUnit = outBuyboxRaw.unit_price;
+        if (rawUnit !== null && rawUnit !== undefined && toPositiveNumber(rawUnit) === null) {
+            newBuybox.unit_price = null;
+        }
+        out.buybox_prices = newBuybox;
     }
     return out;
 }
@@ -1059,24 +1096,34 @@ export async function novadaScrape(params, apiKey) {
         return output;
     }
     catch (err) {
-        // H5: use typed NovadaError.code instead of brittle string matching
+        // ITEM 5 — split upstream 11006 into two distinct error markers:
+        //   • catalogEntry !== undefined → operation IS in the active catalog;
+        //     11006 means the Scraper API product is not activated on this account.
+        //     detail: "not_activated"  message: directs to dashboard.novada.com
+        //   • catalogEntry === undefined → operation NOT in the active catalog;
+        //     11006 means an unknown/unsupported operation or inactive platform.
+        //     detail: "unknown_operation"  message: names valid ops when available
+        // NOTE: no custom agent_instruction added here (house rule — reserved for
+        // the 5 universal API-key errors). Structured message + detail is enough.
+        // H5 / H-7: Re-throw as NovadaError so index.ts sets isError: true.
         if (err instanceof NovadaError && err.code === NovadaErrorCode.PRODUCT_UNAVAILABLE) {
-            // Surface any known canonical aliases for the operation the agent tried, so the
-            // agent can self-correct a near-miss op ID without a second round-trip. Most 11006
-            // errors are malformed/non-canonical op IDs, NOT a deactivated Scraper API.
-            // H-7: Re-throw as NovadaError so index.ts sets isError: true
-            const aliasHint = hasAlias
-                ? `The operation '${params.operation}' was auto-resolved to '${OPERATION_ALIASES[params.operation]}' but still rejected. The canonical ID itself may be wrong for this platform.`
-                : `The operation '${operation}' was rejected. Operation IDs are exact and cannot be guessed.`;
-            throw new NovadaError({
-                code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
-                message: `Scraper code 11006 for '${operation}' on '${platform}'. ${aliasHint}`,
-                agent_instruction: `${aliasHint} Read novada://scraper-platforms to confirm the exact operation ID. ` +
-                    `Alternatives: novada_extract (general pages), novada_extract with render="render" (bot-protected), novada_crawl (multi-page). ` +
-                    `Only treat as an activation issue if the operation ID is confirmed correct. Do not retry with the same ID.`,
-                retryable: false,
-                detail: hasAlias ? `alias:${params.operation}→${OPERATION_ALIASES[params.operation]}` : "code 11006",
-            });
+            if (catalogEntry !== undefined) {
+                // Op IS in the catalog — the account just hasn't activated the product.
+                throw makeNovadaError(NovadaErrorCode.PRODUCT_UNAVAILABLE, `not_activated: Scraper operation '${operation}' on '${platform}' is in the active catalog ` +
+                    `but the Scraper API product is not activated on this account. ` +
+                    `Activate at https://dashboard.novada.com/overview/products/ then retry.`, "not_activated");
+            }
+            else {
+                // Op NOT in catalog (inactive platform / roadmap shell).
+                // Give the agent the nearest valid operations so it can self-correct.
+                const platformOps = Object.prototype.hasOwnProperty.call(PLATFORM_OPERATIONS, platform)
+                    ? Object.keys(PLATFORM_OPERATIONS[platform]).join(", ")
+                    : "";
+                const hint = platformOps
+                    ? `Valid operations for ${platform}: ${platformOps}`
+                    : `Platform '${platform}' is not in the 16 active catalog platforms. Read novada://scraper-platforms for supported platforms.`;
+                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `unknown_operation: '${operation}' for platform '${platform}' is not a recognized scraper operation. ${hint}`, "unknown_operation");
+            }
         }
         // H-7: Re-throw 11008 as NovadaError so index.ts sets isError: true
         if (err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_PARAMS && err.detail === "code 11008") {

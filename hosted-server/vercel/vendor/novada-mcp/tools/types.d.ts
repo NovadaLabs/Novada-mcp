@@ -156,6 +156,7 @@ export declare const HealthParamsSchema: z.ZodObject<{
         quick: "quick";
         full: "full";
     }>>;
+    probe: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
 }, z.core.$strip>;
 export type HealthParams = z.infer<typeof HealthParamsSchema>;
 export declare function validateHealthParams(args: Record<string, unknown> | undefined): HealthParams;

@@ -279,6 +279,8 @@ export const VerifyParamsSchema = z.object({
 export const HealthParamsSchema = z.object({
     mode: z.enum(["quick", "full"]).default("quick")
         .describe("'quick' (default): wallet balance + proxy/browser entitlement from account data (no synthetic probes, no credit cost). 'full': quick + per-product proxy plan balances with expiry (= novada_health_all). Reports account state, not live tool status — to confirm a tool works, call it."),
+    probe: z.boolean().optional().default(false)
+        .describe("true = perform ONE real minimal render through your key to verify live capability (BILLS your account); default false = entitlement status only."),
 });
 export function validateHealthParams(args) {
     return HealthParamsSchema.parse(args ?? {});

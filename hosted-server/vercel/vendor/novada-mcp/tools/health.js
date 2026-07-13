@@ -5,12 +5,67 @@
  * + plan balances) via the same billing API endpoints already used by
  * novada_account_summary / novada_plan_balance_all / novada_wallet_balance.
  *
- * No synthetic product probes. No credit cost. To confirm a specific tool works
- * end-to-end, call that tool directly.
+ * DEFAULT (no probe): entitlement/provisioning status only — does NOT verify live
+ * render capability. No credit cost. Pass probe:true for a real render test.
+ *
+ * probe:true: performs ONE minimal real render call billed to your account against
+ * https://example.com via the Novada Web Unblocker. Reports the OBSERVED result.
  */
 import { novadaWalletBalance } from "./wallet_balance.js";
 import { novadaPlanBalanceAll } from "./plan_balance_all.js";
 import { fetchProxySubAccountCredentials, fetchBrowserSubAccountCredentials, getProxyCredentials, getBrowserWs, } from "../utils/credentials.js";
+import { fetchWithRender } from "../utils/http.js";
+// ─── Shared prose helpers (re-used by health.ts output and core.ts dispatch) ─
+/**
+ * Disclaimer appended to every health output (default + probe paths).
+ * Exported so the dispatch layer in core.ts can append it to novadaAccount
+ * output without duplicating the wording.
+ */
+export const HEALTH_PROBE_DISCLAIMER = "> ⚠️ Entitlement/provisioning status only — does NOT verify live render capability.\n> Pass `probe:true` for a real test (billed 1 render call to your account).";
+/**
+ * Format the render probe section appended when probe:true.
+ * Exported so core.ts can reuse the exact same wording.
+ */
+export function formatProbeSection(result) {
+    const lines = [
+        "",
+        "### Render Probe",
+        "",
+        "> ⚠️ probe performed 1 real render call billed to your account",
+        "",
+        "render_probe:",
+        "  attempted: true",
+        `  ok: ${result.ok}`,
+        `  detail: ${result.detail}`,
+    ];
+    if (!result.ok) {
+        lines.push("", "> ❌ Render probe FAILED — do not assume live render capability is working.", `> Detail: ${result.detail}`);
+    }
+    return lines.join("\n");
+}
+// ─── Render probe (opt-in, billed) ───────────────────────────────────────────
+/**
+ * Performs ONE minimal real render call through the caller's Novada key against
+ * https://example.com via the Web Unblocker. Exported so unit tests can mock it
+ * via vi.mock("../../src/utils/http.js").
+ *
+ * This function MUST NOT be called unless probe:true is explicitly passed — it
+ * is billed to the caller's account.
+ */
+export async function _performRenderProbe(apiKey) {
+    try {
+        const response = await fetchWithRender("https://example.com", apiKey, {
+            tool: "health_probe",
+            timeout: 10000,
+        });
+        const ok = response.status >= 200 && response.status < 300;
+        return { ok, detail: `HTTP ${response.status}` };
+    }
+    catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { ok: false, detail: msg.slice(0, 120) };
+    }
+}
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function statusIcon(s) {
     switch (s) {
@@ -102,10 +157,12 @@ async function browserStatus(apiKey) {
  *
  * mode="quick": wallet balance + proxy/browser entitlement only (fast, no plan details).
  * mode="full" : quick + per-product proxy plan balances with expiry dates.
+ * probe       : when true, performs ONE real render call (billed) to verify live
+ *               render capability. Defaults to false (entitlement-only, no billing).
  *
  * novada_health_all is an alias for novada_health(mode="full").
  */
-export async function novadaHealth(apiKey, mode = "quick") {
+export async function novadaHealth(apiKey, mode = "quick", probe = false) {
     const maskedKey = apiKey.length >= 4 ? `****${apiKey.slice(-4)}` : "****";
     // ── 1. Fetch wallet and (if full) plan balances in parallel ──────────────
     const walletPromise = novadaWalletBalance({}, apiKey)
@@ -153,15 +210,20 @@ export async function novadaHealth(apiKey, mode = "quick") {
         proxy,
         browser,
     ];
-    // ── 4. Format markdown output ──────────────────────────────────────────────
+    // ── 4a. Optional render probe (probe:true only — billed) ─────────────────
+    let probeResult = null;
+    if (probe) {
+        probeResult = await _performRenderProbe(apiKey);
+    }
+    // ── 4b. Format markdown output ────────────────────────────────────────────
     const lines = [
         "## Novada API — Account Status",
         "",
         `api_key: ${maskedKey}`,
         `checked: ${new Date().toISOString()}`,
         "",
-        "> Reports account entitlement + balance (authoritative, no synthetic probes, no credit cost).",
-        "> To confirm a specific tool works end-to-end, call that tool directly.",
+        // Reuse shared disclaimer constant — same wording as core.ts dispatch path.
+        ...HEALTH_PROBE_DISCLAIMER.split("\n"),
         "",
         "| Product | Status | Notes |",
         "|---------|--------|-------|",
@@ -206,6 +268,11 @@ export async function novadaHealth(apiKey, mode = "quick") {
                 lines.push(`| ${label} | ${planStatus} | ${balanceMb} | ${expiresAt} |`);
             }
         }
+    }
+    // ── 4c. Render probe results (probe:true only) ────────────────────────────
+    if (probeResult !== null) {
+        // Reuse shared formatProbeSection — same wording as core.ts dispatch path.
+        lines.push(...formatProbeSection(probeResult).split("\n"));
     }
     // ── 5. Summary + headline ──────────────────────────────────────────────────
     const availableCount = allProducts.filter(p => p.status === "available").length;
