@@ -973,7 +973,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       if (notice) content.push({ type: "text" as const, text: notice });
       return {
         content,
-        ...(gate.charged ? { _meta: { quota_remaining: remaining } } : {}),
+        // quota_remaining only for real free-plan charges: exempt tools were
+        // never charged, and an over-cap-exempted (paid) call would report a
+        // misleading 0 — paid accounts aren't bound by the cap.
+        ...(gate.charged && !gate.overCapAllowed ? { _meta: { quota_remaining: remaining } } : {}),
       };
     } catch (error) {
       // Alert-gating (noise reduction): handled transient/user errors record a

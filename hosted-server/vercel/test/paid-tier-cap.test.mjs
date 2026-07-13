@@ -174,6 +174,18 @@ test("resolvePlan: fresh tokenHash cache hit → returns cached, no upstream cal
   assert.equal(upstreamCalls, 0, "cache hit must not call upstream");
 });
 
+test("resolvePlan: bare-string cache value → treated as cache miss (no freshness deadline), upstream re-resolves", async () => {
+  // A hand-set bare "pro" (e.g. via KV tooling) carries no exp — honoring it
+  // would make it permanently fresh. It must be REJECTED and re-resolved.
+  const kv = makeMockKv({ [`${TH}:plan`]: "pro" });
+  let upstreamCalls = 0;
+  const plan = await resolvePlan("key-x", TH, {
+    ...kv, fetchUsageRecord: async () => { upstreamCalls++; return FREE_PAYLOAD; }, now: () => NOW,
+  });
+  assert.equal(upstreamCalls, 1, "bare-string cache must NOT satisfy the lookup — upstream must run");
+  assert.equal(plan, "free", "the fresh upstream classification wins over the bare-string value");
+});
+
 test("resolvePlan: uncached + paid payload → pro, dual-key KV write (Amendment 2), pro fresh window = 30d", async () => {
   const kv = makeMockKv();
   const plan = await resolvePlan("key-x", TH, {
@@ -413,4 +425,15 @@ test("mcp.ts: plan resolution is NOT invoked at token validation (lazy trigger o
   const validateTokenBody = src.slice(src.indexOf("async function validateToken"), src.indexOf("async function rateLimitExceeded"));
   assert.ok(!validateTokenBody.includes("resolvePlan"),
     "validateToken must not call resolvePlan — plan resolution is lazy at cap-crossing");
+});
+
+test("mcp.ts: _meta.quota_remaining is suppressed for over-cap (paid-exempted) calls", () => {
+  // An over-cap pro call re-increments past the cap, so `remaining` computes to 0 —
+  // emitting quota_remaining: 0 would tell a PAID (cap-exempt) user they're out of
+  // quota. The _meta spread must be double-guarded: charged AND NOT overCapAllowed.
+  const src = readFileSync(MCP_TS, "utf8");
+  assert.match(src, /gate\.charged && !gate\.overCapAllowed \? \{ _meta: \{ quota_remaining: remaining \} \} : \{\}/,
+    "_meta.quota_remaining must be emitted only for real free-plan charges (not exempt, not over-cap-allowed)");
+  assert.doesNotMatch(src, /gate\.charged \? \{ _meta/,
+    "the single-guarded _meta spread (leaks quota_remaining: 0 to pro users) must be gone");
 });

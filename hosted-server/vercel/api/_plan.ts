@@ -186,9 +186,13 @@ interface CachedPlan {
   fresh: boolean;
 }
 
-/** Parse a cached plan value: {plan, exp} object (canonical) or a bare plan string (fresh). */
+/**
+ * Parse a cached plan value — ONLY the canonical {plan, exp} object shape.
+ * A bare "free"/"pro" string (e.g. hand-set via KV tooling) is REJECTED as a
+ * cache miss: it carries no freshness deadline, so honoring it would make it
+ * permanently fresh and permanently skip upstream re-resolution.
+ */
 function parseCachedPlan(raw: unknown, nowMs: number): CachedPlan | null {
-  if (raw === "free" || raw === "pro") return { plan: raw, fresh: true };
   if (raw && typeof raw === "object") {
     const { plan, exp } = raw as { plan?: unknown; exp?: unknown };
     if ((plan === "free" || plan === "pro") && typeof exp === "number") {
