@@ -13,7 +13,7 @@ Tagline:     One server. Every web data tool. Zero install.
 Description: Hosted MCP server giving AI agents instant access to Novada's
              web data stack: search, scrape, extract, crawl, map, headless
              browser, source verification, deep research, and 6 proxy types.
-             5000 calls/month free.
+             1000 calls/month free (paid accounts uncapped).
 GitHub:      https://github.com/NovadaLabs/novada-mcp
 Install:     Add `https://mcp.novada.com/mcp?token=YOUR_KEY` to your MCP client.
 Categories:  Web Scraping, Search, Proxy, Data Extraction, Research
@@ -92,7 +92,7 @@ Update `Status` to ☑ live and fill `Submitted` (YYYY-MM-DD) once each listing 
 
 - URL: https://github.com/punkpeye/awesome-mcp-servers
 - Method: Fork → add an entry under the right category (likely **Browser Automation** + **Search**) → PR.
-- Format: `- [Novada MCP](https://github.com/NovadaLabs/novada-mcp) - Hosted MCP server: search, scrape, extract, crawl, map, headless browser, verify, research, 6 proxy types. 5000 calls/mo free.`
+- Format: `- [Novada MCP](https://github.com/NovadaLabs/novada-mcp) - Hosted MCP server: search, scrape, extract, crawl, map, headless browser, verify, research, 6 proxy types. 1000 calls/mo free (paid accounts uncapped).`
 
 ---
 

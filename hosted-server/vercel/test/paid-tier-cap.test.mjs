@@ -398,13 +398,28 @@ test("mcp.ts: account charge-then-refund dance removed", () => {
   assert.ok(!src.includes("ACCOUNT_DEGRADATION_MARKERS"));
 });
 
-test("mcp.ts: cap error copy updated per Layer 3 (top-up lifts the cap)", () => {
+test("mcp.ts: cap error copy is truthful (round-2 audit) — blocked means no payment history AND no balance", () => {
   const src = readFileSync(MCP_TS, "utf8");
-  assert.ok(src.includes("paid accounts are exempt from the gateway cap"),
-    "new option-2 copy must state that paid accounts are exempt");
+  // The header must state WHY the caller is blocked (the paid exemption did not apply).
+  assert.ok(src.includes("has no payment history and no remaining balance, so the paid exemption does not apply"),
+    "header must explain that the block implies no payment history and no balance");
+  // Top-up guidance must reflect the live balance check on the next call.
+  assert.ok(src.includes("a positive balance takes effect on your NEXT call"),
+    "option 2 must state that a top-up takes effect on the next call via the live balance check");
+  assert.ok(src.includes("purchase-history classification may take up to ~6 hours"),
+    "option 2 must state the ~6h purchase-history classification window");
+  // Falsehoods from the pre-fix copy must be gone: the cap is NOT independent of
+  // balance anymore (balance>0 exempts), and it is NOT separate from billing.
+  assert.ok(!src.includes("independent of your Novada balance"),
+    "old 'independent of your Novada balance' claim must be gone (balance now exempts)");
+  assert.ok(!src.includes("this cap is separate from billing"),
+    "old 'separate from billing' note must be gone");
   assert.ok(!src.includes("does not raise the free-gateway cap"),
     "old copy claiming top-up does not lift the cap must be gone");
+  // agent_instruction contract: marker kept, retry guidance covers the just-topped-up case.
   assert.match(src, /free_gateway_cap_reached/, "agent_instruction marker must be kept");
+  assert.ok(src.includes("unless the user just topped up — then retry immediately"),
+    "retry_recommended must cover the just-topped-up retry case");
 });
 
 test("mcp.ts: error-path quota refund is guarded by the gate's charged flag", () => {
