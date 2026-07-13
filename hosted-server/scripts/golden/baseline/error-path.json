@@ -1,18 +1,14 @@
 {
   "extract_bad_url": {
-    "error_markers": [
-      "Free Gateway Cap Reached"
-    ],
+    "error_markers": [],
     "has_agent_instruction": true,
     "is_error": true,
-    "length_band": "s"
+    "length_band": "xs"
   },
   "search_missing_query": {
-    "error_markers": [
-      "Free Gateway Cap Reached"
-    ],
+    "error_markers": [],
     "has_agent_instruction": true,
     "is_error": true,
-    "length_band": "s"
+    "length_band": "xs"
   }
 }

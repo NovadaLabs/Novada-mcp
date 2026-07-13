@@ -19,7 +19,7 @@
   },
   "novada_scraper_task_mgmt": {
     "code": "other",
-    "isError": true,
+    "isError": false,
     "name": "novada_scraper_task_mgmt",
     "refused": false
   },

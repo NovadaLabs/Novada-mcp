@@ -553,6 +553,10 @@
             "Health & Discovery"
           ],
           "type": "string"
+        },
+        "platform": {
+          "description": "Optional platform domain to look up (e.g. 'amazon.com', 'tiktok.com'). When provided, returns all operations for that platform from the scraper catalog \u2014 free, no API call, no credit cost. Mutually exclusive with category: if both are provided, platform takes priority.",
+          "type": "string"
         }
       },
       "type": "object"
@@ -573,6 +577,12 @@
         "clean": {
           "description": "Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage.",
           "type": "boolean"
+        },
+        "country": {
+          "description": "ISO 3166-1 alpha-2 country code (e.g. 'de', 'us', 'gb') to route the fetch through an exit IP in that country. Useful for localized pricing, geo-restricted content, and per-country monitoring (e.g. comparing a product price across European countries). Only applies to render/unblocker fetches (render=\"render\"|\"js\" or auto-escalation to render); no effect on a pure static fetch. In batch mode (url array), the same country is applied to all URLs in the call.",
+          "maxLength": 2,
+          "minLength": 2,
+          "type": "string"
         },
         "fields": {
           "description": "Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). ADVISORY / confidence-gated: each field returns {value, source, confidence}. Source priority is structured-first \u2014 JSON-LD \u2192 infobox/table/microdata \u2192 anchored pattern \u2192 loose scan LAST. A match below the confidence floor (loose proximity scan) is SUPPRESSED: value=null with low_confidence:true + the rejected candidate in low_confidence_value, rather than emitting a confidently-wrong guess. Treat a resolved value as a strong hint, not ground truth \u2014 check the source/confidence, and re-read the content or retry with render='render' when a field is null/low_confidence.",
@@ -969,6 +979,10 @@
           ],
           "type": "string"
         },
+        "end_date": {
+          "description": "ISO date YYYY-MM-DD. Return results published on or before this date.",
+          "type": "string"
+        },
         "focus": {
           "description": "Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'.",
           "type": "string"
@@ -984,6 +998,20 @@
         },
         "question": {
           "minLength": 5,
+          "type": "string"
+        },
+        "start_date": {
+          "description": "ISO date YYYY-MM-DD. Return results published on or after this date.",
+          "type": "string"
+        },
+        "time_range": {
+          "description": "Limit results to a time window. 'day'=last 24h, 'week'=last 7 days, 'month'=last 30 days, 'year'=last 12 months.",
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "year"
+          ],
           "type": "string"
         }
       },

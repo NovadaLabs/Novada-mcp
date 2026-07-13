@@ -2,217 +2,262 @@
   "novada_account_summary": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Novada Account"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_ai_monitor": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Brand Presence on AI-Company Domains \u2014 novada",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_browser": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Browser Session Results",
+      "Action 1: navigate [ok]",
+      "Action 2: evaluate [ok]",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_capture_logs": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Novada Account"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_crawl": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Crawl Results",
+      "Agent Hints",
+      "[1/1] https://example.com",
+      "Example Domain"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_discover": {
-    "length_band": "s",
+    "length_band": "m",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Novada MCP \u2014 Tool Catalog",
+      "Content Retrieval",
+      "Scraping & Verification",
+      "Proxy",
+      "Browser & Rendering",
+      "Account & Billing",
+      "Health & Discovery",
+      "Next Steps"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_extract": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Extracted Content",
+      "Example Domain",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_health": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Novada Account"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_health_all": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Novada Account"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_map": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Site Map",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_monitor": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Monitor: First Check",
+      "Agent Instruction"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_plan_balance_all": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Plan Balances"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_proxy": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Proxy Configuration",
+      "Usage Examples",
+      "as curl:",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_proxy_account_create": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "action",
+      "agent_instruction",
+      "preview",
+      "status"
     ],
-    "status": "err",
-    "structural": "markdown"
+    "status": "ok",
+    "structural": "json"
   },
   "novada_proxy_account_list": {
     "length_band": "s",
-    "markers": [
-      "Free Gateway Cap Reached"
-    ],
-    "status": "err",
-    "structural": "markdown"
+    "markers": [],
+    "status": "ok",
+    "structural": "other"
   },
   "novada_proxy_datacenter": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Proxy Configuration",
+      "Usage Examples",
+      "as curl:",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_proxy_dedicated": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "as curl:"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_proxy_isp": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Proxy Configuration",
+      "Usage Examples",
+      "as curl:",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_proxy_mobile": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Proxy Configuration",
+      "Usage Examples",
+      "as curl:",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_proxy_residential": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Proxy Configuration",
+      "Usage Examples",
+      "as curl:",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_proxy_static": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "as curl:"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_research": {
-    "length_band": "s",
+    "length_band": "m",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Research: what is anthropic",
+      "Researched source material for: what is anthropic",
+      "Key Findings",
+      "Sources",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_scrape": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Scrape Results",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_scraper_result": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Free Gateway Cap Reached"
+      "agent_instruction",
+      "message",
+      "status"
     ],
-    "status": "err",
-    "structural": "markdown"
+    "status": "ok",
+    "structural": "json"
   },
   "novada_scraper_status": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Free Gateway Cap Reached"
+      "agent_instruction",
+      "message",
+      "status"
     ],
-    "status": "err",
-    "structural": "markdown"
+    "status": "ok",
+    "structural": "json"
   },
   "novada_scraper_submit": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Scrape Results",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_search": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Search Results",
+      "Next Steps"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_setup": {
@@ -227,43 +272,44 @@
     "structural": "markdown"
   },
   "novada_traffic_daily": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Traffic Usage"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_unblock": {
     "length_band": "s",
-    "markers": [
-      "Free Gateway Cap Reached"
-    ],
-    "status": "err",
-    "structural": "markdown"
+    "markers": [],
+    "status": "ok",
+    "structural": "other"
   },
   "novada_verify": {
-    "length_band": "s",
+    "length_band": "m",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Claim Verification",
+      "Sources matching the claim wording (<N> sources)",
+      "Sources matching a negation of the claim (<N> sources)",
+      "Agent Hints"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_wallet_balance": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Wallet Balance"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   },
   "novada_wallet_usage_record": {
     "length_band": "s",
     "markers": [
-      "Free Gateway Cap Reached"
+      "Wallet Usage History"
     ],
-    "status": "err",
+    "status": "ok",
     "structural": "markdown"
   }
 }

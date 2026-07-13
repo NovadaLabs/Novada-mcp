@@ -472,9 +472,12 @@ def capture(base_url: str, outdir: str):
                 "unmasked_user_pass_at_host": real_cred_leak,
                 # internal-only hosts (not in public docs)
                 "internal_api_m": "api-m.novada.com" in text_p,
-                # proxy.novada.pro is public endpoint — flag only if unmasked creds precede it
+                # proxy.novada.pro is public endpoint — flag only if unmasked creds precede it.
+                # Exclude placeholders: ${ENV_VAR}, <PLACEHOLDER>, and *** masks are NOT leaks
+                # (false-positived 2026-07-13 when the cap fix let this probe succeed for the
+                # first time and the response's ${NOVADA_PROXY_PASS} template matched as a secret).
                 "proxy_host_with_unmasked_creds": bool(re.search(
-                    r'[A-Za-z0-9_]+:[^*\s]{4,}@proxy\.novada', text_p)),
+                    r'[A-Za-z0-9_]+:[^*\s$<{}>]{4,}@proxy\.novada', text_p)),
             }
             leaked = any(leaked_patterns.values())
             probe_result["leaked"] = leaked
