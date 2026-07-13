@@ -4,6 +4,21 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.26] — 2026-07-13
+
+Hosted gateway: paying accounts are no longer blocked by the free monthly cap (P0), and meta tools now work in every state.
+
+### Fixed
+- **Paid-tier cap exemption (P0, hosted).** The hosted gateway's 1000 calls/month free cap blocked every caller once exhausted — including paying customers whose calls bill their own Novada balance. The gateway now resolves account standing lazily at the cap boundary: accounts with real payment history (any successful order where `pay_money − coupon_money > 0`) or a positive balance pass beyond the cap; trial/coupon-only accounts remain capped. Zero checks and zero added latency below the cap; plan cached in KV (pro 30d / free 6h), dual-keyed by token hash and account uid so multi-key accounts share one resolution; fail-safe defaults to prior behavior if the upstream lookup is unavailable.
+- **Meta tools never blocked (hosted).** `novada_discover`, `novada_account` (and its aliases), and `novada_setup` no longer consume quota and keep working even when a key is over the cap — a blocked user can always self-diagnose. Previously even `novada_discover` returned the cap error.
+- **Cap error message tells the truth.** It now states the actual block condition (no payment history and no remaining balance) and the fastest unblock path: a top-up takes effect on the next call (live balance check); purchase-history classification applies within ~6 hours. Previously it claimed the cap was "independent of your Novada balance," which is no longer true.
+- Stale "5000 calls/month free" copy corrected to 1000 in `DIRECTORIES.md` (both occurrences).
+
+### Changed
+- Hosted cap enforcement extracted to a pure, unit-testable module (`_plan.ts`: `classifyPlanFromUsageRecord`, `enforceGatewayCap`); 42 new tests (hosted suite now 52). npm package tool code unchanged — this release aligns versions with the hosted deploy.
+
+---
+
 ## [0.9.25] — 2026-07-13
 
 Scraper catalog rebuilt from a single verified source (16 platforms / 88 operations, each live-tested), a scrape format-routing bug fixed, geo-targeted extraction, and sharper agent guidance for depth and cost.
