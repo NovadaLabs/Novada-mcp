@@ -159,6 +159,18 @@ const HOSTED_VERSION = HOSTED_BUILD
   ? `${vendorPkg.version}.${HOSTED_BUILD}-hosted`
   : `${vendorPkg.version}-hosted`;
 
+// ─── Single version source — propagate to all reporting surfaces ─────────────
+// HOSTED_VERSION is the ONE canonical version string for this process.  Setting it
+// in process.env at module-init time means every tool that outputs a "server_version"
+// field (setup.ts, discover.ts) reads the SAME string that serverInfo.version carries
+// in the MCP initialize response, so the invariant
+//   novada_setup output == novada_discover output == serverInfo.version
+// holds without any per-tool coupling.  The vendored config.js VERSION constant is
+// NOT used here — its relative-path resolution can silently drift when the vendor
+// layout changes, and is kept only as a stdio fallback (npm run novada-mcp has no
+// NOVADA_SERVER_VERSION set, so tools fall back to VERSION from package.json).
+process.env.NOVADA_SERVER_VERSION = HOSTED_VERSION;
+
 // ─── Vercel Function runtime (Node.js serverless) ───────────────────────────
 // NOTE: we use Node.js runtime (NOT Edge) because the underlying novada-mcp
 // tool implementations depend on Node-only modules: axios, cheerio,

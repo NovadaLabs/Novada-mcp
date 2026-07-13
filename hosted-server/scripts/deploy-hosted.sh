@@ -345,19 +345,46 @@ PYEOF
 
 echo "$DIFF_RESULT"
 
-if echo "$DIFF_RESULT" | grep -q "^VERDICT: CLEAN"; then
+# ── CONTRACT TEST (HARD GATE) ────────────────────────────────────────────────
+# Runs AFTER the golden diff so both gates get to report before we exit.
+# Non-zero exit → NEEDS_REVIEW regardless of golden result.
+CONTRACT_TEST_PY="$SCRIPT_DIR/contract/contract-test.py"
+CONTRACT_PASS=true
+
+echo ""
+echo "[VERIFY] running contract invariant tests..."
+if [[ -f "$CONTRACT_TEST_PY" ]]; then
+    CONTRACT_OUT=$(NOVADA_MCP_KEY="$NOVADA_MCP_KEY" python3 "$CONTRACT_TEST_PY" "$MCP_URL" 2>&1)
+    CONTRACT_EXIT=$?
+    echo "$CONTRACT_OUT"
+    if [[ $CONTRACT_EXIT -ne 0 ]]; then
+        CONTRACT_PASS=false
+        echo "[VERIFY] ⚠ contract test FAILED (exit $CONTRACT_EXIT) — see output above"
+    else
+        echo "[VERIFY] ✓ contract tests passed"
+    fi
+else
+    echo "[VERIFY] WARNING: $CONTRACT_TEST_PY not found — skipping contract tests"
+fi
+
+# ── FINAL VERDICT (golden + contract combined) ────────────────────────────────
+GOLDEN_CLEAN=false
+echo "$DIFF_RESULT" | grep -q "^VERDICT: CLEAN" && GOLDEN_CLEAN=true
+
+if $GOLDEN_CLEAN && $CONTRACT_PASS; then
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║  DEPLOY VERIFIED — hard gate clean (firewall + contract +     ║"
-    echo "║  redaction + error-path + capabilities); routing stable        ║"
+    echo "║  redaction + error-path + capabilities); routing stable;       ║"
+    echo "║  contract invariants all pass (or skip pending phase D)        ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     [[ -n "$PREV_URL" ]] && echo "Previous URL (rollback if needed): npx vercel promote $PREV_URL --scope novadateam-mvps"
 else
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║  DEPLOY NEEDS REVIEW — a hard-gate file diffed or a tool's     ║"
-    echo "║  routing state crossed a refused/unknown boundary (see above). ║"
-    echo "║  (dispatch-matrix shape changes alone are advisory, not this.) ║"
+    echo "║  DEPLOY NEEDS REVIEW — golden gate OR contract gate failed.    ║"
+    echo "║  Check output above for details.                               ║"
+    echo "║  (advisory dispatch-matrix shape changes alone are not this.)  ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
     echo "Rollback command:"

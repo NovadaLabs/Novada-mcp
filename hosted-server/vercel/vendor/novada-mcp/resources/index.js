@@ -1,6 +1,7 @@
 // ─── MCP Resources ────────────────────────────────────────────────────────────
 // Read-only data agents can access before making tool decisions.
 // Reduces hallucination ("does novada support X?") and fixes LobeHub Resources criterion.
+import { SCRAPER_CATALOG } from "../data/scraper_catalog.js";
 export const RESOURCES = [
     {
         uri: "novada://engines",
@@ -33,6 +34,106 @@ export const RESOURCES = [
         mimeType: "text/plain",
     },
 ];
+// Static category mapping — domain → display category
+const PLATFORM_CATEGORIES = {
+    "amazon.com": "E-Commerce",
+    "walmart.com": "E-Commerce",
+    "shein.com": "E-Commerce",
+    "google.com": "Search Engine",
+    "bing.com": "Search Engine",
+    "duckduckgo.com": "Search Engine",
+    "yandex.com": "Search Engine",
+    "x.com": "Social Media",
+    "tiktok.com": "Social Media",
+    "instagram.com": "Social Media",
+    "facebook.com": "Social Media",
+    "youtube.com": "Social Media",
+    "linkedin.com": "Professional / B2B",
+    "github.com": "Tech / Developer",
+    "chatgpt.com": "AI / Conversational",
+    "perplexity.ai": "AI / Conversational",
+};
+const CATEGORY_ORDER = [
+    "E-Commerce",
+    "Search Engine",
+    "Social Media",
+    "Professional / B2B",
+    "Tech / Developer",
+    "AI / Conversational",
+    "Other",
+];
+function buildScraperPlatformsText() {
+    const lines = [
+        "# Supported Scraper Platforms — novada_scrape",
+        "",
+        "Read this resource to find the correct platform and operation before calling novada_scrape.",
+        "Operation IDs are EXACT — do not guess or invent variants. Verified 2026-07-13.",
+        "",
+        "## How to Use",
+        "1. Find your platform below",
+        "2. Copy the operation exactly as shown — do NOT modify it",
+        "3. Call: novada_scrape({ platform: \"<domain>\", operation: \"<operation_id>\", params: {...} })",
+        "4. Params are wrapped automatically in scraper_params=[{...}] format by the MCP",
+        "",
+        `IMPORTANT: Only these ${SCRAPER_CATALOG.length} platforms have active operations. All others`,
+        "(reddit, glassdoor, zillow, etc.) have 0 scenes and will return error 11006.",
+        "Use novada_extract for unsupported platforms.",
+        "",
+        "---",
+        "",
+    ];
+    // Group by category
+    const byCategory = {};
+    for (const p of SCRAPER_CATALOG) {
+        const cat = PLATFORM_CATEGORIES[p.domain] ?? "Other";
+        if (!byCategory[cat])
+            byCategory[cat] = [];
+        byCategory[cat].push(p);
+    }
+    const cats = [
+        ...CATEGORY_ORDER.filter(c => byCategory[c]),
+        ...Object.keys(byCategory).filter(c => !CATEGORY_ORDER.includes(c)),
+    ];
+    for (const cat of cats) {
+        const platforms = byCategory[cat];
+        if (!platforms?.length)
+            continue;
+        lines.push(`## ${cat}`, "");
+        for (const p of platforms) {
+            lines.push(`### ${p.domain} (platform_id=${p.platform_id})`);
+            const healthy = p.ops.filter(op => op.status === "ok");
+            const broken = p.ops.filter(op => op.status === "backend_broken");
+            for (const op of healthy) {
+                const allParams = op.params.map(param => {
+                    const optMark = param.required ? "" : "?";
+                    return `${param.key}${optMark}: string`;
+                }).join(", ");
+                const paramStr = allParams || "none";
+                lines.push(`- ${op.slug.padEnd(44)} → params: { ${paramStr} }`);
+            }
+            if (broken.length > 0) {
+                lines.push("");
+                lines.push("  Backend-broken (call forwarded with warning — backend may fix any day):");
+                for (const op of broken) {
+                    lines.push(`  - ${op.slug} — ${op.broken_reason ?? "backend failure"}`);
+                }
+            }
+            lines.push("");
+        }
+    }
+    lines.push("---", "");
+    lines.push("## NOT AVAILABLE (0 scenes — use novada_extract instead)");
+    lines.push("reddit.com, glassdoor.com, zillow.com, ebay.com, etsy.com, tripadvisor.com, airbnb.com,");
+    lines.push("booking.com, indeed.com, stackoverflow.com, medium.com, quora.com, and ~91 others.");
+    lines.push("");
+    lines.push("## Common Mistakes");
+    lines.push("- Using invented operation IDs — use ONLY the IDs listed above.");
+    lines.push("- Using reddit/glassdoor/zillow — NOT AVAILABLE, use novada_extract instead.");
+    lines.push("- Error 11006 = either (a) Scraper API not activated, or (b) invalid operation ID. Check the ID first.");
+    lines.push("- Error 11008 = unknown platform name. Use exact domain like \"amazon.com\", \"x.com\".");
+    lines.push("- Error 11009 = wrong request format (flat vs scraper_params). The MCP handles this automatically.");
+    return lines.join("\n");
+}
 export function listResources() {
     return { resources: RESOURCES };
 }
@@ -46,7 +147,6 @@ export function readResource(uri) {
                         text: `# Supported Search Engines
 
 google     — Best general-purpose engine, highest relevance. Default choice.
-bing       — CURRENTLY DEGRADED (may return zero results; avoid). Use google/duckduckgo instead.
 duckduckgo — Privacy-focused, no personalization bias. Good for neutral/unfiltered results.
 yandex     — Best for Russian-language content and Eastern European queries.
 
@@ -215,7 +315,7 @@ Which Novada products are active on your API key?
 | novada_map                | a domain, need URL list              | URL list only           | Low        |
 | novada_crawl              | a domain, need N pages               | Content of N pages      | High       |
 | novada_research           | a complex question                   | Cited report            | Medium     |
-| novada_scrape             | a supported platform (13 platforms)  | Structured records      | Medium     |
+| novada_scrape             | a supported platform (16 platforms)  | Structured records      | Medium     |
 | novada_scraper_submit     | async scraping job submission        | task_id                 | Minimal    |
 | novada_scraper_status     | task_id, need to check progress      | Status JSON             | Minimal    |
 | novada_scraper_result     | completed task_id, need results      | Formatted records       | Low        |
@@ -295,158 +395,7 @@ novada_scrape with platform='amazon.com', operation='amazon_product_keywords'
                 contents: [{
                         uri,
                         mimeType: "text/plain",
-                        text: `# Supported Scraper Platforms — novada_scrape
-
-Read this resource to find the correct platform and operation before calling novada_scrape.
-Operation IDs are EXACT — do not guess or invent variants. Verified from dashboard 2026-05-18.
-
-## How to Use
-1. Find your platform below
-2. Copy the scraper_id exactly as shown — do NOT modify it
-3. Call: novada_scrape({ platform: "<scraper_name>", operation: "<scraper_id>", params: {...} })
-4. Params are wrapped automatically in scraper_params=[{...}] format by the MCP
-
-IMPORTANT: Only these 13 platforms have active operations. All others (reddit, glassdoor, zillow, etc.)
-have 0 scenes and will return error 11006. Use novada_extract for unsupported platforms.
-
----
-
-## E-Commerce
-
-### amazon.com (platform_id=7)
-- amazon_product_asin              → params: { asin: string }
-- amazon_product_url               → params: { url: string }
-- amazon_product_keywords          → params: { keyword: string }
-- amazon_product_category-url      → params: { url: string }
-- amazon_product_best-sellers      → params: { url: string }
-- amazon_global-product_url        → params: { url: string }
-- amazon_global-product_category-url → params: { url: string }
-- amazon_global-product_seller-url → params: { url: string }
-- amazon_global-product_keywords   → params: { keyword: string }
-- amazon_global-product_keywords-brand → params: { keyword: string }
-- amazon_comment_url               → params: { url: string }
-- amazon_seller_url                → params: { url: string }
-- amazon_product-list_keywords-domain → params: { keyword: string }
-
-### walmart.com (platform_id=21)
-- walmart_product_url              → params: { url: string }
-- walmart_product_category-url     → params: { url: string }
-- walmart_product_sku              → params: { sku: string }
-- walmart_product_keywords         → params: { keyword: string }
-- walmart_product_zipcodes         → params: { url: string, zip_code: string }
-
----
-
-## Search Engines
-
-### google.com (platform_id=25)
-- google_search                    → params: { q: string, device?: string, domain?: string, country?: string, hl?: string }
-- google_serp_web                  → params: { q: string }
-- google_serp_videos               → params: { q: string }
-- google_serp_hotels               → params: { q: string }
-- google_serp_jobs                 → params: { q: string }
-- google_map-details_url           → params: { url: string }
-- google_map-details_cid           → params: { cid: string }
-- google_map-details_location      → params: { location: string }
-- google_map-details_placeid       → params: { place_id: string }
-- google_shopping_keywords         → params: { keyword: string }
-- google_comment_url               → params: { url: string }
-
-### bing.com (platform_id=26)
-- bing_search                      → params: { keyword: string }
-- bing_maps                        → params: { keyword: string }
-- bing_images                      → params: { keyword: string }
-- bing_videos                      → params: { keyword: string }
-- bing_news                        → params: { keyword: string }
-- bing_shopping                    → params: { keyword: string }
-
-### duckduckgo.com (platform_id=28)
-- duckduckgo                       → params: { keyword: string }
-
-### yandex.com (platform_id=27)
-- yandex                           → params: { keyword: string }
-
----
-
-## Social Media
-
-### x.com / Twitter (platform_id=31)
-- twitter_profile_profileurl       → params: { url: string }
-- twitter_profile_username         → params: { username: string }
-- twitter_post_posturl             → params: { url: string }
-
-### tiktok.com (platform_id=22)
-- tiktok_posts_url                 → params: { url: string }
-- tiktok_posts_profileurl          → params: { url: string }
-- tiktok_posts_listurl             → params: { url: string }
-- tiktok_profiles_url              → params: { url: string }
-- tiktok_profiles_listurl          → params: { url: string }
-
-### instagram.com (platform_id=24)
-- ins_profiles_username            → params: { username: string }
-- ins_profiles_profileurl          → params: { url: string }
-- ins_reel_url                     → params: { url: string }
-- ins_allreel_url                  → params: { url: string }
-- ins_posts_profileurl             → params: { url: string }
-- ins_posts_posturl                → params: { url: string }
-- ins_comment_posturl              → params: { url: string }
-
-### facebook.com (platform_id=29)
-- facebook_event_eventlist-url     → params: { url: string }
-- facebook_event_search-url        → params: { url: string }
-- facebook_event_events-url        → params: { url: string }
-- facebook_post_posts-url          → params: { url: string }
-- facebook_comment_comments-url    → params: { url: string }
-- facebook_profile_profiles-url    → params: { url: string }
-
-### youtube.com (platform_id=13)
-- youtube_video-post_url           → params: { url: string }
-- youtube_video-post_search_filters → params: { keyword: string }
-- youtube_video_search_label       → params: { label: string }
-- youtube_video-post-podcast-url   → params: { url: string }
-- youtube_video-post-keyword       → params: { keyword: string }
-- youtube_video-post_explore       → params: { keyword: string }
-- youtube_product-videoid          → params: { video_id: string }
-- youtube_video-url                → params: { url: string }
-- youtube_audio_url                → params: { url: string }
-- youtube_comment_id               → params: { video_id: string }
-- youtube_transcript_id            → params: { url: string }
-- youtube_profiles_keyword         → params: { keyword: string }
-- youtube_profiles_url             → params: { url: string }
-
----
-
-## Professional / B2B
-
-### linkedin.com (platform_id=23)
-- linkedin_company_information_url → params: { url: string }
-- linkedin_job_listings_information_job-listing-url → params: { url: string }
-- linkedin_job_listings_information_job-url → params: { url: string }
-- linkedin_job_listings_information_keyword → params: { keyword: string }
-
----
-
-## Tech / Developer
-
-### github.com (platform_id=126)
-- github_repository_repo-url       → params: { url: string }
-- github_repository_search-url     → params: { url: string }
-- github_repository_url            → params: { url: string }
-
----
-
-## NOT AVAILABLE (0 scenes — use novada_extract instead)
-reddit.com, glassdoor.com, zillow.com, ebay.com, etsy.com, tripadvisor.com, airbnb.com,
-booking.com, indeed.com, stackoverflow.com, medium.com, quora.com, and ~94 others.
-
-## Common Mistakes
-- Using invented IDs like "amazon_product_by-keywords" — WRONG. Use "amazon_product_keywords".
-- Using reddit/glassdoor/zillow — NOT AVAILABLE, use novada_extract instead.
-- Error 11006 = either (a) Scraper API not activated, or (b) invalid scraper_id. Check the ID first.
-- Error 11008 = unknown platform name. Use exact domain like "amazon.com", "x.com".
-
-## Full Reference
-docs/novada-api/scraper-operation-ids.md in this repo has additional param details.`,
+                        text: buildScraperPlatformsText(),
                     }],
             };
         case "novada://llms-txt":
@@ -488,7 +437,7 @@ Required: question. Optional: depth (quick/deep/comprehensive/auto), focus.
 Example: novada_research({question: "How do MCP servers work with Claude?", depth: "deep"})
 
 ## novada_scrape
-Best for: structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.).
+Best for: structured data from 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, YouTube, ChatGPT, SHEIN, etc.).
 Not for: arbitrary sites not in the platform list (use novada_extract or novada_crawl).
 Required: platform, operation, params. Optional: format (markdown/json/toon), limit.
 Example: novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "iphone 16"}})
@@ -530,7 +479,7 @@ Required: none.
 Example: novada_discover({})
 
 ## novada_scraper_submit
-Best for: submitting an async scraping job for platforms outside novada_scrape's 13 active platforms.
+Best for: submitting an async scraping job for platforms outside novada_scrape's 16 active platforms.
 Not for: synchronous extraction (use novada_scrape for supported platforms).
 Required: platform, operation. Optional: params, country.
 Example: novada_scraper_submit({ platform: "amazon.com", operation: "amazon_product_keywords", params: { keyword: "wireless earbuds" } })

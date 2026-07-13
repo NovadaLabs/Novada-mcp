@@ -39,15 +39,6 @@ export const AccountParamsSchema = z
         .describe("Output format. " +
         "'card' (default): human-readable markdown card — scannable headline, status table with icons, expired plans highlighted. " +
         "'json': clean flat structured object for programmatic use — no data.data nesting, human-readable values, errors[] aggregated."),
-    // Deprecated no-op: 0.9.9–0.9.11 advertised `mode` (quick|full) on the summary
-    // section. 0.9.12 removed it — the account card always shows full detail. Kept
-    // here as an accepted-but-IGNORED optional so clients cached on the older schema
-    // (and the novada_health alias) never hit a strict-mode "Unrecognized key" error.
-    // Do NOT read this value anywhere.
-    mode: z
-        .enum(["quick", "full"])
-        .optional()
-        .describe("Deprecated and ignored — the account card always shows full detail. Accepted only for backward compatibility with older clients."),
     // Forwarded to the underlying tools when section != summary
     start_time: z
         .string()
@@ -79,7 +70,9 @@ export const AccountParamsSchema = z
         "plans: residential|isp|mobile|datacenter|static|capture. " +
         "traffic: residential|isp|mobile|datacenter|static."),
 })
-    .strict();
+    // .strip() (not .strict()): silently drop unknown keys so old callers passing the
+    // removed `mode` param don't error; trade-off = typo'd params are dropped, not rejected.
+    .strip();
 export function validateAccountParams(args) {
     return AccountParamsSchema.parse(args ?? {});
 }
@@ -262,7 +255,9 @@ function renderSummaryCard(summaryData) {
             ? extractBalanceInfo(v.balance)
             : { display: "—", exhausted: false };
         const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
-        const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
+        // API returns expires_at_human (e.g. "2026-07-08"); expires_at field is absent
+        const expiresStr = typeof v.expires_at_human === "string" ? v.expires_at_human
+            : typeof v.expires_at === "string" ? v.expires_at : "—";
         lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
     }
     lines.push("");
@@ -343,14 +338,20 @@ function renderUsageCard(raw) {
         if (!item || typeof item !== "object")
             continue;
         const t = item;
-        const date = typeof t.created_at === "string" ? t.created_at.slice(0, 10)
-            : typeof t.date === "string" ? t.date : "—";
+        // created_at is a UNIX integer from the API (not a string)
+        const date = typeof t.created_at === "number"
+            ? new Date(t.created_at * 1000).toISOString().slice(0, 10)
+            : typeof t.created_at === "string" ? t.created_at.slice(0, 10)
+                : typeof t.date === "string" ? t.date : "—";
         const desc = typeof t.remark === "string" ? t.remark
             : typeof t.description === "string" ? t.description
                 : typeof t.type === "string" ? t.type : "—";
-        const amtRaw = typeof t.amount === "number" ? t.amount
-            : typeof t.price === "number" ? t.price : undefined;
-        const currency = typeof t.currency === "string" ? t.currency : "";
+        // API uses pay_money; fall back to amount/price/money for defensive coverage
+        const amtRaw = typeof t.pay_money === "number" ? t.pay_money
+            : typeof t.amount === "number" ? t.amount
+                : typeof t.price === "number" ? t.price
+                    : typeof t.money === "number" ? t.money : undefined;
+        const currency = typeof t.currency === "string" && t.currency ? t.currency : "$";
         const amt = amtRaw !== undefined ? `${currency}${amtRaw.toFixed ? amtRaw.toFixed(2) : amtRaw}` : "—";
         lines.push(`| ${date} | ${desc} | ${amt} |`);
     }
@@ -392,7 +393,9 @@ function renderPlansCard(raw) {
             ? extractBalanceInfo(v.balance)
             : { display: "—", exhausted: false };
         const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
-        const expiresStr = typeof v.expires_at === "string" ? v.expires_at : "—";
+        // API returns expires_at_human (e.g. "2026-07-08"); expires_at field is absent
+        const expiresStr = typeof v.expires_at_human === "string" ? v.expires_at_human
+            : typeof v.expires_at === "string" ? v.expires_at : "—";
         lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
     }
     return lines.join("\n");
@@ -459,7 +462,9 @@ function flattenSummaryJson(summaryData) {
             status: derivedStatus,
             balance_mb: balanceMb,
             balance_human: balanceHuman ?? null,
-            expires_at: typeof v.expires_at === "string" ? v.expires_at : null,
+            // API per-product entries carry expires_at_human; expires_at is absent
+            expires_at: typeof v.expires_at_human === "string" ? v.expires_at_human
+                : typeof v.expires_at === "string" ? v.expires_at : null,
         };
     }
     // Clean errors — omit "not provisioned" product 404s

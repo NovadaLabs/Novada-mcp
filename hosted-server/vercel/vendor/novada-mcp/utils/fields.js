@@ -7,10 +7,24 @@ const SOURCE_CONFIDENCE = {
     infobox: 0.85,
     table: 0.8,
     pattern: 0.6,
+    // Loose fallback scans (generic key-value / tolerant / number-near-label). Below the
+    // confidence floor on purpose so an unanchored hit is suppressed, not emitted as truth.
+    proximity: 0.5,
     heading: 0.45,
     llm: 0.5,
     unresolved: 0,
 };
+/**
+ * TOW2-258: confidence gate. A resolved candidate whose confidence is strictly below this
+ * floor is SUPPRESSED — the headline `value` becomes null and the candidate is retained in
+ * `low_confidence_value` with `low_confidence: true`. This is the "honest absence > confident
+ * wrong" rule: the loose proximity/scan layers (source "proximity", conf 0.5) and the heading
+ * fallback (0.45) fall below it, so a stray number grabbed near a bare label word is never
+ * returned as the answer. Anchored layers — jsonld/microdata/infobox/table (≥0.8) and the
+ * anchored known-pattern / adjacent-hero layer (source "pattern", 0.6) — sit AT or ABOVE the
+ * floor and are unaffected.
+ */
+const FIELD_CONFIDENCE_FLOOR = 0.6;
 /** Price patterns: $9.99, €1,299.00, £49, ¥2000, 99.99 USD */
 const PRICE_PATTERNS = [
     /(?:price|cost|was|now)[:\s]*([€$£¥₹]\s*[\d,]+(?:\.\d{2})?)/i,
@@ -764,6 +778,30 @@ function llmExtractStub(_field, _markdown, _html) {
 function resolved(field, value, source, attempted) {
     return { field, value, source, confidence: SOURCE_CONFIDENCE[source], attempted };
 }
+/**
+ * TOW2-258 confidence gate. Applied to every resolved result before it is returned:
+ * if the result's confidence is strictly below FIELD_CONFIDENCE_FLOOR, SUPPRESS it —
+ * null the headline `value`, retain the rejected candidate in `low_confidence_value`,
+ * set `low_confidence: true`, and attach a non-silent agent_instruction. Results at or
+ * above the floor (all structured layers + anchored pattern/adjacent) pass through
+ * unchanged. Already-unresolved results (value null) pass through unchanged.
+ */
+function applyConfidenceGate(r) {
+    if (r.value === null || r.source === "unresolved")
+        return r;
+    if (r.confidence >= FIELD_CONFIDENCE_FLOOR)
+        return r;
+    return {
+        field: r.field,
+        value: null,
+        source: r.source,
+        confidence: r.confidence,
+        attempted: r.attempted,
+        low_confidence: true,
+        low_confidence_value: r.value,
+        agent_instruction: `'${r.field}' only matched a low-confidence ${r.source} scan (conf ${r.confidence.toFixed(2)} < ${FIELD_CONFIDENCE_FLOOR}); the candidate "${r.value}" was found near a bare label word with no structural label→value binding and is likely NOT the real value. Suppressed to avoid a confidently-wrong answer — re-read the page content or retry with render="render" to fetch a structured value.`,
+    };
+}
 /** Make a resolved result with a per-field health warning (low-confidence pattern match). */
 function resolvedWithWarning(field, value, source, attempted, warning) {
     return { field, value, source, confidence: SOURCE_CONFIDENCE[source], attempted, warning };
@@ -794,7 +832,9 @@ preloaded$) {
     // else parse `html` once here.
     const $ = preloaded$ ?? (html ? cheerio.load(html) : null);
     const cand = $ ? collectDomCandidates($) : null;
-    return fields.map(field => {
+    // TOW2-258: every per-field result passes through the confidence gate before return.
+    return fields.map(field => applyConfidenceGate(resolveField(field)));
+    function resolveField(field) {
         const lower = field.toLowerCase().trim();
         const canonical = canonicalField(field);
         const attempted = [];
@@ -924,10 +964,14 @@ preloaded$) {
         }
         // 10. Number-near-label proximity (finance). Run AFTER table/row layers so the
         //     52-week-range hyphen and similar don't get clipped to a single token first.
+        //     This is the loosest numeric scan — it grabs the FIRST number within ~40 chars of
+        //     a bare label word, so a stray "Height 81 m" in unrelated prose resolves "height"
+        //     to "81". Tagged "proximity" (below the floor) so the gate suppresses such hits
+        //     instead of emitting them as the answer. (TOW2-258 root cause)
         attempted.push("proximity");
         const near = numberNearLabel(markdown, canonical) ?? numberNearLabel(markdown, field);
         if (near && !skipAsCartZero(near))
-            return resolved(field, near, "pattern", attempted);
+            return resolved(field, near, "proximity", attempted);
         // 11. Heading section fallback: "## Field\nvalue"
         attempted.push("heading");
         const headingValue = matchHeadingSection(markdown, field);
@@ -964,7 +1008,7 @@ preloaded$) {
             attempted,
             agent_instruction: unresolvedInstruction(field, attempted),
         };
-    });
+    }
 }
 /** Map a resolved FieldResult source to the diagnostic method label. */
 function sourceToDiagnosticMethod(source) {
@@ -1017,7 +1061,9 @@ preloaded$) {
     }
     const results = extractFields(fields, structuredData, markdown, html, preloaded$);
     const diagnostics = results.map(r => {
-        if (r.source !== "unresolved") {
+        // TOW2-258: a low-confidence suppression has source !== "unresolved" but value === null.
+        // It is NOT a match — report it as unmatched (fall through to the reason derivation below).
+        if (r.source !== "unresolved" && !r.low_confidence) {
             return { field: r.field, matched: true, method: sourceToDiagnosticMethod(r.source), attempted: r.attempted };
         }
         // Unresolved — derive the most descriptive reason from the heading fallback.

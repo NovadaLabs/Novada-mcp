@@ -148,7 +148,8 @@ export async function novadaDiscover(
     "",
     `> ${category ? `Showing tools in category: **${category}**` : "All tools listed below, grouped by category."}`,
     "> Status: ✅ active = available now  |  🔜 todo = planned, not yet available",
-    `> server_version: ${VERSION}`,
+    // Same NOVADA_SERVER_VERSION invariant as setup.ts: hosted injects HOSTED_VERSION here.
+    `> server_version: ${process.env.NOVADA_SERVER_VERSION ?? VERSION}`,
     "",
   ];
 

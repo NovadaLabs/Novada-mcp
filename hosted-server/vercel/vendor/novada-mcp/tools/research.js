@@ -40,7 +40,7 @@ const FALLBACKS = [
  * Search with primary engine first, race fallbacks on failure.
  * Best case: 1 API call. Failure case: 3 API calls (1 primary + 2 raced).
  */
-async function searchWithFallback(apiKey, query, num, signal) {
+async function searchWithFallback(apiKey, query, num, signal, filterParams) {
     // C1: record whether a failure carried a real auth/entitlement signal so the
     // caller can tell "Scraper API not activated" (permanent) apart from a
     // transient blip. We never let error inspection change the success path.
@@ -50,7 +50,7 @@ async function searchWithFallback(apiKey, query, num, signal) {
     };
     // Attempt 1: Primary engine (Google) — cheapest path
     try {
-        const submitted = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum);
+        const submitted = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum, filterParams);
         const results = await resolveSearchResults(apiKey, submitted);
         if (results.length > 0)
             return results;
@@ -59,7 +59,7 @@ async function searchWithFallback(apiKey, query, num, signal) {
         note(err); /* fall through to fallback race */
     }
     // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery
-    const attempts = FALLBACKS.map(eng => submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum)
+    const attempts = FALLBACKS.map(eng => submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum, filterParams)
         .then(submitted => resolveSearchResults(apiKey, submitted))
         .then(results => {
         if (results.length === 0)
@@ -160,8 +160,13 @@ export async function novadaResearch(params, apiKey, onProgress) {
     // Execute all queries in parallel; within each query, searchWithFallback tries
     // the primary engine (google) first and only races the fallbacks (ddg + bing)
     // if the primary returns nothing — this saves ~2/3 of API cost vs racing all 3.
+    const researchFilterParams = {
+        time_range: params.time_range,
+        start_date: params.start_date,
+        end_date: params.end_date,
+    };
     const allResults = await Promise.all(queries.map(async (query) => {
-        const results = await searchWithFallback(apiKey, query, 5, authSignal);
+        const results = await searchWithFallback(apiKey, query, 5, authSignal, researchFilterParams);
         if (results.length > 0) {
             return { query, results };
         }
@@ -173,7 +178,7 @@ export async function novadaResearch(params, apiKey, onProgress) {
             .replace(/\s+/g, " ")
             .trim();
         if (retryQuery && retryQuery !== query) {
-            const retryResults = await searchWithFallback(apiKey, retryQuery, 5, authSignal);
+            const retryResults = await searchWithFallback(apiKey, retryQuery, 5, authSignal, researchFilterParams);
             if (retryResults.length > 0) {
                 return { query: retryQuery, results: retryResults };
             }

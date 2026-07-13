@@ -6,12 +6,17 @@ import type { StructuredData } from "./html.js";
  * - infobox     → Wikipedia-style infobox table
  * - table       → table column-header match (was "table_header")
  * - microdata   → Schema.org itemprop attribute
- * - pattern     → known/generic regex pattern in markdown
+ * - pattern     → known/anchored regex pattern OR adjacent hero-stat (label is
+ *                 structurally tied to the value: "Price: $9.99", <span class=price>).
+ * - proximity   → LOOSE fallback scan (generic key-value, tolerant labelled-value,
+ *                 number-near-label). The value was grabbed near a bare word on the page
+ *                 with no structural label→value binding, so it is the lowest-trust match
+ *                 above heading and is confidence-gated (see FIELD_CONFIDENCE_FLOOR).
  * - heading     → "## Field\nvalue" markdown section fallback
  * - llm         → reserved for the (currently disabled) LLM extraction layer
  * - unresolved  → not found by any layer (was "not_found"); value is null
  */
-export type FieldSource = "jsonld" | "infobox" | "table" | "microdata" | "pattern" | "heading" | "llm" | "unresolved";
+export type FieldSource = "jsonld" | "infobox" | "table" | "microdata" | "pattern" | "proximity" | "heading" | "llm" | "unresolved";
 export interface FieldResult {
     field: string;
     /** Resolved value, or null when source === "unresolved". */
@@ -29,6 +34,17 @@ export interface FieldResult {
      * whole-page quality banner must not imply this field is trustworthy.
      */
     warning?: string;
+    /**
+     * TOW2-258: set true when a candidate value was found by a below-threshold layer
+     * (confidence < FIELD_CONFIDENCE_FLOOR) and therefore SUPPRESSED — `value` is null
+     * and the rejected candidate is preserved in `low_confidence_value` so an agent can
+     * still see what was found without treating it as the answer. Honest absence >
+     * confident-wrong: a loose proximity/scan hit (e.g. a stray "81" near the word
+     * "Height") must never be emitted as if it were the resolved field value.
+     */
+    low_confidence?: boolean;
+    /** The suppressed candidate (only set when low_confidence === true). For transparency. */
+    low_confidence_value?: string;
 }
 export interface HeadingSectionResult {
     value: string | null;

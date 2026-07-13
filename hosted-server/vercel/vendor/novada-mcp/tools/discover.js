@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { TOOL_REGISTRY, TOOL_CATEGORIES, POPULATED_TOOL_CATEGORIES, } from "./registry.js";
+import { VERSION } from "../config.js";
+import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS } from "../data/scraper_catalog.js";
 // ─── Tool Catalog ─────────────────────────────────────────────────────────────
 // The catalog is DERIVED from the canonical registry (./registry.ts) — the single
 // source of truth — so it can never list a tool that isn't registered, nor omit a
@@ -13,6 +15,10 @@ export const DiscoverParamsSchema = z.object({
         .enum(POPULATED_TOOL_CATEGORIES)
         .optional()
         .describe(`Optional category filter. One of: ${POPULATED_TOOL_CATEGORIES.map((c) => `'${c}'`).join(", ")}. Omit to list all tools.`),
+    platform: z
+        .string()
+        .optional()
+        .describe(`Optional platform domain to look up (e.g. 'amazon.com', 'tiktok.com'). When provided, returns all operations for that platform from the scraper catalog — free, no API call, no credit cost. Mutually exclusive with category: if both are provided, platform takes priority.`),
 });
 export function validateDiscoverParams(args) {
     return DiscoverParamsSchema.parse(args ?? {});
@@ -30,7 +36,36 @@ export function validateDiscoverParams(args) {
  *   registry are ignored; omit the arg to list the full registry (local MCP).
  */
 export async function novadaDiscover(params, visibleTools) {
-    const { category } = params;
+    const { category, platform } = params;
+    // ─── Platform lookup shortcut (no API call, no credit cost) ─────────────────
+    if (platform) {
+        const platformOps = CATALOG_BY_DOMAIN.get(platform);
+        if (!platformOps) {
+            const validDomains = CATALOG_DOMAINS.join(", ");
+            return (`Platform '${platform}' is not in the scraper catalog. ` +
+                `Valid platform domains: ${validDomains}. ` +
+                `For platforms not in this list, use novada_extract instead.`);
+        }
+        const lines = [
+            `## ${platform} — Scraper Operations`,
+            "",
+            `**${platformOps.size} operations available.** Use with novada_scrape({ platform: "${platform}", operation: "<operation_id>", params: {...} })`,
+            "",
+            "| Operation | Required Params | Format |",
+            "|-----------|-----------------|--------|",
+        ];
+        for (const [slug, op] of platformOps) {
+            const reqParams = op.params
+                .filter(p => p.required)
+                .map(p => p.key)
+                .join(", ") || "(none)";
+            const statusNote = op.status === "backend_broken"
+                ? ` ⚠️ backend-broken: ${op.broken_reason ?? "backend failure"}`
+                : "";
+            lines.push(`| \`${slug}\` | ${reqParams}${statusNote} | ${op.format} |`);
+        }
+        return lines.join("\n");
+    }
     const visible = visibleTools
         ? TOOL_REGISTRY.filter((t) => visibleTools.has(t.name))
         : TOOL_REGISTRY;
@@ -74,6 +109,8 @@ export async function novadaDiscover(params, visibleTools) {
         "",
         `> ${category ? `Showing tools in category: **${category}**` : "All tools listed below, grouped by category."}`,
         "> Status: ✅ active = available now  |  🔜 todo = planned, not yet available",
+        // Same NOVADA_SERVER_VERSION invariant as setup.ts: hosted injects HOSTED_VERSION here.
+        `> server_version: ${process.env.NOVADA_SERVER_VERSION ?? VERSION}`,
         "",
     ];
     const activeCount = entries.filter((t) => t.status === "active").length;
@@ -104,7 +141,7 @@ export async function novadaDiscover(params, visibleTools) {
     lines.push("");
     lines.push("- **Start here:** Call `novada_account` to see your balance, plans, and entitlements.");
     lines.push("- **Search the web:** Use `novada_search` for queries, `novada_extract` for specific URLs.");
-    lines.push("- **Structured data:** Use `novada_scrape` for 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, etc.).");
+    lines.push("- **Structured data:** Use `novada_scrape` for 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, ChatGPT, SHEIN, etc.).");
     lines.push("- **Full research:** Use `novada_research` for multi-source synthesis.");
     if (visibleNames.has("novada_proxy")) {
         lines.push("- **Proxy access:** Use `novada_proxy` for geo-targeted IP rotation.");

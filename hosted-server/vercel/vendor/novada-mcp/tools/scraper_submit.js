@@ -102,7 +102,7 @@ export async function novadaScraperSubmit(params, apiKey) {
         platform,
         operation: resolvedOp,
         ...aliasInfo,
-        agent_instruction: `Call novada_scrape with the same { platform, operation, params } to get results in one synchronous call (recommended). The async status/result flow was retired in 0.9.4.`,
+        agent_instruction: `Call novada_scrape with the same { platform, operation, params } to get results in one synchronous call (recommended). The async status/result flow has been retired.`,
     }, null, 2);
 }
 //# sourceMappingURL=scraper_submit.js.map

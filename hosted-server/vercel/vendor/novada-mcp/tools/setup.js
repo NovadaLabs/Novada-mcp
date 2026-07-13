@@ -1,6 +1,7 @@
 import { z, ZodError } from "zod";
 import { novadaWalletBalance } from "./wallet_balance.js";
 import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { VERSION } from "../config.js";
 export const SetupParamsSchema = z.object({}).strict();
 export function validateSetupParams(raw) {
     try {
@@ -203,6 +204,12 @@ export async function novadaSetup(_params, callerApiKey) {
             : `No key yet. Tell the user to register at ${URL_SIGNUP} (API key + $10 free credits included), copy their API key from ${URL_API_KEY}, add it as NOVADA_API_KEY in their MCP client config, and restart. Do not treat this as an error — it is the normal first-run state.`;
     L.push("## Agent");
     L.push(`key_state: ${state}`);
+    // NOVADA_SERVER_VERSION is set at module init by the hosted wrapper (mcp.ts) to its
+    // computed HOSTED_VERSION string (e.g. "0.9.26-hosted"), which is the same string
+    // serverInfo.version carries in the MCP initialize response. Falling back to VERSION
+    // (from package.json) keeps stdio mode correct without any extra env configuration.
+    // INVARIANT: this line == serverInfo.version in both hosted and stdio modes.
+    L.push(`server_version: ${process.env.NOVADA_SERVER_VERSION ?? VERSION}`);
     L.push(`register_url: ${URL_SIGNUP}`);
     L.push(`api_key_url: ${URL_API_KEY}`);
     L.push(`core_tools: ${CORE_TOOLS.map(t => t.tool).join(", ")}`);

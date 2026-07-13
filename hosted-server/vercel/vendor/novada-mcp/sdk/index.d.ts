@@ -11,7 +11,7 @@ export declare class NovadaClient {
     constructor(config: NovadaClientConfig);
     /** Search the web. Returns typed array of results. */
     search(query: string, options?: {
-        engine?: "google" | "bing" | "duckduckgo";
+        engine?: "google" | "duckduckgo" | "yandex";
         num?: number;
         country?: string;
         timeRange?: "day" | "week" | "month" | "year";

@@ -3,7 +3,6 @@ export declare const SearchParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unkno
     query: z.ZodString;
     engine: z.ZodDefault<z.ZodEnum<{
         google: "google";
-        bing: "bing";
         duckduckgo: "duckduckgo";
         yandex: "yandex";
     }>>;
@@ -80,6 +79,7 @@ export declare const ExtractParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unkn
     wait_for: z.ZodOptional<z.ZodString>;
     wait_ms: z.ZodOptional<z.ZodNumber>;
     clean: z.ZodOptional<z.ZodBoolean>;
+    country: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>>;
 export declare const CrawlParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
@@ -113,6 +113,14 @@ export declare const ResearchParamsSchema: z.ZodObject<{
     }>>;
     focus: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
+    time_range: z.ZodOptional<z.ZodEnum<{
+        day: "day";
+        week: "week";
+        month: "month";
+        year: "year";
+    }>>;
+    start_date: z.ZodOptional<z.ZodString>;
+    end_date: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export declare const MapParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     url: z.ZodString;

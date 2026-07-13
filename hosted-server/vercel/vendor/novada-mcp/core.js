@@ -5,12 +5,18 @@
  * Safe to import from any transport (stdio index.ts, hosted mcp.ts, tests).
  *
  * Exports:
- *   TOOLS          — the MCP tool catalog (array literal, verbatim from index.ts)
+ *   TOOLS          — the MCP tool catalog, DERIVED from REGISTERED_TOOL_NAMES so it can
+ *                    never drift from registry.ts. Tools in _TOOL_DEFINITIONS whose name
+ *                    is absent from the registry are dispatch-only (hidden from ListTools).
  *   HIDDEN_ALIASES — tool names dispatched but intentionally absent from TOOLS
  *   dispatch()     — name → validated → tool fn → string result
  *                    THROWS on unknown tool and on tool errors (no envelope, no catch)
+ *
+ * Single source of truth: registry.ts controls the visible set. Add a name there to
+ * surface it; remove a name there to hide it. _TOOL_DEFINITIONS holds the full
+ * MCP schema for every dispatchable tool (visible + hidden).
  */
-import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateDiscoverParams, validateBrowserFlowParams, } from "./tools/index.js";
+import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateDiscoverParams, validateBrowserFlowParams, REGISTERED_TOOL_NAMES, } from "./tools/index.js";
 import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, } from "./tools/types.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
 import { BrowserFlowParamsSchema } from "./tools/browser_flow.js";
@@ -46,14 +52,18 @@ function zodToMcpSchema(schema) {
     return rest;
 }
 // ─── Tool Definitions ────────────────────────────────────────────────────────
-export const TOOLS = [
+// _TOOL_DEFINITIONS holds the full MCP schema (description + inputSchema + annotations)
+// for EVERY dispatchable tool — both visible (in registry) and hidden (dispatch-only).
+// Do NOT export this directly. The public `TOOLS` below derives from registry.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _TOOL_DEFINITIONS = [
     {
         name: "novada_search",
-        description: `Search the web via 4 working engines (Google, Bing, DuckDuckGo, Yandex). Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
+        description: `Search the web and get clean, ready-to-use content. Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
 
 **Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.
 **Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).
-**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yandex are fallbacks and can be markedly slower; 'bing' is currently degraded — avoid it.
+**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yandex are fallbacks and can be markedly slower.
 **Domain filtering:** includeDomains/excludeDomains are applied by injecting \`site:domain\` operators into the query (not API-side filtering).
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(SearchParamsSchema),
@@ -76,6 +86,7 @@ Common mistake: using markdown when you need specific data — use \`format="jso
 **Key rule:** Leave render="auto" (default). Only set render="render" for known JS-heavy SPAs. Auto mode is 15-100x faster on static sites.
 By default returns full page content for maximum information. Add clean=true to extract only the main article body (strips nav/footer/ads).
 
+**Geo-routing:** Pass \`country="de"\` (ISO 2-letter) to route render fetches through an exit IP in that country — useful for localized pricing, geo-restricted content, or comparing the same page across countries.
 **Results auto-saved:** Every extraction saves to \`~/Downloads/novada-mcp/YYYY-MM-DD/\` automatically. File path shown at the top of each response.
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(ExtractParamsSchema),
@@ -84,6 +95,8 @@ By default returns full page content for maximum information. Add clean=true to 
     {
         name: "novada_crawl",
         description: `Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS or DFS, extracts content from each page inline. Use select_paths globs to target specific sections (e.g. "/docs/api/**").
+
+**IMPORTANT — wrong tool for whole-site jobs:** If you need to copy more than ~20 pages or want an entire docs site / knowledge base on disk, use \`novada_site_copy\` instead (up to 1000 pages, manifest output, streams files to disk). novada_crawl hard-caps at 20 pages and returns bodies inline — it will silently hit that cap on large sites.
 
 **Best for:** Competitive content analysis, extracting a handful of related pages inline (returns page bodies directly).
 **Not for:** A single page (use novada_extract), URL discovery without content extraction (use novada_map — much faster), copying an entire site to disk (use novada_site_copy — it handles hundreds of pages and writes files).
@@ -100,7 +113,9 @@ When to use:
 Not for:
 - Single-URL extraction — use novada_extract.
 - Finding all URLs on a site without downloading content — use novada_map.
-- Copying a whole docs site or knowledge base to disk — use novada_site_copy (handles hundreds of pages, returns a manifest).`,
+- Copying a whole docs site or knowledge base to disk — use novada_site_copy (handles hundreds of pages, returns a manifest).
+
+**Rendering:** The \`render\` param defaults to "auto" (tries static first, escalates to JS rendering on detection) — it is not static-only.`,
         inputSchema: zodToMcpSchema(CrawlParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -113,7 +128,8 @@ Not for:
 **Rule of thumb:** If the answer could fit in one search result snippet, use novada_search. If you need source material pulled from multiple pages to reason over, use novada_research.
 **Depth:** "quick" (3 queries), "deep" (6), "comprehensive" (8-9), "auto" (default: picks quick or deep by question length — never comprehensive).
 **Key advantage:** Agents call this ONCE instead of orchestrating search→extract manually. Saves tokens, time, and complexity.
-**Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
+**Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.
+**Recency:** Supports \`time_range\` ("day"|"week"|"month"|"year"), \`start_date\`, and \`end_date\` (ISO YYYY-MM-DD) for recency-constrained research — all are propagated to every internal search call.`,
         inputSchema: zodToMcpSchema(ResearchParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -142,13 +158,15 @@ Not for:
     },
     {
         name: "novada_scrape",
-        description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 13 platforms (~78 operations): Amazon, Walmart, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub.
+        description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 16 platforms (~88 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
 
 **Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
 **Not for:** General web pages not in the platform list — use novada_extract for arbitrary URLs instead.
 **Output formats:** "markdown" (default, agent-optimized table), "json" (structured records array returned inside a "## Scrape Results" wrapper — a fenced json block, not a bare object), "toon" (token-optimized pipe-separated format — 40-65% smaller than JSON/markdown, best for large result sets in context-constrained situations), "csv" (inline CSV text), "excel" (inline .xlsx base64), "html" (inline HTML table).
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}
+**Amazon price fields:** trust \`final_price\`/\`price\` (check \`_price_source\`); \`initial_price\` and \`buybox_prices.final_price\` are frequently 0 by design, not a bug; \`buybox_prices.unit_price\` is raw upstream per-unit data and may be empty/inconsistent — never treat it as the listing price.
 **Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.
+**Resume slow-platform scrapes:** Pass \`task_id\` from a previous call that returned status:processing to fetch its result without submitting a new billable task. platform and operation are still required (display only when resuming).
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
         inputSchema: zodToMcpSchema(ScrapeParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
@@ -161,7 +179,16 @@ Not for:
 **Not for:** Web page extraction (use novada_extract — proxy is automatic), web search (use novada_search).
 **Formats:** "url" for Node.js/Python, "env" for shell variables, "curl" for CLI requests.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.
-**Specialized tools:** For specific proxy types, use novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, or novada_proxy_dedicated.`,
+
+**Proxy type guide (pass as \`type\` param):**
+- \`residential\` — strongest anti-bot bypass, real home ISP IPs, best for geo-restricted / protected pages; escalate HERE when blocked
+- \`isp\` — looks like a home user (ISP-assigned), best for social media / ecommerce; note: ignores country param
+- \`datacenter\` — fastest and cheapest, best for non-anti-bot targets and high-volume scraping
+- \`mobile\` — 4G/5G device IPs, best for mobile-targeted content and app APIs
+- \`static\` — same dedicated ISP IP every request (requires session_id + country), best for account-management workflows
+- \`dedicated\` — exclusive clean datacenter IP not shared with others (requires session_id), best for high-trust platforms
+
+**Escalation path when blocked:** datacenter → isp → residential`,
         inputSchema: zodToMcpSchema(ProxyParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -261,7 +288,7 @@ Not for:
 
 **Best for:** Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions.
 **Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_extract with format="html").
-**Actions:** navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call.
+**Actions:** navigate, click, type, screenshot, snapshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call. snapshot = full DOM text; aria_snapshot = smaller semantic tree (prefer aria_snapshot for most extraction tasks).
 **Sessions:** Pass session_id to reuse the same browser page (cookies, login) across calls. Persistent cross-call sessions are reliable only on the local/long-lived server; on the hosted serverless endpoint treat each call as one-shot (a session_id may not survive between calls). Use close_session to release early.
 **Auth:** NOVADA_API_KEY (auto-provisions Browser API credentials). NOVADA_BROWSER_WS is optional — set it to override auto-provision.
 **Platform note:** Use wait with domcontentloaded (never networkidle) for SPAs. (The \`country\` param is accepted but NOT yet applied to the browser exit node — do not rely on it for geo-routing.)
@@ -276,7 +303,7 @@ Not for:
 **agent_instruction:** Call this first to see all available Novada tools and capabilities — especially useful when starting a new task and you need to find the right tool.
 **Returns:** Markdown table grouped by category — Content Retrieval, Scraping & Verification, Proxy, Browser & Rendering, Account & Billing, Health & Discovery.
 **Filter:** Pass category to narrow to a specific group (e.g. category="Proxy" to see all proxy tools).
-**Status legend:** active = available now.
+**Status legend:** active = available now. Output also includes server_version (the running package version).
 
 **KEY FACT: ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. No separate keys needed for any product. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no extra API key. If a tool fails, call novada_account (section="summary") to check your balance, plans, and entitlements.`,
         inputSchema: zodToMcpSchema(DiscoverParamsSchema),
@@ -284,55 +311,39 @@ Not for:
     },
     {
         name: "novada_scraper_submit",
-        description: `Run a structured scrape of a platform operation. Returns the records inline in one synchronous call — there is no separate task_id to poll. (Compatibility alias: this now behaves exactly like novada_scrape.)
-
-**Best for:** Structured data from a platform operation (product/keyword/profile/repo lookups) in a single call.
-**Params:** platform (the scraper domain, e.g. 'amazon.com'), operation (the operation ID for that platform), and optional params (operation-specific key/values). These three are the ONLY accepted fields — this tool takes no URL and no category/type selector; the platform + operation pair alone determines what runs.
-**Valid platform values (scraper_name):** amazon.com, walmart.com, google.com, bing.com, duckduckgo.com, yandex.com, x.com, tiktok.com, instagram.com, facebook.com, youtube.com, linkedin.com, github.com. Read novada://scraper-platforms for the full operation IDs per platform.
-**Next step:** The records are already in this response — no polling needed. novada_scraper_status / novada_scraper_result are retained only for old callers and just point back here.
-**Note:** If the endpoint returns no records, contact Novada support at support@novada.com to confirm operation availability.
-**Alternative:** novada_scrape is the canonical name for the same synchronous behavior.`,
+        description: `Deprecated alias — novada_scrape now returns records synchronously in one call; use novada_scrape instead. Pass platform, operation, and optional params — identical to novada_scrape. For resuming a slow job, pass task_id to novada_scrape directly.`,
         inputSchema: zodToMcpSchema(ScraperSubmitParamsSchema),
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
     {
         name: "novada_scraper_status",
-        description: `Check the status of an async scraping task by task_id. Returns: pending, running, complete, or failed.
-
-**Required:** task_id (from novada_scraper_submit).
-**Pending/running:** Retry in 5–10 seconds. Use exponential backoff (5s → 10s → 20s → 40s).
-**Complete:** Call novada_scraper_result with the same task_id to retrieve formatted data.
-**Failed:** Re-submit with novada_scraper_submit, or use novada_extract as an alternative.
-**agent_instruction:** Each response includes the next action to take — always follow it.`,
+        description: `Deprecated alias — novada_scrape now returns records synchronously in one call; use novada_scrape instead. Pass task_id to novada_scrape to resume a slow job without submitting a new billable task.`,
         inputSchema: zodToMcpSchema(ScraperStatusParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },
     {
         name: "novada_scraper_result",
-        description: `Retrieve the completed result of an async scraping task by task_id.
-
-**Required:** task_id (from novada_scraper_submit). Confirm status='complete' with novada_scraper_status first.
-**Formats:** 'markdown' (default — human-readable table), 'json' (structured array for programmatic use), 'raw' (unprocessed API response).
-**agent_instruction:** Call novada_scraper_status first to confirm task is complete before calling this tool. Calling this on a pending task returns a not_ready response.
-**Note:** If result is unavailable, check novada_scraper_status and contact Novada support at support@novada.com with the task_id if the endpoint is returning errors.`,
+        description: `Deprecated alias — novada_scrape now returns records synchronously in one call; use novada_scrape instead. Pass task_id to novada_scrape to resume a slow job without submitting a new billable task.`,
         inputSchema: zodToMcpSchema(ScraperResultParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },
     {
         name: "novada_browser_flow",
-        description: `Execute multi-step browser automation with Novada's cloud browser. Use for JS-heavy sites, login flows, or multi-page sequences.
+        description: `Simplified browser automation with a 5-action flow API (click, scroll, wait, type, screenshot). Use only if you specifically need this simplified flow interface or novada_browser is unavailable.
 
-**Best for:** Automating sequences of clicks, form fills, scrolls, and screenshots on a single page or across a multi-step flow. Maintains session state across calls when session_id is provided.
+**novada_browser is the primary, more capable tool** — it provides full CDP access with 12 automation action types (navigate, click, type, screenshot, snapshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select) plus 2 session-management actions (close_session, list_sessions). Prefer novada_browser for all new browser automation.
+**Use novada_browser_flow when:** you specifically need the simplified flow API, or you have an existing workflow built around it.
 **Actions:** click, scroll, wait, type, screenshot — up to 20 per call.
 **Sessions:** Pass session_id to reuse the same browser instance across calls (preserves cookies, login state). Sessions expire after 10 minutes of inactivity.
-**Fallback:** If this tool fails, use novada_browser — it uses CDP directly and supports more action types (navigate, aria_snapshot, evaluate, hover, press_key, select).
 **Not for:** Single URL reading without interaction (use novada_extract), structured platform data (use novada_scrape).`,
         inputSchema: zodToMcpSchema(BrowserFlowParamsSchema),
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
     {
         name: "novada_ai_monitor",
-        description: `Search the public web and AI-company domains (chatgpt.com/openai.com, perplexity.ai, anthropic.com, ...) for PUBLIC mentions and sentiment of a brand or product. NOTE: this searches INDEXED PUBLIC PAGES — it does NOT query the live AI models' responses. Returns per-source mention counts, sentiment signals, and competitor mentions. A brand not discussed on those indexed domains will show few/zero mentions — that reflects indexed-page coverage, not the models' actual behavior.
+        description: `Search PUBLIC indexed pages on AI-company domains for brand mentions and sentiment — this is NOT page-change monitoring (that's novada_monitor) and does NOT query live AI models.
+
+Searches indexed pages on chatgpt.com/openai.com, perplexity.ai, anthropic.com, and similar domains for public mentions of a brand or product. Returns per-source mention counts, sentiment signals, and competitor mentions. A brand not discussed on those indexed domains will show few/zero mentions — that reflects indexed-page coverage, not the models' actual behavior.
 
 **How it works:** For each selected domain group, executes a Google search scoped to that domain (e.g. site:openai.com "brandname") and analyzes the returned page snippets for sentiment, claims, and competitor co-mentions.
 **Best for:** Checking whether a brand appears on AI-company public docs/blogs/changelogs; competitive presence on indexed pages of AI platforms.
@@ -344,13 +355,13 @@ Not for:
     },
     {
         name: "novada_monitor",
-        description: `⚠️ Session-scoped only: state lost on server restart — baselines live in memory for the MCP session, not persisted to disk. For persistent, cross-session monitoring, schedule recurring novada_monitor (or novada_scrape) calls from your own job runner and diff/store results externally; this tool itself keeps no durable state.
-
-Detect changes on a web page over time. Extracts content, computes a hash, compares with previous check. Returns changed/unchanged + field-level diffs.
+        description: `Detect changes on a web page over time. Extracts content, computes a hash, compares with previous check. Returns changed/unchanged + field-level diffs.
 
 **Use for:** E-commerce price monitoring, stock availability tracking, content change detection, competitive pricing alerts.
 **How:** First call = baseline. Subsequent calls compare against baseline and report changes. Pass fields=["price","availability"] for field-level diffs with % change.
-**Not for:** One-time extraction (novada_extract), full crawl (novada_crawl).`,
+**Not for:** One-time extraction (novada_extract), full crawl (novada_crawl).
+
+⚠️ **Hosted endpoint (mcp.novada.com) limitation:** Baselines do NOT survive between calls on the hosted serverless endpoint — each invocation lands on a cold function with no prior state, so change detection will always return baseline_recorded. For real change detection you must run the local server (\`npx novada-mcp\`, a long-lived process) or schedule calls from your own job runner and diff externally. This is a known interim limitation until persistent KV storage ships.`,
         inputSchema: zodToMcpSchema(MonitorParamsSchema),
         // idempotentHint:false — novada_monitor is explicitly stateful: each call may write a new
         // baseline to monitorStore. Repeated calls on the same URL intentionally produce different
@@ -366,7 +377,7 @@ Detect changes on a web page over time. Extracts content, computes a hash, compa
 2. **Guides you if you have no key** — tells you to register at the Novada dashboard (free credits included for testing), where to copy your API key, and the exact config snippet for Claude Code / Claude Desktop / Cursor / VS Code / Windsurf.
 3. **Orients you** — a plain-language list of the core things you can do (search, extract, scrape, browser, account) plus the add-ons.
 
-**Three states it reports:** key present + valid (ready) · key present but rejected (fix it) · no key yet (register + free credits).
+**Three states it reports:** key present + valid (ready) · key present but rejected (fix it) · no key yet (register + free credits). Output also includes server_version (the running package version).
 
 **Auth-free by design:** this is the tool that helps you GET a key, so a missing key is the normal first-run state — it guides, it never errors. Includes a machine-usable agent_instruction so an AI knows exactly what to tell the user next.
 
@@ -441,11 +452,7 @@ Detect changes on a web page over time. Extracts content, computes a hash, compa
     },
     {
         name: "novada_scraper_task_mgmt",
-        description: `Manage async scraper tasks via the developer-api. List tasks, check status by task_id(s), download results, or get the last task's status.
-
-**Actions:** "list" (paginated task list), "status" (status by task_ids — comma-separated, max 200), "download" (download result by task_id), "last_status" (most recent task).
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).
-**Note:** This wraps management endpoints on api-m.novada.com, separate from the scraper.novada.com submission API. For submitting new tasks use novada_scraper_submit; for polling a known task_id use novada_scraper_status.`,
+        description: `Deprecated alias — novada_scrape now returns records synchronously in one call; use novada_scrape instead. Pass task_id to novada_scrape to resume a slow job without submitting a new billable task.`,
         inputSchema: zodToMcpSchema(ScraperTaskMgmtParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -481,25 +488,48 @@ Detect changes on a web page over time. Extracts content, computes a hash, compa
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
     },
 ];
+/**
+ * TOOLS — the MCP ListTools surface, DERIVED from the registry.
+ *
+ * Only entries whose `name` appears in REGISTERED_TOOL_NAMES are exported here.
+ * Everything else in _TOOL_DEFINITIONS remains dispatchable (the switch handles
+ * all names) but is hidden from agents' tool lists — no ListTools drift possible.
+ *
+ * To surface a new tool: add it to TOOL_REGISTRY in registry.ts AND add its
+ * definition to _TOOL_DEFINITIONS above. To hide one: remove it from TOOL_REGISTRY.
+ * Never edit this export directly.
+ */
+export const TOOLS = _TOOL_DEFINITIONS.filter((t) => REGISTERED_TOOL_NAMES.has(t.name));
 // ─── Hidden Aliases ────────────────────────────────────────────────────────
 // Names dispatched via switch but intentionally absent from TOOLS/ListTools.
-// These are backward-compat aliases, deprecated tool names, and the auth-free
-// pre-gate tools (novada_setup, novada_session_stats, novada_search_feedback
-// are handled before dispatch() is called in index.ts and are also in TOOLS —
-// they do NOT appear here since they ARE in TOOLS).
+// Includes: backward-compat aliases, deprecated tool names, and the 10 tools
+// hidden from the visible surface in TOW2-256 T1+T2:
+//   - 6 proxy variants → novadaProxy(type=...)
+//   - 4 scraper stubs  → novadaScrape / benign stub
 export const HIDDEN_ALIASES = new Set([
-    // Hidden alias: maps to novada_extract(format:"html")
+    // Backward-compat aliases → novada_extract(format:"html")
     "novada_unblock",
-    // Hidden aliases: map to novada_account(section="summary")
+    // Backward-compat aliases → novada_account(section=...)
     "novada_health",
     "novada_health_all",
-    // Hidden backward-compat aliases for novada_account sections
     "novada_wallet_balance",
     "novada_wallet_usage_record",
     "novada_traffic_daily",
     "novada_plan_balance_all",
     "novada_capture_logs",
     "novada_account_summary",
+    // Proxy type variants → novada_proxy(type=...) [TOW2-256 T2]
+    "novada_proxy_residential",
+    "novada_proxy_isp",
+    "novada_proxy_datacenter",
+    "novada_proxy_mobile",
+    "novada_proxy_static",
+    "novada_proxy_dedicated",
+    // Scraper stubs → dispatch preserved but description was misleading [TOW2-256 T1]
+    "novada_scraper_submit",
+    "novada_scraper_status",
+    "novada_scraper_result",
+    "novada_scraper_task_mgmt",
 ]);
 // ─── Dispatch ─────────────────────────────────────────────────────────────
 export async function dispatch(name, args, apiKey, ctx) {
@@ -569,7 +599,7 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_scraper_task_mgmt":
             return JSON.stringify({
                 status: "ok",
-                message: "The async scraper flow was replaced in 0.9.4 — novada_scrape now returns results inline in one call.",
+                message: "The async scraper flow was replaced — novada_scrape now returns results inline in one call.",
                 agent_instruction: "Call novada_scrape with { platform, operation, params } to get the records directly. No polling needed.",
             }, null, 2);
         case "novada_browser_flow":
@@ -612,13 +642,13 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_proxy_account_list":
             return novadaProxyAccountList(validateProxyAccountListParams(args), apiKey);
         case "novada_ip_whitelist":
-            return novadaIpWhitelist(validateIpWhitelistParams(args));
+            return novadaIpWhitelist(validateIpWhitelistParams(args), apiKey);
         case "novada_capture_apikey":
             return novadaCaptureApikey(validateCaptureApikeyParams(args), apiKey);
         case "novada_static_ip_mgmt":
             return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey);
         default:
-            throw new Error(`Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback`);
+            throw new Error(`Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt`);
     }
 }
 //# sourceMappingURL=core.js.map

@@ -22,6 +22,11 @@ export declare function withDateRangeCompat<T extends Record<string, unknown>>(b
  * POST to a developer-api endpoint and unwrap the standard `{code, msg, data}`
  * envelope. Body is encoded as `multipart/form-data` (NOT JSON) per the API
  * contract. Throws NovadaError on auth/transport/business failures.
+ *
+ * Auto-retries ONLY on business code 40002 ("No approval received"), and ONLY
+ * for read-type endpoints (see WRITE_PATHS) — up to 2 retries with 300ms/900ms
+ * backoff. Every other non-zero code (11000/10002/401/etc.) fails immediately,
+ * unchanged from prior behavior.
  */
 export declare function devApiPost<T = unknown>(path: string, body: Record<string, unknown>, opts?: {
     apiKey?: string;
