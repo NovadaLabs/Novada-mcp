@@ -168,3 +168,85 @@ describe("novadaProxyDedicated — username masked in all output formats (NOV-67
     expect(result).toContain("dedU***");
   });
 });
+
+// ─── F1: curl snippet always appended ─────────────────────────────────────────
+
+describe("novadaProxy — curl snippet appended (F1)", () => {
+  beforeEach(() => {
+    process.env.NOVADA_PROXY_USER = "testuser";
+    process.env.NOVADA_PROXY_PASS = "testpass";
+    process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+  });
+
+  it("url format: always includes '## as curl:' snippet", async () => {
+    const result = await novadaProxy({ type: "residential", format: "url" });
+    expect(result).toContain("## as curl:");
+    expect(result).toContain("curl --proxy");
+  });
+
+  it("env format: always includes '## as curl:' snippet", async () => {
+    const result = await novadaProxy({ type: "residential", format: "env" });
+    expect(result).toContain("## as curl:");
+    expect(result).toContain("curl --proxy");
+  });
+
+  it("curl format: does NOT duplicate the snippet (response IS the curl command)", async () => {
+    const result = await novadaProxy({ type: "residential", format: "curl" });
+    // The curl format should not have an extra "## as curl:" section
+    expect(result).not.toContain("## as curl:");
+  });
+
+  it("default (no format): includes '## as curl:' snippet", async () => {
+    // params.format undefined → should default to url which has snippet
+    const result = await novadaProxy({ type: "residential" } as Parameters<typeof novadaProxy>[0]);
+    expect(result).toContain("## as curl:");
+  });
+});
+
+// ─── F2: city warning for static / dedicated ──────────────────────────────────
+
+describe("novadaProxy — city warning for static/dedicated (F2)", () => {
+  beforeEach(() => {
+    process.env.NOVADA_STATIC_PROXY_LIST = "151.242.47.74:8886:ax0kSJ8snE6wF1mR:p3K0rNpsP2iR";
+    process.env.NOVADA_DEDICATED_PROXY_LIST = "192.0.2.10:9999:dedUser9876xYz:secretDedicatedPass";
+  });
+
+  it("static + city: emits ## Warnings block with city message", async () => {
+    const result = await novadaProxy({ type: "static", country: "us", session_id: "sess1", city: "london", format: "url" });
+    expect(result).toContain("## Warnings");
+    // Warning is JSON-encoded (same convention as the existing isp+country warning)
+    expect(result).toContain("city param is not supported for type=");
+    expect(result).toContain("static");
+    expect(result).toContain("london");
+  });
+
+  it("dedicated + city: emits ## Warnings block with city message", async () => {
+    const result = await novadaProxy({ type: "dedicated", session_id: "sess1", city: "paris", format: "url" });
+    expect(result).toContain("## Warnings");
+    expect(result).toContain("city param is not supported for type=");
+    expect(result).toContain("dedicated");
+    expect(result).toContain("paris");
+  });
+
+  it("static without city: no ## Warnings block emitted", async () => {
+    const result = await novadaProxy({ type: "static", country: "us", session_id: "sess1", format: "url" });
+    // No city supplied → no city warning (other warnings from static itself may still appear)
+    expect(result).not.toContain('city param is not supported');
+  });
+
+  it("residential + city: no city warning (city IS supported for residential)", async () => {
+    process.env.NOVADA_PROXY_USER = "testuser";
+    process.env.NOVADA_PROXY_PASS = "testpass";
+    process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+    const result = await novadaProxy({ type: "residential", country: "us", city: "london", format: "url" });
+    expect(result).not.toContain('city param is not supported');
+  });
+
+  it("isp + city: no city warning (only country is warned for isp)", async () => {
+    process.env.NOVADA_PROXY_USER = "testuser";
+    process.env.NOVADA_PROXY_PASS = "testpass";
+    process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+    const result = await novadaProxy({ type: "isp", city: "berlin", format: "url" });
+    expect(result).not.toContain('city param is not supported');
+  });
+});

@@ -266,3 +266,196 @@ describe("NOV-672: buildContextualAgentInstruction (output format tests)", () =>
     expect(halfOrMore).toBe(true); // 2/3 unresolved → should suggest render
   });
 });
+
+// ─── F1: Consolidated fields summary table ────────────────────────────────────
+
+describe("F1: batch fields summary table", () => {
+  /**
+   * Parse the fields table logic inline (mirrors the logic in extract.ts batch path).
+   * We test the extraction helpers and table-building logic without invoking the full
+   * HTTP stack — same pattern as the NOV-672 tests above.
+   */
+
+  /** Simulate the markdown result that extractSingle returns for a URL with fields */
+  function makeMarkdownResult(url: string, fields: Record<string, string | null>): string {
+    const fieldLines = Object.entries(fields).map(([k, v]) =>
+      v === null
+        ? `${k}: — *(unresolved)*`
+        : `${k}: ${v} *(jsonld)* *(conf:0.95)*`
+    );
+    return [
+      `## Extracted Content`,
+      `url: ${url}`,
+      `mode: static | source: live | ok`,
+      `fetched_at: 2026-07-13T09:00:00Z`,
+      `extraction_quality: ${Object.values(fields).every(v => v === null) ? "none" : "high"}`,
+      `title: Test Page`,
+      `chars:1000 | links:5`,
+      ``,
+      `---`,
+      ``,
+      `## Requested Fields`,
+      ...fieldLines,
+      ``,
+      `---`,
+      ``,
+      `## Page content here`,
+    ].join("\n");
+  }
+
+  /** Inline re-implementation of the parseFieldValueMarkdown logic from extract.ts */
+  function parseFieldValueMarkdown(content: string, field: string): string {
+    const CELL_MAX = 60;
+    const sectionStart = content.indexOf("## Requested Fields");
+    if (sectionStart === -1) return "—";
+    const sectionEnd = content.indexOf("\n## ", sectionStart + 1);
+    const section = sectionEnd !== -1 ? content.slice(sectionStart, sectionEnd) : content.slice(sectionStart);
+    const lineRe = new RegExp(`^${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*(.+)$`, "m");
+    const m = section.match(lineRe);
+    if (!m) return "—";
+    const raw = m[1].trim();
+    if (raw.startsWith("—")) return "—";
+    const cleaned = raw.replace(/\s*\*\([^)]*\)\*/g, "").replace(/\s*—\s*\*\([^)]*\)\*/g, "").trim();
+    const truncCell = (v: string) => v.length > CELL_MAX ? v.slice(0, CELL_MAX - 1) + "…" : v;
+    return truncCell(cleaned || "—");
+  }
+
+  it("extracts a resolved field value from a markdown result", () => {
+    const content = makeMarkdownResult("https://example.com/p", { price: "$29.99", title: "Widget" });
+    expect(parseFieldValueMarkdown(content, "price")).toBe("$29.99");
+    expect(parseFieldValueMarkdown(content, "title")).toBe("Widget");
+  });
+
+  it("returns — for unresolved fields", () => {
+    const content = makeMarkdownResult("https://example.com/p", { price: null, title: "Widget" });
+    expect(parseFieldValueMarkdown(content, "price")).toBe("—");
+  });
+
+  it("returns — when field section is absent", () => {
+    const content = "## Extracted Content\nurl: https://example.com\ntitle: Test\n---\nBody text";
+    expect(parseFieldValueMarkdown(content, "price")).toBe("—");
+  });
+
+  it("truncates cell values longer than 60 chars", () => {
+    const longVal = "A".repeat(80);
+    const content = makeMarkdownResult("https://example.com/p", { price: longVal });
+    const cell = parseFieldValueMarkdown(content, "price");
+    expect(cell.length).toBeLessThanOrEqual(60);
+    expect(cell.endsWith("…")).toBe(true);
+  });
+
+  it("builds a markdown table with correct row count for ≥3 URLs", () => {
+    const fieldNames = ["price", "title"];
+    const urls = [
+      { url: "https://a.com", content: makeMarkdownResult("https://a.com", { price: "$10", title: "A" }), ok: true, i: 0, renderRetried: false },
+      { url: "https://b.com", content: makeMarkdownResult("https://b.com", { price: "$20", title: "B" }), ok: true, i: 1, renderRetried: false },
+      { url: "https://c.com", content: makeMarkdownResult("https://c.com", { price: null, title: "C" }), ok: true, i: 2, renderRetried: false },
+    ];
+
+    const CELL_MAX = 60;
+    const truncCell = (v: string) => v.length > CELL_MAX ? v.slice(0, CELL_MAX - 1) + "…" : v;
+    const header = `| url | ${fieldNames.join(" | ")} |`;
+    const separator = `| --- | ${fieldNames.map(() => "---").join(" | ")} |`;
+    const tableRows: string[] = [header, separator];
+    for (const r of urls) {
+      const cells = fieldNames.map(f => parseFieldValueMarkdown(r.content, f));
+      tableRows.push(`| ${truncCell(r.url)} | ${cells.join(" | ")} |`);
+    }
+
+    // header + separator + 3 data rows = 5 lines
+    expect(tableRows).toHaveLength(5);
+    // price for c.com (unresolved) should be —
+    expect(tableRows[4]).toContain("—");
+    // price for a.com should be $10
+    expect(tableRows[2]).toContain("$10");
+  });
+});
+
+// ─── F2: Per-URL render retry trigger condition ────────────────────────────────
+
+describe("F2: render retry trigger condition", () => {
+  /**
+   * Tests that the trigger condition logic (extraction_quality: none + mode: static)
+   * correctly identifies which results qualify for a render retry.
+   * We test the detection predicates inline — same approach as NOV-672 tests.
+   */
+
+  function isAllFieldsUnresolved(content: string): boolean {
+    return /\bextraction_quality:\s*none\b/.test(content);
+  }
+
+  function isStaticMode(content: string): boolean {
+    return /\bmode:\s*static\b/.test(content);
+  }
+
+  it("triggers retry when extraction_quality:none AND mode:static", () => {
+    const content = [
+      "## Extracted Content",
+      "url: https://example.com/js-page",
+      "mode: static | source: live | ok",
+      "extraction_quality: none",
+      "title: JS App",
+      "chars:200 | links:0",
+      "---",
+      "## Requested Fields (none resolved)",
+      "Fields [price, availability] could not be resolved.",
+    ].join("\n");
+    expect(isAllFieldsUnresolved(content)).toBe(true);
+    expect(isStaticMode(content)).toBe(true);
+  });
+
+  it("does NOT trigger retry when fields partially resolved (extraction_quality: partial)", () => {
+    const content = [
+      "## Extracted Content",
+      "url: https://example.com/partial",
+      "mode: static | source: live | ok",
+      "extraction_quality: partial",
+      "title: Page",
+    ].join("\n");
+    expect(isAllFieldsUnresolved(content)).toBe(false);
+  });
+
+  it("does NOT trigger retry when mode is render (already rendered)", () => {
+    const content = [
+      "## Extracted Content",
+      "url: https://example.com/rendered",
+      "mode: render | source: live | ok",
+      "extraction_quality: none",
+      "title: Page",
+    ].join("\n");
+    // Mode is render, not static — retry guard should skip it
+    expect(isStaticMode(content)).toBe(false);
+  });
+
+  it("does NOT trigger retry on HTTP error results (ok=false)", () => {
+    // ok=false results are filtered before the retry check — simulate the filter
+    const results = [
+      { ok: false, content: "Error: 404 Not Found", i: 0, url: "https://example.com/404", renderRetried: false },
+      { ok: true, content: "mode: static | source: live | ok\nextraction_quality: none", i: 1, url: "https://example.com/js", renderRetried: false },
+    ];
+    const retryQueue = results.filter(r =>
+      r.ok &&
+      isAllFieldsUnresolved(r.content) &&
+      isStaticMode(r.content)
+    );
+    // Only the second URL (ok=true, static, none) qualifies
+    expect(retryQueue).toHaveLength(1);
+    expect(retryQueue[0].url).toBe("https://example.com/js");
+  });
+
+  it("caps retry queue at 3 items", () => {
+    const RETRY_CAP = 3;
+    const allRetryable = Array.from({ length: 7 }, (_, i) => ({
+      ok: true,
+      i,
+      url: `https://example${i}.com`,
+      content: "mode: static | source: live | ok\nextraction_quality: none",
+      renderRetried: false,
+    }));
+    const retryQueue = allRetryable.filter(r =>
+      r.ok && isAllFieldsUnresolved(r.content) && isStaticMode(r.content)
+    );
+    const toRetry = retryQueue.slice(0, RETRY_CAP);
+    expect(toRetry).toHaveLength(3);
+  });
+});

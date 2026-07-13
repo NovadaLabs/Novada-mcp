@@ -70,3 +70,7 @@ If still blocked:
 - Content looks JS-heavy or incomplete → retry with render=render
 - Content is truncated → increase max_chars
 - Need more URLs → call novada_map first, then batch extract
+
+## When to call extract after search
+
+`novada_search` returns snippets only — they locate pages but do not answer questions. If accuracy matters (facts, prices, current events), call `novada_extract` on the top 1-3 search results and read the full content before answering. For multi-source questions, `novada_research` (which calls extract internally on top sources) is cheaper than doing this manually — prefer it when you need ≥2 sources.

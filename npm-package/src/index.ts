@@ -394,7 +394,7 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
   novada_research            Multi-source research — returns cited source material to reason over
   novada_map                 Discover URLs on a website (up to 100)
   novada_site_copy           Copy an entire docs site to disk as markdown (one file per page)
-  novada_scrape              Structured data from 13 active platforms (~78 operations, e.g. Amazon, TikTok)
+  novada_scrape              Structured data from 16 active platforms (~88 operations, e.g. Amazon, TikTok, SHEIN, ChatGPT)
   novada_ai_monitor          Search AI-company public domains for brand mentions (not live models)
   novada_monitor             Detect page changes between checks (session-scoped baseline)
   novada_proxy               Get proxy credentials (residential/isp/datacenter/mobile/static/dedicated)

@@ -1,6 +1,6 @@
 # novada_scrape — Platform Scraper Skill
 
-**When to use:** You need structured records from a known platform (Amazon, TikTok, LinkedIn, GitHub, etc.) — not raw HTML, but clean tabular data. 13 platforms are supported: Amazon, Walmart, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub.
+**When to use:** You need structured records from a known platform (Amazon, TikTok, LinkedIn, GitHub, etc.) — not raw HTML, but clean tabular data. 16 platforms are supported: Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity. Note: 8 operations are currently backend-broken (forwarded with a warning — backend may fix any day); the other 80 are verified working as of 2026-07-13.
 
 ## Step 1: Find the right platform and operation
 
@@ -44,6 +44,20 @@ ALWAYS read the `novada://scraper-platforms` resource before calling novada_scra
 - `markdown` — best for agents reading and reasoning over results
 - `json` — best for code processing and downstream pipelines
 - `toon` — token-optimized format (40-65% smaller), pipe-separated rows
+- `csv` — inline CSV text, header row + one row per record
+- `excel` (alias `xlsx`) — real .xlsx via exceljs, returned inline as base64
+- `html` — inline HTML `<table>`
+
+## Deliverable-first: default to a file, not a wall of text
+
+When a result has more than ~10 records, don't dump every row as inline markdown/JSON — produce a file instead. This is the default behavior, not an opt-in:
+
+1. Call with `format: "excel"` for general/business consumers, or `format: "csv"`/`"json"` if the user's phrasing points to a technical/programmatic consumer.
+2. `excel` returns inline base64, `csv`/`json` return inline text — decode/save it yourself as an actual file (e.g. via the Write tool locally, or as a downloadable artifact in your environment). Name it `<topic-or-query>-<platform>-<YYYY-MM-DD>.<ext>`, kebab-case.
+3. Carry the tool's own header line (`platform: ... | operation: ... | records: ... | format: ...`) into the file — as a title row in the xlsx sheet, or a leading comment line in the CSV — so the file is self-describing even opened out of context.
+4. Lead your response with the file path/download reference, not a prose recap — the deliverable is the point.
+
+Under ~10 records (a quick lookup, single answer): inline markdown stays correct — don't force a file for small results.
 
 ## Error handling
 

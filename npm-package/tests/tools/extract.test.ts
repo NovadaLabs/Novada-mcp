@@ -1133,3 +1133,34 @@ describe("NOV-GB1: GitBook .md fallback", () => {
     }
   });
 });
+
+// ─── country param propagation ───────────────────────────────────────────────
+
+describe("country param reaches fetchWithRender", () => {
+  it("passes country=de to the web unblocker POST when render=render", async () => {
+    const prevKey = process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+    try {
+      const richHtml = `<html><head><title>DE Page</title></head><body>${"<p>German content paragraph.</p>".repeat(25)}</body></html>`;
+      mockedAxios.post.mockResolvedValue({
+        data: { data: { html: richHtml, status_code: 200 } },
+        status: 200,
+        headers: {},
+      });
+
+      await novadaExtract(
+        { url: "https://example.de", render: "render", country: "de" },
+        API_KEY
+      );
+
+      // fetchWithRender appends country to URLSearchParams body sent via axios.post
+      const postCalls = mockedAxios.post.mock.calls;
+      expect(postCalls.length).toBeGreaterThan(0);
+      const bodyStr: string = postCalls[0][1] as string;
+      expect(bodyStr).toContain("country=de");
+    } finally {
+      if (prevKey === undefined) delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+      else process.env.NOVADA_WEB_UNBLOCKER_KEY = prevKey;
+    }
+  });
+});

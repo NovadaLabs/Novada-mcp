@@ -9,6 +9,7 @@ import { makeNovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors
 import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
+import { CATALOG_BY_DOMAIN } from "../data/scraper_catalog.js";
 import { isBrowserAvailableOnRuntime, getBrowserUnavailableError } from "../utils/runtime.js";
 
 export { detectJsHeavyContent } from "../utils/index.js";
@@ -26,6 +27,11 @@ const MAX_CHARS_DEFAULT = 25000;
  * Cross-tool hint map: base domain → the best novada_scrape operation for structured data.
  * Used by both the JSON and markdown output paths to suggest novada_scrape when extraction
  * quality is poor (P2-3). Single source of truth so the two hint sites can never drift.
+ *
+ * FIX-2: Only list ops that are NOT backend_broken in the catalog. When the best op for a
+ * platform is broken, either point at the next working op (shein) or suppress the hint
+ * entirely (chatgpt — all ops broken). We validate at hint-emit time too, as a belt-and-
+ * suspenders guard for future catalog status changes.
  */
 const SCRAPER_PLATFORMS: Record<string, string> = {
   "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
@@ -33,7 +39,17 @@ const SCRAPER_PLATFORMS: Record<string, string> = {
   "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
   "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
   "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
+  // shein_products_keyword is backend_broken; shein_product_url is alive — use that instead
+  "shein.com": "shein_product_url",
+  // chatgpt.com: both chatgpt_answer_searchterm and chatgpt_answer_url are backend_broken — suppress
+  // perplexity_answer_searchterm is ok
+  "perplexity.ai": "perplexity_answer_searchterm",
 };
+
+/** Return true when the catalog confirms this op is backend_broken (safe-to-suppress hint). */
+function isCatalogOpBroken(domain: string, op: string): boolean {
+  return CATALOG_BY_DOMAIN.get(domain)?.get(op)?.status === "backend_broken";
+}
 
 /** Markdown annotation for a resolved field's source (used in the Requested Fields block). */
 function sourceAnnotation(source: FieldResult["source"]): string {
@@ -117,15 +133,61 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     const results = await Promise.all(
       urls.map((url, i) =>
         extractSingle({ ...params, url }, apiKey)
-          .then(content => ({ i, url, content, ok: true }))
+          .then(content => ({ i, url, content, ok: true, renderRetried: false }))
           .catch(err => {
             const rawMessage = err instanceof Error ? err.message : String(err);
             const message = redactSecrets(rawMessage);
             const fix = getSuggestedFix(url, rawMessage);
-            return { i, url, content: `Error: ${message}\n${fix}`, ok: false };
+            return { i, url, content: `Error: ${message}\n${fix}`, ok: false, renderRetried: false };
           })
       )
     );
+
+    // F2: Per-URL render escalation for all-unresolved fields on static fetch.
+    // Trigger: ok=true AND extraction_quality:none AND mode:static AND fields were requested.
+    // Cost control: cap concurrent retries at 3; never retry if HTTP error or render was explicit.
+    // Guard requires render to be unset/auto (review MEDIUM-1): an explicit render:"render"
+    // already rendered, so a retry would be an identical duplicate charge.
+    if (params.fields && params.fields.length > 0 && (!params.render || params.render === "auto")) {
+      // Detect which results qualify for a render retry
+      const retryQueue = results.filter(r =>
+        r.ok &&
+        /\bextraction_quality:\s*none\b/.test(r.content) &&
+        /\bmode:\s*static\b/.test(r.content)
+      );
+      if (retryQueue.length > 0) {
+        // Cap: at most 3 retries per batch call to bound added latency (~10-15s each)
+        const RETRY_CAP = 3;
+        const toRetry = retryQueue.slice(0, RETRY_CAP);
+        const retried = await Promise.all(
+          toRetry.map(r =>
+            extractSingle({ ...params, url: r.url, render: "render" }, apiKey)
+              .then(content => ({ i: r.i, url: r.url, content, ok: true, renderRetried: true }))
+              .catch(() => {
+                // Retry failed — keep original + note the attempt
+                return { i: r.i, url: r.url, content: r.content + "\n\n*render retry attempted: failed*", ok: true, renderRetried: true };
+              })
+          )
+        );
+        // Replace original results only when retry resolved at least one field
+        for (const rr of retried) {
+          const resolved = !/\bextraction_quality:\s*none\b/.test(rr.content);
+          const idx = results.findIndex(r => r.i === rr.i);
+          if (idx !== -1) {
+            if (resolved) {
+              results[idx] = rr;
+            } else {
+              // Retry didn't resolve fields — keep original + note the attempt
+              results[idx] = {
+                ...results[idx],
+                content: results[idx].content + "\n\n*render retry attempted: fields still unresolved*",
+                renderRetried: true,
+              };
+            }
+          }
+        }
+      }
+    }
 
     const successful = results.filter(r => r.ok).length;
     const failed = results.length - successful;
@@ -159,6 +221,73 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     function extractAvailabilityFromBlock(content: string): string | null {
       const m = content.match(/^availability_status:\s*(.+)$/m);
       return m ? m[1].trim() : null;
+    }
+
+    // F1: Consolidated fields summary table (≥3 URLs + fields requested).
+    // Parses each result to build one compact cross-URL comparison table at the top.
+    // Full detail sections remain below. Handles both markdown and JSON per-URL output.
+    if (urls.length >= 3 && params.fields && params.fields.length > 0) {
+      const fieldNames = params.fields;
+      const CELL_MAX = 60;
+      const truncCell = (v: string) => v.length > CELL_MAX ? v.slice(0, CELL_MAX - 1) + "…" : v;
+
+      // Parse a field value from one URL's result content (markdown format)
+      function parseFieldValueMarkdown(content: string, field: string): string {
+        // Section starts at "## Requested Fields" (or "## Requested Fields (none resolved)")
+        const sectionStart = content.indexOf("## Requested Fields");
+        if (sectionStart === -1) return "—";
+        const sectionEnd = content.indexOf("\n## ", sectionStart + 1);
+        const section = sectionEnd !== -1
+          ? content.slice(sectionStart, sectionEnd)
+          : content.slice(sectionStart);
+        // Line format: "fieldname: value *(source)* *(conf:X.XX)*" or "fieldname: — *(unresolved)*"
+        const lineRe = new RegExp(`^${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*(.+)$`, "m");
+        const m = section.match(lineRe);
+        if (!m) return "—";
+        // Strip annotation tags like *(jsonld)* *(conf:0.95)* *(warning: ...)* for table display
+        const raw = m[1].trim();
+        if (raw.startsWith("—")) return "—";
+        const cleaned = raw
+          .replace(/\s*\*\([^)]*\)\*/g, "")    // *(tag)*
+          .replace(/\s*—\s*\*\([^)]*\)\*/g, "") // — *(tag)*
+          .trim();
+        return truncCell(cleaned || "—");
+      }
+
+      // Parse a field value from one URL's result content (JSON format)
+      function parseFieldValueJson(content: string, field: string): string {
+        try {
+          const parsed = JSON.parse(content) as Record<string, unknown>;
+          const fields = parsed.fields as Record<string, { value: unknown }> | null;
+          if (!fields || !(field in fields)) return "—";
+          const val = fields[field]?.value;
+          if (val === null || val === undefined) return "—";
+          const str = typeof val === "string" ? val : JSON.stringify(val);
+          return truncCell(str);
+        } catch {
+          return "—";
+        }
+      }
+
+      const parseFieldValue = params.format === "json" ? parseFieldValueJson : parseFieldValueMarkdown;
+
+      // Markdown table: | url | field1 | field2 | ...
+      const header = `| url | ${fieldNames.join(" | ")} |`;
+      const separator = `| --- | ${fieldNames.map(() => "---").join(" | ")} |`;
+      const tableRows: string[] = [header, separator];
+
+      for (const r of results) {
+        if (!r.ok) {
+          tableRows.push(`| ${truncCell(r.url)} | ${fieldNames.map(() => "error").join(" | ")} |`);
+          continue;
+        }
+        const cells = fieldNames.map(f => parseFieldValue(r.content, f));
+        tableRows.push(`| ${truncCell(r.url)} | ${cells.join(" | ")} |`);
+      }
+
+      summaryLines.push(`## Fields Summary`);
+      summaryLines.push(...tableRows);
+      summaryLines.push(``);
     }
 
     // Build compact per-item rows
@@ -615,7 +744,7 @@ async function extractSingleInner(
     }
   } else if (effectiveMode === "render") {
     const response = await fetchWithRender(params.url, apiKey,
-      { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}) }
+      { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}), ...(params.country ? { country: params.country } : {}) }
     );
     const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
     if (isPdfResponse(params.url, contentType)) {
@@ -770,7 +899,7 @@ async function extractSingleInner(
 
       // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
       try {
-        const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract" });
+        const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(params.country ? { country: params.country } : {}) });
         const renderHtml = String(renderResponse.data);
         if (detectBotChallenge(renderHtml)) {
           // Re-check anti-bot on render result (may differ from static)
@@ -1283,10 +1412,11 @@ async function extractSingleInner(
       hints.push(`Auto-escalation attempted (render${isBrowserConfigured() ? "+browser" : ""}) but quality remained low (${quality.score}/100). ${escalationError ? `Render error: ${escalationError}` : "The page may require a specialized approach."}`);
       if (!isBrowserConfigured()) hints.push("Set NOVADA_BROWSER_WS to enable Browser API as a final fallback for JS-heavy pages.");
     }
-    // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
+    // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor.
+    // FIX-2: Only emit the hint when the catalog confirms the op is NOT backend_broken.
     if (!contentOk && baseDomain) {
       const scraperOp = SCRAPER_PLATFORMS[baseDomain];
-      if (scraperOp) {
+      if (scraperOp && !isCatalogOpBroken(baseDomain, scraperOp)) {
         hints.push(`For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
       }
       // NOV-565: never show a bot-protection hint when the page already has full content.
@@ -1500,10 +1630,11 @@ async function extractSingleInner(
       }
     }
   }
-  // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
+  // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor.
+  // FIX-2: Only emit the hint when the catalog confirms the op is NOT backend_broken.
   if (!contentOk && baseDomain) {
     const scraperOp = SCRAPER_PLATFORMS[baseDomain];
-    if (scraperOp) {
+    if (scraperOp && !isCatalogOpBroken(baseDomain, scraperOp)) {
       lines.push(`- For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
     }
     // NOV-565: never show a bot-protection hint when the page already has full content.

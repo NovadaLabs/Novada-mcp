@@ -37,3 +37,4 @@ benchmark/
 reviews/
 meeting-notes/
 .aam/
+npm-package/.opencli/

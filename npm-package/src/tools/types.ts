@@ -179,6 +179,13 @@ const _ExtractParamsInner = z.object({
     .describe("Fixed milliseconds to wait after page load before capturing content. Use wait_for (CSS selector) instead when possible — it is more reliable. wait_ms is a fallback for pages with no stable selector. Max: 30000ms."),
   clean: z.boolean().optional()
     .describe("Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage."),
+  country: z.string().length(2).optional()
+    .describe(
+      "ISO 3166-1 alpha-2 country code (e.g. 'de', 'us', 'gb') to route the fetch through an exit IP in that country. " +
+      "Useful for localized pricing, geo-restricted content, and per-country monitoring (e.g. comparing a product price across European countries). " +
+      "Only applies to render/unblocker fetches (render=\"render\"|\"js\" or auto-escalation to render); no effect on a pure static fetch. " +
+      "In batch mode (url array), the same country is applied to all URLs in the call."
+    ),
   project: z.string().max(30).optional()
     .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
 });
@@ -252,6 +259,12 @@ export const ResearchParamsSchema = z.object({
     .describe("Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'."),
   project: z.string().max(30).optional()
     .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
+  time_range: z.enum(["day", "week", "month", "year"]).optional()
+    .describe("Limit results to a time window. 'day'=last 24h, 'week'=last 7 days, 'month'=last 30 days, 'year'=last 12 months."),
+  start_date: z.string().optional()
+    .describe("ISO date YYYY-MM-DD. Return results published on or after this date."),
+  end_date: z.string().optional()
+    .describe("ISO date YYYY-MM-DD. Return results published on or before this date."),
 }).refine(data => !!(data.question || data.query), {
   message: "Either 'question' or 'query' must be provided",
 });

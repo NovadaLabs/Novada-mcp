@@ -9,7 +9,9 @@ description: >-
 
 # Novada Agent Skill
 
-You have access to Novada's 22 curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a 15-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
+You have access to Novada's 23 curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a 15-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
+
+Deep-dive companion skills: `novada-scrape` (platform scrapers + price fields), `novada-extract` (single/batch extraction), `novada-browser` (CDP automation), `novada-proxy` (proxy type selection + escalation), `novada-site-copy` (whole-site copying / RAG ingestion).
 
 ## Tool Selection — Decision Tree
 
@@ -17,7 +19,10 @@ You have access to Novada's 22 curated MCP tools (the set `novada_discover` list
 Need web data?
 ├── Have specific URLs already? → novada_extract
 ├── Need to find URLs first?
-│   ├── 1-2 targeted queries → novada_search
+│   ├── Question needs facts/prices/current events (accuracy matters)?
+│   │   ├── 1 source → novada_search THEN novada_extract top result (read it)
+│   │   └── Multiple sources → novada_research (reads full content for you — cheaper than N search+extract)
+│   ├── Just locating pages (no answer needed yet) → novada_search
 │   ├── Explore an entire site → novada_map or novada_crawl
 │   └── Multi-faceted question → novada_research
 └── Want ranked, cited source material to reason over? → novada_research
@@ -29,6 +34,9 @@ Need to click/fill/screenshot a page? → novada_browser
 Check account balance / plans / entitlements? → novada_account
 ```
 
+**Escalation ladder (pick the lowest rung that answers the question):**
+`novada_search` (locate) → `novada_extract` top result (read one page) → `novada_research` (read many sources)
+
 Also read `novada://guide` — it contains the full decision tree and workflow patterns.
 
 ## Core Tools
@@ -37,15 +45,17 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 **When:** Find pages matching a query. You know what you're looking for, not where it lives.
 
+**Returns: titles, URLs, snippets only.** Snippets are for locating pages, not for answering questions. If the answer needs to be correct (facts, prices, current events, "what does X say"), you MUST either open the top result(s) with `novada_extract`, or use `novada_research` (which reads full sources for you). Never answer a substantive question from snippets alone.
+
 **Key parameters:**
 - `query` — your search string
-- `engine` — `google` (default), `bing`, `duckduckgo`, `yandex` (`yahoo` is NOT supported — returns an error)
+- `engine` — `google` (default), `duckduckgo`, `yandex` (`bing` and `yahoo` are NOT supported — return an error)
 - `num` — results count, 1-20 (default 10)
 - `time_range` — `day`, `week`, `month`, `year`
 - `include_domains` / `exclude_domains` — up to 10 domains each
 - `country` — ISO code for geo-targeting (195 countries supported)
 
-**When NOT to use:** You already have the URL — use `novada_extract` instead.
+**When NOT to use:** You already have the URL — use `novada_extract` instead. You need a factual answer — search gives you candidates to read, not the answer itself.
 
 **Example:**
 ```json
@@ -193,7 +203,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ### `novada_scrape`
 
-**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 13 platforms (~78 operations): Amazon, Walmart, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub.
+**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 16 platforms (~88 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
 
 **Key parameters:**
 - `platform` — domain, e.g. `amazon.com`, `tiktok.com`, `linkedin.com`
@@ -326,5 +336,8 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 1. **Batch > sequential**: Always use `novada_extract` with a URL array instead of multiple single-URL calls.
 2. **Map before crawl for selective work**: If you only need specific pages, `novada_map` + filter + `novada_extract` is more efficient than `novada_crawl`.
 3. **Use `focus` in research**: A focused research question produces tighter, more relevant sub-queries.
-4. **Prefer `engine="google"`**: It is the fastest and most reliable. `bing` is currently degraded and `yahoo` is unsupported (returns an error); `duckduckgo`/`yandex` are slower fallbacks.
+4. **Prefer `engine="google"`**: It is the fastest and most reliable. `bing` and `yahoo` are unsupported (return an error); `duckduckgo`/`yandex` are slower fallbacks.
 5. **`novada_research` is not a search**: It returns ranked, cited source material to reason over (extractive — you compose the answer), not raw URLs or a finished report. Don't use it for a single lookup.
+6. **Deliverable-first for tabular results**: If a result (e.g. from `novada_scrape`) has more than ~10 records, default to producing a downloadable file (xlsx/csv/json — see `novada_scrape`'s Format guide) instead of dumping every row as inline text. Lead your response with the file reference, not a prose recap. Under ~10 records, inline text is still correct.
+7. **Snippets ≠ answers (depth rule)**: `novada_search` returns snippets for locating pages. If accuracy matters (facts, prices, current events), open the top 1-3 results with `novada_extract` and read the actual content before answering. For multi-source questions, ONE `novada_research` call is cheaper and better than N manual search+extract calls — prefer it.
+8. **Do not thrash on transient errors**: Errors like "No approval received" are auto-retried by the server. Do NOT re-issue the same call manually on a transient error — that double-charges. Retry manually only on an explicit, persistent failure.

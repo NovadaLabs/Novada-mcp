@@ -90,7 +90,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   // ─── Scraping & Verification ────────────────────────────────────────────
   {
     name: "novada_scrape",
-    description: "Extract structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output",
+    description: "Extract structured data from 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, YouTube, SHEIN, ChatGPT, Perplexity, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output",
     category: "Scraping & Verification",
     status: "active",
   },

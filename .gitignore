@@ -50,3 +50,4 @@ test-p0.mjs
 # Env
 .env
 .env.local
+.vercel

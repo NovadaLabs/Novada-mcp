@@ -58,6 +58,27 @@ describe("novadaResearch", () => {
     expect(mockedAxios.post.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
+  it("propagates time_range to every internal search call", async () => {
+    mockedAxios.post.mockResolvedValue(
+      searchEnvelope([
+        { title: "Recent Source", url: "https://recent.com", description: "Fresh news about the topic this week" },
+      ])
+    );
+    mockedAxios.get.mockResolvedValue(
+      extractResponse("<article><p>This week the topic was covered extensively with new findings and recent developments.</p></article>")
+    );
+
+    await novadaResearch({ question: "What happened this week?", depth: "quick", time_range: "week" }, API_KEY);
+
+    // Every POST call (each internal search) must carry time_range in its form body
+    const postCalls = mockedAxios.post.mock.calls;
+    expect(postCalls.length).toBeGreaterThanOrEqual(1);
+    for (const [, body] of postCalls) {
+      const formBody = body as URLSearchParams;
+      expect(formBody.get("time_range")).toBe("week");
+    }
+  });
+
   it("reports failed searches in output", async () => {
     let callCount = 0;
     mockedAxios.post.mockImplementation(async () => {

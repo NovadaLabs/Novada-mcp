@@ -6,6 +6,8 @@ import {
   type ToolMeta,
   type ToolCategory,
 } from "./registry.js";
+import { VERSION } from "../config.js";
+import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS } from "../data/scraper_catalog.js";
 
 // ─── Tool Catalog ─────────────────────────────────────────────────────────────
 // The catalog is DERIVED from the canonical registry (./registry.ts) — the single
@@ -23,6 +25,12 @@ export const DiscoverParamsSchema = z.object({
     .optional()
     .describe(
       `Optional category filter. One of: ${POPULATED_TOOL_CATEGORIES.map((c) => `'${c}'`).join(", ")}. Omit to list all tools.`
+    ),
+  platform: z
+    .string()
+    .optional()
+    .describe(
+      `Optional platform domain to look up (e.g. 'amazon.com', 'tiktok.com'). When provided, returns all operations for that platform from the scraper catalog — free, no API call, no credit cost. Mutually exclusive with category: if both are provided, platform takes priority.`
     ),
 });
 
@@ -51,7 +59,39 @@ export async function novadaDiscover(
   params: DiscoverParams,
   visibleTools?: ReadonlySet<string>
 ): Promise<string> {
-  const { category } = params;
+  const { category, platform } = params;
+
+  // ─── Platform lookup shortcut (no API call, no credit cost) ─────────────────
+  if (platform) {
+    const platformOps = CATALOG_BY_DOMAIN.get(platform);
+    if (!platformOps) {
+      const validDomains = CATALOG_DOMAINS.join(", ");
+      return (
+        `Platform '${platform}' is not in the scraper catalog. ` +
+        `Valid platform domains: ${validDomains}. ` +
+        `For platforms not in this list, use novada_extract instead.`
+      );
+    }
+    const lines: string[] = [
+      `## ${platform} — Scraper Operations`,
+      "",
+      `**${platformOps.size} operations available.** Use with novada_scrape({ platform: "${platform}", operation: "<operation_id>", params: {...} })`,
+      "",
+      "| Operation | Required Params | Format |",
+      "|-----------|-----------------|--------|",
+    ];
+    for (const [slug, op] of platformOps) {
+      const reqParams = op.params
+        .filter(p => p.required)
+        .map(p => p.key)
+        .join(", ") || "(none)";
+      const statusNote = op.status === "backend_broken"
+        ? ` ⚠️ backend-broken: ${op.broken_reason ?? "backend failure"}`
+        : "";
+      lines.push(`| \`${slug}\` | ${reqParams}${statusNote} | ${op.format} |`);
+    }
+    return lines.join("\n");
+  }
 
   const visible = visibleTools
     ? TOOL_REGISTRY.filter((t) => visibleTools.has(t.name))
@@ -108,6 +148,7 @@ export async function novadaDiscover(
     "",
     `> ${category ? `Showing tools in category: **${category}**` : "All tools listed below, grouped by category."}`,
     "> Status: ✅ active = available now  |  🔜 todo = planned, not yet available",
+    `> server_version: ${VERSION}`,
     "",
   ];
 
@@ -153,7 +194,7 @@ export async function novadaDiscover(
     "- **Search the web:** Use `novada_search` for queries, `novada_extract` for specific URLs."
   );
   lines.push(
-    "- **Structured data:** Use `novada_scrape` for 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, etc.)."
+    "- **Structured data:** Use `novada_scrape` for 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, ChatGPT, SHEIN, etc.)."
   );
   lines.push(
     "- **Full research:** Use `novada_research` for multi-source synthesis."

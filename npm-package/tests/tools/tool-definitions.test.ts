@@ -90,13 +90,16 @@ describe("tool definitions (src/core.ts _TOOL_DEFINITIONS)", () => {
     ).toEqual([]);
   });
 
-  it("novada_monitor description opens with the session-scope limitation (NOV-324)", () => {
+  it("novada_monitor description opens with purpose and contains hosted-endpoint warning (NOV-324 updated)", () => {
     const seg = segments.find(s => s.name === "novada_monitor");
     expect(seg, "novada_monitor not found").toBeTruthy();
     const descStart = seg!.body.indexOf("description: `");
     expect(descStart).toBeGreaterThan(-1);
     const firstLine = seg!.body.slice(descStart + "description: `".length).split("\n")[0];
-    expect(firstLine).toMatch(/Session-scoped only/);
+    // Description now leads with purpose; hosted-endpoint warning appears later in the body.
+    expect(firstLine).toMatch(/Detect changes/);
+    expect(seg!.body).toMatch(/Hosted endpoint|hosted endpoint/);
+    expect(seg!.body).toMatch(/baseline_recorded/);
   });
 
   it("novada_scraper_submit description matches the real schema params, not a bogus scraper_type (NOV-324)", () => {

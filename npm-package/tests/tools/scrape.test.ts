@@ -472,8 +472,64 @@ describe("novadaScrape — pre-flight (#6)", () => {
 
   it("resolves twitter.com → x.com so x.com operations validate", async () => {
     const { preflightScrape } = await import("../../src/tools/scrape.js");
-    // preflightScrape itself takes the resolved platform; verify x.com map is correct
-    expect(preflightScrape("x.com", "twitter_profile_username", { username: "jack" })).toBeNull();
+    // preflightScrape itself takes the resolved platform; verify x.com map is correct.
+    // FIX-3: catalog-authoritative param for twitter_profile_username is `user_name` (api_id 126).
+    expect(preflightScrape("x.com", "twitter_profile_username", { user_name: "jack" })).toBeNull();
+  });
+});
+
+// FIX-1: broken-op warning must fire on the ERROR path, not only the success path.
+// When a backend_broken op fails (timeout / API_DOWN / all-errors), the caller must
+// see the known-broken acknowledgement so they understand why it failed.
+describe("novadaScrape — backend_broken op warning on error path (FIX-1)", () => {
+  it("prepends broken-op notice to thrown error when a backend_broken op times out", async () => {
+    // shein_products_keyword is marked backend_broken in the catalog (60s timeout).
+    // Simulate a network timeout — the most common failure mode for broken ops.
+    mockedAxios.post.mockRejectedValue(new Error("timeout of 60000ms exceeded"));
+
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "shein.com", operation: "shein_products_keyword", params: { keyword: "dress" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+
+    expect(thrown).toBeDefined();
+    const msg = thrown instanceof Error ? thrown.message : String(thrown);
+    // The broken-op notice must appear in the thrown error message
+    expect(msg).toContain("currently failing on the backend");
+    expect(msg).toContain("shein_products_keyword");
+  });
+
+  it("prepends broken-op notice when all download items have errors (API_DOWN path)", async () => {
+    // chatgpt_answer_searchterm is backend_broken — simulate the all-errors throw.
+    mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+    mockedAxios.get.mockResolvedValue({
+      data: [{ error: "scraper connection timeout", error_code: 10000 }],
+      status: 200,
+      headers: {},
+      config: {} as never,
+      statusText: "OK",
+    });
+
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "chatgpt.com", operation: "chatgpt_answer_searchterm", params: { search_terms: "hello" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+
+    expect(thrown).toBeDefined();
+    const msg = thrown instanceof Error ? thrown.message : String(thrown);
+    // The broken-op notice must appear on this error path too
+    expect(msg).toContain("currently failing on the backend");
+    expect(msg).toContain("chatgpt_answer_searchterm");
   });
 });
 

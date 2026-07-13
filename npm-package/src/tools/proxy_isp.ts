@@ -82,6 +82,12 @@ export async function novadaProxyIsp(params: ProxyIspParams): Promise<string> {
     ? `Any (ISP zone does not support country targeting — '${params.country.toUpperCase()}' ignored; use novada_proxy_residential for geo-targeted ISP)`
     : "Any country (rotating)";
 
+  const warnings: string[] = [];
+  if (params.country) {
+    warnings.push(`country param is accepted but silently ignored for ISP proxies — ISP proxies do not support country targeting on this product (received: "${params.country}")`);
+  }
+  const warningsBlock = warnings.length > 0 ? [`## Warnings`, JSON.stringify(warnings), ``] : [];
+
   if (params.format === "env") {
     return [
       `## ISP Proxy Configuration (Shell Environment)`,
@@ -96,6 +102,7 @@ export async function novadaProxyIsp(params: ProxyIspParams): Promise<string> {
       `export http_proxy="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
       `export https_proxy="http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
       ``,
+      ...warningsBlock,
       `## agent_instruction`,
       `ISP proxies look like real home users. Best for social/ecommerce. Use country param for targeting. For higher anti-bot strength, try novada_proxy_residential instead.`,
     ].join("\n");
@@ -111,6 +118,7 @@ export async function novadaProxyIsp(params: ProxyIspParams): Promise<string> {
       `# Add this flag to any curl command — replace *** with $NOVADA_PROXY_PASS:`,
       `curl --proxy "${maskedUrl}" <your-url>`,
       ``,
+      ...warningsBlock,
       `## agent_instruction`,
       `ISP proxies look like real home users. Best for social/ecommerce. Use novada_proxy_residential for stronger anti-bot scenarios.`,
       `To get the actual proxy URL with credentials: substitute *** with the runtime value of the NOVADA_PROXY_PASS environment variable.`,
@@ -134,6 +142,7 @@ export async function novadaProxyIsp(params: ProxyIspParams): Promise<string> {
     `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,
     `  # Replace *** with the value of NOVADA_PROXY_PASS`,
     ``,
+    ...warningsBlock,
     `## agent_instruction`,
     `ISP proxies look like real home users. Best for social/ecommerce. ISP IPs are assigned to real ISPs — they pass checks that fail datacenter IPs.`,
     `Fallback: if ISP proxy fails anti-bot checks, use novada_proxy_residential (stronger). For speed, use novada_proxy_datacenter.`,

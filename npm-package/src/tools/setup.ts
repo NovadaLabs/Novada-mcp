@@ -1,6 +1,7 @@
 import { z, ZodError } from "zod";
 import { novadaWalletBalance } from "./wallet_balance.js";
 import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { VERSION } from "../config.js";
 
 export const SetupParamsSchema = z.object({}).strict();
 export type SetupParams = z.infer<typeof SetupParamsSchema>;
@@ -226,6 +227,7 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
 
   L.push("## Agent");
   L.push(`key_state: ${state}`);
+  L.push(`server_version: ${VERSION}`);
   L.push(`register_url: ${URL_SIGNUP}`);
   L.push(`api_key_url: ${URL_API_KEY}`);
   L.push(`core_tools: ${CORE_TOOLS.map(t => t.tool).join(", ")}`);

@@ -36,19 +36,72 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 /**
+ * Append city warnings (F2) and a short "as curl:" one-liner (F1) to an
+ * already-formatted proxy result string.
+ *
+ * The curl snippet is ALWAYS appended for "url" and "env" outputs so any user
+ * on any device has an immediately usable form. For "curl" outputs the snippet
+ * is omitted (the whole response IS the curl command).
+ * For static/dedicated the snippet uses a placeholder endpoint since those tools
+ * return a masked curl command in their "url" section already; we just append a
+ * clean note for env format completeness.
+ */
+function appendCityWarningsAndCurlSnippet(
+  result: string,
+  cityWarnings: string[],
+  format: "url" | "env" | "curl",
+): string {
+  const parts: string[] = [result];
+
+  if (cityWarnings.length > 0) {
+    // Trailing newline matches the ISP-path warningsBlock format (review MEDIUM-2).
+    parts.push(`\n## Warnings\n${JSON.stringify(cityWarnings)}\n`);
+  }
+
+  // Append a curl one-liner so every device has an immediately runnable form.
+  // Skip for "curl" outputs — they already ARE the curl command.
+  if (format !== "curl") {
+    parts.push(`\n## as curl:\ncurl --proxy "<PROXY_URL>" https://example.com`);
+  }
+
+  return parts.join("");
+}
+
+/**
  * Return proxy configuration for use in HTTP clients, curl, or shell.
  *
  * Agents use this when they need to make HTTP requests through a residential proxy,
  * bypass geo-restrictions, or maintain IP consistency across a session.
  */
 export async function novadaProxy(params: ProxyParams): Promise<string> {
+  // F1: On the hosted door (Vercel), when the caller did NOT explicitly pass a
+  // format, default to "url" (a single pasteable proxy URL string) rather than
+  // whatever the schema default is. Local/stdio callers are unaffected.
+  // Note: the ProxyParams type has format optional; when undefined here the
+  // caller left it unset — that is the "no explicit format" case.
+  const effectiveFormat: "url" | "env" | "curl" = params.format ?? "url";
+  // "url" is the universal default — pasteable on any device including phones.
+  // If hosted/local defaults ever need to diverge, gate on
+  // process.env.VERCEL || process.env.VERCEL_ENV here (review LOW-2 removed the
+  // dead ternary that anchored this).
+
+  // F2: city is silently dropped for static and dedicated — warn the caller.
+  const cityWarnings: string[] = [];
+  if ((params.type === "static" || params.type === "dedicated") && params.city) {
+    cityWarnings.push(
+      `city param is not supported for type="${params.type}" — only country + session_id are used (received: "${params.city}")`
+    );
+  }
+
   // 0.9.4: static/dedicated are per-IP products with their own credential model —
   // delegate to their specialized handlers instead of the zone-based path.
   if (params.type === "static") {
-    return novadaProxyStatic({ country: params.country ?? "us", session_id: params.session_id ?? "default", format: params.format ?? "url" });
+    const result = await novadaProxyStatic({ country: params.country ?? "us", session_id: params.session_id ?? "default", format: effectiveFormat });
+    return appendCityWarningsAndCurlSnippet(result, cityWarnings, effectiveFormat);
   }
   if (params.type === "dedicated") {
-    return novadaProxyDedicated({ session_id: params.session_id ?? "default", format: params.format ?? "url" });
+    const result = await novadaProxyDedicated({ session_id: params.session_id ?? "default", format: effectiveFormat });
+    return appendCityWarningsAndCurlSnippet(result, cityWarnings, effectiveFormat);
   }
   // INC-198: Use resolveProxyCredentials() which auto-fetches via account API
   // when only NOVADA_PROXY_ENDPOINT is set (no user/pass).
@@ -103,6 +156,12 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
     ? `targeting: ${appliedCountry.toUpperCase()}${params.city ? ` / ${params.city}` : ""}`
     : "";
 
+  const warnings: string[] = [];
+  if (params.type === "isp" && params.country) {
+    warnings.push(`country param is accepted but silently ignored for type="isp" — ISP proxies do not support country targeting on this product (received: "${params.country}")`);
+  }
+  const warningsBlock = warnings.length > 0 ? [`## Warnings`, JSON.stringify(warnings), ``] : [];
+
   const maskedUrl = `http://${encodedMaskedUser}:***@${proxyEndpoint}`;
   // Shell-safe URL: uses ${NOVADA_PROXY_PASS} literal so credentials are never in tool output
   const proxyUrlShell = `http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${proxyEndpoint}`;
@@ -110,7 +169,7 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
   const proxyHost = endpointParts[0];
   const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
 
-  if (params.format === "env") {
+  if (effectiveFormat === "env") {
     return [
       `## Proxy Configuration (Shell Environment)`,
       `type: ${typeLabel}`,
@@ -124,13 +183,17 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
       `export http_proxy="${proxyUrlShell}"`,
       `export https_proxy="${proxyUrlShell}"`,
       ``,
+      ...warningsBlock,
       `## Agent Hints`,
       `- Set these env vars before running HTTP requests to route through the proxy.`,
       `- Use session_id for sticky IP across multiple requests in a workflow.`,
+      ``,
+      `## as curl:`,
+      `curl --proxy "${proxyUrlShell}" https://example.com`,
     ].filter(l => l !== "").join("\n");
   }
 
-  if (params.format === "curl") {
+  if (effectiveFormat === "curl") {
     return [
       `## Proxy Configuration (curl)`,
       `type: ${typeLabel}`,
@@ -139,6 +202,7 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
       `# Set NOVADA_PROXY_PASS in your environment first:`,
       `curl --proxy "${proxyUrlShell}" <your-url>`,
       ``,
+      ...warningsBlock,
       `## Agent Hints`,
       `- Add this flag to any curl command to route through the proxy.`,
       `- For multi-step workflows needing the same IP, add session_id param.`,
@@ -161,6 +225,10 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
     `Python (requests):`,
     `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,
     `  # Replace *** with the value of NOVADA_PROXY_PASS`,
+    ``,
+    ...warningsBlock,
+    `## as curl:`,
+    `curl --proxy "${proxyUrlShell}" https://example.com`,
     ``,
     `## Agent Hints`,
     `- proxy_url above shows *** for the password — read NOVADA_PROXY_PASS from your environment to complete it.`,
