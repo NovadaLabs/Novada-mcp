@@ -4,6 +4,24 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.27] — 2026-07-14
+
+Truthfulness release: every state the server reports about itself now equals reality — or says `unknown`. No interface changes; no new required parameters.
+
+### Fixed
+- **`server_version` frozen at 0.9.3.** `novada_setup`/`novada_discover` reported a stale constant while the real server ran 0.9.26. All version surfaces now read ONE canonical source and always equal `serverInfo.version` — enforced by a deploy-gate contract test, so it can never silently drift again.
+- **Lying-zero prices (`novada_scrape`).** `initial_price: 0` / `buybox_prices.final_price: 0` / `unit_price: ""` while a real price existed in the same record → unknown values are now `null`, and buybox `final_price` is reconciled from the record's trustworthy price when derivable. Genuine prices are untouched.
+- **Error 11006 disambiguated.** One upstream code meant both "unknown operation id" and "product not activated". Now: `unknown_operation` (rejected before dispatch, free, valid operations listed) vs `not_activated` (points to dashboard activation).
+- **Ghost resource.** Tool descriptions told agents to read `novada://scraper-platforms`, but hosted `resources/read` returned -32601. The hosted server now implements the full MCP resources capability (5 resources); unknown URIs return proper JSON-RPC errors.
+
+### Added
+- **A truthful status line on every hosted response:** free plan "N/1000 free calls remaining", paid accounts "uncapped (paid account)", meta tools "free call — no quota consumed". Cost is reported as explicitly `unknown` (no per-call billing signal exists upstream) — never a fabricated number.
+- **`novada_health` `probe:true`** — performs ONE real minimal render through your key (billed, and disclosed as such) and reports the observed result. Default health output now states clearly it reflects entitlement status only, not live render capability.
+- **Response-level warnings for silent no-ops:** `country` on `novada_browser` and `novada_proxy type=isp` is accepted but not applied — responses now say so instead of letting agents assume geo-routing happened.
+- **Deploy-gate contract test** (`hosted-server/scripts/contract/`): 6 report-vs-reality invariants (version agreement, no silent no-op, no lying zero, advertised capability resolves, cost visibility, health truth) run on every deploy; drift fails the deploy before customers see it.
+
+---
+
 ## [0.9.26] — 2026-07-13
 
 Hosted gateway: paying accounts are no longer blocked by the free monthly cap (P0), and meta tools now work in every state.
