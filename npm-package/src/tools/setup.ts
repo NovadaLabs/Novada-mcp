@@ -217,6 +217,12 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
     L.push("");
   }
 
+  // ─── Privacy disclosure (one line, always shown) ──────────────────────────
+  // Hosted gateway telemetry is metadata-only; the full field list and the
+  // never-collected list live in the novada://privacy resource.
+  L.push("Usage metadata is logged (never your queries, URL paths, or content) — read novada://privacy.");
+  L.push("");
+
   // ─── Agent-facing machine block ───────────────────────────────────────────
   const agentInstruction =
     state === "ready"

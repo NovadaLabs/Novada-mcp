@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { listResources, readResource, RESOURCES } from "../../src/resources/index.js";
 
 describe("RESOURCES array", () => {
-  it("contains all 4 resources", () => {
-    expect(RESOURCES).toHaveLength(4);
+  it("contains all 6 resources", () => {
+    expect(RESOURCES).toHaveLength(6);
   });
 
   it("has correct URIs", () => {
@@ -12,6 +12,8 @@ describe("RESOURCES array", () => {
     expect(uris).toContain("novada://countries");
     expect(uris).toContain("novada://guide");
     expect(uris).toContain("novada://scraper-platforms");
+    expect(uris).toContain("novada://llms-txt");
+    expect(uris).toContain("novada://privacy");
   });
 
   it("all resources have mimeType text/plain", () => {
@@ -22,9 +24,9 @@ describe("RESOURCES array", () => {
 });
 
 describe("listResources()", () => {
-  it("returns all 4 resources", () => {
+  it("returns all 6 resources", () => {
     const result = listResources();
-    expect(result.resources).toHaveLength(4);
+    expect(result.resources).toHaveLength(6);
   });
 
   it("includes novada://engines with a description", () => {
@@ -185,6 +187,52 @@ describe("readResource() — novada://scraper-platforms", () => {
   it("contains linkedin.com", () => {
     const text = readResource("novada://scraper-platforms").contents[0].text;
     expect(text).toContain("linkedin.com");
+  });
+});
+
+describe("readResource() — novada://privacy", () => {
+  it("resolves with one text/plain content entry echoing the URI", () => {
+    const result = readResource("novada://privacy");
+    expect(result.contents).toHaveLength(1);
+    expect(result.contents[0].mimeType).toBe("text/plain");
+    expect(result.contents[0].uri).toBe("novada://privacy");
+  });
+
+  it("lists every mcp_events field including target_domain", () => {
+    const text = readResource("novada://privacy").contents[0].text;
+    for (const field of [
+      "ts", "event_type", "request_id", "token_hash", "plan",
+      "client_name", "client_version", "protocol_version", "tool",
+      "arg_keys", "target_domain", "outcome", "latency_ms", "charged",
+      "over_cap_allowed", "quota_remaining", "server_version", "region",
+    ]) {
+      expect(text).toContain(field);
+    }
+  });
+
+  it("states the hostname-only rule for target_domain", () => {
+    const text = readResource("novada://privacy").contents[0].text;
+    expect(text).toContain("HOSTNAME");
+    expect(text).toContain("Never the path, query");
+  });
+
+  it("states what is never logged", () => {
+    const text = readResource("novada://privacy").contents[0].text;
+    expect(text).toContain("What is NEVER logged");
+    expect(text).toContain("Search queries");
+    expect(text).toContain("Parameter VALUES");
+  });
+
+  it("covers retention and contact", () => {
+    const text = readResource("novada://privacy").contents[0].text;
+    expect(text).toContain("Retention");
+    expect(text).toContain("support@novada.com");
+  });
+
+  it("clarifies the local npm server sends no telemetry", () => {
+    const text = readResource("novada://privacy").contents[0].text;
+    expect(text).toContain("local npm server");
+    expect(text).toContain("no usage telemetry");
   });
 });
 

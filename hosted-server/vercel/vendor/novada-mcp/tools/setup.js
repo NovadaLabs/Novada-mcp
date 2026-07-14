@@ -196,6 +196,11 @@ export async function novadaSetup(_params, callerApiKey) {
         L.push("Next: call **novada_account** for balance + quotas, or **novada_discover** to list every tool.");
         L.push("");
     }
+    // ─── Privacy disclosure (one line, always shown) ──────────────────────────
+    // Hosted gateway telemetry is metadata-only; the full field list and the
+    // never-collected list live in the novada://privacy resource.
+    L.push("Usage metadata is logged (never your queries, URL paths, or content) — read novada://privacy.");
+    L.push("");
     // ─── Agent-facing machine block ───────────────────────────────────────────
     const agentInstruction = state === "ready"
         ? "Key is valid. You may call any tool. Suggest the user try novada_search or novada_extract; call novada_account for balance/quotas."
