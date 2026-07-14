@@ -3,6 +3,7 @@ import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS } from 
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
+import { CATALOG_BY_DOMAIN } from "../data/scraper_catalog.js";
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 // How long the SYNC novada_scrape path will poll before returning a structured
 // (non-error) "still processing" result. 0.9.5: raised from 14s → 45s so slow
@@ -35,10 +36,17 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
     form.append("is_auto_push", "false");
     form.append("file_name", file_name);
     // Two param formats exist in the Novada Scraper API:
-    //   A) Search engines (google, bing, duckduckgo, yandex) — flat form fields + json=1
-    //   B) All other platforms — scraper_params=[{...}] JSON array
-    // Verified from dashboard playground 2026-05-18.
-    const SEARCH_ENGINES = new Set(["google.com", "bing.com", "duckduckgo.com", "yandex.com"]);
+    //   A) "flat"   — flat form fields + json=1, used by search-engine-style ops.
+    //   B) "params" — scraper_params=[{...}] JSON array, used by all other ops.
+    //
+    // Format is now looked up per-operation from CATALOG_BY_DOMAIN (the single source
+    // of truth, verified 2026-07-13). Fallback for unknown ops: platform-level heuristic
+    // (search-engine domains → flat; everything else → params).
+    //
+    // WHY per-op: google_map-details_*, google_comment_url, google_shopping_keywords
+    // are google.com ops that 11009 when sent flat — they require Format B.
+    // The old platform-level SEARCH_ENGINES set caused all google ops to be sent flat,
+    // breaking those 6 ops in every release before 0.9.18.
     const RESERVED = new Set(["scraper_name", "scraper_id", "apikey", "api_key", "authorization",
         "scraper_errors", "is_auto_push"]);
     // H-4: Block prototype-pollution keys from flowing to form/JSON
@@ -49,8 +57,15 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
             opParams[k] = v;
         }
     }
-    if (SEARCH_ENGINES.has(scraper_name)) {
-        // Format A: flat form fields for search engines
+    // Per-op format lookup: catalog wins; fall back to platform-level heuristic for
+    // unknown ops (ops not yet in the catalog defer to the backend's own handling).
+    const SEARCH_ENGINE_DOMAINS = new Set(["google.com", "bing.com", "duckduckgo.com", "yandex.com"]);
+    const catalogOp = CATALOG_BY_DOMAIN.get(scraper_name)?.get(scraper_id);
+    const useFlat = catalogOp
+        ? catalogOp.format === "flat"
+        : SEARCH_ENGINE_DOMAINS.has(scraper_name); // fallback: old platform-level heuristic
+    if (useFlat) {
+        // Format A: flat form fields for search-engine-style ops
         if (!("json" in opParams))
             opParams["json"] = 1; // request JSON output format
         for (const [k, v] of Object.entries(opParams)) {
@@ -58,7 +73,7 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
         }
     }
     else {
-        // Format B: scraper_params array for all other platforms
+        // Format B: scraper_params array — all other ops including Format-B google ops
         // Always include scraper_params even when empty — backend requires this field
         form.append("scraper_params", JSON.stringify([opParams]));
     }
@@ -237,7 +252,10 @@ function flattenRecord(obj, prefix = "", depth = 0) {
             }
         }
         else {
-            result[key] = String(v ?? "");
+            // ITEM 3: surface null as the string "null" so toon/csv/markdown output
+            // distinguishes "price unknown" from "" (empty string). undefined fields
+            // keep their existing "" representation.
+            result[key] = v === null ? "null" : String(v ?? "");
         }
     }
     return result;
@@ -397,6 +415,40 @@ export function normalizeProductRecord(raw) {
             out.description = stripDescriptionChrome(raw.description);
             out._description_source = "stripped";
         }
+    }
+    // ── Null out lying-zero price fields (ITEM 3) ─────────────────────────────
+    // Amazon and similar scrapers return 0 or "" for initial_price and
+    // buybox_prices.{final_price,unit_price} when the upstream field is absent.
+    // Principle: "unknown numeric → null, never 0 or ''". On these platforms a
+    // price of exactly $0 is not semantically possible — 0 always means absent.
+    //
+    // initial_price: 0 / "" → null (was-zero = not populated by upstream)
+    if ("initial_price" in raw) {
+        const ip = raw.initial_price;
+        if (ip !== null && ip !== undefined && toPositiveNumber(ip) === null) {
+            out.initial_price = null;
+        }
+    }
+    // buybox_prices: reconcile final_price when 0; null unit_price when "" / 0.
+    const outBuyboxRaw = (raw.buybox_prices &&
+        typeof raw.buybox_prices === "object" &&
+        !Array.isArray(raw.buybox_prices)) ? raw.buybox_prices : null;
+    if (outBuyboxRaw) {
+        const newBuybox = { ...outBuyboxRaw };
+        // buybox_prices.final_price: 0/empty → reconcile from record's derived
+        // listing price (same precedence: final_price > initial_price > variations);
+        // else null. The derivePrice call skips the 0 buybox value automatically
+        // because toPositiveNumber(0) === null.
+        if (toPositiveNumber(outBuyboxRaw.final_price) === null) {
+            const trustworthy = derivePrice(raw);
+            newBuybox.final_price = trustworthy !== null ? trustworthy : null;
+        }
+        // buybox_prices.unit_price: "" / 0 → null (absent signal, not a real price)
+        const rawUnit = outBuyboxRaw.unit_price;
+        if (rawUnit !== null && rawUnit !== undefined && toPositiveNumber(rawUnit) === null) {
+            newBuybox.unit_price = null;
+        }
+        out.buybox_prices = newBuybox;
     }
     return out;
 }
@@ -586,113 +638,49 @@ export const OPERATION_ALIASES = Object.assign(Object.create(null), {
     "google_shopping": "google_shopping_keywords",
     "google_shopping_by-keyword": "google_shopping_keywords",
 });
-function freezeOpMap(obj) {
-    return Object.assign(Object.create(null), obj);
-}
 // For search-engine platforms the query key varies (q / keyword); accept any of these.
 const SEARCH_QUERY_KEYS = ["q", "keyword", "query"];
-export const PLATFORM_OPERATIONS = Object.assign(Object.create(null), {
-    "amazon.com": freezeOpMap({
-        "amazon_product_asin": ["asin"],
-        "amazon_product_url": ["url"],
-        "amazon_product_keywords": ["keyword"],
-        "amazon_product_category-url": ["url"],
-        "amazon_product_best-sellers": ["url"],
-        "amazon_global-product_url": ["url"],
-        "amazon_global-product_category-url": ["url"],
-        "amazon_global-product_seller-url": ["url"],
-        "amazon_global-product_keywords": ["keyword"],
-        "amazon_global-product_keywords-brand": ["keyword"],
-        "amazon_comment_url": ["url"],
-        "amazon_seller_url": ["url"],
-        "amazon_product-list_keywords-domain": ["keyword"],
-    }),
-    "walmart.com": freezeOpMap({
-        "walmart_product_url": ["url"],
-        "walmart_product_category-url": ["url"],
-        "walmart_product_sku": ["sku"],
-        "walmart_product_keywords": ["keyword"],
-        "walmart_product_zipcodes": ["url"],
-    }),
-    "google.com": freezeOpMap({
-        "google_search": SEARCH_QUERY_KEYS,
-        "google_serp_web": SEARCH_QUERY_KEYS,
-        "google_serp_videos": SEARCH_QUERY_KEYS,
-        "google_serp_hotels": SEARCH_QUERY_KEYS,
-        "google_serp_jobs": SEARCH_QUERY_KEYS,
-        "google_map-details_url": ["url"],
-        "google_map-details_cid": ["cid"],
-        "google_map-details_location": ["location"],
-        "google_map-details_placeid": ["place_id"],
-        "google_shopping_keywords": ["keyword"],
-        "google_comment_url": ["url"],
-    }),
-    "bing.com": freezeOpMap({
-        "bing_search": SEARCH_QUERY_KEYS,
-        "bing_maps": SEARCH_QUERY_KEYS,
-        "bing_images": SEARCH_QUERY_KEYS,
-        "bing_videos": SEARCH_QUERY_KEYS,
-        "bing_news": SEARCH_QUERY_KEYS,
-        "bing_shopping": SEARCH_QUERY_KEYS,
-    }),
-    "duckduckgo.com": freezeOpMap({ "duckduckgo": SEARCH_QUERY_KEYS }),
-    "yandex.com": freezeOpMap({ "yandex": SEARCH_QUERY_KEYS }),
-    "x.com": freezeOpMap({
-        "twitter_profile_profileurl": ["url"],
-        "twitter_profile_username": ["username"],
-        "twitter_post_posturl": ["url"],
-    }),
-    "tiktok.com": freezeOpMap({
-        "tiktok_posts_url": ["url"],
-        "tiktok_posts_profileurl": ["url"],
-        "tiktok_posts_listurl": ["url"],
-        "tiktok_profiles_url": ["url"],
-        "tiktok_profiles_listurl": ["url"],
-    }),
-    "instagram.com": freezeOpMap({
-        "ins_profiles_username": ["username"],
-        "ins_profiles_profileurl": ["url"],
-        "ins_reel_url": ["url"],
-        "ins_allreel_url": ["url"],
-        "ins_posts_profileurl": ["url"],
-        "ins_posts_posturl": ["url"],
-        "ins_comment_posturl": ["url"],
-    }),
-    "facebook.com": freezeOpMap({
-        "facebook_event_eventlist-url": ["url"],
-        "facebook_event_search-url": ["url"],
-        "facebook_event_events-url": ["url"],
-        "facebook_post_posts-url": ["url"],
-        "facebook_comment_comments-url": ["url"],
-        "facebook_profile_profiles-url": ["url"],
-    }),
-    "youtube.com": freezeOpMap({
-        "youtube_video-post_url": ["url"],
-        "youtube_video-post_search_filters": ["keyword"],
-        "youtube_video_search_label": ["label"],
-        "youtube_video-post-podcast-url": ["url"],
-        "youtube_video-post-keyword": ["keyword"],
-        "youtube_video-post_explore": ["keyword"],
-        "youtube_product-videoid": ["video_id"],
-        "youtube_video-url": ["url"],
-        "youtube_audio_url": ["url"],
-        "youtube_comment_id": ["video_id"],
-        "youtube_transcript_id": ["url"],
-        "youtube_profiles_keyword": ["keyword"],
-        "youtube_profiles_url": ["url"],
-    }),
-    "linkedin.com": freezeOpMap({
-        "linkedin_company_information_url": ["url"],
-        "linkedin_job_listings_information_job-listing-url": ["url"],
-        "linkedin_job_listings_information_job-url": ["url"],
-        "linkedin_job_listings_information_keyword": ["keyword"],
-    }),
-    "github.com": freezeOpMap({
-        "github_repository_repo-url": ["url"],
-        "github_repository_search-url": ["url"],
-        "github_repository_url": ["url"],
-    }),
-});
+// Special-case required keys for ops where catalog params are too broad or have
+// alternate accepted query keys. Ops not in this map fall back to catalog required params.
+const SEARCH_ENGINE_OP_KEYS = {
+    // google flat ops — accept q/keyword/query equivalently
+    "google_search": SEARCH_QUERY_KEYS,
+    "google_ai_mode": SEARCH_QUERY_KEYS,
+    "google_serp_web": SEARCH_QUERY_KEYS,
+    "google_serp_videos": SEARCH_QUERY_KEYS,
+    "google_serp_hotels": SEARCH_QUERY_KEYS,
+    "google_serp_jobs": SEARCH_QUERY_KEYS,
+    // bing ops
+    "bing_search": SEARCH_QUERY_KEYS,
+    "bing_videos": SEARCH_QUERY_KEYS,
+    "bing_news": SEARCH_QUERY_KEYS,
+    "bing_shopping": SEARCH_QUERY_KEYS,
+    // duckduckgo / yandex
+    "duckduckgo": SEARCH_QUERY_KEYS,
+    "yandex": SEARCH_QUERY_KEYS,
+};
+/** Build an OpMap from catalog params for a single platform. */
+function buildOpMapFromCatalog(domain) {
+    const platformEntry = CATALOG_BY_DOMAIN.get(domain);
+    if (!platformEntry)
+        return Object.create(null);
+    const obj = {};
+    for (const [slug, op] of platformEntry) {
+        if (slug in SEARCH_ENGINE_OP_KEYS) {
+            // Use the multi-key search query keys for search-engine ops
+            obj[slug] = SEARCH_ENGINE_OP_KEYS[slug];
+        }
+        else {
+            // Extract required param keys from catalog; fall back to all param keys if none required
+            const reqKeys = op.params.filter(p => p.required).map(p => p.key);
+            const allKeys = op.params.map(p => p.key);
+            obj[slug] = reqKeys.length > 0 ? reqKeys : (allKeys.length > 0 ? allKeys : ["url"]);
+        }
+    }
+    return Object.assign(Object.create(null), obj);
+}
+/** Derived from SCRAPER_CATALOG — 16 active platforms. */
+export const PLATFORM_OPERATIONS = Object.assign(Object.create(null), Object.fromEntries(Array.from(CATALOG_BY_DOMAIN.keys()).map(domain => [domain, buildOpMapFromCatalog(domain)])));
 // x.com is the canonical platform; twitter.com is a common alias agents try.
 const PLATFORM_ALIASES = Object.assign(Object.create(null), { "twitter.com": "x.com" });
 /** Resolve a platform alias (twitter.com → x.com) with a pollution-safe lookup. */
@@ -708,7 +696,7 @@ function resolvePlatform(platform) {
  * operations — so the agent self-corrects without a 60s hang → 504. Returns null
  * when the platform is not in the active map (unknown/inactive platforms fall
  * through to the existing 11006/11008 backend handling — the map only covers the
- * 13 platforms that have live operations).
+ * 16 platforms that have live operations).
  */
 export function preflightScrape(platform, operation, params) {
     const ops = Object.prototype.hasOwnProperty.call(PLATFORM_OPERATIONS, platform)
@@ -751,6 +739,13 @@ export function preflightScrape(platform, operation, params) {
     }
     return null;
 }
+/**
+ * Look up the catalog entry for a (platform, operation) pair.
+ * Returns undefined for ops not in the catalog (unknown/future ops).
+ */
+function getCatalogOp(platform, operation) {
+    return CATALOG_BY_DOMAIN.get(platform)?.get(operation);
+}
 export async function novadaScrape(params, apiKey) {
     const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
     const { params: opParams, format } = params;
@@ -766,6 +761,13 @@ export async function novadaScrape(params, apiKey) {
     // preflight, source_url, and the chainable "remember" hint (downstream tooling
     // needs the exact backend id).
     const displayOperation = hasAlias ? `${params.operation} (→ ${operation})` : operation;
+    // Broken-op warning: if the catalog marks this op as backend_broken, we still
+    // forward the call (the backend may fix it any day) but prepend a warning note.
+    // The call is NOT blocked — the agent needs to know it exists, even if it currently fails.
+    const catalogEntry = getCatalogOp(platform, operation);
+    const brokenWarning = (catalogEntry?.status === "backend_broken")
+        ? `⚠️ NOTE: operation '${operation}' is currently failing on the backend (verified 2026-07-13): ${catalogEntry.broken_reason ?? "backend failure"}. The call will be forwarded — the backend may have been fixed since last verification. If it fails, this is a known backend issue (not an MCP or credential problem).`
+        : undefined;
     // Resume path: if task_id is provided, skip submit entirely (NOV-689).
     // No new task is submitted, no new charge is incurred — we go straight to polling.
     // platform/operation are still validated for display; preflight is skipped because
@@ -1064,7 +1066,7 @@ export async function novadaScrape(params, apiKey) {
                     `- Use format='json' or format='csv' for downstream processing. Use format='excel' for a .xlsx spreadsheet.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- For structured scraping of other platforms, change platform and operation.`,
-                    `- Discover all 13 supported platforms and their operations: read novada://scraper-platforms resource.`,
+                    `- Discover all 16 supported platforms and their operations: read novada://scraper-platforms resource.`,
                     ``,
                     `## Chainable Output`,
                     `source_url: ${platform}/${operation}`,
@@ -1088,34 +1090,66 @@ export async function novadaScrape(params, apiKey) {
             output += `\n\n## Output Saved\n${outputResult.summary}`;
         }
         catch { /* file save is best-effort */ }
+        if (brokenWarning) {
+            output = brokenWarning + "\n\n" + output;
+        }
         return output;
     }
     catch (err) {
-        // H5: use typed NovadaError.code instead of brittle string matching
+        // ITEM 5 — split upstream 11006 into two distinct error markers:
+        //   • catalogEntry !== undefined → operation IS in the active catalog;
+        //     11006 means the Scraper API product is not activated on this account.
+        //     detail: "not_activated"  message: directs to dashboard.novada.com
+        //   • catalogEntry === undefined → operation NOT in the active catalog;
+        //     11006 means an unknown/unsupported operation or inactive platform.
+        //     detail: "unknown_operation"  message: names valid ops when available
+        // NOTE: no custom agent_instruction added here (house rule — reserved for
+        // the 5 universal API-key errors). Structured message + detail is enough.
+        // H5 / H-7: Re-throw as NovadaError so index.ts sets isError: true.
         if (err instanceof NovadaError && err.code === NovadaErrorCode.PRODUCT_UNAVAILABLE) {
-            // Surface any known canonical aliases for the operation the agent tried, so the
-            // agent can self-correct a near-miss op ID without a second round-trip. Most 11006
-            // errors are malformed/non-canonical op IDs, NOT a deactivated Scraper API.
-            // H-7: Re-throw as NovadaError so index.ts sets isError: true
-            const aliasHint = hasAlias
-                ? `The operation '${params.operation}' was auto-resolved to '${OPERATION_ALIASES[params.operation]}' but still rejected. The canonical ID itself may be wrong for this platform.`
-                : `The operation '${operation}' was rejected. Operation IDs are exact and cannot be guessed.`;
-            throw new NovadaError({
-                code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
-                message: `Scraper code 11006 for '${operation}' on '${platform}'. ${aliasHint}`,
-                agent_instruction: `${aliasHint} Read novada://scraper-platforms to confirm the exact operation ID. ` +
-                    `Alternatives: novada_extract (general pages), novada_extract with render="render" (bot-protected), novada_crawl (multi-page). ` +
-                    `Only treat as an activation issue if the operation ID is confirmed correct. Do not retry with the same ID.`,
-                retryable: false,
-                detail: hasAlias ? `alias:${params.operation}→${OPERATION_ALIASES[params.operation]}` : "code 11006",
-            });
+            if (catalogEntry !== undefined) {
+                // Op IS in the catalog — the account just hasn't activated the product.
+                throw makeNovadaError(NovadaErrorCode.PRODUCT_UNAVAILABLE, `not_activated: Scraper operation '${operation}' on '${platform}' is in the active catalog ` +
+                    `but the Scraper API product is not activated on this account. ` +
+                    `Activate at https://dashboard.novada.com/overview/products/ then retry.`, "not_activated");
+            }
+            else {
+                // Op NOT in catalog (inactive platform / roadmap shell).
+                // Give the agent the nearest valid operations so it can self-correct.
+                const platformOps = Object.prototype.hasOwnProperty.call(PLATFORM_OPERATIONS, platform)
+                    ? Object.keys(PLATFORM_OPERATIONS[platform]).join(", ")
+                    : "";
+                const hint = platformOps
+                    ? `Valid operations for ${platform}: ${platformOps}`
+                    : `Platform '${platform}' is not in the 16 active catalog platforms. Read novada://scraper-platforms for supported platforms.`;
+                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `unknown_operation: '${operation}' for platform '${platform}' is not a recognized scraper operation. ${hint}`, "unknown_operation");
+            }
         }
         // H-7: Re-throw 11008 as NovadaError so index.ts sets isError: true
         if (err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_PARAMS && err.detail === "code 11008") {
             throw err;
         }
         // All other errors (network, timeout, poll failure, missing task_id): re-throw
-        // index.ts will handle them via classifyError and return isError: true
+        // index.ts will handle them via classifyError and return isError: true.
+        // FIX-1: If this op is known backend_broken, prepend the broken-op notice to
+        // the error so the caller sees it regardless of which failure path fires
+        // (timeout, API_DOWN, code=10000 all-errors branch, etc.).
+        if (brokenWarning) {
+            if (err instanceof NovadaError) {
+                throw new NovadaError({
+                    code: err.code,
+                    message: `${brokenWarning}\n\nOriginal error: ${err.message}`,
+                    agent_instruction: `${brokenWarning}\n\n${err.agent_instruction}`,
+                    retryable: err.retryable,
+                    detail: err.detail,
+                });
+            }
+            if (err instanceof Error) {
+                const wrapped = new Error(`${brokenWarning}\n\nOriginal error: ${err.message}`);
+                wrapped.stack = err.stack;
+                throw wrapped;
+            }
+        }
         throw err;
     }
 }

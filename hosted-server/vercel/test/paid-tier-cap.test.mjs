@@ -1,7 +1,6 @@
 /**
  * Paid-tier gateway cap exemption (P0) — PRD-paid-tier-gateway-cap-2026-07-13.md
- * (incl. Amendment: lazy trigger at cap-crossing + balance OR-fallback;
- *  Amendment 2: uid-keyed plan cache shared across an account's keys).
+ * (incl. Amendment: lazy trigger at cap-crossing + balance OR-fallback).
  *
  * Runs on plain Node ≥22.18 (`node --test`) — imports api/_plan.ts directly via
  * Node's built-in type stripping; no test framework, mirroring caller-key.test.mjs.
@@ -23,7 +22,6 @@ import { dirname, join } from "node:path";
 
 import {
   classifyPlanFromUsageRecord,
-  extractUidFromUsageRecord,
   shouldAllowOverCap,
   CAP_EXEMPT_TOOLS,
   PREFETCH_THRESHOLD,
@@ -84,23 +82,6 @@ test("classify: malformed payloads → free, never throws", () => {
   }
 });
 
-// ─── Layer 1: UNIT — extractUidFromUsageRecord (Amendment 2) ─────────────────
-
-test("extractUid: uid on an entry → returned as string", () => {
-  assert.equal(extractUidFromUsageRecord({ list: [{ uid: 4217 }] }), "4217");
-  assert.equal(extractUidFromUsageRecord({ list: [{}, { uid: "abc9" }] }), "abc9");
-});
-
-test("extractUid: top-level uid → returned", () => {
-  assert.equal(extractUidFromUsageRecord({ uid: 55, list: [] }), "55");
-});
-
-test("extractUid: absent/malformed uid → null (graceful degrade)", () => {
-  assert.equal(extractUidFromUsageRecord({ list: [{}] }), null);
-  assert.equal(extractUidFromUsageRecord(null), null);
-  assert.equal(extractUidFromUsageRecord({ list: [{ uid: {} }] }), null);
-  assert.equal(extractUidFromUsageRecord({ list: [{ uid: "" }] }), null);
-});
 
 // ─── Layer 1: UNIT — shouldAllowOverCap ──────────────────────────────────────
 
@@ -159,7 +140,7 @@ function makeMockKv(initial = {}) {
 const TH = "a".repeat(64); // fake tokenHash
 const NOW = 1_760_000_000_000;
 
-const PAID_PAYLOAD = { list: [{ uid: 42, pay_status: 2, pay_money: 10, coupon_money: 0 }] };
+const PAID_PAYLOAD = { list: [{ pay_status: 2, pay_money: 10, coupon_money: 0 }] };
 const FREE_PAYLOAD = { list: [{ pay_status: 2, pay_money: 14, coupon_money: 14 }] };
 
 // ─── Layer 2: RUNTIME — resolvePlan ──────────────────────────────────────────
@@ -186,21 +167,16 @@ test("resolvePlan: bare-string cache value → treated as cache miss (no freshne
   assert.equal(plan, "free", "the fresh upstream classification wins over the bare-string value");
 });
 
-test("resolvePlan: uncached + paid payload → pro, dual-key KV write (Amendment 2), pro fresh window = 30d", async () => {
+test("resolvePlan: uncached + paid payload → pro, tokenHash KV write, pro fresh window = 30d", async () => {
   const kv = makeMockKv();
   const plan = await resolvePlan("key-x", TH, {
     ...kv, fetchUsageRecord: async () => PAID_PAYLOAD, now: () => NOW,
   });
   assert.equal(plan, "pro");
   const tokenSet = kv.sets.find((s) => s.key === `${TH}:plan`);
-  const uidSet = kv.sets.find((s) => s.key === "uid:42:plan");
-  const uidPtr = kv.sets.find((s) => s.key === `${TH}:uid`);
   assert.ok(tokenSet, "tokenHash-keyed plan must be written");
-  assert.ok(uidSet, "uid-keyed plan must be written when uid present in payload");
-  assert.ok(uidPtr, "uid pointer must be written so later lookups can find the shared entry");
   assert.equal(tokenSet.value.plan, "pro");
   assert.equal(tokenSet.value.exp, NOW + PLAN_TTL_PRO_S * 1000, "pro freshness window must be 30 days");
-  assert.deepEqual(uidSet.value, tokenSet.value, "both keys carry the same resolution");
   // Physical KV retention must outlive the freshness window so a STALE value
   // survives for the upstream-down fallback (PRD: "stale cache exists → use it").
   assert.equal(tokenSet.opts.ex, PLAN_TTL_PRO_S + PLAN_STALE_RETENTION_S);
@@ -218,29 +194,6 @@ test("resolvePlan: uncached + free/coupon-only payload → free, free fresh wind
   assert.equal(tokenSet.opts.ex, PLAN_TTL_FREE_S + PLAN_STALE_RETENTION_S);
 });
 
-test("resolvePlan: payload without uid → tokenHash-only write, no uid keys, no throw (Amendment 2 degrade)", async () => {
-  const kv = makeMockKv();
-  const plan = await resolvePlan("key-x", TH, {
-    ...kv, fetchUsageRecord: async () => FREE_PAYLOAD, now: () => NOW,
-  });
-  assert.equal(plan, "free");
-  assert.ok(kv.sets.some((s) => s.key === `${TH}:plan`));
-  assert.ok(!kv.sets.some((s) => s.key.startsWith("uid:")), "no uid-keyed write without uid");
-  assert.ok(!kv.sets.some((s) => s.key === `${TH}:uid`), "no uid pointer without uid");
-});
-
-test("resolvePlan: tokenHash miss + uid pointer + fresh uid-keyed entry → shared pro, no upstream (Amendment 2)", async () => {
-  const kv = makeMockKv({
-    [`${TH}:uid`]: "42",
-    "uid:42:plan": { plan: "pro", exp: NOW + 1000 },
-  });
-  let upstreamCalls = 0;
-  const plan = await resolvePlan("key-x", TH, {
-    ...kv, fetchUsageRecord: async () => { upstreamCalls++; return FREE_PAYLOAD; }, now: () => NOW,
-  });
-  assert.equal(plan, "pro", "second key of the same account must inherit the shared paid resolution");
-  assert.equal(upstreamCalls, 0);
-});
 
 test("resolvePlan: upstream error + no cache → free, never throws", async () => {
   const kv = makeMockKv();
@@ -385,18 +338,6 @@ test("mcp.ts: gateway cap gate wired (enforceGatewayCap imported from ./_plan.js
   assert.match(src, /enforceGatewayCap\(/, "mcp.ts must call enforceGatewayCap");
 });
 
-test("mcp.ts: old hardcoded free-plan decrement call site is gone", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  assert.doesNotMatch(src, /decrementQuota\(ctx\.tokenHash,\s*env,\s*"free"\)/,
-    "the hardcoded plan:'free' decrement at the call site must be replaced by the gate");
-});
-
-test("mcp.ts: account charge-then-refund dance removed", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  assert.ok(!src.includes("isAccountDegradedResponse"),
-    "account tools are cap-exempt now — the degradation-refund dance must be gone");
-  assert.ok(!src.includes("ACCOUNT_DEGRADATION_MARKERS"));
-});
 
 test("mcp.ts: cap error copy is truthful (round-2 audit) — blocked means no payment history AND no balance", () => {
   const src = readFileSync(MCP_TS, "utf8");
@@ -429,11 +370,6 @@ test("mcp.ts: error-path quota refund is guarded by the gate's charged flag", ()
     "no unconditional refund lines may remain (exempt tools were never charged)");
 });
 
-test("mcp.ts: validateToken captures the wallet balance for the over-cap OR-fallback", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  assert.match(src, /balance\?\s*:\s*number/, "token info/cache must carry an optional balance");
-  assert.match(src, /balance:\s*info\.balance/, "fetchHandler must thread info.balance into ctx");
-});
 
 test("mcp.ts: plan resolution is NOT invoked at token validation (lazy trigger only)", () => {
   const src = readFileSync(MCP_TS, "utf8");

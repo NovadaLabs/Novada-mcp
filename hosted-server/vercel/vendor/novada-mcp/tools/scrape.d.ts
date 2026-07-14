@@ -52,6 +52,7 @@ export declare function descriptionHasChrome(description: string): boolean;
 export declare function curateTabularRecords(records: Record<string, unknown>[]): Record<string, unknown>[];
 export declare const OPERATION_ALIASES: Record<string, string>;
 type OpMap = Record<string, readonly string[]>;
+/** Derived from SCRAPER_CATALOG — 16 active platforms. */
 export declare const PLATFORM_OPERATIONS: Record<string, OpMap>;
 /**
  * #6 pre-flight: reject an unknown platform, an unknown operation for a known
@@ -60,7 +61,7 @@ export declare const PLATFORM_OPERATIONS: Record<string, OpMap>;
  * operations — so the agent self-corrects without a 60s hang → 504. Returns null
  * when the platform is not in the active map (unknown/inactive platforms fall
  * through to the existing 11006/11008 backend handling — the map only covers the
- * 13 platforms that have live operations).
+ * 16 platforms that have live operations).
  */
 export declare function preflightScrape(platform: string, operation: string, params: Record<string, unknown>): NovadaError | null;
 export declare function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, apiKey: string): Promise<string>;

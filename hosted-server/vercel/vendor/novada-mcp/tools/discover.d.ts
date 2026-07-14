@@ -9,6 +9,7 @@ export declare const DiscoverParamsSchema: z.ZodObject<{
         "Health & Discovery": "Health & Discovery";
         Auth: "Auth";
     }>>;
+    platform: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export type DiscoverParams = z.infer<typeof DiscoverParamsSchema>;
 export declare function validateDiscoverParams(args: Record<string, unknown> | undefined): DiscoverParams;

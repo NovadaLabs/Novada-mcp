@@ -35,10 +35,9 @@ export function boundQuery(query) {
 const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 const _searchCache = new Map();
 const SEARCH_CACHE_TTL = 60_000;
-const SCRAPER_SEARCH_ENGINES = new Set(["google", "bing", "duckduckgo", "yandex"]);
+const SCRAPER_SEARCH_ENGINES = new Set(["google", "duckduckgo", "yandex"]);
 const ENGINE_MAP = {
     google: { scraper_name: "google.com", scraper_id: "google_search", query_param: "q", supports_num: true },
-    bing: { scraper_name: "bing.com", scraper_id: "bing_search", query_param: "q", supports_num: false },
     duckduckgo: { scraper_name: "duckduckgo.com", scraper_id: "duckduckgo", query_param: "q", supports_num: true },
     yandex: { scraper_name: "yandex.com", scraper_id: "yandex", query_param: "keyword", supports_num: false },
 };
@@ -419,11 +418,7 @@ export async function novadaSearch(params, apiKey, options) {
             ? "social"
             : detectIntent(params.query);
     try {
-        if (engine === "bing") {
-            // Bing uses is_auto_push=false and may return HTML synchronously or a task_id
-            scraperResults = await submitBingSearch(apiKey, effectiveQuery);
-        }
-        else {
+        {
             const engineCfg = ENGINE_MAP[engine];
             const submitted = await submitSearchScrapeTask(apiKey, engineCfg.scraper_name, engineCfg.scraper_id, effectiveQuery, overFetchNum, engineCfg.query_param, engineCfg.supports_num, {
                 time_range: params.time_range,
@@ -491,7 +486,7 @@ export async function novadaSearch(params, apiKey, options) {
                 search_id: `search-${Date.now()}-${++_searchCounter}`,
                 hints: [
                     "Try a broader or rephrased query",
-                    "Try a different engine: engine=\"google\" (fast, reliable fallback), or engine=\"duckduckgo\" / \"yandex\". Avoid engine=\"bing\" — currently degraded.",
+                    "Try a different engine: engine=\"google\" (fast, reliable fallback), or engine=\"duckduckgo\" / \"yandex\".",
                     "Use novada_research for multi-source investigation",
                     "Use novada_map + novada_extract if you have a known site",
                 ],
@@ -510,7 +505,7 @@ export async function novadaSearch(params, apiKey, options) {
                 ``,
                 `## Agent Hints`,
                 `- Try a broader or rephrased query`,
-                `- Try a different engine: engine="google" (fast, reliable fallback), or engine="duckduckgo" / "yandex". Avoid engine="bing" — currently degraded.`,
+                `- Try a different engine: engine="google" (fast, reliable fallback), or engine="duckduckgo" / "yandex".`,
                 `- Use novada_research for multi-source investigation`,
                 `- Use novada_map + novada_extract if you have a known site`,
             ].join("\n");

@@ -227,7 +227,12 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
 
   L.push("## Agent");
   L.push(`key_state: ${state}`);
-  L.push(`server_version: ${VERSION}`);
+  // NOVADA_SERVER_VERSION is set at module init by the hosted wrapper (mcp.ts) to its
+  // computed HOSTED_VERSION string (e.g. "0.9.26-hosted"), which is the same string
+  // serverInfo.version carries in the MCP initialize response. Falling back to VERSION
+  // (from package.json) keeps stdio mode correct without any extra env configuration.
+  // INVARIANT: this line == serverInfo.version in both hosted and stdio modes.
+  L.push(`server_version: ${process.env.NOVADA_SERVER_VERSION ?? VERSION}`);
   L.push(`register_url: ${URL_SIGNUP}`);
   L.push(`api_key_url: ${URL_API_KEY}`);
   L.push(`core_tools: ${CORE_TOOLS.map(t => t.tool).join(", ")}`);

@@ -26,16 +26,12 @@ export declare const AccountParamsSchema: z.ZodObject<{
         json: "json";
         card: "card";
     }>>;
-    mode: z.ZodOptional<z.ZodEnum<{
-        quick: "quick";
-        full: "full";
-    }>>;
     start_time: z.ZodOptional<z.ZodString>;
     end_time: z.ZodOptional<z.ZodString>;
     page: z.ZodDefault<z.ZodNumber>;
     page_size: z.ZodDefault<z.ZodNumber>;
     products: z.ZodOptional<z.ZodArray<z.ZodString>>;
-}, z.core.$strict>;
+}, z.core.$strip>;
 export type AccountParams = z.infer<typeof AccountParamsSchema>;
 export declare function validateAccountParams(args: Record<string, unknown> | undefined): AccountParams;
 /**

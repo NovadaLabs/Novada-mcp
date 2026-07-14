@@ -27,7 +27,7 @@ export async function novadaBrowser(params: BrowserParams, apiKey?: string): Pro
   const { actions, timeout, session_id: sessionId, country } = params;
   const warnings: string[] = [];
   if (country) {
-    warnings.push(`country param is accepted but not yet applied for browser sessions — exit node is not geo-routed (received: "${country}")`);
+    warnings.push(`country accepted but not applied on this endpoint — do not rely on geo-routing (received: "${country}")`);
   }
 
   // Handle session management actions that don't need a browser connection

@@ -69,8 +69,8 @@ const safeUrl = z.string()
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
 export const SearchParamsSchema = withCamelCaseAliases(z.object({
     query: z.string().min(1, "Search query is required"),
-    engine: z.enum(["google", "bing", "duckduckgo", "yandex"]).default("google")
-        .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content. 'bing': CURRENTLY DEGRADED — may return zero results; avoid."),
+    engine: z.enum(["google", "duckduckgo", "yandex"]).default("google")
+        .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content."),
     num: z.number().int().min(1).max(20).default(10),
     country: z.string().default(""),
     language: z.string().default(""),
@@ -109,6 +109,9 @@ export const SearchParamsSchema = withCamelCaseAliases(z.object({
     timeRange: "time_range",
     startDate: "start_date",
     endDate: "end_date",
+    // T4: start_time/end_time are aliases for start_date/end_date (consistency with dev-api tools)
+    start_time: "start_date",
+    end_time: "end_date",
     includeDomains: "include_domains",
     excludeDomains: "exclude_domains",
     sourceType: "source_type",
@@ -136,7 +139,7 @@ const _ExtractParamsInner = z.object({
     render: z.enum(["auto", "static", "render", "js", "browser"]).default("auto")
         .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS)."),
     fields: z.array(z.string().min(1)).max(20).optional()
-        .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). Returns a structured ## Requested Fields block. JSON-LD structured data is checked first; falls back to pattern matching."),
+        .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). ADVISORY / confidence-gated: each field returns {value, source, confidence}. Source priority is structured-first — JSON-LD → infobox/table/microdata → anchored pattern → loose scan LAST. A match below the confidence floor (loose proximity scan) is SUPPRESSED: value=null with low_confidence:true + the rejected candidate in low_confidence_value, rather than emitting a confidently-wrong guess. Treat a resolved value as a strong hint, not ground truth — check the source/confidence, and re-read the content or retry with render='render' when a field is null/low_confidence."),
     max_chars: z.number().int().min(1000).max(100000).optional()
         .describe("Maximum characters to return (default: 25000, max: 100000). " +
         "When content exceeds this limit, it is truncated and content_truncated:true plus total_chars are emitted. " +
@@ -147,6 +150,11 @@ const _ExtractParamsInner = z.object({
         .describe("Fixed milliseconds to wait after page load before capturing content. Use wait_for (CSS selector) instead when possible — it is more reliable. wait_ms is a fallback for pages with no stable selector. Max: 30000ms."),
     clean: z.boolean().optional()
         .describe("Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage."),
+    country: z.string().length(2).optional()
+        .describe("ISO 3166-1 alpha-2 country code (e.g. 'de', 'us', 'gb') to route the fetch through an exit IP in that country. " +
+        "Useful for localized pricing, geo-restricted content, and per-country monitoring (e.g. comparing a product price across European countries). " +
+        "Only applies to render/unblocker fetches (render=\"render\"|\"js\" or auto-escalation to render); no effect on a pure static fetch. " +
+        "In batch mode (url array), the same country is applied to all URLs in the call."),
     project: z.string().max(30).optional()
         .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
 });
@@ -214,6 +222,12 @@ export const ResearchParamsSchema = z.object({
         .describe("Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'."),
     project: z.string().max(30).optional()
         .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
+    time_range: z.enum(["day", "week", "month", "year"]).optional()
+        .describe("Limit results to a time window. 'day'=last 24h, 'week'=last 7 days, 'month'=last 30 days, 'year'=last 12 months."),
+    start_date: z.string().optional()
+        .describe("ISO date YYYY-MM-DD. Return results published on or after this date."),
+    end_date: z.string().optional()
+        .describe("ISO date YYYY-MM-DD. Return results published on or before this date."),
 }).refine(data => !!(data.question || data.query), {
     message: "Either 'question' or 'query' must be provided",
 });
@@ -265,6 +279,8 @@ export const VerifyParamsSchema = z.object({
 export const HealthParamsSchema = z.object({
     mode: z.enum(["quick", "full"]).default("quick")
         .describe("'quick' (default): wallet balance + proxy/browser entitlement from account data (no synthetic probes, no credit cost). 'full': quick + per-product proxy plan balances with expiry (= novada_health_all). Reports account state, not live tool status — to confirm a tool works, call it."),
+    probe: z.boolean().optional().default(false)
+        .describe("true = perform ONE real minimal render through your key to verify live capability (BILLS your account); default false = entitlement status only."),
 });
 export function validateHealthParams(args) {
     return HealthParamsSchema.parse(args ?? {});
@@ -299,7 +315,7 @@ export const ProxyParamsSchema = withCamelCaseAliases(z.object({
     session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
         .describe("Session ID for sticky routing — same session_id returns same IP across requests."),
     format: z.enum(["url", "env", "curl"]).default("url")
-        .describe("Output format. 'url': proxy URL string. 'env': shell export commands. 'curl': curl --proxy flag."),
+        .describe("Output SHAPE of the returned proxy config — not a data content format. 'url': proxy URL string (default). 'env': shell export commands. 'curl': curl --proxy flag."),
 }), { sessionId: "session_id" });
 /** Backward-compat: old typed-proxy tool name → the `type` value to inject into novada_proxy.
  * The 6 typed tools were merged into one novada_proxy(type=...) in 0.9.4; old names still route here. */

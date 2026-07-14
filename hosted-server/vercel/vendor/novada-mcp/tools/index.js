@@ -13,10 +13,8 @@ export { novadaProxyStatic, validateProxyStaticParams, ProxyStaticParamsSchema }
 export { novadaProxyDedicated, validateProxyDedicatedParams, ProxyDedicatedParamsSchema } from "./proxy_dedicated.js";
 export { novadaScrape } from "./scrape.js";
 export { novadaVerify } from "./verify.js";
-export { novadaUnblock } from "./unblock.js";
 export { novadaBrowser } from "./browser.js";
 export { novadaHealth } from "./health.js";
-export { novadaHealthAll, validateHealthAllParams, HealthAllParamsSchema } from "./health_all.js";
 export { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "./discover.js";
 export { TOOL_REGISTRY, TOOL_CATEGORIES, REGISTERED_TOOL_NAMES } from "./registry.js";
 export { novadaScraperSubmit, validateScraperSubmitParams, ScraperSubmitParamsSchema } from "./scraper_submit.js";

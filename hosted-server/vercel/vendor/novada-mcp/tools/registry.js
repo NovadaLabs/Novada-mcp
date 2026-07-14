@@ -77,7 +77,7 @@ export const TOOL_REGISTRY = [
     // ─── Scraping & Verification ────────────────────────────────────────────
     {
         name: "novada_scrape",
-        description: "Extract structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output",
+        description: "Extract structured data from 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, YouTube, SHEIN, ChatGPT, Perplexity, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output",
         category: "Scraping & Verification",
         status: "active",
     },
@@ -90,6 +90,12 @@ export const TOOL_REGISTRY = [
     {
         name: "novada_monitor",
         description: "Session-scoped only / no durable state — baseline lost on server restart; schedule from your own job runner for persistence. Detect changes on a web page over time by comparing content hashes; first call sets a baseline, subsequent calls report changed/unchanged plus optional field-level diffs",
+        category: "Scraping & Verification",
+        status: "active",
+    },
+    {
+        name: "novada_verify",
+        description: "Check a factual claim against 3 parallel web searches (supporting, skeptical, fact-check angles); returns verdict: supported / unsupported / contested / insufficient_data with confidence 0–100. Signal-based, not definitive.",
         category: "Scraping & Verification",
         status: "active",
     },

@@ -96,7 +96,7 @@ function makeSummaryJson(opts: {
 }
 
 function makeHealthMarkdown(): string {
-  return `## Novada API — Account Status\n\napi_key: ****abcd\nchecked: ${new Date().toISOString()}\n\n> no synthetic probes, no credit cost.\n\n| Product | Status | Notes |\n|---------|--------|-------|\n| Search / Extract / Scraper / Unblock | ✅ Available | €105.10 |\n| Proxy | ✅ Available | Auto-provisioned |\n| Browser API | ❌ Not entitled | |\n\n---\n## Summary\n- 2/3 product groups available`;
+  return `## Novada API — Account Status\n\napi_key: ****abcd\nchecked: ${new Date().toISOString()}\n\n> ⚠️ Entitlement/provisioning status only — does NOT verify live render capability.\n> Pass \`probe:true\` for a real test (billed 1 render call to your account).\n\n| Product | Status | Notes |\n|---------|--------|-------|\n| Search / Extract / Scraper / Unblock | ✅ Available | €105.10 |\n| Proxy | ✅ Available | Auto-provisioned |\n| Browser API | ❌ Not entitled | |\n\n---\n## Summary\n- 2/3 product groups available`;
 }
 
 function makeWalletJson(balance = 105.10): string {

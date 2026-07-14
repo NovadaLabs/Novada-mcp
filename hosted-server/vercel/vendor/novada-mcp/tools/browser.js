@@ -14,7 +14,11 @@ import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
  * - list_sessions: list all currently active session IDs
  */
 export async function novadaBrowser(params, apiKey) {
-    const { actions, timeout, session_id: sessionId } = params;
+    const { actions, timeout, session_id: sessionId, country } = params;
+    const warnings = [];
+    if (country) {
+        warnings.push(`country accepted but not applied on this endpoint — do not rely on geo-routing (received: "${country}")`);
+    }
     // Handle session management actions that don't need a browser connection
     if (actions.length === 1) {
         const action = actions[0];
@@ -209,9 +213,11 @@ export async function novadaBrowser(params, apiKey) {
         `## Browser Session Results`,
         `actions: ${results.length} | succeeded: ${succeeded} | failed: ${failed} | time: ${elapsed}ms${sessionId ? ` | session_id: ${sessionId} | session_active: true` : ""}`,
         ``,
-        `---`,
-        ``,
     ];
+    if (warnings.length > 0) {
+        lines.push(`## Warnings`, JSON.stringify(warnings), ``);
+    }
+    lines.push(`---`, ``);
     for (let i = 0; i < results.length; i++) {
         const r = results[i];
         lines.push(`### Action ${i + 1}: ${r.action} [${r.status}]`);
