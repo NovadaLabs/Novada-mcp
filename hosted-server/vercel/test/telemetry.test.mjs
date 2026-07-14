@@ -23,6 +23,7 @@ import {
   buildInitializeEvent,
   telemetryEnabled,
   emitEvent,
+  extractTargetDomain,
 } from "../api/_telemetry.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -117,9 +118,11 @@ test("buildToolCallEvent: null args produces empty arg_keys array", () => {
 // ─── 2. LEAK FENCE — arg VALUES must NEVER appear in the row or its JSON ──────
 
 test("LEAK FENCE: arg values containing secrets do not appear in JSON-serialised row", () => {
-  // These are deliberately sensitive-looking values to prove they never leak.
+  // Deliberately sensitive-looking VALUES to prove they never leak. The URL's
+  // HOSTNAME is intentionally collected as target_domain (Tier 2) — the secret
+  // material here lives in the path/query/fragment and other param values.
   const secretArgs = {
-    url: "https://secret.example/very-private-path",
+    url: "https://sub.shop.example.com/secret-path?q=secret+words#frag",
     query: "secret words that must not appear",
     api_key: "sk-supersecret-12345",
     password: "hunter2",
@@ -132,7 +135,7 @@ test("LEAK FENCE: arg values containing secrets do not appear in JSON-serialised
     client_name: null,
     client_version: null,
     protocol_version: null,
-    tool: "novada_search",
+    tool: "novada_extract",
     args: secretArgs,
     outcome: "ok",
     latency_ms: 1,
@@ -145,11 +148,16 @@ test("LEAK FENCE: arg values containing secrets do not appear in JSON-serialised
 
   const serialised = JSON.stringify(row);
 
-  // No secret value must appear in the serialised row.
+  // target_domain is the HOSTNAME ONLY.
+  assert.equal(row.target_domain, "sub.shop.example.com");
+
+  // No secret value must appear ANYWHERE in the serialised row.
   assert.ok(!serialised.includes("secret"), `LEAK: serialised row contains "secret": ${serialised}`);
+  assert.ok(!serialised.includes("/secret-path"), `LEAK: serialised row contains URL path: ${serialised}`);
+  assert.ok(!serialised.includes("q="), `LEAK: serialised row contains query string: ${serialised}`);
+  assert.ok(!serialised.includes("#frag"), `LEAK: serialised row contains fragment: ${serialised}`);
   assert.ok(!serialised.includes("hunter2"), `LEAK: serialised row contains "hunter2": ${serialised}`);
   assert.ok(!serialised.includes("sk-supersecret"), `LEAK: serialised row contains api_key value: ${serialised}`);
-  assert.ok(!serialised.includes("very-private-path"), `LEAK: serialised row contains URL path: ${serialised}`);
 
   // But the KEY NAMES must be present.
   assert.ok(serialised.includes('"url"'), "arg key 'url' must be in serialised row");
@@ -159,6 +167,90 @@ test("LEAK FENCE: arg values containing secrets do not appear in JSON-serialised
 
   // Explicit check: arg_keys contains only the key names.
   assert.deepEqual(row.arg_keys, ["url", "query", "api_key", "password"]);
+});
+
+// ─── 2b. extractTargetDomain — hostname-only extraction ──────────────────────
+
+test("extractTargetDomain: hostname only — lowercase, www stripped", () => {
+  assert.equal(extractTargetDomain({ url: "https://WWW.Example.COM/Path?x=1" }), "example.com");
+  assert.equal(extractTargetDomain({ url: "https://sub.shop.example.com/a/b" }), "sub.shop.example.com");
+});
+
+test("extractTargetDomain: never port, credentials, path, query, or fragment", () => {
+  const d = extractTargetDomain({ url: "https://user:pass@host.example.com:8443/deep/path?tok=abc#sec" });
+  assert.equal(d, "host.example.com");
+});
+
+test("extractTargetDomain: batch url array → FIRST URL's hostname", () => {
+  assert.equal(
+    extractTargetDomain({ url: ["https://first.example.com/a", "https://second.example.org/b"] }),
+    "first.example.com",
+  );
+});
+
+test("extractTargetDomain: urls alias array → FIRST URL's hostname", () => {
+  assert.equal(
+    extractTargetDomain({ urls: ["https://alias.example.net/x"] }),
+    "alias.example.net",
+  );
+});
+
+test("extractTargetDomain: novada_scrape nested params.url", () => {
+  assert.equal(
+    extractTargetDomain({ platform: "amazon.com", operation: "op", params: { url: "https://www.amazon.com/dp/B0TEST" } }),
+    "amazon.com",
+  );
+});
+
+test("extractTargetDomain: novada_browser actions[].url (first navigate)", () => {
+  assert.equal(
+    extractTargetDomain({ actions: [{ action: "wait", ms: 500 }, { action: "navigate", url: "https://app.example.io/login" }] }),
+    "app.example.io",
+  );
+});
+
+test("extractTargetDomain: novada_search (query only, no url) → null", () => {
+  assert.equal(extractTargetDomain({ query: "how to test telemetry", engine: "google" }), null);
+});
+
+test("extractTargetDomain: null / empty / unparseable → null, never throws", () => {
+  assert.equal(extractTargetDomain(null), null);
+  assert.equal(extractTargetDomain({}), null);
+  assert.equal(extractTargetDomain({ url: "" }), null);
+  assert.equal(extractTargetDomain({ url: "not a url at all" }), null);
+  assert.equal(extractTargetDomain({ url: 42 }), null);
+  assert.equal(extractTargetDomain({ url: [] }), null);
+  assert.equal(extractTargetDomain({ urls: [] }), null);
+});
+
+test("buildToolCallEvent: target_domain populated from args url", () => {
+  const row = buildToolCallEvent({
+    request_id: "r", token_hash: null, plan: null,
+    client_name: null, client_version: null, protocol_version: null,
+    tool: "novada_extract", args: { url: "https://www.docs.example.com/page" }, outcome: "ok",
+    latency_ms: 5, charged: true, over_cap_allowed: false, quota_remaining: 10,
+    server_version: null, region: null,
+  });
+  assert.equal(row.target_domain, "docs.example.com");
+});
+
+test("buildToolCallEvent: target_domain null for non-URL tools and null args", () => {
+  const searchRow = buildToolCallEvent({
+    request_id: "r", token_hash: null, plan: null,
+    client_name: null, client_version: null, protocol_version: null,
+    tool: "novada_search", args: { query: "anything" }, outcome: "ok",
+    latency_ms: 5, charged: true, over_cap_allowed: false, quota_remaining: 10,
+    server_version: null, region: null,
+  });
+  assert.equal(searchRow.target_domain, null);
+  const nullRow = buildToolCallEvent({
+    request_id: "r", token_hash: null, plan: null,
+    client_name: null, client_version: null, protocol_version: null,
+    tool: "novada_discover", args: null, outcome: "ok",
+    latency_ms: 5, charged: false, over_cap_allowed: false, quota_remaining: 0,
+    server_version: null, region: null,
+  });
+  assert.equal(nullRow.target_domain, null);
 });
 
 // ─── 3. buildInitializeEvent ─────────────────────────────────────────────────

@@ -24,6 +24,8 @@ export interface McpEventRow {
   tool: string | null;
   /** ONLY key names — never values. */
   arg_keys: string[] | null;
+  /** HOSTNAME ONLY of the target URL (lowercase, no leading "www.") — never path/query/port/credentials/fragment. */
+  target_domain: string | null;
   outcome: string | null;
   latency_ms: number | null;
   charged: boolean | null;
@@ -36,6 +38,63 @@ export interface McpEventRow {
 /** True when both required telemetry env vars are present. */
 export function telemetryEnabled(): boolean {
   return !!(process.env.TELEMETRY_SUPABASE_URL && process.env.TELEMETRY_SUPABASE_KEY);
+}
+
+// ─── Target-domain extraction (Tier 2, owner-approved) ───────────────────────
+
+/**
+ * Find the first URL-shaped candidate in a tool's args, covering the actual
+ * param shapes across the URL-taking tools:
+ *   • args.url         — extract / crawl / map / site_copy / monitor /
+ *                        browser_flow (string; extract batch mode may pass an
+ *                        array → FIRST element)
+ *   • args.urls        — extract batch alias (array → FIRST element)
+ *   • args.params.url  — novada_scrape url-param operations (nested params obj)
+ *   • args.actions[].url — novada_browser navigate actions (first with a url)
+ * novada_search and other non-URL tools match none of these → null
+ * (search queries stay uncollected — Tier 3 pending).
+ */
+function firstUrlCandidate(args: Record<string, unknown>): unknown {
+  const url = args.url;
+  if (typeof url === "string") return url;
+  if (Array.isArray(url) && url.length > 0) return url[0];
+  const urls = args.urls;
+  if (Array.isArray(urls) && urls.length > 0) return urls[0];
+  const params = args.params;
+  if (params && typeof params === "object" && !Array.isArray(params)) {
+    const pUrl = (params as Record<string, unknown>).url;
+    if (typeof pUrl === "string") return pUrl;
+  }
+  const actions = args.actions;
+  if (Array.isArray(actions)) {
+    for (const a of actions) {
+      if (a && typeof a === "object" && typeof (a as Record<string, unknown>).url === "string") {
+        return (a as Record<string, unknown>).url;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the target HOSTNAME from a tool's args — pure, never throws.
+ *
+ * Returns the hostname ONLY: lowercase, leading "www." stripped. NEVER the
+ * path, query string, port, credentials, or fragment — `new URL().hostname`
+ * structurally cannot contain any of those. Batch (url/urls array): FIRST
+ * URL's hostname only, by design — one domain signal per event, not a list.
+ * Any parse failure, or no URL-shaped param at all → null.
+ */
+export function extractTargetDomain(args: Record<string, unknown> | null): string | null {
+  if (!args) return null;
+  const candidate = firstUrlCandidate(args);
+  if (typeof candidate !== "string" || candidate.length === 0) return null;
+  try {
+    const hostname = new URL(candidate).hostname.toLowerCase().replace(/^www\./, "");
+    return hostname || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -71,8 +130,10 @@ export function buildToolCallEvent(params: {
     client_version: params.client_version,
     protocol_version: params.protocol_version,
     tool: params.tool,
-    // METADATA ONLY: extract key names, discard values entirely.
+    // METADATA ONLY: args are consumed by exactly two reducers — Object.keys
+    // (names) and extractTargetDomain (hostname only). Values never pass through.
     arg_keys: params.args !== null ? Object.keys(params.args) : [],
+    target_domain: extractTargetDomain(params.args),
     outcome: params.outcome,
     latency_ms: params.latency_ms,
     charged: params.charged,
@@ -108,6 +169,7 @@ export function buildInitializeEvent(params: {
     protocol_version: params.protocol_version,
     tool: null,
     arg_keys: null,
+    target_domain: null,
     outcome: null,
     latency_ms: null,
     charged: null,
