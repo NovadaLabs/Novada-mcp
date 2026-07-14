@@ -4,6 +4,15 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.28] — 2026-07-14
+
+Behavior telemetry with radical transparency: the hosted gateway now records usage metadata — and discloses exactly what, in-band.
+
+### Added
+- **Usage telemetry (hosted gateway only).** One event per tool call: tool name, parameter NAMES (never values), outcome code, latency, plan, quota state, client info from the handshake, serving region. For URL-taking tools, the target HOSTNAME only — never the path, query string, port, credentials, or fragment. Search queries are not collected at all. Emitted after the response (zero added latency), fail-open (telemetry can never fail a request), and disabled entirely unless configured.
+- **`novada://privacy` resource** — the full field-by-field disclosure of what is and is not logged, readable in-band by any agent. `novada_setup` now points to it. The local npm server (`npx novada-mcp`) sends no telemetry; the disclosure says so.
+- Aggregated, k-anonymized (≥3 distinct customers) weekly domain-demand statistics power tool/parser prioritization — individual customer targets are never identifiable.
+
 ## [0.9.27] — 2026-07-14
 
 Truthfulness release: every state the server reports about itself now equals reality — or says `unknown`. No interface changes; no new required parameters.
