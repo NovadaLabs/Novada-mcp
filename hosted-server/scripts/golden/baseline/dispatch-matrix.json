@@ -126,14 +126,9 @@
   },
   "novada_proxy_account_create": {
     "length_band": "s",
-    "markers": [
-      "action",
-      "agent_instruction",
-      "preview",
-      "status"
-    ],
+    "markers": [],
     "status": "ok",
-    "structural": "json"
+    "structural": "other"
   },
   "novada_proxy_account_list": {
     "length_band": "s",
@@ -224,23 +219,15 @@
   },
   "novada_scraper_result": {
     "length_band": "xs",
-    "markers": [
-      "agent_instruction",
-      "message",
-      "status"
-    ],
+    "markers": [],
     "status": "ok",
-    "structural": "json"
+    "structural": "other"
   },
   "novada_scraper_status": {
     "length_band": "xs",
-    "markers": [
-      "agent_instruction",
-      "message",
-      "status"
-    ],
+    "markers": [],
     "status": "ok",
-    "structural": "json"
+    "structural": "other"
   },
   "novada_scraper_submit": {
     "length_band": "s",

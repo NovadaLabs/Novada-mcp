@@ -1,6 +1,7 @@
 {
   "capabilities": {
     "prompts": {},
+    "resources": {},
     "tools": {}
   },
   "serverInfo": {
