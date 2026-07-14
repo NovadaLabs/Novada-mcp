@@ -283,6 +283,20 @@ test("mcp.ts source: error path emits scheduleToolEvent", () => {
   assert.match(src, /scheduleToolEvent\([\s\S]{0,100}error instanceof NovadaError/, "error path must call scheduleToolEvent with NovadaError code");
 });
 
+test("mcp.ts source: browser_flow hosted-rejection path emits NOT_AVAILABLE_ON_HOSTED", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  // The emit must sit inside the novada_browser_flow refusal block, BEFORE its return.
+  const flowIdx = src.indexOf('if (name === "novada_browser_flow")');
+  assert.ok(flowIdx >= 0, "novada_browser_flow refusal block must exist");
+  const returnIdx = src.indexOf("Error [NOT_AVAILABLE_ON_HOSTED]: novada_browser_flow", flowIdx);
+  assert.ok(returnIdx >= 0, "browser_flow refusal return must exist");
+  const emitIdx = src.indexOf('scheduleToolEvent(', flowIdx);
+  assert.ok(emitIdx >= 0 && emitIdx < returnIdx, "browser_flow path must schedule telemetry BEFORE the refusal return");
+  // The outcome for this path must be NOT_AVAILABLE_ON_HOSTED.
+  const outcomeIdx = src.indexOf('"NOT_AVAILABLE_ON_HOSTED"', flowIdx);
+  assert.ok(outcomeIdx >= 0 && outcomeIdx < returnIdx, "browser_flow telemetry outcome must be NOT_AVAILABLE_ON_HOSTED");
+});
+
 test("mcp.ts source: TELEMETRY_SUPABASE_URL/KEY not in SERVER_CONSUMPTION_ENV_VARS strip list", () => {
   const src = readFileSync(MCP_TS, "utf8");
   const block = src.match(/SERVER_CONSUMPTION_ENV_VARS\s*=\s*\[([\s\S]*?)\]/);

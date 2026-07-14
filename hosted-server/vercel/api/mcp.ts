@@ -26,6 +26,11 @@ import "./_polyfills.js";
 // breaking for customers and improve. Set SENTRY_DSN in Vercel env vars.
 // Free tier: 5,000 errors/month — enough for monitoring hosted MCP usage.
 import * as Sentry from "@sentry/node";
+
+// ─── Behavior telemetry (metadata-only, fail-open — see ./_telemetry.ts) ─────
+import { waitUntil } from "@vercel/functions";
+import { buildToolCallEvent, buildInitializeEvent, emitEvent } from "./_telemetry.js";
+
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
@@ -79,8 +84,6 @@ function shouldAlertSentry(error: unknown): boolean {
   return true;                                             // unclassified → real bug → alert
 }
 
-import { waitUntil } from "@vercel/functions";
-import { buildToolCallEvent, buildInitializeEvent, emitEvent } from "./_telemetry.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -1033,6 +1036,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       if (name === "novada_browser_flow") {
         logUsage(env, ctx.token, name, false, Date.now() - started);
         if (gate.charged) await refundQuota(ctx.tokenHash, env);
+        scheduleToolEvent(
+          "NOT_AVAILABLE_ON_HOSTED",
+          { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+          gate.overCapAllowed ? "pro" : "free",
+        );
         return {
           content: [{
             type: "text" as const,
