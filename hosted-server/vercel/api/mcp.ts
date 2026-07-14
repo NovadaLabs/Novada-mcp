@@ -860,12 +860,16 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: visibleTools }));
 
   // ── Telemetry: initialize event ───────────────────────────────────────────
-  // oninitialized fires when the `initialized` notification arrives — at that
-  // point server.getClientVersion() IS populated (it's set by _oninitialize).
-  // In stateless mode each HTTP request creates a fresh server, so this fires
-  // only for initialize requests (not for subsequent tool calls from the same
-  // logical session). protocol_version is not exposed via the SDK public API
-  // after negotiation, so it is honestly reported as null here.
+  // oninitialized fires when the `initialized` NOTIFICATION arrives.
+  // In stateless HTTP mode (sessionIdGenerator: undefined) the initialize
+  // REQUEST and the initialized NOTIFICATION are TWO separate HTTP requests —
+  // each creates a completely fresh server instance. `_clientVersion` is set
+  // inside _oninitialize (on the first request) but that server is discarded;
+  // the second request creates a brand-new server where `_clientVersion` is
+  // still undefined. Therefore server.getClientVersion() always returns
+  // undefined when oninitialized fires in stateless mode. The null-coalescing
+  // below already handles this correctly — this comment documents the why.
+  // protocol_version is not exposed via the SDK public API post-negotiation.
   server.oninitialized = () => {
     const cv = server.getClientVersion();
     const initRow = buildInitializeEvent({
@@ -944,6 +948,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
     // novada_setup is auth-free and never charged against quota.
     if (name === "novada_setup") {
+      // SETUP_GATE semantics: charged=false, over_cap_allowed=false, quota_remaining=0.
+      // plan=null (not resolved on the setup path). token_hash from ctx (always present
+      // — the auth guard at the top already validated the token; if somehow absent the
+      // emitEvent call is a no-op).
+      const setupGateFields = { charged: false, over_cap_allowed: false, quota_remaining: 0 };
       try {
         // Pass the caller's token so setup validates the CUSTOMER's key (not the server env fallback).
         const result = await novadaSetup(validateSetupParams(argsObj), ctx.token);
@@ -952,9 +961,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         // monthlyQuota is declared below (after this early-return block) — inline it here.
         const setupMonthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
         const setupFooter = buildStatusFooter(SETUP_GATE, setupMonthlyQuota);
+        scheduleToolEvent("ok", setupGateFields, null);
         return { content: [{ type: "text" as const, text: result + setupFooter }] };
       } catch (e) {
         logUsage(env, ctx.token, name, false, Date.now() - started);
+        scheduleToolEvent("error", setupGateFields, null);
         return { content: [{ type: "text" as const, text: String(e) }], isError: true };
       }
     }
@@ -1097,8 +1108,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const content = [{ type: "text" as const, text: sanitized + statusFooter }];
       const notice = await maybeGetFirstRunNoticeHosted(ctx.token);
       if (notice) content.push({ type: "text" as const, text: notice });
+      // Classify in-band ceiling timeout from extractSingle — returned as a string
+      // starting with "## Extraction Error" (not thrown), so it reaches this success
+      // path. Emitting "ok" for a timed-out request is misleading in telemetry.
+      const isCeilingTimeout = typeof result === "string" && result.startsWith("## Extraction Error");
       scheduleToolEvent(
-        "ok",
+        isCeilingTimeout ? "TIMEOUT" : "ok",
         { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
         gate.overCapAllowed ? "pro" : "free",
       );

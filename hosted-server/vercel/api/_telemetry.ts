@@ -197,7 +197,7 @@ export async function emitEvent(row: McpEventRow): Promise<void> {
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), TELEMETRY_TIMEOUT_MS);
     try {
-      await fetch(`${url}/rest/v1/mcp_events`, {
+      const res = await fetch(`${url}/rest/v1/mcp_events`, {
         method: "POST",
         headers: {
           "apikey": key,
@@ -208,6 +208,9 @@ export async function emitEvent(row: McpEventRow): Promise<void> {
         body: JSON.stringify(row),
         signal: controller.signal,
       });
+      // Surface non-2xx so ops can see persistent insert failures in Vercel logs.
+      // Status only — never the body (could echo row data); never throw (fail-open).
+      if (!res.ok) console.warn("telemetry insert failed", res.status);
     } finally {
       clearTimeout(tid);
     }
