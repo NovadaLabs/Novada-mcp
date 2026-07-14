@@ -65,7 +65,7 @@ describe("novadaSetup — privacy disclosure line", () => {
   it("output carries the one-line telemetry disclosure pointing at novada://privacy", async () => {
     const result = await novadaSetup({} as never, "sk-test-ABCD1234");
     expect(result).toContain(
-      "Usage metadata is logged (never your queries, URL paths, or content) — read novada://privacy.",
+      "Hosted gateway (mcp.novada.com) logs usage metadata — never your queries, URL paths, or content. Read novada://privacy.",
     );
   });
 });
