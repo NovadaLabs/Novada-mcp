@@ -61,6 +61,15 @@ describe("novadaSetup — server_version truthfulness invariant", () => {
   });
 });
 
+describe("novadaSetup — privacy disclosure line", () => {
+  it("output carries the one-line telemetry disclosure pointing at novada://privacy", async () => {
+    const result = await novadaSetup({} as never, "sk-test-ABCD1234");
+    expect(result).toContain(
+      "Hosted gateway (mcp.novada.com) logs usage metadata — never your queries, URL paths, or content. Read novada://privacy.",
+    );
+  });
+});
+
 describe("novadaSetup — TOW2-252 wallet identity line", () => {
   it("appends key tail (≤4) + as-of to the wallet balance line", async () => {
     const result = await novadaSetup({} as never, "sk-live-abcdWXYZ");

@@ -26,6 +26,11 @@ import "./_polyfills.js";
 // breaking for customers and improve. Set SENTRY_DSN in Vercel env vars.
 // Free tier: 5,000 errors/month — enough for monitoring hosted MCP usage.
 import * as Sentry from "@sentry/node";
+
+// ─── Behavior telemetry (metadata-only, fail-open — see ./_telemetry.ts) ─────
+import { waitUntil } from "@vercel/functions";
+import { buildToolCallEvent, buildInitializeEvent, emitEvent } from "./_telemetry.js";
+
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
@@ -835,7 +840,7 @@ function redactHostedSecrets(msg: string): string {
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────
-function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; balance?: number }): Server {
+function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; balance?: number; requestId: string }): Server {
   const server = new Server(
     { name: "novada", version: HOSTED_VERSION },
     { capabilities: { tools: {}, prompts: {}, resources: {} } },
@@ -854,10 +859,62 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
   const visibleToolNames: ReadonlySet<string> = new Set(visibleTools.map((t) => t.name));
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: visibleTools }));
 
+  // ── Telemetry: initialize event ───────────────────────────────────────────
+  // oninitialized fires when the `initialized` notification arrives — at that
+  // point server.getClientVersion() IS populated (it's set by _oninitialize).
+  // In stateless mode each HTTP request creates a fresh server, so this fires
+  // only for initialize requests (not for subsequent tool calls from the same
+  // logical session). protocol_version is not exposed via the SDK public API
+  // after negotiation, so it is honestly reported as null here.
+  server.oninitialized = () => {
+    const cv = server.getClientVersion();
+    const initRow = buildInitializeEvent({
+      request_id: ctx.requestId,
+      token_hash: ctx.tokenHash,
+      plan: null,   // plan not resolved at initialize time
+      client_name: cv?.name ?? null,
+      client_version: cv?.version != null ? String(cv.version) : null,
+      protocol_version: null,   // not accessible via SDK public API post-negotiation
+      server_version: process.env.NOVADA_SERVER_VERSION ?? null,
+      region: process.env.VERCEL_REGION ?? null,
+    });
+    try { waitUntil(emitEvent(initRow).catch(() => {})); } catch { /* outside Vercel context */ }
+  };
+
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const argsObj = (args as Record<string, unknown>) ?? {};
     const started = Date.now();
+
+    // Telemetry helper — schedule a fire-and-forget INSERT after the response.
+    // waitUntil keeps the Vercel function alive long enough for the fetch to complete.
+    // Falls back gracefully when called outside a Vercel context (tests, local dev).
+    const telSV = process.env.NOVADA_SERVER_VERSION ?? null;
+    const telRegion = process.env.VERCEL_REGION ?? null;
+    const scheduleToolEvent = (
+      outcome: string,
+      gateFields: { charged: boolean; over_cap_allowed: boolean; quota_remaining: number },
+      plan: string | null,
+    ) => {
+      const row = buildToolCallEvent({
+        request_id: ctx.requestId,
+        token_hash: ctx.tokenHash,
+        plan,
+        client_name: null,   // stateless: new server per request, getClientVersion() is not set for tool calls
+        client_version: null,
+        protocol_version: null,
+        tool: name,
+        args: argsObj,
+        outcome,
+        latency_ms: Date.now() - started,
+        charged: gateFields.charged,
+        over_cap_allowed: gateFields.over_cap_allowed,
+        quota_remaining: gateFields.quota_remaining,
+        server_version: telSV,
+        region: telRegion,
+      });
+      try { waitUntil(emitEvent(row).catch(() => {})); } catch { /* outside Vercel context */ }
+    };
 
     // Tool-set filter: reject tools not in the endpoint's ?tools=/?groups= selection.
     if (ctx.allowedTools && !ctx.allowedTools.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
@@ -926,6 +983,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       },
     });
     if (!gate.allowed) {
+      scheduleToolEvent("cap_blocked", { charged: false, over_cap_allowed: false, quota_remaining: -1 }, "free");
       return {
         content: [{
           type: "text" as const,
@@ -978,6 +1036,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       if (name === "novada_browser_flow") {
         logUsage(env, ctx.token, name, false, Date.now() - started);
         if (gate.charged) await refundQuota(ctx.tokenHash, env);
+        scheduleToolEvent(
+          "NOT_AVAILABLE_ON_HOSTED",
+          { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+          gate.overCapAllowed ? "pro" : "free",
+        );
         return {
           content: [{
             type: "text" as const,
@@ -1000,6 +1063,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const discoverContent = [{ type: "text" as const, text: sanitized + discoverFooter }];
         const discoverNotice = await maybeGetFirstRunNoticeHosted(ctx.token);
         if (discoverNotice) discoverContent.push({ type: "text" as const, text: discoverNotice });
+        scheduleToolEvent(
+          "ok",
+          { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+          gate.overCapAllowed ? "pro" : "free",
+        );
         return { content: discoverContent };
       }
 
@@ -1029,6 +1097,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const content = [{ type: "text" as const, text: sanitized + statusFooter }];
       const notice = await maybeGetFirstRunNoticeHosted(ctx.token);
       if (notice) content.push({ type: "text" as const, text: notice });
+      scheduleToolEvent(
+        "ok",
+        { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+        gate.overCapAllowed ? "pro" : "free",
+      );
       return {
         content,
         // quota_remaining only for real free-plan charges: exempt tools were
@@ -1068,6 +1141,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // Guarded by gate.charged: cap-exempt tools were never charged — an
       // unconditional refund here would walk their counter DOWN and mint free calls.
       if (gate.charged) await refundQuota(ctx.tokenHash, env);
+      // Telemetry: error outcome with the NovadaError code, or generic "error".
+      scheduleToolEvent(
+        error instanceof NovadaError ? error.code : (error instanceof ZodError ? "INVALID_PARAMS" : "error"),
+        { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+        gate.overCapAllowed ? "pro" : "free",
+      );
       if (error instanceof ZodError) {
         const issues = error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
         return {
@@ -1434,12 +1513,16 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // never written to KV (see tokenKvHash). Computed once per request.
   const tokenHash = await tokenKvHash(token);
 
+  // Stable per-request identifier for telemetry correlation. Never logged in
+  // user-visible output — used only in the mcp_events sink.
+  const requestId = crypto.randomUUID();
+
   // Build a fresh server + transport per request (stateless mode). Edge
   // functions are per-request isolates with no shared memory — same pattern
   // as the CF Worker port.
   // `balance` rides along from the validateToken probe (90s-TTL cached) so the
   // over-cap OR-fallback usually needs no extra upstream round-trip.
-  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, balance: info.balance });
+  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, balance: info.balance, requestId });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,

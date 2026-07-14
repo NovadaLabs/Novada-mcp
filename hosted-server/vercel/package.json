@@ -15,6 +15,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@sentry/node": "^10.62.0",
+    "@vercel/functions": "^3.7.5",
     "@vercel/kv": "^1.0.0",
     "axios": "^1.15.0",
     "cheerio": "^1.2.0",

@@ -33,6 +33,12 @@ export const RESOURCES = [
         description: "Concise LLM-friendly reference for all 23 novada tools. One paragraph per tool with best-for, not-for, required params, and example. Optimized for context injection — 60% shorter than full guide.",
         mimeType: "text/plain",
     },
+    {
+        uri: "novada://privacy",
+        name: "Privacy & Telemetry Disclosure",
+        description: "Exactly what usage metadata the hosted Novada MCP gateway (mcp.novada.com) logs — full field list, what is never collected (search queries, URL paths, page content, parameter values), retention, and contact. The local npm server logs nothing to Novada.",
+        mimeType: "text/plain",
+    },
 ];
 // Static category mapping — domain → display category
 const PLATFORM_CATEGORIES = {
@@ -541,6 +547,67 @@ Residential proxy → novada_proxy_residential
 ISP/static/datacenter/mobile/dedicated proxy → novada_proxy_{type}
 Diagnose failure → novada_health
 Full tool catalog → novada_discover`,
+                    }],
+            };
+        case "novada://privacy":
+            return {
+                contents: [{
+                        uri,
+                        mimeType: "text/plain",
+                        text: `# Novada MCP — Privacy & Telemetry Disclosure
+
+This document describes exactly what the HOSTED Novada MCP gateway
+(mcp.novada.com) logs about your usage. The local npm server
+(\`npx novada-mcp\`) sends no usage telemetry to Novada — this disclosure
+applies to the hosted gateway only.
+
+## What the hosted gateway logs (mcp_events)
+
+One event per tool call and one per session initialize, with these fields ONLY:
+
+- ts               — server timestamp of the event
+- event_type       — "tool_call" or "initialize"
+- request_id       — random UUID per HTTP request (correlation only)
+- token_hash       — SHA-256 hash of your API key (never the key itself)
+- plan             — "free" or "pro" (billing classification)
+- client_name      — MCP client name from the initialize handshake (e.g. "claude-code")
+- client_version   — MCP client version from the initialize handshake
+- protocol_version — MCP protocol version (currently always null; not exposed per-call)
+- tool             — name of the tool called (e.g. "novada_extract")
+- arg_keys         — parameter NAMES only (e.g. ["url","format"]) — never values
+- target_domain    — for URL-taking tools only: the HOSTNAME of the target URL
+                     (lowercase, leading "www." stripped). Never the path, query
+                     string, port, credentials, or fragment. Null for tools that
+                     take no URL (novada_search queries are not collected at all).
+- outcome          — "ok", an error code, or "cap_blocked"
+- latency_ms       — how long the call took server-side
+- charged          — whether one free-quota unit was consumed
+- over_cap_allowed — whether the call passed via the paid exemption
+- quota_remaining  — free-quota counter after this call
+- server_version   — the gateway build that served the call
+- region           — the serving datacenter region (e.g. "iad1")
+
+## What is NEVER logged
+
+- Search queries (novada_search query text is not collected)
+- Full URLs — no paths, query strings, ports, credentials, or fragments
+- Fetched page content, scrape results, or any tool response body
+- Parameter VALUES of any kind — only parameter names
+- Your API key in plaintext (only its SHA-256 hash)
+
+## Retention
+
+Aggregates are retained; raw events are reviewed for retention policy — see
+the privacy page at https://novada.com for the current policy.
+
+## Why this is collected
+
+Service improvement (which tools and parameters are actually used, latency,
+failure modes) and abuse prevention (cap enforcement, anomalous usage patterns).
+
+## Contact
+
+support@novada.com`,
                     }],
             };
         default:
