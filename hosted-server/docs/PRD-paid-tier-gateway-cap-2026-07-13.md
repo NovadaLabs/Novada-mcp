@@ -119,6 +119,8 @@ When a **free** key hits the cap, the error message must now say topping up lift
 
 `usage_record` responses include `uid` (account ID). When resolvePlan runs, store the plan cache under BOTH `${tokenHash}:plan` and `uid:${uid}:plan` — and check the uid-keyed entry too (when uid is known) so multi-key paid accounts share one resolution. Zero extra upstream calls: uid arrives for free with the payload we already fetch.
 
+REVERTED 2026-07-14 — simplicity audit: 2 extra KV writes per resolution for a near-nonexistent multi-key staggered-TTL scenario. Single-key cache retained.
+
 ## Known accepted limitation: cap is per-key, not per-account
 
 Each account can create up to 10 keys → a determined free rider gets ~10×1000 calls/month. Accepted for v1: (a) per-account counting from call #1 would require an upstream key→uid resolution on first call, destroying the zero-cost-under-cap property; (b) multi-ACCOUNT abuse is unbounded at gateway level anyway (signup friction's job); (c) post-fix, the cap only binds non-paying users, so the leak is bounded to cents of serverless compute. The uid-keyed cache above lays the foundation if per-account capping is ever justified by real abuse data.

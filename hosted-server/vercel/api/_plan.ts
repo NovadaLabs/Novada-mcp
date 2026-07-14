@@ -1,8 +1,7 @@
 /**
  * Paid-tier gateway cap exemption (P0) — plan resolution + cap gate.
  * PRD: hosted-server/docs/PRD-paid-tier-gateway-cap-2026-07-13.md (incl.
- * Amendment: lazy trigger at cap-crossing + balance OR-fallback;
- * Amendment 2: uid-keyed plan cache shared across an account's keys).
+ * Amendment: lazy trigger at cap-crossing + balance OR-fallback).
  *
  * Everything here is dependency-injected (KV + upstream fetch) so the whole
  * module is unit-testable with zero network — see test/paid-tier-cap.test.mjs.
@@ -47,9 +46,6 @@ export const PLAN_STALE_RETENTION_S = 30 * 24 * 3600;
  */
 export const PREFETCH_THRESHOLD = 900;
 
-/** How long the tokenHash→uid pointer lives (Amendment 2). */
-const UID_POINTER_TTL_S = 60 * 24 * 3600;
-
 /** Upstream timeout for the usage-record probe — must not stall the cap boundary. */
 const PLAN_RESOLVE_TIMEOUT_MS = 8_000;
 
@@ -80,7 +76,6 @@ interface UsageRecordEntry {
   pay_status?: unknown;
   pay_money?: unknown;
   coupon_money?: unknown;
-  uid?: unknown;
 }
 
 /**
@@ -109,34 +104,6 @@ export function classifyPlanFromUsageRecord(data: unknown): "free" | "pro" {
     return "free";
   } catch {
     return "free"; // malformed payload must degrade, never throw
-  }
-}
-
-/**
- * Extract the account uid from a usage_record payload (Amendment 2): top-level
- * `data.uid` or the first entry carrying one. Normalized to string; null when
- * absent/malformed (graceful degrade → tokenHash-only caching).
- */
-export function extractUidFromUsageRecord(data: unknown): string | null {
-  try {
-    if (!data || typeof data !== "object") return null;
-    const normalize = (v: unknown): string | null => {
-      if (typeof v === "number" && Number.isFinite(v)) return String(v);
-      if (typeof v === "string" && v.length > 0) return v;
-      return null;
-    };
-    const top = normalize((data as { uid?: unknown }).uid);
-    if (top !== null) return top;
-    const list = (data as { list?: unknown }).list;
-    if (!Array.isArray(list)) return null;
-    for (const raw of list) {
-      if (!raw || typeof raw !== "object") continue;
-      const uid = normalize((raw as UsageRecordEntry).uid);
-      if (uid !== null) return uid;
-    }
-    return null;
-  } catch {
-    return null;
   }
 }
 
@@ -205,12 +172,10 @@ function parseCachedPlan(raw: unknown, nowMs: number): CachedPlan | null {
 /**
  * Resolve the caller's plan ("free" | "pro").
  *
- * Lookup order (all KV, no upstream): fresh `${tokenHash}:plan` → fresh
- * `uid:${uid}:plan` via the `${tokenHash}:uid` pointer (uid is only ever known
- * from a PRIOR resolution — never fetched separately). On miss: ONE upstream
+ * Lookup order: fresh `${tokenHash}:plan` from KV; on miss, ONE upstream
  * usage_record call with the caller's own key, classified by the canonical
- * paid formula, then written under BOTH keys (Amendment 2) with the freshness
- * deadline embedded in the value and a longer physical TTL for stale fallback.
+ * paid formula, written with the freshness deadline embedded in the value and
+ * a longer physical TTL for stale fallback.
  *
  * Fail-safe contract: upstream error + stale cache → stale value; upstream
  * error + nothing cached → "free" (status quo). NEVER throws.
@@ -232,33 +197,17 @@ export async function resolvePlan(
     if (cached) stale = cached.plan;
   } catch { /* KV read failure — fall through */ }
 
-  // 2. uid-keyed shared cache (Amendment 2) — only when uid is already known
-  try {
-    const uidRaw = await deps.kvGet(`${tokenHash}:uid`);
-    const uid = typeof uidRaw === "string" ? uidRaw : typeof uidRaw === "number" ? String(uidRaw) : null;
-    if (uid) {
-      const shared = parseCachedPlan(await deps.kvGet(`uid:${uid}:plan`), nowMs);
-      if (shared?.fresh) return shared.plan;
-      if (shared && stale === null) stale = shared.plan;
-    }
-  } catch { /* KV read failure — fall through */ }
-
-  // 3. upstream resolution with the CALLER's key
+  // 2. upstream resolution with the CALLER's key
   try {
     const data = await deps.fetchUsageRecord(apiKey);
     const plan = classifyPlanFromUsageRecord(data);
-    const uid = extractUidFromUsageRecord(data);
     const freshS = plan === "pro" ? PLAN_TTL_PRO_S : PLAN_TTL_FREE_S;
     const value = { plan, exp: nowMs + freshS * 1000 };
     const ex = freshS + PLAN_STALE_RETENTION_S;
     try {
       await deps.kvSet(tokenKey, value, { ex });
-      if (uid !== null) {
-        await deps.kvSet(`uid:${uid}:plan`, value, { ex });
-        await deps.kvSet(`${tokenHash}:uid`, uid, { ex: UID_POINTER_TTL_S });
-      }
     } catch { /* best-effort cache write — never block the caller */ }
-    console.log(JSON.stringify({ evt: "plan_resolution", tokenHashPrefix: logPrefix, plan, uidKeyed: uid !== null }));
+    console.log(JSON.stringify({ evt: "plan_resolution", tokenHashPrefix: logPrefix, plan }));
     return plan;
   } catch (err) {
     console.error(JSON.stringify({

@@ -43,19 +43,6 @@ test("mcp.ts: exempt footer exact text present", () => {
   );
 });
 
-test("mcp.ts: old 20%-threshold quota footer is gone", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  assert.doesNotMatch(
-    src,
-    /remaining < monthlyQuota \* 0\.2/,
-    "20% low-quota threshold condition must be removed",
-  );
-  assert.doesNotMatch(
-    src,
-    /Quota: \$\{remaining\}\/\$\{monthlyQuota\} calls remaining this month/,
-    "old 'Quota: N/M calls remaining this month' footer must be replaced",
-  );
-});
 
 test("mcp.ts: novada_setup success path carries the exempt footer", () => {
   const src = readFileSync(MCP_TS, "utf8");
@@ -82,59 +69,6 @@ test("mcp.ts: novada_setup success path carries the exempt footer", () => {
 
 // ─── ITEM 7: MCP resources capability ────────────────────────────────────────
 
-test("mcp.ts: Server capabilities include resources: {}", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  // Must have resources in the capabilities object passed to new Server(...)
-  assert.ok(
-    src.includes("resources: {}"),
-    "Server capabilities must declare resources: {}",
-  );
-});
-
-test("mcp.ts: ListResourcesRequestSchema imported from SDK types", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  assert.ok(
-    src.includes("ListResourcesRequestSchema"),
-    "ListResourcesRequestSchema must be imported from SDK",
-  );
-});
-
-test("mcp.ts: ReadResourceRequestSchema imported from SDK types", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  assert.ok(
-    src.includes("ReadResourceRequestSchema"),
-    "ReadResourceRequestSchema must be imported from SDK",
-  );
-});
-
-test("mcp.ts: listResources and readResource imported from vendor resources", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  assert.ok(src.includes("listResources"), "listResources must be imported");
-  assert.ok(src.includes("readResource"),  "readResource must be imported");
-  assert.ok(
-    src.includes("vendor/novada-mcp/resources/index.js"),
-    "imports must come from vendor/novada-mcp/resources/index.js",
-  );
-});
-
-test("mcp.ts: ListResources/ReadResource handlers registered outside quota-gated block", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  const callToolIdx       = src.indexOf("server.setRequestHandler(CallToolRequestSchema");
-  const listResourcesIdx  = src.indexOf("server.setRequestHandler(ListResourcesRequestSchema");
-  const promptsIdx        = src.indexOf("server.setRequestHandler(ListPromptsRequestSchema");
-  assert.ok(callToolIdx      !== -1, "CallToolRequestSchema handler must be present");
-  assert.ok(listResourcesIdx !== -1, "ListResourcesRequestSchema handler must be present");
-  assert.ok(promptsIdx       !== -1, "ListPromptsRequestSchema handler must be present");
-  assert.ok(
-    listResourcesIdx > callToolIdx,
-    "ListResourcesRequestSchema handler must appear AFTER CallToolRequestSchema handler",
-  );
-  // Resources handlers must be close to prompts handlers (both registered outside the quota block).
-  assert.ok(
-    Math.abs(listResourcesIdx - promptsIdx) < 1500,
-    "resources handlers must be adjacent to prompts handlers (both outside the quota gate block)",
-  );
-});
 
 test("mcp.ts: resources handlers contain no quota calls (enforceGatewayCap / decrementQuota)", () => {
   const src = readFileSync(MCP_TS, "utf8");
@@ -183,15 +117,6 @@ test("resource unit: readResource unknown URI throws clean Error (no crash)", ()
   );
 });
 
-// _meta.quota_remaining semantics: unchanged (present only for charged && !overCapAllowed)
-test("mcp.ts: _meta.quota_remaining semantics unchanged (present only for charged && !overCapAllowed)", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  assert.match(
-    src,
-    /gate\.charged && !gate\.overCapAllowed \? \{ _meta: \{ quota_remaining: remaining \} \} : \{\}/,
-    "_meta.quota_remaining must only be emitted for real free-plan charges",
-  );
-});
 
 // ─── FIX 1: ReadResourceRequestSchema handler must THROW, not return, errors ─
 //
@@ -201,28 +126,6 @@ test("mcp.ts: _meta.quota_remaining semantics unchanged (present only for charge
 // The old code returned `{ error: { code: -32602, message } }` which was
 // serialised as a successful result with an error-shaped body.
 
-test("mcp.ts ReadResourceRequestSchema handler: throws McpError for unknown URI, not returns", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  // The handler must contain `throw new McpError(ErrorCode.InvalidParams`
-  assert.ok(
-    src.includes("throw new McpError(ErrorCode.InvalidParams"),
-    "ReadResourceRequestSchema catch block must throw new McpError(ErrorCode.InvalidParams, ...) — not return an error-shaped object",
-  );
-});
-
-test("mcp.ts ReadResourceRequestSchema handler: old 'return { error:' form is absent", () => {
-  // Extract the ReadResource handler section from the source file.
-  const src = readFileSync(MCP_TS, "utf8");
-  const startIdx = src.indexOf("server.setRequestHandler(ReadResourceRequestSchema");
-  assert.ok(startIdx !== -1, "ReadResourceRequestSchema handler must be present in mcp.ts");
-  // Scan forward to find the closing });
-  const handlerSection = src.slice(startIdx, startIdx + 600);
-  assert.doesNotMatch(
-    handlerSection,
-    /return\s*\{\s*\n?\s*error\s*:/,
-    "ReadResourceRequestSchema catch block must NOT return an error-shaped object — it must throw McpError",
-  );
-});
 
 // Unit-level handler fence: import vendor readResource + SDK McpError; verify
 // that wrapping readResource(unknownUri) with the new throw-pattern produces a

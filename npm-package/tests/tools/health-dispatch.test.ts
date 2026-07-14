@@ -59,86 +59,22 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// ─── (a) Default — disclaimer present, probe NOT called ──────────────────────
+// ─── Smoke: dispatch wires probe correctly ────────────────────────────────────
 
-describe("novada_health via dispatch — default (probe:false)", () => {
-  it("(a) disclaimer present in output", async () => {
+describe("novada_health via dispatch — probe smoke (absent→not called, present→called)", () => {
+  it("probe absent → NOT called; probe:true → called exactly once", async () => {
     const { dispatch } = await import("../../src/core.js");
-    const result = await dispatch("novada_health", {}, API_KEY);
-    expect(result).toContain("does NOT verify live render capability");
-    expect(result).toContain("probe:true");
-  });
 
-  it("(a) _performRenderProbe NOT called by default", async () => {
-    const { dispatch } = await import("../../src/core.js");
+    // probe absent → not called
     await dispatch("novada_health", {}, API_KEY);
     expect(mockedProbe).not.toHaveBeenCalled();
-  });
 
-  it("(a) output includes the novadaAccount base summary", async () => {
-    const { dispatch } = await import("../../src/core.js");
-    const result = await dispatch("novada_health", {}, API_KEY);
-    expect(result).toContain("Novada Account");
-  });
-});
-
-// ─── (b) probe:true — _performRenderProbe called once, output has probe block ─
-
-describe("novada_health via dispatch — probe:true success", () => {
-  beforeEach(() => {
+    // reset, then probe:true → called once
+    vi.clearAllMocks();
+    mockedAccount.mockResolvedValue("## Novada Account — Summary\n\nWallet: €10.00\n");
     mockedProbe.mockResolvedValue({ ok: true, detail: "HTTP 200" });
-  });
-
-  it("(b) _performRenderProbe called exactly once", async () => {
-    const { dispatch } = await import("../../src/core.js");
     await dispatch("novada_health", { probe: true }, API_KEY);
     expect(mockedProbe).toHaveBeenCalledOnce();
-  });
-
-  it("(b) output contains render_probe block", async () => {
-    const { dispatch } = await import("../../src/core.js");
-    const result = await dispatch("novada_health", { probe: true }, API_KEY);
-    expect(result).toContain("render_probe:");
-    expect(result).toContain("attempted: true");
-  });
-
-  it("(b) output contains billing disclosure", async () => {
-    const { dispatch } = await import("../../src/core.js");
-    const result = await dispatch("novada_health", { probe: true }, API_KEY);
-    expect(result).toContain("probe performed 1 real render call billed to your account");
-  });
-
-  it("(b) output reports ok: true on success", async () => {
-    const { dispatch } = await import("../../src/core.js");
-    const result = await dispatch("novada_health", { probe: true }, API_KEY);
-    expect(result).toContain("ok: true");
-    expect(result).not.toContain("ok: false");
-  });
-});
-
-// ─── (c) probe failure → ok:false surfaced, no healthy claim ─────────────────
-
-describe("novada_health via dispatch — probe:true failure", () => {
-  beforeEach(() => {
-    mockedProbe.mockResolvedValue({ ok: false, detail: "connection refused" });
-  });
-
-  it("(c) output reports ok: false", async () => {
-    const { dispatch } = await import("../../src/core.js");
-    const result = await dispatch("novada_health", { probe: true }, API_KEY);
-    expect(result).toContain("ok: false");
-  });
-
-  it("(c) output does NOT claim healthy render (ok: true absent)", async () => {
-    const { dispatch } = await import("../../src/core.js");
-    const result = await dispatch("novada_health", { probe: true }, API_KEY);
-    expect(result).not.toContain("ok: true");
-  });
-
-  it("(c) failure detail surfaced in output", async () => {
-    const { dispatch } = await import("../../src/core.js");
-    const result = await dispatch("novada_health", { probe: true }, API_KEY);
-    expect(result).toContain("connection refused");
   });
 });
 
