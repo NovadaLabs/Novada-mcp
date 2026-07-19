@@ -51,3 +51,6 @@ test-p0.mjs
 .env
 .env.local
 .vercel
+
+# Audit/scan reports may contain secrets — never commit
+reports/
