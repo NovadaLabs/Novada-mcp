@@ -1,0 +1,118 @@
+{
+  "$schema_note": "Fixed task-set for the tool-selection eval (Layer 5, the tool-selection regression net). Each entry is a natural-language prompt an agent would receive, the tool it SHOULD pick, tools it may acceptably pick instead (rare — most tasks have exactly one right answer), tools it must NOT pick (a forbidden hit is worse than a miss — it means the eval judges the model actively confused two tools, not merely uncertain), and a sibling watch-list: tools whose selection accuracy on OTHER tasks must not regress when a new tool is added near this one. surfaces[] tags which visible-tool-set(s) this task is valid on — a task that expects novada_site_copy is meaningless on a surface where that tool is filtered out. surfaces[] values MUST be keys that exist in config/surfaces.json (checked at load time by run-eval.mjs's validateTaskSet()) — see the note below on why this differs from the prototype this was ported from.",
+  "version": 2,
+  "generated_from": "reports/phase1-net-design/B/prototype/eval-tasks.json (version 1, 2026-07-18), re-validated against npm-package/src/tools/registry.ts @ 23-tool registry on 2026-07-19 — every expected_tool/acceptable_tools/unacceptable_tools/sibling_watch name in this file was confirmed present in the live TOOL_REGISTRY at that time (see tests/eval/baseline-selector.test.ts and eval/run-eval.mjs, which re-verify this on every run rather than trusting this comment).",
+  "porting_notes": "v1->v2 changes from the B prototype this was ported from: (1) surfaces[] normalized to only 'default' and 'hosted-15' — the prototype also tagged several tasks with a third surface, 'rapid', which does not exist as a key in the real config/surfaces.json (only 'default' and 'hosted-15' are defined there today); keeping a task pointed at a non-existent surface would either silently no-op or require the runner to invent a bucket nobody configured, so 'rapid' was dropped rather than carried forward as aspirational fiction. If a 'rapid' surface is ever added to config/surfaces.json, re-add the tag here as a deliberate, reviewed change. (2) T06 (expected_tool=novada_site_copy) and T10 (expected_tool=novada_verify) had 'hosted-15' dropped from their surfaces[] — wiring model-eval-runner.mjs to the REAL config/surfaces.json (rather than B's hand-rolled SURFACE_FILTERS, which happened to enumerate the identical 15 tools) surfaced that neither novada_site_copy nor novada_verify is actually exposed on the hosted-15 surface; a task tagged for a surface where its own expected_tool isn't even offered to the model is a structurally guaranteed miss, not a real routing signal. model-eval-runner.mjs's validateTaskSurfaces() now hard-fails loud if this class of mismatch is ever reintroduced. (3) No other field changed — prompts, expected_tool, acceptable/unacceptable_tools, sibling_watch, and notes are verbatim from the executed B prototype so the recorded baseline-floor number stays comparable across the port.",
+  "tasks": [
+    {
+      "id": "T01-fact-lookup-vs-research",
+      "prompt": "What's the current price of Bitcoin right now?",
+      "category": "search-vs-research-vs-verify",
+      "expected_tool": "novada_search",
+      "acceptable_tools": ["novada_search"],
+      "unacceptable_tools": ["novada_research", "novada_scrape", "novada_crawl"],
+      "sibling_watch": ["novada_research", "novada_verify"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Single current fact, one snippet suffices. novada_research is over-kill (multi-source synthesis); this is the #1 confusion pair per novada_search's own description disambiguation."
+    },
+    {
+      "id": "T02-single-url-read",
+      "prompt": "Get me the full text of this blog post: https://example.com/2026/agent-memory-design",
+      "category": "extract-vs-search",
+      "expected_tool": "novada_extract",
+      "acceptable_tools": ["novada_extract"],
+      "unacceptable_tools": ["novada_search", "novada_crawl", "novada_map"],
+      "sibling_watch": ["novada_crawl", "novada_map"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "A known URL to read in full — the canonical novada_extract case. Regression signal: if a new content-retrieval tool starts absorbing single-URL reads, extract's routing share should be watched."
+    },
+    {
+      "id": "T03-multi-source-synthesis",
+      "prompt": "Give me a comparative analysis of React vs Vue rendering performance, citing at least three independent sources.",
+      "category": "research-vs-search",
+      "expected_tool": "novada_research",
+      "acceptable_tools": ["novada_research"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_verify"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Explicitly asks for multi-source synthesis with citations — the case novada_research exists for."
+    },
+    {
+      "id": "T04-platform-structured-data",
+      "prompt": "Pull Amazon listings for 'wireless earbuds' with price and rating for the top 5 results.",
+      "category": "scrape-vs-extract",
+      "expected_tool": "novada_scrape",
+      "acceptable_tools": ["novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Named platform (Amazon) + structured fields (price/rating) is the scrape disambiguator called out in novada_scrape's own description. This is the pair Bright Data's flat 65-tool surface gets wrong most often per the competitive teardown."
+    },
+    {
+      "id": "T05-url-discovery-only",
+      "prompt": "Before I read anything, tell me what pages exist under docs.stripe.com.",
+      "category": "map-vs-crawl-vs-sitecopy",
+      "expected_tool": "novada_map",
+      "acceptable_tools": ["novada_map"],
+      "unacceptable_tools": ["novada_crawl", "novada_site_copy", "novada_extract"],
+      "sibling_watch": ["novada_crawl", "novada_site_copy"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "URL discovery with explicit 'before I read anything' — no content wanted yet. The three-way map/crawl/site_copy split is the tightest cluster in the registry; a new fourth discovery-shaped tool is the highest-risk addition for this triad."
+    },
+    {
+      "id": "T06-whole-site-to-disk",
+      "prompt": "Download the entire docs.python.org tutorial section to my machine as markdown files I can grep later.",
+      "category": "map-vs-crawl-vs-sitecopy",
+      "expected_tool": "novada_site_copy",
+      "acceptable_tools": ["novada_site_copy"],
+      "unacceptable_tools": ["novada_crawl", "novada_map", "novada_extract"],
+      "sibling_watch": ["novada_crawl", "novada_map"],
+      "surfaces": ["default"],
+      "notes": "'Entire section' + 'to my machine' + persistence intent rules out novada_crawl's 20-page inline-body cap. Same triad as T05 from the opposite corner — both must hold simultaneously. NOT tagged 'hosted-15': novada_site_copy is not in config/surfaces.json's hosted-15 tool list, so this task is meaningless there — see porting_notes."
+    },
+    {
+      "id": "T07-own-http-client-proxy",
+      "prompt": "I'm writing my own Python scraper and need residential proxy credentials to route through, not a tool that scrapes for me.",
+      "category": "proxy-vs-extract",
+      "expected_tool": "novada_proxy",
+      "acceptable_tools": ["novada_proxy"],
+      "unacceptable_tools": ["novada_extract", "novada_crawl", "novada_scrape"],
+      "sibling_watch": ["novada_extract"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Explicit 'my own HTTP client' framing is the exact disambiguator in novada_proxy's description ('Not for: novada_extract or novada_crawl — they handle proxy routing internally')."
+    },
+    {
+      "id": "T08-interactive-login-flow",
+      "prompt": "Log into this dashboard with my test credentials, click through to the billing tab, and screenshot it.",
+      "category": "browser-vs-extract",
+      "expected_tool": "novada_browser",
+      "acceptable_tools": ["novada_browser"],
+      "unacceptable_tools": ["novada_extract", "novada_browser_flow"],
+      "sibling_watch": ["novada_browser_flow"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Multi-step interactive session (login, click, screenshot) requires novada_browser, not one-shot extract. novada_browser_flow is a deprecated-in-spirit simplified alias — a task should never prefer it over the primary tool."
+    },
+    {
+      "id": "T09-change-over-time",
+      "prompt": "Has this competitor's pricing page changed since I last checked it a week ago?",
+      "category": "monitor-vs-extract",
+      "expected_tool": "novada_monitor",
+      "acceptable_tools": ["novada_monitor"],
+      "unacceptable_tools": ["novada_extract", "novada_verify"],
+      "sibling_watch": ["novada_extract"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Explicit temporal-diff framing ('since last time') is novada_monitor's reason to exist over a one-shot extract. Also exercises the honesty contract: on the hosted surface the tool must self-disclose the session-scoped-baseline limitation, which this eval does not grade but the contract layer (Layer 2) does."
+    },
+    {
+      "id": "T10-claim-verification",
+      "prompt": "Someone told me Anthropic released Claude 4 in 2024 — is that actually true?",
+      "category": "verify-vs-search-vs-research",
+      "expected_tool": "novada_verify",
+      "acceptable_tools": ["novada_verify"],
+      "unacceptable_tools": ["novada_search", "novada_research"],
+      "sibling_watch": ["novada_search", "novada_research"],
+      "surfaces": ["default"],
+      "notes": "A discrete, checkable factual claim (not an open question) is the disambiguator for novada_verify vs novada_search/novada_research. NOT tagged 'hosted-15': novada_verify is not in config/surfaces.json's hosted-15 tool list, so this task is meaningless there — see porting_notes."
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "$comment": "SEED of the future Phase-3 config engine. Only surfaces that exist in code today are listed here — no speculative rapid/pro entries (index.ts's CATEGORY_MAP has no such bundles yet). Runtime filters (npm-package/src/index.ts CATEGORY_MAP, hosted-server/vercel/api/mcp.ts TOOLS array) do NOT read this file yet — that refactor is a later Phase-3 chunk. Today this manifest is read ONLY by scripts/check-hosted-drift.mjs, which fails loudly if hosted's hand-curated TOOLS array silently drifts from the list below.",
+  "surfaces": {
+    "default": {
+      "tools": "*",
+      "description": "npm-package local stdio, no filter"
+    },
+    "hosted-15": {
+      "tools": [
+        "novada_search",
+        "novada_extract",
+        "novada_crawl",
+        "novada_research",
+        "novada_map",
+        "novada_scrape",
+        "novada_browser",
+        "novada_proxy",
+        "novada_discover",
+        "novada_ai_monitor",
+        "novada_monitor",
+        "novada_setup",
+        "novada_account",
+        "novada_proxy_account_list",
+        "novada_proxy_account_create"
+      ],
+      "description": "mcp.novada.com default surface — verbatim from the hand-curated TOOLS array in hosted-server/vercel/api/mcp.ts (const TOOLS = [...], ~lines 367-411), which the source itself comments is a 'standalone curation, NOT derived from core's TOOLS'"
+    }
+  }
+}

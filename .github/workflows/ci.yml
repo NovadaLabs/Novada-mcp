@@ -1,7 +1,17 @@
 name: CI
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "npm-package/**"
+      - ".github/workflows/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "npm-package/**"
+      - ".github/workflows/**"
+  workflow_dispatch: {}
 
 defaults:
   run:
@@ -31,8 +41,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Test
-        run: npm test
+      # test:coverage runs the exact same suite as `npm test` (vitest run) plus
+      # v8 coverage collection + the `thresholds` gate configured in
+      # vitest.config.ts. A coverage regression below the documented baseline
+      # (see that file's coverage.thresholds comment) now fails the build the
+      # same way a failing test does — vitest run --coverage exits non-zero on
+      # a threshold miss, verified locally before wiring this in.
+      - name: Test (with coverage thresholds)
+        run: npm run test:coverage
 
       - name: Lint
         run: npm run lint

@@ -87,8 +87,15 @@ describe("extractMainContent", () => {
       </body></html>
     `;
     const result = extractMainContent(html);
-    expect(result).toContain("- First item");
-    expect(result).toContain("- Second item");
+    // turndown@7.2.4 with bulletListMarker:"-" pads each bullet with 3 spaces
+    // (verified directly: t.turndown("<ul><li>...") -> "-   First item"), not the
+    // single space the test previously assumed. src/utils/html.ts is unchanged —
+    // this is upstream turndown formatting, not a source regression. Normalize
+    // runs of whitespace so the assertion checks substance (bullet + item text)
+    // without pinning an exact column count that could shift with turndown again.
+    const normalized = result.replace(/[ \t]+/g, " ");
+    expect(normalized).toContain("- First item");
+    expect(normalized).toContain("- Second item");
   });
 
   it("decodes HTML entities", () => {

@@ -408,3 +408,143 @@ test("mcp.ts source: requestId generated per request via crypto.randomUUID", () 
   const src = readFileSync(MCP_TS, "utf8");
   assert.match(src, /requestId.*=.*crypto\.randomUUID\(\)/, "requestId must be generated with crypto.randomUUID()");
 });
+
+// ─── Fix 1: emitEvent must surface non-2xx ────────────────────────────────────
+
+test("emitEvent: non-2xx response triggers console.warn with status (no throw)", async () => {
+  // Arrange — stub fetch to return a 400 with ok:false (no network; resolve immediately).
+  const savedFetch = globalThis.fetch;
+  const warnCalls = [];
+  const savedWarn = console.warn;
+  console.warn = (...args) => warnCalls.push(args);
+  globalThis.fetch = async () => ({ ok: false, status: 400 });
+
+  process.env.TELEMETRY_SUPABASE_URL = "https://test.supabase.co";
+  process.env.TELEMETRY_SUPABASE_KEY = "test-key-fix1";
+
+  const row = buildToolCallEvent({
+    request_id: "fix1-req", token_hash: "h1", plan: "free",
+    client_name: null, client_version: null, protocol_version: null,
+    tool: "novada_search", args: { q: "x" }, outcome: "ok",
+    latency_ms: 5, charged: false, over_cap_allowed: false, quota_remaining: 0,
+    server_version: null, region: null,
+  });
+
+  try {
+    await assert.doesNotReject(emitEvent(row), "emitEvent must not throw on non-2xx");
+    const telWarn = warnCalls.find(w => String(w[0]).includes("telemetry insert failed"));
+    assert.ok(telWarn, "console.warn must be called with 'telemetry insert failed'");
+    assert.equal(telWarn[1], 400, "console.warn must receive the HTTP status code (400)");
+  } finally {
+    globalThis.fetch = savedFetch;
+    console.warn = savedWarn;
+    delete process.env.TELEMETRY_SUPABASE_URL;
+    delete process.env.TELEMETRY_SUPABASE_KEY;
+  }
+});
+
+test("emitEvent: 2xx response does NOT trigger console.warn for telemetry insert", async () => {
+  const savedFetch = globalThis.fetch;
+  const warnCalls = [];
+  const savedWarn = console.warn;
+  console.warn = (...args) => warnCalls.push(args);
+  globalThis.fetch = async () => ({ ok: true, status: 201 });
+
+  process.env.TELEMETRY_SUPABASE_URL = "https://test.supabase.co";
+  process.env.TELEMETRY_SUPABASE_KEY = "test-key-fix1b";
+
+  const row = buildToolCallEvent({
+    request_id: "fix1b-req", token_hash: "h2", plan: null,
+    client_name: null, client_version: null, protocol_version: null,
+    tool: "novada_extract", args: {}, outcome: "ok",
+    latency_ms: 10, charged: true, over_cap_allowed: false, quota_remaining: 5,
+    server_version: null, region: null,
+  });
+
+  try {
+    await assert.doesNotReject(emitEvent(row));
+    const telWarn = warnCalls.find(w => String(w[0]).includes("telemetry insert failed"));
+    assert.ok(!telWarn, "console.warn must NOT be called for a 2xx response");
+  } finally {
+    globalThis.fetch = savedFetch;
+    console.warn = savedWarn;
+    delete process.env.TELEMETRY_SUPABASE_URL;
+    delete process.env.TELEMETRY_SUPABASE_KEY;
+  }
+});
+
+// ─── Fix 2: novada_setup block must emit telemetry ───────────────────────────
+
+test("mcp.ts source: novada_setup block calls scheduleToolEvent before its return", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  // Find the novada_setup block and assert scheduleToolEvent is present inside it.
+  const setupBlockStart = src.indexOf('if (name === "novada_setup")');
+  assert.ok(setupBlockStart >= 0, 'novada_setup block must exist in mcp.ts');
+  // The block ends at the next top-level if/const after it (gateway cap gate).
+  // scheduleToolEvent must appear between the block start and the first post-setup code.
+  const afterSetupIdx = src.indexOf('const monthlyQuota', setupBlockStart);
+  assert.ok(afterSetupIdx > setupBlockStart, 'post-setup code must exist after novada_setup block');
+  const setupSrc = src.slice(setupBlockStart, afterSetupIdx);
+  assert.ok(
+    setupSrc.includes("scheduleToolEvent("),
+    "novada_setup block must call scheduleToolEvent before its early return",
+  );
+});
+
+// ─── Fix 3: oninitialized comment must be honest about stateless-mode ─────────
+
+test("mcp.ts source: oninitialized comment does NOT claim getClientVersion IS populated", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  // The old misleading comment said "IS populated (it's set by _oninitialize)".
+  // In stateless mode this is false: the notification arrives on a different HTTP
+  // request with a fresh server where _clientVersion is always undefined.
+  assert.ok(
+    !src.includes("getClientVersion() IS populated"),
+    "Misleading 'IS populated' comment must be removed from oninitialized block",
+  );
+});
+
+test("mcp.ts source: oninitialized block documents stateless-mode limitation honestly", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  // The honest truth: in stateless mode initialized arrives on a separate HTTP
+  // request (fresh server) so getClientVersion() always returns undefined.
+  // Capture the comment + handler region between the section header and the
+  // next setRequestHandler call.
+  const sectionStart = src.indexOf("Telemetry: initialize event");
+  const sectionEnd = src.indexOf("server.setRequestHandler(CallToolRequestSchema");
+  assert.ok(sectionStart >= 0, "oninitialized section header must exist");
+  const oninitBlock = src.slice(sectionStart, sectionEnd);
+  assert.ok(
+    oninitBlock.includes("stateless") && oninitBlock.includes("undefined"),
+    "oninitialized block comment must document that getClientVersion returns undefined in stateless mode",
+  );
+});
+
+// ─── Fix 4: ceiling timeout result must emit TIMEOUT not ok ──────────────────
+
+test("mcp.ts source: success path checks for ceiling error before emitting outcome", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  // The fix must classify a result starting with "## Extraction Error" as TIMEOUT.
+  // Assert that both the detection expression and TIMEOUT outcome literal exist near
+  // the main dispatch result handling (after withWallClock / dispatch call).
+  assert.ok(
+    src.includes("## Extraction Error") || src.includes("Extraction Error"),
+    "mcp.ts must reference the ceiling error marker string for classification",
+  );
+  assert.ok(
+    src.includes('"TIMEOUT"'),
+    'mcp.ts success path must have a "TIMEOUT" outcome for ceiling-hit results',
+  );
+});
+
+test("mcp.ts source: TIMEOUT outcome appears near the main scheduleToolEvent ok call", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  // The TIMEOUT classification must sit in the same region as the main dispatch path
+  // (after withWallClock). Find the dispatch call and the following scheduleToolEvent.
+  const dispatchIdx = src.indexOf("withWallClock(\n        name,");
+  assert.ok(dispatchIdx >= 0, "withWallClock dispatch call must exist");
+  // Scan forward from dispatch for the TIMEOUT literal.
+  const regionEnd = src.indexOf("} catch (error)", dispatchIdx);
+  const subSrc = src.slice(dispatchIdx, regionEnd);
+  assert.ok(subSrc.includes('"TIMEOUT"'), '"TIMEOUT" outcome must be set in the dispatch success region');
+});
