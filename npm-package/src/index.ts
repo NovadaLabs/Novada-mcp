@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+// ─── novada-mcp — stdio entry point (npm bin: `novada-mcp`) ──────────────────
+// Wires the MCP Server + stdio transport and dispatches every tool call through
+// `./core.ts` (the single source of truth for the tool catalog + dispatch logic).
+// The hosted HTTP entrance is a SEPARATE artifact — hosted-server/vercel/api/mcp.ts
+// — which wraps a vendored copy of this package's build and dispatches through the
+// same core.ts. Full cross-artifact map: root ARCHITECTURE.md. Module map for this
+// package: npm-package/ARCHITECTURE.md.
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
