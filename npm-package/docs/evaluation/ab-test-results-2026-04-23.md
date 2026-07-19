@@ -140,8 +140,8 @@ Default engine: bing (changed from google)
 ### Required Credentials
 ```
 NOVADA_SCRAPER_KEY=<NOVADA_API_KEY_REDACTED>    # For task submission
-NOVADA_API_USERNAME=novada_c3dc3be46f7                   # For OAuth2 token
-NOVADA_API_SECRET=863270b49b2dc2f7f0c7d03f56247669       # For OAuth2 token
+NOVADA_API_USERNAME=<REDACTED — was committed to a public repo, rotate this credential>
+NOVADA_API_SECRET=<REDACTED — was committed to a public repo, rotate this credential>       # For OAuth2 token
 ```
 
 ### Remaining Blocker
