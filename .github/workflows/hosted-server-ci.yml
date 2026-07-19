@@ -1,0 +1,43 @@
+name: Hosted Server CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hosted-server/vercel/**"
+      - ".github/workflows/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "hosted-server/vercel/**"
+      - ".github/workflows/**"
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    working-directory: hosted-server/vercel
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # test/*.test.mjs import api/_oauth.ts, api/_plan.ts, api/_telemetry.ts
+      # directly via Node's built-in TS type-stripping, which these files'
+      # own header comments pin at Node >=22.18 — do not lower this below 22.
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: hosted-server/vercel/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Zero-network, zero-secret: node:test unit + static-analysis fences
+      # over telemetry, oauth, caller-key, truthful-self-report, paid-tier-cap.
+      - name: Test
+        run: npm test

@@ -1,0 +1,23 @@
+{
+  "$comment": "Committed deterministic snapshot of eval/baseline-selector.mjs's exact output against the live 23-tool registry + eval-tasks.json v2, captured 2026-07-19. Tier A (bag-of-words) is FULLY DETERMINISTIC — no key, no network, no model sampling — so this snapshot is exact and safe to gate against byte-for-byte. baseline-selector.mjs now gates as REGRESSION-VS-THIS-BASELINE (FIX 2, gate-hardening pass): fail if exact_accuracy drops below the value below, OR a NEW forbidden hit appears (forbidden_hits grows beyond the set below), OR a task listed here with correct:true now scores correct:false. Do NOT gate on forbidden_hits.length===0 — the 2 recorded forbidden hits (T03, T04) are expected weak-selector noise (a bag-of-words heuristic confusing novada_search with novada_research/novada_scrape), not a defect to chase to zero; see baseline-selector.mjs's BASELINE_FLOOR doc and eval-tasks.json's own task notes for T03/T04. Update this file deliberately (new date + note why) whenever eval-tasks.json or the registry's tool descriptions change on purpose — never regenerate it just to make a red run go green.",
+  "recorded_date": "2026-07-19",
+  "registry_tool_count": 23,
+  "task_count": 10,
+  "exact_accuracy": 0.5,
+  "forbidden_hits": [
+    "T03-multi-source-synthesis",
+    "T04-platform-structured-data"
+  ],
+  "per_task": {
+    "T01-fact-lookup-vs-research": { "correct": true },
+    "T02-single-url-read": { "correct": false },
+    "T03-multi-source-synthesis": { "correct": false },
+    "T04-platform-structured-data": { "correct": false },
+    "T05-url-discovery-only": { "correct": false },
+    "T06-whole-site-to-disk": { "correct": true },
+    "T07-own-http-client-proxy": { "correct": true },
+    "T08-interactive-login-flow": { "correct": true },
+    "T09-change-over-time": { "correct": true },
+    "T10-claim-verification": { "correct": false }
+  }
+}

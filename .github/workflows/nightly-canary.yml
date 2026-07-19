@@ -1,0 +1,84 @@
+name: Nightly Canary (prod backend — Layers 2/6/7)
+
+# Runs the deploy-time verification suite AGAINST THE LIVE, ALREADY-DEPLOYED
+# https://mcp.novada.com/mcp — on a schedule, independent of any deploy.
+#
+# THIS IS NOT A PR GATE. It never runs on push/pull_request and it does not
+# test the code in this PR/branch — it tests whatever is CURRENTLY DEPLOYED to
+# production. Do not wire `paths:` filters onto this workflow the way the
+# other CI workflows in this repo are filtered; there is no meaningful path
+# filter for "what's live right now."
+#
+# Why this exists: deploy-hosted.sh's own VERIFY phase already runs this same
+# capture -> diff -> contract sequence, but ONLY when a human runs a deploy
+# (REDLINE-gated, per repo CLAUDE.md). Between deploys, nothing re-checks that
+# the live backend still behaves the way BASELINE.md says it should — a
+# a third-party dependency bump, an expired credential, an upstream platform
+# API change, or an infra blip could silently break Layers 2/6/7 coverage with
+# zero signal until the next deploy happens to notice. This workflow closes
+# that gap with a scheduled, deploy-independent check.
+#
+# Steps mirror deploy-hosted.sh PHASE 5 (VERIFY) exactly, using the two
+# extracted/standalone scripts instead of PHASE 5's inline heredoc + inline
+# contract-test.py invocation:
+#   1. capture-golden.py  https://mcp.novada.com/mcp  -> fresh snapshot dir
+#   2. diff-golden.py     <checked-in baseline/>  <fresh snapshot dir>
+#   3. contract-test.py   https://mcp.novada.com/mcp   (FREE set only — no
+#      CONTRACT_FULL=1 here; CONTRACT_FULL is billable and stays a manual/
+#      deploy-time-only decision, not a nightly default)
+#
+# Secret required: secrets.NOVADA_MCP_KEY (both capture-golden.py and
+# contract-test.py accept NOVADA_MCP_KEY or NOVADA_API_KEY — this workflow
+# standardizes on NOVADA_MCP_KEY to match deploy-hosted.sh's own env var name).
+
+on:
+  schedule:
+    # 06:17 UTC daily — an off-minute (not top-of-hour) to avoid the scheduled-
+    # job pile-up window every other repo's "0 6 * * *"/"0 * * * *" cron
+    # collides into on GitHub Actions' shared runners.
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  canary:
+    name: golden capture + diff + contract (FREE) vs mcp.novada.com
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # capture-golden.py / diff-golden.py / contract-test.py are all stdlib-only
+      # (see their own headers) — no requirements.txt, no pip install needed.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Capture golden snapshot from live prod
+        env:
+          NOVADA_MCP_KEY: ${{ secrets.NOVADA_MCP_KEY }}
+        run: |
+          mkdir -p /tmp/golden-canary
+          python3 hosted-server/scripts/golden/capture-golden.py \
+            https://mcp.novada.com/mcp \
+            /tmp/golden-canary
+
+      # Two-tier verdict: hard-fails (exit 1) on any of the 7 structural files
+      # differing, a redaction leak, or a dispatch-matrix routing escalation.
+      # dispatch-matrix.json shape drift alone is printed as advisory, not gated.
+      - name: Diff fresh capture against checked-in baseline
+        run: |
+          python3 hosted-server/scripts/golden/diff-golden.py \
+            hosted-server/scripts/golden/baseline \
+            /tmp/golden-canary
+
+      # if: always() so a golden-diff failure above doesn't hide whether the
+      # contract invariants also failed — both signals are worth seeing in the
+      # same nightly run, exactly like deploy-hosted.sh reports both gates
+      # before combining them into one final verdict.
+      - name: Contract invariant tests (FREE set — no CONTRACT_FULL)
+        if: always()
+        env:
+          NOVADA_MCP_KEY: ${{ secrets.NOVADA_MCP_KEY }}
+        run: |
+          python3 hosted-server/scripts/contract/contract-test.py https://mcp.novada.com/mcp

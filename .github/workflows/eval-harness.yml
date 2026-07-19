@@ -1,0 +1,127 @@
+name: Eval Harness (Layer 5 — tool selection)
+
+# Wires npm-package/eval/ (the Layer 5 tool-selection regression net) into CI.
+# Ported design: reports/phase1-net-design/B/DESIGN-B.md §5 + prototype/.
+#
+# Two jobs, deliberately asymmetric in cost and trigger:
+#
+#   eval-baseline — the free, deterministic Tier A sentinel (eval/baseline-selector.mjs).
+#     $0, no third-party network call, no secret required. Runs on every push/PR that
+#     touches a tool-registry-affecting path. NOTE: Tier A is *also* covered more
+#     broadly by npm-package/tests/eval/baseline-selector.test.ts, which is part of the
+#     existing required `npm test` step in ci.yml and runs on every npm-package/** change
+#     (a superset of the paths below, and with zero build-freshness dependency — see that
+#     file's header). This job is intentionally redundant with that vitest gate: it exists
+#     to give the standalone CLI script (richer per-task reporting, --json output) its own
+#     CI-visible run scoped tightly to the paths that actually matter, exactly as asked for
+#     in the harness design. If this job and the vitest gate ever disagree, that itself is
+#     a signal something drifted between build/ and src/.
+#
+#   eval-live — the model-in-the-loop Tier B check (eval/model-eval-runner.mjs). A REAL,
+#     BILLED Anthropic API call. Gated on secrets.ANTHROPIC_API_KEY: if the secret is
+#     unset, the script itself detects the missing env var and exits 0 (SKIP, not FAIL —
+#     see model-eval-runner.mjs's own guard). This job has NEVER been run with a real key
+#     as of this workflow's authoring; its first real run doubles as the initial
+#     measurement for the NOV-847 agent-confusion KPI (owner-gated — see the harness
+#     build's final report). Also runnable on demand via workflow_dispatch for a manual,
+#     explicitly-approved spend. FIX 4: `needs: eval-baseline` — don't spend a build +
+#     billed Anthropic call on a commit the $0 deterministic Tier A gate already flagged
+#     as broken or regressed; eval-live now only starts once eval-baseline has passed.
+#
+# Path filter covers every file either job reads (mirroring the documented convention in
+# hosted-drift-check.yml): the registry/catalog sources, the harness's own scripts and
+# task set, the real surface manifest model-eval-runner.mjs reads, and this workflow file
+# itself (so an edit to the trigger logic re-validates itself).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "npm-package/src/tools/registry.ts"
+      - "npm-package/src/core.ts"
+      - "npm-package/src/tools/**"
+      - "npm-package/eval/**"
+      - "npm-package/tests/eval/**"
+      - "config/surfaces.json"
+      - ".github/workflows/eval-harness.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "npm-package/src/tools/registry.ts"
+      - "npm-package/src/core.ts"
+      - "npm-package/src/tools/**"
+      - "npm-package/eval/**"
+      - "npm-package/tests/eval/**"
+      - "config/surfaces.json"
+      - ".github/workflows/eval-harness.yml"
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    working-directory: npm-package
+
+jobs:
+  eval-baseline:
+    name: Tier A — baseline selector (free, deterministic, no secret)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: npm-package/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # eval/baseline-selector.mjs imports from build/ (see its own header for why) —
+      # this step guarantees build/ reflects the exact commit under test.
+      - name: Build
+        run: npm run build
+
+      - name: Run Tier A baseline selector
+        run: node eval/baseline-selector.mjs
+
+  eval-live:
+    name: Tier B — model-in-the-loop (real Anthropic call, skip if unkeyed)
+    runs-on: ubuntu-latest
+    # FIX 4 — don't spend a build + billed API budget on a commit Tier A already
+    # flagged as broken/regressed. eval-baseline is $0 and fails fast (build +
+    # deterministic selector, no network); gating eval-live behind it means a
+    # broken registry/task-set change never reaches the billed Anthropic call.
+    needs: eval-baseline
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: npm-package/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # No `if:` gate on the step itself — ANTHROPIC_API_KEY resolves to an empty
+      # string when the secret is unset, and model-eval-runner.mjs's own guard
+      # detects that and exits 0 (SKIP). Checking secret presence in a workflow
+      # `if:` expression is possible but brittle across GitHub Actions contexts
+      # (forked-PR secret redaction, org- vs repo-level secrets); deferring the
+      # check to the script itself is the same pattern eval/run-eval.mjs already
+      # uses for its own --full gate, so there is exactly one place this logic lives.
+      - name: Run Tier B model-in-the-loop eval (default surface)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node eval/model-eval-runner.mjs --surface=default
+
+      - name: Run Tier B model-in-the-loop eval (hosted-15 surface)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node eval/model-eval-runner.mjs --surface=hosted-15
