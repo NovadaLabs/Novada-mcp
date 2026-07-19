@@ -33,10 +33,23 @@ function mockBrowser(html: string) {
     goto: vi.fn().mockResolvedValue(undefined),
     content: vi.fn().mockResolvedValue(html),
     waitForSelector: vi.fn().mockResolvedValue(undefined),
+    // fetchViaBrowser (src/utils/browser.ts) also unconditionally calls
+    // page.url() (post-navigation SSRF re-check via assertLandingSafe),
+    // page.waitForLoadState(...), and page.waitForTimeout(...) after goto —
+    // a real Playwright Page has all of these. waitForFunction is included
+    // for the (untriggered in this fixture) Cloudflare-challenge branch.
+    url: vi.fn().mockReturnValue("https://example.com"),
+    waitForLoadState: vi.fn().mockResolvedValue(undefined),
+    waitForTimeout: vi.fn().mockResolvedValue(undefined),
+    waitForFunction: vi.fn().mockResolvedValue(undefined),
   };
   const mockContext = {
     newPage: vi.fn().mockResolvedValue(mockPage),
     close: vi.fn().mockResolvedValue(undefined),
+    // src/utils/browser.ts:210 calls context.addInitScript(...) to spoof
+    // navigator.webdriver/chrome/plugins before the page loads — the mock must
+    // implement it or fetchViaBrowser throws "addInitScript is not a function".
+    addInitScript: vi.fn().mockResolvedValue(undefined),
   };
   const mockBrowser = {
     newContext: vi.fn().mockResolvedValue(mockContext),

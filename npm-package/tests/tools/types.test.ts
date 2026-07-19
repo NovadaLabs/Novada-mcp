@@ -10,9 +10,12 @@ import {
   validateBrowserParams,
   validateProxyParams,
   validateSiteCopyParams,
-  classifyError,
-  NovadaErrorCode,
 } from "../../src/tools/types.js";
+// classifyError/NovadaErrorCode never lived in tools/types.ts (verified via
+// `git log -S classifyError -- src/tools/types.ts` = zero hits) — they are
+// defined and exported from src/_core/errors.ts. The test previously imported
+// them from the wrong module.
+import { classifyError, NovadaErrorCode } from "../../src/_core/errors.js";
 
 describe("validateSearchParams", () => {
   it("returns params when query is a valid string", () => {

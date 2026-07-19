@@ -18,6 +18,13 @@ import {
   CrawlParamsSchema,
   validateCrawlParams,
 } from "../../src/tools/types.js";
+// TOOLS is the real, built tool catalog (name/title/description/inputSchema/
+// annotations) — importing it and reading .annotations directly is robust to
+// any description/title-length change, unlike the previous fixed-char-window
+// text scrape over core.ts source (which broke the moment a benign edit pushed
+// the annotations block past the window). Already proven safe to import in a
+// vitest unit test elsewhere (tests/tools/collision-matrix.test.ts).
+import { TOOLS } from "../../src/core.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -25,26 +32,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function readIndexSrc(): string {
   return readFileSync(resolve(__dirname, "../../src/index.ts"), "utf8");
-}
-
-// ─── Helper: extract TOOLS array text from core.ts ───────────────────────────
-
-function readToolsBlock(): string {
-  const src = readFileSync(resolve(__dirname, "../../src/core.ts"), "utf8");
-  // _TOOL_DEFINITIONS holds ALL tool schemas (visible + hidden); annotation contracts apply to all.
-  const start = src.indexOf("const _TOOL_DEFINITIONS");
-  if (start === -1) throw new Error("could not locate `const _TOOL_DEFINITIONS` in src/core.ts");
-  const after = src.slice(start);
-  let depth = 0;
-  let i = after.indexOf("[");
-  for (; i < after.length; i++) {
-    if (after[i] === "[") depth++;
-    else if (after[i] === "]") {
-      depth--;
-      if (depth === 0) break;
-    }
-  }
-  return after.slice(0, i + 1);
 }
 
 // ─── Helper: invoke zodToMcpSchema via the schema's .toJSONSchema() + the
@@ -115,26 +102,15 @@ describe("zodToMcpSchema — required[] excludes defaulted params", () => {
 
 describe("annotations — idempotentHint truthfulness", () => {
   it("novada_monitor has idempotentHint:false (stateful store)", () => {
-    const block = readToolsBlock();
-    // Find the novada_monitor entry and its annotations block
-    const monitorStart = block.indexOf('"novada_monitor"');
-    expect(monitorStart).toBeGreaterThan(-1);
-    const monitorSlice = block.slice(monitorStart, monitorStart + 1500);
-    const annotationsMatch = monitorSlice.match(/annotations:\s*\{([^}]+)\}/);
-    expect(annotationsMatch).not.toBeNull();
-    const annotationsText = annotationsMatch![1];
-    expect(annotationsText).toMatch(/idempotentHint\s*:\s*false/);
+    const tool = TOOLS.find(t => t.name === "novada_monitor");
+    expect(tool).toBeDefined();
+    expect(tool!.annotations.idempotentHint).toBe(false);
   });
 
   it("novada_verify has idempotentHint:false (non-deterministic live searches)", () => {
-    const block = readToolsBlock();
-    const verifyStart = block.indexOf('"novada_verify"');
-    expect(verifyStart).toBeGreaterThan(-1);
-    const verifySlice = block.slice(verifyStart, verifyStart + 1500);
-    const annotationsMatch = verifySlice.match(/annotations:\s*\{([^}]+)\}/);
-    expect(annotationsMatch).not.toBeNull();
-    const annotationsText = annotationsMatch![1];
-    expect(annotationsText).toMatch(/idempotentHint\s*:\s*false/);
+    const tool = TOOLS.find(t => t.name === "novada_verify");
+    expect(tool).toBeDefined();
+    expect(tool!.annotations.idempotentHint).toBe(false);
   });
 });
 

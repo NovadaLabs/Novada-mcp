@@ -383,25 +383,45 @@ describe("validateScraperResultParams", () => {
 });
 
 // ─── validateScraperSubmitParams ─────────────────────────────────────────────
+// NOTE: this schema was rewritten for the platform/operation scraper contract
+// (src/tools/scraper_submit.ts) — the old universal-scrape {url, scraper_type}
+// shape no longer exists. ScraperSubmitParamsSchema now requires
+// {platform, operation, params?}.
 
 describe("validateScraperSubmitParams", () => {
   it("accepts valid params", () => {
     const p = validateScraperSubmitParams({
-      url: "https://example.com",
-      scraper_type: "universal",
-    });
-    expect(p.url).toBeTruthy();
-    expect(p.scraper_type).toBe("universal");
-  });
-
-  it("throws on private IP in url", () => {
-    expect(() => validateScraperSubmitParams({
-      url: "http://127.0.0.1/",
       platform: "amazon.com",
-    })).toThrow();
+      operation: "amazon_product_asin",
+      params: { asin: "B09XYZ" },
+    });
+    expect(p.platform).toBe("amazon.com");
+    expect(p.operation).toBe("amazon_product_asin");
+    expect(p.params).toEqual({ asin: "B09XYZ" });
   });
 
-  it("throws on missing url", () => {
+  it("defaults params to {} when omitted", () => {
+    const p = validateScraperSubmitParams({ platform: "amazon.com", operation: "amazon_product_asin" });
+    expect(p.params).toEqual({});
+  });
+
+  it("throws on missing platform", () => {
+    expect(() => validateScraperSubmitParams({ operation: "amazon_product_asin" })).toThrow();
+  });
+
+  it("throws on missing operation", () => {
     expect(() => validateScraperSubmitParams({ platform: "amazon.com" })).toThrow();
+  });
+
+  it("throws on empty platform", () => {
+    expect(() => validateScraperSubmitParams({ platform: "", operation: "amazon_product_asin" })).toThrow();
+  });
+
+  it("throws on platform with invalid characters (not a domain)", () => {
+    expect(() => validateScraperSubmitParams({ platform: "amazon com!", operation: "amazon_product_asin" })).toThrow();
+  });
+
+  it("throws on operation with invalid characters", () => {
+    expect(() => validateScraperSubmitParams({ platform: "amazon.com", operation: "amazon product asin!" })).toThrow();
   });
 });

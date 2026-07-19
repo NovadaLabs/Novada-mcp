@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
+import { NovadaError, NovadaErrorCode } from "../../src/_core/errors.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -245,8 +246,17 @@ describe("novadaScrape — request format", () => {
     expect(url).toContain("scraper.novada.com");
     const form = body as URLSearchParams;
     expect(form.get("scraper_name")).toBe("amazon.com");
-    expect(form.get("scraper_id")).toBe("amazon_product_by-keywords");
-    expect(form.get("keyword")).toBe("iphone");
+    // scrape.ts resolves the legacy alias "amazon_product_by-keywords" to the
+    // canonical "amazon_product_keywords" (OPERATION_ALIASES) BEFORE calling
+    // submitScrapeTask, so the wire-level scraper_id is the canonical slug.
+    expect(form.get("scraper_id")).toBe("amazon_product_keywords");
+    // amazon_product_keywords is catalog format:"params" (Format B) — op params
+    // are sent as a JSON array under scraper_params, not as flat form fields
+    // (see src/data/scraper_catalog.ts + submitScrapeTask's per-op format lookup).
+    const scraperParamsRaw = form.get("scraper_params");
+    expect(scraperParamsRaw).not.toBeNull();
+    const scraperParams = JSON.parse(scraperParamsRaw!);
+    expect(scraperParams[0].keyword).toBe("iphone");
     expect((config as Record<string, unknown>).headers).toMatchObject({
       "Authorization": "Bearer test-key",
       "Content-Type": "application/x-www-form-urlencoded",
@@ -321,42 +331,68 @@ describe("novadaScrape — flattenRecord edge cases", () => {
   });
 });
 
+// NOTE: novadaScrape's error contract changed from catch-and-return-a-JSON-string
+// to THROW a typed NovadaError (or, for a few raw upstream messages, a plain
+// Error) — see the try/catch wrapping the whole function body in scrape.ts.
+// index.ts is what turns a thrown error into isError:true for the MCP response;
+// the tool function itself no longer swallows errors into a JSON envelope.
 describe("novadaScrape — error handling", () => {
-  it("returns structured error string for code 11006 (account permissions)", async () => {
+  it("throws PRODUCT_UNAVAILABLE (not_activated) for code 11006 (account permissions)", async () => {
     mockApiError(11006, "Scraper error");
-    const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.code).toBe(11006);
-    expect(parsed.reason).toContain("not yet activated");
-    expect(parsed.agent_instruction).toContain("Activate Scraper API");
-    expect(parsed.alternatives).toBeInstanceOf(Array);
-    expect(parsed.alternatives.length).toBeGreaterThan(0);
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(NovadaError);
+    const err = thrown as NovadaError;
+    // amazon_product_keywords (canonical, resolved from the alias) IS in the active
+    // catalog, so 11006 here means "not activated on this account" (not unknown op).
+    expect(err.code).toBe(NovadaErrorCode.PRODUCT_UNAVAILABLE);
+    expect(err.detail).toBe("not_activated");
+    expect(err.message).toContain("not_activated");
+    expect(err.message).toContain("not activated on this account");
+    expect(err.message).toContain("dashboard.novada.com/overview/products");
   });
 
-  it("returns structured error string for code 11008 (bad platform name)", async () => {
+  it("throws INVALID_PARAMS for code 11008 (bad platform name)", async () => {
     mockApiError(11008, "Scraper name error");
-    const result = await novadaScrape(
-      { platform: "bad-platform", operation: "something", params: {}, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.reason).toContain("Unknown platform");
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "bad-platform", operation: "something", params: {}, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(NovadaError);
+    const err = thrown as NovadaError;
+    expect(err.code).toBe(NovadaErrorCode.INVALID_PARAMS);
+    expect(err.detail).toBe("code 11008");
+    expect(err.message).toContain("Unknown platform");
   });
 
-  it("returns structured error string for code 11000 (invalid API key)", async () => {
+  it("throws a plain Error for code 11000 (invalid API key)", async () => {
     mockApiError(11000, "Invalid ApiKey");
-    const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.reason).toContain("Invalid API key");
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    // Code 11000 falls through submitScrapeTask's generic errorMessages map and
+    // throws a plain Error (not a typed NovadaError) — the index.ts dispatch
+    // layer classifies it via classifyError, not the tool itself.
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe("Scraper error (code 11000): Invalid API key.");
   });
 
   it("returns no-data message when API returns empty array", async () => {
@@ -368,45 +404,61 @@ describe("novadaScrape — error handling", () => {
     expect(result).toContain("No records returned");
   });
 
-  it("returns structured error string when task fails with error in download result", async () => {
+  it("throws API_DOWN when task fails with error in download result", async () => {
     mockTaskError("500 Internal Server Error", 500);
-    const result = await novadaScrape(
-      { platform: "google.com", operation: "google_search", params: {}, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.reason).toContain("Scraper task failed");
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        // q is required by preflightScrape for google_search (SEARCH_QUERY_KEYS);
+        // the original empty params:{} tripped the missing-param preflight check
+        // instead of ever reaching the download-error path this test targets.
+        { platform: "google.com", operation: "google_search", params: { q: "test" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(NovadaError);
+    const err = thrown as NovadaError;
+    expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+    expect(err.message).toContain("all failed");
+    expect(err.message).toContain("error_code: 500");
   });
 
-  it("returns structured error string on API-not-activated exception (code 11006)", async () => {
-    // Arrange: mock the API call to throw an Error with "11006" in the message
+  it("throws with an embedded 11006 hint when the raw upstream exception message mentions it", async () => {
+    // Arrange: axios.post itself REJECTS with a plain Error whose text happens to
+    // mention "code 11006" — this is NOT the same path as submitScrapeTask's own
+    // typed `body.code === 11006` branch (that one throws a NovadaError). A raw
+    // exception from the HTTP call is not specially reclassified; it propagates
+    // as the same plain Error all the way out of novadaScrape.
     mockedAxios.post.mockRejectedValue(new Error("Scraper error (code 11006): Scraper API not yet activated on this account."));
-    const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    // Assert: handler does NOT throw; returns string containing status and agent_instruction
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.code).toBe(11006);
-    expect(parsed.agent_instruction).toBeDefined();
-    expect(typeof result).toBe("string");
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).not.toBeInstanceOf(NovadaError);
+    expect((thrown as Error).message).toContain("code 11006");
+    expect((thrown as Error).message).toContain("not yet activated");
   });
 
-  it("does not throw when API call throws — returns structured string", async () => {
+  it("throws the underlying error when the API call rejects with a network error", async () => {
     // Arrange: mock to throw a generic network error
     mockedAxios.post.mockRejectedValue(new Error("ECONNREFUSED network error"));
-    // Assert: the handler does NOT throw; it returns a string containing "status" and "agent_instruction"
-    const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    expect(typeof result).toBe("string");
-    expect(result).toContain("status");
-    expect(result).toContain("agent_instruction");
-    const parsed = JSON.parse(result);
-    expect(parsed.agent_instruction).toBeDefined();
+    // Assert: novadaScrape does NOT catch-and-stringify; the network error
+    // propagates unchanged (index.ts's classifyError is what turns it into a
+    // structured isError:true response at the MCP dispatch boundary).
+    await expect(
+      novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      )
+    ).rejects.toThrow("ECONNREFUSED network error");
   });
 });
 
