@@ -109,7 +109,7 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
   // derive from it (state "22 curated tools"). NOT a semantic diff test — just a
   // count assertion so a bare wrong integer (38/33/25/11) can't silently return.
   it("registry count is 23 and the README headline count matches it", () => {
-    const EXPECTED_CURATED_COUNT = 23;
+    const EXPECTED_CURATED_COUNT = 24;
     expect(
       TOOL_REGISTRY.length,
       `registry size changed — update EXPECTED_CURATED_COUNT and every README/SKILL count to ${TOOL_REGISTRY.length}`

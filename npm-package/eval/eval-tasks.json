@@ -42,11 +42,11 @@
       "prompt": "Pull Amazon listings for 'wireless earbuds' with price and rating for the top 5 results.",
       "category": "scrape-vs-extract",
       "expected_tool": "novada_scrape",
-      "acceptable_tools": ["novada_scrape"],
+      "acceptable_tools": ["novada_scrape", "novada_scrape_amazon"],
       "unacceptable_tools": ["novada_extract", "novada_search"],
-      "sibling_watch": ["novada_extract"],
+      "sibling_watch": ["novada_extract", "novada_scrape_amazon"],
       "surfaces": ["default", "hosted-15"],
-      "notes": "Named platform (Amazon) + structured fields (price/rating) is the scrape disambiguator called out in novada_scrape's own description. This is the pair Bright Data's flat 65-tool surface gets wrong most often per the competitive teardown."
+      "notes": "Named platform (Amazon) + structured fields (price/rating) is the scrape disambiguator called out in novada_scrape's own description. This is the pair Bright Data's flat 65-tool surface gets wrong most often per the competitive teardown. 2026-07-20: novada_scrape_amazon (Tools-v2 Option B scaffold) is an equally-correct pick for this Amazon-specific prompt — added to acceptable_tools/sibling_watch so a model routing to the narrower per-platform tool is not penalized as wrong; expected_tool stays novada_scrape (the generic tool) since that is still the single canonical answer for the strict Tier-A accuracy metric."
     },
     {
       "id": "T05-url-discovery-only",
@@ -113,6 +113,17 @@
       "sibling_watch": ["novada_search", "novada_research"],
       "surfaces": ["default"],
       "notes": "A discrete, checkable factual claim (not an open question) is the disambiguator for novada_verify vs novada_search/novada_research. NOT tagged 'hosted-15': novada_verify is not in config/surfaces.json's hosted-15 tool list, so this task is meaningless there — see porting_notes."
+    },
+    {
+      "id": "T11-amazon-specific-tool",
+      "prompt": "Get the price, title, and rating for the Amazon product with ASIN B0BWBK8F37.",
+      "category": "scrape-amazon-vs-scrape-generic",
+      "expected_tool": "novada_scrape_amazon",
+      "acceptable_tools": ["novada_scrape_amazon", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 Option B scaffold (2026-07-20): a named platform (Amazon) plus a specific ASIN identifier is the strongest possible signal for the new single-platform novada_scrape_amazon tool. novada_scrape remains an acceptable fallback (identical engine, platform='amazon.com'), but novada_scrape_amazon's closed operation enum is the more precise, purpose-built tool for exactly this ask. NOT tagged 'hosted-15': novada_scrape_amazon is not in config/surfaces.json's hosted-15 tool list today (deliberately not added by this scaffold — see the tool's implementation notes on why extending hosted-15 requires a matching hosted-server/vercel/api/mcp.ts edit, out of scope here) — see porting_notes for the same pattern applied to T06/T10."
     }
   ]
 }

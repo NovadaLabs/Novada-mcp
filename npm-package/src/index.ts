@@ -49,7 +49,7 @@ const API_KEY = process.env.NOVADA_API_KEY?.trim();
 // Both set → union. Neither set → all tools (backward compatible).
 
 /** Category bundles — each group name expands to multiple tools */
-const SCRAPE_GROUP = ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"];
+const SCRAPE_GROUP = ["novada_scrape", "novada_scrape_amazon", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"];
 const CATEGORY_MAP: Record<string, string[]> = {
   search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor", "novada_search_feedback"],
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
@@ -403,6 +403,7 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
   novada_map                 Discover URLs on a website (up to 100)
   novada_site_copy           Copy an entire docs site to disk as markdown (one file per page)
   novada_scrape              Structured data from 16 active platforms (~88 operations, e.g. Amazon, TikTok, SHEIN, ChatGPT)
+  novada_scrape_amazon       Structured Amazon data via a closed, typed operation enum (10 verified-working ops)
   novada_ai_monitor          Search AI-company public domains for brand mentions (not live models)
   novada_monitor             Detect page changes between checks (session-scoped baseline)
   novada_proxy               Get proxy credentials (residential/isp/datacenter/mobile/static/dedicated)

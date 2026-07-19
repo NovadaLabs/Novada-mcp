@@ -515,6 +515,58 @@ describe("novadaScrape — pre-flight (#6)", () => {
     expect(preflightScrape("google.com", "google_search", {})).not.toBeNull();
   });
 
+  // FIX 1: the preflight OR/AND gap. Catalog-derived "params"-format ops with more
+  // than one required field are INDEPENDENTLY required (AND), not alternates (OR).
+  // Previously `.some(...)` let any ONE of these keys satisfy preflight, so a call
+  // missing a second required field sailed through preflight and only failed at the
+  // backend (or hung until the network round-trip completed).
+  it("requires ALL independently-required catalog keys for a multi-required 'params'-format op (AND, not OR)", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    // amazon_product-list_keywords-domain needs BOTH keyword AND domain.
+    expect(preflightScrape("amazon.com", "amazon_product-list_keywords-domain", { keyword: "coffee" })).not.toBeNull();
+    expect(preflightScrape("amazon.com", "amazon_product-list_keywords-domain", { domain: "https://www.amazon.com" })).not.toBeNull();
+    expect(
+      preflightScrape("amazon.com", "amazon_product-list_keywords-domain", { keyword: "coffee", domain: "https://www.amazon.com" }),
+    ).toBeNull();
+  });
+
+  it("names the specific missing key(s) in the AND-required error message", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    const err = preflightScrape("amazon.com", "amazon_global-product_category-url", { url: "https://www.amazon.com/s?k=coffer" });
+    expect(err).not.toBeNull();
+    expect(err!.detail).toBe("preflight:missing_param");
+    expect(err!.message).toContain("maximum");
+    expect(err!.agent_instruction).toContain("maximum");
+
+    // Missing all 3 independently-required keys names all 3.
+    const err2 = preflightScrape("amazon.com", "amazon_global-product_keywords-brand", {});
+    expect(err2).not.toBeNull();
+    expect(err2!.message).toContain("keyword");
+    expect(err2!.message).toContain("brands");
+    expect(err2!.message).toContain("max_pages");
+  });
+
+  it("passes AND-required preflight once every independently-required key is present", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    expect(
+      preflightScrape("amazon.com", "amazon_global-product_category-url", { url: "https://www.amazon.com/s?k=coffer", maximum: 3 }),
+    ).toBeNull();
+    expect(
+      preflightScrape("amazon.com", "amazon_global-product_keywords-brand", { keyword: "iphone", brands: "Apple", max_pages: 1 }),
+    ).toBeNull();
+  });
+
+  // Regression guard: google_search_url is a "flat" op with 2 catalog-required keys
+  // (url, json) that is NOT a SEARCH_ENGINE_OP_KEYS alias. `json` is auto-populated
+  // downstream in submitScrapeTask for flat ops and is never actually supplied by
+  // the caller — so this op must stay permissive (OR/fallback), not become
+  // AND-required, or every normal call (which never passes `json` explicitly) would
+  // start failing preflight.
+  it("does not regress flat non-alias ops like google_search_url to AND-required (json is auto-injected downstream)", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    expect(preflightScrape("google.com", "google_search_url", { url: "https://www.google.com/search?q=test" })).toBeNull();
+  });
+
   it("does not match Object.prototype keys as operations (pollution-safe)", async () => {
     const { preflightScrape } = await import("../../src/tools/scrape.js");
     const err = preflightScrape("amazon.com", "__proto__", {});

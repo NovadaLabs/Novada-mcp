@@ -762,7 +762,21 @@ export const OPERATION_ALIASES: Record<string, string> = Object.assign(
 //
 // H-1 parity: null-prototype objects prevent __proto__/constructor lookup pollution
 // when an attacker-supplied platform/operation collides with Object.prototype keys.
-type OpMap = Record<string, readonly string[]>;
+//
+// FIX 1 (2026-07-20): required-key checks come in two flavors that were previously
+// conflated under a single `.some(...)` (OR) check:
+//   - "any" — OR-alternates: ANY ONE of `keys` satisfies the check. Correct for
+//     search-engine query-key aliases (q/keyword/query all mean the same thing).
+//   - "all" — AND-required: EVERY key in `keys` is INDEPENDENTLY required. Correct
+//     for catalog-derived ops with more than one required param, e.g. Amazon's
+//     amazon_product-list_keywords-domain needs BOTH keyword AND domain — passing
+//     just one used to sail through preflight and burn a network round-trip before
+//     the backend rejected it for the other missing field.
+interface RequiredKeys {
+  readonly keys: readonly string[];
+  readonly mode: "any" | "all";
+}
+type OpMap = Record<string, RequiredKeys>;
 
 // For search-engine platforms the query key varies (q / keyword); accept any of these.
 const SEARCH_QUERY_KEYS = ["q", "keyword", "query"] as const;
@@ -787,21 +801,54 @@ const SEARCH_ENGINE_OP_KEYS: Record<string, readonly string[]> = {
   "yandex": SEARCH_QUERY_KEYS,
 };
 
+// Hand-curated allowlist of ops whose catalog-required keys are INDEPENDENTLY
+// required (AND), not alternates (OR). Seeded 2026-07-20 with the 3 Amazon ops
+// verified during the Tools-v2 Amazon scaffold hardening pass — each was checked
+// against novada_scrape_amazon's own operation description (which documents every
+// key as mandatory) and has no known backend-side default for the missing key.
+//
+// Deliberately an EXPLICIT allowlist, not a blanket "op.format === 'params' has
+// >1 required key" rule: trying the blanket rule first surfaced a false positive —
+// google.com's `google_comment_url` also has 2 catalog-required keys (url, limit),
+// but an existing, verified test proves the backend accepts a call with only `url`
+// (its catalog `dflt: "30"` for `limit` reflects a real server-side default, not
+// just a UI placeholder). The catalog's `required`/`dflt` fields alone can't
+// reliably distinguish "genuinely mandatory" from "has a server-side default" —
+// only per-op verification can. Extend this list op-by-op, only after confirming
+// (via docs/tests/live behavior) that every listed key truly has no fallback, as
+// each of the other 15 per-platform tools gets the same hardening pass.
+const AND_REQUIRED_OPS = new Set<string>([
+  "amazon_product-list_keywords-domain",   // keyword + domain
+  "amazon_global-product_category-url",    // url + maximum
+  "amazon_global-product_keywords-brand",  // keyword + brands + max_pages
+]);
+
 /** Build an OpMap from catalog params for a single platform. */
 function buildOpMapFromCatalog(domain: string): OpMap {
   const platformEntry = CATALOG_BY_DOMAIN.get(domain);
   if (!platformEntry) return Object.create(null) as OpMap;
 
-  const obj: Record<string, readonly string[]> = {};
+  const obj: Record<string, RequiredKeys> = {};
   for (const [slug, op] of platformEntry) {
     if (slug in SEARCH_ENGINE_OP_KEYS) {
-      // Use the multi-key search query keys for search-engine ops
-      obj[slug] = SEARCH_ENGINE_OP_KEYS[slug];
+      // Hand-built search-engine alias keys are OR-alternates (q/keyword/query all
+      // mean the same thing) — any ONE satisfies the requirement.
+      obj[slug] = { keys: SEARCH_ENGINE_OP_KEYS[slug], mode: "any" };
+      continue;
+    }
+
+    const reqKeys = op.params.filter(p => p.required).map(p => p.key);
+
+    // Verified AND-required ops: the caller must supply ALL listed keys (e.g.
+    // amazon_product-list_keywords-domain needs keyword AND domain). Every other
+    // op keeps the original permissive OR check — unchanged behavior — until it
+    // is individually verified and added to AND_REQUIRED_OPS above.
+    if (AND_REQUIRED_OPS.has(slug) && reqKeys.length > 0) {
+      obj[slug] = { keys: reqKeys, mode: "all" };
     } else {
-      // Extract required param keys from catalog; fall back to all param keys if none required
-      const reqKeys = op.params.filter(p => p.required).map(p => p.key);
       const allKeys = op.params.map(p => p.key);
-      obj[slug] = reqKeys.length > 0 ? reqKeys : (allKeys.length > 0 ? allKeys : ["url"]);
+      const keys = reqKeys.length > 0 ? reqKeys : (allKeys.length > 0 ? allKeys : ["url"]);
+      obj[slug] = { keys, mode: "any" };
     }
   }
   return Object.assign(Object.create(null) as OpMap, obj);
@@ -865,20 +912,47 @@ export function preflightScrape(
     });
   }
 
-  // Required-param check: at least one of the operation's accepted keys must be
-  // present and non-empty. (Most ops take exactly one; search ops accept several.)
+  // Required-param check. FIX 1: two distinct modes —
+  //   "all" — every key is INDEPENDENTLY required (catalog-derived, e.g. Amazon's
+  //           listings_by_keyword needs BOTH keyword AND domain); missing ANY one fails.
+  //   "any" — OR-alternates (search-engine query keys); at least ONE must be present.
   const required = ops[operation];
-  const hasOne = required.some((k) => {
+
+  if (required.mode === "all") {
+    const missing = required.keys.filter((k) => {
+      const v = params[k];
+      return v === undefined || v === null || String(v).trim().length === 0;
+    });
+    if (missing.length > 0) {
+      const missingList = missing.map((k) => `'${k}'`).join(", ");
+      const allList = required.keys.map((k) => `'${k}'`).join(", ");
+      const exampleParams = required.keys.map((k) => `${k}: "<value>"`).join(", ");
+      return new NovadaError({
+        code: NovadaErrorCode.INVALID_PARAMS,
+        message: `Operation '${operation}' on '${platform}' requires ALL of ${allList} in params; missing: ${missingList}.`,
+        agent_instruction:
+          `Add ${missingList} to the params object — this operation requires ALL of ${allList} together (not alternates), e.g. ` +
+          `novada_scrape({ platform: "${platform}", operation: "${operation}", params: { ${exampleParams} } }). ` +
+          `Read novada://scraper-platforms for the exact param shape.`,
+        retryable: false,
+        detail: `preflight:missing_param`,
+      });
+    }
+    return null;
+  }
+
+  // mode === "any": at least one of the accepted keys must be present and non-empty.
+  const hasOne = required.keys.some((k) => {
     const v = params[k];
     return v !== undefined && v !== null && String(v).trim().length > 0;
   });
   if (!hasOne) {
-    const keyList = required.length === 1 ? `'${required[0]}'` : `one of ${required.map((k) => `'${k}'`).join(", ")}`;
+    const keyList = required.keys.length === 1 ? `'${required.keys[0]}'` : `one of ${required.keys.map((k) => `'${k}'`).join(", ")}`;
     return new NovadaError({
       code: NovadaErrorCode.INVALID_PARAMS,
       message: `Operation '${operation}' on '${platform}' requires ${keyList} in params, but none was provided.`,
       agent_instruction:
-        `Add ${keyList} to the params object, e.g. novada_scrape({ platform: "${platform}", operation: "${operation}", params: { ${required[0]}: "<value>" } }). ` +
+        `Add ${keyList} to the params object, e.g. novada_scrape({ platform: "${platform}", operation: "${operation}", params: { ${required.keys[0]}: "<value>" } }). ` +
         `Read novada://scraper-platforms for the exact param shape.`,
       retryable: false,
       detail: `preflight:missing_param`,
@@ -896,7 +970,18 @@ function getCatalogOp(platform: string, operation: string): CatalogOp | undefine
   return CATALOG_BY_DOMAIN.get(platform)?.get(operation);
 }
 
-export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, apiKey: string): Promise<string> {
+// FIX 3 (2026-07-20): per-platform tools (novada_scrape_amazon and, later, its 15
+// siblings) call through this shared engine with a friendly operation name
+// ("product_by_asin") that has already been resolved to the exact catalog slug
+// ("amazon_product_asin") before novadaScrape ever sees it — so without a way to
+// pass the friendly name along, the "## Scrape Results" header rendered the raw
+// slug, not the name the caller actually used. `displayName` is optional and
+// engine-internal (NOT part of the public ScrapeParams/ScrapeParamsFullType Zod
+// schema, so novada_scrape's own inputSchema is unaffected) — only per-platform
+// wrapper tools set it.
+type ScrapeEngineParams = (ScrapeParams | ScrapeParamsFullType) & { displayName?: string };
+
+export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): Promise<string> {
   const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
   const { params: opParams, format } = params;
   const platform = resolvePlatform(params.platform);
@@ -906,11 +991,15 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
   // displayOperation echoes the operation the CALLER passed, so the results header
   // reflects what the user actually asked for. When we auto-resolved a near-miss
   // alias we surface both forms (requested → canonical) rather than silently
-  // swapping in the canonical id — transparent, not misleading. Used only in the
-  // human-facing header lines; the canonical `operation` still drives the API call,
-  // preflight, source_url, and the chainable "remember" hint (downstream tooling
-  // needs the exact backend id).
-  const displayOperation = hasAlias ? `${params.operation} (→ ${operation})` : operation;
+  // swapping in the canonical id — transparent, not misleading. A per-platform
+  // wrapper tool (e.g. novada_scrape_amazon) can instead set `displayName` to its
+  // own friendly operation name, which takes priority over alias-echoing. Used
+  // only in the human-facing header lines; the canonical `operation` still drives
+  // the API call, preflight, source_url, and the chainable "remember" hint
+  // (downstream tooling needs the exact backend id).
+  const displayOperation = params.displayName
+    ? params.displayName
+    : (hasAlias ? `${params.operation} (→ ${operation})` : operation);
 
   // Broken-op warning: if the catalog marks this op as backend_broken, we still
   // forward the call (the backend may fix it any day) but prepend a warning note.

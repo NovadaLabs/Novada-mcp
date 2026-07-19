@@ -209,6 +209,7 @@ If you know the exact page you want → `novada_extract`. If you need to find pa
 | Tool | Best for | Returns |
 |------|----------|---------|
 | `novada_scrape` | Structured data from 16 supported platforms (~88 operations) — Amazon, Walmart, LinkedIn, TikTok, YouTube, Instagram, GitHub, X, ChatGPT, Perplexity, etc. — instead of parsing raw HTML | Clean records in markdown/json/csv/excel/html/toon |
+| `novada_scrape_amazon` | Amazon-only structured data (product, reviews, seller, bestsellers, category/brand listings) via a closed, typed `operation` enum — 10 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
 
 **Crawl / Map / Site copy**
 
@@ -269,7 +270,7 @@ If you know the exact page you want → `novada_extract`. If you need to find pa
 | `novada_setup` | Validating your key on first run; never hard-errors on a missing key | Key status, balance, onboarding guidance |
 | `novada_session_stats` | Debugging your own call pattern this session | Per-tool call counts, recent calls, uptime |
 
-**23 tools across 6 categories.** The hosted default surface (`mcp.novada.com`) exposes a curated subset; self-host (`npx novada-mcp`) exposes all 23. Call `novada_discover` on your connection to see exactly what's available on it.
+**24 tools across 6 categories.** The hosted default surface (`mcp.novada.com`) exposes a curated subset; self-host (`npx novada-mcp`) exposes all 24. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ---
 

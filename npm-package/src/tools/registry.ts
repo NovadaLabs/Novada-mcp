@@ -95,6 +95,12 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
   },
   {
+    name: "novada_scrape_amazon",
+    description: "Extract structured Amazon data (product details, reviews, seller info, bestsellers, category/brand listings) via a closed, typed operation enum — 10 verified-working operations; same engine and output formats as novada_scrape, pinned to platform=amazon.com",
+    category: "Scraping & Verification",
+    status: "active",
+  },
+  {
     name: "novada_ai_monitor",
     description: "Search indexed public pages on AI-company domains (chatgpt.com/openai.com, perplexity.ai, anthropic.com, ...) for brand mentions and sentiment. Does NOT query the live AI models — reflects indexed-page coverage only. Returns per-domain sentiment signals, key claims, competitor mentions, and source URLs.",
     category: "Scraping & Verification",

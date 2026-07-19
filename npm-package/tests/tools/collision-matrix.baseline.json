@@ -875,6 +875,34 @@
         }
       ],
       "note": "RED-TEAM GAP A FIX — newly surfaced only after paramShape() started recursing into array items/oneOf members/nested properties; previously both sides hashed to the same bare {\"type\":\"array\"} and this collision was completely invisible (never reviewed). Reviewed and ACCEPTED: novada_browser's 'actions' is a 14-variant discriminated union keyed on an 'action' const (navigate/click/type/screenshot/snapshot/aria_snapshot/evaluate/wait/scroll/hover/press_key/select/close_session/list_sessions) for the full-CDP tool. novada_browser_flow's 'actions' is a flat object with a 5-value 'type' enum (click/scroll/wait/type/screenshot) for the simplified-flow tool — a deliberately smaller, differently-shaped vocabulary (different discriminator field name too: 'action' vs 'type'). Each tool's own description explicitly cross-references the other ('novada_browser is the primary, more capable tool... Prefer novada_browser for all new browser automation' / 'Use novada_browser_flow when: you specifically need the simplified flow API'), so an agent reading either schema is pointed at the distinction. Keep as-is — no runtime change warranted; surfacing this in Layer 4 was the point of the red-team fix, not a signal to merge or rename either tool. ROUND-2 UPDATE (2026-07-19): shapes[] corrected to include additionalProperties:false on every object member (present in the real live schema, previously omitted from this recorded fragment since round-1 paramShape never walked additionalProperties at all) — this is a literal-accuracy fix only, not a re-review of the underlying divergence, which is unchanged and remains ACCEPTED."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape",
+        "novada_scrape_amazon"
+      ],
+      "shapes": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "bestsellers",
+            "global_product_by_category_url",
+            "global_product_by_keyword_and_brand",
+            "global_product_by_url",
+            "listings_by_keyword",
+            "product_by_asin",
+            "product_by_url",
+            "products_by_keywords",
+            "reviews_by_url",
+            "seller_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 Option B scaffold (novada_scrape_amazon, single-platform proof-of-pattern): novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs (validated at runtime against the catalog via preflightScrape, not by the schema itself). novada_scrape_amazon deliberately narrows 'operation' to a closed 10-value enum of friendly, Amazon-only operation names (see src/tools/scrape_amazon.ts's AMAZON_OPERATIONS map) — this is the entire point of the per-platform tool: an unknown/broken op is rejected by Zod before any backend round-trip, instead of forwarded-with-a-warning like novada_scrape does for its 3 known backend_broken Amazon ops. The narrower shape is intentional, not a bug to fix on either side."
     }
   ]
 }

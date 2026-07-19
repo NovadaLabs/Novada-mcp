@@ -26,6 +26,7 @@ import {
   novadaSiteCopy,
   novadaProxy,
   novadaScrape,
+  novadaScrapeAmazon,
   novadaVerify,
   novadaBrowser,
   novadaDiscover,
@@ -42,6 +43,8 @@ import {
   validateProxyParams,
   PROXY_ALIAS_MAP,
   validateScrapeParams,
+  validateScrapeAmazonParams,
+  ScrapeAmazonParamsSchema,
   validateVerifyParams,
   validateBrowserParams,
   validateDiscoverParams,
@@ -281,6 +284,17 @@ Not for:
 **Resume slow-platform scrapes:** Pass \`task_id\` from a previous call that returned status:processing to fetch its result without submitting a new billable task. platform and operation are still required (display only when resuming).
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
     inputSchema: zodToMcpSchema(ScrapeParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
+  },
+  {
+    name: "novada_scrape_amazon",
+    description: `Extract structured Amazon data — product details, reviews, seller info, bestseller lists, and category/brand listings — through an Amazon-only tool with a closed, typed \`operation\` enum. Same underlying engine as novada_scrape, pinned to platform="amazon.com".
+
+**Use when:** "get the price/rating/title for Amazon ASIN B0...", "pull the reviews for this Amazon product URL", "search Amazon for <keyword> with price and rating", "who is this Amazon seller", "what's in this Amazon Best Sellers list".
+**Not for:** Any other platform — use novada_scrape with the target platform's domain instead (e.g. platform="walmart.com"). A general Google/web search — use novada_search. Reading one arbitrary URL's raw content — use novada_extract.
+**Returns:** Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen format — same rendering as novada_scrape (markdown/json/csv/excel/html/toon).
+**Operations:** 10 verified-working Amazon operations (see the \`operation\` param's description for the exact \`params\` keys each needs). 3 known backend-broken Amazon operations are intentionally NOT in this enum — this tool rejects them before any backend call, unlike novada_scrape(platform="amazon.com", ...), which still forwards them with a warning.`,
+    inputSchema: zodToMcpSchema(ScrapeAmazonParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
@@ -681,6 +695,8 @@ export async function dispatch(
       return novadaProxy(validateProxyParams(args));
     case "novada_scrape":
       return novadaScrape(validateScrapeParams(args), apiKey!);
+    case "novada_scrape_amazon":
+      return novadaScrapeAmazon(validateScrapeAmazonParams(args), apiKey!);
     case "novada_verify":
       return novadaVerify(validateVerifyParams(args), apiKey!);
     // novada_unblock → hidden alias → novada_extract(format:"html", render mapped from method)
@@ -776,7 +792,7 @@ export async function dispatch(
       return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey);
     default:
       throw new Error(
-        `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt`
+        `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_scrape_amazon, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt`
       );
   }
 }

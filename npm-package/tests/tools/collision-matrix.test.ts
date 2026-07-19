@@ -598,16 +598,17 @@ describe("collision matrix — real npm-package tool registry (src/core.ts TOOLS
       ).toEqual([]);
     });
 
-    it("documents today's 10 accepted collisions (pinned so a silent baseline edit is visible)", () => {
+    it("documents today's 11 accepted collisions (pinned so a silent baseline edit is visible)", () => {
       // Not a behavior assertion — a drift guard on the baseline file's own size, matching
       // the house style of pinning headline counts (see discover.test.ts's registry-count test).
-      // Was 9 before the red-team GAP A fix; the browser vs browser_flow "actions" pair is the
-      // one real, newly-surfaced collision recursion revealed (see baseline note on that entry).
+      // Was 9 before the red-team GAP A fix, 10 after it; 11 adds the novada_scrape vs
+      // novada_scrape_amazon "operation" divergence (Tools-v2 Option B scaffold — see that
+      // entry's note for the reviewed rationale).
       expect(
         baseline.acceptedDivergentCollisions.length,
         "collision-matrix.baseline.json's accepted-collision count changed — update this pinned count " +
           "and confirm each new/removed entry went through reviewer sign-off",
-      ).toBe(10);
+      ).toBe(11);
     });
 
     it("documents today's 18 reviewed shared-param shape variants (pinned so silent growth is visible)", () => {

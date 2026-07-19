@@ -75,7 +75,7 @@ describe("Layer 5 eval harness — Tier B validators (surface + task-set fail-lo
   const { tasks } = JSON.parse(readFileSync(tasksPath, "utf8")) as { tasks: Task[] };
 
   it("sanity: task set loaded from the real, committed eval-tasks.json", () => {
-    expect(tasks.length).toBe(10);
+    expect(tasks.length).toBe(11);
   });
 
   it("loadSurfaceFilter: 'default' surface (real config/surfaces.json) has no filter (tools: '*')", () => {

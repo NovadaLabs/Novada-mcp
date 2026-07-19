@@ -185,7 +185,7 @@ describe("Layer 5 eval harness — Tier A baseline selector (src-grounded, no bu
   const baselineTierA = JSON.parse(readFileSync(baselineTierAPath, "utf8")) as BaselineTierA;
 
   it("sanity: task set and live registry both loaded", () => {
-    expect(tasks.length).toBe(10);
+    expect(tasks.length).toBe(11);
     expect(TOOL_REGISTRY.length).toBeGreaterThan(20);
   });
 
