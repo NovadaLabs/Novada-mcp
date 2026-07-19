@@ -354,7 +354,3 @@ Only relevant if you're running `npx novada-mcp` yourself — hosted users only 
 ## License
 
 MIT
-
----
-
-中文说明将作为后续更新加入 (Chinese-language documentation to follow).
