@@ -10,31 +10,45 @@
  *
  * This test scans the RENDERED TEXT of every piece of agent-facing guidance —
  * the novada://guide and novada://llms-txt resources (plus every resource's
- * catalog description), and every prompt in prompts/index.ts (list description
- * + fully-rendered getPrompt() output) — for tokens matching /novada_[a-z0-9_]+/,
- * and asserts each one names a tool that is ACTUALLY present in
- * REGISTERED_TOOL_NAMES (src/tools/registry.ts — the same source of truth
- * tests/tools/discover.test.ts guards against ListTools drift).
+ * catalog description), every prompt in prompts/index.ts (list description
+ * + fully-rendered getPrompt() output), and the top-level README.md — for
+ * tokens matching /novada_[a-z0-9_]+/, and asserts each one names a tool that
+ * is ACTUALLY present in REGISTERED_TOOL_NAMES (src/tools/registry.ts — the
+ * same source of truth tests/tools/discover.test.ts guards against ListTools
+ * drift).
  *
  * A token that matches the pattern but isn't in the registry is a "ghost":
  * guidance steering an agent toward a tool call its client will reject.
  *
  * This is a PERMANENT CI gate, not a one-time cleanup — any future edit to
- * resources/index.ts or prompts/index.ts that reintroduces, renames-without-
- * updating, or typos a tool name fails this test immediately, turning
- * "keep guidance in sync" from discipline into structure.
+ * resources/index.ts, prompts/index.ts, or README.md that reintroduces,
+ * renames-without-updating, or typos a tool name fails this test immediately,
+ * turning "keep guidance in sync" from discipline into structure. The README
+ * case was added after a README rewrite drifted from the registry and was
+ * only caught by hand — this closes that gap permanently.
  *
- * Not-inert proof (performed manually during NOV-847, not re-run here since it
- * requires mutating source): temporarily reinserting the string "novada_unblock"
- * into the novada://guide text made the
- * "novada://guide references only registered tools" test below fail with a
- * clear ghost-token message; removing it restored green. See the NOV-847
- * worklog for the exact diff used.
+ * Not-inert proof (performed manually, not re-run here since it requires
+ * mutating source):
+ * - NOV-847 (resources): temporarily reinserting the string "novada_unblock"
+ *   into the novada://guide text made the
+ *   "novada://guide references only registered tools" test below fail with a
+ *   clear ghost-token message; removing it restored green. See the NOV-847
+ *   worklog for the exact diff used.
+ * - README case: temporarily appending "Call `novada_ghost_tool()` for X." to
+ *   README.md made the "README.md references only registered tools" test
+ *   fail with `README.md references tool name(s) NOT in
+ *   REGISTERED_TOOL_NAMES ...: novada_ghost_tool`; reverting the append
+ *   restored green (see verification report for this change).
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { RESOURCES, readResource } from "../../src/resources/index.js";
 import { PROMPTS, getPrompt } from "../../src/prompts/index.js";
 import { REGISTERED_TOOL_NAMES } from "../../src/tools/registry.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Explicit allowlist for tokens that match /novada_[a-z0-9_]+/ but are NOT tool
@@ -86,6 +100,14 @@ describe("no-ghost-tool-refs: agent-facing guidance only names REGISTERED tools"
         assertNoGhostTokens(`RESOURCES catalog entry ${r.uri} (name)`, r.name);
         assertNoGhostTokens(`RESOURCES catalog entry ${r.uri} (description)`, r.description);
       }
+    });
+  });
+
+  describe("README", () => {
+    it("README.md references only registered tools", () => {
+      const readmePath = resolve(__dirname, "../../README.md");
+      const readme = readFileSync(readmePath, "utf8");
+      assertNoGhostTokens("README.md", readme);
     });
   });
 
