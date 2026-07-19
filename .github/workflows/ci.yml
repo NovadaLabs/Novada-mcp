@@ -23,7 +23,9 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18, 20]
+        # Node 20+ required: src uses the `File` global (stable in Node 20; absent
+        # in the now-EOL Node 18). See package.json engines. CI verified green on 20 + 22.
+        node-version: [20, 22]
 
     steps:
       - uses: actions/checkout@v4
