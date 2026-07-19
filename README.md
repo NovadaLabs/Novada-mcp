@@ -11,6 +11,9 @@
 
 [Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Why Novada](#why-novada) · [Repository layout](#repository-layout) · [Links](#links)
 
+> ### 🎁 Free to start — no credit card
+> Sign up and get **$10 in free credits (up to 1,000 API calls/month)**. [Get your free key →](https://dashboard.novada.com/sign-up/)
+
 ---
 
 ## Quickstart
