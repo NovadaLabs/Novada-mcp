@@ -11,49 +11,27 @@
  * This test guards against re-introduction of `outputSchema` without a matching
  * `structuredContent` handler. If it fails, see NOV-662.
  *
- * Implementation note: we parse src/index.ts as text (not import it) because index.ts boots
- * a stdio server at module top-level — importing it would start a server inside the test process.
+ * Implementation note: `_TOOL_DEFINITIONS` is imported directly from src/core.ts (exported
+ * specifically for test/introspection use) rather than parsed as text. core.ts is
+ * side-effect-free and safe to import (no server construction, no stdio boot) — unlike
+ * src/index.ts, which boots a stdio server at module top-level and is still read as text
+ * below (only to check for `structuredContent`, an unrelated grep over that one file).
+ * Checking the real objects instead of source text is also more robust: a tool definition
+ * GENERATED and spread in from another module (e.g. tools/platform_scraper.ts's per-platform
+ * scraper factory) has no literal `name: "..."` text sitting inside core.ts's array — a
+ * text-parser would silently stop covering it.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { _TOOL_DEFINITIONS } from "../../src/core.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/** Extract the _TOOL_DEFINITIONS array block from src/core.ts as text.
- * _TOOL_DEFINITIONS holds ALL dispatchable tool schemas (visible + hidden);
- * the exported TOOLS array derives from it by filtering to REGISTERED_TOOL_NAMES.
- * outputSchema contracts apply to all definitions, so we read the full set.
- */
-function readToolsBlock(): string {
-  const indexPath = resolve(__dirname, "../../src/core.ts");
-  const src = readFileSync(indexPath, "utf8");
-  const start = src.indexOf("const _TOOL_DEFINITIONS");
-  if (start === -1) throw new Error("could not locate `const _TOOL_DEFINITIONS` in src/core.ts");
-  const after = src.slice(start);
-  const endRel = after.search(/\n\];/);
-  if (endRel === -1) throw new Error("could not locate end of _TOOL_DEFINITIONS array in src/core.ts");
-  return after.slice(0, endRel);
-}
-
-/** Slice the TOOLS block into per-tool name+body segments. */
-function readToolSegments(): { name: string; body: string }[] {
-  const block = readToolsBlock();
-  const re = /name:\s*"([a-z_]+)"/g;
-  const marks: { name: string; idx: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(block)) !== null) marks.push({ name: m[1], idx: m.index });
-  return marks.map((mark, i) => ({
-    name: mark.name,
-    body: block.slice(mark.idx, i + 1 < marks.length ? marks[i + 1].idx : block.length),
-  }));
-}
-
 describe("NOV-662 contract: outputSchema only when structuredContent is returned", () => {
   it("no tool declares outputSchema (none of the handlers return structuredContent)", () => {
-    const segments = readToolSegments();
-    expect(segments.length, "TOOLS array must be non-empty").toBeGreaterThan(0);
+    expect(_TOOL_DEFINITIONS.length, "TOOLS array must be non-empty").toBeGreaterThan(0);
 
     // Check the CallTool handler returns no structuredContent anywhere in the file — this
     // is the guard's premise; if this ever changes the constraint can be loosened per tool.
@@ -69,7 +47,9 @@ describe("NOV-662 contract: outputSchema only when structuredContent is returned
     }
 
     // No handler returns structuredContent, so no tool may declare outputSchema.
-    const offenders = segments.filter(s => /outputSchema\s*:/.test(s.body)).map(s => s.name);
+    const offenders = _TOOL_DEFINITIONS
+      .filter((t) => Object.prototype.hasOwnProperty.call(t, "outputSchema"))
+      .map((t) => t.name);
     expect(
       offenders,
       `These tools declare outputSchema but their handlers do not return structuredContent — ` +

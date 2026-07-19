@@ -26,7 +26,6 @@ import {
   novadaSiteCopy,
   novadaProxy,
   novadaScrape,
-  novadaScrapeAmazon,
   novadaVerify,
   novadaBrowser,
   novadaDiscover,
@@ -43,14 +42,13 @@ import {
   validateProxyParams,
   PROXY_ALIAS_MAP,
   validateScrapeParams,
-  validateScrapeAmazonParams,
-  ScrapeAmazonParamsSchema,
   validateVerifyParams,
   validateBrowserParams,
   validateDiscoverParams,
   validateBrowserFlowParams,
   REGISTERED_TOOL_NAMES,
 } from "./tools/index.js";
+import { PLATFORM_SCRAPER_DEFS, PLATFORM_SCRAPER_HANDLERS } from "./tools/platform_scrapers.js";
 import type { ProgressReporter } from "./tools/crawl.js";
 import {
   SearchParamsSchema,
@@ -130,48 +128,24 @@ import {
   ScraperStatusParamsSchema,
   ScraperResultParamsSchema,
 } from "./tools/index.js";
-
-/** Convert a Zod v4 schema to MCP-compatible JSON Schema.
- * Uses Zod's native .toJSONSchema() — zod-to-json-schema v3 does not support Zod v4.
- *
- * Two contract fixes applied here (single root-cause location):
- *
- * 1. required[] accuracy: Zod v4 .toJSONSchema() includes all object keys in required[],
- *    even those with a .default() (which makes them truly optional at runtime). We strip any
- *    key from required[] that has a corresponding "default" in its property definition, so
- *    the declared schema matches what Zod actually enforces. Covers ~25 tools in one fix.
- *
- * 2. additionalProperties policy: we previously declared additionalProperties:false but Zod
- *    strips unknown keys silently rather than rejecting them — so the declaration was a lie.
- *    We remove additionalProperties entirely; the actual behavior (strip-unknown) is handled
- *    by Zod's parseUnknown semantics, and we choose NOT to surface a rejection error for
- *    unknown params (MCP clients may add meta fields). Declare nothing, lie nothing.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function zodToMcpSchema(schema: any): Record<string, unknown> {
-  const jsonSchema = schema.toJSONSchema();
-  // Strip meta-schema declarations that MCP clients don't need
-  const { $schema, $defs, additionalProperties: _ap, ...rest } = jsonSchema as Record<string, unknown>;
-
-  // Fix 1: strip keys with a .default() from required[] — they are optional at runtime.
-  // Zod v4 .toJSONSchema() does not do this automatically.
-  const props = rest.properties as Record<string, Record<string, unknown>> | undefined;
-  if (props && Array.isArray(rest.required)) {
-    rest.required = (rest.required as string[]).filter(
-      key => !(props[key] && "default" in props[key])
-    );
-  }
-
-  return rest;
-}
+// zodToMcpSchema lives in utils/mcp-schema.ts (not defined here) so BOTH this file's
+// hand-written tool definitions AND tools/platform_scraper.ts's factory-generated
+// ones share one conversion — factory-generated definitions must not import back
+// from core.ts (core.ts spreads their output into _TOOL_DEFINITIONS below), so the
+// shared function lives in a leaf util instead of either module.
+import { zodToMcpSchema } from "./utils/mcp-schema.js";
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 // _TOOL_DEFINITIONS holds the full MCP schema (description + inputSchema + annotations)
 // for EVERY dispatchable tool — both visible (in registry) and hidden (dispatch-only).
-// Do NOT export this directly. The public `TOOLS` below derives from registry.
+// Exported (read-only, for test/introspection use only — e.g. tests/tools/tool-definitions.test.ts
+// and tests/contract/output-schema.test.ts import it directly instead of parsing this file as
+// text, so factory-generated entries below are just as visible to those guards as hand-written
+// ones). The public `TOOLS` below is still the real dispatch/ListTools contract — external code
+// and tools/index.ts consumers should keep using `TOOLS`/`dispatch()`, not this array.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _TOOL_DEFINITIONS: Array<{ name: string; description: string; inputSchema: Record<string, unknown>; annotations: Record<string, boolean> }> = [
+export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; inputSchema: Record<string, unknown>; annotations: Record<string, boolean> }> = [
   {
     name: "novada_search",
     description: `Search the web and get clean, ready-to-use content. Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
@@ -286,17 +260,12 @@ Not for:
     inputSchema: zodToMcpSchema(ScrapeParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
-  {
-    name: "novada_scrape_amazon",
-    description: `Extract structured Amazon data — product details, reviews, seller info, bestseller lists, and category/brand listings — through an Amazon-only tool with a closed, typed \`operation\` enum. Same underlying engine as novada_scrape, pinned to platform="amazon.com".
-
-**Use when:** "get the price/rating/title for Amazon ASIN B0...", "pull the reviews for this Amazon product URL", "search Amazon for <keyword> with price and rating", "who is this Amazon seller", "what's in this Amazon Best Sellers list".
-**Not for:** Any other platform — use novada_scrape with the target platform's domain instead (e.g. platform="walmart.com"). A general Google/web search — use novada_search. Reading one arbitrary URL's raw content — use novada_extract.
-**Returns:** Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen format — same rendering as novada_scrape (markdown/json/csv/excel/html/toon).
-**Operations:** 10 verified-working Amazon operations (see the \`operation\` param's description for the exact \`params\` keys each needs). 3 known backend-broken Amazon operations are intentionally NOT in this enum — this tool rejects them before any backend call, unlike novada_scrape(platform="amazon.com", ...), which still forwards them with a warning.`,
-    inputSchema: zodToMcpSchema(ScrapeAmazonParamsSchema),
-    annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
-  },
+  // novada_scrape_amazon (and, as they're added, its 15 per-platform siblings) is
+  // GENERATED by the platform-scraper factory (src/tools/platform_scraper.ts) from a
+  // declarative config (src/tools/scrape_amazon.ts) — spread here rather than
+  // hand-written so this definition can never drift from the generated tool, and so
+  // adding a new per-platform tool never requires touching this array again.
+  ...PLATFORM_SCRAPER_DEFS,
   {
     name: "novada_proxy",
     description: `Use when you need to route your own HTTP requests through residential or mobile IPs — for geo-targeting, IP rotation, or bypassing IP-based rate limits. Returns proxy URL, shell export commands, or curl --proxy flag.
@@ -671,6 +640,13 @@ export async function dispatch(
 ): Promise<string> {
   const onProgress = ctx?.onProgress;
 
+  // Platform-scraper family (novada_scrape_amazon and, as they're added, its 15
+  // siblings) is GENERATED by the factory in tools/platform_scraper.ts — routed here
+  // by a name -> handler map (tools/platform_scrapers.ts) instead of one switch `case`
+  // per platform, so adding a new platform config never requires touching dispatch().
+  const platformScraperHandler = PLATFORM_SCRAPER_HANDLERS[name];
+  if (platformScraperHandler) return platformScraperHandler(args, apiKey!);
+
   switch (name) {
     case "novada_search":
       // TOW2-240: pass feedbackToolAvailable so search.ts omits the
@@ -695,8 +671,6 @@ export async function dispatch(
       return novadaProxy(validateProxyParams(args));
     case "novada_scrape":
       return novadaScrape(validateScrapeParams(args), apiKey!);
-    case "novada_scrape_amazon":
-      return novadaScrapeAmazon(validateScrapeAmazonParams(args), apiKey!);
     case "novada_verify":
       return novadaVerify(validateVerifyParams(args), apiKey!);
     // novada_unblock → hidden alias → novada_extract(format:"html", render mapped from method)

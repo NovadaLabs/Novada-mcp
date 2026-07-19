@@ -48,3 +48,26 @@ response envelope itself. Each transport (`index.ts` for stdio, the hosted
    `_TOOL_DEFINITIONS`.
 4. Visibility + short catalog description → `src/tools/registry.ts`'s `TOOL_REGISTRY`.
 5. `tests/tools/discover.test.ts` will fail if 3 and 4 drift apart — that's intentional.
+
+### Adding a per-platform scraper tool (novada_scrape_<platform>)
+
+The 40-file-per-tool flow above still applies to ordinary tools, but the
+`novada_scrape_<platform>` family (novada_scrape_amazon today, 15 more planned) is
+CONFIG-DRIVEN instead: `src/tools/platform_scraper.ts` exports a factory
+(`createPlatformScraperTool`) that takes one declarative `PlatformScraperConfig`
+(platform domain, friendly operation names → catalog `scraper_id`s, and the
+Core/Use-when/Not-for/Returns/Operations description text) and generates the tool
+definition, registry entry, Zod schema, and handler in one call — see
+`src/tools/scrape_amazon.ts` for the reference config. To add the next platform:
+
+1. Write a new config file (mirroring `scrape_amazon.ts`) that calls
+   `createPlatformScraperTool(...)` and exports the result.
+2. Wrap it with `toDispatchableScraperTool(...)` and push it into
+   `PLATFORM_SCRAPER_TOOLS` in `src/tools/platform_scrapers.ts`.
+
+`core.ts` (`_TOOL_DEFINITIONS` + `dispatch()`) and `registry.ts` (`TOOL_REGISTRY`)
+already spread/route through `platform_scrapers.ts`'s exports — neither needs to
+change again per new platform. `_TOOL_DEFINITIONS` is exported (read-only) so
+drift-guard tests (`tests/tools/discover.test.ts`, `tests/tools/tool-definitions.test.ts`,
+`tests/contract/output-schema.test.ts`) can inspect the real, computed tool objects —
+including factory-generated ones — instead of parsing this file as text.

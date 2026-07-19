@@ -1,12 +1,17 @@
-import { z } from "zod";
-import { novadaScrape } from "./scrape.js";
-import { TASK_ID_REGEX, TASK_ID_REGEX_MSG } from "./types.js";
+import type { z } from "zod";
+import {
+  createPlatformScraperTool,
+  type PlatformScraperConfig,
+  type PlatformOperationConfig,
+} from "./platform_scraper.js";
 
 // ─── Amazon operation → catalog scraper_id map (single source of truth) ──────
-// Tools-v2 Option B scaffold (proof-of-pattern for the 16-tool per-platform family —
-// see ARCHITECTURE.md). Friendly, human-readable operation names for
-// novada_scrape_amazon, each mapped deterministically to the exact `slug`
-// (== scraper_id) in src/data/scraper_catalog.ts's amazon.com block.
+// Tools-v2: Amazon is the FIRST config expressed through the platform-scraper
+// factory (src/tools/platform_scraper.ts) — the proof-of-pattern for the
+// 16-tool per-platform family (see ARCHITECTURE.md). Friendly, human-readable
+// operation names for novada_scrape_amazon, each mapped deterministically to
+// the exact `slug` (== scraper_id) in src/data/scraper_catalog.ts's amazon.com
+// block.
 //
 // Only the 10 slugs marked status:"ok" (verified 2026-07-13) are included. The 3
 // "backend_broken" slugs — amazon_product_category-url, amazon_global-product_seller-url,
@@ -31,68 +36,86 @@ export const AMAZON_OPERATIONS = Object.freeze({
 
 export type AmazonOperation = keyof typeof AMAZON_OPERATIONS;
 
-const AMAZON_OPERATION_NAMES = Object.keys(AMAZON_OPERATIONS) as [AmazonOperation, ...AmazonOperation[]];
+/** Per-operation `params` doc — rendered as `- <name>: <doc>` in the enum description. */
+const AMAZON_OPERATION_PARAMS_DOC: Record<AmazonOperation, string> = {
+  product_by_asin: "params.asin (e.g. \"B0BWBK8F37\")",
+  product_by_url: "params.url (product page URL); optional params.zip_code",
+  products_by_keywords: "params.keyword; optional params.max_pages, params.min_price, params.max_price",
+  bestsellers: "params.url (a Best Sellers list page URL); optional params.max_pages",
+  reviews_by_url: "params.url (product page URL)",
+  seller_by_url: "params.url (seller page URL)",
+  listings_by_keyword: "params.keyword and params.domain (e.g. \"https://www.amazon.com\"); optional params.max_pages",
+  global_product_by_url: "params.url",
+  global_product_by_category_url: "params.url (category/search URL) and params.maximum; optional params.sort_by, params.get_sponsored",
+  global_product_by_keyword_and_brand: "params.keyword, params.brands, params.max_pages",
+};
 
-export const ScrapeAmazonParamsSchema = z.object({
-  operation: z.enum(AMAZON_OPERATION_NAMES)
-    .describe(
-      "Which Amazon operation to run. Each requires specific keys in `params`:\n" +
-      "- product_by_asin: params.asin (e.g. \"B0BWBK8F37\")\n" +
-      "- product_by_url: params.url (product page URL); optional params.zip_code\n" +
-      "- products_by_keywords: params.keyword; optional params.max_pages, params.min_price, params.max_price\n" +
-      "- bestsellers: params.url (a Best Sellers list page URL); optional params.max_pages\n" +
-      "- reviews_by_url: params.url (product page URL)\n" +
-      "- seller_by_url: params.url (seller page URL)\n" +
-      "- listings_by_keyword: params.keyword and params.domain (e.g. \"https://www.amazon.com\"); optional params.max_pages\n" +
-      "- global_product_by_url: params.url\n" +
-      "- global_product_by_category_url: params.url (category/search URL) and params.maximum; optional params.sort_by, params.get_sponsored\n" +
-      "- global_product_by_keyword_and_brand: params.keyword, params.brands, params.max_pages"
-    ),
-  params: z.record(z.string(), z.unknown()).default({})
-    .describe(
-      "Operation-specific parameters for the selected `operation`. E.g. { asin: \"B0BWBK8F37\" } for " +
-      "product_by_asin, { url: \"https://www.amazon.com/dp/...\" } for product_by_url/reviews_by_url/" +
-      "seller_by_url/bestsellers/global_product_by_url, { keyword: \"wireless earbuds\" } for products_by_keywords."
-    ),
-  limit: z.number().int().min(1).max(100).default(20)
-    .describe("Max records to return. Default 20, max 100."),
-  format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
-    .describe("Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format."),
-  task_id: z.string().regex(TASK_ID_REGEX, TASK_ID_REGEX_MSG).optional()
-    .describe("Optional. Resume a previous slow task by its task_id instead of submitting a new billable one — same semantics as novada_scrape's task_id."),
-  project: z.string().max(30).optional()
-    .describe("Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'."),
-});
+const AMAZON_OPERATION_CONFIGS: Record<AmazonOperation, PlatformOperationConfig> = Object.fromEntries(
+  (Object.keys(AMAZON_OPERATIONS) as AmazonOperation[]).map((name) => [
+    name,
+    { scraperId: AMAZON_OPERATIONS[name], paramsDoc: AMAZON_OPERATION_PARAMS_DOC[name] },
+  ]),
+) as Record<AmazonOperation, PlatformOperationConfig>;
+
+/** Amazon's declarative platform-scraper config — the factory's sole input for this tool. */
+export const AMAZON_SCRAPER_CONFIG: PlatformScraperConfig<AmazonOperation> = {
+  platform: "amazon.com",
+  platformLabel: "Amazon",
+  toolName: "novada_scrape_amazon",
+  category: "Scraping & Verification",
+  registryDescription:
+    "Extract structured Amazon data (product details, reviews, seller info, bestsellers, category/brand listings) via a closed, typed operation enum — 10 verified-working operations; same engine and output formats as novada_scrape, pinned to platform=amazon.com",
+  operations: AMAZON_OPERATION_CONFIGS,
+  paramsFieldDoc:
+    "Operation-specific parameters for the selected `operation`. E.g. { asin: \"B0BWBK8F37\" } for " +
+    "product_by_asin, { url: \"https://www.amazon.com/dp/...\" } for product_by_url/reviews_by_url/" +
+    "seller_by_url/bestsellers/global_product_by_url, { keyword: \"wireless earbuds\" } for products_by_keywords.",
+  description: {
+    core:
+      "Extract structured Amazon data — product details, reviews, seller info, bestseller lists, and category/brand listings — through an Amazon-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"amazon.com\".",
+    useWhen: [
+      "get the price/rating/title for Amazon ASIN B0...",
+      "pull the reviews for this Amazon product URL",
+      "search Amazon for <keyword> with price and rating",
+      "who is this Amazon seller",
+      "what's in this Amazon Best Sellers list",
+    ],
+    notFor: [
+      { when: "Any other platform", useInstead: "novada_scrape with the target platform's domain instead (e.g. platform=\"walmart.com\")" },
+      { when: "A general Google/web search", useInstead: "novada_search" },
+      { when: "Reading one arbitrary URL's raw content", useInstead: "novada_extract" },
+    ],
+    returns:
+      "Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen format — same rendering as novada_scrape (markdown/json/csv/excel/html/toon).",
+    operationsNote:
+      "10 verified-working Amazon operations (see the `operation` param's description for the exact `params` keys each needs). 3 known backend-broken Amazon operations are intentionally NOT in this enum — this tool rejects them before any backend call, unlike novada_scrape(platform=\"amazon.com\", ...), which still forwards them with a warning.",
+  },
+};
+
+/** The materialized Amazon platform-scraper tool (definition + registry entry + handler). */
+export const AMAZON_SCRAPER_TOOL = createPlatformScraperTool(AMAZON_SCRAPER_CONFIG);
+
+// ─── Public entry points (unchanged names/shapes — behavior-preserving) ──────
+// novadaScrapeAmazon / validateScrapeAmazonParams / ScrapeAmazonParamsSchema keep
+// their original names and import path (src/tools/scrape_amazon.js) so existing
+// callers (tools/index.ts barrel, tests/tools/scrape_amazon.test.ts) are unaffected.
+
+export const ScrapeAmazonParamsSchema = AMAZON_SCRAPER_TOOL.ParamsSchema;
 
 export type ScrapeAmazonParams = z.infer<typeof ScrapeAmazonParamsSchema>;
 
 export function validateScrapeAmazonParams(args: Record<string, unknown> | undefined): ScrapeAmazonParams {
-  return ScrapeAmazonParamsSchema.parse(args ?? {});
+  return AMAZON_SCRAPER_TOOL.validateParams(args);
 }
 
 /**
  * novada_scrape_amazon — a thin, Amazon-only adapter over the shared scrape engine
- * (novadaScrape in ./scrape.js). Resolves the friendly `operation` name to its exact
- * catalog scraper_id, pins the platform to "amazon.com", and delegates everything else
- * — the HTTP call, polling, output rendering, price/availability normalization, and
- * error classification — to novadaScrape. No HTTP/FormData logic is duplicated here.
+ * (novadaScrape in ./scrape.js), generated by the platform-scraper factory. Resolves
+ * the friendly `operation` name to its exact catalog scraper_id, pins the platform to
+ * "amazon.com", and delegates everything else — the HTTP call, polling, output
+ * rendering, price/availability normalization, and error classification — to
+ * novadaScrape. No HTTP/FormData logic is duplicated here.
  */
 export async function novadaScrapeAmazon(params: ScrapeAmazonParams, apiKey: string): Promise<string> {
-  const scraperId = AMAZON_OPERATIONS[params.operation];
-  return novadaScrape(
-    {
-      platform: "amazon.com",
-      operation: scraperId,
-      params: params.params,
-      limit: params.limit,
-      format: params.format,
-      task_id: params.task_id,
-      project: params.project,
-      // FIX 3: surface the friendly operation name (e.g. "product_by_asin") in the
-      // "## Scrape Results" header instead of the raw catalog slug — the caller
-      // never typed "amazon_product_asin", they typed "product_by_asin".
-      displayName: params.operation,
-    },
-    apiKey,
-  );
+  return AMAZON_SCRAPER_TOOL.handler(params, apiKey);
 }
