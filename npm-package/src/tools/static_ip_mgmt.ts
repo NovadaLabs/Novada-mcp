@@ -85,7 +85,7 @@ export const StaticIpMgmtParamsSchema = z
 
     // ── Shared filter fields (list + export) ──────────────────────────────
     status: z
-      .string()
+      .enum(["", "1", "2", "3"])
       .optional()
       .describe('Filter for "list"/"export". ""=All, "1"=In use, "2"=Expired, "3"=Released.'),
     key_word: z

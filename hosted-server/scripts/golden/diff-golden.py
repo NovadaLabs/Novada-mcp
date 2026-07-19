@@ -74,7 +74,22 @@ HARD_GATE_FILES = [
 # Routing states that mean "this tool did not route to a real handler".
 # A dispatch-matrix status flipping INTO or OUT OF one of these (when not already
 # accounted for by refused-set.json) is a routing regression = hard escalation.
-ROUTING_BAD_STATES = {"refused", "not_enabled", "unknown", "unknown_tool", "no_handler"}
+#
+# "timeout" added (NOV-854 hardening, 2026-07-19): capture-golden.py's dispatch
+# exception handler (_run_dispatch, the try/except wrapping call_tool()) is the
+# ONLY place dispatch-matrix.json's "status" field gets a value other than "ok"/
+# "err" — see its `except Exception as e: return name, {"status": "timeout", ...}`
+# branch. A mass paid-tool breakage from rate-limiting or wallet depletion (a
+# malformed/non-JSON-RPC response that fails _parse_sse, or a hung request) lands
+# a tool in this exact "timeout" state. Before this fix that crossing was invisible
+# to the hard gate — dispatch-matrix.json is advisory-tier, so a swath of tools
+# flipping ok -> timeout would only ever print in the human-glance advisory diff
+# (VERDICT: CLEAN), never fail CI. Confirmed by reading capture-golden.py directly:
+# no other status string ("refused"/"not_enabled"/"unknown"/"unknown_tool"/
+# "no_handler") is ever actually written to dispatch-matrix.json today — those
+# values are reserved for other routing-bad producers — so "timeout" is the one
+# real gap this pass closes; the four pre-existing entries are left untouched.
+ROUTING_BAD_STATES = {"refused", "not_enabled", "unknown", "unknown_tool", "no_handler", "timeout"}
 
 
 def _tier1_hard_gate(baseline_dir: Path, after_dir: Path) -> list:

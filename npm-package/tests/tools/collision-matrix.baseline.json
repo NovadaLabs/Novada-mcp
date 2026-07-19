@@ -443,10 +443,16 @@
           ]
         },
         {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "",
+            "1",
+            "2",
+            "3"
+          ]
         }
       ],
-      "note": "Different concepts sharing a name: proxy_account_create's status is a closed enum ('1'=active|'-3'=disabled) for account state. static_ip_mgmt's status is a free-text filter string (no enum) used to filter the IP list/export actions ('', '1'=In use, '2'=Expired, '3'=Released per its description) — not schema-enforced as an enum. Different shapes are correct: one is account state, the other is an IP-status filter."
+      "note": "Different concepts sharing a name, both now enums with disjoint value-spaces: proxy_account_create's status is a closed enum ('1'=active|'-3'=disabled) for account state. static_ip_mgmt's status (NOV-853 hardening, 2026-07-19: widened from a bare z.string() to z.enum([\"\",\"1\",\"2\",\"3\"]) so an out-of-domain filter value is rejected instead of silently passed through) is a closed enum for an IP-status filter (''=All, '1'=In use, '2'=Expired, '3'=Released per its description). Different shapes are correct: one is account state, the other is an IP-status filter — divergence is intentional, just no longer one side being unconstrained."
     },
     {
       "param": "status",
@@ -463,10 +469,16 @@
           ]
         },
         {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "",
+            "1",
+            "2",
+            "3"
+          ]
         }
       ],
-      "note": "novada_proxy_account_list shares novada_proxy_account_create's status enum — same divergence against static_ip_mgmt's free-text status filter as the create-vs-static_ip_mgmt entry above."
+      "note": "novada_proxy_account_list shares novada_proxy_account_create's status enum — same divergence against static_ip_mgmt's now-enum status filter (see create-vs-static_ip_mgmt entry above for the NOV-853 rationale)."
     },
     {
       "param": "action",
