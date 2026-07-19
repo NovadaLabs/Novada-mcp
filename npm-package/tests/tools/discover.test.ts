@@ -117,10 +117,13 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
 
     const readmePath = resolve(__dirname, "../../README.md");
     const readme = readFileSync(readmePath, "utf8");
+    // Count assertion only (per the comment above): the registry-derived count must
+    // appear as a tool count in the README, so a wrong integer can't silently ship.
+    // Robust to phrasing ("23 tools" or "23 curated tools") — the number is the invariant.
     expect(
       readme,
-      `README must state "${EXPECTED_CURATED_COUNT} curated tools" (derived from registry) — not a stale hand-count`
-    ).toContain(`${EXPECTED_CURATED_COUNT} curated tools`);
+      `README must state "${EXPECTED_CURATED_COUNT} tools" (derived from registry) — not a stale hand-count`
+    ).toMatch(new RegExp(`${EXPECTED_CURATED_COUNT}\\s+(curated\\s+)?tools`));
   });
 });
 
