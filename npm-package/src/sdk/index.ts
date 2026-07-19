@@ -40,22 +40,43 @@ export class NovadaClient {
           num: options.num ?? 10,
           country: options.country ?? "",
           language: "",
-          format: "markdown",
+          format: "json",
           time_range: options.timeRange,
         },
         this.config.scraperApiKey
       );
 
-      // Parse the formatted markdown output into typed objects
+      // NOV-852: consume novadaSearch's structured format:"json" output instead
+      // of re-parsing its rendered markdown. The prior parser looked for a
+      // `### N.` header plus separate `url:`/`snippet:` lines — markdown search
+      // actually renders `## N. [title](url)` followed directly by the snippet
+      // text, so the regex never matched and search() silently returned []
+      // for every query. Reading the tool's typed `results[]` field is both the
+      // fix and the more robust long-term contract: it tracks the JSON schema
+      // (rank/title/url/snippet/published) instead of a markdown rendering that
+      // can change independently.
+      //
+      // A few tool-level branches (invalid `engine` param, SERP entitlement
+      // failure) emit a hardcoded markdown message regardless of the requested
+      // format. Parse defensively so any non-JSON or unexpected shape degrades
+      // to [] rather than throwing — callers should never see a JSON.parse
+      // exception surface out of a routine "no results" response.
+      let parsed: { results?: unknown } | undefined;
+      try {
+        parsed = JSON.parse(raw) as { results?: unknown };
+      } catch {
+        return [];
+      }
+      if (!parsed || !Array.isArray(parsed.results)) return [];
+
       const results: SearchResult[] = [];
-      const blocks = raw.split(/\n### \d+\./).slice(1);
-      for (const block of blocks) {
-        const lines = block.split("\n");
-        const title = lines[0]?.trim() ?? "";
-        const url = lines.find(l => l.startsWith("url:"))?.replace("url:", "").trim() ?? "";
-        const snippet = lines.find(l => l.startsWith("snippet:"))?.replace("snippet:", "").trim() ?? "";
-        const published = lines.find(l => l.startsWith("published:"))?.replace("published:", "").trim();
-        if (url) results.push({ title, url, snippet, ...(published ? { published } : {}) });
+      for (const item of parsed.results as Array<Record<string, unknown>>) {
+        const url = item?.url;
+        if (typeof url !== "string" || !url) continue;
+        const title = typeof item.title === "string" ? item.title : "";
+        const snippet = typeof item.snippet === "string" ? item.snippet : "";
+        const published = typeof item.published === "string" ? item.published : undefined;
+        results.push({ title, url, snippet, ...(published ? { published } : {}) });
       }
       return results;
     });
