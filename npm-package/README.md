@@ -210,6 +210,10 @@ If you know the exact page you want → `novada_extract`. If you need to find pa
 |------|----------|---------|
 | `novada_scrape` | Structured data from 16 supported platforms (~88 operations) — Amazon, Walmart, LinkedIn, TikTok, YouTube, Instagram, GitHub, X, ChatGPT, Perplexity, etc. — instead of parsing raw HTML | Clean records in markdown/json/csv/excel/html/toon |
 | `novada_scrape_amazon` | Amazon-only structured data (product, reviews, seller, bestsellers, category/brand listings) via a closed, typed `operation` enum — 10 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_google` | Google-only raw SERP data (web search, AI Mode, Maps details/reviews, Shopping, Jobs, Hotels, Videos) via a closed, typed `operation` enum — 13 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_bing` | Bing-only raw SERP data (web search, videos, news, shopping) via a closed, typed `operation` enum — 4 verified-working operations; Bing is not a selectable `novada_search` engine | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_duckduckgo` | DuckDuckGo-only raw SERP data (web search) via a closed, typed `operation` enum — 1 verified-working operation | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_yandex` | Yandex-only raw SERP data (web search) via a closed, typed `operation` enum — 1 verified-working operation | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
 
 **Crawl / Map / Site copy**
 
@@ -270,7 +274,7 @@ If you know the exact page you want → `novada_extract`. If you need to find pa
 | `novada_setup` | Validating your key on first run; never hard-errors on a missing key | Key status, balance, onboarding guidance |
 | `novada_session_stats` | Debugging your own call pattern this session | Per-tool call counts, recent calls, uptime |
 
-**24 tools across 6 categories.** The hosted default surface (`mcp.novada.com`) exposes a curated subset; self-host (`npx novada-mcp`) exposes all 24. Call `novada_discover` on your connection to see exactly what's available on it.
+**28 tools across 6 categories.** The hosted default surface (`mcp.novada.com`) exposes a curated subset; self-host (`npx novada-mcp`) exposes all 28. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ---
 

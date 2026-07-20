@@ -821,6 +821,16 @@ const AND_REQUIRED_OPS = new Set<string>([
   "amazon_product-list_keywords-domain",   // keyword + domain
   "amazon_global-product_category-url",    // url + maximum
   "amazon_global-product_keywords-brand",  // keyword + brands + max_pages
+  // Seeded 2026-07-20 during the Tools-v2 search-engine platform-scraper pass
+  // (novada_scrape_google et al.): google_map-details_location is a "params"-format
+  // (non-search-engine-style) op, so it is NOT short-circuited by SEARCH_ENGINE_OP_KEYS
+  // above — it falls through to this catalog-derived AND/OR check. All 3 required keys
+  // (country, keyword, merchant_limit) are genuinely independent selectors (not query-key
+  // aliases of each other, unlike q/keyword/query), matching the same "closed-tool
+  // documents every key as mandatory, no known backend-side default" rationale used for
+  // the 3 Amazon ops above. Unlike google_comment_url (deliberately NOT added — see the
+  // comment above this Set), there is no existing test proving a partial call succeeds.
+  "google_map-details_location",           // country + keyword + merchant_limit
 ]);
 
 /** Build an OpMap from catalog params for a single platform. */

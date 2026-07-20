@@ -11,10 +11,18 @@
  */
 import { toDispatchableScraperTool, type DispatchableScraperTool } from "./platform_scraper.js";
 import { AMAZON_SCRAPER_TOOL } from "./scrape_amazon.js";
+import { GOOGLE_SCRAPER_TOOL } from "./scrape_google.js";
+import { BING_SCRAPER_TOOL } from "./scrape_bing.js";
+import { DUCKDUCKGO_SCRAPER_TOOL } from "./scrape_duckduckgo.js";
+import { YANDEX_SCRAPER_TOOL } from "./scrape_yandex.js";
 
 /** One entry per platform-scraper tool. Order mirrors registration order elsewhere. */
 export const PLATFORM_SCRAPER_TOOLS: DispatchableScraperTool[] = [
   toDispatchableScraperTool(AMAZON_SCRAPER_TOOL),
+  toDispatchableScraperTool(GOOGLE_SCRAPER_TOOL),
+  toDispatchableScraperTool(BING_SCRAPER_TOOL),
+  toDispatchableScraperTool(DUCKDUCKGO_SCRAPER_TOOL),
+  toDispatchableScraperTool(YANDEX_SCRAPER_TOOL),
 ];
 
 /** Full MCP tool schemas — spread into src/core.ts's `_TOOL_DEFINITIONS`. */

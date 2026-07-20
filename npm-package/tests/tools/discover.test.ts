@@ -98,8 +98,8 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
   // curated registry size and require the human-authored README headline to
   // derive from it (state "22 curated tools"). NOT a semantic diff test — just a
   // count assertion so a bare wrong integer (38/33/25/11) can't silently return.
-  it("registry count is 23 and the README headline count matches it", () => {
-    const EXPECTED_CURATED_COUNT = 24;
+  it("registry count is 28 and the README headline count matches it", () => {
+    const EXPECTED_CURATED_COUNT = 28;
     expect(
       TOOL_REGISTRY.length,
       `registry size changed — update EXPECTED_CURATED_COUNT and every README/SKILL count to ${TOOL_REGISTRY.length}`

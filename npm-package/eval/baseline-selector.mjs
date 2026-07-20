@@ -133,6 +133,14 @@ export function validateTaskSet(tasks, registryNames) {
  * or the registry's descriptions legitimately improve/regress — never let it
  * silently drift, and never lower it just to make a red run go green.
  *
+ * 2026-07-20 UPDATE (Tools-v2 search-engine platform-scraper pass): eval-tasks.json
+ * grew 11->15 tasks (T12-T15, one per new novada_scrape_<google|bing|duckduckgo|yandex>
+ * tool). The crude Tier-A bag-of-words scorer gets 2 of the 4 new tasks wrong in a way
+ * that adds NEW forbidden hits (T12, T13 both argmax to novada_search) — an honest,
+ * expected consequence of harder/more-specific prompts, not a defect masked by lowering
+ * this floor; see eval/baseline-tier-a.json's own dated comment for the full accounting.
+ * Lowered 50%->46.67% (5/10->7/15) to match the honestly-regenerated committed snapshot.
+ *
  * Kept for reporting/back-compat and as a human-readable summary of what
  * baseline-tier-a.json (below) records precisely, per-task. The actual gate
  * (FIX 2) no longer compares against this bare number — it compares against
@@ -140,7 +148,7 @@ export function validateTaskSet(tasks, registryNames) {
  * deterministic: no key, no network, no sampling) and catches per-task
  * identity regressions this scalar alone cannot (see evaluateRegressionGate).
  */
-export const BASELINE_FLOOR = 5 / 10;
+export const BASELINE_FLOOR = 7 / 15;
 
 const BASELINE_TIER_A_PATH = resolve(__dirname, "baseline-tier-a.json");
 

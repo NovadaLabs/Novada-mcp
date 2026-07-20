@@ -124,6 +124,50 @@
       "sibling_watch": ["novada_scrape"],
       "surfaces": ["default"],
       "notes": "Tools-v2 Option B scaffold (2026-07-20): a named platform (Amazon) plus a specific ASIN identifier is the strongest possible signal for the new single-platform novada_scrape_amazon tool. novada_scrape remains an acceptable fallback (identical engine, platform='amazon.com'), but novada_scrape_amazon's closed operation enum is the more precise, purpose-built tool for exactly this ask. NOT tagged 'hosted-15': novada_scrape_amazon is not in config/surfaces.json's hosted-15 tool list today (deliberately not added by this scaffold — see the tool's implementation notes on why extending hosted-15 requires a matching hosted-server/vercel/api/mcp.ts edit, out of scope here) — see porting_notes for the same pattern applied to T06/T10."
+    },
+    {
+      "id": "T12-google-raw-serp-vs-search",
+      "prompt": "Get the raw Google search results for 'best noise cancelling headphones 2026' — I need the actual SERP entries (title, link, rank), not a synthesized answer.",
+      "category": "scrape-google-vs-search",
+      "expected_tool": "novada_scrape_google",
+      "acceptable_tools": ["novada_scrape_google", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): explicit 'raw SERP entries, not a synthesized answer' framing is the exact disambiguator in novada_scrape_google's own description vs novada_search (which is answer-oriented and reranks/dedups). novada_scrape remains an acceptable fallback (identical engine, platform='google.com'). NOT tagged 'hosted-15': novada_scrape_google is not in config/surfaces.json's hosted-15 tool list — same precedent as T11's novada_scrape_amazon."
+    },
+    {
+      "id": "T13-bing-not-a-search-engine",
+      "prompt": "I need Bing's video search results for 'drone racing highlights' — Bing specifically, not Google or DuckDuckGo.",
+      "category": "scrape-bing-vs-search",
+      "expected_tool": "novada_scrape_bing",
+      "acceptable_tools": ["novada_scrape_bing", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): Bing is NOT one of novada_search's selectable engine values (google/duckduckgo/yandex only — see src/tools/types.ts), so an explicit 'Bing specifically' ask has exactly one intentional route on this surface: novada_scrape_bing (or the generic novada_scrape with platform='bing.com'). NOT tagged 'hosted-15': same precedent as T11/T12."
+    },
+    {
+      "id": "T14-duckduckgo-raw-serp-with-filters",
+      "prompt": "Give me the raw DuckDuckGo results list for 'best VPN 2026', restricted to results from the past week — not a summarized answer.",
+      "category": "scrape-duckduckgo-vs-search",
+      "expected_tool": "novada_scrape_duckduckgo",
+      "acceptable_tools": ["novada_scrape_duckduckgo", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): novada_search already offers engine='duckduckgo', so the disambiguator here is the explicit 'raw results list, not a summarized answer' plus a time-range filter (params.df) novada_search does not expose — both point at the raw-SERP tool, not the answer-oriented one. NOT tagged 'hosted-15': same precedent as T11-T13."
+    },
+    {
+      "id": "T15-yandex-tld-specific",
+      "prompt": "Search yandex.ru specifically (not yandex.com) for 'вакансии Москва' and give me the raw results list.",
+      "category": "scrape-yandex-vs-search",
+      "expected_tool": "novada_scrape_yandex",
+      "acceptable_tools": ["novada_scrape_yandex", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): a specific Yandex TLD (yandex.ru, params.yandex_domain) is a control novada_search's engine='yandex' does not expose, plus the explicit 'raw results list' framing — both point at novada_scrape_yandex over the answer-oriented novada_search. NOT tagged 'hosted-15': same precedent as T11-T14."
     }
   ]
 }
