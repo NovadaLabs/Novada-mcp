@@ -11,7 +11,7 @@
 
 [Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Why Novada](#why-novada) · [Repository layout](#repository-layout) · [Links](#links)
 
-[![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card](docs/assets/free-credits-banner.png)](https://dashboard.novada.com/sign-up/)
+[![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card](docs/assets/free-credits-banner.png)](https://www.novada.com)
 
 > ### 🔎 15 dedicated per-platform scrapers
 > Amazon, Google, LinkedIn, TikTok, YouTube, GitHub, Walmart, Instagram, Facebook, X, Bing, DuckDuckGo, Yandex, SHEIN, Perplexity — each a closed, typed `operation` enum instead of a generic scrape-and-guess call. See the [Scrape table](#how-to-choose-a-tool) below.
@@ -57,8 +57,8 @@ novada_research({question: "how do MCP servers work?"}) — parallel multi-sourc
 
 ## Get your key
 
-1. Sign up at [dashboard.novada.com](https://dashboard.novada.com/sign-up/) — no credit card required.
-2. Copy your API key from [dashboard.novada.com/api-key](https://dashboard.novada.com/api-key/).
+1. Sign up at [novada.com](https://www.novada.com) — no credit card required.
+2. Copy your API key from [novada.com](https://www.novada.com).
 3. You start with **$10 in free credits**, capped at **1,000 calls/month**. Check what's left any time with `novada_account({section: "balance"})` or `novada_setup()`.
 
 ---
@@ -190,8 +190,8 @@ This is a **monorepo** with two artifacts:
 ## Links
 
 - Website: [novada.com](https://www.novada.com)
-- Get an API key: [dashboard.novada.com/api-key](https://dashboard.novada.com/api-key/)
-- Sign up (free): [dashboard.novada.com/sign-up](https://dashboard.novada.com/sign-up/)
+- Get an API key: [novada.com](https://www.novada.com)
+- Sign up (free): [novada.com](https://www.novada.com)
 - npm: [npmjs.com/package/novada-mcp](https://www.npmjs.com/package/novada-mcp)
 - GitHub: [github.com/NovadaLabs/novada-mcp](https://github.com/NovadaLabs/novada-mcp)
 - Issues: [github.com/NovadaLabs/novada-mcp/issues](https://github.com/NovadaLabs/novada-mcp/issues)
