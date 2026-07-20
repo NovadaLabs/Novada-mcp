@@ -1,5 +1,5 @@
 {
-  "$comment": "SEED of the future Phase-3 config engine. Only surfaces that exist in code today are listed here — no speculative rapid/pro entries (index.ts's CATEGORY_MAP has no such bundles yet). Runtime filters (npm-package/src/index.ts CATEGORY_MAP, hosted-server/vercel/api/mcp.ts TOOLS array) do NOT read this file yet — that refactor is a later Phase-3 chunk. Today this manifest is read ONLY by scripts/check-hosted-drift.mjs, which fails loudly if hosted's hand-curated TOOLS array silently drifts from the list below.",
+  "$comment": "Surface manifest. 'default' = npm-package stdio (unfiltered). 'hosted-15' = the ORIGINAL, historical hosted default (pre-2026-07-20) — kept PINNED (do not resize) as a regression fixture for the eval harness (npm-package/eval/model-eval-runner.mjs --surface=hosted-15, npm-package/tests/eval/model-eval-runner.test.ts, .github/workflows/eval-harness.yml): it proves these 15 tools stay reachable on hosted regardless of how the live surface grows. 'hosted' = the REAL, LIVE mcp.novada.com default surface as of 2026-07-20, once hosted-server/vercel/api/mcp.ts's TOOLS array was changed from a hand-curated 15-tool literal to `CORE_TOOLS.map(...)` (derived from npm-package/src/core.ts's `TOOLS`, the single source of truth) filtered by mcp.ts's `HOSTED_HIDDEN` set. This 'hosted' list is a superset of 'hosted-15' (all 15 legacy tools plus the 15 platform-scraper tools, novada_scrape_amazon..novada_scrape_perplexity) minus HOSTED_HIDDEN's 8 exclusions (novada_browser_flow, novada_site_copy, novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey, novada_session_stats, novada_search_feedback, novada_verify — see mcp.ts's HOSTED_HIDDEN docstring for the rationale on each). scripts/check-hosted-drift.mjs verifies this list is (a) a subset of npm-package's REGISTERED_TOOL_NAMES, (b) an exact SET match against mcp.ts's live derived TOOLS output, (c) a superset of 'hosted-15', and (d) that mcp.ts's TOOLS is actually built via `CORE_TOOLS.map(...)` rather than a hand-curated literal (drift would otherwise be structurally impossible to reintroduce silently, per that script's docstring).",
   "surfaces": {
     "default": {
       "tools": "*",
@@ -23,7 +23,42 @@
         "novada_proxy_account_list",
         "novada_proxy_account_create"
       ],
-      "description": "mcp.novada.com default surface — verbatim from the hand-curated TOOLS array in hosted-server/vercel/api/mcp.ts (const TOOLS = [...], ~lines 367-411), which the source itself comments is a 'standalone curation, NOT derived from core's TOOLS'"
+      "description": "PINNED historical hosted default (do not resize — see $comment). Verbatim from mcp.novada.com's original hand-curated TOOLS array before the 2026-07-20 core-derivation refactor; still 100% valid today since every one of these 15 remains visible on the live 'hosted' surface below."
+    },
+    "hosted": {
+      "tools": [
+        "novada_search",
+        "novada_extract",
+        "novada_crawl",
+        "novada_research",
+        "novada_map",
+        "novada_scrape",
+        "novada_scrape_amazon",
+        "novada_scrape_google",
+        "novada_scrape_bing",
+        "novada_scrape_duckduckgo",
+        "novada_scrape_yandex",
+        "novada_scrape_youtube",
+        "novada_scrape_instagram",
+        "novada_scrape_facebook",
+        "novada_scrape_tiktok",
+        "novada_scrape_x",
+        "novada_scrape_walmart",
+        "novada_scrape_shein",
+        "novada_scrape_linkedin",
+        "novada_scrape_github",
+        "novada_scrape_perplexity",
+        "novada_proxy",
+        "novada_browser",
+        "novada_discover",
+        "novada_ai_monitor",
+        "novada_monitor",
+        "novada_setup",
+        "novada_account",
+        "novada_proxy_account_create",
+        "novada_proxy_account_list"
+      ],
+      "description": "mcp.novada.com's REAL, LIVE default surface as of 2026-07-20 (2026-07-20 core-derivation refactor — see $comment). Core-derived: npm-package's core.ts TOOLS (38 registered tools) minus hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set (8 tools: novada_browser_flow, novada_site_copy, novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey, novada_session_stats, novada_search_feedback, novada_verify)."
     }
   }
 }

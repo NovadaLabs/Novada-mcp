@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// ─── novada-mcp — stdio entry point (npm bin: `novada-mcp`) ──────────────────
+// Wires the MCP Server + stdio transport and dispatches every tool call through
+// `./core.ts` (the single source of truth for the tool catalog + dispatch logic).
+// The hosted HTTP entrance is a SEPARATE artifact — hosted-server/vercel/api/mcp.ts
+// — which wraps a vendored copy of this package's build and dispatches through the
+// same core.ts. Full cross-artifact map: root ARCHITECTURE.md. Module map for this
+// package: npm-package/ARCHITECTURE.md.
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
@@ -6,6 +13,7 @@ import { novadaSetup, validateSetupParams, novadaSessionStats, validateSessionSt
 import { classifyError } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { TOOLS, dispatch } from "./core.js";
+import { PLATFORM_SCRAPER_TOOLS } from "./tools/platform_scrapers.js";
 // ─── Configuration ───────────────────────────────────────────────────────────
 import { VERSION } from "./config.js";
 import { listPrompts, getPrompt } from "./prompts/index.js";
@@ -19,7 +27,20 @@ const API_KEY = process.env.NOVADA_API_KEY?.trim();
 // NOVADA_GROUPS="search,proxy"          → category bundles (see CATEGORY_MAP below)
 // Both set → union. Neither set → all tools (backward compatible).
 /** Category bundles — each group name expands to multiple tools */
-const SCRAPE_GROUP = ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"];
+// SCRAPE_GROUP used to hand-list only "novada_scrape_amazon" — every platform-scraper
+// sibling added since (google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/
+// walmart/shein/linkedin/github/perplexity) was silently EXCLUDED from
+// NOVADA_GROUPS="scrape", contradicting the group's own name. Derived programmatically
+// from PLATFORM_SCRAPER_TOOLS (src/tools/platform_scrapers.ts) instead, so every current
+// AND future novada_scrape_<platform> tool is included automatically — no per-platform
+// edit needed here again. See tests/tools/scrape-group-derivation.test.ts.
+const SCRAPE_GROUP = [
+    "novada_scrape",
+    ...PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name),
+    "novada_scraper_submit",
+    "novada_scraper_status",
+    "novada_scraper_result",
+];
 const CATEGORY_MAP = {
     search: ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor", "novada_search_feedback"],
     proxy: ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
@@ -340,6 +361,7 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
   novada_map                 Discover URLs on a website (up to 100)
   novada_site_copy           Copy an entire docs site to disk as markdown (one file per page)
   novada_scrape              Structured data from 16 active platforms (~88 operations, e.g. Amazon, TikTok, SHEIN, ChatGPT)
+  novada_scrape_amazon       Structured Amazon data via a closed, typed operation enum (10 verified-working ops)
   novada_ai_monitor          Search AI-company public domains for brand mentions (not live models)
   novada_monitor             Detect page changes between checks (session-scoped baseline)
   novada_proxy               Get proxy credentials (residential/isp/datacenter/mobile/static/dedicated)

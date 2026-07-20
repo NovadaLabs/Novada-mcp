@@ -1,9 +1,9 @@
 import { z } from "zod";
 export declare const DiscoverParamsSchema: z.ZodObject<{
     category: z.ZodOptional<z.ZodEnum<{
-        Proxy: "Proxy";
-        "Content Retrieval": "Content Retrieval";
         "Scraping & Verification": "Scraping & Verification";
+        "Content Retrieval": "Content Retrieval";
+        Proxy: "Proxy";
         "Browser & Rendering": "Browser & Rendering";
         "Account & Billing": "Account & Billing";
         "Health & Discovery": "Health & Discovery";

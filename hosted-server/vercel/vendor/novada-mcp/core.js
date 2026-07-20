@@ -17,47 +17,29 @@
  * MCP schema for every dispatchable tool (visible + hidden).
  */
 import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateDiscoverParams, validateBrowserFlowParams, REGISTERED_TOOL_NAMES, } from "./tools/index.js";
+import { PLATFORM_SCRAPER_DEFS, PLATFORM_SCRAPER_HANDLERS } from "./tools/platform_scrapers.js";
 import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, validateHealthParams, } from "./tools/types.js";
 import { _performRenderProbe, HEALTH_PROBE_DISCLAIMER, formatProbeSection, } from "./tools/health.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
 import { BrowserFlowParamsSchema } from "./tools/browser_flow.js";
 import { MonitorParamsSchema } from "./tools/monitor.js";
 import { ProxyResidentialParamsSchema, ProxyIspParamsSchema, ProxyDatacenterParamsSchema, ProxyMobileParamsSchema, ProxyStaticParamsSchema, ProxyDedicatedParamsSchema, SetupParamsSchema, novadaAccount, validateAccountParams, AccountParamsSchema, novadaProxyAccountCreate, validateProxyAccountCreateParams, ProxyAccountCreateParamsSchema, novadaProxyAccountList, validateProxyAccountListParams, ProxyAccountListParamsSchema, novadaIpWhitelist, validateIpWhitelistParams, IpWhitelistParamsSchema, novadaCaptureApikey, validateCaptureApikeyParams, CaptureApikeyParamsSchema, ScraperTaskMgmtParamsSchema, novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema, SessionStatsParamsSchema, SearchFeedbackParamsSchema, ScraperSubmitParamsSchema, ScraperStatusParamsSchema, ScraperResultParamsSchema, } from "./tools/index.js";
-/** Convert a Zod v4 schema to MCP-compatible JSON Schema.
- * Uses Zod's native .toJSONSchema() — zod-to-json-schema v3 does not support Zod v4.
- *
- * Two contract fixes applied here (single root-cause location):
- *
- * 1. required[] accuracy: Zod v4 .toJSONSchema() includes all object keys in required[],
- *    even those with a .default() (which makes them truly optional at runtime). We strip any
- *    key from required[] that has a corresponding "default" in its property definition, so
- *    the declared schema matches what Zod actually enforces. Covers ~25 tools in one fix.
- *
- * 2. additionalProperties policy: we previously declared additionalProperties:false but Zod
- *    strips unknown keys silently rather than rejecting them — so the declaration was a lie.
- *    We remove additionalProperties entirely; the actual behavior (strip-unknown) is handled
- *    by Zod's parseUnknown semantics, and we choose NOT to surface a rejection error for
- *    unknown params (MCP clients may add meta fields). Declare nothing, lie nothing.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function zodToMcpSchema(schema) {
-    const jsonSchema = schema.toJSONSchema();
-    // Strip meta-schema declarations that MCP clients don't need
-    const { $schema, $defs, additionalProperties: _ap, ...rest } = jsonSchema;
-    // Fix 1: strip keys with a .default() from required[] — they are optional at runtime.
-    // Zod v4 .toJSONSchema() does not do this automatically.
-    const props = rest.properties;
-    if (props && Array.isArray(rest.required)) {
-        rest.required = rest.required.filter(key => !(props[key] && "default" in props[key]));
-    }
-    return rest;
-}
+// zodToMcpSchema lives in utils/mcp-schema.ts (not defined here) so BOTH this file's
+// hand-written tool definitions AND tools/platform_scraper.ts's factory-generated
+// ones share one conversion — factory-generated definitions must not import back
+// from core.ts (core.ts spreads their output into _TOOL_DEFINITIONS below), so the
+// shared function lives in a leaf util instead of either module.
+import { zodToMcpSchema } from "./utils/mcp-schema.js";
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 // _TOOL_DEFINITIONS holds the full MCP schema (description + inputSchema + annotations)
 // for EVERY dispatchable tool — both visible (in registry) and hidden (dispatch-only).
-// Do NOT export this directly. The public `TOOLS` below derives from registry.
+// Exported (read-only, for test/introspection use only — e.g. tests/tools/tool-definitions.test.ts
+// and tests/contract/output-schema.test.ts import it directly instead of parsing this file as
+// text, so factory-generated entries below are just as visible to those guards as hand-written
+// ones). The public `TOOLS` below is still the real dispatch/ListTools contract — external code
+// and tools/index.ts consumers should keep using `TOOLS`/`dispatch()`, not this array.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _TOOL_DEFINITIONS = [
+export const _TOOL_DEFINITIONS = [
     {
         name: "novada_search",
         description: `Search the web and get clean, ready-to-use content. Returns titles, URLs, snippets — reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).
@@ -172,6 +154,12 @@ Not for:
         inputSchema: zodToMcpSchema(ScrapeParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
+    // novada_scrape_amazon (and, as they're added, its 15 per-platform siblings) is
+    // GENERATED by the platform-scraper factory (src/tools/platform_scraper.ts) from a
+    // declarative config (src/tools/scrape_amazon.ts) — spread here rather than
+    // hand-written so this definition can never drift from the generated tool, and so
+    // adding a new per-platform tool never requires touching this array again.
+    ...PLATFORM_SCRAPER_DEFS,
     {
         name: "novada_proxy",
         description: `Use when you need to route your own HTTP requests through residential or mobile IPs — for geo-targeting, IP rotation, or bypassing IP-based rate limits. Returns proxy URL, shell export commands, or curl --proxy flag.
@@ -535,6 +523,13 @@ export const HIDDEN_ALIASES = new Set([
 // ─── Dispatch ─────────────────────────────────────────────────────────────
 export async function dispatch(name, args, apiKey, ctx) {
     const onProgress = ctx?.onProgress;
+    // Platform-scraper family (novada_scrape_amazon and, as they're added, its 15
+    // siblings) is GENERATED by the factory in tools/platform_scraper.ts — routed here
+    // by a name -> handler map (tools/platform_scrapers.ts) instead of one switch `case`
+    // per platform, so adding a new platform config never requires touching dispatch().
+    const platformScraperHandler = PLATFORM_SCRAPER_HANDLERS[name];
+    if (platformScraperHandler)
+        return platformScraperHandler(args, apiKey);
     switch (name) {
         case "novada_search":
             // TOW2-240: pass feedbackToolAvailable so search.ts omits the
@@ -654,7 +649,7 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_static_ip_mgmt":
             return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey);
         default:
-            throw new Error(`Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt`);
+            throw new Error(`Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_scrape_amazon, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt`);
     }
 }
 //# sourceMappingURL=core.js.map
