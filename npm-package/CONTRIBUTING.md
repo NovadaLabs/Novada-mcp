@@ -38,7 +38,9 @@ Requires Node.js >= 18.
 ## Tool-description and agent-first conventions
 
 This is an MCP server whose primary consumer is an LLM agent, not a human. When editing
-tool descriptions in `src/index.ts`:
+tool descriptions in `src/core.ts`'s `_TOOL_DEFINITIONS` (see root
+[`ARCHITECTURE.md`](../ARCHITECTURE.md) for the full file map — descriptions are NOT in
+`src/index.ts`, which only wires transport + request handlers):
 
 - Keep descriptions accurate — they must match the tool's real Zod schema. Do not
   document parameters that don't exist.

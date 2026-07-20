@@ -11,7 +11,7 @@ Client  ──HTTPS──▶  Vercel Edge Function (/mcp)  ──HTTPS──▶ 
 ```
 
 This is the **Vercel port** of the Cloudflare Worker at `../worker/`. Same
-behavior, same 15 tools, same auth/quota model. The CF Worker is kept as a
+behavior, same 30-tool surface, same auth/quota model. The CF Worker is kept as a
 fallback in case the Vercel deploy needs to be rolled back.
 
 **Why Vercel:** the CF Workers approach needs the root domain (`novada.com`)
@@ -21,9 +21,15 @@ CNAME — DNS stays on AWS, we just add `mcp.novada.com → cname.vercel-dns.com
 
 ## What you get
 
-- **One URL** for all 15 Novada tools (search, extract, crawl, research, map,
-  scrape, browser, proxy, discover, ai_monitor, monitor, setup, account,
-  proxy_account_list, proxy_account_create).
+- **One URL** for the hosted-visible **30-tool** surface — core-derived, not a
+  hand-curated list: it's the npm package's full 38-tool registry
+  (`npm-package/src/tools/registry.ts`) minus 8 tools that don't apply to a
+  stateless serverless endpoint (`HOSTED_HIDDEN` in `api/mcp.ts` — write-gated
+  account mutations, per-process debug state, and `novada_browser_flow`).
+  Covers search, extract, crawl, research, map, site-copy-adjacent tools,
+  the generic `novada_scrape` plus all 15 `novada_scrape_<platform>` tools,
+  browser, proxy, discover, ai_monitor, monitor, setup, account,
+  proxy_account_list, proxy_account_create.
 - **Two auth modes** simultaneously: `?token=…` query param and
   `Authorization: Bearer …` header.
 - **Per-token monthly quota** in Vercel KV (default 5000 calls/mo on free).
@@ -149,7 +155,7 @@ curl -X POST 'https://novada-mcpserver.vercel.app/mcp?token=sk-eu-novada-test123
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-You should see the 15-tool catalog in the response.
+You should see the 30-tool catalog in the response.
 
 Try a tool call:
 
@@ -238,7 +244,8 @@ The following tools depend on Node-only modules and are wired up but return
 
 Both tools return a structured `NOT_AVAILABLE_ON_HOSTED` error telling
 agents to use the **local** MCP server (`npx novada-mcp`) for those two
-tools. All other 23 HTTP/JSON-only tools work on the Edge runtime.
+tools. All other 30 tools on the hosted surface (of the npm package's 38)
+work on the Edge runtime.
 
 ## Local development
 

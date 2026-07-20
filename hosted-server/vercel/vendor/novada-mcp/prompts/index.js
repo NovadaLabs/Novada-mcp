@@ -47,7 +47,7 @@ export const PROMPTS = [
     },
     {
         name: "novada-which-tool",
-        description: "Decision tree that picks the right Novada tool for a task: search vs extract vs crawl vs scrape vs research vs map vs unblock vs browser",
+        description: "Decision tree that picks the right Novada tool for a task: search vs extract vs crawl vs scrape vs research vs map vs raw-HTML extract vs browser",
         arguments: [
             { name: "task", description: "What you are trying to accomplish, e.g. 'get all docs pages from a site', 'find recent news on X', 'extract prices from a known URL'", required: true },
         ],
@@ -133,7 +133,7 @@ export function getPrompt(name, args) {
                 `Query: ${args.query}`,
                 ``,
                 `Workflow:`,
-                `1. Read the \`novada://scraper-platforms\` resource to find the correct operation ID for ${args.platform} and ${args.data_type}.`,
+                `1. Call novada_discover({platform: "${args.platform}"}) to find the correct operation ID for ${args.data_type} — a tool call, so it works in every MCP client. Bonus: the \`novada://scraper-platforms\` resource has the same catalog for clients that support MCP resources.`,
                 `2. Call novada_scrape with:`,
                 `   - platform: "${args.platform}"`,
                 `   - operation: <the operation ID from the resource>`,
@@ -196,11 +196,11 @@ export function getPrompt(name, args) {
                 `6. Target is a known PLATFORM (Amazon, Reddit, TikTok, LinkedIn, YouTube, etc.) and you want structured records?`,
                 `   → novada_scrape (typed fields). Read novada://scraper-platforms for the operation ID. See the scrape_platform_data prompt.`,
                 `7. novada_extract failed and you specifically need the raw rendered HTML for custom DOM parsing?`,
-                `   → novada_unblock (forces JS render; returns raw HTML, not cleaned text).`,
+                `   → novada_extract with render="render" (or render="browser" for tougher anti-bot) and format="html" — forces JS render, returns raw HTML instead of cleaned text.`,
                 `8. Task needs interaction — click, type, log in, paginate, screenshot?`,
                 `   → novada_browser (CDP actions, persistent session_id). See the browser_stateful_workflow prompt.`,
                 ``,
-                `Common mistakes: using novada_crawl for one page (use novada_extract); using novada_search for an open-ended report (use novada_research); using novada_unblock for readable text (use novada_extract with render="render").`,
+                `Common mistakes: using novada_crawl for one page (use novada_extract); using novada_search for an open-ended report (use novada_research); using format="html" when you actually want cleaned readable text (use the default markdown format instead).`,
                 `State your choice and why, then call that tool.`,
             ];
             return {
@@ -225,7 +225,7 @@ export function getPrompt(name, args) {
                 `2. Want to read / summarize the ENTIRE page (article, blog post, docs page)?`,
                 `   → format="markdown" (the default). Add clean=true to strip nav/footer/ads and keep only the main body (~15K chars vs full page).`,
                 `3. Need the raw HTML source for your own DOM parsing / debugging?`,
-                `   → format="html" (truncated at 10K). For the FULL DOM use novada_unblock instead.`,
+                `   → format="html" (truncated at 10K by default — raise max_chars up to 100000 for more). For a bot-protected or JS-heavy page, add render="render" (or render="browser" for tougher anti-bot) to force rendering before capturing the HTML.`,
                 ``,
                 `Rendering: leave render="auto" (default — static first, escalates if JS-heavy). Only force render="render" for known JS-heavy SPAs. If JSON comes back empty/minimal, the page is likely JS-rendered: retry with render="render", or wait_for a CSS selector / wait_ms.`,
                 `Multiple pages: pass url as an array (up to 10) to extract in parallel in one call.`,

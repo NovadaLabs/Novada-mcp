@@ -1,5 +1,5 @@
 /**
- * Tool-definition invariants for the ListTools surface (src/index.ts `TOOLS` array).
+ * Tool-definition invariants for the ListTools surface (src/core.ts `_TOOL_DEFINITIONS`).
  *
  * Covers NOV-326 + NOV-324 + NOV-662:
  *   1. Every tool definition declares `annotations` (readOnly/destructive/idempotent/openWorld hints).
@@ -12,68 +12,38 @@
  *   4. novada_scraper_submit's description documents the REAL params (platform/operation/
  *      params) and does NOT advertise a non-existent `scraper_type` param (NOV-324).
  *
- * Why read src/index.ts as TEXT instead of importing it: index.ts constructs and runs the
- * MCP server at module top-level (`new NovadaMCPServer(); server.run()`). Importing it would
- * boot a stdio server inside the test process. Parsing the file text is side-effect-free —
- * the same approach used by tests/tools/discover.test.ts.
+ * Why import src/core.ts's `_TOOL_DEFINITIONS` directly instead of parsing text: core.ts
+ * documents itself as side-effect-free (no server construction, no process.exit, no stdio
+ * boot) — unlike src/index.ts, which boots a stdio server at module top-level and must never
+ * be imported by a test. `_TOOL_DEFINITIONS` is exported specifically for this kind of
+ * test/introspection use. Checking the actual objects (not their source-text representation)
+ * is also strictly MORE robust than a regex over the literal `name: "novada_x"` pattern: a
+ * tool definition GENERATED and spread in from another module (e.g. tools/platform_scraper.ts's
+ * per-platform scraper factory, used by novada_scrape_amazon and its future 15 siblings) has
+ * no literal `name: "..."` text sitting inside core.ts's array at all — a text-parser would
+ * silently stop covering it, while an import-based check keeps seeing it because it inspects
+ * the real, computed object.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-interface ToolSegment {
-  name: string;
-  body: string;
-}
-
-/**
- * Slice src/core.ts into per-tool segments from `const _TOOL_DEFINITIONS = [` up to
- * the first top-level `];`, so we never pick up `name:` keys from other arrays.
- * _TOOL_DEFINITIONS holds ALL dispatchable tool schemas (visible + hidden);
- * the exported TOOLS array derives from it by filtering to REGISTERED_TOOL_NAMES.
- * Annotation contracts apply to ALL definitions, so we read the full set.
- */
-function readToolSegments(): ToolSegment[] {
-  const indexPath = resolve(__dirname, "../../src/core.ts");
-  const src = readFileSync(indexPath, "utf8");
-  const start = src.indexOf("const _TOOL_DEFINITIONS");
-  expect(start, "could not locate `const _TOOL_DEFINITIONS` in src/core.ts").toBeGreaterThan(-1);
-  const after = src.slice(start);
-  const endRel = after.search(/\n\];/);
-  expect(endRel, "could not locate end of _TOOL_DEFINITIONS array").toBeGreaterThan(-1);
-  const block = after.slice(0, endRel);
-
-  const re = /name:\s*"([a-z_]+)"/g;
-  const marks: { name: string; idx: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(block)) !== null) marks.push({ name: m[1], idx: m.index });
-
-  return marks.map((mark, i) => ({
-    name: mark.name,
-    body: block.slice(mark.idx, i + 1 < marks.length ? marks[i + 1].idx : block.length),
-  }));
-}
-
-const segments = readToolSegments();
+import { _TOOL_DEFINITIONS } from "../../src/core.js";
 
 describe("tool definitions (src/core.ts _TOOL_DEFINITIONS)", () => {
   it("declares at least the full dispatchable tool set", () => {
-    // _TOOL_DEFINITIONS contains all tools (visible + hidden). 22 in registry + 11 hidden = 33.
-    expect(segments.length).toBeGreaterThanOrEqual(30);
+    // _TOOL_DEFINITIONS contains all tools (visible + hidden). 38 in registry + 11 hidden = 49.
+    expect(_TOOL_DEFINITIONS.length).toBeGreaterThanOrEqual(30);
   });
 
-  it("every tool has an `annotations` block (NOV-326)", () => {
-    const missing = segments.filter(s => !/annotations:\s*\{/.test(s.body)).map(s => s.name);
+  it("every tool has an `annotations` object (NOV-326)", () => {
+    const missing = _TOOL_DEFINITIONS
+      .filter((t) => t.annotations === undefined || typeof t.annotations !== "object" || t.annotations === null)
+      .map((t) => t.name);
     expect(missing, `tools missing annotations: ${missing.join(", ")}`).toEqual([]);
   });
 
-  it("every annotations block sets openWorldHint explicitly", () => {
-    const missing = segments
-      .filter(s => !/openWorldHint:\s*(true|false)/.test(s.body))
-      .map(s => s.name);
+  it("every annotations object sets openWorldHint explicitly", () => {
+    const missing = _TOOL_DEFINITIONS
+      .filter((t) => typeof t.annotations?.openWorldHint !== "boolean")
+      .map((t) => t.name);
     expect(missing, `tools missing openWorldHint: ${missing.join(", ")}`).toEqual([]);
   });
 
@@ -83,34 +53,34 @@ describe("tool definitions (src/core.ts _TOOL_DEFINITIONS)", () => {
     // return matching structuredContent — otherwise strict clients (Claude Code) reject every
     // call with -32600. Until structuredContent support is added, outputSchema must be absent
     // from all tool definitions.
-    const withOutputSchema = segments.filter(s => /outputSchema:\s*\{/.test(s.body)).map(s => s.name);
+    const offenders = _TOOL_DEFINITIONS
+      .filter((t) => Object.prototype.hasOwnProperty.call(t, "outputSchema"))
+      .map((t) => t.name);
     expect(
-      withOutputSchema,
-      `Tools re-introduced outputSchema without structuredContent support (see NOV-662): ${withOutputSchema.join(", ")}`,
+      offenders,
+      `Tools re-introduced outputSchema without structuredContent support (see NOV-662): ${offenders.join(", ")}`,
     ).toEqual([]);
   });
 
   it("novada_monitor description opens with purpose and contains hosted-endpoint warning (NOV-324 updated)", () => {
-    const seg = segments.find(s => s.name === "novada_monitor");
-    expect(seg, "novada_monitor not found").toBeTruthy();
-    const descStart = seg!.body.indexOf("description: `");
-    expect(descStart).toBeGreaterThan(-1);
-    const firstLine = seg!.body.slice(descStart + "description: `".length).split("\n")[0];
+    const tool = _TOOL_DEFINITIONS.find((t) => t.name === "novada_monitor");
+    expect(tool, "novada_monitor not found").toBeTruthy();
     // Description now leads with purpose; hosted-endpoint warning appears later in the body.
+    const firstLine = tool!.description.split("\n")[0];
     expect(firstLine).toMatch(/Detect changes/);
-    expect(seg!.body).toMatch(/Hosted endpoint|hosted endpoint/);
-    expect(seg!.body).toMatch(/baseline_recorded/);
+    expect(tool!.description).toMatch(/Hosted endpoint|hosted endpoint/);
+    expect(tool!.description).toMatch(/baseline_recorded/);
   });
 
   it("novada_scraper_submit description matches the real schema params, not a bogus scraper_type (NOV-324)", () => {
-    const seg = segments.find(s => s.name === "novada_scraper_submit");
-    expect(seg, "novada_scraper_submit not found").toBeTruthy();
+    const tool = _TOOL_DEFINITIONS.find((t) => t.name === "novada_scraper_submit");
+    expect(tool, "novada_scraper_submit not found").toBeTruthy();
     // NOV-324: ScraperSubmitParamsSchema has only platform/operation/params — there is no
     // scraper_type field, so the description must not document one (it misleads agents).
-    expect(seg!.body, "scraper_submit description must not mention a non-existent scraper_type param").not.toMatch(/scraper_type/);
+    expect(tool!.description, "scraper_submit description must not mention a non-existent scraper_type param").not.toMatch(/scraper_type/);
     // The description must document the REAL params instead.
-    expect(seg!.body).toMatch(/platform/);
-    expect(seg!.body).toMatch(/operation/);
-    expect(seg!.body).toMatch(/params/);
+    expect(tool!.description).toMatch(/platform/);
+    expect(tool!.description).toMatch(/operation/);
+    expect(tool!.description).toMatch(/params/);
   });
 });

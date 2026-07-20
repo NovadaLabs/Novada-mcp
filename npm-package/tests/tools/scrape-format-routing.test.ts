@@ -76,13 +76,17 @@ describe("Format A — flat (search-engine ops)", () => {
   });
 
   it("yandex sends keyword as flat field", async () => {
+    // B1 (2026-07-20): yandex is AND-required on yandex_domain in addition to the
+    // query alias — live-verified to 400/empty without it. Include it here so this
+    // fixture matches an actually-valid call.
     await novadaScrape(
-      { platform: "yandex.com", operation: "yandex", params: { keyword: "yandex test" } },
+      { platform: "yandex.com", operation: "yandex", params: { keyword: "yandex test", yandex_domain: "yandex.com" } },
       "test-key"
     );
     const body = getSubmitBody();
     expect(body).not.toBeNull();
     expect(body!.get("keyword")).toBe("yandex test");
+    expect(body!.get("yandex_domain")).toBe("yandex.com");
     expect(body!.get("scraper_params")).toBeNull();
   });
 });

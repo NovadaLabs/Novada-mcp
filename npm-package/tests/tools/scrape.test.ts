@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
+import { NovadaError, NovadaErrorCode } from "../../src/_core/errors.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -245,8 +246,17 @@ describe("novadaScrape — request format", () => {
     expect(url).toContain("scraper.novada.com");
     const form = body as URLSearchParams;
     expect(form.get("scraper_name")).toBe("amazon.com");
-    expect(form.get("scraper_id")).toBe("amazon_product_by-keywords");
-    expect(form.get("keyword")).toBe("iphone");
+    // scrape.ts resolves the legacy alias "amazon_product_by-keywords" to the
+    // canonical "amazon_product_keywords" (OPERATION_ALIASES) BEFORE calling
+    // submitScrapeTask, so the wire-level scraper_id is the canonical slug.
+    expect(form.get("scraper_id")).toBe("amazon_product_keywords");
+    // amazon_product_keywords is catalog format:"params" (Format B) — op params
+    // are sent as a JSON array under scraper_params, not as flat form fields
+    // (see src/data/scraper_catalog.ts + submitScrapeTask's per-op format lookup).
+    const scraperParamsRaw = form.get("scraper_params");
+    expect(scraperParamsRaw).not.toBeNull();
+    const scraperParams = JSON.parse(scraperParamsRaw!);
+    expect(scraperParams[0].keyword).toBe("iphone");
     expect((config as Record<string, unknown>).headers).toMatchObject({
       "Authorization": "Bearer test-key",
       "Content-Type": "application/x-www-form-urlencoded",
@@ -321,42 +331,68 @@ describe("novadaScrape — flattenRecord edge cases", () => {
   });
 });
 
+// NOTE: novadaScrape's error contract changed from catch-and-return-a-JSON-string
+// to THROW a typed NovadaError (or, for a few raw upstream messages, a plain
+// Error) — see the try/catch wrapping the whole function body in scrape.ts.
+// index.ts is what turns a thrown error into isError:true for the MCP response;
+// the tool function itself no longer swallows errors into a JSON envelope.
 describe("novadaScrape — error handling", () => {
-  it("returns structured error string for code 11006 (account permissions)", async () => {
+  it("throws PRODUCT_UNAVAILABLE (not_activated) for code 11006 (account permissions)", async () => {
     mockApiError(11006, "Scraper error");
-    const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.code).toBe(11006);
-    expect(parsed.reason).toContain("not yet activated");
-    expect(parsed.agent_instruction).toContain("Activate Scraper API");
-    expect(parsed.alternatives).toBeInstanceOf(Array);
-    expect(parsed.alternatives.length).toBeGreaterThan(0);
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(NovadaError);
+    const err = thrown as NovadaError;
+    // amazon_product_keywords (canonical, resolved from the alias) IS in the active
+    // catalog, so 11006 here means "not activated on this account" (not unknown op).
+    expect(err.code).toBe(NovadaErrorCode.PRODUCT_UNAVAILABLE);
+    expect(err.detail).toBe("not_activated");
+    expect(err.message).toContain("not_activated");
+    expect(err.message).toContain("not activated on this account");
+    expect(err.message).toContain("dashboard.novada.com/overview/products");
   });
 
-  it("returns structured error string for code 11008 (bad platform name)", async () => {
+  it("throws INVALID_PARAMS for code 11008 (bad platform name)", async () => {
     mockApiError(11008, "Scraper name error");
-    const result = await novadaScrape(
-      { platform: "bad-platform", operation: "something", params: {}, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.reason).toContain("Unknown platform");
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "bad-platform", operation: "something", params: {}, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(NovadaError);
+    const err = thrown as NovadaError;
+    expect(err.code).toBe(NovadaErrorCode.INVALID_PARAMS);
+    expect(err.detail).toBe("code 11008");
+    expect(err.message).toContain("Unknown platform");
   });
 
-  it("returns structured error string for code 11000 (invalid API key)", async () => {
+  it("throws a plain Error for code 11000 (invalid API key)", async () => {
     mockApiError(11000, "Invalid ApiKey");
-    const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.reason).toContain("Invalid API key");
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    // Code 11000 falls through submitScrapeTask's generic errorMessages map and
+    // throws a plain Error (not a typed NovadaError) — the index.ts dispatch
+    // layer classifies it via classifyError, not the tool itself.
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe("Scraper error (code 11000): Invalid API key.");
   });
 
   it("returns no-data message when API returns empty array", async () => {
@@ -368,45 +404,61 @@ describe("novadaScrape — error handling", () => {
     expect(result).toContain("No records returned");
   });
 
-  it("returns structured error string when task fails with error in download result", async () => {
+  it("throws API_DOWN when task fails with error in download result", async () => {
     mockTaskError("500 Internal Server Error", 500);
-    const result = await novadaScrape(
-      { platform: "google.com", operation: "google_search", params: {}, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.reason).toContain("Scraper task failed");
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        // q is required by preflightScrape for google_search (SEARCH_QUERY_KEYS);
+        // the original empty params:{} tripped the missing-param preflight check
+        // instead of ever reaching the download-error path this test targets.
+        { platform: "google.com", operation: "google_search", params: { q: "test" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(NovadaError);
+    const err = thrown as NovadaError;
+    expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+    expect(err.message).toContain("all failed");
+    expect(err.message).toContain("error_code: 500");
   });
 
-  it("returns structured error string on API-not-activated exception (code 11006)", async () => {
-    // Arrange: mock the API call to throw an Error with "11006" in the message
+  it("throws with an embedded 11006 hint when the raw upstream exception message mentions it", async () => {
+    // Arrange: axios.post itself REJECTS with a plain Error whose text happens to
+    // mention "code 11006" — this is NOT the same path as submitScrapeTask's own
+    // typed `body.code === 11006` branch (that one throws a NovadaError). A raw
+    // exception from the HTTP call is not specially reclassified; it propagates
+    // as the same plain Error all the way out of novadaScrape.
     mockedAxios.post.mockRejectedValue(new Error("Scraper error (code 11006): Scraper API not yet activated on this account."));
-    const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    // Assert: handler does NOT throw; returns string containing status and agent_instruction
-    const parsed = JSON.parse(result);
-    expect(parsed.status).toBe("unavailable");
-    expect(parsed.code).toBe(11006);
-    expect(parsed.agent_instruction).toBeDefined();
-    expect(typeof result).toBe("string");
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).not.toBeInstanceOf(NovadaError);
+    expect((thrown as Error).message).toContain("code 11006");
+    expect((thrown as Error).message).toContain("not yet activated");
   });
 
-  it("does not throw when API call throws — returns structured string", async () => {
+  it("throws the underlying error when the API call rejects with a network error", async () => {
     // Arrange: mock to throw a generic network error
     mockedAxios.post.mockRejectedValue(new Error("ECONNREFUSED network error"));
-    // Assert: the handler does NOT throw; it returns a string containing "status" and "agent_instruction"
-    const result = await novadaScrape(
-      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-      "test-key"
-    );
-    expect(typeof result).toBe("string");
-    expect(result).toContain("status");
-    expect(result).toContain("agent_instruction");
-    const parsed = JSON.parse(result);
-    expect(parsed.agent_instruction).toBeDefined();
+    // Assert: novadaScrape does NOT catch-and-stringify; the network error
+    // propagates unchanged (index.ts's classifyError is what turns it into a
+    // structured isError:true response at the MCP dispatch boundary).
+    await expect(
+      novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      )
+    ).rejects.toThrow("ECONNREFUSED network error");
   });
 });
 
@@ -461,6 +513,147 @@ describe("novadaScrape — pre-flight (#6)", () => {
     expect(preflightScrape("google.com", "google_search", { q: "hi" })).toBeNull();
     expect(preflightScrape("google.com", "google_search", { keyword: "hi" })).toBeNull();
     expect(preflightScrape("google.com", "google_search", {})).not.toBeNull();
+  });
+
+  // FIX 1: the preflight OR/AND gap. Catalog-derived "params"-format ops with more
+  // than one required field are INDEPENDENTLY required (AND), not alternates (OR).
+  // Previously `.some(...)` let any ONE of these keys satisfy preflight, so a call
+  // missing a second required field sailed through preflight and only failed at the
+  // backend (or hung until the network round-trip completed).
+  it("requires ALL independently-required catalog keys for a multi-required 'params'-format op (AND, not OR)", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    // amazon_product-list_keywords-domain needs BOTH keyword AND domain.
+    expect(preflightScrape("amazon.com", "amazon_product-list_keywords-domain", { keyword: "coffee" })).not.toBeNull();
+    expect(preflightScrape("amazon.com", "amazon_product-list_keywords-domain", { domain: "https://www.amazon.com" })).not.toBeNull();
+    expect(
+      preflightScrape("amazon.com", "amazon_product-list_keywords-domain", { keyword: "coffee", domain: "https://www.amazon.com" }),
+    ).toBeNull();
+  });
+
+  it("names the specific missing key(s) in the AND-required error message", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    const err = preflightScrape("amazon.com", "amazon_global-product_category-url", { url: "https://www.amazon.com/s?k=coffer" });
+    expect(err).not.toBeNull();
+    expect(err!.detail).toBe("preflight:missing_param");
+    expect(err!.message).toContain("maximum");
+    expect(err!.agent_instruction).toContain("maximum");
+
+    // Missing all 3 independently-required keys names all 3.
+    const err2 = preflightScrape("amazon.com", "amazon_global-product_keywords-brand", {});
+    expect(err2).not.toBeNull();
+    expect(err2!.message).toContain("keyword");
+    expect(err2!.message).toContain("brands");
+    expect(err2!.message).toContain("max_pages");
+  });
+
+  it("passes AND-required preflight once every independently-required key is present", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    expect(
+      preflightScrape("amazon.com", "amazon_global-product_category-url", { url: "https://www.amazon.com/s?k=coffer", maximum: 3 }),
+    ).toBeNull();
+    expect(
+      preflightScrape("amazon.com", "amazon_global-product_keywords-brand", { keyword: "iphone", brands: "Apple", max_pages: 1 }),
+    ).toBeNull();
+  });
+
+  // Regression guard: google_search_url is a "flat" op with 2 catalog-required keys
+  // (url, json) that is NOT a SEARCH_ENGINE_OP_KEYS alias. `json` is auto-populated
+  // downstream in submitScrapeTask for flat ops and is never actually supplied by
+  // the caller — CUSTOM_AND_REQUIRED_KEYS overrides the AND-required set to just
+  // `url` so a normal call (which never passes `json` explicitly) still passes.
+  it("does not regress flat non-alias ops like google_search_url to AND-require json (auto-injected downstream)", async () => {
+    const { preflightScrape } = await import("../../src/tools/scrape.js");
+    expect(preflightScrape("google.com", "google_search_url", { url: "https://www.google.com/search?q=test" })).toBeNull();
+  });
+
+  // B1 (2026-07-20, synthesis.md blocker): live probe confirmed these 6 ops return
+  // code:400/data:null when their non-query AND-required param is omitted, but
+  // preflight previously let them through on the query alias alone. Prove BOTH
+  // directions: missing the extra key throws locally; present, it passes.
+  describe("AND-required backend params beyond the search query (B1)", () => {
+    it("google_search_url: requires url", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      const err = preflightScrape("google.com", "google_search_url", {});
+      expect(err).not.toBeNull();
+      expect(err!.detail).toBe("preflight:missing_param");
+      expect(err!.message).toContain("url");
+      // A call with only the auto-injected-elsewhere `json` key (no url) must still fail.
+      expect(preflightScrape("google.com", "google_search_url", { json: 1 })).not.toBeNull();
+      expect(
+        preflightScrape("google.com", "google_search_url", { url: "https://www.google.com/search?q=test" }),
+      ).toBeNull();
+    });
+
+    it("google_serp_web: requires domain in addition to the query", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      const err = preflightScrape("google.com", "google_serp_web", { q: "laptop" });
+      expect(err).not.toBeNull();
+      expect(err!.detail).toBe("preflight:missing_param");
+      expect(err!.message).toContain("domain");
+      // Missing the query entirely still fails on the query-alias check (unchanged).
+      expect(preflightScrape("google.com", "google_serp_web", { domain: "google.com" })).not.toBeNull();
+      expect(preflightScrape("google.com", "google_serp_web", { q: "laptop", domain: "google.com" })).toBeNull();
+      expect(preflightScrape("google.com", "google_serp_web", { keyword: "laptop", domain: "google.com" })).toBeNull();
+    });
+
+    // Re-audit (2026-07-20): the initial B1 pass wrongly added these two to
+    // SEARCH_ENGINE_EXTRA_REQUIRED_KEYS. Live-verified against scraper.novada.com:
+    // both return 200 + real data with ONLY a query key and NO domain — unlike
+    // google_serp_web, which genuinely needs domain (see the test above). Preflight
+    // must PASS these on the query alone; do not re-tighten without fresh live
+    // evidence of a 400/empty response.
+    it("google_serp_jobs / google_serp_videos: pass preflight on the query alone (no domain required)", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      expect(preflightScrape("google.com", "google_serp_jobs", { q: "engineer" })).toBeNull();
+      expect(preflightScrape("google.com", "google_serp_jobs", { q: "engineer", domain: "google.com" })).toBeNull();
+      expect(preflightScrape("google.com", "google_serp_videos", { q: "cats" })).toBeNull();
+      expect(preflightScrape("google.com", "google_serp_videos", { q: "cats", domain: "google.com" })).toBeNull();
+      // Missing the query entirely still fails on the query-alias check (unchanged).
+      expect(preflightScrape("google.com", "google_serp_jobs", {})).not.toBeNull();
+      expect(preflightScrape("google.com", "google_serp_videos", {})).not.toBeNull();
+    });
+
+    it("google_serp_hotels: requires domain + check_in_date + check_out_date in addition to the query", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      const err = preflightScrape("google.com", "google_serp_hotels", { q: "paris hotels" });
+      expect(err).not.toBeNull();
+      expect(err!.detail).toBe("preflight:missing_param");
+      expect(err!.message).toContain("domain");
+      expect(err!.message).toContain("check_in_date");
+      expect(err!.message).toContain("check_out_date");
+      // Partially supplied extra keys still fail (every one is independently required).
+      expect(
+        preflightScrape("google.com", "google_serp_hotels", { q: "paris hotels", domain: "google.com" }),
+      ).not.toBeNull();
+      expect(
+        preflightScrape("google.com", "google_serp_hotels", {
+          q: "paris hotels",
+          domain: "google.com",
+          check_in_date: "2026-08-01",
+          check_out_date: "2026-08-05",
+        }),
+      ).toBeNull();
+    });
+
+    it("yandex: requires yandex_domain in addition to the query", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      const err = preflightScrape("yandex.com", "yandex", { q: "moscow weather" });
+      expect(err).not.toBeNull();
+      expect(err!.detail).toBe("preflight:missing_param");
+      expect(err!.message).toContain("yandex_domain");
+      expect(
+        preflightScrape("yandex.com", "yandex", { q: "moscow weather", yandex_domain: "yandex.com" }),
+      ).toBeNull();
+    });
+
+    // Regression: plain search ops that legitimately need ONLY the query must not
+    // be over-required by the extraAll mechanism above.
+    it("regression: plain google_search / bing_search / duckduckgo still pass with query-only", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      expect(preflightScrape("google.com", "google_search", { q: "apple" })).toBeNull();
+      expect(preflightScrape("bing.com", "bing_search", { q: "apple" })).toBeNull();
+      expect(preflightScrape("duckduckgo.com", "duckduckgo", { q: "apple" })).toBeNull();
+    });
   });
 
   it("does not match Object.prototype keys as operations (pollution-safe)", async () => {
@@ -595,4 +788,79 @@ describe("novadaScrape — task_id resume path (NOV-689)", () => {
     }
   });
 
+});
+
+// C1 (synthesis.md, 2026-07-20): FIX-3 wired `displayName` into the SUCCESS-path
+// header only ("## Scrape Results\nplatform: ... | operation: <friendly-name>").
+// The 4 "no-data" early returns (empty serp, still-processing/pending, no first
+// item, zero records after extraction) all echoed the raw catalog `operation` slug
+// instead — so a caller going through a per-platform wrapper tool (which sets
+// `displayName` to the friendly op name it was actually invoked with) would see the
+// friendly name on a successful call but the internal slug on every no-data path.
+// These tests exercise all 4 return paths directly via novadaScrape + an explicit
+// `displayName`, proving each one now threads the friendly name through.
+describe("novadaScrape — C1 fix: friendly operation name on no-data return paths", () => {
+  const FRIENDLY = "product_by_asin";
+
+  it("empty-serp path shows the friendly operation name, not the raw catalog slug", async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 400, data: null, msg: "serp returns empty" }, msg: "success" },
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B09XYZ" }, format: "markdown", limit: 20, displayName: FRIENDLY } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+    expect(result).toContain("No results found");
+    expect(result).toContain(`operation: ${FRIENDLY}`);
+    expect(result).not.toContain("operation: amazon_product_asin");
+  });
+
+  it("still-processing/pending path shows the friendly operation name, not the raw catalog slug", async () => {
+    vi.useFakeTimers();
+    try {
+      mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+      mockedAxios.get.mockResolvedValue({
+        data: { code: 27202, data: null, msg: "" },
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+      const resultPromise = novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B09XYZ" }, format: "markdown", limit: 20, displayName: FRIENDLY } as Parameters<typeof novadaScrape>[0],
+        "test-key"
+      );
+      await vi.advanceTimersByTimeAsync(46000);
+      const result = await resultPromise;
+      expect(result).toContain("status: processing");
+      expect(result).toContain(`operation: ${FRIENDLY}`);
+      expect(result).not.toContain("operation: amazon_product_asin");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("no-first-item path (download returns a literally empty array) shows the friendly operation name", async () => {
+    mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+    mockedAxios.get.mockResolvedValue({
+      data: [],
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B09XYZ" }, format: "markdown", limit: 20, displayName: FRIENDLY } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+    expect(result).toContain("No records returned");
+    expect(result).toContain(`operation: ${FRIENDLY}`);
+    expect(result).not.toContain("operation: amazon_product_asin");
+  });
+
+  it("zero-records-after-extraction path shows the friendly operation name", async () => {
+    mockSuccess([]);
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B09XYZ" }, format: "markdown", limit: 20, displayName: FRIENDLY } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+    expect(result).toContain("No records returned");
+    expect(result).toContain(`operation: ${FRIENDLY}`);
+    expect(result).not.toContain("operation: amazon_product_asin");
+  });
 });

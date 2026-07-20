@@ -101,42 +101,35 @@ import { kv } from "@vercel/kv";
 
 // ─── Shared catalog + dispatch from vendored core (single source of truth) ────
 // core.ts is side-effect-free: no server construction, no stdio boot, no process.exit.
-// It exports HIDDEN_ALIASES (9 npm-alias names) and dispatch() which THROWS on error
-// and returns a bare string — all hosted transport wrappers (quota, redaction,
-// wall-clock, ALS) stay in this file. The hosted 15-tool TOOLS array (below) is a
-// standalone curation, NOT derived from core's 33-tool TOOLS.
+// It exports HIDDEN_ALIASES (19 npm-alias names: 9 backward-compat account/unblock
+// aliases + 6 proxy type variants + 4 scraper stubs), TOOLS (the npm-registered tool
+// catalog — name/description/inputSchema/annotations, already schema-built) and
+// dispatch() which THROWS on error and returns a bare string — all hosted transport
+// wrappers (quota, redaction, wall-clock, ALS) stay in this file.
+//
+// The hosted TOOLS array (below) is DERIVED from core's TOOLS — no hand-curated
+// duplicate listing. This is what makes the platform-scraper family (novada_scrape_amazon
+// and its 15 siblings, spread into core's catalog via PLATFORM_SCRAPER_DEFS) show up on
+// hosted automatically: adding a tool to npm-package's registry is enough, nothing in
+// this file needs editing for a name to appear (HOSTED_HIDDEN below is the only
+// exception list).
 import {
   HIDDEN_ALIASES as NPM_HIDDEN_ALIASES,
+  TOOLS as CORE_TOOLS,
   dispatch,
 } from "../vendor/novada-mcp/core.js";
-
-// ─── Hosted-only: schemas for the visible 15-tool TOOLS array defined below ──
-// Only the schemas used by the hosted TOOLS curation — no tool function imports.
+// Platform-scraper family metadata (name + source platform domain) — same aggregator
+// npm-package's own src/index.ts imports for its NOVADA_GROUPS "scrape"/"scraper"
+// derivation (see tests/tools/scrape-group-derivation.test.ts there). Used below to
+// derive SCRAPE_TOOLS (resume-hint wall-clock messaging) without hand-listing names.
+import { PLATFORM_SCRAPER_TOOLS } from "../vendor/novada-mcp/tools/platform_scrapers.js";
 import {
-  SearchParamsSchema,
-  ExtractParamsSchema,
-  CrawlParamsSchema,
-  ResearchParamsSchema,
-  MapParamsSchema,
-  ProxyParamsSchema,
-  ScrapeParamsSchema,
-  BrowserParamsSchema,
-  AiMonitorParamsSchema,
-} from "../vendor/novada-mcp/tools/types.js";
-import { MonitorParamsSchema } from "../vendor/novada-mcp/tools/monitor.js";
-import {
-  // Schemas for hosted TOOLS curation
-  SetupParamsSchema,
-  AccountParamsSchema,
-  ProxyAccountListParamsSchema,
-  ProxyAccountCreateParamsSchema,
   // novada_setup: auth-free pre-quota handler stays in mcp.ts (not routed via dispatch)
   novadaSetup,
   validateSetupParams,
   // novada_discover: hosted-specific override (scopes catalog to visibleToolNames)
   novadaDiscover,
   validateDiscoverParams,
-  DiscoverParamsSchema,
 } from "../vendor/novada-mcp/tools/index.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
 import { NovadaError, NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.js";
@@ -189,7 +182,7 @@ process.env.NOVADA_SERVER_VERSION = HOSTED_VERSION;
 // tool implementations depend on Node-only modules: axios, cheerio,
 // playwright-core, exceljs, pdf-parse, and the MCP SDK uses EventEmitter.
 // Trade-off vs Edge: ~200ms cold start (vs ~50ms) + single-region (vs global edge),
-// but in exchange the entire 15-tool surface works without porting.
+// but in exchange the full core-derived tool surface works without porting.
 // TOW2-257 (partial): raised from 60 → 300 on Pro plan (team org).
 // Pro Vercel allows up to 800s; 300s is a practical safe ceiling for MCP streaming.
 // This gives novada_research (deep mode ~30-45s) and novada_scrape (slow platforms
@@ -213,7 +206,15 @@ const TOOL_WALL_CLOCK_MS = (FUNCTION_MAX_DURATION_S - 4) * 1000; // ~296s after 
 // normally completes well under the function wall-clock. This guard fires only if the
 // upstream stalls past all tool-level ceilings. The message is scrape-aware: it mentions
 // task_id resume so the caller does NOT lose the in-flight task and can resume for free.
-const SCRAPE_TOOLS = new Set(["novada_scrape", "novada_scraper_submit"]);
+// The platform-scraper family (novada_scrape_amazon and its siblings) shares scrape.ts's
+// same submit/poll engine, so they get the same resume-hint — derived from
+// PLATFORM_SCRAPER_TOOLS (not hand-listed) so a new platform config is covered with zero
+// edits here, mirroring npm-package's src/index.ts SCRAPE_GROUP derivation.
+const SCRAPE_TOOLS = new Set([
+  "novada_scrape",
+  "novada_scraper_submit",
+  ...PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name),
+]);
 
 /**
  * Race a tool promise against the wall-clock budget. On timeout, reject with a
@@ -331,76 +332,140 @@ function stripServerConsumptionCreds(): void {
 // Run once at cold start — before any request resolves a tool credential.
 stripServerConsumptionCreds();
 
-// ─── Zod → MCP JSON Schema ───────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function zodToMcpSchema(schema: any): Record<string, unknown> {
-  const jsonSchema = schema.toJSONSchema();
-  const { $schema, $defs, ...rest } = jsonSchema as Record<string, unknown>;
-  return rest;
+// ─── Tool catalog — DERIVED from core's single source of truth ───────────────
+// Every tool hosted exposes (name/description/inputSchema/annotations) comes straight
+// from CORE_TOOLS (npm-package/src/core.ts's `TOOLS`, itself filtered from
+// `_TOOL_DEFINITIONS` down to the registered/visible set — see that file's docstring).
+// No hand-curated duplicate listing: the platform-scraper family (novada_scrape_amazon
+// and its 15 siblings) is included automatically because core spreads
+// PLATFORM_SCRAPER_DEFS into `_TOOL_DEFINITIONS`. HOSTED_HIDDEN (below) is the ONLY
+// deliberate exclusion — every other core tool is visible on hosted by default.
+//
+// `title` is MCP-optional display metadata core doesn't carry (core.ts's shape is
+// name/description/inputSchema/annotations only) — preserve the hand-picked titles
+// customers already see for the original 15 tools, and derive a readable title for
+// every other tool (the newly-visible platform scrapers, primarily) from its name so
+// nothing ships titleless.
+const TOOL_TITLES: Record<string, string> = {
+  novada_search: "Web Search",
+  novada_extract: "Content Extractor",
+  novada_crawl: "Site Crawler",
+  novada_research: "Deep Research",
+  novada_map: "URL Mapper",
+  novada_scrape: "Platform Scraper",
+  novada_browser: "Browser Automation",
+  novada_proxy: "Proxy Credentials",
+  novada_discover: "Tool Discovery",
+  novada_ai_monitor: "AI Brand Monitor",
+  novada_monitor: "Page Change Monitor",
+  novada_setup: "Setup & Configuration",
+  novada_account: "Account & Billing",
+  novada_proxy_account_list: "Proxy Account List",
+  novada_proxy_account_create: "Proxy Account Create",
+};
+
+// Brand names whose correct capitalization isn't plain Titlecase-per-word — used by
+// deriveTitle below so the 15 platform-scraper tools ("novada_scrape_<platform>")
+// get correctly-branded titles instead of "Duckduckgo" / "Youtube" / "Github" /
+// "Linkedin" / "Tiktok". Keyed by the lowercase platform segment (the tool name
+// with the "novada_scrape_" prefix stripped).
+const TITLE_BRAND_MAP: Record<string, string> = {
+  amazon: "Amazon",
+  google: "Google",
+  bing: "Bing",
+  duckduckgo: "DuckDuckGo",
+  yandex: "Yandex",
+  youtube: "YouTube",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  x: "X",
+  walmart: "Walmart",
+  shein: "SHEIN",
+  linkedin: "LinkedIn",
+  github: "GitHub",
+  perplexity: "Perplexity",
+};
+
+/** e.g. "novada_scrape_amazon" -> "Scrape Amazon", "novada_scrape_duckduckgo" ->
+ *  "Scrape DuckDuckGo". Fallback for any tool without a hand-picked title above —
+ *  used today by the 15 platform-scraper tools. Brand words use TITLE_BRAND_MAP's
+ *  correct capitalization instead of plain per-word Titlecase. */
+function deriveTitle(name: string): string {
+  return name
+    .replace(/^novada_/, "")
+    .split("_")
+    .map((w) => {
+      const lower = w.toLowerCase();
+      if (TITLE_BRAND_MAP[lower]) return TITLE_BRAND_MAP[lower];
+      return w.length ? w[0].toUpperCase() + w.slice(1) : w;
+    })
+    .join(" ");
 }
 
-// ─── Tool catalog ────────────────────────────────────────────────────────────
-const TOOLS = [
-  { name: "novada_search",              title: "Web Search",                 schema: SearchParamsSchema,              description: "Search the web via Google, Bing, DuckDuckGo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract." },
-  { name: "novada_extract",             title: "Content Extractor",          schema: ExtractParamsSchema,             description: "Read clean content from one or more URLs. Use when you have a specific page URL and need its content. Handles anti-bot protection automatically. For raw HTML, use format='html'. For multiple pages on one site, use crawl instead." },
-  { name: "novada_crawl",               title: "Site Crawler",               schema: CrawlParamsSchema,               description: "Read content from multiple pages on one site (up to 20). Use when you need an entire section of a website. Optionally run map first to discover target URLs." },
-  { name: "novada_research",            title: "Deep Research",              schema: ResearchParamsSchema,            description: "Deep multi-source research: searches multiple angles, reads top sources, returns a synthesized report with citations. Use when you need comprehensive analysis of an open-ended topic (not a yes/no claim — use verify for that). Slower than a single search." },
-  { name: "novada_map",                 title: "URL Mapper",                 schema: MapParamsSchema,                 description: "List all URLs on a website via sitemap or crawl. Use when you need to find the right page before crawl/extract. Returns URLs only, no content. Fast site reconnaissance." },
-  { name: "novada_scrape",              title: "Platform Scraper",           schema: ScrapeParamsSchema,              description: "Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings — NOT general websites (use extract for those)." },
-
-  { name: "novada_browser",             title: "Browser Automation",         schema: BrowserParamsSchema,             description: "Automate Novada's cloud browser via CDP — navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key. NOTE: country is accepted but not yet applied — the browser exit node is not geo-routed by this param today." },
-  { name: "novada_proxy",               title: "Proxy Credentials",          schema: ProxyParamsSchema,               description: "Proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Not needed for extract/crawl — those handle proxies internally." },
-  { name: "novada_discover",            title: "Tool Discovery",             schema: DiscoverParamsSchema,            description: "List all available Novada tools grouped by category." },
-  { name: "novada_ai_monitor",          title: "AI Brand Monitor",           schema: AiMonitorParamsSchema,           description: "Search AI-company domains (chatgpt.com, perplexity.ai, anthropic.com, etc.) and the web for PUBLIC mentions & sentiment of a brand. NOTE: searches indexed public pages — it does NOT query the live models; a brand with few indexed pages shows low/zero mentions (not a measure of how the models actually respond)." },
-  { name: "novada_monitor",             title: "Page Change Monitor",        schema: MonitorParamsSchema,             description: "⚠️ Session-scoped only: on the hosted endpoint the baseline is per-invocation (in-memory), so use this for single-call change-diffs, not durable cross-call monitoring. Track changes on a web page over time. Compares content hash and field-level diffs." },
-  { name: "novada_setup",               title: "Setup & Configuration",      schema: SetupParamsSchema,               description: "Check your API key and environment configuration. Use when you want to verify setup or see which Novada products are active. Auth-free, no quota used." },
-  // ── Account / billing tools ──
-  // 0.9.9: wallet_balance / wallet_usage_record / plan_balance_all / traffic_daily /
-  // capture_logs / account_summary / health / health_all folded into novada_account.
-  // Old names remain functional (alias dispatch below) but are hidden from tools/list.
-  { name: "novada_account",             title: "Account & Billing",          schema: AccountParamsSchema,             description: "Single-call account & billing dashboard. section='summary' (default): wallet balance + plan quotas + recent capture logs + health entitlements. section='balance': wallet balance only. section='usage': paginated transaction history. section='plans': per-product plan balances (residential/isp/etc). section='traffic': daily proxy consumption. Pass start_time/end_time (YYYY-MM-DD) and products=[...] for traffic/plans. Aliases: wallet_balance, wallet_usage_record, plan_balance_all, traffic_daily, capture_logs, account_summary, health, health_all." },
-  { name: "novada_proxy_account_list",  title: "Proxy Account List",         schema: ProxyAccountListParamsSchema,    description: "List proxy sub-accounts for a product (paginated)." },
-  { name: "novada_proxy_account_create",title: "Proxy Account Create",       schema: ProxyAccountCreateParamsSchema,  description: "Create a proxy sub-account. Two-step confirm gate (pass confirm:true after human approval).", write: true },
-].map((t) => ({
+const TOOLS = CORE_TOOLS.map((t) => ({
   name: t.name,
-  title: t.title,
+  title: TOOL_TITLES[t.name] ?? deriveTitle(t.name),
   description: t.description,
-  inputSchema: zodToMcpSchema(t.schema),
-  annotations: ("write" in t && t.write)
-    ? { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true }
-    : { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+  inputSchema: t.inputSchema,
+  annotations: t.annotations,
 }));
 
 // ─── Hosted-hidden tools ──────────────────────────────────────────────────────
-// Tools that are architecturally unavailable on hosted (Vercel) but should still
-// be callable (returns NOT_AVAILABLE_ON_HOSTED error) if explicitly requested.
-// Separated from TOOLS array because .map() strips non-standard properties.
-// novada_browser is ENABLED on hosted (one-shot CDP to Novada's remote cloud browser
-// works — verified 2026-07-03). novada_browser_flow stays hidden: it keeps a persistent
-// session across MULTIPLE tool calls, which a per-request serverless isolate cannot hold.
-const HOSTED_HIDDEN = new Set(["novada_browser_flow"]);
+// Tools present in core's catalog that are deliberately NOT surfaced on hosted —
+// either architecturally impossible on Vercel's serverless isolates, or WRITE /
+// destructive / meaningless-when-stateless and never ported to hosted:
+//   - novada_browser_flow  — keeps a persistent WS session across MULTIPLE tool
+//     calls, which a per-request serverless isolate cannot hold. (novada_browser
+//     itself IS enabled: one-shot CDP to Novada's remote cloud browser works —
+//     verified 2026-07-03.)
+//   - novada_site_copy     — writes files to disk; Vercel's function FS is read-only.
+//   - novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey — WRITE /
+//     destructive account-mutation actions (whitelist edits, IP purchases, API-key
+//     rotation) never ported to the hosted gateway.
+//   - novada_session_stats, novada_search_feedback — in-memory, per-process state
+//     that resets on every serverless invocation; exposing them on hosted would be
+//     misleading (always reports empty/zero).
+//   - novada_verify — never surfaced on the hosted default tool listing historically;
+//     still fully dispatchable by name (see HOSTED_ROUTABLE_ALIASES below).
+// This is now the ONLY exclusion list — TOOLS derives from core, so anything NOT
+// listed here that core registers is visible on hosted by default.
+const HOSTED_HIDDEN = new Set([
+  "novada_browser_flow",
+  "novada_site_copy",
+  "novada_ip_whitelist",
+  "novada_static_ip_mgmt",
+  "novada_capture_apikey",
+  "novada_session_stats",
+  "novada_search_feedback",
+  "novada_verify",
+]);
 
 // ─── Hidden-alias allowlist (fail-safe — explicit opt-in) ────────────────────
 // Backward-compat ALIASES that must route silently on hosted = fold-targets +
 // the proxy/verify/scraper names hosted hides but still serves. NOT every tool
-// core can dispatch — never-ported tools (site_copy, ip_whitelist,
+// core can dispatch — the never-ported tools above (site_copy, ip_whitelist,
 // static_ip_mgmt, capture_apikey, scraper_task_mgmt, session_stats,
 // search_feedback) stay refused-by-default. A NEW core tool is refused until
-// explicitly opted in here (fail-safe direction). Two of the excluded names are
+// explicitly opted in here (fail-safe direction). Some of the excluded names are
 // billable/mutating WRITE actions (static_ip_mgmt spends money, ip_whitelist
 // mutates the account) and site_copy writes to the read-only serverless FS —
 // auto-exposing them would be a security/billing regression.
 const HOSTED_ROUTABLE_ALIASES = new Set<string>([
-  ...NPM_HIDDEN_ALIASES,                        // health*, wallet*, plan, traffic, capture_logs, account_summary, unblock
-  "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter",
-  "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated",
+  ...NPM_HIDDEN_ALIASES,   // health*, wallet*, plan, traffic, capture_logs, account_summary, unblock, 6 proxy type variants, 4 scraper stubs (19 total)
   "novada_verify",
-  "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result",
 ]);
-const HOSTED_HIDDEN_ALIASES: ReadonlySet<string> = (() => {
-  const visible = new Set(TOOLS.map((t) => t.name));
-  return new Set([...HOSTED_ROUTABLE_ALIASES].filter((n) => !visible.has(n) && !HOSTED_HIDDEN.has(n)));
-})();
+// NOTE: base this on the hosted-VISIBLE set (TOOLS minus HOSTED_HIDDEN), NOT raw
+// TOOLS. TOOLS is core's full 38-tool catalog (unfiltered) — a tool that is BOTH
+// in HOSTED_ROUTABLE_ALIASES and a real core tool (novada_verify: routable +
+// HOSTED_HIDDEN) is still present in raw TOOLS, so filtering against raw TOOLS
+// would wrongly conclude it's "already visible" and drop it from this set —
+// making a direct CallTool("novada_verify") fall through to the
+// hidden/unwired-on-hosted guard below and get refused with TOOL_NOT_ENABLED.
+const listedOnHosted = new Set(TOOLS.filter((t) => !HOSTED_HIDDEN.has(t.name)).map((t) => t.name));
+const HOSTED_HIDDEN_ALIASES: ReadonlySet<string> = new Set(
+  [...HOSTED_ROUTABLE_ALIASES].filter((n) => !listedOnHosted.has(n)),
+);
 
 // ─── Tool-set filtering (?tools= / ?groups=) ─────────────────────────────────
 // Lets a client request a slim toolset, e.g. ?groups=search,scrape or
@@ -408,7 +473,8 @@ const HOSTED_HIDDEN_ALIASES: ReadonlySet<string> = (() => {
 // Fewer tools = less token overhead in the agent's context window.
 const TOOL_GROUPS: Record<string, string[]> = {
   core: ["novada_search", "novada_extract", "novada_crawl", "novada_research", "novada_map", "novada_scrape", "novada_setup", "novada_account", "novada_monitor", "novada_discover"],
-  search: ["novada_search"],
+  // Search engines: novada_search (SERP aggregator) + the 4 direct per-engine scrapers.
+  search: ["novada_search", "novada_scrape_google", "novada_scrape_bing", "novada_scrape_duckduckgo", "novada_scrape_yandex"],
   scrape: ["novada_scrape", "novada_extract"],
   scraper: ["novada_scrape", "novada_extract"],   // alias of `scrape` — matches npm group key so NOVADA_GROUPS config is portable across surfaces
   crawl: ["novada_crawl", "novada_map"],
@@ -417,8 +483,21 @@ const TOOL_GROUPS: Record<string, string[]> = {
   // 0.9.9: novada_account replaces the 7 folded billing tools in this group
   account: ["novada_account", "novada_proxy_account_list", "novada_proxy_account_create"],
   browser: ["novada_browser", "novada_browser_flow"],
+  // ── BD-style platform-family groups (new — slim to one vertical's tools) ────
+  ecommerce: ["novada_scrape_amazon", "novada_scrape_walmart", "novada_scrape_shein"],
+  // LinkedIn wasn't in the SOP's suggested split; grouped under `social` here (Bright
+  // Data itself files LinkedIn under social-media datasets, not a separate bucket).
+  social: ["novada_scrape_instagram", "novada_scrape_facebook", "novada_scrape_tiktok", "novada_scrape_x", "novada_scrape_youtube", "novada_scrape_linkedin"],
+  dev: ["novada_scrape_github"],
+  ai: ["novada_scrape_perplexity", "novada_ai_monitor"],
 };
-const ALL_TOOL_NAMES = new Set(TOOLS.map((t) => t.name));
+// Built from the hosted-VISIBLE set (TOOLS minus HOSTED_HIDDEN), not raw TOOLS —
+// otherwise a HOSTED_HIDDEN tool name (e.g. ?tools=novada_ip_whitelist) would pass
+// this validation and get added to the caller's allowed-tool set, even though it's
+// never dispatchable on hosted. Tools that must stay dispatchable-by-name despite
+// being hidden from listing (novada_verify) route through HOSTED_HIDDEN_ALIASES
+// instead — that check is independent of ALL_TOOL_NAMES/resolveAllowedTools.
+const ALL_TOOL_NAMES = new Set(TOOLS.filter((t) => !HOSTED_HIDDEN.has(t.name)).map((t) => t.name));
 
 /**
  * Resolve the allowed-tool set from URL params. Returns null = no filter (all tools).
@@ -846,26 +925,39 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     { capabilities: { tools: {}, prompts: {}, resources: {} } },
   );
 
-  const isHosted = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+  // B2 fix (2026-07-20, synthesis.md blocker): this filter used to be gated on
+  // `isHosted` (a VERCEL/VERCEL_ENV env-var sniff) — fail-OPEN, because those vars
+  // require an opt-in Vercel project toggle and are not guaranteed to be set. This
+  // file IS the hosted server (hosted-server/vercel/api/mcp.ts, the Vercel handler
+  // for mcp.novada.com); HOSTED_HIDDEN must be excluded unconditionally, matching
+  // the fail-CLOSED invariant already used elsewhere in this file for
+  // `listedOnHosted`/`ALL_TOOL_NAMES` above (neither of which was ever gated on
+  // isHosted) — those two silently carried the correct behavior; only this one
+  // filter, which drives the actually-served ListTools/CallTool surface, forgot it.
   const visibleTools = (ctx.allowedTools
     ? TOOLS.filter((t) => ctx.allowedTools!.has(t.name))
     : TOOLS
-  ).filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name));
+  ).filter(t => !HOSTED_HIDDEN.has(t.name));
   // Names actually exposed on this endpoint — drives both ListTools and the
   // discover catalog so an agent never sees a tool it can't call. A tool can be
-  // absent here for three reasons: filtered out by ?tools=/?groups=, hidden by
-  // HOSTED_HIDDEN (browser tools on Vercel), or never ported to hosted at all
-  // (e.g. novada_site_copy, novada_ip_whitelist — not in the hosted TOOLS array).
+  // absent here for two reasons: filtered out by ?tools=/?groups=, or excluded by
+  // HOSTED_HIDDEN (architecturally impossible on Vercel — e.g. novada_browser_flow —
+  // or deliberately never ported — e.g. novada_site_copy, novada_ip_whitelist; see
+  // HOSTED_HIDDEN's docstring above for the full list + rationale per tool).
   const visibleToolNames: ReadonlySet<string> = new Set(visibleTools.map((t) => t.name));
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: visibleTools }));
 
   // ── Telemetry: initialize event ───────────────────────────────────────────
-  // oninitialized fires when the `initialized` notification arrives — at that
-  // point server.getClientVersion() IS populated (it's set by _oninitialize).
-  // In stateless mode each HTTP request creates a fresh server, so this fires
-  // only for initialize requests (not for subsequent tool calls from the same
-  // logical session). protocol_version is not exposed via the SDK public API
-  // after negotiation, so it is honestly reported as null here.
+  // oninitialized fires when the `initialized` NOTIFICATION arrives.
+  // In stateless HTTP mode (sessionIdGenerator: undefined) the initialize
+  // REQUEST and the initialized NOTIFICATION are TWO separate HTTP requests —
+  // each creates a completely fresh server instance. `_clientVersion` is set
+  // inside _oninitialize (on the first request) but that server is discarded;
+  // the second request creates a brand-new server where `_clientVersion` is
+  // still undefined. Therefore server.getClientVersion() always returns
+  // undefined when oninitialized fires in stateless mode. The null-coalescing
+  // below already handles this correctly — this comment documents the why.
+  // protocol_version is not exposed via the SDK public API post-negotiation.
   server.oninitialized = () => {
     const cv = server.getClientVersion();
     const initRow = buildInitializeEvent({
@@ -928,10 +1020,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     }
 
     // Hidden / unwired-on-hosted guard: a tool that isn't in the visible set for this
-    // endpoint (HOSTED_HIDDEN browser tools, or tools never ported to hosted such as
-    // novada_site_copy / novada_ip_whitelist, or an outright unknown name) is rejected
-    // BEFORE quota is touched, with an agent_instruction pointing at the npm package
-    // where the full tool surface is available.
+    // endpoint (a HOSTED_HIDDEN tool such as novada_browser_flow / novada_site_copy /
+    // novada_ip_whitelist, or an outright unknown name) is rejected BEFORE quota is
+    // touched, with an agent_instruction pointing at the npm package where the full
+    // tool surface is available.
     if (!visibleToolNames.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
       return {
         content: [{
@@ -944,6 +1036,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
     // novada_setup is auth-free and never charged against quota.
     if (name === "novada_setup") {
+      // SETUP_GATE semantics: charged=false, over_cap_allowed=false, quota_remaining=0.
+      // plan=null (not resolved on the setup path). token_hash from ctx (always present
+      // — the auth guard at the top already validated the token; if somehow absent the
+      // emitEvent call is a no-op).
+      const setupGateFields = { charged: false, over_cap_allowed: false, quota_remaining: 0 };
       try {
         // Pass the caller's token so setup validates the CUSTOMER's key (not the server env fallback).
         const result = await novadaSetup(validateSetupParams(argsObj), ctx.token);
@@ -952,9 +1049,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         // monthlyQuota is declared below (after this early-return block) — inline it here.
         const setupMonthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
         const setupFooter = buildStatusFooter(SETUP_GATE, setupMonthlyQuota);
+        scheduleToolEvent("ok", setupGateFields, null);
         return { content: [{ type: "text" as const, text: result + setupFooter }] };
       } catch (e) {
         logUsage(env, ctx.token, name, false, Date.now() - started);
+        scheduleToolEvent("error", setupGateFields, null);
         return { content: [{ type: "text" as const, text: String(e) }], isError: true };
       }
     }
@@ -1052,8 +1151,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
       // ── novada_discover override — scope catalog to this endpoint's visible tools ──
       // core.dispatch calls novadaDiscover(args) without the second arg, which would list
-      // core's full 33-tool catalog. On hosted we pass visibleToolNames so the output only
-      // advertises the 15 tools the agent can actually call on this endpoint.
+      // core's full registered catalog. On hosted we pass visibleToolNames so the output
+      // only advertises the tools the agent can actually call on this endpoint (core's
+      // catalog minus HOSTED_HIDDEN, further narrowed by any ?tools=/?groups= filter).
       if (name === "novada_discover") {
         const result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
@@ -1072,7 +1172,8 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       }
 
       // ── Single dispatch call (replaces the old hand-maintained switch) ──
-      // core.dispatch handles routing for all 33 npm tools + 9 npm hidden aliases.
+      // core.dispatch handles routing for every npm-registered tool (see CORE_TOOLS,
+      // derived from core.ts's TOOLS) plus core's HIDDEN_ALIASES (backward-compat names).
       // It throws Error("Unknown tool: <name>") for anything not in its switch.
       // withWallClock races the Promise against the 56s wall-clock budget.
       const result = await withWallClock(
@@ -1097,8 +1198,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const content = [{ type: "text" as const, text: sanitized + statusFooter }];
       const notice = await maybeGetFirstRunNoticeHosted(ctx.token);
       if (notice) content.push({ type: "text" as const, text: notice });
+      // Classify in-band ceiling timeout from extractSingle — returned as a string
+      // starting with "## Extraction Error" (not thrown), so it reaches this success
+      // path. Emitting "ok" for a timed-out request is misleading in telemetry.
+      const isCeilingTimeout = typeof result === "string" && result.startsWith("## Extraction Error");
       scheduleToolEvent(
-        "ok",
+        isCeilingTimeout ? "TIMEOUT" : "ok",
         { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
         gate.overCapAllowed ? "pro" : "free",
       );

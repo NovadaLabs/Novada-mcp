@@ -19,7 +19,12 @@ export declare const StaticIpMgmtParamsSchema: z.ZodObject<{
     renew_ip_list: z.ZodOptional<z.ZodString>;
     page: z.ZodDefault<z.ZodNumber>;
     limit: z.ZodDefault<z.ZodNumber>;
-    status: z.ZodOptional<z.ZodString>;
+    status: z.ZodOptional<z.ZodEnum<{
+        "": "";
+        1: "1";
+        2: "2";
+        3: "3";
+    }>>;
     key_word: z.ZodOptional<z.ZodString>;
     is_auto_renew: z.ZodOptional<z.ZodNumber>;
     confirm: z.ZodOptional<z.ZodLiteral<true>>;

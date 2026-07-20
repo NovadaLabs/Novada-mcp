@@ -302,11 +302,15 @@ describe("getPrompt() — novada-which-tool", () => {
       "novada_map",
       "novada_crawl",
       "novada_scrape",
-      "novada_unblock",
       "novada_browser",
     ]) {
       expect(text).toContain(tool);
     }
+    // NOV-847: novada_unblock is a hidden alias (never in ListTools) — the raw-HTML
+    // path is now spelled out as novada_extract with render + format params.
+    expect(text).not.toContain("novada_unblock");
+    expect(text).toContain('render="render"');
+    expect(text).toContain('format="html"');
   });
 
   it("cross-references the format prompt", () => {

@@ -41,7 +41,7 @@ export const RESOURCES: Resource[] = [
   {
     uri: "novada://guide",
     name: "Agent Tool Selection Guide",
-    description: "Decision tree and workflow patterns for choosing between all 23 novada tools: search, extract, crawl, map, research, proxy variants (6), scrape, scraper async (3), verify, unblock, browser, health, discover",
+    description: "Decision tree and workflow patterns for choosing between all 23 novada tools: search, extract (incl. raw-HTML render), crawl, map, research, scrape (with novada_discover for platform lookup), proxy (one tool, type param), verify, browser, account (incl. product-activation status), discover",
     mimeType: "text/plain",
   },
   {
@@ -320,21 +320,22 @@ You need content from multiple pages and don't have the URLs yet?
 
 You need structured data from a known platform (Amazon, Reddit, TikTok…)?
   → novada_scrape
-  → Read novada://scraper-platforms resource first to find the exact operation ID and required params
+  → Call novada_discover({platform: "<domain>"}) first to find the exact operation ID and required params — it's a tool call, so it works in every MCP client
+  → Bonus: the novada://scraper-platforms resource has the same catalog, for clients that support MCP resources
 
 You need to route your own HTTP requests through a specific IP type?
-  → novada_proxy_residential — real home IP, strongest anti-bot bypass
-  → novada_proxy_isp — ISP-assigned IP, looks like a home user
-  → novada_proxy_static — static residential, same IP every time
-  → novada_proxy_datacenter — fastest, best for non-anti-bot targets
-  → novada_proxy_mobile — 4G/5G mobile IP
-  → novada_proxy_dedicated — exclusive datacenter IP, not shared
+  → novada_proxy(type="residential") — real home IP, strongest anti-bot bypass
+  → novada_proxy(type="isp") — ISP-assigned IP, looks like a home user
+  → novada_proxy(type="static") — static residential, same IP every time
+  → novada_proxy(type="datacenter") — fastest, best for non-anti-bot targets
+  → novada_proxy(type="mobile") — 4G/5G mobile IP
+  → novada_proxy(type="dedicated") — exclusive datacenter IP, not shared
 
-You need to submit an async scraping job for a non-standard platform?
-  → novada_scraper_submit → novada_scraper_status → novada_scraper_result
+You need to scrape a platform and think you need to poll for results?
+  → novada_scrape is synchronous — one call, no submit/status/result dance. Pass task_id from a prior slow call to resume without re-billing.
 
 Which tools are available on your API key?
-  → novada_discover (or novada_health for product activation status)
+  → novada_discover (or novada_account(section="summary") for product activation status)
 
 You need to fact-check whether a claim is true or false?
   → novada_verify
@@ -347,7 +348,7 @@ You need to interact with a page (click buttons, fill forms, navigate, screensho
   → Use aria_snapshot action to get the page's semantic structure (roles + names) — more stable than CSS selectors and 70% smaller than raw HTML snapshot
 
 Which Novada products are active on your API key?
-  → novada_health (instant status table — use for first-time setup or debugging)
+  → novada_account(section="summary") (instant status table — use for first-time setup or debugging)
 
 ## Tool Comparison
 
@@ -359,19 +360,11 @@ Which Novada products are active on your API key?
 | novada_crawl              | a domain, need N pages               | Content of N pages      | High       |
 | novada_research           | a complex question                   | Cited report            | Medium     |
 | novada_scrape             | a supported platform (16 platforms)  | Structured records      | Medium     |
-| novada_scraper_submit     | async scraping job submission        | task_id                 | Minimal    |
-| novada_scraper_status     | task_id, need to check progress      | Status JSON             | Minimal    |
-| novada_scraper_result     | completed task_id, need results      | Formatted records       | Low        |
-| novada_proxy_residential  | real home IP needed                  | Proxy config string     | Minimal    |
-| novada_proxy_isp          | ISP IP for social/ecommerce          | Proxy config string     | Minimal    |
-| novada_proxy_static       | sticky residential IP                | Proxy config string     | Minimal    |
-| novada_proxy_datacenter   | fastest proxy, no anti-bot needed    | Proxy config string     | Minimal    |
-| novada_proxy_mobile       | 4G/5G mobile IP                      | Proxy config string     | Minimal    |
-| novada_proxy_dedicated    | exclusive IP, clean reputation       | Proxy config string     | Minimal    |
+| novada_proxy(type=...)    | residential/isp/static/datacenter/mobile/dedicated IP needed | Proxy config string | Minimal |
 | novada_verify             | a factual claim to check             | Verdict + evidence URLs | Medium     |
 | novada_extract render=render | a URL blocked by anti-bot         | JS-rendered content     | Medium-High|
 | novada_browser            | interactive page actions             | Action result           | High       |
-| novada_health             | check which products are active      | Status table + links    | Minimal    |
+| novada_account(section=summary) | check which products are active | Status table + links | Minimal    |
 | novada_discover           | need full tool catalog               | Tool catalog JSON       | Low        |
 
 ## Efficient Workflow Patterns
@@ -482,11 +475,11 @@ Required: question. Optional: depth (quick/deep/comprehensive/auto), focus.
 Example: novada_research({question: "How do MCP servers work with Claude?", depth: "deep"})
 
 ## novada_scrape
-Best for: structured data from 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, YouTube, ChatGPT, SHEIN, etc.).
+Best for: structured data from 16 active platforms (~87 operations) (Amazon, TikTok, LinkedIn, YouTube, ChatGPT, SHEIN, etc.).
 Not for: arbitrary sites not in the platform list (use novada_extract or novada_crawl).
 Required: platform, operation, params. Optional: format (markdown/json/toon), limit.
 Example: novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "iphone 16"}})
-Tip: Read novada://scraper-platforms to find valid platform+operation combinations.
+Tip: Call novada_discover({platform: "<domain>"}) first to find valid operation IDs and params — it's a tool call, so it works in every MCP client. Bonus: the novada://scraper-platforms resource has the same catalog for clients that support MCP resources.
 
 ## novada_proxy
 Best for: getting proxy credentials (residential/mobile/ISP/datacenter) for your own HTTP requests.
@@ -512,79 +505,29 @@ Not for: simple page reading (use novada_extract).
 Required: actions (array, max 20). Optional: country, timeout, session_id.
 Example: novada_browser({actions: [{action: "navigate", url: "https://example.com"}, {action: "screenshot"}]})
 
-## novada_health
-Best for: diagnosing why a tool fails. Shows which Novada products are active on your API key.
-Required: none.
-Example: novada_health({})
+## novada_account
+Best for: diagnosing why a tool fails. section="summary" shows wallet balance, plan quotas, and which Novada products are active on your API key.
+Required: none. Optional: section (summary/balance/usage/plans/traffic).
+Example: novada_account({section: "summary"})
 
 ## novada_discover
 Best for: getting the full tool catalog with descriptions, categories, and availability status.
-Not for: checking product activation (use novada_health).
+Not for: checking product activation (use novada_account with section="summary").
 Required: none.
 Example: novada_discover({})
-
-## novada_scraper_submit
-Best for: submitting an async scraping job for platforms outside novada_scrape's 16 active platforms.
-Not for: synchronous extraction (use novada_scrape for supported platforms).
-Required: platform, operation. Optional: params, country.
-Example: novada_scraper_submit({ platform: "amazon.com", operation: "amazon_product_keywords", params: { keyword: "wireless earbuds" } })
-
-## novada_scraper_status
-Best for: polling status of an async scraping task submitted via novada_scraper_submit.
-Required: task_id.
-Example: novada_scraper_status({task_id: "abc123"})
-
-## novada_scraper_result
-Best for: retrieving completed results from an async scraping task.
-Not for: incomplete tasks — always check novada_scraper_status first.
-Required: task_id. Optional: format (markdown/json/raw).
-Example: novada_scraper_result({task_id: "abc123", format: "json"})
-
-## novada_proxy_residential
-Best for: geo-targeted scraping through real home IPs. Strongest anti-bot bypass.
-Not for: page content extraction (use novada_extract — proxy is automatic there).
-Required: none. Optional: country, city, session_id, format (url/env/curl).
-Example: novada_proxy_residential({country: "us", format: "curl"})
-
-## novada_proxy_isp
-Best for: social media and ecommerce — IPs look like real home users from an ISP.
-Required: none. Optional: country, session_id, format.
-Example: novada_proxy_isp({country: "gb", format: "env"})
-
-## novada_proxy_static
-Best for: workflows needing the same residential IP across multiple requests.
-Required: none. Optional: country, session_id, format.
-Example: novada_proxy_static({country: "de", session_id: "sess42"})
-
-## novada_proxy_datacenter
-Best for: high-volume scraping of non-anti-bot targets. Fastest proxy type.
-Required: none. Optional: country, session_id, format.
-Example: novada_proxy_datacenter({country: "us"})
-
-## novada_proxy_mobile
-Best for: mobile-targeted content and 4G/5G IP reputation. Pair with mobile User-Agent.
-Required: none. Optional: country, session_id, format.
-Example: novada_proxy_mobile({country: "jp"})
-
-## novada_proxy_dedicated
-Best for: high-trust platforms requiring a clean, exclusive IP (not shared with other users).
-Required: session_id (dedicated IP is tied to session). Optional: country, format.
-Example: novada_proxy_dedicated({session_id: "dedicated-01", country: "us"})
 
 ## Quick Decision Tree
 URL you have → novada_extract
 No URL, need search → novada_search
 Many pages → novada_crawl
 Find URLs → novada_map
-Platform data (Amazon/TikTok etc.) → novada_scrape
-Async scraping job → novada_scraper_submit → novada_scraper_status → novada_scraper_result
+Platform data (Amazon/TikTok etc.) → novada_scrape (call novada_discover({platform: "<domain>"}) first for the operation ID)
 Complex question → novada_research
 Fact check → novada_verify
 Raw HTML/DOM → novada_extract with render="render" and format="html"
 Click/interact → novada_browser
-Residential proxy → novada_proxy_residential
-ISP/static/datacenter/mobile/dedicated proxy → novada_proxy_{type}
-Diagnose failure → novada_health
+Proxy (residential/isp/static/datacenter/mobile/dedicated) → novada_proxy(type="...")
+Diagnose failure / check product activation → novada_account(section="summary")
 Full tool catalog → novada_discover`,
         }],
       };

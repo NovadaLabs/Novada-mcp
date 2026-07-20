@@ -12,6 +12,7 @@ export { novadaProxyMobile, validateProxyMobileParams, ProxyMobileParamsSchema }
 export { novadaProxyStatic, validateProxyStaticParams, ProxyStaticParamsSchema } from "./proxy_static.js";
 export { novadaProxyDedicated, validateProxyDedicatedParams, ProxyDedicatedParamsSchema } from "./proxy_dedicated.js";
 export { novadaScrape } from "./scrape.js";
+export { novadaScrapeAmazon, validateScrapeAmazonParams, ScrapeAmazonParamsSchema, AMAZON_OPERATIONS } from "./scrape_amazon.js";
 export { novadaVerify } from "./verify.js";
 export { novadaBrowser } from "./browser.js";
 export { novadaHealth } from "./health.js";

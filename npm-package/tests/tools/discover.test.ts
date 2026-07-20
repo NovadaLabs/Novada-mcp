@@ -2,17 +2,24 @@
  * Discover catalog drift guards.
  *
  * The discover catalog is DERIVED from the canonical TOOL_REGISTRY (src/tools/registry.ts),
- * and the server's wired tool list lives in the `TOOLS` array in src/index.ts. These tests
- * fail loudly the moment any of those three drift apart:
+ * and the server's wired tool list lives in the `TOOLS` array exported by src/core.ts. These
+ * tests fail loudly the moment any of those three drift apart:
  *
- *   1. TOOL_REGISTRY names === src/index.ts TOOLS names      (exact set — no ghosts, no omissions)
+ *   1. TOOL_REGISTRY names === src/core.ts TOOLS names        (exact set — no ghosts, no omissions)
  *   2. Every registry entry has a valid category + status     (typed metadata integrity)
  *   3. The rendered discover catalog ⊆ TOOL_REGISTRY          (no ghost tools surface to agents)
  *   4. Category filtering returns exactly the registered tools for that category
  *
- * Why read src/index.ts as TEXT instead of importing it: index.ts constructs and runs the
- * MCP server at module top-level (`new NovadaMCPServer(); server.run()`). Importing it would
- * boot a stdio server inside the test process. Parsing the file text is side-effect-free.
+ * Why import src/core.ts's TOOLS directly (not text-parse it): core.ts documents itself as
+ * side-effect-free and safe to import from any transport or test (no server construction, no
+ * process.exit, no stdio boot — unlike src/index.ts, which boots a stdio server at module
+ * top-level and must never be imported by a test). `TOOLS` is EXACTLY the wired ListTools
+ * surface (`_TOOL_DEFINITIONS.filter(t => REGISTERED_TOOL_NAMES.has(t.name))`), so importing
+ * it is both simpler and MORE robust than regex-scraping `_TOOL_DEFINITIONS` text: it stays
+ * correct even when a tool definition is generated/spread in from another module (e.g.
+ * tools/platform_scraper.ts's per-platform scraper factory) rather than written as a literal
+ * `name: "novada_x"` string directly in core.ts. This mirrors the pattern already used by
+ * tests/tools/collision-matrix.test.ts and tests/contract/nov673-schema-contract.test.ts.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -24,39 +31,26 @@ import {
   REGISTERED_TOOL_NAMES,
 } from "../../src/tools/registry.js";
 import { novadaDiscover, validateDiscoverParams, DiscoverParamsSchema } from "../../src/tools/discover.js";
+import { TOOLS } from "../../src/core.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Extract the tool names declared in the `_TOOL_DEFINITIONS = [ ... ]` array in src/core.ts.
- * This is the FULL dispatch-capable set (visible + hidden). The exported `TOOLS` array
- * is derived from this by filtering to REGISTERED_TOOL_NAMES — so the structural invariant
- * is: every registry name has a _TOOL_DEFINITIONS entry (no ghost schemas) and the test
- * asserts wiredNames === registryNames after that filter is applied implicitly by the derive.
- *
- * We read source text (not import) to avoid booting the MCP server.
+ * Pure set-difference logic factored out of the "exact match" test below, so it can be
+ * exercised against SYNTHETIC (fabricated) name lists in the self-check block further down
+ * — proving the detector actually fires on drift, not just that it's inert-green today.
  */
-function readWiredToolNames(): string[] {
-  const indexPath = resolve(__dirname, "../../src/core.ts");
-  const src = readFileSync(indexPath, "utf8");
-  // _TOOL_DEFINITIONS contains ALL dispatchable tool schemas; TOOLS derives from it.
-  // We want the names that TOOLS will expose: those in both _TOOL_DEFINITIONS AND the registry.
-  // Rather than re-implementing the filter here, read _TOOL_DEFINITIONS names and the test
-  // assertion will compare against registryNames directly (exact equality).
-  const start = src.indexOf("const _TOOL_DEFINITIONS");
-  expect(start, "could not locate `const _TOOL_DEFINITIONS` in src/core.ts").toBeGreaterThan(-1);
-  const end = src.indexOf("\n];", start);
-  expect(end, "could not locate end of _TOOL_DEFINITIONS array in src/core.ts").toBeGreaterThan(start);
-  const block = src.slice(start, end);
-  const allDefinedNames = [...block.matchAll(/name:\s*"(novada_[a-z_]+)"/g)].map((m) => m[1]);
-  // Mirror the core.ts filter: only names in the registry are exported as TOOLS.
-  // This makes this parser match EXACTLY what TOOLS.filter(REGISTERED_TOOL_NAMES) produces.
-  const registrySet = new Set(TOOL_REGISTRY.map((t) => t.name));
-  return allDefinedNames.filter((n) => registrySet.has(n));
+function diffToolNames(registryNames: readonly string[], wiredNames: readonly string[]): { ghosts: string[]; missing: string[] } {
+  const wiredSet = new Set(wiredNames);
+  const registrySet = new Set(registryNames);
+  return {
+    ghosts: [...registrySet].filter((n) => !wiredSet.has(n)), // in registry, not wired
+    missing: [...wiredSet].filter((n) => !registrySet.has(n)), // wired, not in registry
+  };
 }
 
 describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
-  const wiredNames = readWiredToolNames();
+  const wiredNames = TOOLS.map((t) => t.name);
   const registryNames = TOOL_REGISTRY.map((t) => t.name);
 
   it("the test can locate the wired TOOLS array (sanity)", () => {
@@ -75,16 +69,12 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
     // to TOOL_REGISTRY keeps it hidden automatically. The reverse — adding to registry
     // without a definition — surfaces it as an empty schema, which is caught by the
     // "every wired tool is in registry" direction of this assertion.
-    const wiredSet = new Set(wiredNames);
-    const registrySet = new Set(registryNames);
-
-    const ghosts = [...registrySet].filter((n) => !wiredSet.has(n)); // in registry, not wired
-    const missing = [...wiredSet].filter((n) => !registrySet.has(n)); // wired, not in registry
+    const { ghosts, missing } = diffToolNames(registryNames, wiredNames);
 
     expect(ghosts, `registry lists tools NOT present in src/core.ts TOOLS (add definition or remove from registry): ${ghosts.join(", ")}`).toEqual([]);
     expect(missing, `src/core.ts TOOLS includes tools missing from TOOL_REGISTRY (add to registry or remove from _TOOL_DEFINITIONS): ${missing.join(", ")}`).toEqual([]);
     // Exact set equality (order-independent). No alias filtering needed — TOOLS is derived.
-    expect([...registrySet].sort()).toEqual([...wiredSet].sort());
+    expect([...new Set(registryNames)].sort()).toEqual([...new Set(wiredNames)].sort());
   });
 
   it("registry has no duplicate tool names", () => {
@@ -108,8 +98,8 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
   // curated registry size and require the human-authored README headline to
   // derive from it (state "22 curated tools"). NOT a semantic diff test — just a
   // count assertion so a bare wrong integer (38/33/25/11) can't silently return.
-  it("registry count is 23 and the README headline count matches it", () => {
-    const EXPECTED_CURATED_COUNT = 23;
+  it("registry count is 38 and the README headline count matches it", () => {
+    const EXPECTED_CURATED_COUNT = 38;
     expect(
       TOOL_REGISTRY.length,
       `registry size changed — update EXPECTED_CURATED_COUNT and every README/SKILL count to ${TOOL_REGISTRY.length}`
@@ -117,10 +107,97 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
 
     const readmePath = resolve(__dirname, "../../README.md");
     const readme = readFileSync(readmePath, "utf8");
+    // Count assertion only (per the comment above): the registry-derived count must
+    // appear as a tool count in the README, so a wrong integer can't silently ship.
+    // Robust to phrasing ("23 tools" or "23 curated tools") — the number is the invariant.
     expect(
       readme,
-      `README must state "${EXPECTED_CURATED_COUNT} curated tools" (derived from registry) — not a stale hand-count`
-    ).toContain(`${EXPECTED_CURATED_COUNT} curated tools`);
+      `README must state "${EXPECTED_CURATED_COUNT} tools" (derived from registry) — not a stale hand-count`
+    ).toMatch(new RegExp(`${EXPECTED_CURATED_COUNT}\\s+(curated\\s+)?tools`));
+  });
+
+  // Same drift guard as above, but for the MONOREPO ROOT README.md (the GitHub landing
+  // page) — a separate file from npm-package/README.md that the test above never touched.
+  // This is exactly why the root count silently drifted to a stale "23 tools" while the
+  // npm-package README was already correct: nothing asserted the root file at all.
+  it("registry count matches the monorepo root README headline too", () => {
+    const EXPECTED_CURATED_COUNT = 38;
+    const rootReadmePath = resolve(__dirname, "../../../README.md");
+    const rootReadme = readFileSync(rootReadmePath, "utf8");
+    expect(
+      rootReadme,
+      `root README (repo root, the GitHub landing page) must state "${EXPECTED_CURATED_COUNT} tools" (derived from registry) — not a stale hand-count`
+    ).toMatch(new RegExp(`${EXPECTED_CURATED_COUNT}\\s+(curated\\s+)?tools`));
+  });
+
+  // C3 fix (2026-07-20, synthesis.md): the "38 tools" headline is hand-typed in ~6 files
+  // (both READMEs above, npm CHANGELOG.md, novada-agent/SKILL.md, hosted-server/vercel's
+  // README.md and mcp.ts's own comment) but ONLY the two README tests above ever guarded
+  // it — a change to TOOL_REGISTRY.length could silently drift every other mention. This
+  // extends the guard to novada-agent/SKILL.md (the only SKILL that states the GLOBAL
+  // 38-tool total; novada-scrape/SKILL.md only ever states PER-PLATFORM operation counts,
+  // already guarded separately by scrape_amazon.test.ts/scrape_youtube.test.ts et al.'s
+  // "exactly N entries" assertions). The hosted-side "30" mention
+  // (hosted-server/vercel/README.md) is guarded in that package's own test suite instead —
+  // see hosted-server/vercel/test/tool-catalog-derivation.test.mjs's hosted-visible-count
+  // test, since deriving "30" requires HOSTED_HIDDEN, which lives in mcp.ts, not this package.
+  it("registry count matches novada-agent SKILL.md's headline too", () => {
+    const EXPECTED_CURATED_COUNT = 38;
+    const skillPath = resolve(__dirname, "../../skills/novada-agent/SKILL.md");
+    const skill = readFileSync(skillPath, "utf8");
+    expect(
+      skill,
+      `novada-agent/SKILL.md must state "${EXPECTED_CURATED_COUNT}" curated tools (derived from registry) — not a stale hand-count`
+    ).toMatch(new RegExp(`\\*\\*${EXPECTED_CURATED_COUNT}\\*\\*\\s+curated`));
+  });
+});
+
+/**
+ * Self-check (synthetic fixtures only, never the real registry/TOOLS) — proves
+ * `diffToolNames` (the exact comparison the "registry names EXACTLY match" test above
+ * runs against the real data) actually FIRES on injected drift, rather than merely being
+ * green today because nothing happens to be wrong right now. Mirrors the "not-inert" proof
+ * pattern used by tests/tools/collision-matrix.test.ts's self-check section.
+ *
+ * This is also the direct proof that switching the guard from regex-parsing src/core.ts's
+ * source text to importing its `TOOLS` export (done above) did not weaken detection: a tool
+ * definition that is GENERATED/spread in from another module (exactly what
+ * tools/platform_scraper.ts's factory does for novada_scrape_amazon and its future
+ * per-platform siblings) is invisible to a literal `name: "novada_x"` regex scan but fully
+ * visible here, because `diffToolNames` only ever looks at the real, computed name arrays.
+ */
+describe("diffToolNames self-check: the drift detector fires on injected drift", () => {
+  it("flags a registry-only name as a ghost (registered but not wired — the exact class of bug a hand-written literal could introduce)", () => {
+    const { ghosts, missing } = diffToolNames(
+      ["novada_real_tool", "novada_typo_or_removed_tool"],
+      ["novada_real_tool"],
+    );
+    expect(ghosts).toEqual(["novada_typo_or_removed_tool"]);
+    expect(missing).toEqual([]);
+  });
+
+  it("flags a wired-only name as missing (dispatchable but never added to the registry)", () => {
+    const { ghosts, missing } = diffToolNames(
+      ["novada_real_tool"],
+      ["novada_real_tool", "novada_new_platform_tool"],
+    );
+    expect(ghosts).toEqual([]);
+    expect(missing).toEqual(["novada_new_platform_tool"]);
+  });
+
+  it("reports both directions independently when both a ghost and a missing name are present", () => {
+    const { ghosts, missing } = diffToolNames(
+      ["novada_shared", "novada_ghost_only"],
+      ["novada_shared", "novada_missing_only"],
+    );
+    expect(ghosts).toEqual(["novada_ghost_only"]);
+    expect(missing).toEqual(["novada_missing_only"]);
+  });
+
+  it("reports no drift when the two lists match exactly (sanity: the detector isn't just always-fail)", () => {
+    const { ghosts, missing } = diffToolNames(["novada_a", "novada_b"], ["novada_b", "novada_a"]);
+    expect(ghosts).toEqual([]);
+    expect(missing).toEqual([]);
   });
 });
 

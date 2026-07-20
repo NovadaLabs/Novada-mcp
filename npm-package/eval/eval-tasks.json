@@ -1,0 +1,283 @@
+{
+  "$schema_note": "Fixed task-set for the tool-selection eval (Layer 5, the tool-selection regression net). Each entry is a natural-language prompt an agent would receive, the tool it SHOULD pick, tools it may acceptably pick instead (rare — most tasks have exactly one right answer), tools it must NOT pick (a forbidden hit is worse than a miss — it means the eval judges the model actively confused two tools, not merely uncertain), and a sibling watch-list: tools whose selection accuracy on OTHER tasks must not regress when a new tool is added near this one. surfaces[] tags which visible-tool-set(s) this task is valid on — a task that expects novada_site_copy is meaningless on a surface where that tool is filtered out. surfaces[] values MUST be keys that exist in config/surfaces.json (checked at load time by run-eval.mjs's validateTaskSet()) — see the note below on why this differs from the prototype this was ported from.",
+  "version": 2,
+  "generated_from": "reports/phase1-net-design/B/prototype/eval-tasks.json (version 1, 2026-07-18), re-validated against npm-package/src/tools/registry.ts @ 23-tool registry on 2026-07-19 — every expected_tool/acceptable_tools/unacceptable_tools/sibling_watch name in this file was confirmed present in the live TOOL_REGISTRY at that time (see tests/eval/baseline-selector.test.ts and eval/run-eval.mjs, which re-verify this on every run rather than trusting this comment).",
+  "porting_notes": "v1->v2 changes from the B prototype this was ported from: (1) surfaces[] normalized to only 'default' and 'hosted-15' — the prototype also tagged several tasks with a third surface, 'rapid', which does not exist as a key in the real config/surfaces.json (only 'default' and 'hosted-15' are defined there today); keeping a task pointed at a non-existent surface would either silently no-op or require the runner to invent a bucket nobody configured, so 'rapid' was dropped rather than carried forward as aspirational fiction. If a 'rapid' surface is ever added to config/surfaces.json, re-add the tag here as a deliberate, reviewed change. (2) T06 (expected_tool=novada_site_copy) and T10 (expected_tool=novada_verify) had 'hosted-15' dropped from their surfaces[] — wiring model-eval-runner.mjs to the REAL config/surfaces.json (rather than B's hand-rolled SURFACE_FILTERS, which happened to enumerate the identical 15 tools) surfaced that neither novada_site_copy nor novada_verify is actually exposed on the hosted-15 surface; a task tagged for a surface where its own expected_tool isn't even offered to the model is a structurally guaranteed miss, not a real routing signal. model-eval-runner.mjs's validateTaskSurfaces() now hard-fails loud if this class of mismatch is ever reintroduced. (3) No other field changed — prompts, expected_tool, acceptable/unacceptable_tools, sibling_watch, and notes are verbatim from the executed B prototype so the recorded baseline-floor number stays comparable across the port.",
+  "tasks": [
+    {
+      "id": "T01-fact-lookup-vs-research",
+      "prompt": "What's the current price of Bitcoin right now?",
+      "category": "search-vs-research-vs-verify",
+      "expected_tool": "novada_search",
+      "acceptable_tools": ["novada_search"],
+      "unacceptable_tools": ["novada_research", "novada_scrape", "novada_crawl"],
+      "sibling_watch": ["novada_research", "novada_verify"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Single current fact, one snippet suffices. novada_research is over-kill (multi-source synthesis); this is the #1 confusion pair per novada_search's own description disambiguation."
+    },
+    {
+      "id": "T02-single-url-read",
+      "prompt": "Get me the full text of this blog post: https://example.com/2026/agent-memory-design",
+      "category": "extract-vs-search",
+      "expected_tool": "novada_extract",
+      "acceptable_tools": ["novada_extract"],
+      "unacceptable_tools": ["novada_search", "novada_crawl", "novada_map"],
+      "sibling_watch": ["novada_crawl", "novada_map"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "A known URL to read in full — the canonical novada_extract case. Regression signal: if a new content-retrieval tool starts absorbing single-URL reads, extract's routing share should be watched."
+    },
+    {
+      "id": "T03-multi-source-synthesis",
+      "prompt": "Give me a comparative analysis of React vs Vue rendering performance, citing at least three independent sources.",
+      "category": "research-vs-search",
+      "expected_tool": "novada_research",
+      "acceptable_tools": ["novada_research"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_verify"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Explicitly asks for multi-source synthesis with citations — the case novada_research exists for."
+    },
+    {
+      "id": "T04-platform-structured-data",
+      "prompt": "Pull Amazon listings for 'wireless earbuds' with price and rating for the top 5 results.",
+      "category": "scrape-vs-extract",
+      "expected_tool": "novada_scrape",
+      "acceptable_tools": ["novada_scrape", "novada_scrape_amazon"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape_amazon"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Named platform (Amazon) + structured fields (price/rating) is the scrape disambiguator called out in novada_scrape's own description. This is the pair Bright Data's flat 65-tool surface gets wrong most often per the competitive teardown. 2026-07-20: novada_scrape_amazon (Tools-v2 Option B scaffold) is an equally-correct pick for this Amazon-specific prompt — added to acceptable_tools/sibling_watch so a model routing to the narrower per-platform tool is not penalized as wrong; expected_tool stays novada_scrape (the generic tool) since that is still the single canonical answer for the strict Tier-A accuracy metric."
+    },
+    {
+      "id": "T05-url-discovery-only",
+      "prompt": "Before I read anything, tell me what pages exist under docs.stripe.com.",
+      "category": "map-vs-crawl-vs-sitecopy",
+      "expected_tool": "novada_map",
+      "acceptable_tools": ["novada_map"],
+      "unacceptable_tools": ["novada_crawl", "novada_site_copy", "novada_extract"],
+      "sibling_watch": ["novada_crawl", "novada_site_copy"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "URL discovery with explicit 'before I read anything' — no content wanted yet. The three-way map/crawl/site_copy split is the tightest cluster in the registry; a new fourth discovery-shaped tool is the highest-risk addition for this triad."
+    },
+    {
+      "id": "T06-whole-site-to-disk",
+      "prompt": "Download the entire docs.python.org tutorial section to my machine as markdown files I can grep later.",
+      "category": "map-vs-crawl-vs-sitecopy",
+      "expected_tool": "novada_site_copy",
+      "acceptable_tools": ["novada_site_copy"],
+      "unacceptable_tools": ["novada_crawl", "novada_map", "novada_extract"],
+      "sibling_watch": ["novada_crawl", "novada_map"],
+      "surfaces": ["default"],
+      "notes": "'Entire section' + 'to my machine' + persistence intent rules out novada_crawl's 20-page inline-body cap. Same triad as T05 from the opposite corner — both must hold simultaneously. NOT tagged 'hosted-15': novada_site_copy is not in config/surfaces.json's hosted-15 tool list, so this task is meaningless there — see porting_notes."
+    },
+    {
+      "id": "T07-own-http-client-proxy",
+      "prompt": "I'm writing my own Python scraper and need residential proxy credentials to route through, not a tool that scrapes for me.",
+      "category": "proxy-vs-extract",
+      "expected_tool": "novada_proxy",
+      "acceptable_tools": ["novada_proxy"],
+      "unacceptable_tools": ["novada_extract", "novada_crawl", "novada_scrape"],
+      "sibling_watch": ["novada_extract"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Explicit 'my own HTTP client' framing is the exact disambiguator in novada_proxy's description ('Not for: novada_extract or novada_crawl — they handle proxy routing internally')."
+    },
+    {
+      "id": "T08-interactive-login-flow",
+      "prompt": "Log into this dashboard with my test credentials, click through to the billing tab, and screenshot it.",
+      "category": "browser-vs-extract",
+      "expected_tool": "novada_browser",
+      "acceptable_tools": ["novada_browser"],
+      "unacceptable_tools": ["novada_extract", "novada_browser_flow"],
+      "sibling_watch": ["novada_browser_flow"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Multi-step interactive session (login, click, screenshot) requires novada_browser, not one-shot extract. novada_browser_flow is a deprecated-in-spirit simplified alias — a task should never prefer it over the primary tool."
+    },
+    {
+      "id": "T09-change-over-time",
+      "prompt": "Has this competitor's pricing page changed since I last checked it a week ago?",
+      "category": "monitor-vs-extract",
+      "expected_tool": "novada_monitor",
+      "acceptable_tools": ["novada_monitor"],
+      "unacceptable_tools": ["novada_extract", "novada_verify"],
+      "sibling_watch": ["novada_extract"],
+      "surfaces": ["default", "hosted-15"],
+      "notes": "Explicit temporal-diff framing ('since last time') is novada_monitor's reason to exist over a one-shot extract. Also exercises the honesty contract: on the hosted surface the tool must self-disclose the session-scoped-baseline limitation, which this eval does not grade but the contract layer (Layer 2) does."
+    },
+    {
+      "id": "T10-claim-verification",
+      "prompt": "Someone told me Anthropic released Claude 4 in 2024 — is that actually true?",
+      "category": "verify-vs-search-vs-research",
+      "expected_tool": "novada_verify",
+      "acceptable_tools": ["novada_verify"],
+      "unacceptable_tools": ["novada_search", "novada_research"],
+      "sibling_watch": ["novada_search", "novada_research"],
+      "surfaces": ["default"],
+      "notes": "A discrete, checkable factual claim (not an open question) is the disambiguator for novada_verify vs novada_search/novada_research. NOT tagged 'hosted-15': novada_verify is not in config/surfaces.json's hosted-15 tool list, so this task is meaningless there — see porting_notes."
+    },
+    {
+      "id": "T11-amazon-specific-tool",
+      "prompt": "Get the price, title, and rating for the Amazon product with ASIN B0BWBK8F37.",
+      "category": "scrape-amazon-vs-scrape-generic",
+      "expected_tool": "novada_scrape_amazon",
+      "acceptable_tools": ["novada_scrape_amazon", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 Option B scaffold (2026-07-20): a named platform (Amazon) plus a specific ASIN identifier is the strongest possible signal for the new single-platform novada_scrape_amazon tool. novada_scrape remains an acceptable fallback (identical engine, platform='amazon.com'), but novada_scrape_amazon's closed operation enum is the more precise, purpose-built tool for exactly this ask. NOT tagged 'hosted-15': novada_scrape_amazon is not in config/surfaces.json's hosted-15 tool list today (deliberately not added by this scaffold — see the tool's implementation notes on why extending hosted-15 requires a matching hosted-server/vercel/api/mcp.ts edit, out of scope here) — see porting_notes for the same pattern applied to T06/T10."
+    },
+    {
+      "id": "T12-google-raw-serp-vs-search",
+      "prompt": "Get the raw Google search results for 'best noise cancelling headphones 2026' — I need the actual SERP entries (title, link, rank), not a synthesized answer.",
+      "category": "scrape-google-vs-search",
+      "expected_tool": "novada_scrape_google",
+      "acceptable_tools": ["novada_scrape_google", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): explicit 'raw SERP entries, not a synthesized answer' framing is the exact disambiguator in novada_scrape_google's own description vs novada_search (which is answer-oriented and reranks/dedups). novada_scrape remains an acceptable fallback (identical engine, platform='google.com'). NOT tagged 'hosted-15': novada_scrape_google is not in config/surfaces.json's hosted-15 tool list — same precedent as T11's novada_scrape_amazon."
+    },
+    {
+      "id": "T13-bing-not-a-search-engine",
+      "prompt": "I need Bing's video search results for 'drone racing highlights' — Bing specifically, not Google or DuckDuckGo.",
+      "category": "scrape-bing-vs-search",
+      "expected_tool": "novada_scrape_bing",
+      "acceptable_tools": ["novada_scrape_bing", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): Bing is NOT one of novada_search's selectable engine values (google/duckduckgo/yandex only — see src/tools/types.ts), so an explicit 'Bing specifically' ask has exactly one intentional route on this surface: novada_scrape_bing (or the generic novada_scrape with platform='bing.com'). NOT tagged 'hosted-15': same precedent as T11/T12."
+    },
+    {
+      "id": "T14-duckduckgo-raw-serp-with-filters",
+      "prompt": "Give me the raw DuckDuckGo results list for 'best VPN 2026', restricted to results from the past week — not a summarized answer.",
+      "category": "scrape-duckduckgo-vs-search",
+      "expected_tool": "novada_scrape_duckduckgo",
+      "acceptable_tools": ["novada_scrape_duckduckgo", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): novada_search already offers engine='duckduckgo', so the disambiguator here is the explicit 'raw results list, not a summarized answer' plus a time-range filter (params.df) novada_search does not expose — both point at the raw-SERP tool, not the answer-oriented one. NOT tagged 'hosted-15': same precedent as T11-T13."
+    },
+    {
+      "id": "T15-yandex-tld-specific",
+      "prompt": "Search yandex.ru specifically (not yandex.com) for 'вакансии Москва' and give me the raw results list.",
+      "category": "scrape-yandex-vs-search",
+      "expected_tool": "novada_scrape_yandex",
+      "acceptable_tools": ["novada_scrape_yandex", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract"],
+      "sibling_watch": ["novada_search", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): a specific Yandex TLD (yandex.ru, params.yandex_domain) is a control novada_search's engine='yandex' does not expose, plus the explicit 'raw results list' framing — both point at novada_scrape_yandex over the answer-oriented novada_search. NOT tagged 'hosted-15': same precedent as T11-T14."
+    },
+    {
+      "id": "T16-youtube-transcript-vs-extract",
+      "prompt": "Get me the full transcript for this YouTube video: https://www.youtube.com/watch?v=LCAY3PGHZyw",
+      "category": "scrape-youtube-vs-extract",
+      "expected_tool": "novada_scrape_youtube",
+      "acceptable_tools": ["novada_scrape_youtube", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): 'transcript' for a specific YouTube video is a structured-data ask (the transcript_by_video operation), not a request to read the page as prose — the disambiguator novada_scrape_youtube's description calls out against novada_extract. novada_scrape remains an acceptable fallback (identical engine, platform='youtube.com'). NOT tagged 'hosted-15': novada_scrape_youtube is not in config/surfaces.json's hosted-15 tool list — same precedent as T11-T15."
+    },
+    {
+      "id": "T17-instagram-profile-posts",
+      "prompt": "Pull the latest posts from the Instagram profile novadaproxies, with likes and captions.",
+      "category": "scrape-instagram-vs-extract",
+      "expected_tool": "novada_scrape_instagram",
+      "acceptable_tools": ["novada_scrape_instagram", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a named platform (Instagram) plus structured fields (likes/captions) for a profile's posts is the strongest signal for novada_scrape_instagram's posts_by_profile operation, mirroring T04's Amazon disambiguator. novada_scrape remains an acceptable fallback (identical engine, platform='instagram.com'). NOT tagged 'hosted-15': same precedent as T11-T16."
+    },
+    {
+      "id": "T18-facebook-event-details",
+      "prompt": "Get the details (date, location, description) for this Facebook event: https://www.facebook.com/events/4332074220347336",
+      "category": "scrape-facebook-vs-extract",
+      "expected_tool": "novada_scrape_facebook",
+      "acceptable_tools": ["novada_scrape_facebook", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a Facebook event URL plus explicit structured fields (date/location/description) is the event_by_url disambiguator over reading the page as plain text. novada_scrape remains an acceptable fallback (identical engine, platform='facebook.com'). NOT tagged 'hosted-15': same precedent as T11-T17."
+    },
+    {
+      "id": "T19-tiktok-video-details",
+      "prompt": "Get the like count, description, and author for this TikTok video URL: https://www.tiktok.com/@gingercat168/video/7586318922010332446",
+      "category": "scrape-tiktok-vs-extract",
+      "expected_tool": "novada_scrape_tiktok",
+      "acceptable_tools": ["novada_scrape_tiktok", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a single TikTok post URL plus explicit structured fields (likes/description/author) is the post_by_url disambiguator over reading the page as plain text (the exact extract-vs-scrape pattern from T02/T04). novada_scrape remains an acceptable fallback (identical engine, platform='tiktok.com'). NOT tagged 'hosted-15': same precedent as T11-T18."
+    },
+    {
+      "id": "T20-x-profile-by-username",
+      "prompt": "Get the X (Twitter) profile info — bio, follower count, post count — for the username BillGates.",
+      "category": "scrape-x-vs-extract",
+      "expected_tool": "novada_scrape_x",
+      "acceptable_tools": ["novada_scrape_x", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a bare username (not a URL) plus structured profile fields (bio/follower count/post count) is the profile_by_username disambiguator — there is no page to 'read' from a username alone, ruling out novada_extract. novada_scrape remains an acceptable fallback (identical engine, platform='x.com'). NOT tagged 'hosted-15': same precedent as T11-T19."
+    },
+    {
+      "id": "T21-walmart-sku-lookup",
+      "prompt": "Get the price and availability for the Walmart product with SKU 433078517.",
+      "category": "scrape-walmart-vs-extract",
+      "expected_tool": "novada_scrape_walmart",
+      "acceptable_tools": ["novada_scrape_walmart", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a named platform (Walmart) plus a specific SKU identifier is the product_by_sku disambiguator, mirroring T11's Amazon-ASIN pattern. novada_scrape remains an acceptable fallback (identical engine, platform='walmart.com'). NOT tagged 'hosted-15': same precedent as T11-T20."
+    },
+    {
+      "id": "T22-shein-product-by-id",
+      "prompt": "Get SHEIN product details (price, images) for product ID Tween-Girls-Casual-Solid-Color-Criss-Cross-Racerback-Sports-Dress-Kids-p-423721658.",
+      "category": "scrape-shein-vs-extract",
+      "expected_tool": "novada_scrape_shein",
+      "acceptable_tools": ["novada_scrape_shein", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a named platform (SHEIN) plus a specific product ID is the product_by_id disambiguator over reading a page as prose. novada_scrape remains an acceptable fallback (identical engine, platform='shein.com'). SHEIN keyword/category list-search intentionally has no working route today (all 3 catalog ops are backend_broken) — that gap is documented on the tool itself, not exercised by this task. NOT tagged 'hosted-15': same precedent as T11-T21."
+    },
+    {
+      "id": "T23-linkedin-jobs-by-location",
+      "prompt": "Find LinkedIn job listings for 'product manager' in Germany, remote-friendly only.",
+      "category": "scrape-linkedin-vs-search",
+      "expected_tool": "novada_scrape_linkedin",
+      "acceptable_tools": ["novada_scrape_linkedin", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a named platform (LinkedIn) plus structured job-search filters (location/remote) is the jobs_search disambiguator over a generic web search, which cannot apply LinkedIn's own filters. novada_scrape remains an acceptable fallback (identical engine, platform='linkedin.com'). NOT tagged 'hosted-15': same precedent as T11-T22."
+    },
+    {
+      "id": "T24-github-repo-details-by-url",
+      "prompt": "Get the stars, forks, and description for the GitHub repo https://github.com/gin-gonic/gin.",
+      "category": "scrape-github-vs-extract",
+      "expected_tool": "novada_scrape_github",
+      "acceptable_tools": ["novada_scrape_github", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a GitHub repo URL plus explicit structured fields (stars/forks/description) is the repository_by_url disambiguator over reading the repo page as plain text (the same extract-vs-scrape pattern as T18/T19). novada_scrape remains an acceptable fallback (identical engine, platform='github.com'). NOT tagged 'hosted-15': same precedent as T11-T23."
+    },
+    {
+      "id": "T25-perplexity-answer-vs-search",
+      "prompt": "What does Perplexity AI itself answer when you ask it 'what's the best noise cancelling headphones in 2026' — I want Perplexity's own generated answer, not a general web search.",
+      "category": "scrape-perplexity-vs-search",
+      "expected_tool": "novada_scrape_perplexity",
+      "acceptable_tools": ["novada_scrape_perplexity", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract", "novada_ai_monitor"],
+      "sibling_watch": ["novada_search", "novada_ai_monitor", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): explicit 'Perplexity's own generated answer, not a general web search' framing is the exact disambiguator in novada_scrape_perplexity's own description vs both novada_search (multi-engine, answer-oriented but not Perplexity-specific) and novada_ai_monitor (scans INDEXED PUBLIC PAGES for brand mentions, not a live generated answer for an arbitrary query). novada_scrape remains an acceptable fallback (identical engine, platform='perplexity.ai'). This is also the task that proves the ChatGPT-exclusion decision doesn't leave a routing gap: no novada_scrape_chatgpt sibling exists because chatgpt.com's only 2 catalog ops are both backend_broken. NOT tagged 'hosted-15': same precedent as T11-T24."
+    }
+  ]
+}

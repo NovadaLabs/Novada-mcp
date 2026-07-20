@@ -17,6 +17,12 @@
  * MCP schema for every dispatchable tool (visible + hidden).
  */
 import type { ProgressReporter } from "./tools/crawl.js";
+export declare const _TOOL_DEFINITIONS: Array<{
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+    annotations: Record<string, boolean>;
+}>;
 /**
  * TOOLS — the MCP ListTools surface, DERIVED from the registry.
  *

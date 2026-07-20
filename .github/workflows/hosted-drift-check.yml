@@ -1,0 +1,72 @@
+name: Hosted Drift Check
+
+# Wires scripts/check-hosted-drift.mjs into CI. Before this workflow existed,
+# the script was dead code: it protects the hand-curated `TOOLS` array that is
+# the MAIN entrance for every mcp.novada.com user, but nothing ever invoked it
+# (grep across workflows / package.json scripts confirmed zero call sites,
+# 2026-07-18 red-team finding — GAP 1).
+#
+# Zero secrets, zero network: check-hosted-drift.mjs is a dependency-free ESM
+# script that only reads local repo files (config/surfaces.json,
+# npm-package/src/tools/registry.ts, npm-package/src/tools/scrape_*.ts, and
+# hosted-server/vercel/api/mcp.ts) and text-parses them — see that script's own
+# header for why it text-parses instead of importing/executing any of them.
+#
+# UPDATED 2026-07-20 (Option A — core-derivation refactor): mcp.ts's TOOLS array is now
+# DERIVED from npm-package's core.ts (`CORE_TOOLS.map(...)`) instead of hand-curated, so
+# this guard's job shifted from "does the hand-curated literal match the manifest" to
+# "is the derivation still intact, and does mcp.ts's HOSTED_HIDDEN exclusion set still
+# match config/surfaces.json's 'hosted' manifest" — see the script's own header for the
+# full gate list (derivation gate + gates a/b/c).
+#
+# The `paths:` filter below MUST list every file the check reads or could be
+# invalidated by — otherwise an edit to one of its inputs would land on main
+# without ever re-running this guard:
+#   - config/**                                  (the committed manifest, config/surfaces.json)
+#   - scripts/check-hosted-drift.mjs              (the guard itself, incl. its anchor strings)
+#   - npm-package/src/tools/registry.ts           (hand-written REGISTERED_TOOL_NAMES, gate (a))
+#   - npm-package/src/tools/scrape_*.ts           (platform-scraper `toolName:` literals — the
+#                                                   15-tool family registry.ts spreads in rather
+#                                                   than lists literally, recovered from here)
+#   - hosted-server/vercel/api/mcp.ts             (the live hosted TOOLS derivation + HOSTED_HIDDEN,
+#                                                   the derivation gate + gate (b))
+#   - .github/workflows/**                        (so edits to this workflow re-validate themselves)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "config/**"
+      - "scripts/check-hosted-drift.mjs"
+      - "npm-package/src/tools/registry.ts"
+      - "npm-package/src/tools/scrape_*.ts"
+      - "hosted-server/vercel/api/mcp.ts"
+      - ".github/workflows/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "config/**"
+      - "scripts/check-hosted-drift.mjs"
+      - "npm-package/src/tools/registry.ts"
+      - "npm-package/src/tools/scrape_*.ts"
+      - "hosted-server/vercel/api/mcp.ts"
+      - ".github/workflows/**"
+  workflow_dispatch: {}
+
+jobs:
+  check-hosted-drift:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # check-hosted-drift.mjs is plain dependency-free ESM (.mjs) — no build
+      # step, no ts-node/tsx, no npm install required. Any modern Node runs it;
+      # 20 (current LTS) matches this repo's existing npm-package CI matrix.
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run hosted-drift guard
+        run: node scripts/check-hosted-drift.mjs

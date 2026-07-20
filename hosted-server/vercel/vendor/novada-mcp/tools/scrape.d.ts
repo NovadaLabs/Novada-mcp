@@ -51,7 +51,11 @@ export declare function descriptionHasChrome(description: string): boolean;
  */
 export declare function curateTabularRecords(records: Record<string, unknown>[]): Record<string, unknown>[];
 export declare const OPERATION_ALIASES: Record<string, string>;
-type OpMap = Record<string, readonly string[]>;
+interface RequiredKeys {
+    readonly keys: readonly string[];
+    readonly mode: "any" | "all";
+}
+type OpMap = Record<string, RequiredKeys>;
 /** Derived from SCRAPER_CATALOG — 16 active platforms. */
 export declare const PLATFORM_OPERATIONS: Record<string, OpMap>;
 /**
@@ -64,6 +68,9 @@ export declare const PLATFORM_OPERATIONS: Record<string, OpMap>;
  * 16 platforms that have live operations).
  */
 export declare function preflightScrape(platform: string, operation: string, params: Record<string, unknown>): NovadaError | null;
-export declare function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, apiKey: string): Promise<string>;
+type ScrapeEngineParams = (ScrapeParams | ScrapeParamsFullType) & {
+    displayName?: string;
+};
+export declare function novadaScrape(params: ScrapeEngineParams, apiKey: string): Promise<string>;
 export {};
 //# sourceMappingURL=scrape.d.ts.map
