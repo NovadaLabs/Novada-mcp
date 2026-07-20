@@ -3,52 +3,34 @@
  * npm-package/scripts/acceptance/live-smoke.mjs
  *
  * LIVE SMOKE TEST — one real, billed call per platform-scraper tool (all 15 of the
- * novada_scrape_<platform> family), proving the wire format actually returns data from
- * the live Novada Scraper API — not just a mocked unit test. This is gate 7 of the
- * release-acceptance run (scripts/acceptance/run.mjs). Cost-aware by design: exactly
- * ONE call per platform, ~90s timeout each, never a full-catalog sweep.
+ * novada_scrape_<platform> family), proving the wire format actually reaches the live
+ * Novada Scraper API and is accepted — not just a mocked unit test. Gate 7 of the
+ * release-acceptance run (scripts/acceptance/run.mjs). Cost-aware: ONE call per platform
+ * (plus at most one retry for a target-side flake), ~90s timeout each, never a full sweep.
  *
- * Params are NOT hand-typed per platform (that would silently rot the day a platform's
- * catalog op changes). For each of the 15 platform-scraper tools, this script:
- *   1. Reads the tool's declarative config (PLATFORM_SCRAPER_TOOLS[i].config) — the
- *      friendly-operation-name -> catalog-scraperId map, the SAME object
- *      tests/tools/platform-scraper-catalog.test.ts cross-checks against SCRAPER_CATALOG.
- *   2. Iterates that platform's operations in declared order and picks the FIRST one
- *      whose catalog op is status:"ok" AND every required param can be filled from the
- *      catalog's own `dflt` value — or, when a required param has no `dflt` but DOES
- *      carry an `opts` enum (e.g. the `json` output-format field most search-engine ops
- *      require), falls back to `opts[0]`, which is just as guaranteed-valid.
- *   3. Dispatches novada_scrape_<platform>({ operation: <friendlyName>, params }) through
- *      the real dispatch() router (src/core.ts's compiled build/core.js) — the exact same
- *      code path a customer's MCP call hits, not a hand-rolled HTTP request.
+ * Params are catalog-derived (see pickOperation/buildParams) so they can't silently rot.
  *
- * Self-maintaining: add a 16th platform-scraper config and this script covers it with
- * zero hand-added fixture data (see npm-package/docs/RELEASE-ACCEPTANCE.md's "when you
- * add a tool" checklist for the one thing that still needs a manual touch: adding the
- * platform to `docs/RELEASE-ACCEPTANCE.md` coverage note — the pickOperation() logic
- * itself needs no per-platform code).
+ * THREE-WAY OUTCOME (see classify.mjs for the why):
+ *   - pass      — accepted + data/task/progress.
+ *   - wire_fail — OUR integration is wrong (11006/10001/unknown platform/auth). BLOCKS.
+ *   - flake     — the scraper accepted the request but the TARGET site returned a
+ *                 CAPTCHA/403/5xx or the upstream timed out. Transient, target-side, NOT
+ *                 our bug. Retried once; reported; NEVER blocks the release.
+ * Only wire_fail sets a non-zero exit code. A release is not held hostage to a target site
+ * being flaky at the instant the smoke test ran.
  *
- * KEY: read from process.env.NOVADA_SCRAPER_KEY ONLY — never hardcoded, never a default.
- * Missing key is a SKIP (exit 0), not a FAIL: every call this script makes is REAL and
- * BILLED against the live Novada Scraper API, an external effect that requires the key
- * to even be attempted (REDLINE — no credential ever lives in this repo).
+ * KEY: process.env.NOVADA_SCRAPER_KEY ONLY — never hardcoded, never a default. Missing key
+ * is a SKIP (exit 0): every call here is REAL and BILLED (external effect ⇒ REDLINE).
  *
- * Usage:
- *   npm run build && NOVADA_SCRAPER_KEY=... node scripts/acceptance/live-smoke.mjs
+ * Usage: npm run build && NOVADA_SCRAPER_KEY=... node scripts/acceptance/live-smoke.mjs
  */
 import { dispatch } from "../../build/core.js";
 import { PLATFORM_SCRAPER_TOOLS } from "../../build/tools/platform_scrapers.js";
 import { SCRAPER_CATALOG } from "../../build/data/scraper_catalog.js";
+import { classify, flakeReason } from "./classify.mjs";
 
 const KEY = process.env.NOVADA_SCRAPER_KEY;
 const PER_CALL_TIMEOUT_MS = 90_000;
-
-// A call is accepted if the returned/thrown text carries one of these signals...
-const ACCEPT_PATTERNS = [/source:\s*live/i, /records:\s*\d+/i, /task_id/i, /status:\s*processing/i];
-// ...and does NOT also carry one of these known error signals (scrape.ts's own error
-// vocabulary — see src/tools/scrape.ts's 11006/10001/"Unknown platform" handling and
-// src/_core/errors.ts's NovadaError.toAgentString() "failure_class: auth" rendering).
-const ERROR_PATTERNS = [/\b11006\b/, /\b10001\b/, /Unknown platform/i, /failure_class:\s*auth/i, /auth error/i, /INVALID_API_KEY/i];
 
 /**
  * Build guaranteed-valid params for one catalog op from its own `dflt`/`opts` fields.
@@ -71,9 +53,8 @@ function buildParams(catalogOp) {
 }
 
 /**
- * Pick the first operation (in declared order) this tool's config can smoke-test with
- * guaranteed-valid, catalog-derived params. Throws if NONE qualify — a platform added
- * with no safely-callable default operation is a real gap to fix, not a soft skip.
+ * Pick the first operation (declared order) this tool's config can smoke-test with
+ * guaranteed-valid, catalog-derived params. Throws if NONE qualify.
  */
 function pickOperation(tool) {
   const platformEntry = SCRAPER_CATALOG.find((p) => p.domain === tool.config.platform);
@@ -103,10 +84,12 @@ function withTimeout(promise, ms) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function classify(text) {
-  const accepted = ACCEPT_PATTERNS.some((re) => re.test(text));
-  const errored = ERROR_PATTERNS.some((re) => re.test(text));
-  return accepted && !errored;
+async function callOnce(name, operation, params) {
+  try {
+    return await withTimeout(dispatch(name, { operation, params }, KEY), PER_CALL_TIMEOUT_MS);
+  } catch (err) {
+    return typeof err?.toAgentString === "function" ? err.toAgentString() : String(err?.message ?? err);
+  }
 }
 
 async function main() {
@@ -124,39 +107,55 @@ async function main() {
     try {
       ({ operation, params } = pickOperation(tool));
     } catch (err) {
-      rows.push({ platform: name, op: "-", pass: false, ms: 0, note: String(err?.message ?? err) });
+      // A platform with no safely-callable default op is a real harness/catalog gap — surface
+      // it as a wire_fail (it means we cannot even attempt this tool), so it blocks + gets fixed.
+      rows.push({ platform: name, op: "-", verdict: "wire_fail", ms: 0, note: String(err?.message ?? err) });
       continue;
     }
 
     const start = Date.now();
-    let text;
-    try {
-      text = await withTimeout(dispatch(name, { operation, params }, KEY), PER_CALL_TIMEOUT_MS);
-    } catch (err) {
-      text = typeof err?.toAgentString === "function" ? err.toAgentString() : String(err?.message ?? err);
+    let text = await callOnce(name, operation, params);
+    let verdict = classify(text);
+    // Retry a target-side flake ONCE — transients (CAPTCHA/5xx/timeout) often clear immediately.
+    if (verdict === "flake") {
+      const retry = await callOnce(name, operation, params);
+      const rv = classify(retry);
+      if (rv !== "flake") { text = retry; verdict = rv; }
     }
     const ms = Date.now() - start;
-    const pass = classify(text);
-    rows.push({ platform: name, op: operation, pass, ms, note: pass ? "" : String(text).slice(0, 160).replace(/\s+/g, " ") });
+    const note = verdict === "pass" ? "" : `${verdict === "flake" ? flakeReason(text) + " — " : ""}${String(text).slice(0, 150).replace(/\s+/g, " ")}`;
+    rows.push({ platform: name, op: operation, verdict, ms, note });
   }
 
   const nameWidth = Math.max(...rows.map((r) => r.platform.length), "platform".length);
   const opWidth = Math.max(...rows.map((r) => r.op.length), "op".length);
-  console.log(`${"platform".padEnd(nameWidth)} | ${"op".padEnd(opWidth)} | status | ms`);
-  console.log(`${"-".repeat(nameWidth)}-|-${"-".repeat(opWidth)}-|--------|------`);
+  console.log(`${"platform".padEnd(nameWidth)} | ${"op".padEnd(opWidth)} | status    | ms`);
+  console.log(`${"-".repeat(nameWidth)}-|-${"-".repeat(opWidth)}-|-----------|------`);
 
-  let failCount = 0;
+  const label = { pass: "PASS     ", wire_fail: "WIRE-FAIL", flake: "flake    " };
+  let pass = 0, wireFail = 0, flake = 0;
   for (const r of rows) {
-    if (!r.pass) failCount++;
-    const line = `${r.platform.padEnd(nameWidth)} | ${r.op.padEnd(opWidth)} | ${r.pass ? "PASS  " : "FAIL  "} | ${String(r.ms).padStart(5)}`;
+    if (r.verdict === "pass") pass++; else if (r.verdict === "wire_fail") wireFail++; else flake++;
+    const line = `${r.platform.padEnd(nameWidth)} | ${r.op.padEnd(opWidth)} | ${label[r.verdict]} | ${String(r.ms).padStart(5)}`;
     console.log(r.note ? `${line}  (${r.note})` : line);
   }
 
-  console.log(`\n${rows.length - failCount}/${rows.length} accepted`);
-  process.exit(failCount > 0 ? 1 : 0);
+  // Only wire-integration failures block. Target-side flakes are reported, not fatal.
+  console.log(`\n${pass}/${rows.length} pass · ${flake} upstream-flake (non-blocking) · ${wireFail} wire-fail`);
+  console.log(wireFail > 0
+    ? `WIRE FAILURES (${wireFail}) — integration broken, release BLOCKED.`
+    : `Wire integration OK${flake > 0 ? ` (${flake} target-side flake${flake > 1 ? "s" : ""} — retry/ignore; not our bug)` : ""}.`);
+  process.exit(wireFail > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error("live-smoke: unexpected failure:", err);
-  process.exit(1);
-});
+// Only run when executed directly — importing this module (e.g. from a unit test that pulls
+// in classify) must NOT boot main() and its live calls.
+const isDirectRun = process.argv[1] && process.argv[1].replace(/\\/g, "/").endsWith("scripts/acceptance/live-smoke.mjs");
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("live-smoke: unexpected failure:", err);
+    process.exit(1);
+  });
+}
+
+export { classify, pickOperation, buildParams };

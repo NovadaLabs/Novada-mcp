@@ -40,10 +40,23 @@ isn't currently possible.
 | 4 | `check-hosted-drift` (`node scripts/check-hosted-drift.mjs`) | The hosted (mcp.novada.com) tool surface is still derived from core and hasn't silently drifted from `config/surfaces.json` | script exits 0 (no drift detected) |
 | 5 | eval Tier-A (`eval/baseline-selector.mjs`) | Deterministic, $0 tool-selection regression floor — no NEW description collision was introduced since the recorded baseline | `gate_pass: true` in its JSON output |
 | 6 | eval Tier-B (`eval/model-eval-runner.mjs`) | A REAL model's first-try tool selection still clears the accuracy floor and no sibling tool's routing regressed | `gate_pass: true` in its JSON output (SKIPPED without `ANTHROPIC_API_KEY`) |
-| 7 | live-smoke (`scripts/acceptance/live-smoke.mjs`) | The wire format for all 15 platform-scraper tools actually returns data from the LIVE Novada Scraper API — not just a mock | all 15 platforms accepted (SKIPPED without `NOVADA_SCRAPER_KEY`) |
+| 7 | live-smoke (`scripts/acceptance/live-smoke.mjs`) | The wire format for all 15 platform-scraper tools actually reaches the LIVE Novada Scraper API and is accepted — not just a mock | **zero `wire_fail`** (SKIPPED without `NOVADA_SCRAPER_KEY`). Target-side `flake`s do NOT block — see below |
 
 Notes:
 
+- **Gate 7 distinguishes two failure modes — this is what makes it trustworthy.** Live web
+  scraping fails in two very different ways, and conflating them makes a smoke test useless:
+    - `wire_fail` = OUR integration is wrong (invalid `scraper_id` → 11006, bad/missing params
+      → 10001, unknown platform, or auth). **This BLOCKS the release.** It is the only thing
+      gate 7 fails on.
+    - `flake` = the scraper accepted the request but the TARGET site returned a CAPTCHA / 403 /
+      5xx, or the upstream timed out. This is transient and target-side, **not our bug**. Each
+      flake is retried once; if it still flakes it is reported (with reason) but **never blocks
+      the release**. (Observed 2026-07-20: the flaky set changed run-to-run — 11/15 then 12/15,
+      instagram/github/perplexity vs a different set — the signature of target transients, not
+      wire bugs. A gate that blocked on these would cry wolf every release.)
+  The wire_fail/flake boundary is unit-tested (`tests/tools/live-smoke-classify.test.ts`) against
+  the real response strings, so the classifier itself can't silently rot.
 - The platform-scraper ↔ catalog cross-check (no dead/typo'd `scraper_id` ever reaches a
   customer) is a `npm test` suite already — `tests/tools/platform-scraper-catalog.test.ts`
   — so it's covered by gate 2 and is not re-run separately here.
