@@ -219,6 +219,11 @@ If you know the exact page you want → `novada_extract`. If you need to find pa
 | `novada_scrape_facebook` | Facebook-only structured data (profiles, posts, comments, events) via a closed, typed `operation` enum — 6 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
 | `novada_scrape_tiktok` | TikTok-only structured data (profiles, posts, hashtag/discover listings) via a closed, typed `operation` enum — 5 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
 | `novada_scrape_x` | X (Twitter)-only structured data (post details, profile lookup by username or URL) via a closed, typed `operation` enum — 3 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_walmart` | Walmart-only structured data (product details by keyword/category URL/SKU/zip code/URL) via a closed, typed `operation` enum — 5 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_shein` | SHEIN-only structured product data (by product ID or product URL) via a closed, typed `operation` enum — 2 verified-working operations (3 known backend_broken ops excluded) | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_linkedin` | LinkedIn-only structured data (job listings by filters/search URL/job URL, company info by URL) via a closed, typed `operation` enum — 4 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_github` | GitHub-only structured repository data (by repository URL or a search-results URL) via a closed, typed `operation` enum — 3 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_perplexity` | Perplexity AI's own generated answer for a query (by URL or search term) via a closed, typed `operation` enum — 2 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
 
 **Crawl / Map / Site copy**
 
@@ -279,7 +284,7 @@ If you know the exact page you want → `novada_extract`. If you need to find pa
 | `novada_setup` | Validating your key on first run; never hard-errors on a missing key | Key status, balance, onboarding guidance |
 | `novada_session_stats` | Debugging your own call pattern this session | Per-tool call counts, recent calls, uptime |
 
-**33 tools across 6 categories.** The hosted default surface (`mcp.novada.com`) exposes a curated subset; self-host (`npx novada-mcp`) exposes all 33. Call `novada_discover` on your connection to see exactly what's available on it.
+**38 tools across 6 categories.** The hosted default surface (`mcp.novada.com`) exposes a curated subset; self-host (`npx novada-mcp`) exposes all 38. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ---
 

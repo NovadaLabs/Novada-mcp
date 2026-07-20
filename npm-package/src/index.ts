@@ -31,6 +31,7 @@ import type { ProgressReporter } from "./tools/crawl.js";
 import { classifyError } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { TOOLS, dispatch } from "./core.js";
+import { PLATFORM_SCRAPER_TOOLS } from "./tools/platform_scrapers.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -49,7 +50,20 @@ const API_KEY = process.env.NOVADA_API_KEY?.trim();
 // Both set → union. Neither set → all tools (backward compatible).
 
 /** Category bundles — each group name expands to multiple tools */
-const SCRAPE_GROUP = ["novada_scrape", "novada_scrape_amazon", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"];
+// SCRAPE_GROUP used to hand-list only "novada_scrape_amazon" — every platform-scraper
+// sibling added since (google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/
+// walmart/shein/linkedin/github/perplexity) was silently EXCLUDED from
+// NOVADA_GROUPS="scrape", contradicting the group's own name. Derived programmatically
+// from PLATFORM_SCRAPER_TOOLS (src/tools/platform_scrapers.ts) instead, so every current
+// AND future novada_scrape_<platform> tool is included automatically — no per-platform
+// edit needed here again. See tests/tools/scrape-group-derivation.test.ts.
+const SCRAPE_GROUP = [
+  "novada_scrape",
+  ...PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name),
+  "novada_scraper_submit",
+  "novada_scraper_status",
+  "novada_scraper_result",
+];
 const CATEGORY_MAP: Record<string, string[]> = {
   search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor", "novada_search_feedback"],
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],

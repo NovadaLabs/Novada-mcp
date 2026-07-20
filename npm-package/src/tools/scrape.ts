@@ -843,6 +843,17 @@ const AND_REQUIRED_OPS = new Set<string>([
   // which has an existing passing test proving a partial call succeeds — no such live
   // counter-evidence exists here).
   "ins_posts_profileurl",                  // profileurl + resultsLimit
+  // Seeded 2026-07-20 during the Tools-v2 FINAL platform-scraper pass
+  // (novada_scrape_walmart/shein/linkedin/github/perplexity): 3 of walmart.com's 5
+  // ops carry MORE THAN ONE catalog required:true key — the only new AND-required
+  // ops in this pass (SHEIN/LinkedIn/GitHub/Perplexity each have exactly one
+  // required key per op, needing no entry here). Same rationale as every prior
+  // entry in this Set: a catalog `dflt` on a required key does not exempt it from
+  // being genuinely mandatory (walmart_product_category-url's `all`/`page_limit`
+  // both carry a `dflt` and are still independently required).
+  "walmart_product_keywords",              // domain + keyword
+  "walmart_product_category-url",          // category_url + all + page_limit
+  "walmart_product_zipcodes",              // url + zipcode
 ]);
 
 /** Build an OpMap from catalog params for a single platform. */

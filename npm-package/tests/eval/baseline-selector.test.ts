@@ -27,11 +27,11 @@
  * imported identically by both a vitest .ts file and a plain node .mjs
  * script) — not worth doing for one duplicate.
  *
- * Recorded floor: 60% (12/20), updated 2026-07-20 (Tools-v2 SOCIAL/VIDEO
- * platform-scraper pass, T16-T20) from the prior 46.67% (7/15) recorded earlier
- * the same day (Tools-v2 search-engine platform-scraper pass, T12-T15), itself
- * from the original 50% (5/10) measured 2026-07-19 against the live 23-tool
- * registry — see eval/baseline-selector.mjs's
+ * Recorded floor: 68% (17/25), updated 2026-07-20 (Tools-v2 FINAL platform-scraper
+ * pass, T21-T25) from the prior 60% (12/20) recorded earlier the same day (Tools-v2
+ * SOCIAL/VIDEO platform-scraper pass, T16-T20), itself from 46.67% (7/15, Tools-v2
+ * search-engine platform-scraper pass, T12-T15), itself from the original 50% (5/10)
+ * measured 2026-07-19 against the live 23-tool registry — see eval/baseline-selector.mjs's
  * BASELINE_FLOOR doc comment for the full provenance. This suite's gate is REGRESSION-vs-floor, not an
  * absolute quality bar: a green run means "no NEW description collision was
  * introduced," not "tool selection is correct." The model-in-the-loop runner
@@ -125,7 +125,7 @@ function validateTaskSet(tasks: readonly Task[], registryNames: readonly string[
   return problems;
 }
 
-const BASELINE_FLOOR = 12 / 20;
+const BASELINE_FLOOR = 17 / 25;
 
 interface BaselineTierA {
   recorded_date: string;
@@ -188,7 +188,7 @@ describe("Layer 5 eval harness — Tier A baseline selector (src-grounded, no bu
   const baselineTierA = JSON.parse(readFileSync(baselineTierAPath, "utf8")) as BaselineTierA;
 
   it("sanity: task set and live registry both loaded", () => {
-    expect(tasks.length).toBe(20);
+    expect(tasks.length).toBe(25);
     expect(TOOL_REGISTRY.length).toBeGreaterThan(20);
   });
 

@@ -223,6 +223,61 @@
       "sibling_watch": ["novada_extract", "novada_scrape"],
       "surfaces": ["default"],
       "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a bare username (not a URL) plus structured profile fields (bio/follower count/post count) is the profile_by_username disambiguator — there is no page to 'read' from a username alone, ruling out novada_extract. novada_scrape remains an acceptable fallback (identical engine, platform='x.com'). NOT tagged 'hosted-15': same precedent as T11-T19."
+    },
+    {
+      "id": "T21-walmart-sku-lookup",
+      "prompt": "Get the price and availability for the Walmart product with SKU 433078517.",
+      "category": "scrape-walmart-vs-extract",
+      "expected_tool": "novada_scrape_walmart",
+      "acceptable_tools": ["novada_scrape_walmart", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a named platform (Walmart) plus a specific SKU identifier is the product_by_sku disambiguator, mirroring T11's Amazon-ASIN pattern. novada_scrape remains an acceptable fallback (identical engine, platform='walmart.com'). NOT tagged 'hosted-15': same precedent as T11-T20."
+    },
+    {
+      "id": "T22-shein-product-by-id",
+      "prompt": "Get SHEIN product details (price, images) for product ID Tween-Girls-Casual-Solid-Color-Criss-Cross-Racerback-Sports-Dress-Kids-p-423721658.",
+      "category": "scrape-shein-vs-extract",
+      "expected_tool": "novada_scrape_shein",
+      "acceptable_tools": ["novada_scrape_shein", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a named platform (SHEIN) plus a specific product ID is the product_by_id disambiguator over reading a page as prose. novada_scrape remains an acceptable fallback (identical engine, platform='shein.com'). SHEIN keyword/category list-search intentionally has no working route today (all 3 catalog ops are backend_broken) — that gap is documented on the tool itself, not exercised by this task. NOT tagged 'hosted-15': same precedent as T11-T21."
+    },
+    {
+      "id": "T23-linkedin-jobs-by-location",
+      "prompt": "Find LinkedIn job listings for 'product manager' in Germany, remote-friendly only.",
+      "category": "scrape-linkedin-vs-search",
+      "expected_tool": "novada_scrape_linkedin",
+      "acceptable_tools": ["novada_scrape_linkedin", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a named platform (LinkedIn) plus structured job-search filters (location/remote) is the jobs_search disambiguator over a generic web search, which cannot apply LinkedIn's own filters. novada_scrape remains an acceptable fallback (identical engine, platform='linkedin.com'). NOT tagged 'hosted-15': same precedent as T11-T22."
+    },
+    {
+      "id": "T24-github-repo-details-by-url",
+      "prompt": "Get the stars, forks, and description for the GitHub repo https://github.com/gin-gonic/gin.",
+      "category": "scrape-github-vs-extract",
+      "expected_tool": "novada_scrape_github",
+      "acceptable_tools": ["novada_scrape_github", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a GitHub repo URL plus explicit structured fields (stars/forks/description) is the repository_by_url disambiguator over reading the repo page as plain text (the same extract-vs-scrape pattern as T18/T19). novada_scrape remains an acceptable fallback (identical engine, platform='github.com'). NOT tagged 'hosted-15': same precedent as T11-T23."
+    },
+    {
+      "id": "T25-perplexity-answer-vs-search",
+      "prompt": "What does Perplexity AI itself answer when you ask it 'what's the best noise cancelling headphones in 2026' — I want Perplexity's own generated answer, not a general web search.",
+      "category": "scrape-perplexity-vs-search",
+      "expected_tool": "novada_scrape_perplexity",
+      "acceptable_tools": ["novada_scrape_perplexity", "novada_scrape"],
+      "unacceptable_tools": ["novada_search", "novada_extract", "novada_ai_monitor"],
+      "sibling_watch": ["novada_search", "novada_ai_monitor", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): explicit 'Perplexity's own generated answer, not a general web search' framing is the exact disambiguator in novada_scrape_perplexity's own description vs both novada_search (multi-engine, answer-oriented but not Perplexity-specific) and novada_ai_monitor (scans INDEXED PUBLIC PAGES for brand mentions, not a live generated answer for an arbitrary query). novada_scrape remains an acceptable fallback (identical engine, platform='perplexity.ai'). This is also the task that proves the ChatGPT-exclusion decision doesn't leave a routing gap: no novada_scrape_chatgpt sibling exists because chatgpt.com's only 2 catalog ops are both backend_broken. NOT tagged 'hosted-15': same precedent as T11-T24."
     }
   ]
 }

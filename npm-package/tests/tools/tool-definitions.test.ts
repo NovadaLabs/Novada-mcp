@@ -29,7 +29,7 @@ import { _TOOL_DEFINITIONS } from "../../src/core.js";
 
 describe("tool definitions (src/core.ts _TOOL_DEFINITIONS)", () => {
   it("declares at least the full dispatchable tool set", () => {
-    // _TOOL_DEFINITIONS contains all tools (visible + hidden). 22 in registry + 11 hidden = 33.
+    // _TOOL_DEFINITIONS contains all tools (visible + hidden). 38 in registry + 11 hidden = 49.
     expect(_TOOL_DEFINITIONS.length).toBeGreaterThanOrEqual(30);
   });
 

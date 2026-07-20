@@ -598,26 +598,30 @@ describe("collision matrix — real npm-package tool registry (src/core.ts TOOLS
       ).toEqual([]);
     });
 
-    it("documents today's 24 accepted collisions (pinned so a silent baseline edit is visible)", () => {
+    it("documents today's 129 accepted collisions (pinned so a silent baseline edit is visible)", () => {
       // Not a behavior assertion — a drift guard on the baseline file's own size, matching
       // the house style of pinning headline counts (see discover.test.ts's registry-count test).
       // Was 9 before the red-team GAP A fix, 10 after it, 11 after the novada_scrape vs
       // novada_scrape_amazon "operation" divergence (Tools-v2 Option B scaffold); 24 added the 13
       // new "operation" divergences from the Tools-v2 search-engine platform-scraper pass
-      // (novada_scrape_google/bing/duckduckgo/yandex). 64 adds 40 more from the Tools-v2
+      // (novada_scrape_google/bing/duckduckgo/yandex). 64 added 40 more from the Tools-v2
       // SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x,
-      // 2026-07-20) — every pair, among the now-eleven tools that declare an "operation" param,
+      // 2026-07-20) — every pair, among the then-eleven tools that declare an "operation" param,
       // whose closed enums actually differ: 6 (existing family) x 5 (new family) + C(5,2) (new
-      // family pairwise) = 30 + 10 = 40. NOTE: novada_scrape_duckduckgo vs novada_scrape_yandex
-      // is NOT among these: both tools have a single-value enum of exactly ["web_search"] — an
-      // IDENTICAL shape, so the live scan never even flags it as a collision (scanParamCollisions
-      // skips shapeA === shapeB before the baseline check runs) — see each new entry's note for
-      // the reviewed rationale.
+      // family pairwise) = 30 + 10 = 40. 129 adds 65 more from the Tools-v2 FINAL
+      // platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity,
+      // 2026-07-20) — every pair, among the now-sixteen "operation"-bearing tools, whose closed
+      // enums differ: 11 (existing family) x 5 (new family) + C(5,2) (new family pairwise) =
+      // 55 + 10 = 65. NOTE: novada_scrape_duckduckgo vs novada_scrape_yandex is NOT among these:
+      // both tools have a single-value enum of exactly ["web_search"] — an IDENTICAL shape, so
+      // the live scan never even flags it as a collision (scanParamCollisions skips
+      // shapeA === shapeB before the baseline check runs) — see each new entry's note for the
+      // reviewed rationale.
       expect(
         baseline.acceptedDivergentCollisions.length,
         "collision-matrix.baseline.json's accepted-collision count changed — update this pinned count " +
           "and confirm each new/removed entry went through reviewer sign-off",
-      ).toBe(64);
+      ).toBe(129);
     });
 
     it("documents today's 18 reviewed shared-param shape variants (pinned so silent growth is visible)", () => {

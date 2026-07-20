@@ -20,6 +20,11 @@ import { INSTAGRAM_SCRAPER_TOOL } from "./scrape_instagram.js";
 import { FACEBOOK_SCRAPER_TOOL } from "./scrape_facebook.js";
 import { TIKTOK_SCRAPER_TOOL } from "./scrape_tiktok.js";
 import { X_SCRAPER_TOOL } from "./scrape_x.js";
+import { WALMART_SCRAPER_TOOL } from "./scrape_walmart.js";
+import { SHEIN_SCRAPER_TOOL } from "./scrape_shein.js";
+import { LINKEDIN_SCRAPER_TOOL } from "./scrape_linkedin.js";
+import { GITHUB_SCRAPER_TOOL } from "./scrape_github.js";
+import { PERPLEXITY_SCRAPER_TOOL } from "./scrape_perplexity.js";
 
 /** One entry per platform-scraper tool. Order mirrors registration order elsewhere. */
 export const PLATFORM_SCRAPER_TOOLS: DispatchableScraperTool[] = [
@@ -33,6 +38,11 @@ export const PLATFORM_SCRAPER_TOOLS: DispatchableScraperTool[] = [
   toDispatchableScraperTool(FACEBOOK_SCRAPER_TOOL),
   toDispatchableScraperTool(TIKTOK_SCRAPER_TOOL),
   toDispatchableScraperTool(X_SCRAPER_TOOL),
+  toDispatchableScraperTool(WALMART_SCRAPER_TOOL),
+  toDispatchableScraperTool(SHEIN_SCRAPER_TOOL),
+  toDispatchableScraperTool(LINKEDIN_SCRAPER_TOOL),
+  toDispatchableScraperTool(GITHUB_SCRAPER_TOOL),
+  toDispatchableScraperTool(PERPLEXITY_SCRAPER_TOOL),
 ];
 
 /** Full MCP tool schemas — spread into src/core.ts's `_TOOL_DEFINITIONS`. */

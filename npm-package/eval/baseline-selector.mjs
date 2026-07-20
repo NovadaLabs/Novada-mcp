@@ -149,6 +149,13 @@ export function validateTaskSet(tasks, registryNames) {
  * dated comment for the full accounting. Raised 46.67%->60% (7/15->12/20) to match the
  * honestly-regenerated committed snapshot.
  *
+ * 2026-07-20 UPDATE 3 (Tools-v2 FINAL platform-scraper pass): eval-tasks.json grew
+ * 20->25 tasks (T21-T25, one per new novada_scrape_<walmart|shein|linkedin|github|
+ * perplexity> tool). Same pattern as UPDATE 2 — all 5 new tasks score correct:true,
+ * no new forbidden hits; see eval/baseline-tier-a.json's own dated comment for the
+ * full accounting. Raised 60%->68% (12/20->17/25) to match the honestly-regenerated
+ * committed snapshot.
+ *
  * Kept for reporting/back-compat and as a human-readable summary of what
  * baseline-tier-a.json (below) records precisely, per-task. The actual gate
  * (FIX 2) no longer compares against this bare number — it compares against
@@ -156,7 +163,7 @@ export function validateTaskSet(tasks, registryNames) {
  * deterministic: no key, no network, no sampling) and catches per-task
  * identity regressions this scalar alone cannot (see evaluateRegressionGate).
  */
-export const BASELINE_FLOOR = 12 / 20;
+export const BASELINE_FLOOR = 17 / 25;
 
 const BASELINE_TIER_A_PATH = resolve(__dirname, "baseline-tier-a.json");
 
