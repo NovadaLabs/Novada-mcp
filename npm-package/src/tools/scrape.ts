@@ -775,6 +775,11 @@ export const OPERATION_ALIASES: Record<string, string> = Object.assign(
 interface RequiredKeys {
   readonly keys: readonly string[];
   readonly mode: "any" | "all";
+  // B1 fix (2026-07-20): some "any" (query-alias) ops ALSO have non-query keys that
+  // are AND-required IN ADDITION to the query — e.g. google_serp_web needs
+  // q/keyword/query (any one) PLUS domain (must be present regardless of which
+  // query alias was used). Only meaningful when mode === "any"; ignored otherwise.
+  readonly extraAll?: readonly string[];
 }
 type OpMap = Record<string, RequiredKeys>;
 
@@ -799,6 +804,43 @@ const SEARCH_ENGINE_OP_KEYS: Record<string, readonly string[]> = {
   // duckduckgo / yandex
   "duckduckgo": SEARCH_QUERY_KEYS,
   "yandex": SEARCH_QUERY_KEYS,
+};
+
+// B1 fix (2026-07-20, live-verified against scraper.novada.com): these search-engine
+// ops need the query alias (q/keyword/query, checked via SEARCH_ENGINE_OP_KEYS above)
+// PLUS one or more non-query keys that are catalog `required:true` AND have no known
+// backend-side default — live probe confirmed code:400/data:null when omitted. Every
+// key listed here must be present TOGETHER WITH a query key; the query check alone
+// (SEARCH_ENGINE_OP_KEYS) is not sufficient for these ops.
+//   google_search / google_ai_mode / bing_* / duckduckgo — deliberately NOT listed
+//   here: live-verified to need ONLY the query, no extra AND-required key.
+//
+// FIX (2026-07-20, re-audit): google_serp_jobs and google_serp_videos were WRONGLY
+// added here by the initial B1 pass (over-rejection). Live re-verification against
+// scraper.novada.com proves both return 200 + real data with ONLY a query key and NO
+// domain — the opposite of google_serp_web (which genuinely 400s/empty without
+// domain, confirmed separately and KEPT below). Do not re-add jobs/videos here
+// without fresh live evidence of a 400/empty response — the prior addition was
+// never actually verified against a live call.
+const SEARCH_ENGINE_EXTRA_REQUIRED_KEYS: Record<string, readonly string[]> = {
+  "google_serp_web": ["domain"],
+  "google_serp_hotels": ["domain", "check_in_date", "check_out_date"],
+  "yandex": ["yandex_domain"],
+};
+
+// B1 fix (2026-07-20): ops whose catalog `required:true` key set is NOT the live
+// required set, because one or more catalog-required params are synthetic
+// scaffolding auto-filled by submitScrapeTask before the request ever reaches the
+// backend (e.g. `json`, the output-format selector — see the
+// `if (!("json" in opParams)) opParams["json"] = 1;` auto-fill a few dozen lines
+// below in submitScrapeTask) and therefore never need to come from the caller.
+// This is an explicit override of the AND-required key list (bypassing the
+// catalog-derived reqKeys used by AND_REQUIRED_OPS below), analogous to how
+// SEARCH_ENGINE_OP_KEYS overrides the OR-required list.
+const CUSTOM_AND_REQUIRED_KEYS: Record<string, readonly string[]> = {
+  // catalog also marks `json` required:true for this op, but json is auto-filled —
+  // live-verified: only `url` is actually required.
+  "google_search_url": ["url"],
 };
 
 // Hand-curated allowlist of ops whose catalog-required keys are INDEPENDENTLY
@@ -865,8 +907,21 @@ function buildOpMapFromCatalog(domain: string): OpMap {
   for (const [slug, op] of platformEntry) {
     if (slug in SEARCH_ENGINE_OP_KEYS) {
       // Hand-built search-engine alias keys are OR-alternates (q/keyword/query all
-      // mean the same thing) — any ONE satisfies the requirement.
-      obj[slug] = { keys: SEARCH_ENGINE_OP_KEYS[slug], mode: "any" };
+      // mean the same thing) — any ONE satisfies the requirement. Some of these ops
+      // ALSO carry non-query keys that are AND-required in addition (B1 fix,
+      // 2026-07-20) — see SEARCH_ENGINE_EXTRA_REQUIRED_KEYS above.
+      const extraAll = SEARCH_ENGINE_EXTRA_REQUIRED_KEYS[slug];
+      obj[slug] = extraAll
+        ? { keys: SEARCH_ENGINE_OP_KEYS[slug], mode: "any", extraAll }
+        : { keys: SEARCH_ENGINE_OP_KEYS[slug], mode: "any" };
+      continue;
+    }
+
+    // Explicit AND-required override (bypasses catalog-derived reqKeys below) for
+    // ops where the catalog's required:true flags include synthetic/auto-filled
+    // params — see CUSTOM_AND_REQUIRED_KEYS above.
+    if (slug in CUSTOM_AND_REQUIRED_KEYS) {
+      obj[slug] = { keys: CUSTOM_AND_REQUIRED_KEYS[slug], mode: "all" };
       continue;
     }
 
@@ -992,6 +1047,33 @@ export function preflightScrape(
     });
   }
 
+  // B1 fix (2026-07-20): some query-alias ops ALSO have non-query keys that are
+  // AND-required in addition to the query (e.g. google_serp_web needs a query key
+  // PLUS domain). The query check above only confirms ONE of the alias keys is
+  // present — extraAll keys must be independently checked, every one of them.
+  if (required.extraAll && required.extraAll.length > 0) {
+    const missingExtra = required.extraAll.filter((k) => {
+      const v = params[k];
+      return v === undefined || v === null || String(v).trim().length === 0;
+    });
+    if (missingExtra.length > 0) {
+      const missingList = missingExtra.map((k) => `'${k}'`).join(", ");
+      const exampleParams = [required.keys[0], ...required.extraAll]
+        .map((k) => `${k}: "<value>"`)
+        .join(", ");
+      return new NovadaError({
+        code: NovadaErrorCode.INVALID_PARAMS,
+        message: `Operation '${operation}' on '${platform}' requires ${missingList} in addition to the search query; missing: ${missingList}.`,
+        agent_instruction:
+          `Add ${missingList} to the params object alongside your query key — this operation requires them together, e.g. ` +
+          `novada_scrape({ platform: "${platform}", operation: "${operation}", params: { ${exampleParams} } }). ` +
+          `Read novada://scraper-platforms for the exact param shape.`,
+        retryable: false,
+        detail: `preflight:missing_param`,
+      });
+    }
+  }
+
   return null;
 }
 
@@ -1100,7 +1182,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   if (submitOutcome.kind === "empty") {
     return [
       `## Scrape Results`,
-      `platform: ${platform} | operation: ${operation} | records: 0 | source: live`,
+      `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
       ``,
       `status: ok`,
       `_No results found for this query._ (upstream: ${sanitizeServerMsg(submitOutcome.message)})`,
@@ -1135,7 +1217,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     if (pollOutcome.kind === "pending") {
       return [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${operation} | records: 0 | source: live`,
+        `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
         ``,
         `status: processing`,
         `⏳ Task still running (task_id="${pollOutcome.taskId}") after ${POLL_TIMEOUT_MS / 1000}s.`,
@@ -1158,7 +1240,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   //   Format B (wrapped): [{spider_code:200, rest:{...}}, ...] or [{error:"msg", error_code:N}]
   const firstItem = resultItems[0];
   if (!firstItem) {
-    return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
+    return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
   }
 
   const firstAsRecord = firstItem as Record<string, unknown>;
@@ -1220,7 +1302,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   const records = rawRecords.slice(0, limit).map(r => flattenRecord(r)) as Record<string, unknown>[];
 
   if (records.length === 0) {
-    return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
+    return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
   }
 
   const title = `${platform} — ${displayOperation}`;

@@ -1,7 +1,7 @@
 /**
  * novada_scrape_youtube — wire-format proof.
  *
- * Mirrors scrape_amazon.test.ts's proof pattern. All 12 youtube.com catalog operations
+ * Mirrors scrape_amazon.test.ts's proof pattern. All 13 youtube.com catalog operations
  * are "params" format (Format B), so every op threads params via scraper_params (a JSON
  * array in a single form field), never as flat form fields (Format A).
  */
@@ -97,11 +97,27 @@ describe("novadaScrapeYoutube — request format (wire-format proof)", () => {
     expect(scraperParams[0].keyword_search).toBe("music");
     expect(scraperParams[0].duration).toBe("Under 3 minutes");
   });
+
+  // C2 fix (2026-07-20, synthesis.md): videos_by_label (youtube_video_search_label)
+  // was missing from YOUTUBE_OPERATIONS even though the tool's own description
+  // already claimed video-search-by-label coverage.
+  it("videos_by_label resolves to scraper_id=youtube_video_search_label and threads search_label", async () => {
+    mockSuccess(MOCK_RECORDS);
+    await novadaScrapeYoutube(
+      validateScrapeYoutubeParams({ operation: "videos_by_label", params: { search_label: "music" } }),
+      "test-key",
+    );
+    const [, body] = mockedAxios.post.mock.calls[0];
+    const form = body as URLSearchParams;
+    expect(form.get("scraper_id")).toBe("youtube_video_search_label");
+    const scraperParams = JSON.parse(form.get("scraper_params")!);
+    expect(scraperParams[0].search_label).toBe("music");
+  });
 });
 
 describe("novadaScrapeYoutube — enum safety (only catalog-'ok' operations reachable)", () => {
-  it("YOUTUBE_OPERATIONS has exactly 12 entries", () => {
-    expect(Object.values(YOUTUBE_OPERATIONS)).toHaveLength(12);
+  it("YOUTUBE_OPERATIONS has exactly 13 entries", () => {
+    expect(Object.values(YOUTUBE_OPERATIONS)).toHaveLength(13);
   });
 
   it("rejects an unknown/typo'd operation name", () => {
@@ -120,5 +136,19 @@ describe("novadaScrapeYoutube — enum safety (only catalog-'ok' operations reac
     }
     const youtubePlatform = SCRAPER_CATALOG.find((p) => p.domain === "youtube.com");
     expect(youtubePlatform!.ops.every((op) => op.status === "ok"), "youtube.com catalog has a backend_broken op not reflected in this assertion").toBe(true);
+  });
+
+  // C2 regression guard: the reverse-direction check the original gap slipped
+  // through — every catalog "ok" op for this platform must be reachable via
+  // YOUTUBE_OPERATIONS, not just "every mapped op is valid". This is the check
+  // that would have caught youtube_video_search_label being dropped.
+  it("every 'ok' youtube.com catalog operation is mapped in YOUTUBE_OPERATIONS (full coverage, not just valid coverage)", async () => {
+    const { SCRAPER_CATALOG } = await import("../../src/data/scraper_catalog.js");
+    const youtubePlatform = SCRAPER_CATALOG.find((p) => p.domain === "youtube.com");
+    expect(youtubePlatform, "youtube.com missing from the live catalog").toBeDefined();
+    const okSlugs = youtubePlatform!.ops.filter((op) => op.status === "ok").map((op) => op.slug);
+    const mappedSlugs: Set<string> = new Set(Object.values(YOUTUBE_OPERATIONS));
+    const missing = okSlugs.filter((slug) => !mappedSlugs.has(slug));
+    expect(missing, `catalog 'ok' op(s) not reachable via any friendly YOUTUBE_OPERATIONS name: ${missing.join(", ")}`).toEqual([]);
   });
 });

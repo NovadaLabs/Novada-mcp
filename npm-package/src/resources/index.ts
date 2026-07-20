@@ -475,7 +475,7 @@ Required: question. Optional: depth (quick/deep/comprehensive/auto), focus.
 Example: novada_research({question: "How do MCP servers work with Claude?", depth: "deep"})
 
 ## novada_scrape
-Best for: structured data from 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, YouTube, ChatGPT, SHEIN, etc.).
+Best for: structured data from 16 active platforms (~87 operations) (Amazon, TikTok, LinkedIn, YouTube, ChatGPT, SHEIN, etc.).
 Not for: arbitrary sites not in the platform list (use novada_extract or novada_crawl).
 Required: platform, operation, params. Optional: format (markdown/json/toon), limit.
 Example: novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "iphone 16"}})

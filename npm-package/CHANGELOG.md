@@ -77,12 +77,12 @@ Hosted gateway: paying accounts are no longer blocked by the free monthly cap (P
 
 ## [0.9.25] — 2026-07-13
 
-Scraper catalog rebuilt from a single verified source (16 platforms / 88 operations, each live-tested), a scrape format-routing bug fixed, geo-targeted extraction, and sharper agent guidance for depth and cost.
+Scraper catalog rebuilt from a single verified source (16 platforms / 87 operations, each live-tested), a scrape format-routing bug fixed, geo-targeted extraction, and sharper agent guidance for depth and cost.
 
 ### Added
 - **`novada_extract` `country` parameter.** Pass `country="de"` (ISO 3166-1 alpha-2) to route a render/unblocker fetch through an exit IP in that country — for localized pricing, geo-restricted content, and per-country monitoring (e.g. comparing a product price across European countries). Live-verified: `de` → German exit IP, `us` → US exit IP. Render-only (no effect on a pure static fetch); in batch mode the same country applies to all URLs.
 - **`novada_discover` `platform` parameter.** A free call — `novada_discover({platform:"amazon.com"})` returns that platform's operations, required params, format, and status, so an agent can find the exact `scraper_id` without guessing (a wrong guess is a billed failure).
-- **Single-source scraper catalog** (`src/data/scraper_catalog.ts`): 16 platforms / 88 operations, each with slug, param schema, wire format, and live-verified status — the authoritative source the tool descriptions, resource, and preflight all derive from.
+- **Single-source scraper catalog** (`src/data/scraper_catalog.ts`): 16 platforms / 87 operations, each with slug, param schema, wire format, and live-verified status — the authoritative source the tool descriptions, resource, and preflight all derive from.
 
 ### Fixed
 - **`novada_scrape` format routing (bug).** Format (flat params vs `scraper_params` JSON) is now decided per-operation, not per-platform. This fixes 6 Google operations (Maps details ×4, comment, shopping) that previously failed through the MCP because they were sent flat params but require the JSON format.
@@ -90,7 +90,7 @@ Scraper catalog rebuilt from a single verified source (16 platforms / 88 operati
 - **`novada_extract` no longer suggests a backend-broken scrape operation** in its upgrade hints.
 
 ### Changed
-- **Honest platform accounting:** the tool surface now states 16 implemented platforms / 88 operations (the dashboard lists ~107, but 91 are pre-registered shells with no backend and return 11006 — documented in the `novada://scraper-platforms` resource).
+- **Honest platform accounting:** the tool surface now states 16 implemented platforms / 87 operations (the dashboard lists ~107, but 91 are pre-registered shells with no backend and return 11006 — documented in the `novada://scraper-platforms` resource).
 - **Agent guidance (skills):** `novada_search` returns snippets only — the skill now requires escalating to `novada_extract` (read the page) or `novada_research` (reads full sources) before answering an accuracy- or recency-sensitive question, with an explicit `search → extract → research` ladder. Cost guidance added: one `novada_research` call beats N manual search+extract; transient errors are auto-retried server-side, so do not manually re-fire (avoids double-charging).
 - New `novada-proxy` and `novada-site-copy` skills; `novada-agent` skill corrected (23 tools; `bing` removed from the advertised search engines — it is not in the supported set).
 

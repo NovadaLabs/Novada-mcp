@@ -203,7 +203,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ### `novada_scrape`
 
-**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 16 platforms (~88 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
+**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
 
 **Key parameters:**
 - `platform` — domain, e.g. `amazon.com`, `tiktok.com`, `linkedin.com`
@@ -239,7 +239,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 | `novada_scrape_bing` | bing.com | 4 |
 | `novada_scrape_duckduckgo` | duckduckgo.com | 1 |
 | `novada_scrape_yandex` | yandex.com | 1 |
-| `novada_scrape_youtube` | youtube.com | 12 |
+| `novada_scrape_youtube` | youtube.com | 13 |
 | `novada_scrape_instagram` | instagram.com | 7 |
 | `novada_scrape_facebook` | facebook.com | 6 |
 | `novada_scrape_tiktok` | tiktok.com | 5 |

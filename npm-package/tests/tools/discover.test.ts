@@ -129,6 +129,27 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
       `root README (repo root, the GitHub landing page) must state "${EXPECTED_CURATED_COUNT} tools" (derived from registry) — not a stale hand-count`
     ).toMatch(new RegExp(`${EXPECTED_CURATED_COUNT}\\s+(curated\\s+)?tools`));
   });
+
+  // C3 fix (2026-07-20, synthesis.md): the "38 tools" headline is hand-typed in ~6 files
+  // (both READMEs above, npm CHANGELOG.md, novada-agent/SKILL.md, hosted-server/vercel's
+  // README.md and mcp.ts's own comment) but ONLY the two README tests above ever guarded
+  // it — a change to TOOL_REGISTRY.length could silently drift every other mention. This
+  // extends the guard to novada-agent/SKILL.md (the only SKILL that states the GLOBAL
+  // 38-tool total; novada-scrape/SKILL.md only ever states PER-PLATFORM operation counts,
+  // already guarded separately by scrape_amazon.test.ts/scrape_youtube.test.ts et al.'s
+  // "exactly N entries" assertions). The hosted-side "30" mention
+  // (hosted-server/vercel/README.md) is guarded in that package's own test suite instead —
+  // see hosted-server/vercel/test/tool-catalog-derivation.test.mjs's hosted-visible-count
+  // test, since deriving "30" requires HOSTED_HIDDEN, which lives in mcp.ts, not this package.
+  it("registry count matches novada-agent SKILL.md's headline too", () => {
+    const EXPECTED_CURATED_COUNT = 38;
+    const skillPath = resolve(__dirname, "../../skills/novada-agent/SKILL.md");
+    const skill = readFileSync(skillPath, "utf8");
+    expect(
+      skill,
+      `novada-agent/SKILL.md must state "${EXPECTED_CURATED_COUNT}" curated tools (derived from registry) — not a stale hand-count`
+    ).toMatch(new RegExp(`\\*\\*${EXPECTED_CURATED_COUNT}\\*\\*\\s+curated`));
+  });
 });
 
 /**

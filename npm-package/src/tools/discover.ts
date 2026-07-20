@@ -195,7 +195,7 @@ export async function novadaDiscover(
     "- **Search the web:** Use `novada_search` for queries, `novada_extract` for specific URLs."
   );
   lines.push(
-    "- **Structured data:** Use `novada_scrape` for 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, ChatGPT, SHEIN, etc.)."
+    "- **Structured data:** Use `novada_scrape` for 16 active platforms (~87 operations) (Amazon, TikTok, LinkedIn, ChatGPT, SHEIN, etc.)."
   );
   lines.push(
     "- **Full research:** Use `novada_research` for multi-source synthesis."

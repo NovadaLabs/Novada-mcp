@@ -34,9 +34,17 @@
  *   (5) The LIVE RUNTIME FILTER regressing — (1)-(4) above only ever compare CATALOG-level
  *       name sets (TOOLS, HOSTED_HIDDEN, surfaces.json). None of them prove the actual
  *       ListTools/discover code path (`visibleTools` in buildServer(), which applies
- *       `.filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name))`) still excludes HOSTED_HIDDEN
+ *       `.filter(t => !HOSTED_HIDDEN.has(t.name))`) still excludes HOSTED_HIDDEN
  *       tools from what's served. Deleting that one clause would serve every HOSTED_HIDDEN
  *       tool to every hosted caller while (1)-(4) kept reporting PASS.
+ *       UPDATED 2026-07-20 (B2 fix, novada-test-engineering synthesis.md tools-v2 audit):
+ *       this clause used to read `.filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name))` —
+ *       fail-OPEN, because `isHosted` (a VERCEL/VERCEL_ENV env-var sniff) is not guaranteed
+ *       to be set, and when falsy the predicate short-circuited to `true` for every tool,
+ *       serving every HOSTED_HIDDEN tool by default. The fix removed the `isHosted` gate
+ *       entirely (this file IS the hosted server; HOSTED_HIDDEN must always apply) — this
+ *       script's own pattern below was updated to match, since it previously encoded the
+ *       BUGGY fail-open clause as the "expected" (PASS) shape.
  *   (6) A dynamic bypass mutating `TOOLS`/`visibleTools` AFTER their declarations
  *       (`.push`/`.splice`/`.concat`/`.unshift`, `...TOOLS` spreads, `Object.assign(TOOLS, ...)`,
  *       length-based truncate/append) — the pre-refactor version of this script had a
@@ -50,9 +58,9 @@
  *       — this script refuses to trust anything else it parses out of mcp.ts once the
  *       derivation itself can't be confirmed (mirrors the pre-refactor mutation-gate's
  *       "don't report false PASS against an unverifiable state" philosophy).
- *   (runtime-filter gate) the LIVE `.filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name))`
+ *   (runtime-filter gate) the LIVE `.filter(t => !HOSTED_HIDDEN.has(t.name))`
  *       clause that builds `visibleTools` (what ListTools/discover actually serve) must be
- *       present in mcp.ts — see (5) above.
+ *       present in mcp.ts, UNCONDITIONALLY (no `isHosted` bypass) — see (5) above.
  *   (mutation gate) mcp.ts is scanned, AFTER `TOOLS`'s declaration, for any dynamic mutation
  *       of TOOLS or visibleTools — see (6) above.
  *   (a) every tool name in config/surfaces.json's "hosted" AND "hosted-15" surfaces is a
@@ -145,7 +153,17 @@ const MCP_TOOLS_DECL_END = "\n}));";
 // clause (so every request gets the full unfiltered TOOLS list back) and every other
 // check in this script would still report PASS, because they never look at the
 // ListTools/visibleTools code path at all.
-const RUNTIME_FILTER_PATTERN = /\.filter\(\s*t\s*=>\s*!isHosted\s*\|\|\s*!HOSTED_HIDDEN\.has\(t\.name\)\s*\)/;
+//
+// B2 fix (2026-07-20): this pattern previously required the BUGGY fail-open form
+// (`!isHosted || !HOSTED_HIDDEN.has(t.name)`) as the "expected" shape — i.e. this
+// script's own PASS condition encoded the exact bug the synthesis.md audit found. The
+// fix is fail-CLOSED: the filter must apply UNCONDITIONALLY, with no `isHosted`
+// escape hatch. This pattern intentionally matches ONLY the clean, unconditional form —
+// re-introducing `!isHosted ||` (or any other bypass) between `t =>` and
+// `!HOSTED_HIDDEN.has` makes the literal text no longer match, so a regression back to
+// fail-open fails this gate again, symmetrically to how the old (wrong) pattern used to
+// fail if the fail-open clause was ever removed.
+const RUNTIME_FILTER_PATTERN = /\.filter\(\s*t\s*=>\s*!HOSTED_HIDDEN\.has\(t\.name\)\s*\)/;
 
 /**
  * Slice `source` between the first occurrence of `startAnchor` and the next occurrence
@@ -292,22 +310,25 @@ function detectDerivationRegression(mcpSrc) {
  * that gate only proves TOOLS is built from CORE_TOOLS; it says nothing about whether
  * HOSTED_HIDDEN tools are actually excluded from what the server SERVES. That exclusion
  * happens at a different spot entirely: the `visibleTools` construction inside
- * buildServer(), which applies `.filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name))` to
- * the list ListTools/discover actually return. If that one runtime clause is ever deleted
- * (accidentally or not), every HOSTED_HIDDEN tool (novada_site_copy, novada_ip_whitelist,
- * etc.) would be served to every hosted caller by default — and every other check in this
- * script would still report PASS, because none of them execute or otherwise observe this
- * code path; they only compare catalog-level name sets (TOOLS / HOSTED_HIDDEN /
- * surfaces.json), never what the ListTools handler actually filters and returns.
+ * buildServer(), which applies `.filter(t => !HOSTED_HIDDEN.has(t.name))` to
+ * the list ListTools/discover actually return, UNCONDITIONALLY (B2 fix, 2026-07-20 — no
+ * `isHosted` bypass). If that one runtime clause is ever deleted or regains an `isHosted`
+ * escape hatch (accidentally or not), every HOSTED_HIDDEN tool (novada_site_copy,
+ * novada_ip_whitelist, etc.) would be served to every hosted caller by default — and
+ * every other check in this script would still report PASS, because none of them execute
+ * or otherwise observe this code path; they only compare catalog-level name sets
+ * (TOOLS / HOSTED_HIDDEN / surfaces.json), never what the ListTools handler actually
+ * filters and returns.
  */
 function detectRuntimeFilterMissing(mcpSrc) {
   if (!RUNTIME_FILTER_PATTERN.test(mcpSrc)) {
     return [
-      `  mcp.ts no longer applies the HOSTED_HIDDEN runtime filter to the served tool list — ` +
-      `the ".filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name))" clause that builds ` +
+      `  mcp.ts no longer applies the unconditional HOSTED_HIDDEN runtime filter to the ` +
+      `served tool list — the ".filter(t => !HOSTED_HIDDEN.has(t.name))" clause that builds ` +
       `"visibleTools" in buildServer() (the thing ListTools/novada_discover actually serve) is ` +
-      `missing or was reworded. Without it, HOSTED_HIDDEN tools would be served on hosted ` +
-      `regardless of what TOOLS/HOSTED_HIDDEN/surfaces.json say.`,
+      `missing, reworded, or has regained an "isHosted" bypass (the exact fail-open bug fixed ` +
+      `2026-07-20). Without it, HOSTED_HIDDEN tools would be served on hosted regardless of ` +
+      `what TOOLS/HOSTED_HIDDEN/surfaces.json say.`,
     ];
   }
   return [];

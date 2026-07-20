@@ -12,10 +12,18 @@ import {
 // novada_scrape_youtube, each mapped deterministically to the exact `slug`
 // (== scraper_id) in src/data/scraper_catalog.ts's youtube.com block.
 //
-// All 12 youtube.com catalog operations are status:"ok" as of the 2026-07-13 live
+// All 13 youtube.com catalog operations are status:"ok" as of the 2026-07-13 live
 // verification pass — none are excluded here. If a future catalog refresh marks
 // any of these backend_broken, tests/tools/platform-scraper-catalog.test.ts will
 // fail CI until it is removed from this map.
+//
+// C2 fix (2026-07-20, synthesis.md): `videos_by_label` (catalog slug
+// youtube_video_search_label, api_id 45, "YouTube Video Post By Label") was
+// missing from this map even though this file's own operationsNote already
+// claimed "video search by keyword/label/filters/playlist/channel" — a genuine
+// coverage gap, not a deliberate exclusion. It has one required key
+// (search_label) and no backend_broken status, so it's added here rather than
+// just correcting the claim.
 export const YOUTUBE_OPERATIONS = Object.freeze({
   transcript_by_video: "youtube_transcript_id",
   video_file_by_url: "youtube_video-url",
@@ -29,6 +37,7 @@ export const YOUTUBE_OPERATIONS = Object.freeze({
   videos_by_filters: "youtube_video-post_search_filters",
   videos_by_playlist_url: "youtube_video-post-podcast-url",
   channel_videos_by_url: "youtube_video-post_url",
+  videos_by_label: "youtube_video_search_label",
 } as const);
 
 export type YoutubeOperation = keyof typeof YOUTUBE_OPERATIONS;
@@ -47,6 +56,7 @@ const YOUTUBE_OPERATION_PARAMS_DOC: Record<YoutubeOperation, string> = {
   videos_by_filters: "params.keyword_search; optional params.attributes, params.type (Videos|Movies), params.duration, params.upload_date, params.num_of_posts, params.file_name",
   videos_by_playlist_url: "params.url (playlist/podcast URL); optional params.num_of_posts, params.file_name",
   channel_videos_by_url: "params.url (a channel's /videos URL); optional params.sorting_method (Latest|Popular|Oldest), params.start_index, params.num_of_posts, params.file_name",
+  videos_by_label: "params.search_label (topic tag, e.g. \"music\"); optional params.num_of_posts, params.file_name",
 };
 
 const YOUTUBE_OPERATION_CONFIGS: Record<YoutubeOperation, PlatformOperationConfig> = Object.fromEntries(
@@ -63,7 +73,7 @@ export const YOUTUBE_SCRAPER_CONFIG: PlatformScraperConfig<YoutubeOperation> = {
   toolName: "novada_scrape_youtube",
   category: "Scraping & Verification",
   registryDescription:
-    "Extract structured YouTube data (video/channel info, transcripts, comments, video/audio downloads) via a closed, typed operation enum — 12 verified-working operations; same engine and output formats as novada_scrape, pinned to platform=youtube.com",
+    "Extract structured YouTube data (video/channel info, transcripts, comments, video/audio downloads) via a closed, typed operation enum — 13 verified-working operations; same engine and output formats as novada_scrape, pinned to platform=youtube.com",
   operations: YOUTUBE_OPERATION_CONFIGS,
   paramsFieldDoc:
     "Operation-specific parameters for the selected `operation`. E.g. { video_id: \"LCAY3PGHZyw\" } for " +
@@ -87,7 +97,7 @@ export const YOUTUBE_SCRAPER_CONFIG: PlatformScraperConfig<YoutubeOperation> = {
     returns:
       "Structured video/channel/comment records (title, views, transcript text, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen format (markdown/json/csv/excel/html/toon) — same rendering as novada_scrape.",
     operationsNote:
-      "12 verified-working YouTube operations spanning transcripts, video/audio file downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel (see the `operation` param's description for the exact `params` keys each needs). Every youtube.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+      "13 verified-working YouTube operations spanning transcripts, video/audio file downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel (see the `operation` param's description for the exact `params` keys each needs). Every youtube.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },
 };
 

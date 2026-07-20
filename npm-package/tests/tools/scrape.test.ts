@@ -559,12 +559,101 @@ describe("novadaScrape — pre-flight (#6)", () => {
   // Regression guard: google_search_url is a "flat" op with 2 catalog-required keys
   // (url, json) that is NOT a SEARCH_ENGINE_OP_KEYS alias. `json` is auto-populated
   // downstream in submitScrapeTask for flat ops and is never actually supplied by
-  // the caller — so this op must stay permissive (OR/fallback), not become
-  // AND-required, or every normal call (which never passes `json` explicitly) would
-  // start failing preflight.
-  it("does not regress flat non-alias ops like google_search_url to AND-required (json is auto-injected downstream)", async () => {
+  // the caller — CUSTOM_AND_REQUIRED_KEYS overrides the AND-required set to just
+  // `url` so a normal call (which never passes `json` explicitly) still passes.
+  it("does not regress flat non-alias ops like google_search_url to AND-require json (auto-injected downstream)", async () => {
     const { preflightScrape } = await import("../../src/tools/scrape.js");
     expect(preflightScrape("google.com", "google_search_url", { url: "https://www.google.com/search?q=test" })).toBeNull();
+  });
+
+  // B1 (2026-07-20, synthesis.md blocker): live probe confirmed these 6 ops return
+  // code:400/data:null when their non-query AND-required param is omitted, but
+  // preflight previously let them through on the query alias alone. Prove BOTH
+  // directions: missing the extra key throws locally; present, it passes.
+  describe("AND-required backend params beyond the search query (B1)", () => {
+    it("google_search_url: requires url", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      const err = preflightScrape("google.com", "google_search_url", {});
+      expect(err).not.toBeNull();
+      expect(err!.detail).toBe("preflight:missing_param");
+      expect(err!.message).toContain("url");
+      // A call with only the auto-injected-elsewhere `json` key (no url) must still fail.
+      expect(preflightScrape("google.com", "google_search_url", { json: 1 })).not.toBeNull();
+      expect(
+        preflightScrape("google.com", "google_search_url", { url: "https://www.google.com/search?q=test" }),
+      ).toBeNull();
+    });
+
+    it("google_serp_web: requires domain in addition to the query", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      const err = preflightScrape("google.com", "google_serp_web", { q: "laptop" });
+      expect(err).not.toBeNull();
+      expect(err!.detail).toBe("preflight:missing_param");
+      expect(err!.message).toContain("domain");
+      // Missing the query entirely still fails on the query-alias check (unchanged).
+      expect(preflightScrape("google.com", "google_serp_web", { domain: "google.com" })).not.toBeNull();
+      expect(preflightScrape("google.com", "google_serp_web", { q: "laptop", domain: "google.com" })).toBeNull();
+      expect(preflightScrape("google.com", "google_serp_web", { keyword: "laptop", domain: "google.com" })).toBeNull();
+    });
+
+    // Re-audit (2026-07-20): the initial B1 pass wrongly added these two to
+    // SEARCH_ENGINE_EXTRA_REQUIRED_KEYS. Live-verified against scraper.novada.com:
+    // both return 200 + real data with ONLY a query key and NO domain — unlike
+    // google_serp_web, which genuinely needs domain (see the test above). Preflight
+    // must PASS these on the query alone; do not re-tighten without fresh live
+    // evidence of a 400/empty response.
+    it("google_serp_jobs / google_serp_videos: pass preflight on the query alone (no domain required)", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      expect(preflightScrape("google.com", "google_serp_jobs", { q: "engineer" })).toBeNull();
+      expect(preflightScrape("google.com", "google_serp_jobs", { q: "engineer", domain: "google.com" })).toBeNull();
+      expect(preflightScrape("google.com", "google_serp_videos", { q: "cats" })).toBeNull();
+      expect(preflightScrape("google.com", "google_serp_videos", { q: "cats", domain: "google.com" })).toBeNull();
+      // Missing the query entirely still fails on the query-alias check (unchanged).
+      expect(preflightScrape("google.com", "google_serp_jobs", {})).not.toBeNull();
+      expect(preflightScrape("google.com", "google_serp_videos", {})).not.toBeNull();
+    });
+
+    it("google_serp_hotels: requires domain + check_in_date + check_out_date in addition to the query", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      const err = preflightScrape("google.com", "google_serp_hotels", { q: "paris hotels" });
+      expect(err).not.toBeNull();
+      expect(err!.detail).toBe("preflight:missing_param");
+      expect(err!.message).toContain("domain");
+      expect(err!.message).toContain("check_in_date");
+      expect(err!.message).toContain("check_out_date");
+      // Partially supplied extra keys still fail (every one is independently required).
+      expect(
+        preflightScrape("google.com", "google_serp_hotels", { q: "paris hotels", domain: "google.com" }),
+      ).not.toBeNull();
+      expect(
+        preflightScrape("google.com", "google_serp_hotels", {
+          q: "paris hotels",
+          domain: "google.com",
+          check_in_date: "2026-08-01",
+          check_out_date: "2026-08-05",
+        }),
+      ).toBeNull();
+    });
+
+    it("yandex: requires yandex_domain in addition to the query", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      const err = preflightScrape("yandex.com", "yandex", { q: "moscow weather" });
+      expect(err).not.toBeNull();
+      expect(err!.detail).toBe("preflight:missing_param");
+      expect(err!.message).toContain("yandex_domain");
+      expect(
+        preflightScrape("yandex.com", "yandex", { q: "moscow weather", yandex_domain: "yandex.com" }),
+      ).toBeNull();
+    });
+
+    // Regression: plain search ops that legitimately need ONLY the query must not
+    // be over-required by the extraAll mechanism above.
+    it("regression: plain google_search / bing_search / duckduckgo still pass with query-only", async () => {
+      const { preflightScrape } = await import("../../src/tools/scrape.js");
+      expect(preflightScrape("google.com", "google_search", { q: "apple" })).toBeNull();
+      expect(preflightScrape("bing.com", "bing_search", { q: "apple" })).toBeNull();
+      expect(preflightScrape("duckduckgo.com", "duckduckgo", { q: "apple" })).toBeNull();
+    });
   });
 
   it("does not match Object.prototype keys as operations (pollution-safe)", async () => {
@@ -699,4 +788,79 @@ describe("novadaScrape — task_id resume path (NOV-689)", () => {
     }
   });
 
+});
+
+// C1 (synthesis.md, 2026-07-20): FIX-3 wired `displayName` into the SUCCESS-path
+// header only ("## Scrape Results\nplatform: ... | operation: <friendly-name>").
+// The 4 "no-data" early returns (empty serp, still-processing/pending, no first
+// item, zero records after extraction) all echoed the raw catalog `operation` slug
+// instead — so a caller going through a per-platform wrapper tool (which sets
+// `displayName` to the friendly op name it was actually invoked with) would see the
+// friendly name on a successful call but the internal slug on every no-data path.
+// These tests exercise all 4 return paths directly via novadaScrape + an explicit
+// `displayName`, proving each one now threads the friendly name through.
+describe("novadaScrape — C1 fix: friendly operation name on no-data return paths", () => {
+  const FRIENDLY = "product_by_asin";
+
+  it("empty-serp path shows the friendly operation name, not the raw catalog slug", async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 400, data: null, msg: "serp returns empty" }, msg: "success" },
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B09XYZ" }, format: "markdown", limit: 20, displayName: FRIENDLY } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+    expect(result).toContain("No results found");
+    expect(result).toContain(`operation: ${FRIENDLY}`);
+    expect(result).not.toContain("operation: amazon_product_asin");
+  });
+
+  it("still-processing/pending path shows the friendly operation name, not the raw catalog slug", async () => {
+    vi.useFakeTimers();
+    try {
+      mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+      mockedAxios.get.mockResolvedValue({
+        data: { code: 27202, data: null, msg: "" },
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+      const resultPromise = novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B09XYZ" }, format: "markdown", limit: 20, displayName: FRIENDLY } as Parameters<typeof novadaScrape>[0],
+        "test-key"
+      );
+      await vi.advanceTimersByTimeAsync(46000);
+      const result = await resultPromise;
+      expect(result).toContain("status: processing");
+      expect(result).toContain(`operation: ${FRIENDLY}`);
+      expect(result).not.toContain("operation: amazon_product_asin");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("no-first-item path (download returns a literally empty array) shows the friendly operation name", async () => {
+    mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+    mockedAxios.get.mockResolvedValue({
+      data: [],
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B09XYZ" }, format: "markdown", limit: 20, displayName: FRIENDLY } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+    expect(result).toContain("No records returned");
+    expect(result).toContain(`operation: ${FRIENDLY}`);
+    expect(result).not.toContain("operation: amazon_product_asin");
+  });
+
+  it("zero-records-after-extraction path shows the friendly operation name", async () => {
+    mockSuccess([]);
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B09XYZ" }, format: "markdown", limit: 20, displayName: FRIENDLY } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+    expect(result).toContain("No records returned");
+    expect(result).toContain(`operation: ${FRIENDLY}`);
+    expect(result).not.toContain("operation: amazon_product_asin");
+  });
 });

@@ -925,11 +925,19 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     { capabilities: { tools: {}, prompts: {}, resources: {} } },
   );
 
-  const isHosted = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+  // B2 fix (2026-07-20, synthesis.md blocker): this filter used to be gated on
+  // `isHosted` (a VERCEL/VERCEL_ENV env-var sniff) — fail-OPEN, because those vars
+  // require an opt-in Vercel project toggle and are not guaranteed to be set. This
+  // file IS the hosted server (hosted-server/vercel/api/mcp.ts, the Vercel handler
+  // for mcp.novada.com); HOSTED_HIDDEN must be excluded unconditionally, matching
+  // the fail-CLOSED invariant already used elsewhere in this file for
+  // `listedOnHosted`/`ALL_TOOL_NAMES` above (neither of which was ever gated on
+  // isHosted) — those two silently carried the correct behavior; only this one
+  // filter, which drives the actually-served ListTools/CallTool surface, forgot it.
   const visibleTools = (ctx.allowedTools
     ? TOOLS.filter((t) => ctx.allowedTools!.has(t.name))
     : TOOLS
-  ).filter(t => !isHosted || !HOSTED_HIDDEN.has(t.name));
+  ).filter(t => !HOSTED_HIDDEN.has(t.name));
   // Names actually exposed on this endpoint — drives both ListTools and the
   // discover catalog so an agent never sees a tool it can't call. A tool can be
   // absent here for two reasons: filtered out by ?tools=/?groups=, or excluded by

@@ -1,6 +1,6 @@
 # novada_scrape — Platform Scraper Skill
 
-**When to use:** You need structured records from a known platform (Amazon, TikTok, LinkedIn, GitHub, etc.) — not raw HTML, but clean tabular data. 16 platforms are in the catalog: Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity. **15 of those 16 have a dedicated `novada_scrape_<platform>` tool** (see below) — only ChatGPT doesn't, because both of its catalog operations are backend-dead. Note: 8 operations across the catalog are currently backend-broken (forwarded with a warning — backend may fix any day); the other 80 are verified working as of 2026-07-13.
+**When to use:** You need structured records from a known platform (Amazon, TikTok, LinkedIn, GitHub, etc.) — not raw HTML, but clean tabular data. 16 platforms are in the catalog: Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity. **15 of those 16 have a dedicated `novada_scrape_<platform>` tool** (see below) — only ChatGPT doesn't, because both of its catalog operations are backend-dead. Note: 8 operations across the catalog are currently backend-broken (forwarded with a warning — backend may fix any day); the other 79 are verified working as of 2026-07-13.
 
 ## Prefer the dedicated `novada_scrape_<platform>` tool over generic `novada_scrape`
 
@@ -13,7 +13,7 @@ For these 15 platforms, call the dedicated tool instead of generic `novada_scrap
 | `novada_scrape_bing` | bing.com | 4 |
 | `novada_scrape_duckduckgo` | duckduckgo.com | 1 |
 | `novada_scrape_yandex` | yandex.com | 1 |
-| `novada_scrape_youtube` | youtube.com | 12 |
+| `novada_scrape_youtube` | youtube.com | 13 |
 | `novada_scrape_instagram` | instagram.com | 7 |
 | `novada_scrape_facebook` | facebook.com | 6 |
 | `novada_scrape_tiktok` | tiktok.com | 5 |

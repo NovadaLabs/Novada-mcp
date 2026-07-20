@@ -257,3 +257,44 @@ test("FIX 4: deriveTitle produces a 'Scrape <Brand>' title for every real platfo
     assert.ok(title.startsWith("Scrape "), `${name} title must start with "Scrape ": got "${title}"`);
   }
 });
+
+// ─── (h) C3 fix (2026-07-20, synthesis.md): hosted "30-tool" count guard ──────────────
+//
+// The "38 tools" / "30 tools" headline is hand-typed in ~6 files across both packages
+// (see npm-package's tests/tools/discover.test.ts for the npm-side README/SKILL guards).
+// hosted-server/vercel/README.md's "30-tool" mentions were previously completely
+// unguarded — nothing would fail if CORE_TOOLS.length or HOSTED_HIDDEN's size ever
+// changed and the README's hand-typed numbers silently went stale. This derives the
+// expected hosted-visible count the SAME way mcp.ts's real `visibleTools` filter does
+// (CORE_TOOLS.length minus HOSTED_HIDDEN.size) and asserts the README states it.
+
+const HOSTED_README = readFileSync(join(__dirname, "..", "README.md"), "utf8");
+
+test("core registry has exactly 38 tools (pinned — mirrors npm-package discover.test.ts's EXPECTED_CURATED_COUNT)", () => {
+  assert.equal(CORE_TOOL_NAMES.size, 38, `core registry size changed — update this pinned count, npm-package's discover.test.ts, and every README/SKILL count to ${CORE_TOOL_NAMES.size}`);
+});
+
+test("HOSTED_HIDDEN has exactly 8 entries (pinned)", () => {
+  assert.equal(HOSTED_HIDDEN.size, 8, `HOSTED_HIDDEN size changed — update this pinned count and the hosted-visible-count derivation below to ${HOSTED_HIDDEN.size}`);
+});
+
+test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 30", () => {
+  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 30, "hosted-visible tool count drifted from 30 — update hosted-server/vercel/README.md's '30-tool' mentions to match");
+});
+
+test("hosted-server/vercel/README.md states the derived hosted-visible count ('30-tool'/'30 tools')", () => {
+  const expectedHostedCount = CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size;
+  assert.match(
+    HOSTED_README,
+    new RegExp(`${expectedHostedCount}[- ]tool`),
+    `hosted-server/vercel/README.md must state "${expectedHostedCount}-tool"/"${expectedHostedCount} tool(s)" (derived: CORE_TOOLS ${CORE_TOOL_NAMES.size} - HOSTED_HIDDEN ${HOSTED_HIDDEN.size}) — not a stale hand-count`,
+  );
+});
+
+test("hosted-server/vercel/README.md states the full core registry count ('38-tool registry')", () => {
+  assert.match(
+    HOSTED_README,
+    new RegExp(`${CORE_TOOL_NAMES.size}[- ]tool`),
+    `hosted-server/vercel/README.md must state "${CORE_TOOL_NAMES.size}-tool" (the full npm-package registry size) — not a stale hand-count`,
+  );
+});
