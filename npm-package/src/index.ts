@@ -417,7 +417,9 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
   novada_map                 Discover URLs on a website (up to 100)
   novada_site_copy           Copy an entire docs site to disk as markdown (one file per page)
   novada_scrape              Structured data from 16 active platforms (~88 operations, e.g. Amazon, TikTok, SHEIN, ChatGPT)
-  novada_scrape_amazon       Structured Amazon data via a closed, typed operation enum (10 verified-working ops)
+  novada_scrape_<platform>   15 dedicated platform scrapers (amazon, google, bing, duckduckgo, yandex, youtube,
+                             instagram, facebook, tiktok, x, walmart, shein, linkedin, github, perplexity) —
+                             each a closed, typed operation enum; run --list-tools for the full live set
   novada_ai_monitor          Search AI-company public domains for brand mentions (not live models)
   novada_monitor             Detect page changes between checks (session-scoped baseline)
   novada_proxy               Get proxy credentials (residential/isp/datacenter/mobile/static/dedicated)

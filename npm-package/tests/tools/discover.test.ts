@@ -115,6 +115,20 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
       `README must state "${EXPECTED_CURATED_COUNT} tools" (derived from registry) — not a stale hand-count`
     ).toMatch(new RegExp(`${EXPECTED_CURATED_COUNT}\\s+(curated\\s+)?tools`));
   });
+
+  // Same drift guard as above, but for the MONOREPO ROOT README.md (the GitHub landing
+  // page) — a separate file from npm-package/README.md that the test above never touched.
+  // This is exactly why the root count silently drifted to a stale "23 tools" while the
+  // npm-package README was already correct: nothing asserted the root file at all.
+  it("registry count matches the monorepo root README headline too", () => {
+    const EXPECTED_CURATED_COUNT = 38;
+    const rootReadmePath = resolve(__dirname, "../../../README.md");
+    const rootReadme = readFileSync(rootReadmePath, "utf8");
+    expect(
+      rootReadme,
+      `root README (repo root, the GitHub landing page) must state "${EXPECTED_CURATED_COUNT} tools" (derived from registry) — not a stale hand-count`
+    ).toMatch(new RegExp(`${EXPECTED_CURATED_COUNT}\\s+(curated\\s+)?tools`));
+  });
 });
 
 /**

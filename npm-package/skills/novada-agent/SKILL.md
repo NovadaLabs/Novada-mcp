@@ -9,7 +9,7 @@ description: >-
 
 # Novada Agent Skill
 
-You have access to Novada's 23 curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a 15-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
+You have access to Novada's **38** curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a core-derived **30**-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
 
 Deep-dive companion skills: `novada-scrape` (platform scrapers + price fields), `novada-extract` (single/batch extraction), `novada-browser` (CDP automation), `novada-proxy` (proxy type selection + escalation), `novada-site-copy` (whole-site copying / RAG ingestion).
 
@@ -27,7 +27,7 @@ Need web data?
 │   └── Multi-faceted question → novada_research
 └── Want ranked, cited source material to reason over? → novada_research
 
-Need structured platform data (Amazon, TikTok, LinkedIn…)? → novada_scrape
+Need structured platform data (Amazon, TikTok, LinkedIn…)? → novada_scrape_<platform> if one of the 15 dedicated platform tools exists for it, else generic novada_scrape
 Need proxy credentials for your own HTTP requests? → novada_proxy
 Page blocked or JS-heavy, need raw HTML? → novada_extract (format:"html", render:"render")
 Need to click/fill/screenshot a page? → novada_browser
@@ -223,6 +223,40 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
   "operation": "amazon_product_keywords",
   "params": { "keyword": "iphone 16", "num": 5 },
   "format": "json"
+}
+```
+
+---
+
+### `novada_scrape_<platform>` — 15 dedicated per-platform scrapers
+
+**When:** The platform is one of the 15 below. Prefer the dedicated tool over generic `novada_scrape` for these — its `operation` parameter is a **closed, typed enum** scoped to that one platform, so an agent literally cannot pick an operation that belongs to a different platform or doesn't exist. That eliminates the two most common `novada_scrape` failure modes: error 11008 (invalid platform name) and operation-guessing against the wrong platform's op list. Same output rendering as `novada_scrape` (markdown/json/csv/excel/html/toon).
+
+| Tool | Platform | Ops |
+|------|----------|-----|
+| `novada_scrape_amazon` | amazon.com | 10 |
+| `novada_scrape_google` | google.com (web, AI Mode, Maps, Shopping, Jobs, Hotels, Videos) | 13 |
+| `novada_scrape_bing` | bing.com | 4 |
+| `novada_scrape_duckduckgo` | duckduckgo.com | 1 |
+| `novada_scrape_yandex` | yandex.com | 1 |
+| `novada_scrape_youtube` | youtube.com | 12 |
+| `novada_scrape_instagram` | instagram.com | 7 |
+| `novada_scrape_facebook` | facebook.com | 6 |
+| `novada_scrape_tiktok` | tiktok.com | 5 |
+| `novada_scrape_x` | x.com / twitter.com | 3 |
+| `novada_scrape_walmart` | walmart.com | 5 |
+| `novada_scrape_shein` | shein.com | 2 (3 known backend_broken ops excluded) |
+| `novada_scrape_linkedin` | linkedin.com | 4 |
+| `novada_scrape_github` | github.com | 3 |
+| `novada_scrape_perplexity` | perplexity.ai | 2 |
+
+**When NOT to use:** The platform isn't in this list (e.g. Walmart is covered, but a platform not among the 16 in the `novada_scrape` catalog is not — use `novada_extract`/`novada_crawl`). ChatGPT has no dedicated tool — its two catalog operations are backend-dead; use generic `novada_scrape` only if the backend is later fixed.
+
+**Example:**
+```json
+{
+  "operation": "linkedin_company_information_url",
+  "params": { "url": "https://www.linkedin.com/company/anthropic/" }
 }
 ```
 

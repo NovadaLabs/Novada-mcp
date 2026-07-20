@@ -4,6 +4,18 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [Unreleased]
+
+Tools v2: the scraper surface grows from one generic tool to a curated per-platform family, and the hosted gateway's tool list is now mechanically derived from the same registry instead of hand-maintained.
+
+### Added
+- **15 dedicated per-platform scraper tools** (`novada_scrape_amazon`, `_google`, `_bing`, `_duckduckgo`, `_yandex`, `_youtube`, `_instagram`, `_facebook`, `_tiktok`, `_x`, `_walmart`, `_shein`, `_linkedin`, `_github`, `_perplexity`) alongside the existing generic `novada_scrape`. Each exposes a closed, typed `operation` enum scoped to that platform's verified-working operations only — no cross-platform operation guessing, no 11008 (invalid platform) errors. ChatGPT has no dedicated tool: both of its catalog operations are backend-dead. Curated tool count: **23 → 38**.
+- **Config-driven factory for platform scrapers** (`src/tools/platform_scraper.ts`): `createPlatformScraperTool(config)` takes one declarative `PlatformScraperConfig` (platform domain, operation-name → catalog `scraper_id` map, description text) and generates the tool definition, registry entry, Zod schema, and handler in one call. Adding a platform is one new config file (see `src/tools/scrape_amazon.ts` for the reference) — `core.ts` and `registry.ts` never need to change again per platform. All 15 tools aggregate through `src/tools/platform_scrapers.ts`.
+- **Catalog-cross-check guard**: a test asserts every `scraper_id` referenced by a platform-scraper config actually exists in `src/data/scraper_catalog.ts` (the single verified-operations source), so a typo'd or renamed operation id fails the build instead of surfacing as a live 11008/11008-class error.
+- **Hosted surface now core-derived, not hand-curated.** `mcp.novada.com` computes its visible tool list as the npm package's registry (38) minus an explicit `HOSTED_HIDDEN` exclusion set (8 tools that don't apply to a stateless serverless endpoint: write-gated account mutations, per-process debug state, `novada_browser_flow`) — instead of maintaining a second hand-written tool list that can silently drift. Hosted-visible count: **15 → 30**.
+
+---
+
 ## [0.9.28] — 2026-07-14
 
 Behavior telemetry with radical transparency: the hosted gateway now records usage metadata — and discloses exactly what, in-band.

@@ -52,8 +52,9 @@ response envelope itself. Each transport (`index.ts` for stdio, the hosted
 ### Adding a per-platform scraper tool (novada_scrape_<platform>)
 
 The 40-file-per-tool flow above still applies to ordinary tools, but the
-`novada_scrape_<platform>` family (novada_scrape_amazon today, 15 more planned) is
-CONFIG-DRIVEN instead: `src/tools/platform_scraper.ts` exports a factory
+`novada_scrape_<platform>` family (all 15 platforms shipped — see
+`src/tools/platform_scrapers.ts` for the aggregated list and `src/tools/scrape_*.ts`
+for each platform's config) is CONFIG-DRIVEN instead: `src/tools/platform_scraper.ts` exports a factory
 (`createPlatformScraperTool`) that takes one declarative `PlatformScraperConfig`
 (platform domain, friendly operation names → catalog `scraper_id`s, and the
 Core/Use-when/Not-for/Returns/Operations description text) and generates the tool
