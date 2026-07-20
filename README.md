@@ -11,8 +11,7 @@
 
 [Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Why Novada](#why-novada) · [Repository layout](#repository-layout) · [Links](#links)
 
-> ### 🎁 Free to start — no credit card
-> Sign up and get **$10 in free credits (up to 1,000 API calls/month)**. [Get your free key →](https://dashboard.novada.com/sign-up/)
+[![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card](docs/assets/free-credits-banner.png)](https://dashboard.novada.com/sign-up/)
 
 > ### 🔎 15 dedicated per-platform scrapers
 > Amazon, Google, LinkedIn, TikTok, YouTube, GitHub, Walmart, Instagram, Facebook, X, Bing, DuckDuckGo, Yandex, SHEIN, Perplexity — each a closed, typed `operation` enum instead of a generic scrape-and-guess call. See the [Scrape table](#how-to-choose-a-tool) below.

@@ -13,8 +13,7 @@
 
 [Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Troubleshooting](#troubleshooting) · [Why Novada](#why-novada) · [Links](#links)
 
-> ### 🎁 Free to start — no credit card
-> Sign up and get **$10 in free credits (up to 1,000 API calls/month)**. [Get your free key →](https://dashboard.novada.com/sign-up/)
+[![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card](https://raw.githubusercontent.com/NovadaLabs/Novada-mcp/main/docs/assets/free-credits-banner.png)](https://dashboard.novada.com/sign-up/)
 
 ---
 

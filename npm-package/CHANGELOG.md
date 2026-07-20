@@ -4,6 +4,13 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [Unreleased]
+
+### Changed
+- Replaced the plain-text free-credits README callout with a linked, accessible Novada brand banner in both the repository and npm package documentation.
+
+---
+
 ## [0.9.30] — 2026-07-20
 
 Tools v2: the scraper surface grows from one generic tool to a curated per-platform family, and the hosted gateway's tool list is now mechanically derived from the same registry instead of hand-maintained. Shipped after a full 7-phase test-engineering audit (BLOCKED → fixed → re-audit CLEAN): preflight now enforces backend-required params, hosted hidden-tool gate is fail-closed. Known upstream issue: `novada_scrape_yandex` intermittently fails at the Novada backend (escalated).
