@@ -1288,6 +1288,1271 @@
         }
       ],
       "note": "Tools-v2 search-engine platform-scraper pass (novada_scrape_google/bing/duckduckgo/yandex, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) \u2014 novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform search-engine tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the six operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names \u2014 a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape",
+        "novada_scrape_youtube"
+      ],
+      "shapes": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape",
+        "novada_scrape_instagram"
+      ],
+      "shapes": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape",
+        "novada_scrape_facebook"
+      ],
+      "shapes": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_amazon",
+        "novada_scrape_youtube"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "product_by_asin",
+            "product_by_url",
+            "products_by_keywords",
+            "bestsellers",
+            "reviews_by_url",
+            "seller_by_url",
+            "listings_by_keyword",
+            "global_product_by_url",
+            "global_product_by_category_url",
+            "global_product_by_keyword_and_brand"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_amazon",
+        "novada_scrape_instagram"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "product_by_asin",
+            "product_by_url",
+            "products_by_keywords",
+            "bestsellers",
+            "reviews_by_url",
+            "seller_by_url",
+            "listings_by_keyword",
+            "global_product_by_url",
+            "global_product_by_category_url",
+            "global_product_by_keyword_and_brand"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_amazon",
+        "novada_scrape_facebook"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "product_by_asin",
+            "product_by_url",
+            "products_by_keywords",
+            "bestsellers",
+            "reviews_by_url",
+            "seller_by_url",
+            "listings_by_keyword",
+            "global_product_by_url",
+            "global_product_by_category_url",
+            "global_product_by_keyword_and_brand"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_amazon",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "product_by_asin",
+            "product_by_url",
+            "products_by_keywords",
+            "bestsellers",
+            "reviews_by_url",
+            "seller_by_url",
+            "listings_by_keyword",
+            "global_product_by_url",
+            "global_product_by_category_url",
+            "global_product_by_keyword_and_brand"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_amazon",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "product_by_asin",
+            "product_by_url",
+            "products_by_keywords",
+            "bestsellers",
+            "reviews_by_url",
+            "seller_by_url",
+            "listings_by_keyword",
+            "global_product_by_url",
+            "global_product_by_category_url",
+            "global_product_by_keyword_and_brand"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_google",
+        "novada_scrape_youtube"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "web_search_by_domain",
+            "search_by_url",
+            "ai_mode",
+            "hotels",
+            "jobs",
+            "videos",
+            "shopping",
+            "maps_by_location",
+            "maps_by_place_id",
+            "maps_by_cid",
+            "maps_by_url",
+            "maps_reviews_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_google",
+        "novada_scrape_instagram"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "web_search_by_domain",
+            "search_by_url",
+            "ai_mode",
+            "hotels",
+            "jobs",
+            "videos",
+            "shopping",
+            "maps_by_location",
+            "maps_by_place_id",
+            "maps_by_cid",
+            "maps_by_url",
+            "maps_reviews_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_google",
+        "novada_scrape_facebook"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "web_search_by_domain",
+            "search_by_url",
+            "ai_mode",
+            "hotels",
+            "jobs",
+            "videos",
+            "shopping",
+            "maps_by_location",
+            "maps_by_place_id",
+            "maps_by_cid",
+            "maps_by_url",
+            "maps_reviews_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_google",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "web_search_by_domain",
+            "search_by_url",
+            "ai_mode",
+            "hotels",
+            "jobs",
+            "videos",
+            "shopping",
+            "maps_by_location",
+            "maps_by_place_id",
+            "maps_by_cid",
+            "maps_by_url",
+            "maps_reviews_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_google",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "web_search_by_domain",
+            "search_by_url",
+            "ai_mode",
+            "hotels",
+            "jobs",
+            "videos",
+            "shopping",
+            "maps_by_location",
+            "maps_by_place_id",
+            "maps_by_cid",
+            "maps_by_url",
+            "maps_reviews_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_bing",
+        "novada_scrape_youtube"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "videos",
+            "news",
+            "shopping"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_bing",
+        "novada_scrape_instagram"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "videos",
+            "news",
+            "shopping"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_bing",
+        "novada_scrape_facebook"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "videos",
+            "news",
+            "shopping"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_bing",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "videos",
+            "news",
+            "shopping"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_bing",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search",
+            "videos",
+            "news",
+            "shopping"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_duckduckgo",
+        "novada_scrape_youtube"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_duckduckgo",
+        "novada_scrape_instagram"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_duckduckgo",
+        "novada_scrape_facebook"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_duckduckgo",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_duckduckgo",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_yandex",
+        "novada_scrape_youtube"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_yandex",
+        "novada_scrape_instagram"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_yandex",
+        "novada_scrape_facebook"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_yandex",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_yandex",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "web_search"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_youtube",
+        "novada_scrape_instagram"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_youtube",
+        "novada_scrape_facebook"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_youtube",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_youtube",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_instagram",
+        "novada_scrape_facebook"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_instagram",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_instagram",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_facebook",
+        "novada_scrape_tiktok"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_facebook",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
+    },
+    {
+      "param": "operation",
+      "tools": [
+        "novada_scrape_tiktok",
+        "novada_scrape_x"
+      ],
+      "shapes": [
+        {
+          "type": "string",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ]
+        },
+        {
+          "type": "string",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ]
+        }
+      ],
+      "note": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (novada_scrape_youtube/instagram/facebook/tiktok/x, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the eleven operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
     }
   ]
 }

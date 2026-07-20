@@ -15,6 +15,11 @@ import { GOOGLE_SCRAPER_TOOL } from "./scrape_google.js";
 import { BING_SCRAPER_TOOL } from "./scrape_bing.js";
 import { DUCKDUCKGO_SCRAPER_TOOL } from "./scrape_duckduckgo.js";
 import { YANDEX_SCRAPER_TOOL } from "./scrape_yandex.js";
+import { YOUTUBE_SCRAPER_TOOL } from "./scrape_youtube.js";
+import { INSTAGRAM_SCRAPER_TOOL } from "./scrape_instagram.js";
+import { FACEBOOK_SCRAPER_TOOL } from "./scrape_facebook.js";
+import { TIKTOK_SCRAPER_TOOL } from "./scrape_tiktok.js";
+import { X_SCRAPER_TOOL } from "./scrape_x.js";
 
 /** One entry per platform-scraper tool. Order mirrors registration order elsewhere. */
 export const PLATFORM_SCRAPER_TOOLS: DispatchableScraperTool[] = [
@@ -23,6 +28,11 @@ export const PLATFORM_SCRAPER_TOOLS: DispatchableScraperTool[] = [
   toDispatchableScraperTool(BING_SCRAPER_TOOL),
   toDispatchableScraperTool(DUCKDUCKGO_SCRAPER_TOOL),
   toDispatchableScraperTool(YANDEX_SCRAPER_TOOL),
+  toDispatchableScraperTool(YOUTUBE_SCRAPER_TOOL),
+  toDispatchableScraperTool(INSTAGRAM_SCRAPER_TOOL),
+  toDispatchableScraperTool(FACEBOOK_SCRAPER_TOOL),
+  toDispatchableScraperTool(TIKTOK_SCRAPER_TOOL),
+  toDispatchableScraperTool(X_SCRAPER_TOOL),
 ];
 
 /** Full MCP tool schemas — spread into src/core.ts's `_TOOL_DEFINITIONS`. */

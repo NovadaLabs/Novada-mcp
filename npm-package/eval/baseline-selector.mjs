@@ -141,6 +141,14 @@ export function validateTaskSet(tasks, registryNames) {
  * this floor; see eval/baseline-tier-a.json's own dated comment for the full accounting.
  * Lowered 50%->46.67% (5/10->7/15) to match the honestly-regenerated committed snapshot.
  *
+ * 2026-07-20 UPDATE 2 (Tools-v2 SOCIAL/VIDEO platform-scraper pass): eval-tasks.json
+ * grew 15->20 tasks (T16-T20, one per new novada_scrape_<youtube|instagram|facebook|
+ * tiktok|x> tool). Unlike the prior update, all 5 new tasks score correct:true — each
+ * new platform's name/operation tokens are distinctive enough for Tier A's bag-of-words
+ * argmax to pick cleanly, with no new forbidden hits; see eval/baseline-tier-a.json's own
+ * dated comment for the full accounting. Raised 46.67%->60% (7/15->12/20) to match the
+ * honestly-regenerated committed snapshot.
+ *
  * Kept for reporting/back-compat and as a human-readable summary of what
  * baseline-tier-a.json (below) records precisely, per-task. The actual gate
  * (FIX 2) no longer compares against this bare number — it compares against
@@ -148,7 +156,7 @@ export function validateTaskSet(tasks, registryNames) {
  * deterministic: no key, no network, no sampling) and catches per-task
  * identity regressions this scalar alone cannot (see evaluateRegressionGate).
  */
-export const BASELINE_FLOOR = 7 / 15;
+export const BASELINE_FLOOR = 12 / 20;
 
 const BASELINE_TIER_A_PATH = resolve(__dirname, "baseline-tier-a.json");
 

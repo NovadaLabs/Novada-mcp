@@ -214,6 +214,11 @@ If you know the exact page you want → `novada_extract`. If you need to find pa
 | `novada_scrape_bing` | Bing-only raw SERP data (web search, videos, news, shopping) via a closed, typed `operation` enum — 4 verified-working operations; Bing is not a selectable `novada_search` engine | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
 | `novada_scrape_duckduckgo` | DuckDuckGo-only raw SERP data (web search) via a closed, typed `operation` enum — 1 verified-working operation | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
 | `novada_scrape_yandex` | Yandex-only raw SERP data (web search) via a closed, typed `operation` enum — 1 verified-working operation | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_youtube` | YouTube-only structured data (video/channel info, transcripts, comments, video/audio downloads) via a closed, typed `operation` enum — 12 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_instagram` | Instagram-only structured data (profiles, posts, reels, comments) via a closed, typed `operation` enum — 7 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_facebook` | Facebook-only structured data (profiles, posts, comments, events) via a closed, typed `operation` enum — 6 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_tiktok` | TikTok-only structured data (profiles, posts, hashtag/discover listings) via a closed, typed `operation` enum — 5 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
+| `novada_scrape_x` | X (Twitter)-only structured data (post details, profile lookup by username or URL) via a closed, typed `operation` enum — 3 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) |
 
 **Crawl / Map / Site copy**
 
@@ -274,7 +279,7 @@ If you know the exact page you want → `novada_extract`. If you need to find pa
 | `novada_setup` | Validating your key on first run; never hard-errors on a missing key | Key status, balance, onboarding guidance |
 | `novada_session_stats` | Debugging your own call pattern this session | Per-tool call counts, recent calls, uptime |
 
-**28 tools across 6 categories.** The hosted default surface (`mcp.novada.com`) exposes a curated subset; self-host (`npx novada-mcp`) exposes all 28. Call `novada_discover` on your connection to see exactly what's available on it.
+**33 tools across 6 categories.** The hosted default surface (`mcp.novada.com`) exposes a curated subset; self-host (`npx novada-mcp`) exposes all 33. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ---
 

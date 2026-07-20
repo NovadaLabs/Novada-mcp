@@ -831,6 +831,18 @@ const AND_REQUIRED_OPS = new Set<string>([
   // the 3 Amazon ops above. Unlike google_comment_url (deliberately NOT added — see the
   // comment above this Set), there is no existing test proving a partial call succeeds.
   "google_map-details_location",           // country + keyword + merchant_limit
+  // Seeded 2026-07-20 during the Tools-v2 SOCIAL/VIDEO platform-scraper pass
+  // (novada_scrape_youtube/instagram/facebook/tiktok/x): ins_posts_profileurl (Instagram
+  // "posts by profile") is the only op across youtube.com/instagram.com/facebook.com/
+  // tiktok.com/x.com with 2+ catalog required:true keys — profileurl AND resultsLimit.
+  // resultsLimit carries a catalog `dflt: "10"`, but that does NOT exempt it: the existing
+  // Amazon AND-required ops above (e.g. amazon_product-list_keywords-domain's keyword/domain)
+  // also carry a catalog `dflt` on their required keys and are still treated as genuinely
+  // mandatory — a `dflt` is a UI form placeholder/example, not verified evidence of a
+  // backend-side optional default (that distinction is reserved for google_comment_url,
+  // which has an existing passing test proving a partial call succeeds — no such live
+  // counter-evidence exists here).
+  "ins_posts_profileurl",                  // profileurl + resultsLimit
 ]);
 
 /** Build an OpMap from catalog params for a single platform. */

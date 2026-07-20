@@ -168,6 +168,61 @@
       "sibling_watch": ["novada_search", "novada_scrape"],
       "surfaces": ["default"],
       "notes": "Tools-v2 search-engine platform-scraper pass (2026-07-20): a specific Yandex TLD (yandex.ru, params.yandex_domain) is a control novada_search's engine='yandex' does not expose, plus the explicit 'raw results list' framing — both point at novada_scrape_yandex over the answer-oriented novada_search. NOT tagged 'hosted-15': same precedent as T11-T14."
+    },
+    {
+      "id": "T16-youtube-transcript-vs-extract",
+      "prompt": "Get me the full transcript for this YouTube video: https://www.youtube.com/watch?v=LCAY3PGHZyw",
+      "category": "scrape-youtube-vs-extract",
+      "expected_tool": "novada_scrape_youtube",
+      "acceptable_tools": ["novada_scrape_youtube", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): 'transcript' for a specific YouTube video is a structured-data ask (the transcript_by_video operation), not a request to read the page as prose — the disambiguator novada_scrape_youtube's description calls out against novada_extract. novada_scrape remains an acceptable fallback (identical engine, platform='youtube.com'). NOT tagged 'hosted-15': novada_scrape_youtube is not in config/surfaces.json's hosted-15 tool list — same precedent as T11-T15."
+    },
+    {
+      "id": "T17-instagram-profile-posts",
+      "prompt": "Pull the latest posts from the Instagram profile novadaproxies, with likes and captions.",
+      "category": "scrape-instagram-vs-extract",
+      "expected_tool": "novada_scrape_instagram",
+      "acceptable_tools": ["novada_scrape_instagram", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a named platform (Instagram) plus structured fields (likes/captions) for a profile's posts is the strongest signal for novada_scrape_instagram's posts_by_profile operation, mirroring T04's Amazon disambiguator. novada_scrape remains an acceptable fallback (identical engine, platform='instagram.com'). NOT tagged 'hosted-15': same precedent as T11-T16."
+    },
+    {
+      "id": "T18-facebook-event-details",
+      "prompt": "Get the details (date, location, description) for this Facebook event: https://www.facebook.com/events/4332074220347336",
+      "category": "scrape-facebook-vs-extract",
+      "expected_tool": "novada_scrape_facebook",
+      "acceptable_tools": ["novada_scrape_facebook", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a Facebook event URL plus explicit structured fields (date/location/description) is the event_by_url disambiguator over reading the page as plain text. novada_scrape remains an acceptable fallback (identical engine, platform='facebook.com'). NOT tagged 'hosted-15': same precedent as T11-T17."
+    },
+    {
+      "id": "T19-tiktok-video-details",
+      "prompt": "Get the like count, description, and author for this TikTok video URL: https://www.tiktok.com/@gingercat168/video/7586318922010332446",
+      "category": "scrape-tiktok-vs-extract",
+      "expected_tool": "novada_scrape_tiktok",
+      "acceptable_tools": ["novada_scrape_tiktok", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a single TikTok post URL plus explicit structured fields (likes/description/author) is the post_by_url disambiguator over reading the page as plain text (the exact extract-vs-scrape pattern from T02/T04). novada_scrape remains an acceptable fallback (identical engine, platform='tiktok.com'). NOT tagged 'hosted-15': same precedent as T11-T18."
+    },
+    {
+      "id": "T20-x-profile-by-username",
+      "prompt": "Get the X (Twitter) profile info — bio, follower count, post count — for the username BillGates.",
+      "category": "scrape-x-vs-extract",
+      "expected_tool": "novada_scrape_x",
+      "acceptable_tools": ["novada_scrape_x", "novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search"],
+      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "surfaces": ["default"],
+      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): a bare username (not a URL) plus structured profile fields (bio/follower count/post count) is the profile_by_username disambiguator — there is no page to 'read' from a username alone, ruling out novada_extract. novada_scrape remains an acceptable fallback (identical engine, platform='x.com'). NOT tagged 'hosted-15': same precedent as T11-T19."
     }
   ]
 }
