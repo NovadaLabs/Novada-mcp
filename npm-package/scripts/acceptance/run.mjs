@@ -215,8 +215,11 @@ if (process.env.ANTHROPIC_API_KEY) {
 // ─── Gate 7: live-smoke (needs NOVADA_SCRAPER_KEY) ────────────────────────────
 if (process.env.NOVADA_SCRAPER_KEY) {
   const r = runCommand("node", ["scripts/acceptance/live-smoke.mjs"]);
-  const acceptedMatch = r.combined.match(/(\d+)\/(\d+)\s+accepted/);
-  const metric = acceptedMatch ? `${acceptedMatch[1]}/${acceptedMatch[2]} accepted` : "no summary line found — see log";
+  // live-smoke summary line: "<pass>/<total> pass · <flake> upstream-flake (non-blocking) · <wireFail> wire-fail"
+  const m = r.combined.match(/(\d+)\/(\d+)\s+pass\s*·\s*(\d+)\s+upstream-flake[^·]*·\s*(\d+)\s+wire-fail/);
+  const metric = m
+    ? `${m[1]}/${m[2]} pass · ${m[3]} flake (non-blocking) · ${m[4]} wire-fail`
+    : "no summary line found — see log";
   record({
     name: "live-smoke",
     status: r.status === 0 ? "PASS" : "FAIL",
@@ -258,6 +261,14 @@ async function writeReport() {
           .join("\n")
       : "- None. Every gate ran (no keys were missing).";
 
+  // Embed the live-smoke per-platform table so the report is self-contained — you can see
+  // WHICH platforms passed/flaked without a diagnostic re-run. (flake = target-side transient,
+  // non-blocking; only wire-fail blocks — see docs/RELEASE-ACCEPTANCE.md.)
+  const liveSmoke = gates.find((g) => g.name === "live-smoke" && g.status !== "SKIP");
+  const detail = liveSmoke && liveSmoke.log.trim()
+    ? `\n## Live-smoke detail (per platform)\n\n\`\`\`\n${liveSmoke.log.trim()}\n\`\`\`\n`
+    : "";
+
   const report = `# Release Acceptance Report
 
 - **Date:** ${DATE}
@@ -279,7 +290,7 @@ ${rows}
 ## Skipped gates (lack of a key)
 
 ${footer}
-`;
+${detail}`;
 
   const reportDir = resolve(REPO_ROOT, "reports", `${DATE}-${FEATURE}`);
   mkdirSync(reportDir, { recursive: true });
