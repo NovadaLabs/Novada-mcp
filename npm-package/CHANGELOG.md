@@ -8,6 +8,7 @@ All notable changes are recorded here in reverse chronological order.
 
 ### Changed
 - Replaced the plain-text free-credits README callout with a linked, accessible Novada brand banner in both the repository and npm package documentation.
+- Replaced the dense README tool-selection paragraph with a linked decision map while retaining the detailed quick-reference tables.
 
 ---
 

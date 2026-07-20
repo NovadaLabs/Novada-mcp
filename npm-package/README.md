@@ -186,7 +186,7 @@ novada_research({question: "how do MCP servers work?"}) — parallel multi-sourc
 
 ## How to choose a tool
 
-If you know the exact page you want → `novada_extract`. If you need to find pages first → `novada_search`. If you need cited, multi-source material for a complex question → `novada_research` (extractive source passages, not a generated summary). If you need many pages from one site → `novada_crawl` (bodies inline, capped at 20 pages) or `novada_site_copy` (writes an entire docs site to disk). If you just need the URL list, not content → `novada_map`. If the data lives on a named platform (Amazon, LinkedIn, TikTok, GitHub, etc.) → `novada_scrape` returns clean structured records instead of raw HTML you'd have to parse yourself. If you need to detect what changed on a page over time → `novada_monitor`; for a brand's footprint on AI-company domains specifically → `novada_ai_monitor`. If you need to fact-check a claim before citing it → `novada_verify`. If a page needs clicks, typing, or a login to reach the data → `novada_browser` (or `novada_browser_flow` for a simpler step sequence). If you need your own HTTP client routed through a specific IP type or geo → `novada_proxy`. Unsure which tool applies at all → call `novada_discover` first; unsure if your key even works → call `novada_setup()` first.
+[![How to choose a Novada MCP tool — decision guide](https://raw.githubusercontent.com/NovadaLabs/Novada-mcp/main/docs/assets/tool-decision-map.png)](https://www.novada.com)
 
 ### Quick reference table
 
