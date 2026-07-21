@@ -6,11 +6,20 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
-### Changed
-- Replaced the plain-text free-credits README callout with a linked, accessible Novada brand banner in both the repository and npm package documentation.
-- Added a linked "how to choose a tool" decision map to both READMEs.
-- Trimmed both READMEs to a compact core-tools table (Bright Data–style progressive disclosure) and moved the full 38-tool per-category reference to `docs/TOOLS.md`, linked via "Full reference — all 38 tools →".
-- Added a top-of-README differentiator hook (works with any MCP client · 15 typed per-platform scrapers · free credits · zero install) and an "honest tool surface" point to "Why Novada".
+---
+
+## [0.9.31] — 2026-07-21
+
+Reliability + honesty patch. Shipped after an independent external audit (found issues → fix-loop → re-audit CLEAN). No new tools — this hardens what's there. Backend extractor outages surfaced during the audit (github/x/yandex/bing/youtube) are tracked separately as a Novada backend issue (TOW2-305), not fixable in this wrapper.
+
+### Fixed
+- **YouTube wrong-target guard (data integrity).** `novada_scrape_youtube` video-metadata ops (`video_by_url`, `video_by_id`) now verify the returned video id matches the requested one. A mismatch returns a dedicated `WRONG_TARGET` error (permanent, non-retryable, and — unlike the old path — surfaced to alerting) instead of silently presenting a different video as `success`. Scoped to metadata ops and matched on identity fields only (id/url), so it never false-rejects a valid result. Fixes an audited case where a request for one video returned another as success.
+- **Honest backend-failure copy.** When a scraper's backend fails, the tool now states the data source is temporarily unavailable / under maintenance on Novada's side — not the caller's request, parameters, or key — and points to `novada_extract` as an alternative, instead of the misleading "wait 30s and retry / contact support."
+- **`server.json` generated from the registry at build.** It was shipping stale (v0.9.17, 11 tools, named removed tools `novada_unblock`/`novada_health`, "4 engines incl. Bing"). Now `scripts/gen-server-json.mjs` derives `version`, `packages[].version`, `tools`, and the summary description from `package.json` + the tool registry; a CI guard (`server-json-sync.test.ts`) fails the build on any drift (incl. the install-target `packages[].version`).
+- **Self-report consistency.** `novada_search` is correctly documented as 3 engines (Google, DuckDuckGo, Yandex) across registry/resources/CLI/prompts — Bing is a scrape platform, not a search engine. The README hidden-tools rationale now names the actual 8 hosted-hidden tools. `novada_research`'s field descriptions state that either `question` or `query` is required.
+
+### Changed (docs, since 0.9.30)
+- Linked free-credits banner + "how to choose a tool" decision map in both READMEs; trimmed both to a compact core-tools table (Bright Data–style progressive disclosure) with the full 38-tool reference moved to `docs/TOOLS.md`; added a top-of-README differentiator hook and an "honest tool surface" point to "Why Novada."
 
 ---
 

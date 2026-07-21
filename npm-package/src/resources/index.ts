@@ -445,7 +445,7 @@ novada_scrape with platform='amazon.com', operation='amazon_product_keywords'
 > 23 tools. Read this to pick the right one.
 
 ## novada_search
-Best for: web search when you have a question, not a URL. Returns titles+URLs+snippets from 4 engines (Google, Bing, DuckDuckGo, Yandex).
+Best for: web search when you have a question, not a URL. Returns titles+URLs+snippets from 3 engines (Google, DuckDuckGo, Yandex).
 Not for: reading a URL you have (use novada_extract), or full reports (use novada_research).
 Required: query. Optional: engine (default google), num (default 10), time_range.
 Example: novada_search({query: "Claude MCP tutorial 2025", engine: "google", num: 5})

@@ -87,7 +87,7 @@ These are the tools you reach for most:
 
 📚 **[Full reference — all 38 tools →](docs/TOOLS.md)**
 
-**38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38. The hosted default surface (`mcp.novada.com`) exposes **30** — the same registry minus 8 tools that don't apply to a stateless serverless endpoint (write-gated account mutations, per-process debug state, and two browser tools that need a persistent process) — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
+**38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38. The hosted default surface (`mcp.novada.com`) exposes **30** — the same registry minus 8 tools that don't apply to a stateless serverless endpoint: `novada_browser_flow` (needs a persistent browser session), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ---
 

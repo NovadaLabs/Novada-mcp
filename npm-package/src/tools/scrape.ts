@@ -258,14 +258,14 @@ async function pollForResult(apiKey: string, taskId: string): Promise<PollOutcom
         // rather than an UNKNOWN permanent bug.
         throw makeNovadaError(
           NovadaErrorCode.API_DOWN,
-          `Scraper task error (code ${errCode}): ${errMsg || "Task failed on the server side."} This is usually transient — retry once, or retry with different parameters.`,
+          `Scraper task error (code ${errCode}): ${errMsg || "Task failed on the server side."} Retry once; if it persists, this is a Novada-side backend issue (under maintenance) — not your request or parameters.`,
           `error_code:${errCode}`,
         );
       }
       if (errCode === 27203) {
         throw makeNovadaError(
           NovadaErrorCode.API_DOWN,
-          `Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`,
+          `Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. Retry once; if it persists, this is a Novada-side backend issue under maintenance — not your request.`,
           "error_code:27203",
         );
       }
@@ -1096,6 +1096,92 @@ function getCatalogOp(platform: string, operation: string): CatalogOp | undefine
 // wrapper tools set it.
 type ScrapeEngineParams = (ScrapeParams | ScrapeParamsFullType) & { displayName?: string };
 
+// ─── Identity oracle (TOW2-305) ──────────────────────────────────────────────
+// Single-target YouTube video operations request ONE specific video (by id, or by a
+// URL that contains the id). A 2026-07-21 independent audit caught novada_scrape_youtube
+// returning a DIFFERENT video as success:true (requested dQw4w9WgXcQ, backend returned
+// tSi6Dn1H36Y "Billie Jean"). Silent wrong data is worse than an error, so we verify the
+// backend returned the video that was asked for. CONSERVATIVE by design: this only fires
+// when an 11-char video id can be confidently extracted from the request AND it appears in
+// NONE of the returned records — otherwise it is a no-op and never false-rejects a valid result.
+
+/** YouTube scraper_ids whose record is a single video's METADATA (id/url reliably present).
+ *  Deliberately scoped to metadata ops only: transcript / comments / file-download records
+ *  legitimately may NOT echo the video id, so applying the oracle to them would false-reject
+ *  every valid call (code-review MEDIUM, 2026-07-21). */
+const IDENTITY_CHECKED_YT_OPS: ReadonlySet<string> = new Set([
+  "youtube_video-post_explore", // video_by_url
+  "youtube_product-videoid",    // video_by_id
+]);
+
+/** Identity-bearing field names, matched case-insensitively. */
+const YT_ID_KEYS = new Set(["id", "video_id", "videoid"]);
+const YT_URL_KEYS = new Set(["url", "webpage_url", "video_url", "link"]);
+
+/** Collect id/url identity strings from a record, walking nested OBJECTS but NEVER arrays — so
+ *  a wrong result can't pass by echoing the requested id in a related_videos[] entry, a
+ *  description, or an echoed requested_url field (code-review MEDIUM, 2026-07-21). */
+function collectYouTubeIdentityStrings(node: unknown, out: { ids: string[]; urls: string[] }, depth = 0): void {
+  if (depth > 4 || node === null || typeof node !== "object" || Array.isArray(node)) return;
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    const key = k.toLowerCase();
+    if (typeof v === "string") {
+      if (YT_ID_KEYS.has(key)) out.ids.push(v.trim());
+      else if (YT_URL_KEYS.has(key)) out.urls.push(v);
+    } else if (v && typeof v === "object" && !Array.isArray(v)) {
+      collectYouTubeIdentityStrings(v, out, depth + 1);
+    }
+  }
+}
+
+/** Extract an 11-char YouTube video id from a `video_id` param or a video URL, else null. */
+export function extractYouTubeVideoId(params: Record<string, unknown> | undefined): string | null {
+  if (!params) return null;
+  const vid = params["video_id"];
+  if (typeof vid === "string" && /^[A-Za-z0-9_-]{11}$/.test(vid.trim())) return vid.trim();
+  const url = params["url"];
+  if (typeof url === "string") {
+    const m = url.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/watch\/)([A-Za-z0-9_-]{11})/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Throws a wrong-target NovadaError when a single-video YouTube op returns records that do
+ * NOT contain the requested video id. No-op for any other platform/op, when no id can be
+ * extracted, or when records are empty — so a valid result is never rejected.
+ */
+export function assertYouTubeIdentity(
+  platform: string,
+  operation: string,
+  params: Record<string, unknown> | undefined,
+  records: Record<string, unknown>[],
+): void {
+  if (platform !== "youtube.com") return;
+  if (!IDENTITY_CHECKED_YT_OPS.has(operation)) return;
+  if (!records || records.length === 0) return;
+  const requestedId = extractYouTubeVideoId(params);
+  if (!requestedId) return; // can't verify safely → never false-reject
+  // Match ONLY identity fields (id/url), walking objects not arrays. A wrong result that
+  // merely echoes the requested id in a description or a related_videos[] list does NOT pass.
+  const acc = { ids: [] as string[], urls: [] as string[] };
+  for (const r of records) collectYouTubeIdentityStrings(r, acc);
+  const matched =
+    acc.ids.some((id) => id === requestedId || id.includes(requestedId)) ||
+    acc.urls.some((u) => u.includes(requestedId));
+  if (matched) return;
+  const first = records[0] as Record<string, unknown>;
+  const firstLabel = first?.["title"] ?? first?.["id"] ?? first?.["url"] ?? "a different item";
+  throw makeNovadaError(
+    NovadaErrorCode.WRONG_TARGET,
+    `Wrong target: you requested YouTube video "${requestedId}", but the backend returned different data ` +
+    `(first record: ${sanitizeServerMsg(String(firstLabel))}). This is a Novada-side data-integrity issue — ` +
+    `not your request. Do not use these records.`,
+    `youtube_wrong_target:${requestedId}`,
+  );
+}
+
 export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): Promise<string> {
   const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
   const { params: opParams, format } = params;
@@ -1255,7 +1341,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
       // retryable envelope for the customer + suppressed from Sentry alerts.
       throw makeNovadaError(
         NovadaErrorCode.API_DOWN,
-        `Scraper task failed (${errCode ?? "unknown"}): ${itemError}. This is usually transient — retry once or try a different operation.`,
+        `Scraper task failed (${errCode ?? "unknown"}): ${itemError}. Retry once or try a different operation; if it persists, this operation is temporarily under maintenance on Novada's side — not your request.`,
         `error_code:${errCode ?? "unknown"}`,
       );
     }
@@ -1288,8 +1374,8 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         NovadaErrorCode.API_DOWN,
         `Scraper collected ${errorItems.length} result(s) but all failed. ` +
         `error_code: ${errCode} — ${sanitizeServerMsg(String(errMsg))}. ` +
-        `This means the target page was reached but data extraction failed (parser error, empty page, or access blocked). ` +
-        `This is usually transient — retry once, or try a different operation / verify the target URL.`,
+        `Novada reached the target but couldn't extract data (parser error, empty page, or access blocked). ` +
+        `Retry once; if it persists, this data source is temporarily under maintenance on Novada's side (not your request) — try novada_extract on the URL meanwhile.`,
         `error_code:${errCode}`,
       );
     }
@@ -1300,6 +1386,11 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   // for platforms (e.g. Walmart) whose flat fields are already populated.
   rawRecords = rawRecords.map(r => normalizeProductRecord(r));
   const records = rawRecords.slice(0, limit).map(r => flattenRecord(r)) as Record<string, unknown>[];
+
+  // Identity oracle (TOW2-305): never surface a DIFFERENT YouTube video than requested as
+  // success. Runs on the raw upstream records (which carry the real id/url). No-op for
+  // everything except single-target YouTube video ops with a confidently-extracted id.
+  assertYouTubeIdentity(platform, operation, opParams as Record<string, unknown> | undefined, rawRecords.slice(0, limit));
 
   if (records.length === 0) {
     return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;

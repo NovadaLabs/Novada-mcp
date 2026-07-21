@@ -410,7 +410,7 @@ Connect to Claude Code:
   claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 
 Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the live set):
-  novada_search              Search the web via Google, Bing, DuckDuckGo, Yandex (4 engines)
+  novada_search              Search the web via Google, DuckDuckGo, Yandex (3 engines)
   novada_extract             Extract content from any URL (smart auto-routing)
   novada_crawl               Crawl a website (BFS/DFS, up to 20 pages)
   novada_research            Multi-source research — returns cited source material to reason over

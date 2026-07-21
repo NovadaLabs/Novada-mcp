@@ -8,6 +8,7 @@ export enum NovadaErrorCode {
   URL_UNREACHABLE        = "URL_UNREACHABLE",
   SPA_NO_URLS_FOUND      = "SPA_NO_URLS_FOUND",
   API_DOWN               = "API_DOWN",
+  WRONG_TARGET           = "WRONG_TARGET",
   INVALID_PARAMS         = "INVALID_PARAMS",
   PRODUCT_UNAVAILABLE    = "PRODUCT_UNAVAILABLE",
   TASK_NOT_FOUND         = "TASK_NOT_FOUND",
@@ -27,6 +28,7 @@ const FAILURE_CLASS: Record<NovadaErrorCode, FailureClass> = {
   [NovadaErrorCode.URL_UNREACHABLE]:     "transient",
   [NovadaErrorCode.SPA_NO_URLS_FOUND]:   "permanent",
   [NovadaErrorCode.API_DOWN]:            "transient",
+  [NovadaErrorCode.WRONG_TARGET]:        "permanent",
   [NovadaErrorCode.INVALID_PARAMS]:      "permanent",
   [NovadaErrorCode.PRODUCT_UNAVAILABLE]: "permanent",
   [NovadaErrorCode.TASK_NOT_FOUND]:      "permanent",
@@ -127,11 +129,18 @@ Do not retry novada_map. Recommended next steps:
 3. Use novada_search with "site:<hostname>" to find indexed subpages.`,
 
   [NovadaErrorCode.API_DOWN]: `\
-The Novada API is temporarily unavailable (5xx or network failure).
+The Novada backend couldn't complete this request. This is on Novada's side — not your request, your parameters, or your API key.
 
-Action: Wait 30–60 seconds and retry.
-Status: Check https://status.novada.com for ongoing incidents.
-Escalate: If unavailable for >5 minutes, contact support@novada.com.`,
+Action: Retry ONCE. If it fails again, this data source is temporarily under maintenance (a known backend issue we're actively fixing) — stop retrying, it won't succeed by trying harder.
+Meanwhile: to read a page directly, use novada_extract on the URL; for a web query, use novada_search or novada_research.
+Status: https://status.novada.com · Still down after a while? support@novada.com.`,
+
+  [NovadaErrorCode.WRONG_TARGET]: `\
+The backend returned data for a DIFFERENT item than you requested — a data-integrity mismatch on Novada's side, not a problem with your request.
+
+Action: Do NOT use these records. Do NOT blindly retry — a retry may return the same wrong item.
+Alternative: read the exact target directly with novada_extract on the URL.
+This has been logged for the Novada team to investigate.`,
 
   [NovadaErrorCode.INVALID_PARAMS]: `\
 One or more parameters are invalid. Correct them and retry.

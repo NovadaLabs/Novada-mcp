@@ -49,7 +49,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   // ─── Content Retrieval ──────────────────────────────────────────────────
   {
     name: "novada_search",
-    description: "Search the web via Google, Bing, DuckDuckGo, or Yandex with geo-targeting, time_range, domain filters, and optional auto-extract on top results",
+    description: "Search the web via Google, DuckDuckGo, or Yandex with geo-targeting, time_range, domain filters, and optional auto-extract on top results",
     category: "Content Retrieval",
     status: "active",
   },
