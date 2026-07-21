@@ -15,7 +15,7 @@
       <stop stop-color="#6B41DE" stop-opacity=".18"/><stop offset="1" stop-color="#6B41DE" stop-opacity="0"/>
     </radialGradient>
     <filter id="softShadow" x="300" y="60" width="1300" height="1580" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="10" stdDeviation="20" flood-color="#000000" flood-opacity=".28"/>
+      <feDropShadow dx="0" dy="10" stdDeviation="20" flood-color="#44289F" flood-opacity=".10"/>
     </filter>
     <filter id="startShadow" x="10" y="710" width="330" height="220" filterUnits="userSpaceOnUse">
       <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#6B41DE" flood-opacity=".28"/>
@@ -26,28 +26,28 @@
     <style>
       .sans{font-family:"Avenir Next",Avenir,Inter,ui-sans-serif,system-ui,sans-serif}
       .mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace}
-      .lane{font-size:20px;font-weight:700;letter-spacing:2.8px;fill:#A89FC6}
-      .need{font-size:25px;font-weight:500;fill:#F5F5F4}
-      .need2{font-size:22px;font-weight:500;fill:#D1CED9}
-      .tool{font-size:21px;font-weight:600;fill:#F5F5F4}
-      .rowline{stroke:#292338;stroke-width:1}
+      .lane{font-size:20px;font-weight:700;letter-spacing:2.8px;fill:#544B8A}
+      .need{font-size:25px;font-weight:500;fill:#222222}
+      .need2{font-size:22px;font-weight:500;fill:#544B8A}
+      .tool{font-size:21px;font-weight:600;fill:#44289F}
+      .rowline{stroke:#E4DCFD;stroke-width:1}
       .route{stroke:#6B41DE;stroke-opacity:.66;stroke-width:2;fill:none}
       .dot{fill:#6B41DE}
     </style>
   </defs>
 
-  <rect width="1600" height="1640" fill="#0B0B0C"/>
-  <rect x="1" y="1" width="1598" height="1638" rx="20" fill="none" stroke="#6B41DE" stroke-opacity=".44" stroke-width="2"/>
+  <rect width="1600" height="1640" fill="#F7E5FF"/>
+  <rect x="1" y="1" width="1598" height="1638" rx="20" fill="none" stroke="#6B41DE" stroke-opacity=".26" stroke-width="2"/>
   <rect width="1600" height="1640" fill="url(#glow)"/>
-  <path d="M1050 1h549v1638h-315C1128 1270 1060 742 1050 1Z" fill="#6B41DE" fill-opacity=".025"/>
+  <path d="M1050 1h549v1638h-315C1128 1270 1060 742 1050 1Z" fill="#E4DCFD" fill-opacity=".58"/>
 
   <!-- Small Novada logo, matched to the free-credits banner. -->
   <g transform="translate(48 36) scale(1.24)">
     <path d="M.827 21.973.652 22.274H9.158l7.594-12.308 3.794 6.051a.271.271 0 0 0 .455.001l4.169-6.552a.27.27 0 0 0 .001-.286l-3.448-5.562c-2.386-3.847-8.01-3.769-10.288.143L.827 21.973Z" fill="url(#markTop)"/>
     <path d="M38.021 11.629l.175-.301h-8.506l-7.594 12.307-3.794-6.05a.271.271 0 0 0-.455-.002l-4.168 6.553a.27.27 0 0 0-.002.286l3.449 5.561c2.385 3.848 8.009 3.77 10.288-.142L38.021 11.629Z" fill="url(#markBottom)"/>
-    <text x="47" y="28" class="sans" font-size="31" font-weight="700" letter-spacing="-1"><tspan fill="#F5F5F4">nova</tspan><tspan fill="#6B41DE">da</tspan></text>
+    <text x="47" y="28" class="sans" font-size="31" font-weight="700" letter-spacing="-1"><tspan fill="#222222">nova</tspan><tspan fill="#6B41DE">da</tspan></text>
   </g>
-  <text x="1552" y="66" text-anchor="end" class="sans" font-size="16" font-weight="700" letter-spacing="2.6" fill="#746C88">MCP TOOL DECISION MAP</text>
+  <text x="1552" y="66" text-anchor="end" class="sans" font-size="16" font-weight="700" letter-spacing="2.6" fill="#544B8A">MCP TOOL DECISION MAP</text>
 
   <!-- Fan-out routing spine. -->
   <path class="route" d="M290 820H330M330 320V1516"/>
@@ -64,42 +64,42 @@
 
   <!-- READ &amp; FIND -->
   <g filter="url(#softShadow)">
-    <rect x="370" y="96" width="1182" height="448" rx="18" fill="#111014" stroke="#31264E" stroke-width="2"/>
+    <rect x="370" y="96" width="1182" height="448" rx="18" fill="#FFFFFF" fill-opacity=".88" stroke="#E4DCFD" stroke-width="2"/>
   </g>
   <rect x="370" y="96" width="8" height="448" rx="4" fill="#6B41DE"/>
   <text x="414" y="142" class="sans lane">READ &amp; FIND</text>
   <text x="414" y="194" class="sans need">Read one specific/known URL</text>
   <path d="M1034 187H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="162" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="162" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="192" text-anchor="middle" class="mono tool">novada_extract</text>
   <path d="M402 224H1520" class="rowline"/>
   <text x="414" y="260" class="sans need">Find pages by query first</text>
   <path d="M1034 253H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="228" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="228" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="258" text-anchor="middle" class="mono tool">novada_search</text>
   <path d="M402 290H1520" class="rowline"/>
   <text x="414" y="326" class="sans need">Cited, multi-source material for a complex question</text>
   <path d="M1034 319H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="294" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="294" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="324" text-anchor="middle" class="mono tool">novada_research</text>
   <path d="M402 356H1520" class="rowline"/>
   <text x="414" y="392" class="sans need">Many pages from one site (bodies inline, ≤20)</text>
   <path d="M1034 385H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="360" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="360" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="390" text-anchor="middle" class="mono tool">novada_crawl</text>
   <path d="M402 422H1520" class="rowline"/>
   <text x="414" y="458" class="sans need">An entire docs site saved to disk</text>
   <path d="M1034 451H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="426" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="426" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="456" text-anchor="middle" class="mono tool">novada_site_copy</text>
   <path d="M402 488H1520" class="rowline"/>
   <text x="414" y="524" class="sans need">Just the URL list, no content</text>
   <path d="M1034 517H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="492" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="492" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="522" text-anchor="middle" class="mono tool">novada_map</text>
 
   <!-- PLATFORM DATA -->
-  <g filter="url(#softShadow)"><rect x="370" y="568" width="1182" height="240" rx="18" fill="#111014" stroke="#31264E" stroke-width="2"/></g>
+  <g filter="url(#softShadow)"><rect x="370" y="568" width="1182" height="240" rx="18" fill="#FFFFFF" fill-opacity=".88" stroke="#E4DCFD" stroke-width="2"/></g>
   <rect x="370" y="568" width="8" height="240" rx="4" fill="#6B41DE"/>
   <text x="414" y="614" class="sans lane">PLATFORM DATA</text>
   <text x="414" y="660" class="sans need2">
@@ -107,63 +107,63 @@
     <tspan x="414" dy="29">GitHub… — 15 have a dedicated tool)</tspan>
   </text>
   <path d="M1094 674H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="641" width="348" height="52" rx="26" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
-  <text x="1326" y="674" text-anchor="middle" class="mono" font-size="19" font-weight="600" fill="#F5F5F4">novada_scrape_&lt;platform&gt;</text>
+  <rect x="1152" y="641" width="348" height="52" rx="26" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
+  <text x="1326" y="674" text-anchor="middle" class="mono" font-size="19" font-weight="600" fill="#44289F">novada_scrape_&lt;platform&gt;</text>
   <path d="M402 714H1520" class="rowline"/>
   <text x="414" y="762" class="sans need">Any other platform / generic</text>
   <path d="M1034 755H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="730" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="730" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="760" text-anchor="middle" class="mono tool">novada_scrape</text>
 
   <!-- WATCH -->
-  <g filter="url(#softShadow)"><rect x="370" y="832" width="1182" height="184" rx="18" fill="#111014" stroke="#31264E" stroke-width="2"/></g>
+  <g filter="url(#softShadow)"><rect x="370" y="832" width="1182" height="184" rx="18" fill="#FFFFFF" fill-opacity=".88" stroke="#E4DCFD" stroke-width="2"/></g>
   <rect x="370" y="832" width="8" height="184" rx="4" fill="#6B41DE"/>
   <text x="414" y="878" class="sans lane">WATCH</text>
   <text x="414" y="924" class="sans need">Detect what changed on a page over time</text>
   <path d="M1034 917H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="892" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="892" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="922" text-anchor="middle" class="mono tool">novada_monitor</text>
   <path d="M402 950H1520" class="rowline"/>
   <text x="414" y="990" class="sans need">A brand's footprint on AI-company domains</text>
   <path d="M1034 983H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="958" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="958" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="988" text-anchor="middle" class="mono tool">novada_ai_monitor</text>
 
   <!-- VERIFY / INTERACT / NETWORK -->
-  <g filter="url(#softShadow)"><rect x="370" y="1040" width="1182" height="324" rx="18" fill="#111014" stroke="#31264E" stroke-width="2"/></g>
+  <g filter="url(#softShadow)"><rect x="370" y="1040" width="1182" height="324" rx="18" fill="#FFFFFF" fill-opacity=".88" stroke="#E4DCFD" stroke-width="2"/></g>
   <rect x="370" y="1040" width="8" height="324" rx="4" fill="#6B41DE"/>
   <text x="414" y="1086" class="sans lane">VERIFY / INTERACT / NETWORK</text>
   <text x="414" y="1136" class="sans need">Fact-check a claim before citing</text>
   <path d="M1034 1129H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="1104" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="1104" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="1134" text-anchor="middle" class="mono tool">novada_verify</text>
   <path d="M402 1166H1520" class="rowline"/>
   <text x="414" y="1210" class="sans need">Page needs clicks / typing / login</text>
   <path d="M1034 1203H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="1178" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="1178" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="1208" text-anchor="middle" class="mono tool">novada_browser</text>
   <text x="654" y="1253" class="sans need2">(simpler step sequence</text>
   <path d="M1034 1246H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="1221" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
-  <text x="1326" y="1251" text-anchor="middle" class="mono" font-size="19" font-weight="600" fill="#F5F5F4">novada_browser_flow</text>
+  <rect x="1152" y="1221" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
+  <text x="1326" y="1251" text-anchor="middle" class="mono" font-size="19" font-weight="600" fill="#44289F">novada_browser_flow</text>
   <text x="1508" y="1253" class="sans need2">)</text>
   <path d="M402 1282H1520" class="rowline"/>
   <text x="414" y="1328" class="sans need">Your own HTTP client via a specific IP type or geo</text>
   <path d="M1034 1321H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="1296" width="348" height="46" rx="23" fill="#191422" stroke="#6B41DE" stroke-opacity=".72"/>
+  <rect x="1152" y="1296" width="348" height="46" rx="23" fill="#F2EDFF" stroke="#6B41DE" stroke-opacity=".72"/>
   <text x="1326" y="1326" text-anchor="middle" class="mono tool">novada_proxy</text>
 
   <!-- START HERE -->
-  <g filter="url(#softShadow)"><rect x="370" y="1388" width="1182" height="224" rx="18" fill="#13101A" stroke="#6B41DE" stroke-opacity=".7" stroke-width="2"/></g>
+  <g filter="url(#softShadow)"><rect x="370" y="1388" width="1182" height="224" rx="18" fill="#FBF9FF" stroke="#6B41DE" stroke-opacity=".7" stroke-width="2"/></g>
   <rect x="370" y="1388" width="8" height="224" rx="4" fill="#8E6AF2"/>
-  <text x="414" y="1434" class="sans lane" fill="#C0AFE9">START HERE (UTILITY)</text>
+  <text x="414" y="1434" class="sans lane" fill="#544B8A">START HERE (UTILITY)</text>
   <text x="414" y="1484" class="sans need">Unsure which tool applies</text>
   <path d="M1034 1477H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="1452" width="348" height="46" rx="23" fill="#211834" stroke="#8E6AF2"/>
+  <rect x="1152" y="1452" width="348" height="46" rx="23" fill="#EEE7FF" stroke="#8E6AF2"/>
   <text x="1326" y="1482" text-anchor="middle" class="mono tool">novada_discover</text>
   <path d="M402 1518H1520" class="rowline"/>
   <text x="414" y="1570" class="sans need">Unsure your key even works</text>
   <path d="M1034 1563H1132" class="route" marker-end="url(#arrow)"/>
-  <rect x="1152" y="1538" width="348" height="46" rx="23" fill="#211834" stroke="#8E6AF2"/>
+  <rect x="1152" y="1538" width="348" height="46" rx="23" fill="#EEE7FF" stroke="#8E6AF2"/>
   <text x="1326" y="1568" text-anchor="middle" class="mono tool">novada_setup</text>
 </svg>

@@ -8,7 +8,9 @@ All notable changes are recorded here in reverse chronological order.
 
 ### Changed
 - Replaced the plain-text free-credits README callout with a linked, accessible Novada brand banner in both the repository and npm package documentation.
-- Replaced the dense README tool-selection paragraph with a linked decision map while retaining the detailed quick-reference tables.
+- Added a linked "how to choose a tool" decision map to both READMEs.
+- Trimmed both READMEs to a compact core-tools table (Bright Data–style progressive disclosure) and moved the full 38-tool per-category reference to `docs/TOOLS.md`, linked via "Full reference — all 38 tools →".
+- Added a top-of-README differentiator hook (works with any MCP client · 15 typed per-platform scrapers · free credits · zero install) and an "honest tool surface" point to "Why Novada".
 
 ---
 
