@@ -13,6 +13,7 @@ export declare const YOUTUBE_OPERATIONS: Readonly<{
     readonly videos_by_filters: "youtube_video-post_search_filters";
     readonly videos_by_playlist_url: "youtube_video-post-podcast-url";
     readonly channel_videos_by_url: "youtube_video-post_url";
+    readonly videos_by_label: "youtube_video_search_label";
 }>;
 export type YoutubeOperation = keyof typeof YOUTUBE_OPERATIONS;
 /** YouTube's declarative platform-scraper config — the factory's sole input for this tool. */
@@ -45,6 +46,7 @@ export declare const YOUTUBE_SCRAPER_TOOL: {
             videos_by_filters: "videos_by_filters";
             videos_by_playlist_url: "videos_by_playlist_url";
             channel_videos_by_url: "channel_videos_by_url";
+            videos_by_label: "videos_by_label";
         }>;
         params: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
         limit: z.ZodDefault<z.ZodNumber>;
@@ -60,7 +62,7 @@ export declare const YOUTUBE_SCRAPER_TOOL: {
         project: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>;
     validateParams: (args: Record<string, unknown> | undefined) => {
-        operation: "transcript_by_video" | "video_file_by_url" | "channel_by_url" | "channels_by_keyword" | "comments_by_video" | "audio_file_by_url" | "video_by_id" | "video_by_url" | "videos_by_keyword" | "videos_by_filters" | "videos_by_playlist_url" | "channel_videos_by_url";
+        operation: "transcript_by_video" | "video_file_by_url" | "channel_by_url" | "channels_by_keyword" | "comments_by_video" | "audio_file_by_url" | "video_by_id" | "video_by_url" | "videos_by_keyword" | "videos_by_filters" | "videos_by_playlist_url" | "channel_videos_by_url" | "videos_by_label";
         params: Record<string, unknown>;
         limit: number;
         format: "json" | "html" | "markdown" | "csv" | "excel" | "toon";
@@ -68,14 +70,14 @@ export declare const YOUTUBE_SCRAPER_TOOL: {
         project?: string | undefined;
     };
     handler: (params: {
-        operation: "transcript_by_video" | "video_file_by_url" | "channel_by_url" | "channels_by_keyword" | "comments_by_video" | "audio_file_by_url" | "video_by_id" | "video_by_url" | "videos_by_keyword" | "videos_by_filters" | "videos_by_playlist_url" | "channel_videos_by_url";
+        operation: "transcript_by_video" | "video_file_by_url" | "channel_by_url" | "channels_by_keyword" | "comments_by_video" | "audio_file_by_url" | "video_by_id" | "video_by_url" | "videos_by_keyword" | "videos_by_filters" | "videos_by_playlist_url" | "channel_videos_by_url" | "videos_by_label";
         params: Record<string, unknown>;
         limit: number;
         format: "json" | "html" | "markdown" | "csv" | "excel" | "toon";
         task_id?: string | undefined;
         project?: string | undefined;
     }, apiKey: string) => Promise<string>;
-    config: PlatformScraperConfig<"transcript_by_video" | "video_file_by_url" | "channel_by_url" | "channels_by_keyword" | "comments_by_video" | "audio_file_by_url" | "video_by_id" | "video_by_url" | "videos_by_keyword" | "videos_by_filters" | "videos_by_playlist_url" | "channel_videos_by_url">;
+    config: PlatformScraperConfig<"transcript_by_video" | "video_file_by_url" | "channel_by_url" | "channels_by_keyword" | "comments_by_video" | "audio_file_by_url" | "video_by_id" | "video_by_url" | "videos_by_keyword" | "videos_by_filters" | "videos_by_playlist_url" | "channel_videos_by_url" | "videos_by_label">;
 };
 export declare const ScrapeYoutubeParamsSchema: z.ZodObject<{
     operation: z.ZodEnum<{
@@ -91,6 +93,7 @@ export declare const ScrapeYoutubeParamsSchema: z.ZodObject<{
         videos_by_filters: "videos_by_filters";
         videos_by_playlist_url: "videos_by_playlist_url";
         channel_videos_by_url: "channel_videos_by_url";
+        videos_by_label: "videos_by_label";
     }>;
     params: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     limit: z.ZodDefault<z.ZodNumber>;

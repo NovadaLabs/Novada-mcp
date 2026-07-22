@@ -35,7 +35,7 @@ export const TOOL_REGISTRY = [
     // ─── Content Retrieval ──────────────────────────────────────────────────
     {
         name: "novada_search",
-        description: "Search the web via Google, Bing, DuckDuckGo, or Yandex with geo-targeting, time_range, domain filters, and optional auto-extract on top results",
+        description: "Search the web via Google, DuckDuckGo, or Yandex with geo-targeting, time_range, domain filters, and optional auto-extract on top results",
         category: "Content Retrieval",
         status: "active",
     },
@@ -78,7 +78,7 @@ export const TOOL_REGISTRY = [
     // ─── Scraping & Verification ────────────────────────────────────────────
     {
         name: "novada_scrape",
-        description: "Extract structured data from 16 active platforms (~88 operations) (Amazon, TikTok, LinkedIn, YouTube, SHEIN, ChatGPT, Perplexity, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output",
+        description: "Extract structured data from 16 active platforms (~87 operations) (Amazon, TikTok, LinkedIn, YouTube, SHEIN, ChatGPT, Perplexity, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output",
         category: "Scraping & Verification",
         status: "active",
     },

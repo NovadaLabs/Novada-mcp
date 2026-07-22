@@ -1,5 +1,8 @@
 // ─── Scraper Platform Catalog ────────────────────────────────────────────────
-// SINGLE SOURCE OF TRUTH for the 16 active scraper platforms / 88 operations.
+// SINGLE SOURCE OF TRUTH for the 16 active scraper platforms / 87 operations
+// (79 status:"ok" + 8 backend_broken — see the "google_search_url" dedup note
+// below: the source JSON had 88 raw rows, one of which was a same-op duplicate
+// api_id, deduped down to 87 distinct catalog entries).
 // Generated from: scraper-catalog-authoritative-2026-07-13.json +
 //                 fulltest-merged-2026-07-13.json (live verification 2026-07-13)
 //

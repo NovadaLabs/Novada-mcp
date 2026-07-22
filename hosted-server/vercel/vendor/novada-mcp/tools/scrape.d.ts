@@ -54,6 +54,7 @@ export declare const OPERATION_ALIASES: Record<string, string>;
 interface RequiredKeys {
     readonly keys: readonly string[];
     readonly mode: "any" | "all";
+    readonly extraAll?: readonly string[];
 }
 type OpMap = Record<string, RequiredKeys>;
 /** Derived from SCRAPER_CATALOG — 16 active platforms. */
@@ -71,6 +72,14 @@ export declare function preflightScrape(platform: string, operation: string, par
 type ScrapeEngineParams = (ScrapeParams | ScrapeParamsFullType) & {
     displayName?: string;
 };
+/** Extract an 11-char YouTube video id from a `video_id` param or a video URL, else null. */
+export declare function extractYouTubeVideoId(params: Record<string, unknown> | undefined): string | null;
+/**
+ * Throws a wrong-target NovadaError when a single-video YouTube op returns records that do
+ * NOT contain the requested video id. No-op for any other platform/op, when no id can be
+ * extracted, or when records are empty — so a valid result is never rejected.
+ */
+export declare function assertYouTubeIdentity(platform: string, operation: string, params: Record<string, unknown> | undefined, records: Record<string, unknown>[]): void;
 export declare function novadaScrape(params: ScrapeEngineParams, apiKey: string): Promise<string>;
 export {};
 //# sourceMappingURL=scrape.d.ts.map

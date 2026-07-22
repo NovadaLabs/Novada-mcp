@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.9.29",
+  "version": "0.9.32",
   "description": "One MCP server for all web data. Search, scrape, crawl, proxy, and AI research in one install.",
   "mcpName": "novada",
   "type": "module",
@@ -25,7 +25,8 @@
     "skills"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js','755');require('fs').chmodSync('build/cli.js','755')\"",
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js','755');require('fs').chmodSync('build/cli.js','755')\" && npm run gen:server-json",
+    "gen:server-json": "node scripts/gen-server-json.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

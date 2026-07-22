@@ -1,6 +1,6 @@
 import { writeFile } from "fs/promises";
 import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractLinks, normalizeUrl, isContentLink, discoverViaSitemap, resolveSiteCopyDir, safeSiteCopyFilePath, sanitizeSlug, } from "../utils/index.js";
-import { detectJsHeavyContent } from "./extract.js";
+import { detectJsHeavyContent, deriveTitleFromMarkdown, bodyLooksLikeHtml } from "./extract.js";
 import { compilePatterns, shouldCrawlUrl } from "./crawl.js";
 import { SITE_COPY_HARD_MAX } from "./types.js";
 import { TIMEOUTS } from "../config.js";
@@ -77,24 +77,67 @@ async function discoverViaLlmsTxt(origin, apiKey) {
     }
     return null;
 }
-/** Fetch one page, honouring render mode + JS-heavy auto-escalation. */
+/** True when a fetched page's content-type indicates the body is already the final
+ *  markdown/text content (never HTML to be Turndown-converted). Mirrors extract.ts's
+ *  passthrough gate EXACTLY: text/markdown always qualifies; text/plain qualifies when
+ *  it is not actually HTML. The bodyLooksLikeHtml guard (review HIGH 2026-07-22,
+ *  TOW2-307) makes an origin that mislabels HTML as text/plain fall through to real
+ *  extraction — not get written to disk with raw tags or skip the JS-render escalation.
+ *  It deliberately does NOT gate on looksLikeMarkdown: Turndown corrupts ANY plain-text
+ *  body (escapes markdown chars, collapses newlines), so even a short/heading-less
+ *  text/plain note must pass through verbatim — gating on looksLikeMarkdown here would
+ *  reintroduce the TOW2-307 bug for short pages (the divergence a second review caught).
+ *  Title derivation downstream stays graceful: deriveTitleFromMarkdown falls back to the
+ *  URL when the body has no heading, so a non-markdown text/plain body still gets a title. */
+function isMarkdownPassthroughContentType(contentType, body) {
+    if (contentType.includes("text/markdown"))
+        return true;
+    return contentType.includes("text/plain") && !bodyLooksLikeHtml(body);
+}
+/**
+ * Fetch one page, honouring render mode + JS-heavy auto-escalation.
+ *
+ * TOW2-307 extension: fetchSitePage used to hand back the raw body unconditionally,
+ * and the caller ran it through extractMainContent/Turndown (utils/html.ts) no matter
+ * what the server actually served. Turndown assumes HTML input — fed a real
+ * `text/markdown` (or markdown-shaped `text/plain`) page, its text-node escaping pass
+ * escapes markdown-significant characters (`*`, `_`, `[`, `]`, backtick, ...) and its
+ * whitespace-collapsing pass flattens every newline in a non-`<pre>` text node, so a
+ * `.md` docs page got corrupted before ever reaching disk. This applies the SAME
+ * content-type gate extract.ts uses (isMarkdownPassthroughContentType, defined above:
+ * text/markdown, or non-HTML text/plain) so a markdown/plain response is flagged and
+ * returned verbatim by the caller — never Turndown'd. A markdown/plain body is also never a
+ * JS-rendered shell, so the JS-heavy auto-escalation is skipped once that's decided,
+ * matching extract.ts's early-return behavior for the same content-type.
+ */
 async function fetchSitePage(url, apiKey, renderMode) {
     const useRender = renderMode === "render";
     try {
         const resp = useRender
             ? await fetchWithRender(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
             : await fetchViaProxy(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
-        let html = typeof resp.data === "string" ? resp.data : null;
+        let body = typeof resp.data === "string" ? resp.data : null;
+        if (body === null)
+            return null;
+        let contentType = String(resp.headers?.["content-type"] ?? "");
+        if (isMarkdownPassthroughContentType(contentType, body)) {
+            return { body, isMarkdown: true };
+        }
         // auto: escalate to render once if the static HTML looks JS-heavy.
-        if (html && renderMode === "auto" && detectJsHeavyContent(html)) {
+        if (renderMode === "auto" && detectJsHeavyContent(body)) {
             try {
                 const r = await fetchWithRender(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 });
-                if (typeof r.data === "string")
-                    html = r.data;
+                if (typeof r.data === "string") {
+                    body = r.data;
+                    contentType = String(r.headers?.["content-type"] ?? "");
+                    if (isMarkdownPassthroughContentType(contentType, body)) {
+                        return { body, isMarkdown: true };
+                    }
+                }
             }
-            catch { /* keep static html */ }
+            catch { /* keep static body */ }
         }
-        return html;
+        return { body, isMarkdown: false };
     }
     catch {
         return null;
@@ -278,15 +321,20 @@ export async function novadaSiteCopy(params, apiKey) {
             // in the same batch never collide on a filename.
             const slug = slugFor(url);
             try {
-                const html = await fetchSitePage(url, apiKey, params.render);
-                if (!html) {
+                const page = await fetchSitePage(url, apiKey, params.render);
+                if (!page) {
                     failedCount++;
                     pages.push({ url, file: "", title: "", word_count: 0, depth, bytes: 0, status: "failed" });
                     return;
                 }
-                const title = extractTitle(html);
+                const { body, isMarkdown } = page;
+                // TOW2-307: a text/markdown|text/plain body IS the final content already —
+                // use it verbatim (title from its own H1, falling back to the URL like
+                // extract.ts's formatMarkdownExtract) instead of running it through
+                // extractMainContent/Turndown, which assumes HTML input.
+                const title = isMarkdown ? (deriveTitleFromMarkdown(body) ?? url) : extractTitle(body);
                 // Clean markdown per page WITHOUT the 3000-char crawl cap.
-                const md = extractMainContent(html, url, NO_CHAR_CAP);
+                const md = isMarkdown ? body : extractMainContent(body, url, NO_CHAR_CAP);
                 const wordCount = md.split(/\s+/).filter(Boolean).length;
                 const header = [
                     `<!-- source: ${url} -->`,

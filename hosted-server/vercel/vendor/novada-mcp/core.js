@@ -141,7 +141,7 @@ Not for:
     },
     {
         name: "novada_scrape",
-        description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 16 platforms (~88 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
+        description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
 
 **Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
 **Not for:** General web pages not in the platform list — use novada_extract for arbitrary URLs instead.

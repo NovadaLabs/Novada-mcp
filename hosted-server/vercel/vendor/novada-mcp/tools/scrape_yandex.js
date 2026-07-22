@@ -17,11 +17,12 @@ export const YANDEX_OPERATIONS = Object.freeze({
 /** Per-operation `params` doc — rendered as `- <name>: <doc>` in the enum description. */
 const YANDEX_OPERATION_PARAMS_DOC = {
     // yandex_domain is catalog required:true (which of 15 Yandex TLD variants to search,
-    // e.g. "yandex.com" vs "yandex.ru") but the shared engine's SEARCH_ENGINE_OP_KEYS map
-    // treats the "yandex" slug as OR-alternates on q/keyword/query only (search-engine
-    // convention, see scrape.ts) — preflight will NOT reject a call missing yandex_domain.
-    // Documented here as required for correctness even though it is not locally enforced;
-    // omitting it risks a live backend rejection this tool can't catch before the call.
+    // e.g. "yandex.com" vs "yandex.ru"). The shared engine's SEARCH_ENGINE_OP_KEYS map
+    // treats the "yandex" slug's query key as OR-alternates on q/keyword/query, but
+    // SEARCH_ENGINE_EXTRA_REQUIRED_KEYS (see scrape.ts, B1 fix 2026-07-20) ALSO
+    // AND-requires yandex_domain alongside the query — preflight now rejects a call
+    // missing yandex_domain locally, before the live 400/empty the backend used to
+    // return for it.
     web_search: "params.q (search query) and params.yandex_domain (Yandex TLD, e.g. \"yandex.com\", \"yandex.ru\"); optional params.lang, params.location, params.page, params.within (time range)",
 };
 const YANDEX_OPERATION_CONFIGS = Object.fromEntries(Object.keys(YANDEX_OPERATIONS).map((name) => [

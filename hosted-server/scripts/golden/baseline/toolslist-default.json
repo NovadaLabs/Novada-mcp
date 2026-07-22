@@ -3,12 +3,11 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true,
+      "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Single-call account & billing dashboard. section='summary' (default): wallet balance + plan quotas + recent capture logs + health entitlements. section='balance': wallet balance only. section='usage': paginated transaction history. section='plans': per-product plan balances (residential/isp/etc). section='traffic': daily proxy consumption. Pass start_time/end_time (YYYY-MM-DD) and products=[...] for traffic/plans. Aliases: wallet_balance, wallet_usage_record, plan_balance_all, traffic_daily, capture_logs, account_summary, health, health_all.",
+    "description": "Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements based on the `section` param.\n\n**Best for:** \"What's my Novada account status?\" / \"How much do I have left?\" / one-shot health snapshot.\n**section=\"summary\" (default):** Full dashboard \u2014 wallet balance + plan quotas + recent capture logs + product entitlements (proxy/browser/wallet-funded services). This is what novada_account_summary + novada_health combined.\n**section=\"balance\":** Master wallet currency balance.\n**section=\"usage\":** Paginated wallet transaction / usage history. Pass start_time/end_time/page/page_size.\n**section=\"plans\":** Per-product plan balances (residential/isp/mobile/datacenter/static/capture). Pass products[] to filter.\n**section=\"traffic\":** Daily proxy traffic consumption across products. Pass start_time/end_time/products[].\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).\n**Aliases (backward compat):** novada_wallet_balance, novada_wallet_usage_record, novada_plan_balance_all, novada_traffic_daily, novada_capture_logs, novada_account_summary, novada_health, novada_health_all \u2014 all route here.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "end_time": {
           "description": "Inclusive end date YYYY-MM-DD (usage/traffic sections only).",
@@ -63,12 +62,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "section",
-        "format",
-        "page",
-        "page_size"
-      ],
+      "required": [],
       "type": "object"
     },
     "name": "novada_account"
@@ -80,9 +74,8 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Search AI-company domains (chatgpt.com, perplexity.ai, anthropic.com, etc.) and the web for PUBLIC mentions & sentiment of a brand. NOTE: searches indexed public pages \u2014 it does NOT query the live models; a brand with few indexed pages shows low/zero mentions (not a measure of how the models actually respond).",
+    "description": "Search PUBLIC indexed pages on AI-company domains for brand mentions and sentiment \u2014 this is NOT page-change monitoring (that's novada_monitor) and does NOT query live AI models.\n\nSearches indexed pages on chatgpt.com/openai.com, perplexity.ai, anthropic.com, and similar domains for public mentions of a brand or product. Returns per-source mention counts, sentiment signals, and competitor mentions. A brand not discussed on those indexed domains will show few/zero mentions \u2014 that reflects indexed-page coverage, not the models' actual behavior.\n\n**How it works:** For each selected domain group, executes a Google search scoped to that domain (e.g. site:openai.com \"brandname\") and analyzes the returned page snippets for sentiment, claims, and competitor co-mentions.\n**Best for:** Checking whether a brand appears on AI-company public docs/blogs/changelogs; competitive presence on indexed pages of AI platforms.\n**Not for:** Finding out how ChatGPT/Perplexity/Claude actually answer questions about your brand (those are live model responses, not indexed pages); general web search (use novada_search); real-time social monitoring (use novada_scrape with twitter/reddit).\n**Output:** Per-domain sentiment (positive/neutral/negative), key claims from indexed snippets, competitor mentions, source URLs.\n**Domains searched:** chatgpt.com+openai.com, perplexity.ai, grok.com+x.com/i/grok, claude.ai+anthropic.com, gemini.google.com. Default: chatgpt, perplexity, grok.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "brand": {
           "description": "Brand or product name to search for on AI-company public web domains. E.g. 'novada', 'firecrawl', 'stripe'.",
@@ -126,13 +119,12 @@
   {
     "annotations": {
       "destructiveHint": false,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
-      "readOnlyHint": true
+      "readOnlyHint": false
     },
-    "description": "Automate Novada's cloud browser via CDP \u2014 navigate, click, type, screenshot, snapshot. One-shot tasks per call. Credentials auto-provisioned from your API key. NOTE: country is accepted but not yet applied \u2014 the browser exit node is not geo-routed by this param today.",
+    "description": "Use when you need to interact with a web page \u2014 click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Chain multiple actions in one call for efficiency.\n\n**Best for:** Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions.\n**Not for:** Simple page reading (use novada_extract), structured data (use novada_scrape), raw HTML (use novada_extract with format=\"html\").\n**Actions:** navigate, click, type, screenshot, snapshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select \u2014 up to 20 per call. snapshot = full DOM text; aria_snapshot = smaller semantic tree (prefer aria_snapshot for most extraction tasks).\n**Sessions:** Pass session_id to reuse the same browser page (cookies, login) across calls. Persistent cross-call sessions are reliable only on the local/long-lived server; on the hosted serverless endpoint treat each call as one-shot (a session_id may not survive between calls). Use close_session to release early.\n**Auth:** NOVADA_API_KEY (auto-provisions Browser API credentials). NOVADA_BROWSER_WS is optional \u2014 set it to override auto-provision.\n**Platform note:** Use wait with domcontentloaded (never networkidle) for SPAs. (The `country` param is accepted but NOT yet applied to the browser exit node \u2014 do not rely on it for geo-routing.)\n**Constraint:** close_session and list_sessions must be the only action in the call \u2014 they cannot be combined with other actions.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "actions": {
           "description": "Array of browser actions to execute sequentially. Max 20 per call. Each action MUST use the discriminated union format: {action: \"<type>\", ...fields}. Examples: {action: \"navigate\", url: \"https://example.com\"} | {action: \"click\", selector: \"#btn\"} | {action: \"type\", selector: \"#input\", text: \"hello\"} | {action: \"wait\", ms: 2000} | {action: \"screenshot\"} | {action: \"aria_snapshot\"}. Do NOT use string format (\"navigate\") or object-key format ({navigate: \"url\"}) \u2014 both are invalid.",
@@ -439,8 +431,7 @@
         }
       },
       "required": [
-        "actions",
-        "timeout"
+        "actions"
       ],
       "type": "object"
     },
@@ -449,13 +440,12 @@
   {
     "annotations": {
       "destructiveHint": false,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Read content from multiple pages on one site (up to 20). Use when you need an entire section of a website. Optionally run map first to discover target URLs.",
+    "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS or DFS, extracts content from each page inline. Use select_paths globs to target specific sections (e.g. \"/docs/api/**\").\n\n**IMPORTANT \u2014 wrong tool for whole-site jobs:** If you need to copy more than ~20 pages or want an entire docs site / knowledge base on disk, use `novada_site_copy` instead (up to 1000 pages, manifest output, streams files to disk). novada_crawl hard-caps at 20 pages and returns bodies inline \u2014 it will silently hit that cap on large sites.\n\n**Best for:** Competitive content analysis, extracting a handful of related pages inline (returns page bodies directly).\n**Not for:** A single page (use novada_extract), URL discovery without content extraction (use novada_map \u2014 much faster), copying an entire site to disk (use novada_site_copy \u2014 it handles hundreds of pages and writes files).\n\nCommon mistakes:\n- Do NOT set max_pages > 10 for large sites \u2014 crawl time scales linearly (~1.4s/page). At max_pages=20, expect 28s minimum.\n- Do NOT use novada_crawl to fetch one page \u2014 use novada_extract which is faster and simpler.\n- Use select_paths to restrict to relevant URL patterns before setting max_pages high.\n\nWhen to use:\n- You need content from a small set of related pages on one domain (e.g., all /docs/* pages, up to 20).\n- You need BFS discovery of related content under a path prefix and want bodies inline.\n\nNot for:\n- Single-URL extraction \u2014 use novada_extract.\n- Finding all URLs on a site without downloading content \u2014 use novada_map.\n- Copying a whole docs site or knowledge base to disk \u2014 use novada_site_copy (handles hundreds of pages, returns a manifest).\n\n**Rendering:** The `render` param defaults to \"auto\" (tries static first, escalates to JS rendering on detection) \u2014 it is not static-only.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "exclude_paths": {
           "description": "Glob patterns for URL paths to skip entirely. '*' matches within a path segment, '**' matches across segments. E.g. ['/blog/**', '/changelog/**'].",
@@ -521,11 +511,7 @@
         }
       },
       "required": [
-        "url",
-        "max_pages",
-        "strategy",
-        "format",
-        "render"
+        "url"
       ],
       "type": "object"
     },
@@ -535,12 +521,11 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true,
+      "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "List all available Novada tools grouped by category.",
+    "description": "List all available Novada tools with name, description, category, and status.\n\n**agent_instruction:** Call this first to see all available Novada tools and capabilities \u2014 especially useful when starting a new task and you need to find the right tool.\n**Returns:** Markdown table grouped by category \u2014 Content Retrieval, Scraping & Verification, Proxy, Browser & Rendering, Account & Billing, Health & Discovery.\n**Filter:** Pass category to narrow to a specific group (e.g. category=\"Proxy\" to see all proxy tools).\n**Status legend:** active = available now. Output also includes server_version (the running package version).\n\n**KEY FACT: ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. No separate keys needed for any product. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no extra API key. If a tool fails, call novada_account (section=\"summary\") to check your balance, plans, and entitlements.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "category": {
           "description": "Optional category filter. One of: 'Content Retrieval', 'Scraping & Verification', 'Proxy', 'Browser & Rendering', 'Account & Billing', 'Health & Discovery'. Omit to list all tools.",
@@ -570,9 +555,8 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Read clean content from one or more URLs. Use when you have a specific page URL and need its content. Handles anti-bot protection automatically. For raw HTML, use format='html'. For multiple pages on one site, use crawl instead.",
+    "description": "Extract content from any URL. Handles Cloudflare, DataDome, Kasada automatically via auto-escalation (static \u2192 JS render \u2192 Browser CDP). Batch mode: pass url as array for up to 10 pages in parallel.\n\n**CRITICAL \u2014 Format Selection:**\n- `format=\"markdown\"` (default): full-page content for reading/analysis. Best for articles, docs.\n- `format=\"json\"`: structured object. Key fields: url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at. Use `fields=[\"price\",\"title\"]` to populate the `fields` key \u2014 this is the primary reason to choose format=\"json\".\n- `format=\"html\"`: raw HTML source (truncated at 100K chars by default; pass max_chars to adjust). Best for debugging or custom DOM parsing.\n- `clean=true`: strip nav/sidebar, return main content only (~15K chars vs ~100K full page).\n\nCommon mistake: using markdown when you need specific data \u2014 use `format=\"json\"` + `fields=[\"price\",\"title\"]` instead.\n\n**Use for:** Reading pages, batch-extracting search results, pulling structured fields (price, author, date). Works on anti-bot pages automatically.\n**Not for:** URL discovery (novada_map), multi-page crawl (novada_crawl), platform data like Amazon/LinkedIn (novada_scrape is richer).\n**Key rule:** Leave render=\"auto\" (default). Only set render=\"render\" for known JS-heavy SPAs. Auto mode is 15-100x faster on static sites.\nBy default returns full page content for maximum information. Add clean=true to extract only the main article body (strips nav/footer/ads).\n\n**Geo-routing:** Pass `country=\"de\"` (ISO 2-letter) to route render fetches through an exit IP in that country \u2014 useful for localized pricing, geo-restricted content, or comparing the same page across countries.\n**Results auto-saved:** Every extraction saves to `~/Downloads/novada-mcp/YYYY-MM-DD/` automatically. File path shown at the top of each response.\n**Project grouping:** Pass `project=\"my-project\"` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "clean": {
           "description": "Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage.",
@@ -671,9 +655,7 @@
         }
       },
       "required": [
-        "url",
-        "format",
-        "render"
+        "url"
       ],
       "type": "object"
     },
@@ -686,9 +668,8 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "List all URLs on a website via sitemap or crawl. Use when you need to find the right page before crawl/extract. Returns URLs only, no content. Fast site reconnaissance.",
+    "description": "Use when you need to know what URLs exist on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl. Returns URL list only \u2014 no content. Hard cap: 100 URLs.\n\n**Best for:** Site structure discovery, finding the correct subpage URL when you extracted the wrong page, pre-flight before novada_crawl or novada_extract.\n**Not for:** Reading page content (follow with novada_extract or novada_crawl). Copying an entire site to disk (use novada_site_copy \u2014 it handles hundreds of pages).\n**Note:** Limited results on JavaScript SPAs \u2014 will flag this in output.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "include_subdomains": {
           "default": false,
@@ -716,10 +697,7 @@
         }
       },
       "required": [
-        "url",
-        "limit",
-        "include_subdomains",
-        "max_depth"
+        "url"
       ],
       "type": "object"
     },
@@ -728,13 +706,12 @@
   {
     "annotations": {
       "destructiveHint": false,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "\u26a0\ufe0f Session-scoped only: on the hosted endpoint the baseline is per-invocation (in-memory), so use this for single-call change-diffs, not durable cross-call monitoring. Track changes on a web page over time. Compares content hash and field-level diffs.",
+    "description": "Detect changes on a web page over time. Extracts content, computes a hash, compares with previous check. Returns changed/unchanged + field-level diffs.\n\n**Use for:** E-commerce price monitoring, stock availability tracking, content change detection, competitive pricing alerts.\n**How:** First call = baseline. Subsequent calls compare against baseline and report changes. Pass fields=[\"price\",\"availability\"] for field-level diffs with % change.\n**Not for:** One-time extraction (novada_extract), full crawl (novada_crawl).\n\n\u26a0\ufe0f **Hosted endpoint (mcp.novada.com) limitation:** Baselines do NOT survive between calls on the hosted serverless endpoint \u2014 each invocation lands on a cold function with no prior state, so change detection will always return baseline_recorded. For real change detection you must run the local server (`npx novada-mcp`, a long-lived process) or schedule calls from your own job runner and diff externally. This is a known interim limitation until persistent KV storage ships.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "fields": {
           "description": "Specific fields to track for changes (e.g. ['price', 'availability', 'rating']). When provided, change detection focuses on these fields. Without fields, tracks full page content hash.",
@@ -761,8 +738,7 @@
         }
       },
       "required": [
-        "url",
-        "format"
+        "url"
       ],
       "type": "object"
     },
@@ -772,12 +748,11 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true,
+      "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Not needed for extract/crawl \u2014 those handle proxies internally.",
+    "description": "Use when you need to route your own HTTP requests through residential or mobile IPs \u2014 for geo-targeting, IP rotation, or bypassing IP-based rate limits. Returns proxy URL, shell export commands, or curl --proxy flag.\n\n**Best for:** When you need a specific country/city IP, sticky sessions for multi-step workflows, or testing geo-restricted content.\n**Not for:** Web page extraction (use novada_extract \u2014 proxy is automatic), web search (use novada_search).\n**Formats:** \"url\" for Node.js/Python, \"env\" for shell variables, \"curl\" for CLI requests.\n**Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.\n\n**Proxy type guide (pass as `type` param):**\n- `residential` \u2014 strongest anti-bot bypass, real home ISP IPs, best for geo-restricted / protected pages; escalate HERE when blocked\n- `isp` \u2014 looks like a home user (ISP-assigned), best for social media / ecommerce; note: ignores country param\n- `datacenter` \u2014 fastest and cheapest, best for non-anti-bot targets and high-volume scraping\n- `mobile` \u2014 4G/5G device IPs, best for mobile-targeted content and app APIs\n- `static` \u2014 same dedicated ISP IP every request (requires session_id + country), best for account-management workflows\n- `dedicated` \u2014 exclusive clean datacenter IP not shared with others (requires session_id), best for high-trust platforms\n\n**Escalation path when blocked:** datacenter \u2192 isp \u2192 residential",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "city": {
           "description": "City name for city-level targeting. Requires country to be set.",
@@ -820,10 +795,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "type",
-        "format"
-      ],
+      "required": [],
       "type": "object"
     },
     "name": "novada_proxy"
@@ -832,12 +804,11 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": true,
+      "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Create a proxy sub-account. Two-step confirm gate (pass confirm:true after human approval).",
+    "description": "\u26a0\ufe0f WRITE \u2014 Create a proxy sub-account. Two-step confirm gate.\n\n**Behavior:** Without `confirm: true` the tool returns a `confirmation_required` JSON preview (password masked) and DOES NOT hit the API. Show preview to the human user; only re-call with `confirm: true` after explicit human approval.\n\n**Best for:** Provisioning a team-member or per-project sub-account against your master plan.\n**Params:** product (\"1\"=Residential, \"2\"=Rotating ISP, \"3\"=Rotating Datacenter, \"4\"=Unlimited, \"7\"=Unblocker, \"9\"=Mobile), account (3-64, [a-zA-Z0-9_-]), password (8-64), status (\"1\" active default | \"-3\" disabled), remark?, limit_flow? (GB cap as string), confirm.\n**Wire format:** multipart/form-data (per developer-api spec).\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "account": {
           "description": "REQUIRED. Sub-account name. 3-64 chars, alphanumeric + underscore/hyphen only.",
@@ -891,8 +862,7 @@
       "required": [
         "product",
         "account",
-        "password",
-        "status"
+        "password"
       ],
       "type": "object"
     },
@@ -902,12 +872,11 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true,
+      "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "List proxy sub-accounts for a product (paginated).",
+    "description": "List proxy sub-accounts. Wraps developer-api POST /v1/proxy_account/list.\n\n**Best for:** Auditing sub-accounts, finding account names before rotating credentials.\n**Params:** product (REQUIRED \u2014 same codes as create), page, limit (max 200), status? (\"1\"|\"-3\"), account? (exact-match filter).\n**Wire format:** multipart/form-data.\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "account": {
           "description": "Optional filter \u2014 exact-match account name. (API field is `account`, not `username`.)",
@@ -949,9 +918,7 @@
         }
       },
       "required": [
-        "product",
-        "page",
-        "limit"
+        "product"
       ],
       "type": "object"
     },
@@ -964,9 +931,8 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Deep multi-source research: searches multiple angles, reads top sources, returns a synthesized report with citations. Use when you need comprehensive analysis of an open-ended topic (not a yes/no claim \u2014 use verify for that). Slower than a single search.",
+    "description": "One call \u2192 3-10 parallel searches across Google/Bing/DuckDuckGo \u2192 dedup \u2192 extract full content from top sources \u2192 returns CITED SOURCE MATERIAL (numbered source sections), not a written answer. Extractive, not generative: it gathers and ranks the most relevant passages; YOU compose the final answer from them.\n\n**Use for:** Any complex question where you want relevant passages from \u22653 independent sources gathered in one call. Comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** Single fact lookup or finding one URL \u2014 use novada_search for that (faster, cheaper). Reading a known URL \u2014 use novada_extract. A finished prose report \u2014 this returns source material, you write the answer.\n**Rule of thumb:** If the answer could fit in one search result snippet, use novada_search. If you need source material pulled from multiple pages to reason over, use novada_research.\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default: picks quick or deep by question length \u2014 never comprehensive).\n**Key advantage:** Agents call this ONCE instead of orchestrating search\u2192extract manually. Saves tokens, time, and complexity.\n**Project grouping:** Pass `project=\"my-project\"` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.\n**Recency:** Supports `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`, and `end_date` (ISO YYYY-MM-DD) for recency-constrained research \u2014 all are propagated to every internal search call.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "depth": {
           "default": "auto",
@@ -993,10 +959,11 @@
           "type": "string"
         },
         "query": {
-          "description": "Alias for 'question' \u2014 use either",
+          "description": "REQUIRED \u2014 provide either `question` or `query`. Alias for `question` \u2014 use either.",
           "type": "string"
         },
         "question": {
+          "description": "REQUIRED \u2014 provide either `question` or `query`. The research question to answer (min 5 characters).",
           "minLength": 5,
           "type": "string"
         },
@@ -1015,9 +982,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "depth"
-      ],
+      "required": [],
       "type": "object"
     },
     "name": "novada_research"
@@ -1025,13 +990,12 @@
   {
     "annotations": {
       "destructiveHint": false,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Structured data from Amazon, Reddit, TikTok, LinkedIn, GitHub, YouTube, Twitter/X, Walmart, and more platforms. Use when you need e-commerce products, social posts, or job listings \u2014 NOT general websites (use extract for those).",
+    "description": "Use when you need structured data from a specific platform \u2014 not raw HTML, but clean tabular records. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.\n\n**Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.\n**Not for:** General web pages not in the platform list \u2014 use novada_extract for arbitrary URLs instead.\n**Output formats:** \"markdown\" (default, agent-optimized table), \"json\" (structured records array returned inside a \"## Scrape Results\" wrapper \u2014 a fenced json block, not a bare object), \"toon\" (token-optimized pipe-separated format \u2014 40-65% smaller than JSON/markdown, best for large result sets in context-constrained situations), \"csv\" (inline CSV text), \"excel\" (inline .xlsx base64), \"html\" (inline HTML table).\n**Example:** platform=\"amazon.com\", operation=\"amazon_product_keywords\", params={keyword:\"iphone 16\", num:5}\n**Amazon price fields:** trust `final_price`/`price` (check `_price_source`); `initial_price` and `buybox_prices.final_price` are frequently 0 by design, not a bug; `buybox_prices.unit_price` is raw upstream per-unit data and may be empty/inconsistent \u2014 never treat it as the listing price.\n**Discover platforms:** Read the `novada://scraper-platforms` MCP resource for the complete platform list with operation IDs and required params.\n**Resume slow-platform scrapes:** Pass `task_id` from a previous call that returned status:processing to fetch its result without submitting a new billable task. platform and operation are still required (display only when resuming).\n**Project grouping:** Pass `project=\"my-project\"` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "format": {
           "default": "markdown",
@@ -1089,10 +1053,7 @@
       },
       "required": [
         "platform",
-        "operation",
-        "params",
-        "limit",
-        "format"
+        "operation"
       ],
       "type": "object"
     },
@@ -1101,13 +1062,1036 @@
   {
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured Amazon data \u2014 product details, reviews, seller info, bestseller lists, and category/brand listings \u2014 through an Amazon-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"amazon.com\".\n\n**Use when:** \"get the price/rating/title for Amazon ASIN B0...\", \"pull the reviews for this Amazon product URL\", \"search Amazon for <keyword> with price and rating\", \"who is this Amazon seller\", \"what's in this Amazon Best Sellers list\".\n**Not for:** Any other platform \u2014 use novada_scrape with the target platform's domain instead (e.g. platform=\"walmart.com\"). A general Google/web search \u2014 use novada_search. Reading one arbitrary URL's raw content \u2014 use novada_extract.\n**Returns:** Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen format \u2014 same rendering as novada_scrape (markdown/json/csv/excel/html/toon).\n**Operations:** 10 verified-working Amazon operations (see the `operation` param's description for the exact `params` keys each needs). 3 known backend-broken Amazon operations are intentionally NOT in this enum \u2014 this tool rejects them before any backend call, unlike novada_scrape(platform=\"amazon.com\", ...), which still forwards them with a warning.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which Amazon operation to run. Each requires specific keys in `params`:\n- product_by_asin: params.asin (e.g. \"B0BWBK8F37\")\n- product_by_url: params.url (product page URL); optional params.zip_code\n- products_by_keywords: params.keyword; optional params.max_pages, params.min_price, params.max_price\n- bestsellers: params.url (a Best Sellers list page URL); optional params.max_pages\n- reviews_by_url: params.url (product page URL)\n- seller_by_url: params.url (seller page URL)\n- listings_by_keyword: params.keyword and params.domain (e.g. \"https://www.amazon.com\"); optional params.max_pages\n- global_product_by_url: params.url\n- global_product_by_category_url: params.url (category/search URL) and params.maximum; optional params.sort_by, params.get_sponsored\n- global_product_by_keyword_and_brand: params.keyword, params.brands, params.max_pages",
+          "enum": [
+            "product_by_asin",
+            "product_by_url",
+            "products_by_keywords",
+            "bestsellers",
+            "reviews_by_url",
+            "seller_by_url",
+            "listings_by_keyword",
+            "global_product_by_url",
+            "global_product_by_category_url",
+            "global_product_by_keyword_and_brand"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { asin: \"B0BWBK8F37\" } for product_by_asin, { url: \"https://www.amazon.com/dp/...\" } for product_by_url/reviews_by_url/seller_by_url/bestsellers/global_product_by_url, { keyword: \"wireless earbuds\" } for products_by_keywords.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_amazon"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured Bing SERP data \u2014 organic web search results, video results, news results, and shopping listings \u2014 through a Bing-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"bing.com\". Bing is NOT a selectable engine on novada_search \u2014 this is the only intentional way to query Bing specifically.\n\n**Use when:** \"get the raw Bing search results (titles, links, ranks) for <query>\", \"find Bing video results for <query>\", \"find Bing news results for <query>, sorted by date\", \"search Bing Shopping for <keyword>\".\n**Not for:** A general question that just needs an answer or a few good links \u2014 use novada_search \u2014 google/duckduckgo/yandex only (Bing is not selectable there); ranked, reranked, answer-oriented, and cheaper than a raw-SERP scrape. A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content (not a search results page) \u2014 use novada_extract. A different platform's structured data (Amazon, LinkedIn, TikTok, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured SERP records per operation \u2014 organic results (title/url/snippet/rank), video results, news results (with date), and shopping listings (price/rating) \u2014 in the chosen format (markdown/json/csv/excel/html/toon), same rendering as novada_scrape.\n**Operations:** 4 verified-working Bing operations: web search, videos, news, and shopping (see the `operation` param's description for the exact `params` keys each needs). Every bing.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which Bing operation to run. Each requires specific keys in `params`:\n- web_search: params.q (search query); optional params.device, params.country, params.lg (language), params.location, params.start, params.num, params.safe, params.filters\n- videos: params.q (search query); optional params.device, params.country, params.lg, params.length (short/medium/long), params.date, params.resolution, params.source_site, params.price\n- news: params.q (search query \u2014 required by the engine's preflight even though the catalog's own params list omits it); optional params.country, params.language, params.start, params.num, params.qft (sort order, e.g. \"sortbydate\")\n- shopping: params.q (search query); optional params.country, params.lg, params.start, params.filters",
+          "enum": [
+            "web_search",
+            "videos",
+            "news",
+            "shopping"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\" } for web_search/videos/news/shopping; all four operations share the same q-driven query shape.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_bing"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured DuckDuckGo web search SERP data through a DuckDuckGo-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"duckduckgo.com\". Returns the raw organic-results SERP, with region/time/adult-content filters novada_search does not expose, not a generated answer.\n\n**Use when:** \"get the raw DuckDuckGo search results (titles, links, ranks) for <query>\", \"search DuckDuckGo restricted to a specific region (params.kl) or time range (params.df)\", \"compare DuckDuckGo's ranking for <query> against another engine's raw SERP\".\n**Not for:** A general question that just needs an answer or a few good links \u2014 use novada_search with engine=\"duckduckgo\" \u2014 same engine, but ranked/reranked and answer-oriented instead of a raw SERP dump. A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content (not a search results page) \u2014 use novada_extract. A different platform's structured data (Amazon, LinkedIn, TikTok, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured organic-result SERP records (title/url/snippet/rank) in the chosen format (markdown/json/csv/excel/html/toon), same rendering as novada_scrape.\n**Operations:** 1 verified-working DuckDuckGo operation (web search \u2014 see the `operation` param's description for the exact `params` keys it needs). The single duckduckgo.com catalog operation is currently status:\"ok\".",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which DuckDuckGo operation to run. Each requires specific keys in `params`:\n- web_search: params.q (search query); optional params.kl (region), params.start (results offset), params.df (time range: d/w/m/y), params.kp (adult content filter)",
+          "enum": [
+            "web_search"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\", kl: \"us-en\" } for web_search.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_duckduckgo"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured Facebook data \u2014 public profile pages, posts, comments, and events \u2014 through a Facebook-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"facebook.com\".\n\n**Use when:** \"get this public Facebook page's profile info\", \"pull the comments on this Facebook post\", \"get details for this Facebook event\", \"find events matching <query> on Facebook\", \"list the upcoming events on this Facebook page\".\n**Not for:** A single Facebook URL you just want read as plain text \u2014 use novada_extract. A general web search not scoped to Facebook \u2014 use novada_search. A different platform's structured data (Instagram, X, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured profile/post/comment/event records (page name, post text, comment author/text, event name/date/location, etc.) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 6 verified-working Facebook operations spanning public profile pages, posts, comments, and events (search / single event / event list) (see the `operation` param's description for the exact `params` keys each needs). Every facebook.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which Facebook operation to run. Each requires specific keys in `params`:\n- profile_by_url: params.url (personal/page homepage URL); optional params.file_name\n- events_by_search_url: params.url (an activity/events search URL); optional params.file_name\n- event_by_url: params.url (a single event URL); optional params.file_name\n- events_by_list_url: params.url (a page's /events list URL); optional params.upcoming_events, params.file_name\n- post_by_url: params.url (post URL); optional params.file_name\n- comments_by_post_url: params.url (post URL); optional params.get_all_replies, params.limit_records, params.file_name",
+          "enum": [
+            "profile_by_url",
+            "events_by_search_url",
+            "event_by_url",
+            "events_by_list_url",
+            "post_by_url",
+            "comments_by_post_url"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { url: \"https://www.facebook.com/handle\" } for profile_by_url/post_by_url/comments_by_post_url/event_by_url/events_by_list_url/events_by_search_url.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_facebook"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured GitHub repository data \u2014 repository details by URL, or multiple repositories from a GitHub search-results URL \u2014 through a GitHub-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"github.com\".\n\n**Use when:** \"get repository info (stars, forks, description, language, etc.) for this GitHub repo URL\", \"get the repositories listed on this GitHub search-results URL\".\n**Not for:** A single GitHub URL (repo, issue, PR, user) you just want read as plain text \u2014 use novada_extract. A general web/code search not scoped to GitHub, or a GitHub issue/PR/user lookup (no catalog operation exists for those) \u2014 use novada_search, or novada_extract for a known URL. A different platform's structured data (LinkedIn, Amazon, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured repository records (name, description, stars, forks, language, etc.) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 3 verified-working GitHub operations: two repository-by-URL lookups (`repository_by_url` and `repository_details_by_url` map to distinct catalog scraper_ids \u2014 github_repository_repo-url and github_repository_url respectively \u2014 both taking the same `url` param; the catalog documents no behavioral difference between them) and repository listing from a GitHub search-results URL (see the `operation` param's description for the exact `params` keys each needs). Every github.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which GitHub operation to run. Each requires specific keys in `params`:\n- repository_by_url: params.url (repository URL, e.g. \"https://github.com/gin-gonic/gin\"); optional params.file_name\n- repository_details_by_url: params.url (repository URL, e.g. \"https://github.com/QwenLM/Qwen\"); optional params.file_name\n- repositories_by_search_url: params.search_url (a GitHub search-results URL, e.g. \"https://github.com/search?q=ai&type=repositories\"); optional params.page_limit, params.max, params.file_name",
+          "enum": [
+            "repository_by_url",
+            "repository_details_by_url",
+            "repositories_by_search_url"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { url: \"https://github.com/gin-gonic/gin\" } for repository_by_url/repository_details_by_url, { search_url: \"https://github.com/search?q=ai&type=repositories\" } for repositories_by_search_url.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_github"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured Google SERP data \u2014 organic web search results, AI Mode answers, Maps place/review details, Shopping listings, Jobs, Hotels, and Videos \u2014 through a Google-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"google.com\". Returns raw structured SERP records, not a generated answer.\n\n**Use when:** \"get the raw Google search results (titles, links, ranks) for <query>\", \"what's in Google's AI Mode answer for <query>\", \"pull Google Maps reviews or place details for this URL / place_id / CID\", \"search Google Shopping for <keyword>\", \"find Google Jobs, Hotels, or Videos results for <query>\".\n**Not for:** A general question that just needs an answer or a few good links \u2014 use novada_search \u2014 multi-engine (google/duckduckgo/yandex), ranked and reranked, answer-oriented, and far cheaper than a raw-SERP scrape. A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content (not a search results page) \u2014 use novada_extract. A different platform's structured data (Amazon, LinkedIn, TikTok, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured SERP records per operation \u2014 organic results (title/url/snippet/rank), AI Mode answer content, Maps place details/reviews, Shopping listings (price/rating), and Jobs/Hotels/Videos listings \u2014 in the chosen format (markdown/json/csv/excel/html/toon), same rendering as novada_scrape.\n**Operations:** 13 verified-working Google operations spanning web search, AI Mode, Maps (location/place_id/CID/URL lookups + reviews), Shopping, Jobs, Hotels, and Videos (see the `operation` param's description for the exact `params` keys each needs). Every google.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which Google operation to run. Each requires specific keys in `params`:\n- web_search: params.q (search query); optional params.domain, params.country, params.hl (language), params.location, params.start/params.num (pagination), params.ai_overview, params.safe, params.tbs (advanced filters)\n- web_search_by_domain: params.q (search query) and params.domain (Google TLD domain, e.g. \"google.com\"); optional params.country, params.hl, params.location, params.start, params.num\n- search_by_url: params.url (a full Google search results URL, e.g. \"https://www.google.com/search?q=...\"); optional params.device, params.render_js, params.no_cache\n- ai_mode: params.q (search query); optional params.gl (country), params.location, params.uule (encoded location)\n- hotels: params.q, params.domain, params.check_in_date, params.check_out_date (YYYY-MM-DD); optional params.country, params.hl, params.adults\n- jobs: params.q (search query); optional params.domain, params.country, params.hl, params.location, params.start, params.num\n- videos: params.q (search query); optional params.domain, params.country, params.hl, params.start, params.num\n- shopping: params.keyword (e.g. \"pizza\"); optional params.country\n- maps_by_location: params.country, params.keyword, params.merchant_limit (max merchants to return); optional params.lat, params.long, params.zl (zoom level)\n- maps_by_place_id: params.place_id (Google Place ID)\n- maps_by_cid: params.cid (Google Maps CID)\n- maps_by_url: params.url (a Google Maps place URL)\n- maps_reviews_by_url: params.url (Google Maps place URL); optional params.limit (days of reviews to fetch, default 30)",
+          "enum": [
+            "web_search",
+            "web_search_by_domain",
+            "search_by_url",
+            "ai_mode",
+            "hotels",
+            "jobs",
+            "videos",
+            "shopping",
+            "maps_by_location",
+            "maps_by_place_id",
+            "maps_by_cid",
+            "maps_by_url",
+            "maps_reviews_by_url"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\" } for web_search/ai_mode, { keyword: \"pizza\" } for shopping, { url: \"https://www.google.com/maps/place/...\" } for maps_by_url/maps_reviews_by_url, { place_id: \"ChIJ...\" } for maps_by_place_id.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_google"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured Instagram data \u2014 profiles, posts, reels, and comments \u2014 through an Instagram-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"instagram.com\".\n\n**Use when:** \"get the latest posts from this Instagram profile\", \"pull the comments on this Instagram post or reel\", \"get details for this single Instagram post or reel URL\", \"get Instagram profile info by URL or username\", \"get the reels posted by this Instagram profile\".\n**Not for:** A single Instagram URL you just want read as plain text \u2014 use novada_extract. A general web search not scoped to Instagram \u2014 use novada_search. A different platform's structured data (TikTok, Facebook, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured profile/post/reel/comment records (username, follower count, caption, like count, comment author/text, etc.) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 7 verified-working Instagram operations spanning profile lookup (by URL or username), posts and reels (by profile or by direct URL), and comments (see the `operation` param's description for the exact `params` keys each needs). `posts_by_profile` requires BOTH `profileurl` AND `resultsLimit` together. Every instagram.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which Instagram operation to run. Each requires specific keys in `params`:\n- comments_by_post_url: params.posturl (post/reel URL); optional params.file_name\n- reels_by_profile_url: params.url (profile URL); optional params.num_posts, params.uncrawled_posts, params.start_date, params.end_date, params.file_name\n- reel_by_url: params.url (a single reel URL); optional params.file_name\n- posts_by_profile: params.profileurl AND params.resultsLimit (BOTH required together); optional params.start_date, params.end_date, params.post_type (Post|Reel), params.file_name\n- post_by_url: params.posturl (a single post URL); optional params.file_name\n- profile_by_url: params.profileurl; optional params.file_name\n- profile_by_username: params.username; optional params.file_name",
+          "enum": [
+            "comments_by_post_url",
+            "reels_by_profile_url",
+            "reel_by_url",
+            "posts_by_profile",
+            "post_by_url",
+            "profile_by_url",
+            "profile_by_username"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { posturl: \"https://www.instagram.com/p/...\" } for comments_by_post_url/post_by_url, { profileurl: \"https://www.instagram.com/handle/\", resultsLimit: 10 } for posts_by_profile, { username: \"handle\" } for profile_by_username.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_instagram"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured LinkedIn data \u2014 job listings (by location/filters, by a jobs search-results URL, or a single job posting URL) and company profile info by URL \u2014 through a LinkedIn-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"linkedin.com\".\n\n**Use when:** \"find LinkedIn job listings in <location> matching <keyword/level/remote/etc.>\", \"get all the job listings from this LinkedIn jobs search URL\", \"get details for this single LinkedIn job posting URL\", \"get company info for this LinkedIn company URL\".\n**Not for:** A single LinkedIn URL you just want read as plain text \u2014 use novada_extract. A general web search not scoped to LinkedIn \u2014 use novada_search. A LinkedIn personal PROFILE (not a company or job) \u2014 no catalog operation exists for this today \u2014 use novada_extract on the profile URL, or novada_search. A different platform's structured data (GitHub, Amazon, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured job-listing/company records (title, location, level, company name, follower count, etc.) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 4 verified-working LinkedIn operations spanning job search (by location, with optional keyword/level/remote/company filters), job listings from a search-results URL, a single job posting by URL, and company info by URL (see the `operation` param's description for the exact `params` keys each needs). `jobs_search` requires `params.location` \u2014 the catalog's actual required key for this op, despite its upstream name reading \"By Keywords\" (keyword itself is optional there). Every linkedin.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which LinkedIn operation to run. Each requires specific keys in `params`:\n- jobs_search: params.location (required, e.g. \"Germany\"); optional params.keyword, params.range (Any_time|Past_day|Past_week|Past_month), params.level, params.position_type, params.remote (On_site|Remote|Hybrid), params.company, params.selective_search, params.position_to_not_include, params.location_radius, params.page_limit, params.file_name\n- jobs_by_search_url: params.listing_url (a LinkedIn JOBS SEARCH RESULTS URL \u2014 returns multiple listings); optional params.page_limit, params.file_name\n- job_by_url: params.position_url (a single LinkedIn job POSTING URL); optional params.file_name\n- company_by_url: params.url (LinkedIn company page URL); optional params.file_name",
+          "enum": [
+            "jobs_search",
+            "jobs_by_search_url",
+            "job_by_url",
+            "company_by_url"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { location: \"Germany\", keyword: \"product manager\" } for jobs_search, { listing_url: \"https://www.linkedin.com/jobs/search?...\" } for jobs_by_search_url, { position_url: \"https://www.linkedin.com/jobs/view/...\" } for job_by_url, { url: \"https://www.linkedin.com/company/...\" } for company_by_url.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_linkedin"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract the actual AI-generated answer Perplexity returns for a query \u2014 by a Perplexity query URL or a raw search term \u2014 through a Perplexity-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"perplexity.ai\". This scrapes Perplexity's own live-rendered answer page (the model's actual response text) \u2014 it is NOT a web search results list and NOT an indexed-page brand-mention scan.\n\n**Use when:** \"what does Perplexity AI answer for <query>\", \"get Perplexity's generated answer for this perplexity.ai URL\", \"get Perplexity's answer for the search term <term>\".\n**Not for:** A general web/multi-engine search for information (not specifically Perplexity's own generated answer) \u2014 use novada_search. Checking whether a brand is mentioned on AI-company indexed public pages (chatgpt.com/perplexity.ai/openai.com/etc.) \u2014 use novada_ai_monitor \u2014 that tool scans INDEXED PUBLIC PAGES for brand mentions across AI-company domains; it does not fetch a live generated answer for an arbitrary query the way this tool does. A complex question needing cited, multi-source synthesis \u2014 use novada_research. Reading one already-known URL's raw page content \u2014 use novada_extract. A different platform's structured data (Amazon, LinkedIn, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Perplexity's rendered answer content (the text of its generated response) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term (see the `operation` param's description for the exact `params` keys each needs). Every perplexity.ai catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken, unlike its sibling chatgpt.com, whose only 2 catalog operations are BOTH backend_broken (verified 2026-07-13, \"submit hangs >120s\") \u2014 which is why no novada_scrape_chatgpt tool exists.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which Perplexity AI operation to run. Each requires specific keys in `params`:\n- answer_by_url: params.url (a Perplexity AI query URL, e.g. \"https://www.perplexity.ai/?q=apple\"); optional params.file_name\n- answer_by_search_term: params.search_terms (e.g. \"Today's weather\"); optional params.file_name",
+          "enum": [
+            "answer_by_url",
+            "answer_by_search_term"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { url: \"https://www.perplexity.ai/?q=apple\" } for answer_by_url, { search_terms: \"Today's weather\" } for answer_by_search_term.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_perplexity"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured SHEIN product data \u2014 product details by product ID or product URL \u2014 through a SHEIN-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"shein.com\".\n\n**Use when:** \"get SHEIN product details for this product ID\", \"get SHEIN product details for this product URL\".\n**Not for:** A single SHEIN URL you just want read as plain text \u2014 use novada_extract. A general web search not scoped to SHEIN \u2014 use novada_search. SHEIN keyword or category product-list search (no working operation exists for these today) \u2014 use novada_search, or novada_extract on a SHEIN category/search page URL \u2014 the 3 catalog operations that would cover this (product list by keyword, by category ID, by category URL) are all backend_broken (submit endpoint hangs 60s+) and deliberately excluded from this tool's enum. A different platform's structured data (Amazon, Walmart, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured product records (title, price, rating, images, etc.) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 2 verified-working SHEIN operations: product lookup by product ID or by product URL (see the `operation` param's description for the exact `params` keys each needs). 3 known backend_broken SHEIN operations \u2014 product-list by keyword, by category ID, and by category URL, all failing with a 60s+ submit-endpoint hang \u2014 are intentionally NOT in this enum; this tool rejects them before any backend call, unlike novada_scrape(platform=\"shein.com\", ...), which still forwards them with a warning.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which SHEIN operation to run. Each requires specific keys in `params`:\n- product_by_id: params.ID (e.g. \"Tween-Girls-Casual-Solid-Color-Criss-Cross-Racerback-Sports-Dress-Kids-p-423721658\"); optional params.flow_retry_num, params.country\n- product_by_url: params.url (product page URL); optional params.flow_retry_num, params.country",
+          "enum": [
+            "product_by_id",
+            "product_by_url"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { ID: \"Tween-Girls-...-p-423721658\" } for product_by_id, { url: \"https://us.shein.com/...html\" } for product_by_url.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_shein"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured TikTok data \u2014 profile info, post/video details, and post lists by profile, hashtag, or search URL \u2014 through a TikTok-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"tiktok.com\".\n\n**Use when:** \"get the latest posts from this TikTok profile\", \"get details for this single TikTok video URL\", \"pull TikTok profile info for this URL\", \"search TikTok profiles from this discover/search URL\", \"get posts from this TikTok hashtag/discover page\".\n**Not for:** A single TikTok URL you just want read as plain text \u2014 use novada_extract. A general web search not scoped to TikTok \u2014 use novada_search. A different platform's structured data (YouTube, Instagram, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured profile/post records (username, follower count, video description, likes, view count, etc.) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 5 verified-working TikTok operations: profile search by list URL, profile by URL, posts by list URL, posts by profile URL, and a single post by URL (see the `operation` param's description for the exact `params` keys each needs). Every tiktok.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which TikTok operation to run. Each requires specific keys in `params`:\n- profiles_by_search_url: params.search_url (a TikTok search/discover URL listing profiles); optional params.country, params.page_turning\n- profile_by_url: params.url (profile URL, e.g. \"https://www.tiktok.com/@handle\"); optional params.country, params.file_name\n- posts_by_list_url: params.url (a discover/hashtag page URL); optional params.num_of_posts, params.file_name\n- posts_by_profile: params.url (profile URL); optional params.start_date, params.end_date, params.num_of_posts, params.what_to_collect, params.post_type, params.country, params.posts_to_not_include, params.file_name\n- post_by_url: params.url (a single TikTok post/video URL); optional params.country, params.file_name",
+          "enum": [
+            "profiles_by_search_url",
+            "profile_by_url",
+            "posts_by_list_url",
+            "posts_by_profile",
+            "post_by_url"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { url: \"https://www.tiktok.com/@handle\" } for profile_by_url/posts_by_profile/post_by_url, { search_url: \"https://www.tiktok.com/search?q=...\" } for profiles_by_search_url.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_tiktok"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured Walmart data \u2014 product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL \u2014 through a Walmart-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"walmart.com\".\n\n**Use when:** \"search Walmart for <keyword> and give me prices/ratings\", \"get product listings from this Walmart category URL\", \"what's the price/availability for this Walmart SKU\", \"get this Walmart product's info for a specific zip code\", \"get product details for this Walmart product URL\".\n**Not for:** A single Walmart URL you just want read as plain text \u2014 use novada_extract. A general web search not scoped to Walmart \u2014 use novada_search. A different platform's structured data (Amazon, SHEIN, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured product records (title, price, rating, availability, SKU, etc.) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 5 verified-working Walmart operations spanning keyword search, category-URL listings, SKU lookup, zip-code-specific pricing, and direct product URL (see the `operation` param's description for the exact `params` keys each needs). `product_by_keyword` requires BOTH `domain` AND `keyword` together; `product_by_category_url` requires ALL THREE of `category_url`, `all`, AND `page_limit` together; `product_by_url_and_zipcode` requires BOTH `url` AND `zipcode` together. Every walmart.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which Walmart operation to run. Each requires specific keys in `params`:\n- product_by_keyword: params.domain (e.g. \"https://www.walmart.com/\") AND params.keyword (BOTH required together); optional params.all, params.page_turning, params.file_name\n- product_by_category_url: params.category_url AND params.all AND params.page_limit (ALL THREE required together); optional params.file_name\n- product_by_url_and_zipcode: params.url AND params.zipcode (BOTH required together, e.g. zipcode \"95829\"); optional params.file_name\n- product_by_sku: params.sku (e.g. \"433078517\"); optional params.all, params.file_name\n- product_by_url: params.url (product page URL); optional params.all, params.file_name",
+          "enum": [
+            "product_by_keyword",
+            "product_by_category_url",
+            "product_by_url_and_zipcode",
+            "product_by_sku",
+            "product_by_url"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { domain: \"https://www.walmart.com/\", keyword: \"shoes\" } for product_by_keyword, { sku: \"433078517\" } for product_by_sku, { url: \"https://www.walmart.com/ip/...\" } for product_by_url/product_by_url_and_zipcode.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_walmart"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured X (Twitter) data \u2014 a single post and profile lookups by username or URL \u2014 through an X-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"x.com\".\n\n**Use when:** \"get the text/engagement stats for this X post URL\", \"get this X profile's info by username\", \"get this X profile's info by profile URL\".\n**Not for:** A single X/Twitter URL you just want read as plain text \u2014 use novada_extract. A general web search not scoped to X \u2014 use novada_search. A different platform's structured data (YouTube, Instagram, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured post/profile records (post text, like/reply/repost counts, profile bio, follower count, etc.) in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 3 verified-working X (Twitter) operations: a single post by URL, and profile lookup by username or by profile URL (see the `operation` param's description for the exact `params` keys each needs). Every x.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which X (Twitter) operation to run. Each requires specific keys in `params`:\n- post_by_url: params.post_url (e.g. \"https://x.com/user/status/123...\"); optional params.file_name\n- profile_by_username: params.user_name (e.g. \"BillGates\"); optional params.file_name\n- profile_by_url: params.profile_url (e.g. \"https://x.com/BillGates\"); optional params.file_name",
+          "enum": [
+            "post_by_url",
+            "profile_by_username",
+            "profile_by_url"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { post_url: \"https://x.com/user/status/123\" } for post_by_url, { user_name: \"BillGates\" } for profile_by_username, { profile_url: \"https://x.com/BillGates\" } for profile_by_url.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_x"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured Yandex web search SERP data through a Yandex-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"yandex.com\". Returns the raw organic-results SERP, with TLD/language/time-range controls novada_search does not expose, not a generated answer.\n\n**Use when:** \"get the raw Yandex search results (titles, links, ranks) for <query>\", \"search a specific Yandex TLD (params.yandex_domain, e.g. \"yandex.ru\") for Russian/Eastern European content\", \"search Yandex restricted to a time range (params.within)\".\n**Not for:** A general question that just needs an answer or a few good links \u2014 use novada_search with engine=\"yandex\" \u2014 same engine, but ranked/reranked and answer-oriented instead of a raw SERP dump. A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content (not a search results page) \u2014 use novada_extract. A different platform's structured data (Amazon, LinkedIn, TikTok, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured organic-result SERP records (title/url/snippet/rank) in the chosen format (markdown/json/csv/excel/html/toon), same rendering as novada_scrape.\n**Operations:** 1 verified-working Yandex operation (web search \u2014 see the `operation` param's description for the exact `params` keys it needs, including the required params.yandex_domain TLD selector). The single yandex.com catalog operation is currently status:\"ok\".",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which Yandex operation to run. Each requires specific keys in `params`:\n- web_search: params.q (search query) and params.yandex_domain (Yandex TLD, e.g. \"yandex.com\", \"yandex.ru\"); optional params.lang, params.location, params.page, params.within (time range)",
+          "enum": [
+            "web_search"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\", yandex_domain: \"yandex.com\" } for web_search.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_yandex"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "Extract structured YouTube data \u2014 video and channel metadata, transcripts, comments, and downloadable video/audio files \u2014 through a YouTube-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"youtube.com\".\n\n**Use when:** \"get the transcript/subtitles for this YouTube video\", \"pull the comments on this YouTube video\", \"get channel info for this YouTube channel URL\", \"search YouTube channels for <keyword>\", \"find YouTube videos matching <keyword>, filtered by duration/upload date/attributes\".\n**Not for:** A single YouTube URL you just want read as plain text \u2014 use novada_extract. A general web/video search not scoped to YouTube \u2014 use novada_search. A different platform's structured data (TikTok, Instagram, etc.) \u2014 use novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool.\n**Returns:** Structured video/channel/comment records (title, views, transcript text, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen format (markdown/json/csv/excel/html/toon) \u2014 same rendering as novada_scrape.\n**Operations:** 13 verified-working YouTube operations spanning transcripts, video/audio file downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel (see the `operation` param's description for the exact `params` keys each needs). Every youtube.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "inputSchema": {
+      "properties": {
+        "format": {
+          "default": "markdown",
+          "description": "Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format.",
+          "enum": [
+            "json",
+            "csv",
+            "excel",
+            "html",
+            "markdown",
+            "toon"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max records to return. Default 20, max 100.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "description": "Which YouTube operation to run. Each requires specific keys in `params`:\n- transcript_by_video: params.video_id (e.g. \"LCAY3PGHZyw\"); optional params.subtitles_language, params.subtitles_type (auto_generated|uploader_provided), params.selected_only, params.file_name\n- video_file_by_url: params.url (video URL); optional params.resolution, params.video_codec (avc1|vp9|av01), params.audio_format (opus|m4a), params.bitrate, params.subtitles_language, params.selected_only, params.file_name\n- channel_by_url: params.url (channel URL, e.g. \"https://www.youtube.com/@disneykids\"); optional params.file_name\n- channels_by_keyword: params.keyword; optional params.page_numbers, params.file_name\n- comments_by_video: params.video_id; optional params.replay_times, params.sorting_methods, params.num_of_comments, params.file_name\n- audio_file_by_url: params.url (video URL \u2014 downloads its audio track); optional params.bitrate, params.audio_format (opus|m4a), params.kHz, params.is_subtitles, params.selected_format, params.file_name\n- video_by_id: params.video_id; optional params.file_name\n- video_by_url: params.url (video URL); optional params.all_labels, params.file_name\n- videos_by_keyword: params.keyword; optional params.num_of_posts, params.file_name\n- videos_by_filters: params.keyword_search; optional params.attributes, params.type (Videos|Movies), params.duration, params.upload_date, params.num_of_posts, params.file_name\n- videos_by_playlist_url: params.url (playlist/podcast URL); optional params.num_of_posts, params.file_name\n- channel_videos_by_url: params.url (a channel's /videos URL); optional params.sorting_method (Latest|Popular|Oldest), params.start_index, params.num_of_posts, params.file_name\n- videos_by_label: params.search_label (topic tag, e.g. \"music\"); optional params.num_of_posts, params.file_name",
+          "enum": [
+            "transcript_by_video",
+            "video_file_by_url",
+            "channel_by_url",
+            "channels_by_keyword",
+            "comments_by_video",
+            "audio_file_by_url",
+            "video_by_id",
+            "video_by_url",
+            "videos_by_keyword",
+            "videos_by_filters",
+            "videos_by_playlist_url",
+            "channel_videos_by_url",
+            "videos_by_label"
+          ],
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {},
+          "default": {},
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { video_id: \"LCAY3PGHZyw\" } for transcript_by_video/comments_by_video/video_by_id, { url: \"https://www.youtube.com/watch?v=...\" } for video_file_by_url/audio_file_by_url/video_by_url, { keyword: \"proxy\" } for channels_by_keyword/videos_by_keyword.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project": {
+          "description": "Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'.",
+          "maxLength": 30,
+          "type": "string"
+        },
+        "task_id": {
+          "description": "Optional. Resume a previous slow task by its task_id instead of submitting a new billable one \u2014 same semantics as novada_scrape's task_id.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "name": "novada_scrape_youtube"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Search the web via Google, Bing, DuckDuckGo, or Yandex. Use when you need to find relevant pages but don't know the URL. Returns titles, URLs, and snippets. For full page content, follow up with extract.",
+    "description": "Search the web and get clean, ready-to-use content. Returns titles, URLs, snippets \u2014 reranked by relevance. For complex questions needing multiple sources, use novada_research instead (it's faster and more thorough).\n\n**Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.\n**Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).\n**Tip:** engine='google' (default) is the fastest and most reliable. duckduckgo/yandex are fallbacks and can be markedly slower.\n**Domain filtering:** includeDomains/excludeDomains are applied by injecting `site:domain` operators into the query (not API-side filtering).\n**Project grouping:** Pass `project=\"my-project\"` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {
         "country": {
           "default": "",
@@ -1244,12 +2228,7 @@
         }
       },
       "required": [
-        "query",
-        "engine",
-        "num",
-        "country",
-        "language",
-        "format"
+        "query"
       ],
       "type": "object"
     },
@@ -1262,9 +2241,8 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Check your API key and environment configuration. Use when you want to verify setup or see which Novada products are active. Auth-free, no quota used.",
+    "description": "The onboarding concierge and first-run front door of the Novada MCP. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key.\n\n**What it does:**\n1. **Validates your key** \u2014 makes one cheap, authoritative account read (wallet balance) to confirm your key actually works, and shows your balance. No synthetic per-product probes, no credit cost.\n2. **Guides you if you have no key** \u2014 tells you to register at the Novada dashboard (free credits included for testing), where to copy your API key, and the exact config snippet for Claude Code / Claude Desktop / Cursor / VS Code / Windsurf.\n3. **Orients you** \u2014 a plain-language list of the core things you can do (search, extract, scrape, browser, account) plus the add-ons.\n\n**Three states it reports:** key present + valid (ready) \u00b7 key present but rejected (fix it) \u00b7 no key yet (register + free credits). Output also includes server_version (the running package version).\n\n**Auth-free by design:** this is the tool that helps you GET a key, so a missing key is the normal first-run state \u2014 it guides, it never errors. Includes a machine-usable agent_instruction so an AI knows exactly what to tell the user next.\n\n**Unified key:** NOVADA_API_KEY covers search, extract, unblock, scraper, research, crawl, map, browser and proxy auto-provisioning. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT are optional add-ons that need no separate key.",
     "inputSchema": {
-      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },

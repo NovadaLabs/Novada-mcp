@@ -180,10 +180,10 @@ async function pollForResult(apiKey, taskId) {
                 // API_DOWN (transient) so the customer gets a retryable envelope AND the
                 // hosted dispatch catch treats it as upstream weather (breadcrumb, not alert)
                 // rather than an UNKNOWN permanent bug.
-                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper task error (code ${errCode}): ${errMsg || "Task failed on the server side."} This is usually transient — retry once, or retry with different parameters.`, `error_code:${errCode}`);
+                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper task error (code ${errCode}): ${errMsg || "Task failed on the server side."} Retry once; if it persists, this is a Novada-side backend issue (under maintenance) — not your request or parameters.`, `error_code:${errCode}`);
             }
             if (errCode === 27203) {
-                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`, "error_code:27203");
+                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. Retry once; if it persists, this is a Novada-side backend issue under maintenance — not your request.`, "error_code:27203");
             }
             // code 10000 from the legacy proxy download endpoint means "result not yet available"
             // (equivalent to 27202 from task_status). Continue polling — do NOT throw.
@@ -659,6 +659,41 @@ const SEARCH_ENGINE_OP_KEYS = {
     "duckduckgo": SEARCH_QUERY_KEYS,
     "yandex": SEARCH_QUERY_KEYS,
 };
+// B1 fix (2026-07-20, live-verified against scraper.novada.com): these search-engine
+// ops need the query alias (q/keyword/query, checked via SEARCH_ENGINE_OP_KEYS above)
+// PLUS one or more non-query keys that are catalog `required:true` AND have no known
+// backend-side default — live probe confirmed code:400/data:null when omitted. Every
+// key listed here must be present TOGETHER WITH a query key; the query check alone
+// (SEARCH_ENGINE_OP_KEYS) is not sufficient for these ops.
+//   google_search / google_ai_mode / bing_* / duckduckgo — deliberately NOT listed
+//   here: live-verified to need ONLY the query, no extra AND-required key.
+//
+// FIX (2026-07-20, re-audit): google_serp_jobs and google_serp_videos were WRONGLY
+// added here by the initial B1 pass (over-rejection). Live re-verification against
+// scraper.novada.com proves both return 200 + real data with ONLY a query key and NO
+// domain — the opposite of google_serp_web (which genuinely 400s/empty without
+// domain, confirmed separately and KEPT below). Do not re-add jobs/videos here
+// without fresh live evidence of a 400/empty response — the prior addition was
+// never actually verified against a live call.
+const SEARCH_ENGINE_EXTRA_REQUIRED_KEYS = {
+    "google_serp_web": ["domain"],
+    "google_serp_hotels": ["domain", "check_in_date", "check_out_date"],
+    "yandex": ["yandex_domain"],
+};
+// B1 fix (2026-07-20): ops whose catalog `required:true` key set is NOT the live
+// required set, because one or more catalog-required params are synthetic
+// scaffolding auto-filled by submitScrapeTask before the request ever reaches the
+// backend (e.g. `json`, the output-format selector — see the
+// `if (!("json" in opParams)) opParams["json"] = 1;` auto-fill a few dozen lines
+// below in submitScrapeTask) and therefore never need to come from the caller.
+// This is an explicit override of the AND-required key list (bypassing the
+// catalog-derived reqKeys used by AND_REQUIRED_OPS below), analogous to how
+// SEARCH_ENGINE_OP_KEYS overrides the OR-required list.
+const CUSTOM_AND_REQUIRED_KEYS = {
+    // catalog also marks `json` required:true for this op, but json is auto-filled —
+    // live-verified: only `url` is actually required.
+    "google_search_url": ["url"],
+};
 // Hand-curated allowlist of ops whose catalog-required keys are INDEPENDENTLY
 // required (AND), not alternates (OR). Seeded 2026-07-20 with the 3 Amazon ops
 // verified during the Tools-v2 Amazon scaffold hardening pass — each was checked
@@ -722,8 +757,20 @@ function buildOpMapFromCatalog(domain) {
     for (const [slug, op] of platformEntry) {
         if (slug in SEARCH_ENGINE_OP_KEYS) {
             // Hand-built search-engine alias keys are OR-alternates (q/keyword/query all
-            // mean the same thing) — any ONE satisfies the requirement.
-            obj[slug] = { keys: SEARCH_ENGINE_OP_KEYS[slug], mode: "any" };
+            // mean the same thing) — any ONE satisfies the requirement. Some of these ops
+            // ALSO carry non-query keys that are AND-required in addition (B1 fix,
+            // 2026-07-20) — see SEARCH_ENGINE_EXTRA_REQUIRED_KEYS above.
+            const extraAll = SEARCH_ENGINE_EXTRA_REQUIRED_KEYS[slug];
+            obj[slug] = extraAll
+                ? { keys: SEARCH_ENGINE_OP_KEYS[slug], mode: "any", extraAll }
+                : { keys: SEARCH_ENGINE_OP_KEYS[slug], mode: "any" };
+            continue;
+        }
+        // Explicit AND-required override (bypasses catalog-derived reqKeys below) for
+        // ops where the catalog's required:true flags include synthetic/auto-filled
+        // params — see CUSTOM_AND_REQUIRED_KEYS above.
+        if (slug in CUSTOM_AND_REQUIRED_KEYS) {
+            obj[slug] = { keys: CUSTOM_AND_REQUIRED_KEYS[slug], mode: "all" };
             continue;
         }
         const reqKeys = op.params.filter(p => p.required).map(p => p.key);
@@ -824,6 +871,31 @@ export function preflightScrape(platform, operation, params) {
             detail: `preflight:missing_param`,
         });
     }
+    // B1 fix (2026-07-20): some query-alias ops ALSO have non-query keys that are
+    // AND-required in addition to the query (e.g. google_serp_web needs a query key
+    // PLUS domain). The query check above only confirms ONE of the alias keys is
+    // present — extraAll keys must be independently checked, every one of them.
+    if (required.extraAll && required.extraAll.length > 0) {
+        const missingExtra = required.extraAll.filter((k) => {
+            const v = params[k];
+            return v === undefined || v === null || String(v).trim().length === 0;
+        });
+        if (missingExtra.length > 0) {
+            const missingList = missingExtra.map((k) => `'${k}'`).join(", ");
+            const exampleParams = [required.keys[0], ...required.extraAll]
+                .map((k) => `${k}: "<value>"`)
+                .join(", ");
+            return new NovadaError({
+                code: NovadaErrorCode.INVALID_PARAMS,
+                message: `Operation '${operation}' on '${platform}' requires ${missingList} in addition to the search query; missing: ${missingList}.`,
+                agent_instruction: `Add ${missingList} to the params object alongside your query key — this operation requires them together, e.g. ` +
+                    `novada_scrape({ platform: "${platform}", operation: "${operation}", params: { ${exampleParams} } }). ` +
+                    `Read novada://scraper-platforms for the exact param shape.`,
+                retryable: false,
+                detail: `preflight:missing_param`,
+            });
+        }
+    }
     return null;
 }
 /**
@@ -832,6 +904,89 @@ export function preflightScrape(platform, operation, params) {
  */
 function getCatalogOp(platform, operation) {
     return CATALOG_BY_DOMAIN.get(platform)?.get(operation);
+}
+// ─── Identity oracle (TOW2-305) ──────────────────────────────────────────────
+// Single-target YouTube video operations request ONE specific video (by id, or by a
+// URL that contains the id). A 2026-07-21 independent audit caught novada_scrape_youtube
+// returning a DIFFERENT video as success:true (requested dQw4w9WgXcQ, backend returned
+// tSi6Dn1H36Y "Billie Jean"). Silent wrong data is worse than an error, so we verify the
+// backend returned the video that was asked for. CONSERVATIVE by design: this only fires
+// when an 11-char video id can be confidently extracted from the request AND it appears in
+// NONE of the returned records — otherwise it is a no-op and never false-rejects a valid result.
+/** YouTube scraper_ids whose record is a single video's METADATA (id/url reliably present).
+ *  Deliberately scoped to metadata ops only: transcript / comments / file-download records
+ *  legitimately may NOT echo the video id, so applying the oracle to them would false-reject
+ *  every valid call (code-review MEDIUM, 2026-07-21). */
+const IDENTITY_CHECKED_YT_OPS = new Set([
+    "youtube_video-post_explore", // video_by_url
+    "youtube_product-videoid", // video_by_id
+]);
+/** Identity-bearing field names, matched case-insensitively. */
+const YT_ID_KEYS = new Set(["id", "video_id", "videoid"]);
+const YT_URL_KEYS = new Set(["url", "webpage_url", "video_url", "link"]);
+/** Collect id/url identity strings from a record, walking nested OBJECTS but NEVER arrays — so
+ *  a wrong result can't pass by echoing the requested id in a related_videos[] entry, a
+ *  description, or an echoed requested_url field (code-review MEDIUM, 2026-07-21). */
+function collectYouTubeIdentityStrings(node, out, depth = 0) {
+    if (depth > 4 || node === null || typeof node !== "object" || Array.isArray(node))
+        return;
+    for (const [k, v] of Object.entries(node)) {
+        const key = k.toLowerCase();
+        if (typeof v === "string") {
+            if (YT_ID_KEYS.has(key))
+                out.ids.push(v.trim());
+            else if (YT_URL_KEYS.has(key))
+                out.urls.push(v);
+        }
+        else if (v && typeof v === "object" && !Array.isArray(v)) {
+            collectYouTubeIdentityStrings(v, out, depth + 1);
+        }
+    }
+}
+/** Extract an 11-char YouTube video id from a `video_id` param or a video URL, else null. */
+export function extractYouTubeVideoId(params) {
+    if (!params)
+        return null;
+    const vid = params["video_id"];
+    if (typeof vid === "string" && /^[A-Za-z0-9_-]{11}$/.test(vid.trim()))
+        return vid.trim();
+    const url = params["url"];
+    if (typeof url === "string") {
+        const m = url.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/watch\/)([A-Za-z0-9_-]{11})/);
+        if (m)
+            return m[1];
+    }
+    return null;
+}
+/**
+ * Throws a wrong-target NovadaError when a single-video YouTube op returns records that do
+ * NOT contain the requested video id. No-op for any other platform/op, when no id can be
+ * extracted, or when records are empty — so a valid result is never rejected.
+ */
+export function assertYouTubeIdentity(platform, operation, params, records) {
+    if (platform !== "youtube.com")
+        return;
+    if (!IDENTITY_CHECKED_YT_OPS.has(operation))
+        return;
+    if (!records || records.length === 0)
+        return;
+    const requestedId = extractYouTubeVideoId(params);
+    if (!requestedId)
+        return; // can't verify safely → never false-reject
+    // Match ONLY identity fields (id/url), walking objects not arrays. A wrong result that
+    // merely echoes the requested id in a description or a related_videos[] list does NOT pass.
+    const acc = { ids: [], urls: [] };
+    for (const r of records)
+        collectYouTubeIdentityStrings(r, acc);
+    const matched = acc.ids.some((id) => id === requestedId || id.includes(requestedId)) ||
+        acc.urls.some((u) => u.includes(requestedId));
+    if (matched)
+        return;
+    const first = records[0];
+    const firstLabel = first?.["title"] ?? first?.["id"] ?? first?.["url"] ?? "a different item";
+    throw makeNovadaError(NovadaErrorCode.WRONG_TARGET, `Wrong target: you requested YouTube video "${requestedId}", but the backend returned different data ` +
+        `(first record: ${sanitizeServerMsg(String(firstLabel))}). This is a Novada-side data-integrity issue — ` +
+        `not your request. Do not use these records.`, `youtube_wrong_target:${requestedId}`);
 }
 export async function novadaScrape(params, apiKey) {
     const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
@@ -910,7 +1065,7 @@ export async function novadaScrape(params, apiKey) {
         if (submitOutcome.kind === "empty") {
             return [
                 `## Scrape Results`,
-                `platform: ${platform} | operation: ${operation} | records: 0 | source: live`,
+                `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
                 ``,
                 `status: ok`,
                 `_No results found for this query._ (upstream: ${sanitizeServerMsg(submitOutcome.message)})`,
@@ -945,7 +1100,7 @@ export async function novadaScrape(params, apiKey) {
             if (pollOutcome.kind === "pending") {
                 return [
                     `## Scrape Results`,
-                    `platform: ${platform} | operation: ${operation} | records: 0 | source: live`,
+                    `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
                     ``,
                     `status: processing`,
                     `⏳ Task still running (task_id="${pollOutcome.taskId}") after ${POLL_TIMEOUT_MS / 1000}s.`,
@@ -966,7 +1121,7 @@ export async function novadaScrape(params, apiKey) {
         //   Format B (wrapped): [{spider_code:200, rest:{...}}, ...] or [{error:"msg", error_code:N}]
         const firstItem = resultItems[0];
         if (!firstItem) {
-            return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
+            return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
         }
         const firstAsRecord = firstItem;
         let rawRecords;
@@ -977,7 +1132,7 @@ export async function novadaScrape(params, apiKey) {
                 const errCode = firstAsRecord.error_code;
                 // API_DOWN (transient): scraper reached the backend but the task failed —
                 // retryable envelope for the customer + suppressed from Sentry alerts.
-                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper task failed (${errCode ?? "unknown"}): ${itemError}. This is usually transient — retry once or try a different operation.`, `error_code:${errCode ?? "unknown"}`);
+                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper task failed (${errCode ?? "unknown"}): ${itemError}. Retry once or try a different operation; if it persists, this operation is temporarily under maintenance on Novada's side — not your request.`, `error_code:${errCode ?? "unknown"}`);
             }
             rawRecords = extractRecords(firstAsRecord.rest);
         }
@@ -1006,8 +1161,8 @@ export async function novadaScrape(params, apiKey) {
                 // AND the hosted dispatch catch records a breadcrumb instead of paging us.
                 throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper collected ${errorItems.length} result(s) but all failed. ` +
                     `error_code: ${errCode} — ${sanitizeServerMsg(String(errMsg))}. ` +
-                    `This means the target page was reached but data extraction failed (parser error, empty page, or access blocked). ` +
-                    `This is usually transient — retry once, or try a different operation / verify the target URL.`, `error_code:${errCode}`);
+                    `Novada reached the target but couldn't extract data (parser error, empty page, or access blocked). ` +
+                    `Retry once; if it persists, this data source is temporarily under maintenance on Novada's side (not your request) — try novada_extract on the URL meanwhile.`, `error_code:${errCode}`);
             }
         }
         // TOW2-237: reconcile price + availability BEFORE any format derives from the
@@ -1016,8 +1171,12 @@ export async function novadaScrape(params, apiKey) {
         // for platforms (e.g. Walmart) whose flat fields are already populated.
         rawRecords = rawRecords.map(r => normalizeProductRecord(r));
         const records = rawRecords.slice(0, limit).map(r => flattenRecord(r));
+        // Identity oracle (TOW2-305): never surface a DIFFERENT YouTube video than requested as
+        // success. Runs on the raw upstream records (which carry the real id/url). No-op for
+        // everything except single-target YouTube video ops with a confidently-extracted id.
+        assertYouTubeIdentity(platform, operation, opParams, rawRecords.slice(0, limit));
         if (records.length === 0) {
-            return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
+            return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
         }
         const title = `${platform} — ${displayOperation}`;
         // For json we want clean structured records (not the flattened dot-path display version).

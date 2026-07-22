@@ -583,6 +583,131 @@ async function attemptGitBookMdFallback(pageUrl, staticHtml) {
     }
     return null;
 }
+/**
+ * TOW2-307: True when a text body reads as markdown-structured content — it has at
+ * least one ATX heading (`# Heading`), or is long enough to be document-like
+ * (>=40 words). Used to decide whether a `text/plain` response should be treated
+ * the same way as an explicit `text/markdown` response (title-from-heading +
+ * markdown-link parsing) versus returned as plain, unstructured text. Deliberately
+ * independent of attemptGitBookMdFallback's own `looksLikeDocs` check above (same
+ * shape, different call site — kept separate per scope: do not touch the GitBook
+ * fast-path).
+ *
+ * Exported (with deriveTitleFromMarkdown below) so site_copy.ts can apply the SAME
+ * text/markdown | text/plain passthrough gate to fetchSitePage — it had the identical
+ * Turndown-corruption bug (see site_copy.ts's fetchSitePage doc comment). site_copy.ts
+ * already imports detectJsHeavyContent from this module, so re-exporting these two is
+ * the established, cycle-free way to share extract.ts's leaf logic (extract.ts imports
+ * nothing from site_copy.ts).
+ */
+export function looksLikeMarkdown(body) {
+    return /^#{1,6}\s+\S/m.test(body) || body.trim().split(/\s+/).filter(Boolean).length >= 40;
+}
+/**
+ * A body whose first non-whitespace char is `<` is HTML/XML, even when the server
+ * mislabels its content-type as `text/plain` (common on raw CDNs like
+ * raw.githubusercontent.com, S3, and misconfigured origins). Mirrors the guard the
+ * `application/json` branch already applies (`body.trimStart().startsWith("<")`) so
+ * mislabeled HTML falls through to real HTML extraction instead of being returned
+ * verbatim as "markdown" — which would both leak raw tags AND short-circuit
+ * site_copy's JS-render escalation. Scoped to `text/plain` only: a `text/markdown`
+ * response is explicitly declared and trusted (valid markdown may legitimately open
+ * with an inline `<div>`/`<!-- -->`). Review HIGH 2026-07-22, TOW2-307.
+ * Exported so site_copy.ts applies the identical guard on its passthrough gate.
+ */
+export function bodyLooksLikeHtml(body) {
+    return body.trimStart().startsWith("<");
+}
+/** Derive a title from the body's first ATX H1 (`# Heading`). Null when none is found. */
+export function deriveTitleFromMarkdown(body) {
+    const m = body.match(/^#\s+(.+)$/m);
+    return m ? m[1].trim() : null;
+}
+/**
+ * Parse markdown links `[text](url)` (optionally with a trailing `"title"`) out of a
+ * raw markdown/text body, resolved against baseUrl. Malformed targets are skipped
+ * rather than throwing, so one bad link never drops the rest.
+ */
+function extractMarkdownLinks(body, baseUrl) {
+    const links = [];
+    const re = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+    let m;
+    while ((m = re.exec(body)) !== null) {
+        try {
+            links.push(new URL(m[1], baseUrl).toString());
+        }
+        catch { /* skip malformed link target */ }
+    }
+    return links;
+}
+/**
+ * TOW2-307: Format a `text/markdown` (or markdown-like `text/plain`) response
+ * WITHOUT ever running it through Turndown. extractMainContent/extractFullPageContent
+ * (utils/html.ts) call cheerio.load() + Turndown, which assumes HTML input — fed raw
+ * markdown, Turndown escapes every markdown-significant character (`*`, `_`, `[`, `]`,
+ * `` ` ``, etc.) via its text-node escaping pass AND collapses all whitespace
+ * (including newlines) in non-`<pre>` text nodes, destroying real structure. The body
+ * here IS the final output already; this only derives a title/links for the header
+ * and applies the same max_chars contract as the HTML path (truncatePreservingTable).
+ */
+function formatMarkdownExtract(url, mode, body, maxChars, outputFormat, isMarkdown, contentType) {
+    const limit = maxChars ?? MAX_CHARS_DEFAULT;
+    const title = (isMarkdown ? deriveTitleFromMarkdown(body) : null) ?? url;
+    const links = isMarkdown ? extractMarkdownLinks(body, url) : [];
+    const totalChars = body.length;
+    let content = body;
+    let isTruncated = false;
+    if (content.length > limit) {
+        content = truncatePreservingTable(content, limit);
+        isTruncated = true;
+    }
+    let origin = url;
+    try {
+        origin = new URL(url).origin;
+    }
+    catch { /* ignore */ }
+    // Report the REAL Content-Type header the origin sent (charset stripped), not a
+    // label inferred from body shape — a markdown-shaped text/plain body must not be
+    // reported as "text/markdown" (TOW2-307 LOW). Fall back to the shape-based label
+    // only when the header was empty.
+    const contentTypeLabel = contentType.split(";")[0].trim() || (isMarkdown ? "text/markdown" : "text/plain");
+    if (outputFormat === "json") {
+        return JSON.stringify({
+            url,
+            title,
+            mode,
+            source: "live",
+            content_type: contentTypeLabel,
+            content,
+            content_truncated: isTruncated,
+            total_chars: totalChars,
+            links: { total: links.length, sample: links.slice(0, 15) },
+            agent_instruction: `This URL returned raw ${isMarkdown ? "markdown" : "plain text"}, not HTML — the content above is verbatim (no HTML-to-markdown conversion was applied, since the source was already text). To discover more pages call novada_map with url="${origin}".`,
+        }, null, 2);
+    }
+    const lines = [
+        `## Extracted Content`,
+        `url: ${url}`,
+        `mode: ${mode} | source: live | content_type: ${contentTypeLabel}`,
+        `title: ${title}`,
+        `chars:${content.length}${isTruncated ? ` (truncated, full: ${totalChars})` : ""} | links:${links.length}`,
+        ``,
+        `---`,
+        ``,
+        content,
+    ];
+    if (isTruncated) {
+        const suggestedHigher = Math.min(limit * 2, 100000);
+        lines.push(``, `[Content truncated — showing first ${limit} of ${totalChars} total characters. Pass max_chars=${suggestedHigher} to get more.]`);
+    }
+    if (links.length > 0) {
+        lines.push(``, `---`, `## Links (${Math.min(links.length, 15)} of ${links.length})`);
+        for (const l of links.slice(0, 15))
+            lines.push(`- ${l}`);
+    }
+    lines.push(``, `---`, `## Agent Hints`, `- This URL returned raw ${isMarkdown ? "markdown" : "plain text"} — the content above is verbatim. Turndown/HTML-to-markdown conversion was NOT applied, since the source is already text (running it through Turndown would escape markdown characters and collapse newlines).`, `- To discover more pages: novada_map with url="${origin}"`, ``, `## Agent Action`, `agent_instruction: status:success | raw ${isMarkdown ? "markdown" : "text"} passthrough`);
+    return lines.join("\n");
+}
 /** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
 async function extractSingleInner(params, apiKey) {
     // Normalize render="js" → "render" (js is the agent-friendly alias)
@@ -693,6 +818,17 @@ async function extractSingleInner(params, apiKey) {
                 return formatJsonExtract(params.url, "render", body, params.max_chars, params.format);
             }
         }
+        else if (typeof response.data === "string" && (contentType.includes("text/markdown") || (contentType.includes("text/plain") && !bodyLooksLikeHtml(response.data)))) {
+            // TOW2-307: text/markdown or text/plain bodies are ALREADY the final content —
+            // never run them through Turndown (see formatMarkdownExtract's doc comment).
+            // This gate must run AHEAD of the generic HTML default below, which otherwise
+            // treats every non-JSON/non-PDF body as HTML and Turndown-converts it.
+            // text/plain that is actually HTML (mislabeled by raw CDNs) is excluded by
+            // bodyLooksLikeHtml so it falls through to real HTML extraction (review HIGH).
+            const body = response.data;
+            const isMarkdownCT = contentType.includes("text/markdown");
+            return formatMarkdownExtract(params.url, "render", body, params.max_chars, params.format, isMarkdownCT || looksLikeMarkdown(body), contentType);
+        }
         else {
             if (typeof response.data !== "string") {
                 throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "Response is not HTML. The URL may return JSON or binary data.", `url:${params.url} returned non-string content-type`);
@@ -782,6 +918,17 @@ async function extractSingleInner(params, apiKey) {
             else {
                 return formatJsonExtract(params.url, "static", body, params.max_chars, params.format);
             }
+        }
+        else if (typeof response.data === "string" && (contentType.includes("text/markdown") || (contentType.includes("text/plain") && !bodyLooksLikeHtml(response.data)))) {
+            // TOW2-307: text/markdown or text/plain bodies are ALREADY the final content —
+            // never run them through Turndown (see formatMarkdownExtract's doc comment).
+            // This gate must run AHEAD of the generic HTML default below, which otherwise
+            // treats every non-JSON/non-PDF body as HTML and Turndown-converts it.
+            // text/plain that is actually HTML (mislabeled by raw CDNs) is excluded by
+            // bodyLooksLikeHtml so it falls through to real HTML extraction (review HIGH).
+            const body = response.data;
+            const isMarkdownCT = contentType.includes("text/markdown");
+            return formatMarkdownExtract(params.url, "static", body, params.max_chars, params.format, isMarkdownCT || looksLikeMarkdown(body), contentType);
         }
         else {
             if (typeof response.data !== "string") {

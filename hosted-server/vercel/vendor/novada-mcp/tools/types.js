@@ -214,8 +214,10 @@ export const CrawlParamsSchema = withCamelCaseAliases(z.object({
     excludePaths: "exclude_paths",
 });
 export const ResearchParamsSchema = z.object({
-    question: z.string().min(5, "Research question must be at least 5 characters").optional(),
-    query: z.string().optional().describe("Alias for 'question' — use either"),
+    question: z.string().min(5, "Research question must be at least 5 characters").optional()
+        .describe("REQUIRED — provide either `question` or `query`. The research question to answer (min 5 characters)."),
+    query: z.string().optional()
+        .describe("REQUIRED — provide either `question` or `query`. Alias for `question` — use either."),
     depth: z.enum(["quick", "deep", "auto", "comprehensive"]).default("auto")
         .describe("'quick'=3 searches, 'deep'=6, 'comprehensive'=8-9, 'auto' (default)=picks quick or deep by question length — never comprehensive."),
     focus: z.string().optional()
