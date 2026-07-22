@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import axios from "axios";
-import { NovadaError, NovadaErrorCode } from "../../src/_core/errors.js";
+import axios, { AxiosError } from "axios";
+import { NovadaError, NovadaErrorCode, classifyError } from "../../src/_core/errors.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -459,6 +459,57 @@ describe("novadaScrape — error handling", () => {
         "test-key"
       )
     ).rejects.toThrow("ECONNREFUSED network error");
+  });
+
+  // TOW2-307 Task 2 verification: an audit claimed concurrent scrapes surface a raw
+  // "Failed to retrieve scraper results: Request failed with status code 429" that
+  // BYPASSES classifyError(). This reproduces the exact path (pollForResult's own
+  // axios.get, inside scrape.ts, throwing a 429 AxiosError) and proves the claim is
+  // wrong: novadaScrape does rewrap the AxiosError into a plain Error (by design —
+  // see the ECONNREFUSED test above), but the "429" substring survives that rewrap,
+  // and classifyError()'s generic-Error fallback (errors.ts ~line 341,
+  // `msg.includes("429")`) still classifies it as RATE_LIMITED with
+  // failure_class:quota + retry_after_ms + "reduce concurrency" guidance. Nothing
+  // reaches the agent as a raw, unclassified string — classifyError is applied to
+  // every thrown error at the index.ts dispatch boundary regardless of type.
+  it("classifies a raw 429 from the result-poll endpoint as RATE_LIMITED via classifyError", async () => {
+    mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+    // NOTE: under vi.mock("axios") automock, AxiosError's constructor body is
+    // replaced (message/name are NOT set by `new AxiosError(msg, code)` — verified
+    // empirically), so `.message` must be assigned directly to reproduce axios's
+    // real default 429 error shape. `.response` works fine via plain assignment too.
+    const err429 = new AxiosError("orig", "ERR_BAD_REQUEST");
+    err429.message = "Request failed with status code 429";
+    Object.defineProperty(err429, "response", { value: { status: 429, data: "Too Many Requests" } });
+    mockedAxios.get.mockRejectedValue(err429);
+
+    let thrown: unknown;
+    try {
+      await novadaScrape(
+        { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+
+    // scrape.ts's poll catch deliberately rewraps the AxiosError into a plain Error
+    // (`Failed to retrieve scraper results: ...`) — it is NOT a NovadaError at this
+    // point, matching the documented "does not catch-and-stringify" contract.
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).not.toBeInstanceOf(NovadaError);
+    expect((thrown as Error).message).toContain("429");
+
+    // classifyError() is the SAME function index.ts's dispatch() applies to every
+    // thrown error at the MCP boundary — it must still recognize the "429" text and
+    // classify it as RATE_LIMITED (quota), not UNKNOWN/generic.
+    const classified = classifyError(thrown);
+    expect(classified.code).toBe(NovadaErrorCode.RATE_LIMITED);
+    expect(classified.retryable).toBe(true);
+    const agentText = classified.toAgentString();
+    expect(agentText).toContain("failure_class: quota");
+    expect(agentText).toContain("retry_after_ms");
+    expect(agentText.toLowerCase()).toContain("serialize");
   });
 });
 

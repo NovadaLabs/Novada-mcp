@@ -8,6 +8,22 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.32] — 2026-07-22
+
+Correctness patch found by dogfooding `novada_extract`/`novada_site_copy` against Novada's own `.md` docs (TOW2-307), plus a correction to one external-audit claim. No new tools — count stays **38** (self-host) / **30** (hosted).
+
+### Fixed
+- **Markdown / plain-text bodies are no longer corrupted by Turndown (TOW2-307).** `novada_extract` and `novada_site_copy` used to run every non-PDF/non-JSON response body through Turndown (the HTML→markdown converter), *including* bodies the origin already served as `text/markdown` or `text/plain`. Turndown assumes HTML input: its text-node escaping pass escapes every markdown-significant character (`*`, `_`, `[`, `]`, backtick), and its whitespace pass collapses real newlines — so a `.md` docs page (e.g. developer.novada.com's GitBook `.md` endpoints) arrived escaped and flattened before an agent or disk ever saw it. Both tools now branch on content-type and return `text/markdown`/`text/plain` bodies **verbatim**, ahead of the HTML default.
+- **Anti-HTML guard on the passthrough gate.** `text/markdown` (an explicit, trusted declaration) always passes through; `text/plain` passes through **only when the body isn't actually HTML**. Origins that mislabel HTML as `text/plain` (raw CDNs, misconfigured servers) now fall through to real HTML extraction instead of (a) leaking raw `<…>` tags into the output and (b) short-circuiting `novada_site_copy`'s JS-render escalation. Mirrors the `application/json` branch's long-standing `startsWith("<")` guard, in both `extract.ts` response branches and `site_copy.ts`.
+- **Honest content-type label.** The `novada_extract` passthrough header now reports the *real* `Content-Type` the origin sent (charset stripped), not a label inferred from the body's shape — a markdown-shaped `text/plain` body is reported as `text/plain`.
+- **Tool count in resource descriptions is now dynamic.** `novada://guide` and `novada://llms-txt` derive the count from `TOOL_REGISTRY.length` instead of a hardcoded number that had drifted (was "23").
+
+### Testing / Notes
+- **The audited "raw 429 leak" is not real — corrected with a regression test.** An external audit reported that concurrent scrapes surface a raw, unclassified `Request failed with status code 429` bypassing the error envelope. Reproducing the exact path (the result-poll `axios.get` throwing a 429) shows: `novada_scrape` *does* rewrap the AxiosError into a plain `Error` (by design), but the `429` substring survives, and `classifyError()` — which `dispatch()` applies to **every** thrown error at the MCP boundary regardless of type — still classifies it as `RATE_LIMITED` (failure_class:quota + `retry_after_ms` + reduce-concurrency guidance). No raw string reaches the agent. Locked in with a test; no code change needed. (Backend extractor outages and the static-catalog health gap surfaced by the same audit remain tracked as TOW2-305 — a Novada backend issue, not fixable in this wrapper.)
+- Full suite **1864 tests / 115 files** green, `tsc --noEmit` clean. New prove-the-tester regression tests cover markdown/plain passthrough AND HTML-mislabeled-as-`text/plain` on *both* the `extract` and `site_copy` paths (each verified to fail against the pre-fix code). Independent `code-reviewer` pass on the diff — not the author's own review.
+
+---
+
 ## [0.9.31] — 2026-07-21
 
 Reliability + honesty patch. Shipped after an independent external audit (found issues → fix-loop → re-audit CLEAN). No new tools — this hardens what's there. Backend extractor outages surfaced during the audit (github/x/yandex/bing/youtube) are tracked separately as a Novada backend issue (TOW2-305), not fixable in this wrapper.

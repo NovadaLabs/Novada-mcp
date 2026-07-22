@@ -3,6 +3,11 @@
 // Reduces hallucination ("does novada support X?") and fixes LobeHub Resources criterion.
 
 import { SCRAPER_CATALOG, CATALOG_OP_COUNT } from "../data/scraper_catalog.js";
+// TOW2-307: single source of truth for the tool count quoted below (was a stale
+// hand-typed "23" in three spots — the registry has grown to 38 since). Importing
+// TOOL_REGISTRY.length instead of hardcoding a number means this can never drift
+// again the way the literal did.
+import { TOOL_REGISTRY } from "../tools/registry.js";
 
 interface Resource {
   uri: string;
@@ -41,7 +46,10 @@ export const RESOURCES: Resource[] = [
   {
     uri: "novada://guide",
     name: "Agent Tool Selection Guide",
-    description: "Decision tree and workflow patterns for choosing between all 23 novada tools: search, extract (incl. raw-HTML render), crawl, map, research, scrape (with novada_discover for platform lookup), proxy (one tool, type param), verify, browser, account (incl. product-activation status), discover",
+    // TODO(TOW2-307): this prose enumerates only a representative subset of tool
+    // names, not all TOOL_REGISTRY.length tools — a fuller pass should expand (or
+    // explicitly summarize by category) rather than leave the list looking exhaustive.
+    description: `Decision tree and workflow patterns for choosing between all ${TOOL_REGISTRY.length} novada tools: search, extract (incl. raw-HTML render), crawl, map, research, scrape (with novada_discover for platform lookup), proxy (one tool, type param), verify, browser, account (incl. product-activation status), discover`,
     mimeType: "text/plain",
   },
   {
@@ -53,7 +61,10 @@ export const RESOURCES: Resource[] = [
   {
     uri: "novada://llms-txt",
     name: "LLM-Optimized Tool Reference",
-    description: "Concise LLM-friendly reference for all 23 novada tools. One paragraph per tool with best-for, not-for, required params, and example. Optimized for context injection — 60% shorter than full guide.",
+    // TODO(TOW2-307): the actual novada://llms-txt body (below) only documents a
+    // subset of tools, not all TOOL_REGISTRY.length — a fuller pass should add the
+    // missing per-tool paragraphs rather than leave the headline count exhaustive.
+    description: `Concise LLM-friendly reference for all ${TOOL_REGISTRY.length} novada tools. One paragraph per tool with best-for, not-for, required params, and example. Optimized for context injection — 60% shorter than full guide.`,
     mimeType: "text/plain",
   },
   {
@@ -437,12 +448,15 @@ novada_scrape with platform='amazon.com', operation='amazon_product_keywords'
       };
 
     case "novada://llms-txt":
+      // TODO(TOW2-307): the body below only documents a subset of TOOL_REGISTRY.length
+      // tools (12 at last count) — a fuller pass should add the missing per-tool
+      // paragraphs so the headline count isn't more exhaustive than the content.
       return {
         contents: [{
           uri,
           mimeType: "text/plain",
           text: `# Novada MCP — Quick Reference (LLM-optimized)
-> 23 tools. Read this to pick the right one.
+> ${TOOL_REGISTRY.length} tools. Read this to pick the right one.
 
 ## novada_search
 Best for: web search when you have a question, not a URL. Returns titles+URLs+snippets from 3 engines (Google, DuckDuckGo, Yandex).
