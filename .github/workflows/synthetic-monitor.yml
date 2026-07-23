@@ -1,0 +1,116 @@
+name: Synthetic Monitor
+
+# 3-layer synthetic monitor for mcp.novada.com (see monitoring/README.md for
+# the full picture — Layer A/UptimeRobot is owner-provisioned outside this
+# repo; this workflow only drives Layer B (smoke) and Layer C (stress)).
+#
+# THIS IS NOT A PR GATE. It never runs on push/pull_request — scheduled +
+# manual only, on purpose, so routine commits never burn NOVADA_TEST_KEY
+# budget or k6 minutes. Do not add a `push:`/`pull_request:` trigger here.
+#
+# Two independent cron schedules fan out to two independent jobs. GitHub
+# Actions cron is ALWAYS UTC, regardless of repo/org timezone settings.
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_scrapers:
+        description: "Also execute one real Tier-3 scraper call in the smoke job (costs credits)"
+        type: boolean
+        default: false
+  schedule:
+    # Layer B (smoke): every 6 hours at :17 past the hour — an off-round
+    # minute so this doesn't land in the top-of-hour pile-up window that
+    # every other repo's "0 */6 * * *"/"0 * * * *" cron collides into on
+    # GitHub's shared runners.
+    - cron: "17 */6 * * *"
+    # Layer C (stress): once daily at 04:23 UTC — off-peak (low traffic on
+    # mcp.novada.com) and off-round-minute for the same pile-up reason.
+    - cron: "23 4 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  # Gate: only run this job on ITS OWN cron, or on manual workflow_dispatch
+  # (which runs both jobs). github.event.schedule carries the exact cron
+  # expression that fired, so matching the literal string is the clean way
+  # to split one multi-schedule workflow into per-cadence jobs without a
+  # separate workflow file per layer.
+  smoke:
+    name: "Layer B — all-tools smoke (6h)"
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # all-tools-smoke.mjs is dependency-free (Node ≥20 stdlib only) — no
+      # npm install needed. Cheap/free-tier tool calls only by default;
+      # SMOKE_SCRAPERS is only ever "1" here when this run was a manual
+      # workflow_dispatch with the "smoke_scrapers" input checked — scheduled
+      # runs never set it, so Tier-3 stays free/skipped on the routine 6h
+      # cadence. See monitoring/README.md cost rule.
+      - name: Run all-tools smoke
+        env:
+          NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
+          SMOKE_SCRAPERS: ${{ (github.event_name == 'workflow_dispatch' && inputs.smoke_scrapers) && '1' || '' }}
+        run: node monitoring/smoke/all-tools-smoke.mjs
+
+      # if: always() so a smoke failure (non-zero exit above) still uploads
+      # the JSON report for post-mortem instead of silently discarding it.
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report-${{ github.run_id }}
+          path: monitoring/reports/
+          if-no-files-found: warn
+
+      # Optional alert: only fires if ALERT_WEBHOOK is configured as a repo
+      # secret. If it's absent, GitHub's own failed-scheduled-run email/UI
+      # notification is the fallback (see monitoring/README.md).
+      - name: Alert on failure
+        if: failure() && secrets.ALERT_WEBHOOK != ''
+        run: |
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\": \"Novada Synthetic Monitor: smoke job FAILED — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "${{ secrets.ALERT_WEBHOOK }}"
+
+  stress:
+    name: "Layer C — k6 stress (daily)"
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 4 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      # Export a JSON summary into the shared reports dir so it can be
+      # uploaded as an artifact below, same convention as the smoke report.
+      - name: Run k6 stress test
+        uses: grafana/run-k6-action@v1
+        with:
+          path: monitoring/stress/k6-stress.js
+          flags: --summary-export=monitoring/reports/stress-summary-${{ github.run_id }}.json
+        env:
+          NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
+
+      - name: Upload stress report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-report-${{ github.run_id }}
+          path: monitoring/reports/
+          if-no-files-found: warn
+
+      - name: Alert on failure
+        if: failure() && secrets.ALERT_WEBHOOK != ''
+        run: |
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\": \"Novada Synthetic Monitor: stress job FAILED — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "${{ secrets.ALERT_WEBHOOK }}"
