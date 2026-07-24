@@ -152,17 +152,65 @@ Every run writes:
 - `monitoring/reports/full-<UTC timestamp>.csv` — the same per-tool table as
   UTF-8-BOM CSV (opens with correct Chinese headers in Excel).
 
-**Phase 2 (pending, not implemented in this pass):** auto-file a Linear issue
-on any P2+ finding, and post a green "all tools healthy" heartbeat otherwise.
-The workflow has a clearly-commented placeholder step for this
-(`.github/workflows/synthetic-monitor.yml`'s `full-daily` job) — Phase 1 is
-probe + report only.
+**Phase 2 (implemented):** the `full-daily` job also delivers this report
+privately — a private archive-repo push, then `monitoring/report/linear-sync.mjs`
+files a Linear alert issue on any P0/P1/P2 finding, or posts a green
+heartbeat comment otherwise. See the "Privacy model" section above for the
+full picture and why nothing here ever reaches the public repo's Actions UI.
+
+## Privacy model
+
+**This repo (`NovadaLabs/Novada-mcp`) is PUBLIC** — its Actions logs AND
+artifacts are world-readable to anyone. The synthetic-monitor *action*
+(this workflow, the probe scripts) is fine to keep here; the *report
+results* — which backends are down, our fault-domain analysis, per-tool
+error text — must **never** be public. Three things enforce that:
+
+1. **No artifacts.** None of the three jobs (`smoke`, `stress`, `full-daily`)
+   upload an `actions/upload-artifact` step. Report files never leave the
+   ephemeral runner via the public repo.
+2. **Quiet public logs.** `full-tools-probe.mjs` and `all-tools-smoke.mjs`
+   both read `MONITOR_QUIET` — the CI workflow sets it to `"1"` on both the
+   Layer B and Layer D probe steps. In quiet mode, stdout is reduced to a
+   single non-revealing completion line (e.g. `[full-tools-probe] complete:
+   30 probed, exit 0`) — no tool names, domains, backend names, or severity
+   breakdown. The full per-tool detail is unaffected in the JSON report
+   file; only what a human reading the public Actions log sees is reduced.
+   Local/manual runs leave `MONITOR_QUIET` unset and get the full
+   human-readable table, exactly as before.
+3. **Private delivery, both channels.** Only the `full-daily` job (Layer D)
+   delivers report data anywhere, and only to two private destinations:
+   - A **private archive repo**, `NovadaLabs/novada-mcp-monitoring`, holds
+     the actual downloadable report files (`full-*.json`/`.xlsx`/`.csv`),
+     pushed by the "Push report to private archive" step into
+     `reports/<YYYY>/<MM>/`. This repo is where the real, detailed report
+     data lives — it is never the public `Novada-mcp` repo.
+   - A **private Linear workspace** (team `TongWu`, project `Novada MCP —
+     Daily Monitoring Loop`, label `Wutong`) gets an inline alert issue on
+     any P0/P1/P2 finding, or a dated heartbeat comment on green days — see
+     `monitoring/report/linear-sync.mjs`. The issue/comment body is a
+     compact summary plus a **link** to the file in the private archive
+     repo above, deliberately avoiding Linear's file-upload flow.
+
+   Neither delivery step ever fails the job on error (missing secret,
+   network failure, archive repo not provisioned yet, GraphQL error) — both
+   are fail-soft by design, since a delivery failure must never be confused
+   with a real monitor-run failure.
+
+Layers B and C (`smoke`, `stress`) intentionally get **neither** private
+delivery channel — only Layer D's daily full-tools probe is deep/important
+enough to warrant it. Their reports simply stay on the ephemeral runner
+(quieted, un-uploaded) and vanish when the job ends; a Layer B/C failure
+still surfaces via the `Alert on failure` step (if `ALERT_WEBHOOK` is
+configured) or GitHub's own failed-scheduled-run notification.
 
 ## Required GitHub Secrets
 
 | Secret | Required | Notes |
 |--------|----------|-------|
 | `NOVADA_TEST_KEY` | Yes | A **dedicated, low-value test key with a budget cap** — never a production key. Used by Layer B, Layer C, and Layer D. |
+| `MONITOR_ARCHIVE_TOKEN` | No (recommended) | A GitHub PAT with push access to the **private** `NovadaLabs/novada-mcp-monitoring` archive repo. If unset, the "Push report to private archive" step is skipped entirely (guarded via the `env` context, never `secrets.*`, inside `if:` — see the workflow file's own comments on why). |
+| `LINEAR_API_KEY` | No (recommended) | A Linear personal API key used by `monitoring/report/linear-sync.mjs` to file the daily alert issue / heartbeat comment. If unset, the "Sync report to Linear" step is skipped entirely. Never printed by the script, even on error. |
 | `ALERT_WEBHOOK` | No | Slack/Telegram-compatible incoming webhook URL. If set, a failed job POSTs a one-line status message to it. If unset, the alert step is skipped and **GitHub's own failed-scheduled-run notification** (email to repo watchers / Actions tab) is the fallback — no silent failures either way. |
 
 ## Cost rule

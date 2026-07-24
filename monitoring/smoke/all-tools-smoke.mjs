@@ -25,6 +25,14 @@
  *                    monitoring/smoke/baseline-tools.json from this run's
  *                    live `tools/list` (e.g. after a deliberate tool
  *                    add/rename). Not for routine CI use.
+ *   MONITOR_QUIET    (optional) "1" to suppress the per-tool table, the
+ *                    new/missing tool name lists, and the detailed
+ *                    `SUMMARY: {...}` line from stdout, printing only a
+ *                    single non-revealing completion line instead (no tool
+ *                    names). The full detail is UNAFFECTED in the JSON
+ *                    report file. This repo's GitHub Actions logs are PUBLIC
+ *                    (world-readable), so the CI workflow sets this to "1";
+ *                    local/manual runs leave it unset for full output.
  *
  * What it does:
  *   1. `tools/list` (live) -> single source of truth for the tool inventory.
@@ -74,6 +82,9 @@ const RUN_SCRAPERS = process.env.SMOKE_SCRAPERS === "1";
 const UPDATE_BASELINE = process.env.UPDATE_BASELINE === "1";
 const SLOW_MS = Number(process.env.SMOKE_SLOW_MS) > 0 ? Number(process.env.SMOKE_SLOW_MS) : 15000;
 const CALL_DELAY_MS = Number(process.env.SMOKE_DELAY_MS) >= 0 ? Number(process.env.SMOKE_DELAY_MS) : 300;
+
+// See the MONITOR_QUIET doc comment above.
+const QUIET = process.env.MONITOR_QUIET === "1";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -272,7 +283,12 @@ function printExecutedTable(rows) {
 async function main() {
   requireTestKey(); // fail fast, before any network call, with a clear error
 
-  console.log(`[all-tools-smoke] MCP_URL=${MCP_URL}`);
+  // MCP_URL is gated too — defense-in-depth in case a future URL scheme
+  // embeds a key (e.g. a `/:key/mcp` path form); QUIET must never leak
+  // anything, even something that looks harmless today.
+  if (!QUIET) {
+    console.log(`[all-tools-smoke] MCP_URL=${MCP_URL}`);
+  }
   console.log(
     `[all-tools-smoke] SMOKE_SCRAPERS=${RUN_SCRAPERS ? "1 (Tier-3 WILL execute a real scraper call)" : "0 (Tier-3 skipped by default)"}`
   );
@@ -305,24 +321,26 @@ async function main() {
   const { rows: tier2Rows, currentNames, missingNames, newNames } = runTier2(liveTools, baseline);
   const tier3Rows = await runTier3();
 
-  console.log("");
-  console.log("Tier-1 (executed every run) + Tier-3 (rotating scraper sample):");
-  printExecutedTable([...tier1Rows, ...tier3Rows]);
+  if (!QUIET) {
+    console.log("");
+    console.log("Tier-1 (executed every run) + Tier-3 (rotating scraper sample):");
+    printExecutedTable([...tier1Rows, ...tier3Rows]);
 
-  console.log("");
-  console.log(
-    `Tier-2 (presence-only, ${tier2Rows.filter((r) => r.status === "pass").length}/${liveTools.length} tool(s) present):`
-  );
-  if (newNames.length > 0) {
-    console.log(`  + new since baseline (WARN only, not a failure): ${newNames.join(", ")}`);
+    console.log("");
     console.log(
-      `    baseline out of date — run with UPDATE_BASELINE=1 to refresh ${BASELINE_FILE_REL}`
+      `Tier-2 (presence-only, ${tier2Rows.filter((r) => r.status === "pass").length}/${liveTools.length} tool(s) present):`
     );
-  }
-  if (missingNames.length > 0) {
-    console.log(`  ! MISSING since baseline (regression): ${missingNames.join(", ")}`);
-  } else if (!baselineBootstrapped) {
-    console.log("  no drift — all baseline tools still present");
+    if (newNames.length > 0) {
+      console.log(`  + new since baseline (WARN only, not a failure): ${newNames.join(", ")}`);
+      console.log(
+        `    baseline out of date — run with UPDATE_BASELINE=1 to refresh ${BASELINE_FILE_REL}`
+      );
+    }
+    if (missingNames.length > 0) {
+      console.log(`  ! MISSING since baseline (regression): ${missingNames.join(", ")}`);
+    } else if (!baselineBootstrapped) {
+      console.log("  no drift — all baseline tools still present");
+    }
   }
 
   const tier1Failures = tier1Rows.filter((r) => r.status === "fail-server");
@@ -343,8 +361,10 @@ async function main() {
     regressionCount: regressions.length,
   };
 
-  console.log("");
-  console.log(`SUMMARY: ${JSON.stringify(summary)}`);
+  if (!QUIET) {
+    console.log("");
+    console.log(`SUMMARY: ${JSON.stringify(summary)}`);
+  }
 
   mkdirSync(REPORTS_DIR, { recursive: true });
   const finishedAt = new Date();
@@ -368,7 +388,12 @@ async function main() {
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
   console.log(`[all-tools-smoke] report written: ${reportPath}`);
 
-  if (regressions.length > 0) {
+  if (QUIET) {
+    // The ONLY status line in quiet mode — deliberately non-revealing: a
+    // total row count and an exit code, nothing that names a tool. See the
+    // MONITOR_QUIET doc comment above.
+    console.log(`[all-tools-smoke] complete: ${allRows.length} probed, exit ${exitCode}`);
+  } else if (regressions.length > 0) {
     console.error(
       `[all-tools-smoke] REGRESSION (${regressions.length}): ${regressions
         .map((r) => `${r.name}:${r.status}`)
@@ -381,6 +406,16 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(`[all-tools-smoke] FATAL: ${err?.stack || err}`);
+  // MONITOR_QUIET applies here too (HIGH fix, code review 2026-07-24): an
+  // un-try/caught `listTools()` failure (endpoint down) used to bypass quiet
+  // mode entirely, printing a raw stack trace / HTTP status / upstream error
+  // text straight to this repo's PUBLIC Actions log at exactly the worst
+  // moment (an outage). In quiet mode this now prints ONLY the same
+  // non-revealing completion line normal quiet-mode completion uses.
+  if (QUIET) {
+    console.error(`[all-tools-smoke] complete: 0 probed, exit 1`);
+  } else {
+    console.error(`[all-tools-smoke] FATAL: ${err?.stack || err}`);
+  }
   process.exit(1);
 });

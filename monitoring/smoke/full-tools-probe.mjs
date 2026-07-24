@@ -26,6 +26,15 @@
  *                    classified "SLOW" instead of "PASS". Default 20000.
  *   SMOKE_DELAY_MS   (optional) delay between sequential probe calls, to stay
  *                    friendly to the rate limiter. Default 300.
+ *   MONITOR_QUIET    (optional) "1" to suppress the per-tool table AND the
+ *                    detailed `SUMMARY: {...}` line from stdout, printing only
+ *                    a single non-revealing completion line instead (no tool
+ *                    names, domains, backend names, or severity breakdown).
+ *                    The full detail is UNAFFECTED in the JSON report file —
+ *                    this only changes what a human/CI-log reader sees. This
+ *                    repo's GitHub Actions logs are PUBLIC (world-readable),
+ *                    so the CI workflow sets this to "1"; local/manual runs
+ *                    leave it unset and get the full human-readable output.
  *
  * What it does:
  *   1. `tools/list` (live) -> single source of truth for the tool inventory.
@@ -99,6 +108,12 @@ const REPORTS_DIR = path.join(MONITORING_DIR, "reports");
 
 const SLOW_MS = Number(process.env.SMOKE_SLOW_MS) > 0 ? Number(process.env.SMOKE_SLOW_MS) : 20000;
 const CALL_DELAY_MS = Number(process.env.SMOKE_DELAY_MS) >= 0 ? Number(process.env.SMOKE_DELAY_MS) : 300;
+
+// See the MONITOR_QUIET doc comment above. Read once at module load — this
+// script is always a fresh `node` invocation, never long-running, so a
+// module-level constant is equivalent to reading it inside main() but keeps
+// every quiet-mode check below terse.
+const QUIET = process.env.MONITOR_QUIET === "1";
 
 // Short backoff before the ONE retry on a network-level failure (httpStatus
 // === 0). Lives here, not in lib/mcp-client.mjs, so only this daily probe is
@@ -799,7 +814,12 @@ async function main() {
   preflightAssertAllProbesExecutable(); // fail loudly at t=0 on a bad PROBES entry
   requireTestKey(); // fail fast, before any network call, with a clear error
 
-  console.log(`[full-tools-probe] MCP_URL=${MCP_URL}`);
+  // MCP_URL is gated too — defense-in-depth in case a future URL scheme
+  // embeds a key (e.g. a `/:key/mcp` path form); QUIET must never leak
+  // anything, even something that looks harmless today.
+  if (!QUIET) {
+    console.log(`[full-tools-probe] MCP_URL=${MCP_URL}`);
+  }
   console.log(`[full-tools-probe] probing ${PROBES.length} tool(s) sequentially (delay ${CALL_DELAY_MS}ms)...\n`);
 
   const startedAt = new Date();
@@ -813,16 +833,20 @@ async function main() {
 
   applySeverityEscalations(results);
 
-  console.log("");
-  printTable(results);
+  if (!QUIET) {
+    console.log("");
+    printTable(results);
+  }
 
   const summary = buildSummary(results);
   const oursP0P1 = results.filter(
     (r) => (r.domain === "①-mcp-code" || r.domain === "②-gateway") && (r.severity === "P0" || r.severity === "P1")
   );
 
-  console.log("");
-  console.log(`SUMMARY: ${JSON.stringify(summary)}`);
+  if (!QUIET) {
+    console.log("");
+    console.log(`SUMMARY: ${JSON.stringify(summary)}`);
+  }
 
   mkdirSync(REPORTS_DIR, { recursive: true });
   const finishedAt = new Date();
@@ -859,7 +883,12 @@ async function main() {
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
   console.log(`[full-tools-probe] report written: ${reportPath}`);
 
-  if (exitCode !== 0) {
+  if (QUIET) {
+    // The ONLY status line in quiet mode — deliberately non-revealing: a
+    // probed count and an exit code, nothing that names a tool, domain,
+    // backend, or severity. See the MONITOR_QUIET doc comment above.
+    console.log(`[full-tools-probe] complete: ${results.length} probed, exit ${exitCode}`);
+  } else if (exitCode !== 0) {
     console.error(
       `[full-tools-probe] OURS-DOMAIN REGRESSION (exit 1): missing=${JSON.stringify(summary.missingTools)} ` +
         `oursP0P1=${JSON.stringify(oursP0P1.map((r) => `${r.name}:${r.severity}`))}`
@@ -892,7 +921,20 @@ if (isDirectRun) {
     // per-probe call/poll is already try/caught above), but if `requireTestKey`
     // or `listTools` itself throws (e.g. the endpoint is completely down), still
     // write a minimal report rather than silently vanishing from CI logs.
-    console.error(`[full-tools-probe] FATAL: ${err?.stack || err}`);
+    //
+    // MONITOR_QUIET applies here too (HIGH fix, code review 2026-07-24): an
+    // un-try/caught `listTools()` failure (endpoint down) used to bypass
+    // quiet mode entirely, printing a raw stack trace / HTTP status /
+    // upstream error text straight to this repo's PUBLIC Actions log at
+    // exactly the worst moment (an outage). In quiet mode this now prints
+    // ONLY the same non-revealing completion line normal quiet-mode
+    // completion uses — the full error still lands in the JSON report's
+    // `summary.fatalError` field below, never on stdout/stderr.
+    if (QUIET) {
+      console.error(`[full-tools-probe] complete: 0 probed, exit 1`);
+    } else {
+      console.error(`[full-tools-probe] FATAL: ${err?.stack || err}`);
+    }
     try {
       mkdirSync(REPORTS_DIR, { recursive: true });
       const finishedAt = new Date();

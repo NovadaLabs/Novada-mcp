@@ -48,6 +48,14 @@ jobs:
     name: "Layer B — all-tools smoke (6h)"
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
     runs-on: ubuntu-latest
+    # Job-level env so ALERT_WEBHOOK is readable via the `env` context in a
+    # step's condition below — GitHub Actions FORBIDS the secrets context
+    # inside a step condition (a "workflow file issue" that silently makes
+    # the whole workflow invalid, not just the one step — this is what broke
+    # this workflow from 2026-07-23 until this fix). The env context IS
+    # allowed in a step condition.
+    env:
+      ALERT_WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,36 +70,44 @@ jobs:
       # workflow_dispatch with the "smoke_scrapers" input checked — scheduled
       # runs never set it, so Tier-3 stays free/skipped on the routine 6h
       # cadence. See monitoring/README.md cost rule.
+      # This repo (NovadaLabs/Novada-mcp) is PUBLIC — its Actions logs are
+      # world-readable. MONITOR_QUIET=1 makes all-tools-smoke.mjs suppress
+      # per-tool status lines (which name specific failing tools) from
+      # stdout; the full detail still lands in the gitignored, non-public
+      # monitoring/reports/*.json file. See monitoring/README.md's Privacy
+      # model section.
       - name: Run all-tools smoke
         env:
           NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
           SMOKE_SCRAPERS: ${{ (github.event_name == 'workflow_dispatch' && inputs.smoke_scrapers) && '1' || '' }}
+          MONITOR_QUIET: "1"
         run: node monitoring/smoke/all-tools-smoke.mjs
 
-      # if: always() so a smoke failure (non-zero exit above) still uploads
-      # the JSON report for post-mortem instead of silently discarding it.
-      - name: Upload smoke report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: smoke-report-${{ github.run_id }}
-          path: monitoring/reports/
-          if-no-files-found: warn
+      # No artifact upload — this repo is PUBLIC and artifacts are
+      # world-readable. The report stays local to the runner (gitignored,
+      # never uploaded) and is never published from this job; only Layer D's
+      # full-daily job delivers report data, and only privately (see
+      # monitoring/README.md's Privacy model section).
 
       # Optional alert: only fires if ALERT_WEBHOOK is configured as a repo
       # secret. If it's absent, GitHub's own failed-scheduled-run email/UI
       # notification is the fallback (see monitoring/README.md).
       - name: Alert on failure
-        if: failure() && secrets.ALERT_WEBHOOK != ''
+        if: failure() && env.ALERT_WEBHOOK != ''
         run: |
           curl -sS -X POST -H 'Content-Type: application/json' \
             -d "{\"text\": \"Novada Synthetic Monitor: smoke job FAILED — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-            "${{ secrets.ALERT_WEBHOOK }}"
+            "$ALERT_WEBHOOK"
 
   stress:
     name: "Layer C — k6 stress (daily)"
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 4 * * *'
     runs-on: ubuntu-latest
+    # See the `smoke` job's identical comment: job-level env is required so
+    # ALERT_WEBHOOK is readable via the `env` context in a step condition —
+    # the secrets context is forbidden there.
+    env:
+      ALERT_WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
     steps:
       - uses: actions/checkout@v4
 
@@ -108,25 +124,41 @@ jobs:
         env:
           NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
 
-      - name: Upload stress report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stress-report-${{ github.run_id }}
-          path: monitoring/reports/
-          if-no-files-found: warn
+      # No artifact upload — this repo is PUBLIC and artifacts are
+      # world-readable (see the `smoke` job's identical comment).
 
       - name: Alert on failure
-        if: failure() && secrets.ALERT_WEBHOOK != ''
+        if: failure() && env.ALERT_WEBHOOK != ''
         run: |
           curl -sS -X POST -H 'Content-Type: application/json' \
             -d "{\"text\": \"Novada Synthetic Monitor: stress job FAILED — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-            "${{ secrets.ALERT_WEBHOOK }}"
+            "$ALERT_WEBHOOK"
 
   full-daily:
     name: "Layer D — full-tools probe (daily)"
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 0 * * *'
     runs-on: ubuntu-latest
+    # Prevents a manual workflow_dispatch from racing the daily cron (both
+    # match the job's `if:` above) — without this, two concurrent runs could
+    # each push to the private archive repo and file a Linear
+    # issue/comment for the same day, producing double delivery.
+    # cancel-in-progress: false queues the second run instead of killing the
+    # first mid-probe (a half-finished probe is worse than a queued rerun).
+    concurrency:
+      group: full-daily
+      cancel-in-progress: false
+    # Job-level env: makes ALERT_WEBHOOK/ARCHIVE_TOKEN/LINEAR_API_KEY readable
+    # via the `env` context in step conditions below (the secrets context is
+    # forbidden there — see the `smoke` job's identical comment) AND
+    # available as plain OS env vars to every `run:` step in this job
+    # (job-level env is inherited by all steps unless a step overrides it).
+    # ARCHIVE_TOKEN/LINEAR_API_KEY are deliberately renamed from their secret
+    # names so the private-delivery steps below read a short, stable name.
+    env:
+      ALERT_WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+      ARCHIVE_TOKEN: ${{ secrets.MONITOR_ARCHIVE_TOKEN }}
+      LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      MONITOR_ARCHIVE_REPO: NovadaLabs/novada-mcp-monitoring
     steps:
       - uses: actions/checkout@v4
 
@@ -151,39 +183,91 @@ jobs:
       # backend-only (③) finding, including a full scraper-platform outage,
       # is reported but never fails this step — see the script's own header
       # comment for the full classification rubric.
+      # This repo (NovadaLabs/Novada-mcp) is PUBLIC — its Actions logs are
+      # world-readable. MONITOR_QUIET=1 makes full-tools-probe.mjs suppress
+      # the per-tool table and the detailed SUMMARY line from stdout, leaving
+      # only a single non-revealing completion line (no tool names, domains,
+      # backend names, or severity breakdown). The full detail still lands in
+      # monitoring/reports/full-*.json, which is gitignored here and instead
+      # delivered PRIVATELY below (archive repo + Linear) — see
+      # monitoring/README.md's Privacy model section.
       - name: Run full-tools probe
         env:
           NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
+          MONITOR_QUIET: "1"
         run: node monitoring/smoke/full-tools-probe.mjs
 
       # if: always() so a probe failure (non-zero exit above) still renders
-      # and uploads the report for post-mortem instead of silently discarding
-      # it — same rationale as Layer B/C's "if: always()" report steps.
+      # the report for private delivery instead of silently discarding it —
+      # same rationale as Layer B/C's "if: always()" report steps.
       - name: Render xlsx/csv report
         if: always()
         run: python3 monitoring/report/render-report.py
 
-      - name: Upload full-daily report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-daily-report-${{ github.run_id }}
-          path: monitoring/reports/
-          if-no-files-found: warn
+      # No artifact upload — this repo is PUBLIC and artifacts are
+      # world-readable. The report data instead goes to the PRIVATE archive
+      # repo (next step) and PRIVATE Linear (step after) — never to this
+      # public repo's Actions UI. See monitoring/README.md's Privacy model
+      # section.
 
-      # Phase 2 (TODO, not implemented yet): file a Linear issue automatically
-      # on any P2+ finding, and post a green "all tools healthy" heartbeat
-      # otherwise. Deliberately left as an unimplemented placeholder — Phase 1
-      # (this job) only probes + reports; Linear wiring is a separate,
-      # explicitly-scoped follow-up.
-      - name: "Phase 2 (TODO): Linear issue on P2+ / green heartbeat"
-        if: false
+      # Private archive push: only runs if MONITOR_ARCHIVE_TOKEN is
+      # configured (guarded via the `env` context, not `secrets.*`, per the
+      # `if:` restriction noted above). Clones the PRIVATE archive repo
+      # (NovadaLabs/novada-mcp-monitoring), copies today's report files into
+      # reports/<YYYY>/<MM>/, and pushes. Never fails the job — a missing
+      # archive repo or a push failure is logged and swallowed
+      # (`|| echo "archive skipped"`), and the token is never echoed anywhere.
+      - name: Push report to private archive
+        if: always() && env.ARCHIVE_TOKEN != ''
         run: |
-          echo "Not implemented in Phase 1. See monitoring/README.md's Layer D section."
+          set +e
+          WORKDIR="$(mktemp -d)"
+          YEAR="$(date -u +%Y)"
+          MONTH="$(date -u +%m)"
+
+          git clone --depth 1 "https://x-access-token:${ARCHIVE_TOKEN}@github.com/${MONITOR_ARCHIVE_REPO}.git" "$WORKDIR" >/dev/null 2>&1
+          if [ $? -ne 0 ]; then
+            echo "archive skipped: could not clone ${MONITOR_ARCHIVE_REPO} (repo may not exist yet, or token lacks access)"
+            exit 0
+          fi
+
+          DEST_DIR="$WORKDIR/reports/${YEAR}/${MONTH}"
+          mkdir -p "$DEST_DIR"
+          cp monitoring/reports/full-*.json "$DEST_DIR/" 2>/dev/null || true
+          cp monitoring/reports/full-*.xlsx "$DEST_DIR/" 2>/dev/null || true
+          cp monitoring/reports/full-*.csv "$DEST_DIR/" 2>/dev/null || true
+
+          cd "$WORKDIR" || { echo "archive skipped: workdir missing"; exit 0; }
+          git -c user.name="novada-mcp-monitor" -c user.email="monitor@novada-mcp.internal" add -A
+          if git -c user.name="novada-mcp-monitor" -c user.email="monitor@novada-mcp.internal" commit -m "chore: full-daily report $(date -u +%Y-%m-%d)" >/dev/null 2>&1; then
+            git push origin HEAD:main >/dev/null 2>&1 || echo "archive skipped: push failed"
+          else
+            echo "archive: nothing new to commit"
+          fi
+          exit 0
+
+      # Private Linear delivery: only runs if LINEAR_API_KEY is configured
+      # (same `env`-context guard pattern). Reads the just-rendered report and
+      # posts to Linear ONLY (team TongWu / project "Novada MCP — Daily
+      # Monitoring Loop" / label Wutong) — a new alert issue on any P0/P1/P2
+      # finding, or a dated heartbeat comment on green days. Never fails the
+      # job — see linear-sync.mjs's own fail-soft contract.
+      #
+      # LINEAR_SYNC_LIVE=1 arms the script's mutations (issueCreate/
+      # commentCreate) — linear-sync.mjs defaults to a DRY-RUN preview
+      # otherwise (see its own doc comment on why: an earlier version fired
+      # live on any run with a key present, which is what created TOW2-336
+      # during local testing). Only CI, which is meant to actually deliver
+      # the daily report, sets this.
+      - name: Sync report to Linear
+        if: always() && env.LINEAR_API_KEY != ''
+        env:
+          LINEAR_SYNC_LIVE: "1"
+        run: node monitoring/report/linear-sync.mjs
 
       - name: Alert on failure
-        if: failure() && secrets.ALERT_WEBHOOK != ''
+        if: failure() && env.ALERT_WEBHOOK != ''
         run: |
           curl -sS -X POST -H 'Content-Type: application/json' \
             -d "{\"text\": \"Novada Synthetic Monitor: full-daily job FAILED (ours-domain P0/P1 or missing tool) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-            "${{ secrets.ALERT_WEBHOOK }}"
+            "$ALERT_WEBHOOK"
