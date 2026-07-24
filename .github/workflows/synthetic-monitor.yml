@@ -1,14 +1,15 @@
 name: Synthetic Monitor
 
-# 3-layer synthetic monitor for mcp.novada.com (see monitoring/README.md for
+# 4-layer synthetic monitor for mcp.novada.com (see monitoring/README.md for
 # the full picture — Layer A/UptimeRobot is owner-provisioned outside this
-# repo; this workflow only drives Layer B (smoke) and Layer C (stress)).
+# repo; this workflow drives Layer B (smoke), Layer C (stress), and Layer D
+# (full-tools probe)).
 #
 # THIS IS NOT A PR GATE. It never runs on push/pull_request — scheduled +
 # manual only, on purpose, so routine commits never burn NOVADA_TEST_KEY
 # budget or k6 minutes. Do not add a `push:`/`pull_request:` trigger here.
 #
-# Two independent cron schedules fan out to two independent jobs. GitHub
+# Three independent cron schedules fan out to three independent jobs. GitHub
 # Actions cron is ALWAYS UTC, regardless of repo/org timezone settings.
 on:
   workflow_dispatch:
@@ -26,6 +27,13 @@ on:
     # Layer C (stress): once daily at 04:23 UTC — off-peak (low traffic on
     # mcp.novada.com) and off-round-minute for the same pile-up reason.
     - cron: "23 4 * * *"
+    # Layer D (full-tools probe): once daily at 00:17 UTC (~02:00 Berlin time
+    # in winter / CET; ~01:00 in CEST DST — this cron is DST-naive, GitHub
+    # Actions schedules don't shift with the clock, so the local wall-clock
+    # time drifts by ±1h across the DST boundary. Off-round :17 minute for the
+    # same anti-pile-up reason as Layer B, on a distinct minute from both
+    # other layers so all three never contend for the runner queue at once).
+    - cron: "17 0 * * *"
 
 permissions:
   contents: read
@@ -113,4 +121,69 @@ jobs:
         run: |
           curl -sS -X POST -H 'Content-Type: application/json' \
             -d "{\"text\": \"Novada Synthetic Monitor: stress job FAILED — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "${{ secrets.ALERT_WEBHOOK }}"
+
+  full-daily:
+    name: "Layer D — full-tools probe (daily)"
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 0 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # render-report.py is the only step in this job that needs a dependency —
+      # full-tools-probe.mjs itself stays Node-stdlib-only, same as Layer B.
+      - name: Install openpyxl
+        run: pip install openpyxl
+
+      # One real, representative, safe (or dry-run) call per hosted tool —
+      # including every billable per-platform scraper. Exits non-zero ONLY on
+      # an OURS-domain (①/②) P0/P1 finding or a missing probe tool; a
+      # backend-only (③) finding, including a full scraper-platform outage,
+      # is reported but never fails this step — see the script's own header
+      # comment for the full classification rubric.
+      - name: Run full-tools probe
+        env:
+          NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
+        run: node monitoring/smoke/full-tools-probe.mjs
+
+      # if: always() so a probe failure (non-zero exit above) still renders
+      # and uploads the report for post-mortem instead of silently discarding
+      # it — same rationale as Layer B/C's "if: always()" report steps.
+      - name: Render xlsx/csv report
+        if: always()
+        run: python3 monitoring/report/render-report.py
+
+      - name: Upload full-daily report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-daily-report-${{ github.run_id }}
+          path: monitoring/reports/
+          if-no-files-found: warn
+
+      # Phase 2 (TODO, not implemented yet): file a Linear issue automatically
+      # on any P2+ finding, and post a green "all tools healthy" heartbeat
+      # otherwise. Deliberately left as an unimplemented placeholder — Phase 1
+      # (this job) only probes + reports; Linear wiring is a separate,
+      # explicitly-scoped follow-up.
+      - name: "Phase 2 (TODO): Linear issue on P2+ / green heartbeat"
+        if: false
+        run: |
+          echo "Not implemented in Phase 1. See monitoring/README.md's Layer D section."
+
+      - name: Alert on failure
+        if: failure() && secrets.ALERT_WEBHOOK != ''
+        run: |
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\": \"Novada Synthetic Monitor: full-daily job FAILED (ours-domain P0/P1 or missing tool) — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
             "${{ secrets.ALERT_WEBHOOK }}"
