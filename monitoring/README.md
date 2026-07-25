@@ -153,10 +153,11 @@ Every run writes:
   UTF-8-BOM CSV (opens with correct Chinese headers in Excel).
 
 **Phase 2 (implemented):** the `full-daily` job also delivers this report
-privately — a private archive-repo push, then `monitoring/report/linear-sync.mjs`
-files a Linear alert issue on any P0/P1/P2 finding, or posts a green
-heartbeat comment otherwise. See the "Privacy model" section above for the
-full picture and why nothing here ever reaches the public repo's Actions UI.
+privately — `monitoring/report/linear-sync.mjs` files a Linear alert issue
+on any P0/P1/P2 finding (or posts a green heartbeat comment otherwise) AND
+attaches the rendered `.xlsx` directly to that issue/comment as a genuine
+Linear file upload. See the "Privacy model" section above for the full
+picture and why nothing here ever reaches the public repo's Actions UI.
 
 ## Privacy model
 
@@ -178,39 +179,37 @@ error text — must **never** be public. Three things enforce that:
    file; only what a human reading the public Actions log sees is reduced.
    Local/manual runs leave `MONITOR_QUIET` unset and get the full
    human-readable table, exactly as before.
-3. **Private delivery, both channels.** Only the `full-daily` job (Layer D)
-   delivers report data anywhere, and only to two private destinations:
-   - A **private archive repo**, `NovadaLabs/novada-mcp-monitoring`, holds
-     the actual downloadable report files (`full-*.json`/`.xlsx`/`.csv`),
-     pushed by the "Push report to private archive" step into
-     `reports/<YYYY>/<MM>/`. This repo is where the real, detailed report
-     data lives — it is never the public `Novada-mcp` repo.
-   - A **private Linear workspace** (team `TongWu`, project `Novada MCP —
-     Daily Monitoring Loop`, label `Wutong`) gets an inline alert issue on
-     any P0/P1/P2 finding, or a dated heartbeat comment on green days — see
-     `monitoring/report/linear-sync.mjs`. The issue/comment body is a
-     compact summary plus a **link** to the file in the private archive
-     repo above, deliberately avoiding Linear's file-upload flow.
+3. **Private delivery — Linear only.** Only the `full-daily` job (Layer D)
+   delivers report data anywhere, and it goes to exactly one destination: a
+   **private Linear workspace** (team `TongWu`, project `Novada MCP — Daily
+   Monitoring Loop`, label `Wutong`). `monitoring/report/linear-sync.mjs`
+   files an inline alert issue on any P0/P1/P2 finding, or a dated heartbeat
+   comment on green days, and in both cases uploads the rendered `.xlsx`
+   directly as a Linear file attachment (via Linear's GraphQL
+   `fileUpload` mutation + a signed PUT), linking it from the issue/comment
+   body. There is no public artifact and no separate archive repo — Linear
+   is the only place the full report ever lands.
 
-   Neither delivery step ever fails the job on error (missing secret,
-   network failure, archive repo not provisioned yet, GraphQL error) — both
-   are fail-soft by design, since a delivery failure must never be confused
-   with a real monitor-run failure.
+   This delivery step never fails the job on error (missing secret, network
+   failure, GraphQL error, or an attachment-upload failure specifically) —
+   it is fail-soft by design, since a delivery failure must never be
+   confused with a real monitor-run failure. Even if the attachment upload
+   itself fails, the issue/comment is still created with the inline summary
+   plus a note that the attachment upload failed.
 
-Layers B and C (`smoke`, `stress`) intentionally get **neither** private
-delivery channel — only Layer D's daily full-tools probe is deep/important
-enough to warrant it. Their reports simply stay on the ephemeral runner
-(quieted, un-uploaded) and vanish when the job ends; a Layer B/C failure
-still surfaces via the `Alert on failure` step (if `ALERT_WEBHOOK` is
-configured) or GitHub's own failed-scheduled-run notification.
+Layers B and C (`smoke`, `stress`) intentionally get **no** private delivery
+channel — only Layer D's daily full-tools probe is deep/important enough to
+warrant it. Their reports simply stay on the ephemeral runner (quieted,
+un-uploaded) and vanish when the job ends; a Layer B/C failure still
+surfaces via the `Alert on failure` step (if `ALERT_WEBHOOK` is configured)
+or GitHub's own failed-scheduled-run notification.
 
 ## Required GitHub Secrets
 
 | Secret | Required | Notes |
 |--------|----------|-------|
 | `NOVADA_TEST_KEY` | Yes | A **dedicated, low-value test key with a budget cap** — never a production key. Used by Layer B, Layer C, and Layer D. |
-| `MONITOR_ARCHIVE_TOKEN` | No (recommended) | A GitHub PAT with push access to the **private** `NovadaLabs/novada-mcp-monitoring` archive repo. If unset, the "Push report to private archive" step is skipped entirely (guarded via the `env` context, never `secrets.*`, inside `if:` — see the workflow file's own comments on why). |
-| `LINEAR_API_KEY` | No (recommended) | A Linear personal API key used by `monitoring/report/linear-sync.mjs` to file the daily alert issue / heartbeat comment. If unset, the "Sync report to Linear" step is skipped entirely. Never printed by the script, even on error. |
+| `LINEAR_API_KEY` | No (recommended) | A Linear personal API key used by `monitoring/report/linear-sync.mjs` to file the daily alert issue / heartbeat comment AND upload the rendered `.xlsx` as a Linear file attachment. If unset, the "Sync report to Linear" step is skipped entirely. Never printed by the script, even on error. |
 | `ALERT_WEBHOOK` | No | Slack/Telegram-compatible incoming webhook URL. If set, a failed job POSTs a one-line status message to it. If unset, the alert step is skipped and **GitHub's own failed-scheduled-run notification** (email to repo watchers / Actions tab) is the fallback — no silent failures either way. |
 
 ## Cost rule

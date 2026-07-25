@@ -3,10 +3,11 @@
  * monitoring/report/linear-sync.selftest.mjs
  *
  * Dependency-free, OFFLINE self-test for linear-sync.mjs's delivery
- * pipeline. Makes ZERO network calls and needs NO LINEAR_API_KEY — it
- * injects a stub GraphQL transport (`requestFn`) into linear-sync.mjs's
+ * pipeline. Makes ZERO network calls, touches NO real filesystem paths, and
+ * needs NO LINEAR_API_KEY — it injects a stub GraphQL transport
+ * (`requestFn`) AND a stub file uploader (`uploadFn`) into linear-sync.mjs's
  * exported `runSync`/`createIssue`/`createComment`/`findTrackerIssue` and
- * asserts on mutation call counts, not on live Linear state.
+ * asserts on mutation/upload call counts, not on live Linear state.
  *
  * This is the RATCHETING regression test for the TOW2-336 incident
  * (2026-07-24): an earlier version of linear-sync.mjs fired a live
@@ -16,6 +17,12 @@
  * Linear issue. Assertion (1) below — dry-run fires ZERO mutations — is
  * exactly the check that would have caught it before it ever ran live.
  *
+ * Every LIVE-mode test case below passes an explicit `uploadFn` stub (never
+ * relies on the module's default `uploadFileToLinear`) so this self-test
+ * NEVER reads a real file off disk or opens a real network connection, even
+ * by accident — see the "Do NOT run linear-sync.mjs against a live key"
+ * constraint this file exists to uphold.
+ *
  * Run this after ANY change to linear-sync.mjs:
  *   node monitoring/report/linear-sync.selftest.mjs
  *
@@ -24,20 +31,31 @@
  *      commentCreate mutation queries are NEVER sent over the transport
  *      (zero GraphQL calls whose query text contains "IssueCreateInput" or
  *      "CommentCreateInput") — createIssue/createComment must return a
- *      local stub instead of calling `requestFn`.
+ *      local stub instead of calling `requestFn`. ALSO: zero upload calls
+ *      (dry-run never uploads the report attachment either).
  *   2. LIVE (live: true), alert-worthy report -> exactly ONE issueCreate
- *      mutation call, ZERO commentCreate calls.
+ *      mutation call, ZERO commentCreate calls, exactly ONE upload call, and
+ *      the created issue's body contains the stub's returned assetUrl link.
  *   3. LIVE, green (all-PASS) report, tracker ALREADY EXISTS -> the
- *      find-or-create step finds it (no issueCreate for the tracker) and
- *      exactly ONE commentCreate call follows.
+ *      find-or-create step finds it (no issueCreate for the tracker),
+ *      exactly ONE commentCreate call follows, exactly ONE upload call, and
+ *      the comment body contains the stub's returned assetUrl link.
  *   3b. LIVE, green report, tracker does NOT exist yet -> exactly ONE
  *       issueCreate (creates the tracker) followed by exactly ONE
- *       commentCreate.
+ *       commentCreate, and exactly ONE upload call overall (the tracker's
+ *       own creation body has no attachment link — only the heartbeat
+ *       comment does, same as the pre-attachment archive-link behavior).
  *   4. LIVE, green report, the tracker SEARCH itself fails (simulated
  *      GraphQL error) -> runSync returns "skipped-search-error" and NEITHER
- *      issueCreate NOR commentCreate is ever called — a search error must
- *      never be treated as "tracker not found" (that was the duplicate-
- *      heartbeat-issue bug; see findTrackerIssue's doc comment).
+ *      issueCreate NOR commentCreate NOR the uploader is ever called — a
+ *      search error must never be treated as "tracker not found" (that was
+ *      the duplicate-heartbeat-issue bug; see findTrackerIssue's doc
+ *      comment), and must never even attempt the attachment upload.
+ *   5. LIVE, alert-worthy report, the uploader ITSELF throws (simulated
+ *      upload failure) -> delivery is still fail-soft: exactly ONE
+ *      issueCreate still fires (never crashes, never blocks delivery), and
+ *      the issue body contains the "(report attachment upload failed —
+ *      see CI logs)" fallback note instead of a broken/missing link.
  *
  * Exit code: non-zero on ANY assertion mismatch, or if the pipeline itself
  * throws uncaught.
@@ -52,6 +70,26 @@ import {
 } from "./linear-sync.mjs";
 
 const FAKE_API_KEY = "fake-key-for-selftest-only";
+const FAKE_ASSET_URL = "https://uploads.linear.app/fake-asset/full-report.xlsx";
+
+/**
+ * Build a stub uploader (matches runSync's injectable `uploadFn` signature:
+ * `(filePath) => Promise<assetUrl>`). Never touches disk or network — logs
+ * every call so assertions can count them precisely.
+ *
+ * @param {{throwError?: boolean, assetUrl?: string}} [opts]
+ */
+function makeUploadStub(opts = {}) {
+  const uploadLog = [];
+  async function uploadFn(filePath) {
+    uploadLog.push({ filePath });
+    if (opts.throwError) {
+      throw new Error("simulated upload failure (network or fileUpload mutation)");
+    }
+    return opts.assetUrl || FAKE_ASSET_URL;
+  }
+  return { uploadFn, uploadLog };
+}
 
 /**
  * Build a stub GraphQL transport (matches linear-sync.mjs's `requestFn`
@@ -143,14 +181,20 @@ function expect(condition, message) {
   }
 }
 
+/** Find the variables of the (first) GraphQL call whose query text contains `needle`. */
+function findCallVariables(callLog, needle) {
+  return callLog.find((c) => c.query.includes(needle))?.variables;
+}
+
 async function main() {
   const filename = "full-2026-07-24T09-52-52-244Z.json";
 
-  // ── Assertion 1: DRY-RUN, alert-worthy report -> ZERO mutation calls ──────
-  console.log("[selftest] (1) dry-run (live:false), alert-worthy report -> zero mutations...");
+  // ── Assertion 1: DRY-RUN, alert-worthy report -> ZERO mutation calls, ZERO uploads ──
+  console.log("[selftest] (1) dry-run (live:false), alert-worthy report -> zero mutations, zero uploads...");
   {
     const { requestFn, callLog } = makeStub({});
-    const result = await runSync(FAKE_API_KEY, makeAlertReport(), filename, { requestFn, live: false });
+    const { uploadFn, uploadLog } = makeUploadStub();
+    const result = await runSync(FAKE_API_KEY, makeAlertReport(), filename, { requestFn, live: false, uploadFn });
     expect(result.action === "issue-created", `runSync returns action "issue-created" even in dry-run (got "${result.action}")`);
     expect(
       countMatching(callLog, "IssueCreateInput") === 0,
@@ -161,45 +205,61 @@ async function main() {
       `ZERO commentCreate GraphQL calls were sent (got ${countMatching(callLog, "CommentCreateInput")})`
     );
     expect(result.issue?.identifier === "DRY-RUN", `dry-run createIssue returns a local stub identifier (got "${result.issue?.identifier}")`);
+    expect(uploadLog.length === 0, `ZERO report-attachment upload calls in dry-run (got ${uploadLog.length})`);
   }
 
-  // ── Assertion 2: LIVE, alert-worthy report -> exactly ONE issueCreate ─────
-  console.log("\n[selftest] (2) live (live:true), alert-worthy report -> exactly one issueCreate...");
+  // ── Assertion 2: LIVE, alert-worthy report -> exactly ONE issueCreate + ONE upload, body has the link ──
+  console.log("\n[selftest] (2) live (live:true), alert-worthy report -> exactly one issueCreate + one upload, body has the assetUrl link...");
   {
     const { requestFn, callLog } = makeStub({});
-    const result = await runSync(FAKE_API_KEY, makeAlertReport(), filename, { requestFn, live: true });
+    const { uploadFn, uploadLog } = makeUploadStub();
+    const result = await runSync(FAKE_API_KEY, makeAlertReport(), filename, { requestFn, live: true, uploadFn });
     expect(result.action === "issue-created", `runSync returns action "issue-created" (got "${result.action}")`);
     expect(countMatching(callLog, "IssueCreateInput") === 1, `exactly one issueCreate call (got ${countMatching(callLog, "IssueCreateInput")})`);
     expect(countMatching(callLog, "CommentCreateInput") === 0, `zero commentCreate calls on the alert path (got ${countMatching(callLog, "CommentCreateInput")})`);
     expect(result.issue?.identifier === "TOW2-1000", `created issue identifier is the stub's real return value (got "${result.issue?.identifier}")`);
+    expect(uploadLog.length === 1, `exactly one report-attachment upload call (got ${uploadLog.length})`);
+    expect(
+      uploadLog[0]?.filePath?.endsWith("full-2026-07-24T09-52-52-244Z.xlsx"),
+      `upload was called with the sibling .xlsx path derived from the report's own filename (got "${uploadLog[0]?.filePath}")`
+    );
+    const issueBody = findCallVariables(callLog, "IssueCreateInput")?.input?.description || "";
+    expect(issueBody.includes(FAKE_ASSET_URL), `issue body contains the uploaded assetUrl link (body: ${JSON.stringify(issueBody.slice(-120))})`);
   }
 
-  // ── Assertion 3: LIVE, green report, tracker EXISTS -> find (no create) + one commentCreate ──
-  console.log("\n[selftest] (3) live, green report, tracker already exists -> find + exactly one commentCreate...");
+  // ── Assertion 3: LIVE, green report, tracker EXISTS -> find (no create) + one commentCreate + one upload, comment has the link ──
+  console.log("\n[selftest] (3) live, green report, tracker already exists -> find + exactly one commentCreate + one upload, comment has the assetUrl link...");
   {
     const { requestFn, callLog } = makeStub({ trackerExists: true });
-    const result = await runSync(FAKE_API_KEY, makeGreenReport(), filename, { requestFn, live: true });
+    const { uploadFn, uploadLog } = makeUploadStub();
+    const result = await runSync(FAKE_API_KEY, makeGreenReport(), filename, { requestFn, live: true, uploadFn });
     expect(result.action === "heartbeat", `runSync returns action "heartbeat" (got "${result.action}")`);
     expect(countMatching(callLog, "IssueCreateInput") === 0, `tracker already existed -> zero issueCreate calls (got ${countMatching(callLog, "IssueCreateInput")})`);
     expect(countMatching(callLog, "CommentCreateInput") === 1, `exactly one commentCreate call (got ${countMatching(callLog, "CommentCreateInput")})`);
     expect(result.tracker?.identifier === "TOW2-999", `used the EXISTING tracker, not a new one (got "${result.tracker?.identifier}")`);
+    expect(uploadLog.length === 1, `exactly one report-attachment upload call (got ${uploadLog.length})`);
+    const commentBody = findCallVariables(callLog, "CommentCreateInput")?.input?.body || "";
+    expect(commentBody.includes(FAKE_ASSET_URL), `heartbeat comment body contains the uploaded assetUrl link (body: ${JSON.stringify(commentBody)})`);
   }
 
-  // ── Assertion 3b: LIVE, green report, tracker MISSING -> create + one commentCreate ──
-  console.log("\n[selftest] (3b) live, green report, tracker missing -> creates it + exactly one commentCreate...");
+  // ── Assertion 3b: LIVE, green report, tracker MISSING -> create + one commentCreate + one upload overall ──
+  console.log("\n[selftest] (3b) live, green report, tracker missing -> creates it + exactly one commentCreate + exactly one upload...");
   {
     const { requestFn, callLog } = makeStub({ trackerExists: false });
-    const result = await runSync(FAKE_API_KEY, makeGreenReport(), filename, { requestFn, live: true });
+    const { uploadFn, uploadLog } = makeUploadStub();
+    const result = await runSync(FAKE_API_KEY, makeGreenReport(), filename, { requestFn, live: true, uploadFn });
     expect(result.action === "heartbeat", `runSync returns action "heartbeat" (got "${result.action}")`);
     expect(countMatching(callLog, "IssueCreateInput") === 1, `tracker missing -> exactly one issueCreate call to create it (got ${countMatching(callLog, "IssueCreateInput")})`);
     expect(countMatching(callLog, "CommentCreateInput") === 1, `exactly one commentCreate call after creating the tracker (got ${countMatching(callLog, "CommentCreateInput")})`);
+    expect(uploadLog.length === 1, `exactly one report-attachment upload call overall — the tracker-creation body itself carries no attachment link, only the comment does (got ${uploadLog.length})`);
   }
 
-  // ── Assertion 4: LIVE, green report, tracker SEARCH errors -> no create at all ──
-  console.log("\n[selftest] (4) live, green report, tracker search fails -> zero mutations, delivery skipped...");
+  // ── Assertion 4: LIVE, green report, tracker SEARCH errors -> no create, no comment, no upload at all ──
+  console.log("\n[selftest] (4) live, green report, tracker search fails -> zero mutations, zero uploads, delivery skipped...");
   {
     const { requestFn, callLog } = makeStub({ trackerSearchError: true });
-    const result = await runSync(FAKE_API_KEY, makeGreenReport(), filename, { requestFn, live: true });
+    const { uploadFn, uploadLog } = makeUploadStub();
+    const result = await runSync(FAKE_API_KEY, makeGreenReport(), filename, { requestFn, live: true, uploadFn });
     expect(
       result.action === "skipped-search-error",
       `runSync returns action "skipped-search-error" (got "${result.action}") — a search ERROR must never be treated as "not found"`
@@ -209,6 +269,24 @@ async function main() {
       `a tracker-search failure creates ZERO issues (got ${countMatching(callLog, "IssueCreateInput")}) — this is the exact duplicate-heartbeat regression check`
     );
     expect(countMatching(callLog, "CommentCreateInput") === 0, `a tracker-search failure posts ZERO comments (got ${countMatching(callLog, "CommentCreateInput")})`);
+    expect(uploadLog.length === 0, `a tracker-search failure never even attempts the report-attachment upload (got ${uploadLog.length})`);
+  }
+
+  // ── Assertion 5: LIVE, alert-worthy report, the UPLOADER ITSELF throws -> fail-soft, still one issueCreate, body has the fallback note ──
+  console.log("\n[selftest] (5) live, alert-worthy report, upload throws -> fail-soft: still exactly one issueCreate, body has the upload-failed note, no crash...");
+  {
+    const { requestFn, callLog } = makeStub({});
+    const { uploadFn, uploadLog } = makeUploadStub({ throwError: true });
+    const result = await runSync(FAKE_API_KEY, makeAlertReport(), filename, { requestFn, live: true, uploadFn });
+    expect(result.action === "issue-created", `runSync still returns action "issue-created" despite the upload failure — fail-soft (got "${result.action}")`);
+    expect(countMatching(callLog, "IssueCreateInput") === 1, `exactly one issueCreate call still fires (got ${countMatching(callLog, "IssueCreateInput")})`);
+    expect(uploadLog.length === 1, `the upload was attempted exactly once (got ${uploadLog.length})`);
+    const issueBody = findCallVariables(callLog, "IssueCreateInput")?.input?.description || "";
+    expect(
+      issueBody.includes("report attachment upload failed"),
+      `issue body carries the "(report attachment upload failed — see CI logs)" fallback note instead of a broken link (body: ${JSON.stringify(issueBody.slice(-120))})`
+    );
+    expect(!issueBody.includes(FAKE_ASSET_URL), `issue body does NOT contain a (nonexistent) assetUrl link when the upload failed`);
   }
 
   console.log("");
@@ -217,7 +295,7 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  console.log("[selftest] OK — all dry-run/live/search-error delivery assertions passed, 0 crashes.");
+  console.log("[selftest] OK — all dry-run/live/search-error/upload-failure delivery assertions passed, 0 crashes.");
   process.exitCode = 0;
 }
 

@@ -114,13 +114,15 @@ jobs:
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
-      # Export a JSON summary into the shared reports dir so it can be
-      # uploaded as an artifact below, same convention as the smoke report.
+      # k6 sandboxes env vars — it does NOT inherit the step `env:` into its
+      # `__ENV`; the key must be passed explicitly via `-e` or k6 throws
+      # "NOVADA_TEST_KEY environment variable is required" (the 2026-07-25
+      # first-run failure). The secret value is masked in Actions logs.
       - name: Run k6 stress test
         uses: grafana/run-k6-action@v1
         with:
           path: monitoring/stress/k6-stress.js
-          flags: --summary-export=monitoring/reports/stress-summary-${{ github.run_id }}.json
+          flags: -e NOVADA_TEST_KEY=${{ secrets.NOVADA_TEST_KEY }} --summary-export=monitoring/reports/stress-summary-${{ github.run_id }}.json
         env:
           NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
 
@@ -140,25 +142,23 @@ jobs:
     runs-on: ubuntu-latest
     # Prevents a manual workflow_dispatch from racing the daily cron (both
     # match the job's `if:` above) — without this, two concurrent runs could
-    # each push to the private archive repo and file a Linear
-    # issue/comment for the same day, producing double delivery.
+    # each file a Linear issue/comment for the same day, producing double
+    # delivery.
     # cancel-in-progress: false queues the second run instead of killing the
     # first mid-probe (a half-finished probe is worse than a queued rerun).
     concurrency:
       group: full-daily
       cancel-in-progress: false
-    # Job-level env: makes ALERT_WEBHOOK/ARCHIVE_TOKEN/LINEAR_API_KEY readable
-    # via the `env` context in step conditions below (the secrets context is
+    # Job-level env: makes ALERT_WEBHOOK/LINEAR_API_KEY readable via the
+    # `env` context in step conditions below (the secrets context is
     # forbidden there — see the `smoke` job's identical comment) AND
     # available as plain OS env vars to every `run:` step in this job
     # (job-level env is inherited by all steps unless a step overrides it).
-    # ARCHIVE_TOKEN/LINEAR_API_KEY are deliberately renamed from their secret
-    # names so the private-delivery steps below read a short, stable name.
+    # LINEAR_API_KEY is deliberately renamed from its secret name so the
+    # private-delivery step below reads a short, stable name.
     env:
       ALERT_WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
-      ARCHIVE_TOKEN: ${{ secrets.MONITOR_ARCHIVE_TOKEN }}
       LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      MONITOR_ARCHIVE_REPO: NovadaLabs/novada-mcp-monitoring
     steps:
       - uses: actions/checkout@v4
 
@@ -189,8 +189,8 @@ jobs:
       # only a single non-revealing completion line (no tool names, domains,
       # backend names, or severity breakdown). The full detail still lands in
       # monitoring/reports/full-*.json, which is gitignored here and instead
-      # delivered PRIVATELY below (archive repo + Linear) — see
-      # monitoring/README.md's Privacy model section.
+      # delivered PRIVATELY below (Linear only — see monitoring/README.md's
+      # Privacy model section).
       - name: Run full-tools probe
         env:
           NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
@@ -199,66 +199,35 @@ jobs:
 
       # if: always() so a probe failure (non-zero exit above) still renders
       # the report for private delivery instead of silently discarding it —
-      # same rationale as Layer B/C's "if: always()" report steps.
+      # same rationale as Layer B/C's "if: always()" report steps. This step
+      # MUST run before "Sync report to Linear" below — linear-sync.mjs
+      # uploads the `.xlsx` this step produces as a Linear file attachment.
       - name: Render xlsx/csv report
         if: always()
         run: python3 monitoring/report/render-report.py
 
       # No artifact upload — this repo is PUBLIC and artifacts are
-      # world-readable. The report data instead goes to the PRIVATE archive
-      # repo (next step) and PRIVATE Linear (step after) — never to this
-      # public repo's Actions UI. See monitoring/README.md's Privacy model
-      # section.
-
-      # Private archive push: only runs if MONITOR_ARCHIVE_TOKEN is
-      # configured (guarded via the `env` context, not `secrets.*`, per the
-      # `if:` restriction noted above). Clones the PRIVATE archive repo
-      # (NovadaLabs/novada-mcp-monitoring), copies today's report files into
-      # reports/<YYYY>/<MM>/, and pushes. Never fails the job — a missing
-      # archive repo or a push failure is logged and swallowed
-      # (`|| echo "archive skipped"`), and the token is never echoed anywhere.
-      - name: Push report to private archive
-        if: always() && env.ARCHIVE_TOKEN != ''
-        run: |
-          set +e
-          WORKDIR="$(mktemp -d)"
-          YEAR="$(date -u +%Y)"
-          MONTH="$(date -u +%m)"
-
-          git clone --depth 1 "https://x-access-token:${ARCHIVE_TOKEN}@github.com/${MONITOR_ARCHIVE_REPO}.git" "$WORKDIR" >/dev/null 2>&1
-          if [ $? -ne 0 ]; then
-            echo "archive skipped: could not clone ${MONITOR_ARCHIVE_REPO} (repo may not exist yet, or token lacks access)"
-            exit 0
-          fi
-
-          DEST_DIR="$WORKDIR/reports/${YEAR}/${MONTH}"
-          mkdir -p "$DEST_DIR"
-          cp monitoring/reports/full-*.json "$DEST_DIR/" 2>/dev/null || true
-          cp monitoring/reports/full-*.xlsx "$DEST_DIR/" 2>/dev/null || true
-          cp monitoring/reports/full-*.csv "$DEST_DIR/" 2>/dev/null || true
-
-          cd "$WORKDIR" || { echo "archive skipped: workdir missing"; exit 0; }
-          git -c user.name="novada-mcp-monitor" -c user.email="monitor@novada-mcp.internal" add -A
-          if git -c user.name="novada-mcp-monitor" -c user.email="monitor@novada-mcp.internal" commit -m "chore: full-daily report $(date -u +%Y-%m-%d)" >/dev/null 2>&1; then
-            git push origin HEAD:main >/dev/null 2>&1 || echo "archive skipped: push failed"
-          else
-            echo "archive: nothing new to commit"
-          fi
-          exit 0
+      # world-readable. The report data instead goes ONLY to PRIVATE Linear
+      # (next step, both as an inline summary and as a genuine file
+      # attachment) — never to this public repo's Actions UI. See
+      # monitoring/README.md's Privacy model section.
 
       # Private Linear delivery: only runs if LINEAR_API_KEY is configured
-      # (same `env`-context guard pattern). Reads the just-rendered report and
-      # posts to Linear ONLY (team TongWu / project "Novada MCP — Daily
-      # Monitoring Loop" / label Wutong) — a new alert issue on any P0/P1/P2
-      # finding, or a dated heartbeat comment on green days. Never fails the
-      # job — see linear-sync.mjs's own fail-soft contract.
+      # (guarded via the `env` context, not `secrets.*`, per the `if:`
+      # restriction noted above). Reads the just-rendered report and posts to
+      # Linear ONLY (team TongWu / project "Novada MCP — Daily Monitoring
+      # Loop" / label Wutong) — a new alert issue on any P0/P1/P2 finding, or
+      # a dated heartbeat comment on green days, each with the rendered
+      # `.xlsx` attached directly as a Linear file upload. Never fails the
+      # job — see linear-sync.mjs's own fail-soft contract (including for
+      # the attachment upload itself).
       #
       # LINEAR_SYNC_LIVE=1 arms the script's mutations (issueCreate/
-      # commentCreate) — linear-sync.mjs defaults to a DRY-RUN preview
-      # otherwise (see its own doc comment on why: an earlier version fired
-      # live on any run with a key present, which is what created TOW2-336
-      # during local testing). Only CI, which is meant to actually deliver
-      # the daily report, sets this.
+      # commentCreate/fileUpload) — linear-sync.mjs defaults to a DRY-RUN
+      # preview otherwise (see its own doc comment on why: an earlier version
+      # fired live on any run with a key present, which is what created
+      # TOW2-336 during local testing). Only CI, which is meant to actually
+      # deliver the daily report, sets this.
       - name: Sync report to Linear
         if: always() && env.LINEAR_API_KEY != ''
         env:

@@ -5,41 +5,44 @@
  * Delivers the Layer D (full-tools probe) daily report data PRIVATELY via
  * Linear. This repo (NovadaLabs/Novada-mcp) is PUBLIC — its Actions logs and
  * artifacts are world-readable — so the actual report DATA (which backends
- * are down, our fault-domain analysis) must never land there. Instead:
- *   - the full report file (json/xlsx/csv) is pushed to a PRIVATE archive
- *     repo (NovadaLabs/novada-mcp-monitoring) by the workflow step just
- *     before this one runs (see .github/workflows/synthetic-monitor.yml's
- *     "Push report to private archive" step);
- *   - THIS script posts to Linear (a private workspace) only an alert issue
- *     (on any P0/P1/P2 finding) or a dated heartbeat comment (on green
- *     days), with a compact inline summary plus a LINK to the archived file
- *     — never the raw per-tool data itself.
- * See monitoring/README.md's "Privacy model" section for the full picture.
+ * are down, our fault-domain analysis) must never land there. Instead, THIS
+ * script delivers EVERYTHING to Linear (a private workspace) directly:
+ *   - an alert issue (on any P0/P1/P2 finding) or a dated heartbeat comment
+ *     (on green days), with a compact inline markdown summary; AND
+ *   - the full report's rendered `.xlsx` file, uploaded as a genuine Linear
+ *     file attachment via Linear's GraphQL file-upload flow, linked from the
+ *     issue/comment body.
+ * There is no public artifact and no separate archive repo — Linear is the
+ * only delivery destination. See monitoring/README.md's "Privacy model"
+ * section for the full picture.
  *
- * Dependency-free: Node >=20 built-in `fetch` + a hand-written GraphQL
+ * Dependency-free: Node >=20 built-in `fetch`/`fs` + a hand-written GraphQL
  * query/mutation set against Linear's public API
  * (https://api.linear.app/graphql — see https://linear.app/developers/graphql).
  *
  * ── DRY-RUN BY DEFAULT (critical safety invariant) ──────────────────────────
- * Every mutation (issueCreate, commentCreate) is a NO-OP unless explicitly
- * armed via `--send` on the CLI or `LINEAR_SYNC_LIVE=1` in the environment.
- * Read-only resolution (team/project/label/tracker lookups) still runs in
- * dry-run — it validates config without writing anything. This exists
- * because an earlier version of this script fired a live mutation on ANY
- * run with a valid key present (no separate arm switch), which is exactly
- * how a local sanity-check run against a real `LINEAR_API_KEY` accidentally
- * created a real Linear issue during development (TOW2-336, since
- * canceled/relabeled). The CI workflow sets `LINEAR_SYNC_LIVE: "1"` on its
- * "Sync report to Linear" step so scheduled runs still deliver for real;
- * every other invocation (local, ad-hoc, an offline self-test importing this
- * module) defaults to preview-only.
+ * Every mutation (issueCreate, commentCreate, fileUpload + the follow-up PUT)
+ * is a NO-OP unless explicitly armed via `--send` on the CLI or
+ * `LINEAR_SYNC_LIVE=1` in the environment. Read-only resolution
+ * (team/project/label/tracker lookups) still runs in dry-run — it validates
+ * config without writing anything. This exists because an earlier version of
+ * this script fired a live mutation on ANY run with a valid key present (no
+ * separate arm switch), which is exactly how a local sanity-check run
+ * against a real `LINEAR_API_KEY` accidentally created a real Linear issue
+ * during development (TOW2-336, since canceled/relabeled). The CI workflow
+ * sets `LINEAR_SYNC_LIVE: "1"` on its "Sync report to Linear" step so
+ * scheduled runs still deliver for real; every other invocation (local,
+ * ad-hoc, an offline self-test importing this module) defaults to
+ * preview-only.
  *
  * A companion OFFLINE self-test lives at
  * monitoring/report/linear-sync.selftest.mjs — it imports this module's
- * exported pipeline (runSync/createIssue/createComment/etc.), injects a stub
- * GraphQL transport (no network, no key needed), and asserts that dry-run
- * mode never fires a mutation and that live mode fires exactly the expected
- * ones. Run it after any change to this file:
+ * exported pipeline (runSync/createIssue/createComment/uploadFileToLinear/
+ * etc.), injects a stub GraphQL transport AND a stub file uploader (no
+ * network, no key needed), and asserts that dry-run mode never fires a
+ * mutation or upload, and that live mode fires exactly the expected ones —
+ * including the fail-soft path when the upload itself fails. Run it after
+ * any change to this file:
  *   node monitoring/report/linear-sync.selftest.mjs
  *
  * Env vars:
@@ -51,11 +54,6 @@
  *   LINEAR_SYNC_LIVE       (optional) "1" to arm real mutations (see the
  *                          DRY-RUN section above). Same effect as passing
  *                          `--send` on the CLI.
- *   MONITOR_ARCHIVE_REPO   (optional) "owner/repo" of the private archive
- *                          repo that holds the actual report files, used
- *                          only to construct the link in the Linear
- *                          issue/comment body. Default:
- *                          NovadaLabs/novada-mcp-monitoring.
  *
  * Resolution (by NAME, fail-soft — a name that doesn't resolve is logged and
  * that field is skipped, this script never crashes on a missing name):
@@ -68,20 +66,24 @@
  *     or P2 -> create a NEW issue titled
  *     "[MCP Daily] <date> · <worst-sev> · <passN>/<total> ok · backend down: <names>",
  *     body = a compact markdown table (worst -> best) + the ours/backend
- *     split + a link to the archived report file. Assigned to the API key's
- *     own viewer (`me`), labeled Wutong.
+ *     split + a link to the `.xlsx` file attached directly to this issue.
+ *     Assigned to the API key's own viewer (`me`), labeled Wutong.
  *   - Otherwise (all green, or only P3 findings) -> find-or-create a SINGLE
  *     rolling tracker issue "MCP Daily Monitor — heartbeat" and post a dated
- *     comment on it. Never opens a new issue on a green day. If the SEARCH
- *     for the tracker itself fails (network/GraphQL error), this is treated
- *     as "unknown", NOT "not found" — delivery is skipped for this run
- *     rather than risking a duplicate tracker issue on a transient blip.
+ *     comment on it (with the same attached-`.xlsx` link). Never opens a new
+ *     issue on a green day. If the SEARCH for the tracker itself fails
+ *     (network/GraphQL error), this is treated as "unknown", NOT "not
+ *     found" — delivery is skipped for this run rather than risking a
+ *     duplicate tracker issue on a transient blip.
  *
  * Failure mode: ANY error (missing key, missing report file, network
- * failure, GraphQL error) is logged to stderr and this script exits 0 — a
- * Linear delivery failure must never fail the monitor run itself; the
- * probe's own exit code (set by full-tools-probe.mjs) is what actually
- * matters for CI.
+ * failure, GraphQL error, file-upload failure) is logged to stderr and this
+ * script exits 0 — a Linear delivery failure must never fail the monitor run
+ * itself; the probe's own exit code (set by full-tools-probe.mjs) is what
+ * actually matters for CI. The file-upload step specifically is fail-soft in
+ * isolation too: if it throws, the issue/comment is still created with the
+ * inline summary plus a note that the attachment upload failed — see
+ * `uploadFileToLinear` and its caller below.
  *
  * Usage:
  *   LINEAR_API_KEY=<key> node monitoring/report/linear-sync.mjs             # dry-run (preview only)
@@ -102,7 +104,7 @@ const TEAM_NAME = "TongWu";
 const PROJECT_NAME = "Novada MCP — Daily Monitoring Loop";
 const LABEL_NAME = "Wutong";
 const TRACKER_TITLE = "MCP Daily Monitor — heartbeat";
-const ARCHIVE_REPO = process.env.MONITOR_ARCHIVE_REPO || "NovadaLabs/novada-mcp-monitoring";
+const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 // See the "DRY-RUN BY DEFAULT" doc comment above. Read once at module load;
 // createIssue/createComment default to this but accept an explicit `live`
@@ -163,6 +165,83 @@ async function linearRequest(apiKey, query, variables) {
     throw new Error(`Linear API error: ${msg}`);
   }
   return json.data;
+}
+
+/**
+ * Upload a local file to Linear as a genuine file attachment and return its
+ * public-within-Linear `assetUrl`. Two-step flow per Linear's documented
+ * GraphQL file-upload API (https://linear.app/developers/how-to-upload-a-file-to-linear
+ * — verified against that page, 2026-07-24 — the `fileUpload` mutation, then
+ * a direct PUT of the raw bytes to the returned signed `uploadUrl`, using
+ * EVERY header Linear returns plus `Content-Type` and `Cache-Control`, both
+ * required by Linear's own documented example — omitting `uploadFile.headers`
+ * causes a 403 from the underlying signed-URL storage):
+ *
+ *   1. `fileUpload(contentType, filename, size)` — asks Linear for a signed
+ *      upload URL. Assumed field names (`success`, `uploadFile.uploadUrl`,
+ *      `uploadFile.assetUrl`, `uploadFile.headers[].{key,value}`) match
+ *      Linear's documented shape; verify against Linear's live schema
+ *      (`https://api.linear.app/graphql` introspection) if this ever starts
+ *      failing in CI.
+ *   2. `fetch(uploadUrl, { method: "PUT", headers, body })` — a raw PUT of
+ *      the file bytes straight to Linear's file storage, NOT through the
+ *      GraphQL endpoint and NOT through `requestFn` (only the `fileUpload`
+ *      mutation itself goes through `requestFn`, so the offline self-test
+ *      can stub the GraphQL call; the PUT only ever happens for a real
+ *      `--send`/`LINEAR_SYNC_LIVE=1` run, since callers gate this whole
+ *      function behind the same `live` check used for issueCreate/
+ *      commentCreate).
+ *
+ * This function itself does NOT catch errors — any failure (network,
+ * non-2xx PUT, malformed `fileUpload` response) propagates to the caller,
+ * which is expected to treat it as fail-soft (see `runSync`'s
+ * `attachReportSuffix` helper below).
+ *
+ * @param {string} apiKey
+ * @param {string} filePath  absolute path to the local file to upload
+ * @param {{requestFn?: typeof linearRequest}} [deps]
+ * @returns {Promise<string>} the uploaded file's assetUrl
+ */
+async function uploadFileToLinear(apiKey, filePath, { requestFn = linearRequest } = {}) {
+  const buffer = readFileSync(filePath);
+  const filename = path.basename(filePath);
+  const size = buffer.length;
+
+  const data = await requestFn(
+    apiKey,
+    `mutation FileUpload($contentType: String!, $filename: String!, $size: Int!) {
+      fileUpload(contentType: $contentType, filename: $filename, size: $size) {
+        success
+        uploadFile { uploadUrl assetUrl headers { key value } }
+      }
+    }`,
+    { contentType: XLSX_CONTENT_TYPE, filename, size }
+  );
+
+  if (!data?.fileUpload?.success || !data.fileUpload.uploadFile) {
+    throw new Error("fileUpload did not report success");
+  }
+  const { uploadUrl, assetUrl, headers } = data.fileUpload.uploadFile;
+  if (!uploadUrl || !assetUrl) {
+    throw new Error("fileUpload response missing uploadUrl/assetUrl");
+  }
+
+  const putHeaders = { "Content-Type": XLSX_CONTENT_TYPE, "Cache-Control": "public, max-age=31536000" };
+  for (const h of headers || []) {
+    if (h?.key) putHeaders[h.key] = h.value;
+  }
+
+  let putRes;
+  try {
+    putRes = await fetch(uploadUrl, { method: "PUT", headers: putHeaders, body: buffer });
+  } catch (err) {
+    throw new Error(`Linear file upload PUT failed (network): ${err.message}`);
+  }
+  if (!putRes.ok) {
+    throw new Error(`Linear file upload PUT failed: HTTP ${putRes.status}`);
+  }
+
+  return assetUrl;
 }
 
 async function resolveTeamId(apiKey, { requestFn = linearRequest } = {}) {
@@ -309,13 +388,10 @@ function dateStamp(iso) {
   return (iso || new Date().toISOString()).slice(0, 10);
 }
 
-/** Build the private-archive link for this run's report (same <YYYY>/<MM> bucket the workflow's archive-push step files it into, since both happen in the same job run). */
-function buildArchiveLink(report, filename) {
-  const finishedAt = report.finishedAt || new Date().toISOString();
-  const year = finishedAt.slice(0, 4);
-  const month = finishedAt.slice(5, 7);
+/** The `.xlsx` render-report.py produces next to the source JSON report, same basename (see render-report.py's `xlsx_path`). */
+function xlsxPathForReport(filename) {
   const stem = filename.replace(/\.json$/, "");
-  return `https://github.com/${ARCHIVE_REPO}/blob/main/reports/${year}/${month}/${stem}.xlsx`;
+  return path.join(REPORTS_DIR, `${stem}.xlsx`);
 }
 
 function rank(sev) {
@@ -334,27 +410,52 @@ function buildMarkdownTable(results) {
 
 /**
  * Core delivery logic — given a parsed report + its filename, resolve
- * config and deliver to Linear (or preview it in dry-run). No file I/O, no
- * env reads (besides the `live` default, which is itself overridable), no
- * process.exit — main() owns all of that. Dependency-injected (`requestFn`,
- * `live`) so the offline self-test (linear-sync.selftest.mjs) can exercise
- * this exact pipeline against a stub GraphQL transport instead of the live
- * network, and can force both dry-run and live behavior in one process.
+ * config and deliver to Linear (or preview it in dry-run). No file I/O
+ * besides the report's own `.xlsx` attachment upload, no env reads (besides
+ * the `live` default, which is itself overridable), no process.exit —
+ * main() owns all of that. Dependency-injected (`requestFn`, `live`,
+ * `uploadFn`) so the offline self-test (linear-sync.selftest.mjs) can
+ * exercise this exact pipeline against a stub GraphQL transport AND a stub
+ * file uploader instead of the live network/filesystem, and can force both
+ * dry-run and live behavior in one process.
  *
  * @param {string} apiKey
  * @param {object} report  parsed full-*.json content
- * @param {string} filename  the report's own filename (for the archive link)
- * @param {{requestFn?: typeof linearRequest, live?: boolean}} [deps]
+ * @param {string} filename  the report's own JSON filename (used to locate
+ *   the sibling `.xlsx` render-report.py produced next to it)
+ * @param {{requestFn?: typeof linearRequest, live?: boolean, uploadFn?: (filePath: string) => Promise<string>}} [deps]
  * @returns {Promise<{action: string, [key: string]: unknown}>}
  */
-async function runSync(apiKey, report, filename, { requestFn = linearRequest, live = LIVE } = {}) {
+async function runSync(apiKey, report, filename, { requestFn = linearRequest, live = LIVE, uploadFn } = {}) {
   const summary = report.summary || {};
   const results = report.results || [];
   const total = results.length;
   const passCount = results.filter((r) => r.status === "PASS" || r.status === "SLOW").length;
   const slowCount = results.filter((r) => r.status === "SLOW").length;
-  const archiveLink = buildArchiveLink(report, filename);
   const date = dateStamp(report.finishedAt);
+  const xlsxPath = xlsxPathForReport(filename);
+  const upload = uploadFn || ((filePath) => uploadFileToLinear(apiKey, filePath, { requestFn }));
+
+  /**
+   * Upload the report's `.xlsx` and return a markdown suffix to append to
+   * the issue/comment body (never throws — this is the fail-soft boundary
+   * described in this file's module doc comment). Dry-run never uploads
+   * (matches the DRY-RUN BY DEFAULT invariant for every other mutation in
+   * this file) and instead just previews the intent.
+   */
+  async function attachReportSuffix() {
+    if (!live) {
+      console.log(`[linear-sync] DRY-RUN — would attach ${path.basename(xlsxPath)}`);
+      return "";
+    }
+    try {
+      const assetUrl = await upload(xlsxPath);
+      return `\n\n📎 [Full report (xlsx)](${assetUrl})`;
+    } catch (err) {
+      console.error(`[linear-sync] WARN: report attachment upload failed: ${err.message}`);
+      return `\n\n_(report attachment upload failed — see CI logs)_`;
+    }
+  }
 
   // Worse-of-both by rank -> {P0,P1,P2} on EITHER field triggers the alert
   // path (an OR condition; taking the worse rank is equivalent since P3/null
@@ -383,15 +484,15 @@ async function runSync(apiKey, report, filename, { requestFn = linearRequest, li
     const title = `[MCP Daily] ${date} · ${worst} · ${passCount}/${total} ok · backend down: ${
       backendDown.length > 0 ? backendDown.join(", ") : "none"
     }`;
-    const body = [
-      `**Severity:** ${worst}  (ours: ${summary.maxOursSeverity || "-"}, overall incl. backend: ${summary.maxSeverity || "-"})`,
-      `**Pass rate:** ${passCount}/${total}${slowCount > 0 ? ` (${slowCount} slow)` : ""}`,
-      `**Ours (①/②) issues:** ${summary.oursCount ?? 0}  ·  **Backend (③) issues:** ${summary.backendCount ?? 0}`,
-      "",
-      buildMarkdownTable(results),
-      "",
-      `[Full report (private archive)](${archiveLink})`,
-    ].join("\n");
+    const attachmentSuffix = await attachReportSuffix();
+    const body =
+      [
+        `**Severity:** ${worst}  (ours: ${summary.maxOursSeverity || "-"}, overall incl. backend: ${summary.maxSeverity || "-"})`,
+        `**Pass rate:** ${passCount}/${total}${slowCount > 0 ? ` (${slowCount} slow)` : ""}`,
+        `**Ours (①/②) issues:** ${summary.oursCount ?? 0}  ·  **Backend (③) issues:** ${summary.backendCount ?? 0}`,
+        "",
+        buildMarkdownTable(results),
+      ].join("\n") + attachmentSuffix;
 
     const input = { title, description: body, teamId };
     if (projectId) input.projectId = projectId;
@@ -439,7 +540,8 @@ async function runSync(apiKey, report, filename, { requestFn = linearRequest, li
     }
 
     const healthNote = slowCount > 0 ? `${passCount}/${total}, ${slowCount} slow` : `${total}/${total}`;
-    const commentBody = `✅ ${date} all healthy (${healthNote}) — [report](${archiveLink})`;
+    const attachmentSuffix = await attachReportSuffix();
+    const commentBody = `✅ ${date} all healthy (${healthNote})${attachmentSuffix}`;
     const comment = await createComment(apiKey, tracker.id, commentBody, { requestFn, live });
     console.log(`[linear-sync] ${live ? "posted heartbeat comment on" : "dry-run previewed comment on"} ${tracker.identifier}`);
     return { action: "heartbeat", tracker, comment };
@@ -513,9 +615,10 @@ export {
   PROJECT_NAME,
   LABEL_NAME,
   TRACKER_TITLE,
-  ARCHIVE_REPO,
+  XLSX_CONTENT_TYPE,
   findLatestReport,
   linearRequest,
+  uploadFileToLinear,
   resolveTeamId,
   resolveProjectId,
   resolveLabelId,
@@ -523,7 +626,7 @@ export {
   findTrackerIssue,
   createIssue,
   createComment,
-  buildArchiveLink,
+  xlsxPathForReport,
   buildMarkdownTable,
   runSync,
 };
