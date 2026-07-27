@@ -1182,6 +1182,18 @@ def invariant_7_oauth_metadata(transport: Transport) -> list[str]:
     stdio rather than failing on a surface that structurally cannot serve
     OAuth discovery metadata.
     """
+    # DEPLOYMENT GATE (2026-07-27): the OAuth discovery surface ships with the
+    # feat/oauth-keyless branch, which is NOT yet deployed to prod (owner-gated).
+    # Until it deploys, this invariant tests an aspiration, not the contract —
+    # every nightly canary run failed on it, which is alert fatigue, not signal
+    # (owner call, same day: red must mean NEW breakage). Set CONTRACT_OAUTH=1
+    # to re-enable ahead of the deploy; DELETE this gate once oauth-keyless is
+    # live so the invariant becomes a hard guard again.
+    if os.environ.get("CONTRACT_OAUTH", "").strip() not in ("1", "true", "yes"):
+        raise SkipInvariant(
+            "feat/oauth-keyless not yet deployed to prod — OAuth discovery "
+            "invariant gated behind CONTRACT_OAUTH=1 until it ships"
+        )
     if not transport.has_http_surface:
         raise SkipInvariant(
             f"{transport.label}: no HTTP surface — OAuth discovery (/.well-known/...) is a "
