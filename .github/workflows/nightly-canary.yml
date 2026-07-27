@@ -86,3 +86,16 @@ jobs:
           NOVADA_MCP_KEY: ${{ secrets.NOVADA_TEST_KEY }}
         run: |
           python3 hosted-server/scripts/contract/contract-test.py https://mcp.novada.com/mcp
+
+      # Evidence for NEEDS_REVIEW verdicts: the fresh capture (taken with the
+      # CI account's key, i.e. what the diff actually compared) rides along as
+      # an artifact whenever the run fails, so re-baselining never requires
+      # guessing what CI saw. Snapshot files are scrubbed by capture-golden.py
+      # (redaction probe asserts no credentials) — safe to retain 14 days.
+      - name: Upload fresh capture on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-canary-capture-${{ github.run_id }}
+          path: /tmp/golden-canary/
+          retention-days: 14
