@@ -27,9 +27,13 @@ name: Nightly Canary (prod backend — Layers 2/6/7)
 #      CONTRACT_FULL=1 here; CONTRACT_FULL is billable and stays a manual/
 #      deploy-time-only decision, not a nightly default)
 #
-# Secret required: secrets.NOVADA_MCP_KEY (both capture-golden.py and
-# contract-test.py accept NOVADA_MCP_KEY or NOVADA_API_KEY — this workflow
-# standardizes on NOVADA_MCP_KEY to match deploy-hosted.sh's own env var name).
+# Secret required: secrets.NOVADA_TEST_KEY — the same repo secret the (green)
+# synthetic-monitor.yml already uses against mcp.novada.com. The env VAR name
+# stays NOVADA_MCP_KEY (what capture-golden.py / contract-test.py read; matches
+# deploy-hosted.sh). 2026-07-27 fix: this workflow originally referenced a
+# secrets.NOVADA_MCP_KEY that was never created (the key was added 2026-07-24
+# under the name NOVADA_TEST_KEY instead), so every canary run failed in ~8s
+# with an empty key before ever reaching prod.
 
 on:
   schedule:
@@ -56,7 +60,7 @@ jobs:
 
       - name: Capture golden snapshot from live prod
         env:
-          NOVADA_MCP_KEY: ${{ secrets.NOVADA_MCP_KEY }}
+          NOVADA_MCP_KEY: ${{ secrets.NOVADA_TEST_KEY }}
         run: |
           mkdir -p /tmp/golden-canary
           python3 hosted-server/scripts/golden/capture-golden.py \
@@ -79,6 +83,6 @@ jobs:
       - name: Contract invariant tests (FREE set — no CONTRACT_FULL)
         if: always()
         env:
-          NOVADA_MCP_KEY: ${{ secrets.NOVADA_MCP_KEY }}
+          NOVADA_MCP_KEY: ${{ secrets.NOVADA_TEST_KEY }}
         run: |
           python3 hosted-server/scripts/contract/contract-test.py https://mcp.novada.com/mcp
