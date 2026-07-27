@@ -114,17 +114,20 @@ jobs:
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
-      # k6 sandboxes env vars — it does NOT inherit the step `env:` into its
-      # `__ENV`; the key must be passed explicitly via `-e` or k6 throws
-      # "NOVADA_TEST_KEY environment variable is required" (the 2026-07-25
-      # first-run failure). The secret value is masked in Actions logs.
+      # grafana/run-k6-action silently DROPS the key: it neither forwards the
+      # step `env:` into k6's `__ENV` nor honors the `-e` flag we passed via
+      # `flags:` — verified in the 2026-07-25 + 07-27 runs (the `-e` was in the
+      # command, k6 still threw "NOVADA_TEST_KEY required"). So run the k6
+      # binary DIRECTLY (setup-k6-action@v1 above puts it on PATH) and pass the
+      # key with `-e`; the secret is masked in Actions logs.
       - name: Run k6 stress test
-        uses: grafana/run-k6-action@v1
-        with:
-          path: monitoring/stress/k6-stress.js
-          flags: -e NOVADA_TEST_KEY=${{ secrets.NOVADA_TEST_KEY }} --summary-export=monitoring/reports/stress-summary-${{ github.run_id }}.json
         env:
           NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
+        run: |
+          k6 run \
+            -e NOVADA_TEST_KEY="$NOVADA_TEST_KEY" \
+            --summary-export=monitoring/reports/stress-summary-${{ github.run_id }}.json \
+            monitoring/stress/k6-stress.js
 
       # No artifact upload — this repo is PUBLIC and artifacts are
       # world-readable (see the `smoke` job's identical comment).
