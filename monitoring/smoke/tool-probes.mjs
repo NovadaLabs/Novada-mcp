@@ -127,6 +127,24 @@ export function isBackendKnownFlaky(toolName) {
   return BACKEND_KNOWN_FLAKY_TOOL_NAMES.has(toolName);
 }
 
+// ─── Backend/upstream error signature (Novada side), NOT our code ──────────
+// Matches the scraper `50004: context deadline exceeded` timeout (backend
+// outage, reproduced 2026-07-28 via a raw curl with zero MCP involved) plus
+// the other upstream signals already known to this suite. This is the SINGLE
+// SOURCE OF TRUTH for "is this text a backend signal" — both
+// full-tools-probe.mjs's classifyFailure() (Layer D) and this file's own
+// all-tools-smoke.mjs caller (Layer B, Tier-1 tolerance) import it, so there
+// is exactly one regex to keep in sync, never two drifting copies.
+/**
+ * @param {unknown} text
+ * @returns {boolean}
+ */
+export function isBackendSignal(text) {
+  return /\b50004\b|context[ ._]?deadline|deadline exceeded|API_DOWN|upstream|维护|insufficient balance|Scraper API error \(HTTP undefined\)|\b520\b/i.test(
+    String(text || "")
+  );
+}
+
 // ─── Write-tool guard (defense in depth) ────────────────────────────────────
 // Tier-2 is presence-only and must NEVER execute any of these, regardless of
 // future edits to this file or the runner. all-tools-smoke.mjs asserts (hard

@@ -24,13 +24,27 @@
  *   2. preflightAssertAllProbesExecutable() does not throw for the real,
  *      committed PROBES list (confirms the args-aware carve-out for
  *      novada_proxy_account_create's no-confirm dry-run actually works).
- *   3. Ten scripted canned scenarios (a plain pass; an isolated backend 520;
- *      processing→poll-completes; processing→still-stuck on a non-flaky
- *      platform; processing→still-stuck on a KNOWN-FLAKY platform;
+ *   3. Eleven scripted canned scenarios (a plain pass; an isolated backend
+ *      520; processing→poll-completes; processing→still-stuck on a
+ *      non-flaky platform; processing→still-stuck on a KNOWN-FLAKY platform;
  *      processing-matched-but-no-task_id; a validation error we own; an
  *      INVALID_API_KEY auth error; httpStatus-0-then-retry-recovers;
- *      httpStatus-0-retry-exhausted) each classify to the EXACT
- *      domain+severity this script's 2026-07-24 review fixes specify.
+ *      httpStatus-0-retry-exhausted; a scraper `50004: context deadline
+ *      exceeded` backend timeout on a NON-flaky platform) each classify to
+ *      the EXACT domain+severity this script's 2026-07-24/2026-07-28 review
+ *      fixes specify. The last scenario is the ratchet for the real-world
+ *      mislabel found 2026-07-28: `scraper.novada.com/request` returning
+ *      `{code:50004, msg:"context deadline exceeded"}` (a genuine BACKEND
+ *      outage, reproduced with a raw curl, zero MCP involved) was, before the
+ *      isBackendSignal fix, falling through every existing pattern (it is
+ *      not a known-flaky platform, not a validation error, not an
+ *      INVALID_API_KEY, not an HTTP 5xx/network failure, and did not match
+ *      the old BACKEND_SIGNAL_RE's exact wording) all the way to step 7's
+ *      ①-mcp-code fail-safe default — a false "our-code" P1 on every
+ *      non-flaky platform during a pure backend outage. Confirmed by
+ *      temporarily reverting the `isBackendSignal` check in classifyFailure
+ *      and re-running this self-test: the scenario below classified
+ *      `①-mcp-code`/P1 instead of `③-backend`/P2.
  *   4. novada_proxy_account_create (no confirm) never crashes the run and
  *      classifies as a PASS/SLOW — the literal CRITICAL regression check.
  *
@@ -193,6 +207,23 @@ function stubCallTool(name, args) {
       // -> must classify ②-gateway, NOT ①-mcp-code (the other MEDIUM fix).
       return Promise.resolve({ ok: false, httpStatus: 0, timeMs: 5000, text: null, error: "socket hang up" });
 
+    case "novada_scrape_google":
+      // Scenario 11: the scraper `50004: context deadline exceeded` backend
+      // timeout (2026-07-28 real-world incident, reproduced with a raw curl
+      // against scraper.novada.com/request — zero MCP involved) on a
+      // NON-known-flaky platform (google is not in
+      // BACKEND_KNOWN_FLAKY_PLATFORMS). Must classify ③-backend/P2 via the
+      // shared isBackendSignal() helper, NOT ①-mcp-code — this is the exact
+      // mislabel the isBackendSignal fix closes, and it must never
+      // contribute to oursP0P1 (see the dedicated assertion below).
+      return Promise.resolve({
+        ok: false,
+        httpStatus: 200,
+        timeMs: 400,
+        text: null,
+        error: { toolError: true, message: "Scraper error (code 50004): context deadline exceeded" },
+      });
+
     default:
       return Promise.resolve({ ok: true, httpStatus: 200, timeMs: 80, text: `${name} ok (default self-test stub)`, error: null });
   }
@@ -253,6 +284,7 @@ async function main() {
     { name: "novada_scrape_facebook", status: "FAIL", domain: "②-gateway", severity: "P1", why: "an INVALID_API_KEY auth error (MEDIUM fix: must be ②/config, not ①)" },
     { name: "novada_extract", status: "PASS", domain: "-", severity: null, why: "httpStatus 0 non-timeout on attempt 1, retry recovers" },
     { name: "novada_scrape_instagram", status: "FAIL", domain: "②-gateway", severity: "P1", why: "httpStatus 0 non-timeout, retry exhausted (MEDIUM fix: must be ②, not ①)" },
+    { name: "novada_scrape_google", status: "FAIL", domain: "③-backend", severity: "P2", why: 'scraper 50004 "context deadline exceeded" backend timeout on a NON-flaky platform (2026-07-28 fix: must be ③, not ①)' },
   ];
 
   console.log("");
@@ -265,6 +297,22 @@ async function main() {
     expect(
       row.severity === sc.severity,
       `${sc.name}: severity === ${JSON.stringify(sc.severity)} (got ${JSON.stringify(row.severity)}) — ${sc.why}`
+    );
+  }
+
+  // The literal ratchet for the 2026-07-28 mislabel: the 50004 backend-
+  // timeout scenario above must never count toward oursP0P1 the way
+  // main() computes it (domain ①-mcp-code or ②-gateway at severity P0/P1).
+  console.log("");
+  const backendTimeoutRow = byName.novada_scrape_google;
+  expect(Boolean(backendTimeoutRow), "novada_scrape_google: row present");
+  if (backendTimeoutRow) {
+    const countsAsOursP0P1 =
+      (backendTimeoutRow.domain === "①-mcp-code" || backendTimeoutRow.domain === "②-gateway") &&
+      (backendTimeoutRow.severity === "P0" || backendTimeoutRow.severity === "P1");
+    expect(
+      !countsAsOursP0P1,
+      "novada_scrape_google (50004 backend timeout): does NOT contribute to oursP0P1 — a pure backend outage must not fail the run"
     );
   }
 
@@ -292,7 +340,7 @@ async function main() {
     return;
   }
   console.log(
-    `[selftest] OK — ${scenarios.length + 5} assertion group(s) passed, ${results.length} probe(s) attempted, 0 crashes.`
+    `[selftest] OK — ${scenarios.length + 6} assertion group(s) passed, ${results.length} probe(s) attempted, 0 crashes.`
   );
   process.exitCode = 0;
 }

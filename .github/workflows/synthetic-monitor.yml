@@ -129,6 +129,7 @@ jobs:
         env:
           NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
         run: |
+          mkdir -p monitoring/reports
           k6 run \
             -e NOVADA_TEST_KEY="$NOVADA_TEST_KEY" \
             --summary-export=monitoring/reports/stress-summary-${{ github.run_id }}.json \

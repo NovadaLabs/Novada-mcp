@@ -38,6 +38,13 @@
  *   1. `tools/list` (live) -> single source of truth for the tool inventory.
  *      NEVER hardcodes the tool-name list.
  *   2. Tier-1: executes a handful of free/cheap read-only tools, every run.
+ *      A Tier-1 failure whose error text is a backend/upstream signal (e.g.
+ *      the scraper `50004: context deadline exceeded` timeout — see
+ *      tool-probes.mjs's isBackendSignal(), the single source of truth this
+ *      file shares with Layer D's full-tools-probe.mjs) classifies
+ *      `fail-backend`, not `fail-server`, and is never a regression: a
+ *      Novada backend outage must not red this monitor. Only a genuine
+ *      ours-side Tier-1 failure still counts.
  *   3. Tier-2: presence-checks EVERY live tool (no execution) and diffs
  *      against the COMMITTED baseline file
  *      (monitoring/smoke/baseline-tools.json — checked into git, unlike
@@ -57,8 +64,9 @@
  *   5. Prints a human summary table, writes a JSON report to
  *      monitoring/reports/smoke-<UTC timestamp>.json (an artifact only — it
  *      is NOT read back as a baseline on the next run), and exits non-zero
- *      ONLY for a real regression (a Tier-1 failure, or a baseline tool
- *      going missing) — never for `fail-backend-known` or a skipped Tier-3.
+ *      ONLY for a real regression (a Tier-1 failure that is NOT a backend
+ *      signal, or a baseline tool going missing) — never for `fail-backend`,
+ *      `fail-backend-known`, or a skipped Tier-3.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -69,6 +77,7 @@ import {
   NEVER_EXECUTE_TOOL_NAMES,
   TIER1_PROBES,
   isBackendKnownFlaky,
+  isBackendSignal,
   pickTier3Sample,
 } from "./tool-probes.mjs";
 
@@ -153,8 +162,36 @@ function assertExecutable(toolName, tierLabel) {
   }
 }
 
-function classifyExecuted(ok, timeMs) {
-  if (!ok) return "fail-server";
+/** Normalize a callTool() error shape (string | {message} | JSON-RPC error)
+ *  to plain text for isBackendSignal() to test against. Local to this file —
+ *  full-tools-probe.mjs has its own equivalent (errorText()); only the
+ *  backend-signal REGEX itself (isBackendSignal, tool-probes.mjs) is shared,
+ *  per the brief's single-source-of-truth requirement. */
+function errorText(err) {
+  if (err == null) return "";
+  if (typeof err === "string") return err;
+  if (typeof err === "object") {
+    if (typeof err.message === "string") return err.message;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
+}
+
+/**
+ * A failing Tier-1 probe whose error text is a backend/upstream signal (e.g.
+ * the scraper `50004: context deadline exceeded` timeout) is a Novada
+ * BACKEND outage, not a regression in this repo — classify it
+ * `fail-backend` (honest, non-alerting, same spirit as Tier-3's
+ * `fail-backend-known`) instead of `fail-server`. Only a Tier-1 failure that
+ * is NOT a backend signal (a real ours-side error) still counts as a
+ * regression below.
+ */
+function classifyExecuted(ok, timeMs, errText) {
+  if (!ok) return isBackendSignal(errText) ? "fail-backend" : "fail-server";
   if (timeMs > SLOW_MS) return "slow";
   return "pass";
 }
@@ -174,7 +211,7 @@ async function runTier1() {
       tier: 1,
       name: probe.name,
       args: probe.args,
-      status: classifyExecuted(res.ok, res.timeMs),
+      status: classifyExecuted(res.ok, res.timeMs, errorText(res.error)),
       httpStatus: res.httpStatus,
       timeMs: res.timeMs,
       error: res.ok ? null : res.error,

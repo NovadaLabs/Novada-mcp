@@ -100,7 +100,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { callTool, listTools, MCP_URL, requireTestKey } from "../lib/mcp-client.mjs";
-import { NEVER_EXECUTE_TOOL_NAMES, isBackendKnownFlaky } from "./tool-probes.mjs";
+import { NEVER_EXECUTE_TOOL_NAMES, isBackendKnownFlaky, isBackendSignal } from "./tool-probes.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MONITORING_DIR = path.resolve(__dirname, "..");
@@ -429,7 +429,13 @@ const BACKEND_SIGNAL_RE =
  *      not the message says "timeout" — after callToolWithNetworkRetry's one
  *      retry, a lingering httpStatus 0 means the client never reached the
  *      server) -> ②-gateway.
- *   6. Backend/upstream signal text -> ③-backend.
+ *   6. Backend/upstream signal text (BACKEND_SIGNAL_RE, or the shared
+ *      isBackendSignal() from tool-probes.mjs — e.g. the scraper `50004:
+ *      context deadline exceeded` timeout, reproduced 2026-07-28 via a raw
+ *      curl with zero MCP involved) -> ③-backend. Checked for EVERY tool,
+ *      regardless of platform — this is what keeps a bare backend outage from
+ *      defaulting to ①-mcp-code at step 7 below for any platform not already
+ *      on the known-flaky list.
  *   7. Anything else unclassified -> ①-mcp-code (fail-safe toward "ours until
  *      proven otherwise" — we'd rather over-investigate a real backend blip
  *      once than silently blame the backend for something we broke).
@@ -488,7 +494,7 @@ function classifyFailure(probe, res, { stillProcessingAfterPoll = false } = {}) 
     };
   }
 
-  if (BACKEND_SIGNAL_RE.test(msg)) {
+  if (BACKEND_SIGNAL_RE.test(msg) || isBackendSignal(msg)) {
     return { domain: "③-backend", severity: "P2", note: "upstream/backend signal in error text" };
   }
 

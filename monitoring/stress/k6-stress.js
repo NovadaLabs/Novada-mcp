@@ -12,11 +12,23 @@
  *   VUS      - peak virtual users held during the plateau stage (default 20)
  *   DURATION - length of the plateau/hold stage (default "60s")
  *
+ * Scope (2026-07-28): Layer C measures OUR GATEWAY's load capacity — can the
+ * hosted MCP box (Vercel function, auth, rate-limit) take concurrency — NOT
+ * backend/scraper content correctness (that is Layer B's Tier-1/Tier-3 and
+ * Layer D's daily full-tools probe). The request mix below is therefore
+ * restricted to tools that never call the Novada Scraper API backend
+ * (scraper.novada.com) — novada_setup/novada_discover (free/local),
+ * novada_account (wallet-balance read), and novada_extract against a static
+ * page. A Scraper API backend outage (e.g. the `50004: context deadline
+ * exceeded` timeout reproduced 2026-07-28 via a raw curl, zero MCP involved)
+ * must NOT trip this load test — see http_req_failed's threshold rationale
+ * below, which now genuinely only measures gateway health.
+ *
  * Safety notes:
  *   - Conservative default load (20 VUs) so this does not DDoS prod or churn credits.
- *   - Only cheap, read-only tools are exercised: novada_search (num:1), novada_discover
- *     (free), novada_extract (a static example.com page). No write tools. No expensive
- *     async scrapers / research calls that would cost real money or skew latency.
+ *   - Only cheap, read-only, gateway-only tools are exercised (see Scope above). No
+ *     write tools. No scraper/SERP tools, and no expensive async research calls that
+ *     would cost real money, skew latency, or touch the Scraper API backend.
  *   - The API key is read from the environment ONLY — never hardcode a key here.
  *   - The key is sent as an `Authorization: Bearer` header, never a `?token=`
  *     URL query param — this repo and its CI logs are public, and a key in
@@ -51,32 +63,27 @@ export const options = {
     { duration: "30s", target: 0 }, // ramp down
   ],
   thresholds: {
-    // Layer C measures LOAD HEALTH only — can the box take concurrency —
-    // NOT per-tool content correctness (that's Layer B / the daily full-tools
-    // probe's job). Gate on HTTP failure rate + latency:
-    // Allow up to 5% request failure — some backend flakiness is expected.
+    // Layer C measures GATEWAY LOAD CAPACITY only — can our box take
+    // concurrency — NOT backend/scraper content correctness (that's Layer B's
+    // Tier-1/Tier-3 and Layer D's daily full-tools probe). Gate on HTTP
+    // failure rate + latency:
+    // Allow up to 5% request failure — some gateway-side flakiness is expected.
     http_req_failed: ["rate<0.05"],
     // Research isn't in this mix; cheap ops should stay well under 15s at p95.
     http_req_duration: ["p(95)<15000"],
     // NOTE: the JSON-RPC "has a result, not an error" check still RUNS and is
     // reported in the summary, but is intentionally NOT a hard threshold here.
-    // A tool returning isError under HTTP 200 is a *backend content* problem
-    // (e.g. amazon/x/github scrapers down) — that's caught + fault-classified
-    // by Layer D daily, and must not red the *load* test. (2026-07-27)
+    // As of the 2026-07-28 gateway-only mix, none of the exercised tools call
+    // the Scraper API backend at all, so this check should normally pass —
+    // but it stays non-gated as defense-in-depth: a *content* problem on any
+    // of these tools is caught + fault-classified by Layer D daily, and must
+    // never red the *load* test. (2026-07-27, scope narrowed 2026-07-28)
   },
 };
 
 // ---------------------------------------------------------------------------
-// Sample inputs (cheap, deterministic-ish, read-only)
+// Sample inputs (cheap, deterministic-ish, read-only, gateway-only)
 // ---------------------------------------------------------------------------
-
-const SEARCH_QUERIES = [
-  "weather today",
-  "latest technology news",
-  "current stock market summary",
-  "how to make coffee",
-  "what is the capital of France",
-];
 
 const EXTRACT_URL = "https://example.com";
 
@@ -156,16 +163,25 @@ function callTool(toolName, args, tag) {
 }
 
 // ---------------------------------------------------------------------------
-// Weighted scenario mix: ~70% search / ~20% discover / ~10% extract
+// Weighted scenario mix: 25% each across setup/discover/account-balance/extract
+// — ALL four are gateway/meta-only tools that never call the Novada Scraper
+// API backend (see the file header's Scope note). Deliberately no
+// novada_search or any scraper/SERP tool in this mix: those go through
+// scraper.novada.com and a backend outage there (e.g. `50004: context
+// deadline exceeded`) would trip http_req_failed and false-red this LOAD
+// test for a problem this layer does not own.
 // ---------------------------------------------------------------------------
 
-function doSearch() {
-  const query = SEARCH_QUERIES[Math.floor(Math.random() * SEARCH_QUERIES.length)];
-  callTool("novada_search", { query, num: 1 }, "search");
+function doSetup() {
+  callTool("novada_setup", {}, "setup");
 }
 
 function doDiscover() {
   callTool("novada_discover", {}, "discover");
+}
+
+function doAccountBalance() {
+  callTool("novada_account", { section: "balance" }, "account_balance");
 }
 
 function doExtract() {
@@ -175,10 +191,12 @@ function doExtract() {
 export default function () {
   const roll = Math.random();
 
-  if (roll < 0.7) {
-    doSearch();
-  } else if (roll < 0.9) {
+  if (roll < 0.25) {
+    doSetup();
+  } else if (roll < 0.5) {
     doDiscover();
+  } else if (roll < 0.75) {
+    doAccountBalance();
   } else {
     doExtract();
   }
