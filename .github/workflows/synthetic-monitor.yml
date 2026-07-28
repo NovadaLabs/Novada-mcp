@@ -46,7 +46,12 @@ jobs:
   # separate workflow file per layer.
   smoke:
     name: "Layer B — all-tools smoke (6h)"
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
+    # Self-guard: only run on the canonical repo. The post-commit hook mirrors
+    # main → NovadaLabs/test-novada-mcp-test, which has NO NOVADA_TEST_KEY secret,
+    # so the monitor failed on every mirror run (pure email noise, not a real
+    # outage). github.repository is the repo the run belongs to, so this skips
+    # every job on any mirror. (2026-07-28)
+    if: github.repository == 'NovadaLabs/Novada-mcp' && (github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *')
     runs-on: ubuntu-latest
     # Job-level env so ALERT_WEBHOOK is readable via the `env` context in a
     # step's condition below — GitHub Actions FORBIDS the secrets context
@@ -101,7 +106,7 @@ jobs:
 
   stress:
     name: "Layer C — k6 stress (daily)"
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 4 * * *'
+    if: github.repository == 'NovadaLabs/Novada-mcp' && (github.event_name == 'workflow_dispatch' || github.event.schedule == '23 4 * * *')
     runs-on: ubuntu-latest
     # See the `smoke` job's identical comment: job-level env is required so
     # ALERT_WEBHOOK is readable via the `env` context in a step condition —
@@ -141,7 +146,7 @@ jobs:
 
   full-daily:
     name: "Layer D — full-tools probe (daily)"
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 0 * * *'
+    if: github.repository == 'NovadaLabs/Novada-mcp' && (github.event_name == 'workflow_dispatch' || github.event.schedule == '17 0 * * *')
     runs-on: ubuntu-latest
     # Prevents a manual workflow_dispatch from racing the daily cron (both
     # match the job's `if:` above) — without this, two concurrent runs could
