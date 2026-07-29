@@ -24,10 +24,16 @@ import {
   telemetryEnabled,
   emitEvent,
   extractTargetDomain,
+  extractOperation,
+  encryptHqIdentity,
+  statusBucket,
+  resolveProduct,
+  resolveFailureClass,
 } from "../api/_telemetry.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MCP_TS = join(__dirname, "..", "api", "mcp.ts");
+const ERRORS_TS = join(__dirname, "..", "..", "..", "npm-package", "src", "_core", "errors.ts");
 
 // ─── 1. buildToolCallEvent — field mapping ────────────────────────────────────
 
@@ -356,8 +362,10 @@ test("mcp.ts source: scheduleToolEvent helper present in CallToolRequestSchema h
 
 test("mcp.ts source: cap_blocked path emits scheduleToolEvent", () => {
   const src = readFileSync(MCP_TS, "utf8");
+  // scheduleToolEvent now takes a single options object — the outcome field
+  // reads `outcome: "cap_blocked"` rather than a positional string literal.
   // The cap_blocked emit must appear before the cap-blocked return.
-  const capBlockedIdx = src.indexOf('scheduleToolEvent("cap_blocked"');
+  const capBlockedIdx = src.indexOf('outcome: "cap_blocked"');
   const capReturnIdx = src.indexOf('"## Free Gateway Cap Reached"');
   assert.ok(capBlockedIdx >= 0, 'cap_blocked scheduleToolEvent call must exist');
   assert.ok(capReturnIdx >= 0, '"## Free Gateway Cap Reached" must exist');
@@ -366,7 +374,10 @@ test("mcp.ts source: cap_blocked path emits scheduleToolEvent", () => {
 
 test("mcp.ts source: success path emits scheduleToolEvent with outcome ok", () => {
   const src = readFileSync(MCP_TS, "utf8");
-  assert.match(src, /scheduleToolEvent\(\s*["']ok["']/, "success path must call scheduleToolEvent with 'ok'");
+  // scheduleToolEvent now takes a single options object — the outcome field
+  // reads `outcome: "ok"` (or a ternary resolving to it) rather than a
+  // positional string literal.
+  assert.match(src, /scheduleToolEvent\(\{\s*\n\s*outcome:\s*["']ok["']/, "success path must call scheduleToolEvent with outcome: 'ok'");
 });
 
 test("mcp.ts source: error path emits scheduleToolEvent", () => {
@@ -547,4 +558,261 @@ test("mcp.ts source: TIMEOUT outcome appears near the main scheduleToolEvent ok 
   const regionEnd = src.indexOf("} catch (error)", dispatchIdx);
   const subSrc = src.slice(dispatchIdx, regionEnd);
   assert.ok(subSrc.includes('"TIMEOUT"'), '"TIMEOUT" outcome must be set in the dispatch success region');
+});
+
+// ─── 7. extractOperation — strict ALLOWLIST (not a denylist) ─────────────────
+
+test("extractOperation: accepts valid closed-enum tokens", () => {
+  assert.equal(extractOperation({ operation: "product_by_asin" }), "product_by_asin");
+  assert.equal(extractOperation({ platform: "amazon.com" }), "amazon.com");
+  assert.equal(extractOperation({ render: "render" }), "render");
+  assert.equal(extractOperation({ format: "json" }), "json");
+  // dots, underscores, hyphens all allowed
+  assert.equal(extractOperation({ operation: "web_search-by.domain-2" }), "web_search-by.domain-2");
+});
+
+test("extractOperation: rejects whitespace", () => {
+  assert.equal(extractOperation({ operation: "product by asin" }), null);
+  assert.equal(extractOperation({ operation: "  " }), null);
+  assert.equal(extractOperation({ operation: "tab\tvalue" }), null);
+});
+
+test("extractOperation: rejects path/protocol metacharacters : / \\", () => {
+  assert.equal(extractOperation({ operation: "https://evil.example.com" }), null);
+  assert.equal(extractOperation({ operation: "a/b" }), null);
+  assert.equal(extractOperation({ operation: "a\\b" }), null);
+  assert.equal(extractOperation({ operation: "key:value" }), null);
+});
+
+test("extractOperation: rejects HTML/script-metacharacters < > & and quotes", () => {
+  assert.equal(extractOperation({ operation: "<script>alert(1)</script>" }), null);
+  assert.equal(extractOperation({ operation: "a<b" }), null);
+  assert.equal(extractOperation({ operation: "a>b" }), null);
+  assert.equal(extractOperation({ operation: "a&b" }), null);
+  assert.equal(extractOperation({ operation: 'a"b' }), null);
+  assert.equal(extractOperation({ operation: "a'b" }), null);
+  assert.equal(extractOperation({ operation: "a`b" }), null);
+});
+
+test("extractOperation: enforces 64-char cap", () => {
+  const ok64 = "a".repeat(64);
+  const tooLong = "a".repeat(65);
+  assert.equal(extractOperation({ operation: ok64 }), ok64);
+  assert.equal(extractOperation({ operation: tooLong }), null);
+});
+
+test("extractOperation: honors priority order operation > platform > render > format", () => {
+  assert.equal(
+    extractOperation({ operation: "op_value", platform: "amazon.com", render: "render", format: "json" }),
+    "op_value",
+  );
+  assert.equal(
+    extractOperation({ platform: "amazon.com", render: "render", format: "json" }),
+    "amazon.com",
+  );
+  assert.equal(extractOperation({ render: "render", format: "json" }), "render");
+  assert.equal(extractOperation({ format: "json" }), "json");
+});
+
+test("extractOperation: falls through to next allowlisted key when the higher-priority value is rejected", () => {
+  // operation fails the shape check (whitespace) — must fall through to platform.
+  assert.equal(extractOperation({ operation: "bad value", platform: "amazon.com" }), "amazon.com");
+});
+
+test("extractOperation: returns null when no allowlisted key is present", () => {
+  assert.equal(extractOperation({ query: "hello", url: "https://example.com" }), null);
+  assert.equal(extractOperation({}), null);
+  assert.equal(extractOperation(null), null);
+});
+
+// ─── 8. encryptHqIdentity — AES-256-GCM, nonce freshness, fail-open ──────────
+
+const VALID_AES_KEY_B64 = Buffer.from(new Uint8Array(32).fill(7)).toString("base64");
+
+test("encryptHqIdentity: fail-open — null when NOVADA_LOG_IDENTITY_AES_KEY is absent", async () => {
+  delete process.env.NOVADA_LOG_IDENTITY_AES_KEY;
+  const result = await encryptHqIdentity("some-api-key");
+  assert.deepEqual(result, { hq_identity: null, key_version: null });
+});
+
+test("encryptHqIdentity: fail-open — null for malformed base64 key", async () => {
+  process.env.NOVADA_LOG_IDENTITY_AES_KEY = "not-valid-base64!!! ***";
+  try {
+    const result = await encryptHqIdentity("some-api-key");
+    assert.deepEqual(result, { hq_identity: null, key_version: null });
+  } finally {
+    delete process.env.NOVADA_LOG_IDENTITY_AES_KEY;
+  }
+});
+
+test("encryptHqIdentity: fail-open — null for wrong-length key (not 32 raw bytes)", async () => {
+  process.env.NOVADA_LOG_IDENTITY_AES_KEY = Buffer.from(new Uint8Array(16).fill(1)).toString("base64");
+  try {
+    const result = await encryptHqIdentity("some-api-key");
+    assert.deepEqual(result, { hq_identity: null, key_version: null });
+  } finally {
+    delete process.env.NOVADA_LOG_IDENTITY_AES_KEY;
+  }
+});
+
+test("encryptHqIdentity: two calls with the SAME key produce DIFFERENT nonce AND ciphertext", async () => {
+  process.env.NOVADA_LOG_IDENTITY_AES_KEY = VALID_AES_KEY_B64;
+  try {
+    const a = await encryptHqIdentity("sk-same-api-key-both-calls");
+    const b = await encryptHqIdentity("sk-same-api-key-both-calls");
+    assert.ok(a.hq_identity && b.hq_identity, "both calls must succeed");
+    const [nonceA, ctA] = a.hq_identity.split(":");
+    const [nonceB, ctB] = b.hq_identity.split(":");
+    assert.notEqual(nonceA, nonceB, "nonce must be fresh on every call (never reused)");
+    assert.notEqual(ctA, ctB, "ciphertext must differ across calls (follows from nonce freshness)");
+  } finally {
+    delete process.env.NOVADA_LOG_IDENTITY_AES_KEY;
+  }
+});
+
+test("encryptHqIdentity: output is base64 nonce:ciphertext:tag (3 non-empty segments) with correct key_version", async () => {
+  process.env.NOVADA_LOG_IDENTITY_AES_KEY = VALID_AES_KEY_B64;
+  try {
+    const result = await encryptHqIdentity("sk-format-check");
+    assert.ok(result.hq_identity, "hq_identity must be set for a valid key");
+    const segments = result.hq_identity.split(":");
+    assert.equal(segments.length, 3, "hq_identity must be exactly nonce:ciphertext:tag");
+    for (const seg of segments) {
+      assert.ok(seg.length > 0, "every segment must be non-empty");
+      assert.match(seg, /^[A-Za-z0-9+/]+=*$/, "every segment must be valid base64");
+    }
+    assert.equal(result.key_version, "aes-gcm-v1");
+  } finally {
+    delete process.env.NOVADA_LOG_IDENTITY_AES_KEY;
+  }
+});
+
+test("encryptHqIdentity: raw AES key never appears in the output string", async () => {
+  process.env.NOVADA_LOG_IDENTITY_AES_KEY = VALID_AES_KEY_B64;
+  try {
+    const result = await encryptHqIdentity("sk-leak-check");
+    assert.ok(result.hq_identity, "hq_identity must be set for a valid key");
+    assert.ok(!result.hq_identity.includes(VALID_AES_KEY_B64), "raw AES key must never appear in hq_identity output");
+    const serialised = JSON.stringify(result);
+    assert.ok(!serialised.includes(VALID_AES_KEY_B64), "raw AES key must never appear anywhere in the serialised result");
+  } finally {
+    delete process.env.NOVADA_LOG_IDENTITY_AES_KEY;
+  }
+});
+
+// ─── 9. statusBucket — §6 outcome -> status_bucket governed mapping ──────────
+
+test("statusBucket: ok -> success", () => {
+  assert.equal(statusBucket({ outcome: "ok" }), "success");
+});
+
+test("statusBucket: TARGET_BLOCKED -> blocked", () => {
+  assert.equal(statusBucket({ outcome: "TARGET_BLOCKED" }), "blocked");
+});
+
+test("statusBucket: TOOL_NOT_ENABLED / NOT_AVAILABLE_ON_HOSTED -> not_applicable", () => {
+  assert.equal(statusBucket({ outcome: "TOOL_NOT_ENABLED" }), "not_applicable");
+  assert.equal(statusBucket({ outcome: "NOT_AVAILABLE_ON_HOSTED" }), "not_applicable");
+});
+
+test("statusBucket: TASK_PENDING disambiguation — gateway_ceiling_hit true -> failed, false/absent -> pending", () => {
+  assert.equal(statusBucket({ outcome: "TASK_PENDING" }), "pending");
+  assert.equal(statusBucket({ outcome: "TASK_PENDING", gatewayCeilingHit: false }), "pending");
+  assert.equal(statusBucket({ outcome: "TASK_PENDING", gatewayCeilingHit: true }), "failed");
+});
+
+test("statusBucket: every other outcome -> failed (generic errors, cap/rate/token gates, TIMEOUT)", () => {
+  for (const outcome of [
+    "INVALID_API_KEY",
+    "RATE_LIMITED",
+    "cap_blocked",
+    "GATEWAY_RATE_LIMITED",
+    "MISSING_TOKEN",
+    "INVALID_TOKEN",
+    "TIMEOUT",
+    "INVALID_PARAMS",
+    "error",
+  ]) {
+    assert.equal(statusBucket({ outcome }), "failed", `outcome "${outcome}" must map to "failed"`);
+  }
+});
+
+// ─── 10. resolveProduct — governed TOOL -> PRODUCT map, never a guess ────────
+
+test("resolveProduct: novada_extract -> Unblocker (D1)", () => {
+  assert.equal(resolveProduct("novada_extract"), "Unblocker");
+});
+
+test("resolveProduct: a novada_scrape_<platform> tool -> Scraper", () => {
+  assert.equal(resolveProduct("novada_scrape_amazon"), "Scraper");
+});
+
+test("resolveProduct: an unmapped/unknown tool -> null (never a guess)", () => {
+  assert.equal(resolveProduct("novada_totally_unknown_future_tool"), null);
+});
+
+test("resolveProduct: null tool -> null", () => {
+  assert.equal(resolveProduct(null), null);
+});
+
+// ─── 11. FAILURE_CLASS_MIRROR drift guard — golden test vs errors.ts ─────────
+//
+// FAILURE_CLASS_MIRROR (in _telemetry.ts) is a hand-maintained copy of
+// npm-package/src/_core/errors.ts's private (non-exported) FAILURE_CLASS table
+// — see the "KEEP IN SYNC with errors.ts:FAILURE_CLASS" comment there. This
+// test reads the CANONICAL errors.ts source text directly (not the deploy-time
+// vendor copy, which is regenerated and can be stale between deploys) and
+// fails if the mirror's classification for any code diverges, or if the two
+// tables don't cover exactly the same NovadaErrorCode set.
+
+function parseNovadaErrorCodesFromSource(src) {
+  const enumMatch = src.match(/export enum NovadaErrorCode\s*\{([\s\S]*?)\}/);
+  assert.ok(enumMatch, "must be able to parse the NovadaErrorCode enum from errors.ts");
+  const codes = [];
+  const re = /(\w+)\s*=\s*"(\w+)"/g;
+  let m;
+  while ((m = re.exec(enumMatch[1]))) codes.push(m[2]);
+  assert.ok(codes.length > 0, "must find at least one NovadaErrorCode member");
+  return codes;
+}
+
+function parseFailureClassTableFromSource(src) {
+  const tableMatch = src.match(/\bconst FAILURE_CLASS: Record<NovadaErrorCode, FailureClass> = \{([\s\S]*?)\};/);
+  assert.ok(tableMatch, "must be able to parse the FAILURE_CLASS table from errors.ts");
+  const table = {};
+  const re = /\[NovadaErrorCode\.(\w+)\]:\s*"(\w+)"/g;
+  let m;
+  while ((m = re.exec(tableMatch[1]))) table[m[1]] = m[2];
+  return table;
+}
+
+test("FAILURE_CLASS_MIRROR drift guard: covers exactly the current NovadaErrorCode set", () => {
+  const errorsSrc = readFileSync(ERRORS_TS, "utf8");
+  const codes = parseNovadaErrorCodesFromSource(errorsSrc);
+  const table = parseFailureClassTableFromSource(errorsSrc);
+  assert.deepEqual(
+    Object.keys(table).sort(),
+    codes.slice().sort(),
+    "errors.ts FAILURE_CLASS table must cover exactly the current NovadaErrorCode enum members",
+  );
+});
+
+test("FAILURE_CLASS_MIRROR drift guard: mirror's classification matches errors.ts exactly for every code", () => {
+  const errorsSrc = readFileSync(ERRORS_TS, "utf8");
+  const codes = parseNovadaErrorCodesFromSource(errorsSrc);
+  const table = parseFailureClassTableFromSource(errorsSrc);
+  for (const code of codes) {
+    const expected = table[code];
+    assert.ok(expected, `errors.ts FAILURE_CLASS must have an entry for ${code}`);
+    assert.equal(
+      resolveFailureClass(code),
+      expected,
+      `FAILURE_CLASS_MIRROR[${code}] (got "${resolveFailureClass(code)}") must match errors.ts FAILURE_CLASS[${code}] ("${expected}") — mirror has drifted, update _telemetry.ts's FAILURE_CLASS_MIRROR`,
+    );
+  }
+});
+
+test("FAILURE_CLASS_MIRROR drift guard: resolveFailureClass never guesses for a retired/unknown code", () => {
+  assert.equal(resolveFailureClass("SOME_RETIRED_CODE_NOT_IN_ANY_ENUM"), null);
+  assert.equal(resolveFailureClass(null), null);
 });

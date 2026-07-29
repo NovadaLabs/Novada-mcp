@@ -29,7 +29,17 @@ import * as Sentry from "@sentry/node";
 
 // ─── Behavior telemetry (metadata-only, fail-open — see ./_telemetry.ts) ─────
 import { waitUntil } from "@vercel/functions";
-import { buildToolCallEvent, buildInitializeEvent, emitEvent } from "./_telemetry.js";
+import {
+  buildToolCallEvent,
+  buildInitializeEvent,
+  emitEvent,
+  encryptHqIdentity,
+} from "./_telemetry.js";
+import type { RejectionStage, AuthMethod } from "./_telemetry.js";
+// HQ log-ingest push (Leo's /mcp/log/create contract) — see ./_hq_push.ts. Fail-safe
+// (no-op without NOVADA_HQ_LOG_URL) and fail-silent (never throws); chained after
+// emitEvent below so our own backup insert is always scheduled regardless of push outcome.
+import { pushToHq } from "./_hq_push.js";
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
@@ -98,6 +108,17 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { ZodError } from "zod";
 import { kv } from "@vercel/kv";
+// OAuth 2.1 Authorization Server (RFC 8414/9728/7591/6749/7636) — _oauth.ts is
+// import-free by design (unit-tested side-effect-free in test/oauth.test.mjs);
+// mcp.ts is the ONLY place that wires its real dependencies (Vercel KV,
+// validateToken, OAUTH_ENC_KEY) — see buildOAuthDeps below.
+import {
+  isOAuthPath,
+  handleOAuthRequest,
+  resolveAccessToken,
+  deriveIssuer,
+} from "./_oauth.js";
+import type { OAuthDeps } from "./_oauth.js";
 
 // ─── Shared catalog + dispatch from vendored core (single source of truth) ────
 // core.ts is side-effect-free: no server construction, no stdio boot, no process.exit.
@@ -217,6 +238,16 @@ const SCRAPE_TOOLS = new Set([
 ]);
 
 /**
+ * Marks NovadaError instances thrown by withWallClock's OWN ceiling timeout
+ * (below) — as opposed to a genuine upstream TASK_PENDING (scrape poll still
+ * running). Both share NovadaErrorCode.TASK_PENDING (a structural defect noted
+ * in the roundtable doc §6, #15/#16 — fixing it properly is WS-B/npm-package
+ * work), so this WeakSet is the WS-A-only signal telemetry uses to tell them
+ * apart: see gateway_ceiling_hit in scheduleToolEvent below.
+ */
+const GATEWAY_CEILING_ERRORS = new WeakSet<object>();
+
+/**
  * Race a tool promise against the wall-clock budget. On timeout, reject with a
  * structured NovadaError (TASK_PENDING — transient + retryable) so the call still
  * returns a JSON-RPC error envelope instead of being hard-killed into a bare 504.
@@ -237,12 +268,14 @@ function withWallClock<T>(toolName: string, p: Promise<T>): Promise<T> {
         : `The hosted endpoint wall-clock budget (${TOOL_WALL_CLOCK_MS / 1000}s) was reached. ` +
           `Retry with a narrower request (fewer URLs, render="static", a smaller depth/limit), ` +
           `or run the local MCP server (\`npx novada-mcp\`) which has no per-call wall-clock cap.`;
-      reject(new NovadaError({
+      const ceilingError = new NovadaError({
         code: NovadaErrorCode.TASK_PENDING,
         message: `${toolName} exceeded the hosted ${TOOL_WALL_CLOCK_MS / 1000}s time budget and was stopped before the function timed out.`,
         agent_instruction,
         retryable: true,
-      }));
+      });
+      GATEWAY_CEILING_ERRORS.add(ceilingError);
+      reject(ceilingError);
     }, TOOL_WALL_CLOCK_MS);
   });
   return Promise.race([p, guard]).finally(() => clearTimeout(timer)) as Promise<T>;
@@ -263,6 +296,9 @@ interface Env {
   FREE_PLAN_MONTHLY_QUOTA: string;
   STUB_AUTH_WARNING_ACCEPTED?: string;
   RATE_LIMIT_PER_MIN?: string;
+  /** Base64 (std) 32-byte AES-256-GCM key for at-rest encryption of the caller's
+   *  Novada API key inside OAuth code/token KV records — see api/_oauth.ts. */
+  OAUTH_ENC_KEY?: string;
 }
 
 function readEnv(): Env {
@@ -272,6 +308,26 @@ function readEnv(): Env {
     FREE_PLAN_MONTHLY_QUOTA: process.env.FREE_PLAN_MONTHLY_QUOTA || "1000",
     STUB_AUTH_WARNING_ACCEPTED: process.env.STUB_AUTH_WARNING_ACCEPTED,
     RATE_LIMIT_PER_MIN: process.env.RATE_LIMIT_PER_MIN,
+    OAUTH_ENC_KEY: process.env.OAUTH_ENC_KEY,
+  };
+}
+
+// ─── OAuth deps wiring (mcp.ts is the DI root for api/_oauth.ts) ─────────────
+/**
+ * Wire _oauth.ts's OAuthDeps to the real Vercel KV client and the existing
+ * validateToken wallet-probe (same verification /mcp auth already performs) —
+ * _oauth.ts stays import-free and unit-testable; this is its ONLY real caller.
+ */
+function buildOAuthDeps(env: Env): OAuthDeps {
+  return {
+    kvGet: (key) => kv.get(key),
+    kvSet: (key, value, opts) => kv.set(key, value, opts),
+    kvGetDel: (key) => kv.getdel(key),
+    kvIncr: (key) => kv.incr(key),
+    kvExpire: (key, seconds) => kv.expire(key, seconds),
+    verifyKey: (apiKey) => validateToken(apiKey, env),
+    encKeyB64: env.OAUTH_ENC_KEY,
+    issuerOverride: process.env.OAUTH_ISSUER,
   };
 }
 
@@ -795,7 +851,12 @@ async function maybeGetFirstRunNoticeHosted(token: string): Promise<string | nul
   }
 }
 
-function extractToken(req: Request): string | null {
+/**
+ * Extracts the caller's API key AND which auth branch matched — auth_method is
+ * a security-relevant telemetry signal (path-auth = key-in-URL) per the
+ * roundtable doc §2.3/§4: "path-auth=key-in-URL 的安全信号".
+ */
+function extractToken(req: Request): { token: string; authMethod: AuthMethod } | null {
   // Vercel Node.js Functions: req.url is path-only ("/mcp"). Vercel Edge: it's
   // the absolute URL. Provide a base so URL parsing works in both runtimes.
   const base = `https://${req.headers.get("host") || "localhost"}`;
@@ -804,18 +865,68 @@ function extractToken(req: Request): string | null {
   // 1. Path-based auth (Firecrawl pattern): /:key/mcp
   //    Vercel rewrite may inject ?pathKey=:key, OR Node runtime may show the original path.
   const pathKey = url.searchParams.get("pathKey");
-  if (pathKey && pathKey.trim().length >= 16) return pathKey.trim();
+  if (pathKey && pathKey.trim().length >= 16) return { token: pathKey.trim(), authMethod: "path" };
   const pathAuthMatch = url.pathname.match(/^\/([a-zA-Z0-9_\-]{16,})\/mcp$/);
-  if (pathAuthMatch) return pathAuthMatch[1];
+  if (pathAuthMatch) return { token: pathAuthMatch[1], authMethod: "path" };
 
   // 2. Query param: ?token=YOUR_API_KEY
   const qp = url.searchParams.get("token");
-  if (qp) return qp.trim();
+  if (qp) return { token: qp.trim(), authMethod: "query" };
 
   // 3. Bearer header: Authorization: Bearer YOUR_API_KEY
   const auth = req.headers.get("authorization") || req.headers.get("Authorization");
-  if (auth && /^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, "").trim();
+  if (auth && /^Bearer\s+/i.test(auth)) return { token: auth.replace(/^Bearer\s+/i, "").trim(), authMethod: "bearer" };
   return null;
+}
+
+/**
+ * Emits a telemetry row for a request rejected BEFORE a tool name is even known
+ * (pre_auth / rate_limited guard sites in fetchHandler, ahead of buildServer).
+ * Fire-and-forget via waitUntil, mirroring scheduleToolEvent's style — never
+ * awaited by the caller, never blocks the rejection response.
+ *
+ * `token` is the RAW presented key when one exists (even a rejected one — HQ
+ * identity resolution still wants to know which account attempted the call);
+ * null only for MISSING_TOKEN, where there is nothing to hash or encrypt.
+ */
+function emitGuardRejection(params: {
+  requestId: string;
+  token: string | null;
+  outcome: string;
+  rejectionStage: RejectionStage;
+  authMethod: AuthMethod | null;
+  userAgent: string | null;
+}): void {
+  const promise = (async () => {
+    const tokenHash = params.token ? await tokenKvHash(params.token) : null;
+    const hq = params.token
+      ? await encryptHqIdentity(params.token)
+      : { hq_identity: null, key_version: null };
+    const row = buildToolCallEvent({
+      request_id: params.requestId,
+      token_hash: tokenHash,
+      plan: null,
+      client_name: null,
+      client_version: null,
+      protocol_version: null,
+      tool: null,
+      args: null,
+      outcome: params.outcome,
+      latency_ms: 0,
+      charged: false,
+      over_cap_allowed: false,
+      quota_remaining: 0,
+      server_version: process.env.NOVADA_SERVER_VERSION ?? null,
+      region: process.env.VERCEL_REGION ?? null,
+      rejection_stage: params.rejectionStage,
+      auth_method: params.authMethod,
+      user_agent: params.userAgent,
+      hq_identity: hq.hq_identity,
+      key_version: hq.key_version,
+    });
+    await emitEvent(row);
+  })().catch(() => { /* fail-open — telemetry must never affect the rejection response */ });
+  try { waitUntil(promise); } catch { /* outside Vercel context */ }
 }
 
 function logUsage(env: Env, token: string, tool: string, ok: boolean, ms: number): void {
@@ -919,7 +1030,7 @@ function redactHostedSecrets(msg: string): string {
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────
-function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; balance?: number; requestId: string }): Server {
+function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; balance?: number; requestId: string; authMethod: AuthMethod | null; userAgent: string | null }): Server {
   const server = new Server(
     { name: "novada", version: HOSTED_VERSION },
     { capabilities: { tools: {}, prompts: {}, resources: {} } },
@@ -960,17 +1071,27 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
   // protocol_version is not exposed via the SDK public API post-negotiation.
   server.oninitialized = () => {
     const cv = server.getClientVersion();
-    const initRow = buildInitializeEvent({
-      request_id: ctx.requestId,
-      token_hash: ctx.tokenHash,
-      plan: null,   // plan not resolved at initialize time
-      client_name: cv?.name ?? null,
-      client_version: cv?.version != null ? String(cv.version) : null,
-      protocol_version: null,   // not accessible via SDK public API post-negotiation
-      server_version: process.env.NOVADA_SERVER_VERSION ?? null,
-      region: process.env.VERCEL_REGION ?? null,
-    });
-    try { waitUntil(emitEvent(initRow).catch(() => {})); } catch { /* outside Vercel context */ }
+    // hq_identity needs a FRESH nonce per row (never reused across rows, even for
+    // the same apiKey) — encryptHqIdentity is async, so it's chained here rather
+    // than passed in as an already-computed value, same pattern as scheduleToolEvent below.
+    const promise = encryptHqIdentity(apiKey).then((hq) => {
+      const initRow = buildInitializeEvent({
+        request_id: ctx.requestId,
+        token_hash: ctx.tokenHash,
+        plan: null,   // plan not resolved at initialize time
+        client_name: cv?.name ?? null,
+        client_version: cv?.version != null ? String(cv.version) : null,
+        protocol_version: null,   // not accessible via SDK public API post-negotiation
+        server_version: process.env.NOVADA_SERVER_VERSION ?? null,
+        region: process.env.VERCEL_REGION ?? null,
+        auth_method: ctx.authMethod,
+        user_agent: ctx.userAgent,
+        hq_identity: hq.hq_identity,
+        key_version: hq.key_version,
+      });
+      return emitEvent(initRow);
+    }).catch(() => { /* fail-open */ });
+    try { waitUntil(promise); } catch { /* outside Vercel context */ }
   };
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -983,33 +1104,78 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // Falls back gracefully when called outside a Vercel context (tests, local dev).
     const telSV = process.env.NOVADA_SERVER_VERSION ?? null;
     const telRegion = process.env.VERCEL_REGION ?? null;
-    const scheduleToolEvent = (
-      outcome: string,
-      gateFields: { charged: boolean; over_cap_allowed: boolean; quota_remaining: number },
-      plan: string | null,
-    ) => {
-      const row = buildToolCallEvent({
-        request_id: ctx.requestId,
-        token_hash: ctx.tokenHash,
-        plan,
-        client_name: null,   // stateless: new server per request, getClientVersion() is not set for tool calls
-        client_version: null,
-        protocol_version: null,
-        tool: name,
-        args: argsObj,
-        outcome,
-        latency_ms: Date.now() - started,
-        charged: gateFields.charged,
-        over_cap_allowed: gateFields.over_cap_allowed,
-        quota_remaining: gateFields.quota_remaining,
-        server_version: telSV,
-        region: telRegion,
-      });
-      try { waitUntil(emitEvent(row).catch(() => {})); } catch { /* outside Vercel context */ }
+    // Single authoritative telemetry emitter for every tool_call row in this
+    // handler. product/status_bucket/failure_class are ALWAYS derived inside
+    // buildToolCallEvent (governed, single-source functions) — never computed
+    // here — so no call site below can drift from the canonical mapping.
+    // error_code/retryable are taken from an actual thrown NovadaError (or
+    // synthesized for ZodError, the one non-NovadaError case classified here);
+    // every other guard-site rejection legitimately has no NovadaError instance
+    // and leaves both null. hq_identity needs a FRESH nonce PER ROW, so
+    // encryptHqIdentity(apiKey) is awaited fresh on every call, chained into the
+    // same waitUntil-tracked promise (never blocks the caller).
+    const scheduleToolEvent = (opts: {
+      outcome: string;
+      gate: { charged: boolean; over_cap_allowed: boolean; quota_remaining: number };
+      plan: string | null;
+      rejectionStage?: RejectionStage;
+      isHostedLimitation?: boolean;
+      gatewayCeilingHit?: boolean;
+      error?: unknown;
+    }) => {
+      const novadaErr = opts.error instanceof NovadaError ? opts.error : null;
+      const isZod = opts.error instanceof ZodError;
+      const errorCode = novadaErr ? novadaErr.code : (isZod ? NovadaErrorCode.INVALID_PARAMS : null);
+      const retryable = novadaErr ? novadaErr.retryable : (isZod ? false : null);
+      const promise = encryptHqIdentity(apiKey).then((hq) => {
+        const row = buildToolCallEvent({
+          request_id: ctx.requestId,
+          token_hash: ctx.tokenHash,
+          plan: opts.plan,
+          client_name: null,   // stateless: new server per request, getClientVersion() is not set for tool calls
+          client_version: null,
+          protocol_version: null,
+          tool: name,
+          args: argsObj,
+          outcome: opts.outcome,
+          latency_ms: Date.now() - started,
+          charged: opts.gate.charged,
+          over_cap_allowed: opts.gate.over_cap_allowed,
+          quota_remaining: opts.gate.quota_remaining,
+          server_version: telSV,
+          region: telRegion,
+          error_code: errorCode,
+          retryable,
+          rejection_stage: opts.rejectionStage,
+          is_hosted_limitation: opts.isHostedLimitation,
+          gateway_ceiling_hit: opts.gatewayCeilingHit,
+          auth_method: ctx.authMethod,
+          user_agent: ctx.userAgent,
+          hq_identity: hq.hq_identity,
+          key_version: hq.key_version,
+        });
+        // emitEvent (our own mcp_events backup) is scheduled regardless of the HQ
+        // push outcome — pushToHq runs after it, on the SAME row, and never throws
+        // (see ./_hq_push.ts), so no extra .catch() is needed on this leg.
+        // `started` = the tool call's own start timestamp — Leo's contract wants
+        // EVENT time (事件发生时间), not push time; the emit hop + retries can lag
+        // tens of seconds behind on slow tools.
+        return emitEvent(row).then(() => pushToHq(row, process.env, started));
+      }).catch(() => { /* fail-open */ });
+      try { waitUntil(promise); } catch { /* outside Vercel context */ }
     };
 
     // Tool-set filter: reject tools not in the endpoint's ?tools=/?groups= selection.
+    // This is a CALLER config choice (their own URL params), not a hosted
+    // architectural limitation — is_hosted_limitation stays false.
     if (ctx.allowedTools && !ctx.allowedTools.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
+      scheduleToolEvent({
+        outcome: "TOOL_NOT_ENABLED",
+        gate: { charged: false, over_cap_allowed: false, quota_remaining: 0 },
+        plan: null,
+        rejectionStage: "tool_filtered",
+        isHostedLimitation: false,
+      });
       return {
         content: [{
           type: "text" as const,
@@ -1023,8 +1189,16 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // endpoint (a HOSTED_HIDDEN tool such as novada_browser_flow / novada_site_copy /
     // novada_ip_whitelist, or an outright unknown name) is rejected BEFORE quota is
     // touched, with an agent_instruction pointing at the npm package where the full
-    // tool surface is available.
+    // tool surface is available. This IS a hosted architectural limitation —
+    // is_hosted_limitation is true.
     if (!visibleToolNames.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
+      scheduleToolEvent({
+        outcome: "TOOL_NOT_ENABLED",
+        gate: { charged: false, over_cap_allowed: false, quota_remaining: 0 },
+        plan: null,
+        rejectionStage: "tool_filtered",
+        isHostedLimitation: true,
+      });
       return {
         content: [{
           type: "text" as const,
@@ -1049,11 +1223,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         // monthlyQuota is declared below (after this early-return block) — inline it here.
         const setupMonthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
         const setupFooter = buildStatusFooter(SETUP_GATE, setupMonthlyQuota);
-        scheduleToolEvent("ok", setupGateFields, null);
+        scheduleToolEvent({ outcome: "ok", gate: setupGateFields, plan: null });
         return { content: [{ type: "text" as const, text: result + setupFooter }] };
       } catch (e) {
         logUsage(env, ctx.token, name, false, Date.now() - started);
-        scheduleToolEvent("error", setupGateFields, null);
+        scheduleToolEvent({ outcome: "error", gate: setupGateFields, plan: null, error: e });
         return { content: [{ type: "text" as const, text: String(e) }], isError: true };
       }
     }
@@ -1082,7 +1256,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       },
     });
     if (!gate.allowed) {
-      scheduleToolEvent("cap_blocked", { charged: false, over_cap_allowed: false, quota_remaining: -1 }, "free");
+      scheduleToolEvent({
+        outcome: "cap_blocked",
+        gate: { charged: false, over_cap_allowed: false, quota_remaining: -1 },
+        plan: "free",
+        rejectionStage: "cap_blocked",
+      });
       return {
         content: [{
           type: "text" as const,
@@ -1135,11 +1314,13 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       if (name === "novada_browser_flow") {
         logUsage(env, ctx.token, name, false, Date.now() - started);
         if (gate.charged) await refundQuota(ctx.tokenHash, env);
-        scheduleToolEvent(
-          "NOT_AVAILABLE_ON_HOSTED",
-          { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
-          gate.overCapAllowed ? "pro" : "free",
-        );
+        scheduleToolEvent({
+          outcome: "NOT_AVAILABLE_ON_HOSTED",
+          gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+          plan: gate.overCapAllowed ? "pro" : "free",
+          rejectionStage: "tool_filtered",
+          isHostedLimitation: true,
+        });
         return {
           content: [{
             type: "text" as const,
@@ -1163,11 +1344,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const discoverContent = [{ type: "text" as const, text: sanitized + discoverFooter }];
         const discoverNotice = await maybeGetFirstRunNoticeHosted(ctx.token);
         if (discoverNotice) discoverContent.push({ type: "text" as const, text: discoverNotice });
-        scheduleToolEvent(
-          "ok",
-          { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
-          gate.overCapAllowed ? "pro" : "free",
-        );
+        scheduleToolEvent({
+          outcome: "ok",
+          gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+          plan: gate.overCapAllowed ? "pro" : "free",
+        });
         return { content: discoverContent };
       }
 
@@ -1202,11 +1383,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // starting with "## Extraction Error" (not thrown), so it reaches this success
       // path. Emitting "ok" for a timed-out request is misleading in telemetry.
       const isCeilingTimeout = typeof result === "string" && result.startsWith("## Extraction Error");
-      scheduleToolEvent(
-        isCeilingTimeout ? "TIMEOUT" : "ok",
-        { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
-        gate.overCapAllowed ? "pro" : "free",
-      );
+      scheduleToolEvent({
+        outcome: isCeilingTimeout ? "TIMEOUT" : "ok",
+        gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+        plan: gate.overCapAllowed ? "pro" : "free",
+      });
       return {
         content,
         // quota_remaining only for real free-plan charges: exempt tools were
@@ -1247,11 +1428,17 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // unconditional refund here would walk their counter DOWN and mint free calls.
       if (gate.charged) await refundQuota(ctx.tokenHash, env);
       // Telemetry: error outcome with the NovadaError code, or generic "error".
-      scheduleToolEvent(
-        error instanceof NovadaError ? error.code : (error instanceof ZodError ? "INVALID_PARAMS" : "error"),
-        { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
-        gate.overCapAllowed ? "pro" : "free",
-      );
+      // gatewayCeilingHit distinguishes withWallClock's OWN timeout from a genuine
+      // upstream TASK_PENDING — both share the same NovadaErrorCode (see the
+      // GATEWAY_CEILING_ERRORS WeakSet doc comment above withWallClock).
+      const gatewayCeilingHit = error instanceof NovadaError && GATEWAY_CEILING_ERRORS.has(error);
+      scheduleToolEvent({
+        outcome: error instanceof NovadaError ? error.code : (error instanceof ZodError ? "INVALID_PARAMS" : "error"),
+        gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
+        plan: gate.overCapAllowed ? "pro" : "free",
+        gatewayCeilingHit,
+        error,
+      });
       if (error instanceof ZodError) {
         const issues = error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
         return {
@@ -1349,7 +1536,17 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 }
 
 // ─── HTTP entrypoint ─────────────────────────────────────────────────────────
-function jsonError(status: number, code: string, message: string, agentInstruction?: string): Response {
+/**
+ * RFC 9728 §5.1: every 401 on the protected /mcp resource must point OAuth-aware
+ * clients (Claude.ai, mcp-remote) at Protected Resource Metadata discovery via
+ * `resource_metadata=` on the WWW-Authenticate challenge, so they can find the
+ * Authorization Server and start the OAuth flow instead of just failing.
+ */
+function resourceMetadataUrl(url: URL): string {
+  return `${deriveIssuer(url.host, process.env.OAUTH_ISSUER)}/.well-known/oauth-protected-resource/mcp`;
+}
+
+function jsonError(status: number, code: string, message: string, agentInstruction?: string, extraHeaders?: Record<string, string>): Response {
   return new Response(
     JSON.stringify({
       jsonrpc: "2.0",
@@ -1360,7 +1557,7 @@ function jsonError(status: number, code: string, message: string, agentInstructi
       },
       id: null,
     }),
-    { status, headers: { "content-type": "application/json" } },
+    { status, headers: { "content-type": "application/json", ...extraHeaders } },
   );
 }
 
@@ -1526,6 +1723,14 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     });
   }
 
+  // OAuth 2.1 endpoints (RFC 8414/9728/7591/6749/7636) — routed BEFORE the
+  // /mcp path check and 404 fallback. Metadata GETs work without KV/env; the
+  // grant endpoints (/register, /authorize, /token) fail closed to
+  // server_error when OAUTH_ENC_KEY is absent (see _oauth.ts).
+  if (isOAuthPath(pathname)) {
+    return handleOAuthRequest(request, url, getClientIp(request), buildOAuthDeps(env));
+  }
+
   // Accept /mcp, /api/mcp, or /:key/mcp (path-based auth for Claude.ai).
   // In Vercel Node runtime, req.url may show the original path even after rewrite.
   const pathMatch = pathname.match(/^\/([a-zA-Z0-9_\-]{16,})\/mcp$/);
@@ -1537,6 +1742,10 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
 
   // 🔴 STUB AUTH GATE — operator must explicitly accept that the auth layer is a stub
   // until sub2api integration lands. See PRE_LAUNCH_CHECKLIST.md.
+  // Scope: this gate covers /mcp ONLY. The OAuth AS endpoints (.well-known/*,
+  // /register, /authorize, /token) route above it — metadata GETs are pure, and
+  // grant endpoints fail closed to server_error while OAUTH_ENC_KEY is unset, so
+  // leaving this env var off does NOT dark-launch the whole host.
   if (env.STUB_AUTH_WARNING_ACCEPTED !== "true") {
     return jsonError(503, "STUB_AUTH_UNACKED",
       "Auth system not yet activated. Contact the operator.",
@@ -1566,15 +1775,56 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     });
   }
 
+  // Stable per-request identifier for telemetry correlation. Generated BEFORE
+  // auth so every guard-site rejection below (pre_auth / rate_limited) can be
+  // emitted with the SAME request_id a successful call would have gotten.
+  // Never logged in user-visible output — used only in the mcp_events sink.
+  const requestId = crypto.randomUUID();
+  // Raw User-Agent header — sanitized (truncated + control-stripped) inside
+  // buildToolCallEvent/buildInitializeEvent, never here. Never paired with raw
+  // IP in telemetry (see the roundtable doc §4 privacy redline).
+  const userAgent = request.headers.get("user-agent");
+
   // Auth — validate the token FIRST and reject with 401 BEFORE touching KV.
   // An unauthenticated request must not be able to spend a KV read/incr (the
   // rate-limit counter below), so this runs ahead of rateLimitExceeded.
-  const token = extractToken(request);
+  // `token` is `let`-bound and REBOUND (never renamed) once an OAuth access
+  // token resolves to the caller's real Novada key below — every downstream
+  // consumer (validateToken, tokenHash, buildServer, the `apiKey` trim further
+  // down) must see that real key, and caller-key.test.mjs's
+  // `const apiKey = token?.trim()` fence depends on this same carrier.
+  let token = extractToken(request)?.token ?? null;
+  const authMethod = extractToken(request)?.authMethod ?? null;
   if (!token) {
+    // pre_auth guard-site emit: no token at all → no tokenHash/hq_identity possible
+    // (nothing to hash or encrypt) — emitGuardRejection handles that null case.
+    emitGuardRejection({ requestId, token: null, outcome: "MISSING_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
+    // The RFC 9728 challenge header below is written INLINE at each 401 site on
+    // purpose: oauth.test.mjs T28 counts the literal per site. Consolidating these
+    // 401 responses into a shared helper breaks that contract test — update the
+    // test first if you ever refactor this.
     return jsonError(401, "MISSING_TOKEN",
       "Missing API key. Pass your own Novada API key as ?token=YOUR_KEY or Authorization: Bearer YOUR_KEY — the hosted endpoint bills each call to your own Novada balance.",
-      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.");
+      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.",
+      { "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}"` });
   }
+
+  // OAuth access tokens (nvo_at_*, minted by POST /token) are opaque handles —
+  // resolve to the underlying Novada API key BEFORE validateToken (which only
+  // understands real Novada keys), so a raw key and a resolved OAuth key take
+  // the exact same path from here on.
+  if (token.startsWith("nvo_at_")) {
+    const resolved = await resolveAccessToken(token, buildOAuthDeps(env));
+    if (!resolved) {
+      emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
+      return jsonError(401, "INVALID_TOKEN",
+        "This OAuth access token is expired, revoked, or unknown.",
+        "Refresh via grant_type=refresh_token, or restart the OAuth flow at /.well-known/oauth-authorization-server.",
+        { "www-authenticate": `Bearer error="invalid_token", resource_metadata="${resourceMetadataUrl(url)}"` });
+    }
+    token = resolved;
+  }
+
   const info = await validateToken(token, env);
   if (!info.valid) {
     // `verified` distinguishes a real upstream rejection (key is well-formed but
@@ -1584,14 +1834,22 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     const message = info.verified
       ? "Your API key is not a valid or active Novada API key. It was rejected by the Novada account API — verify you copied the correct key from your OWN Novada account."
       : "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the token.";
+    // pre_auth guard-site emit: token is present (even though rejected) — hash/
+    // encrypt it so HQ can still resolve which account attempted the call.
+    emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
     return jsonError(401, "INVALID_TOKEN", message,
-      "Check your key at https://dashboard.novada.com/api-key/ — make sure it belongs to YOUR account, not a different one. Get a Novada API key with $10 free credits at https://novada.com if you don't have one.");
+      "Check your key at https://dashboard.novada.com/api-key/ — make sure it belongs to YOUR account, not a different one. Get a Novada API key with $10 free credits at https://novada.com if you don't have one.",
+      { "www-authenticate": `Bearer error="invalid_token", resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 
   // Per-IP rate limit — slow down abusive loops from an authenticated key.
   // Identity comes from a Vercel-trusted IP header (never spoofable raw XFF).
   const ip = getClientIp(request);
   if (await rateLimitExceeded(ip, env)) {
+    // rate_limited guard-site emit. Outcome is deliberately "GATEWAY_RATE_LIMITED"
+    // (NOT a NovadaErrorCode) — distinct from a target-side 429 an upstream tool
+    // might raise, per the roundtable doc §6's explicit "网关429 vs target 429" split.
+    emitGuardRejection({ requestId, token, outcome: "GATEWAY_RATE_LIMITED", rejectionStage: "rate_limited", authMethod, userAgent });
     return jsonError(429, "RATE_LIMITED",
       `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
       "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.");
@@ -1608,7 +1866,8 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   if (!apiKey) {
     return jsonError(401, "MISSING_TOKEN",
       "No Novada API key provided. Pass your own key as ?token=YOUR_KEY (or Authorization: Bearer YOUR_KEY) — the hosted endpoint bills each call to your own Novada balance and never to a shared account.",
-      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.");
+      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.",
+      { "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 
   // Optional tool-set filter from ?tools= / ?groups= (BrightData-style slim endpoint).
@@ -1618,16 +1877,12 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // never written to KV (see tokenKvHash). Computed once per request.
   const tokenHash = await tokenKvHash(token);
 
-  // Stable per-request identifier for telemetry correlation. Never logged in
-  // user-visible output — used only in the mcp_events sink.
-  const requestId = crypto.randomUUID();
-
   // Build a fresh server + transport per request (stateless mode). Edge
   // functions are per-request isolates with no shared memory — same pattern
   // as the CF Worker port.
   // `balance` rides along from the validateToken probe (90s-TTL cached) so the
   // over-cap OR-fallback usually needs no extra upstream round-trip.
-  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, balance: info.balance, requestId });
+  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, balance: info.balance, requestId, authMethod, userAgent });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,
