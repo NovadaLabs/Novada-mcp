@@ -54,3 +54,7 @@ test-p0.mjs
 
 # Audit/scan reports may contain secrets — never commit
 reports/
+
+# Python
+__pycache__/
+*.pyc
