@@ -8,6 +8,18 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Vitest's 5s default is too tight for the COVERAGE run — and `npm run
+    // test:coverage` is what ci.yml actually executes. Measured 2026-07-30:
+    // v8 instrumentation stretches aggregate test time ~3.6x (29s bare ->
+    // 105s with coverage), so slower mock-heavy specs randomly blew the 5s
+    // budget. The failing set DRIFTED between runs (f6-f11 -> none ->
+    // sdk/client+crawl+extract-markdown), i.e. contention flake, never a
+    // logic fault: re-running the same suite at --testTimeout=30000 turned
+    // every one of them green. 20s keeps a genuinely hung test failing fast
+    // enough while removing a CI-red generator unrelated to code quality.
+    // Do NOT raise this to paper over a test that is legitimately slow —
+    // fix the test instead.
+    testTimeout: 20_000,
     // Strips leaked NOVADA_* env vars before each test so credential-fallback
     // branches are deterministic regardless of the operator's shell. See tests/setup.ts.
     setupFiles: ["tests/setup.ts"],
