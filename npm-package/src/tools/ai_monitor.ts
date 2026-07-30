@@ -281,8 +281,14 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
   lines.push(`brand: ${brand}`);
   lines.push(`domains_searched: ${models.join(", ")}`);
   if (allCompetitors.length > 0) lines.push(`competitors_found: ${allCompetitors.join(", ")}`);
+  // PARAM_HONESTY dual-surface requirement (2026-07-30 marker-drift fix): the shared
+  // case-insensitive marker set ["not applied", "do not rely"] must appear on BOTH the
+  // body warning above AND this agent_instruction line (contract-test.py's
+  // PARAM_HONESTY_CASES row for novada_ai_monitor asserts both surfaces separately).
+  // Keep the named ignored topics and the per-call guidance — just also say it the
+  // same way proxy.ts/browser.ts/extract.ts do.
   const ignoredTopicsInstruction = ignoredTopics.length > 0
-    ? ` topics ${ignoredTopics.map(t => JSON.stringify(t)).join(", ")} were NOT queried — only topics[0] is used per call. Issue one novada_ai_monitor call per topic to cover the rest.`
+    ? ` topics ${ignoredTopics.map(t => JSON.stringify(t)).join(", ")} were accepted but not applied — do not rely on them being queried; only topics[0] ("${topics[0]}") is used per call. Issue one novada_ai_monitor call per topic to cover the rest.`
     : "";
   lines.push(`agent_instruction: Domain presence check complete. Results show indexed PUBLIC PAGES on AI-company domains — not live model responses. To deep-dive into any source URL, call novada_extract. To check a competitor, call novada_ai_monitor with their brand name.${ignoredTopicsInstruction}`);
 

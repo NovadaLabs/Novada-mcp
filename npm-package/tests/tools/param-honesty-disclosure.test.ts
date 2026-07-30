@@ -191,8 +191,37 @@ describe("novada_ai_monitor — topics[1..n] disclosure", () => {
     );
 
     expect(result).toContain("agent_instruction:");
-    expect(result).toContain('topics "reliability" were NOT queried');
+    expect(result).toContain('topics "reliability" were accepted but not applied');
+    expect(result).toContain("do not rely on them being queried");
     expect(result).toContain("Issue one novada_ai_monitor call per topic to cover the rest");
+  });
+
+  // Regression guard for the 2026-07-30 marker-drift incident: contract-test.py's
+  // PARAM_HONESTY invariant (case 9) requires the SAME case-insensitive marker set
+  // (["not applied", "do not rely"]) to appear on BOTH the body "## Warnings" block
+  // AND, separately, the `agent_instruction:` line — checking only one surface let
+  // ai_monitor's agent_instruction drift out of sync with its own body disclosure
+  // (it said "were NOT queried" instead of sharing the class-wide marker used by
+  // novada_proxy/novada_browser/novada_extract). Pin both surfaces here so that
+  // drift trips locally before it ever reaches the nightly canary.
+  it("(b) shared PARAM_HONESTY marker ['not applied' | 'do not rely'] present on BOTH the body warning and the agent_instruction line", async () => {
+    const result = await novadaAiMonitor(
+      { brand: "novada", models: ["chatgpt"], topics: ["pricing", "reliability", "support"] },
+      API_KEY,
+    );
+
+    const warningsIdx = result.indexOf("## Warnings");
+    const agentInstructionIdx = result.indexOf("agent_instruction:");
+    expect(warningsIdx).toBeGreaterThan(-1);
+    expect(agentInstructionIdx).toBeGreaterThan(-1);
+    expect(agentInstructionIdx).toBeGreaterThan(warningsIdx);
+
+    const bodyText = result.slice(warningsIdx, agentInstructionIdx).toLowerCase();
+    const instructionText = result.slice(agentInstructionIdx).toLowerCase();
+    const sharedMarkers = ["not applied", "do not rely"];
+
+    expect(sharedMarkers.some(m => bodyText.includes(m))).toBe(true);
+    expect(sharedMarkers.some(m => instructionText.includes(m))).toBe(true);
   });
 
   it("(c) single topic supplied: NO ignored-topics disclosure anywhere (no noise)", async () => {
