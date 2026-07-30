@@ -171,7 +171,7 @@ import { listResources, readResource } from "../vendor/novada-mcp/resources/inde
 // blocked; over-cap calls pass when the account has real payment history (orders
 // primary, positive balance as OR-fallback). Plan resolution is LAZY — nothing is
 // looked up for keys under the cap.
-import { enforceGatewayCap, resolvePlan } from "./_plan.js";
+import { enforceGatewayCap, resolvePlan, fetchAggregateBalance } from "./_plan.js";
 
 // Hosted server version = `<vendored npm version>.<server build tag>-hosted`.
 //   • The npm-version part is DERIVED from the vendored package — NEVER hardcoded.
@@ -1249,10 +1249,14 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       deps: {
         decrementQuota: (plan) => decrementQuota(ctx.tokenHash, env, plan),
         resolvePlan: () => resolvePlan(apiKey, ctx.tokenHash),
-        fetchBalance: async () => {
-          const d = await devApiPost("/v1/wallet/balance", {}, { apiKey, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS }) as { balance?: unknown };
-          return typeof d?.balance === "number" ? d.balance : 0;
-        },
+        // 2026-07-30 incident fix: the wallet ledger alone missed capture-funded
+        // paid accounts (Scraping Solutions: wallet=$0, capture balance ~$99,994.78).
+        // fetchAggregateBalance queries BOTH ledgers in parallel and never throws —
+        // see ./_plan.ts for the per-ledger degrade-to-0 + max() contract.
+        fetchBalance: () => fetchAggregateBalance({
+          fetchWalletBalance: () => devApiPost("/v1/wallet/balance", {}, { apiKey, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS }),
+          fetchCaptureBalance: () => devApiPost("/v1/capture/get_balance", {}, { apiKey, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS }),
+        }),
       },
     });
     if (!gate.allowed) {

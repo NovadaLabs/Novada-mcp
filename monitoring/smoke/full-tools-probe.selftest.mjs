@@ -24,29 +24,45 @@
  *   2. preflightAssertAllProbesExecutable() does not throw for the real,
  *      committed PROBES list (confirms the args-aware carve-out for
  *      novada_proxy_account_create's no-confirm dry-run actually works).
- *   3. Eleven scripted canned scenarios (a plain pass; an isolated backend
+ *   3. Thirteen scripted canned scenarios (a plain pass; an isolated backend
  *      520; processing→poll-completes; processing→still-stuck on a
  *      non-flaky platform; processing→still-stuck on a KNOWN-FLAKY platform;
  *      processing-matched-but-no-task_id; a validation error we own; an
  *      INVALID_API_KEY auth error; httpStatus-0-then-retry-recovers;
  *      httpStatus-0-retry-exhausted; a scraper `50004: context deadline
- *      exceeded` backend timeout on a NON-flaky platform) each classify to
- *      the EXACT domain+severity this script's 2026-07-24/2026-07-28 review
- *      fixes specify. The last scenario is the ratchet for the real-world
- *      mislabel found 2026-07-28: `scraper.novada.com/request` returning
- *      `{code:50004, msg:"context deadline exceeded"}` (a genuine BACKEND
- *      outage, reproduced with a raw curl, zero MCP involved) was, before the
+ *      exceeded` backend timeout on a NON-flaky platform; a 2026-07-30
+ *      free-gateway-cap error on a CORE tool; the SAME free-gateway-cap
+ *      error on a KNOWN-FLAKY platform) each classify to the EXACT
+ *      domain+severity this script's 2026-07-24/2026-07-28/2026-07-30
+ *      review fixes specify. The `novada_scrape_google` scenario is the
+ *      ratchet for the real-world mislabel found 2026-07-28:
+ *      `scraper.novada.com/request` returning `{code:50004,
+ *      msg:"context deadline exceeded"}` (a genuine BACKEND outage,
+ *      reproduced with a raw curl, zero MCP involved) was, before the
  *      isBackendSignal fix, falling through every existing pattern (it is
  *      not a known-flaky platform, not a validation error, not an
  *      INVALID_API_KEY, not an HTTP 5xx/network failure, and did not match
- *      the old BACKEND_SIGNAL_RE's exact wording) all the way to step 7's
+ *      the old BACKEND_SIGNAL_RE's exact wording) all the way to step 8's
  *      ①-mcp-code fail-safe default — a false "our-code" P1 on every
  *      non-flaky platform during a pure backend outage. Confirmed by
  *      temporarily reverting the `isBackendSignal` check in classifyFailure
  *      and re-running this self-test: the scenario below classified
- *      `①-mcp-code`/P1 instead of `③-backend`/P2.
+ *      `①-mcp-code`/P1 instead of `③-backend`/P2. The `novada_search` and
+ *      `novada_scrape_yandex` scenarios are the ratchet for the 2026-07-30
+ *      incident: before the FREE_CAP_RE fix, the CORE-tool case fell through
+ *      to step 8's ①-mcp-code fail-safe (false "code bug" P0) and the
+ *      known-flaky-platform case was swallowed by step 3's isFlaky branch
+ *      (false ③-backend/P3) — both wrong, since a free-gateway-cap rejection
+ *      is billing/test-infra, not a code bug or a backend outage.
  *   4. novada_proxy_account_create (no confirm) never crashes the run and
  *      classifies as a PASS/SLOW — the literal CRITICAL regression check.
+ *   5. adviceFor() on the novada_search free-gateway-cap scenario returns
+ *      advice text mentioning "free-gateway cap" (review round 1, 2026-07-30
+ *      HIGH fix) — classifyFailure() alone is not enough; adviceFor()'s
+ *      ②-gateway block must ALSO branch on the new note, or a cap-hit row's
+ *      report advice silently falls through to the generic "check
+ *      hosted-server Vercel function health..." fallthrough, which is the
+ *      exact misdirection this whole fix targets.
  *
  * Exit code: non-zero on ANY assertion mismatch, or if the pipeline itself
  * throws uncaught (caught by the outer .catch() below and reported as FATAL
@@ -54,7 +70,7 @@
  * must never crash").
  */
 
-import { PROBES, runAllProbes, preflightAssertAllProbesExecutable } from "./full-tools-probe.mjs";
+import { PROBES, runAllProbes, preflightAssertAllProbesExecutable, adviceFor } from "./full-tools-probe.mjs";
 
 // ─── Stub callTool: canned responses for 10 scripted scenarios, a default
 // PASS for every other probe, and generic-dispatcher poll routing keyed by
@@ -224,6 +240,38 @@ function stubCallTool(name, args) {
         error: { toolError: true, message: "Scraper error (code 50004): context deadline exceeded" },
       });
 
+    case "novada_search":
+      // Scenario 12: the 2026-07-30 free-gateway-cap incident on a CORE tool
+      // (novada_search is a CORE_TOOL_NAMES member) — must classify
+      // ②-gateway/P0, NOT ①-mcp-code (which is what happened for real on
+      // 2026-07-30 before this fix, misfiring TOW2-349). httpStatus 200
+      // (a normal tool-result envelope carrying the cap error), see the
+      // sibling httpStatus-0 case on novada_scrape_yandex below — both MUST
+      // classify identically since FREE_CAP_RE only inspects the message.
+      return Promise.resolve({
+        ok: false,
+        httpStatus: 200,
+        timeMs: 300,
+        text: null,
+        error: {
+          toolError: true,
+          message:
+            '## Free Gateway Cap Reached\n\nThis test key has used its free daily gateway quota.\n' +
+            'agent_instruction: "free_gateway_cap_reached — top up the key or wait for the daily reset. Do not retry immediately."',
+        },
+      });
+
+    case "novada_scrape_yandex":
+      // Scenario 13: the SAME 2026-07-30 free-gateway-cap error, but on a
+      // KNOWN-FLAKY platform (yandex is in BACKEND_KNOWN_FLAKY_PLATFORMS)
+      // and delivered as httpStatus 0 (the network-level envelope some
+      // hosted-gateway rejections arrive as). Must STILL classify
+      // ②-gateway/P1 — the isFlaky branch must NOT swallow this into
+      // ③-backend/P3 the way it did for real on 2026-07-30 for
+      // youtube/github/perplexity. This is the ratchet for that exact bug:
+      // FREE_CAP_RE is checked BEFORE isFlaky in classifyFailure.
+      return Promise.resolve({ ok: false, httpStatus: 0, timeMs: 200, text: null, error: "free_gateway_cap_reached" });
+
     default:
       return Promise.resolve({ ok: true, httpStatus: 200, timeMs: 80, text: `${name} ok (default self-test stub)`, error: null });
   }
@@ -285,6 +333,8 @@ async function main() {
     { name: "novada_extract", status: "PASS", domain: "-", severity: null, why: "httpStatus 0 non-timeout on attempt 1, retry recovers" },
     { name: "novada_scrape_instagram", status: "FAIL", domain: "②-gateway", severity: "P1", why: "httpStatus 0 non-timeout, retry exhausted (MEDIUM fix: must be ②, not ①)" },
     { name: "novada_scrape_google", status: "FAIL", domain: "③-backend", severity: "P2", why: 'scraper 50004 "context deadline exceeded" backend timeout on a NON-flaky platform (2026-07-28 fix: must be ③, not ①)' },
+    { name: "novada_search", status: "FAIL", domain: "②-gateway", severity: "P0", why: "2026-07-30 free-gateway-cap error on a CORE tool (must be ②/P0, not ①-mcp-code)" },
+    { name: "novada_scrape_yandex", status: "FAIL", domain: "②-gateway", severity: "P1", why: "the SAME free-gateway-cap error on a KNOWN-FLAKY platform, httpStatus 0 (must be ②/P1, NOT swallowed into ③-backend/P3)" },
   ];
 
   console.log("");
@@ -297,6 +347,24 @@ async function main() {
     expect(
       row.severity === sc.severity,
       `${sc.name}: severity === ${JSON.stringify(sc.severity)} (got ${JSON.stringify(row.severity)}) — ${sc.why}`
+    );
+  }
+
+  // Review round 1 (2026-07-30, HIGH): adviceFor() was not extended alongside
+  // classifyFailure()'s new FREE_CAP_RE branch, so a cap-hit row's `.advice`
+  // (the report's "给后端的建议" column) fell through to the generic ②-gateway
+  // fallthrough ("Ours — check hosted-server Vercel function health, timeout
+  // budget, and streaming behavior") — exactly the misdirection this whole
+  // fix targets. Assert directly on adviceFor()'s output for the
+  // novada_search cap scenario so this can never silently regress again.
+  console.log("");
+  const capAdviceRow = byName.novada_search;
+  expect(Boolean(capAdviceRow), "novada_search: row present for adviceFor() check");
+  if (capAdviceRow) {
+    const advice = adviceFor(capAdviceRow);
+    expect(
+      typeof advice === "string" && advice.includes("free-gateway cap"),
+      `novada_search (free-gateway-cap scenario): adviceFor() mentions "free-gateway cap" (got: ${JSON.stringify(advice)}) — must NOT fall through to the generic ②-gateway advice`
     );
   }
 
@@ -340,7 +408,7 @@ async function main() {
     return;
   }
   console.log(
-    `[selftest] OK — ${scenarios.length + 6} assertion group(s) passed, ${results.length} probe(s) attempted, 0 crashes.`
+    `[selftest] OK — ${scenarios.length + 7} assertion group(s) passed, ${results.length} probe(s) attempted, 0 crashes.`
   );
   process.exitCode = 0;
 }

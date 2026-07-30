@@ -30,6 +30,8 @@ import {
   PLAN_STALE_RETENTION_S,
   resolvePlan,
   enforceGatewayCap,
+  parseBalanceValue,
+  fetchAggregateBalance,
 } from "../api/_plan.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -118,6 +120,77 @@ test("CAP_EXEMPT_TOOLS: content tools are NOT exempt", () => {
   for (const name of ["novada_search", "novada_extract", "novada_scrape", "novada_proxy_account_create"]) {
     assert.ok(!CAP_EXEMPT_TOOLS.has(name), `${name} must NOT be cap-exempt`);
   }
+});
+
+// ─── Layer 1: UNIT — parseBalanceValue / fetchAggregateBalance ───────────────
+// 2026-07-30 incident: Scraping Solutions had wallet=$0 but capture-ledger
+// balance ~$99,994.78 and was denied service by the free-gateway cap because
+// the OR-fallback only ever probed the wallet. These tests lock in the fix:
+// the aggregate resolver queries both ledgers and takes the max.
+
+test("parseBalanceValue: bare number (capture shape) → itself", () => {
+  assert.equal(parseBalanceValue(99994.783374), 99994.783374);
+  assert.equal(parseBalanceValue(0), 0);
+});
+
+test("parseBalanceValue: {balance:number} object (wallet shape) → the balance field", () => {
+  assert.equal(parseBalanceValue({ balance: 254.4 }), 254.4);
+  assert.equal(parseBalanceValue({ balance: 0 }), 0);
+});
+
+test("parseBalanceValue: malformed payloads → 0, never throws", () => {
+  const malformed = [null, undefined, "string", NaN, Infinity, -Infinity, [], {}, { balance: "10" }, { balance: null }];
+  for (const payload of malformed) {
+    assert.equal(parseBalanceValue(payload), 0, `payload ${JSON.stringify(payload)} must parse to 0`);
+  }
+});
+
+test("aggregate: wallet=0 (object shape), capture>0 (bare-number shape) → max = capture (the incident case)", async () => {
+  const balance = await fetchAggregateBalance({
+    fetchWalletBalance: async () => ({ balance: 0 }),
+    fetchCaptureBalance: async () => 99994.783374,
+  });
+  assert.equal(balance, 99994.783374);
+});
+
+test("aggregate: wallet=0, capture=0 → 0 (still capped)", async () => {
+  const balance = await fetchAggregateBalance({
+    fetchWalletBalance: async () => ({ balance: 0 }),
+    fetchCaptureBalance: async () => 0,
+  });
+  assert.equal(balance, 0);
+});
+
+test("aggregate: wallet probe throws, capture>0 → capture wins (wallet ledger degrades to 0, not a total failure)", async () => {
+  const balance = await fetchAggregateBalance({
+    fetchWalletBalance: async () => { throw new Error("wallet probe down"); },
+    fetchCaptureBalance: async () => 42,
+  });
+  assert.equal(balance, 42);
+});
+
+test("aggregate: capture probe throws, wallet>0 → wallet wins (capture ledger degrades to 0)", async () => {
+  const balance = await fetchAggregateBalance({
+    fetchWalletBalance: async () => ({ balance: 17 }),
+    fetchCaptureBalance: async () => { throw new Error("capture probe down"); },
+  });
+  assert.equal(balance, 17);
+});
+
+test("aggregate: BOTH probes throw → 0, never throws", async () => {
+  const balance = await fetchAggregateBalance({
+    fetchWalletBalance: async () => { throw new Error("wallet down"); },
+    fetchCaptureBalance: async () => { throw new Error("capture down"); },
+  });
+  assert.equal(balance, 0);
+});
+
+test("aggregate: wallet > capture → wallet wins (max, not wallet-preference or capture-preference)", async () => {
+  const balance = await fetchAggregateBalance({
+    fetchWalletBalance: async () => ({ balance: 500 }),
+    fetchCaptureBalance: async () => 10,
+  });
+  assert.equal(balance, 500);
 });
 
 // ─── Runtime helpers: mock KV + deps ─────────────────────────────────────────
@@ -311,6 +384,29 @@ test("gate: call #1001, plan=free + no ctxBalance + live balance>0 → allowed v
   const r = await enforceGatewayCap({ toolName: "novada_search", monthlyQuota: 1000, deps });
   assert.equal(r.allowed, true);
   assert.equal(calls.fetchBalance, 1);
+});
+
+// 2026-07-30 incident regression: ctxBalance is the CACHED WALLET-ONLY balance
+// from token verification (mcp.ts validateToken). A $0 wallet on a
+// capture-funded paid account must NOT short-circuit past the live aggregate
+// fetch — before this fix, `balance === undefined` was the only trigger, so
+// ctxBalance=0 (defined, falsy) skipped deps.fetchBalance() entirely and the
+// call was blocked even though the aggregate ledger had real balance.
+test("gate: call #1001, ctxBalance=0 (wallet empty) + live aggregate balance>0 → allowed (the incident case)", async () => {
+  const { calls, deps } = makeGateDeps({ remainingFree: -1, plan: "free", balance: 99994.78 });
+  const r = await enforceGatewayCap({ toolName: "novada_search", monthlyQuota: 1000, ctxBalance: 0, deps });
+  assert.equal(r.allowed, true, "ctxBalance=0 must not suppress the live aggregate-balance fallback fetch");
+  assert.equal(r.overCapAllowed, true);
+  assert.equal(calls.fetchBalance, 1, "ctxBalance=0 must trigger the live fetch, not be treated as a trusted positive balance");
+});
+
+// Fast-path contrast to the test above: a genuinely POSITIVE ctxBalance still
+// must NOT pay a live fetch — only ctxBalance<=0 falls through.
+test("gate: call #1001, ctxBalance>0 → fetchBalance is NOT called (fast path preserved)", async () => {
+  const { calls, deps } = makeGateDeps({ remainingFree: -1, plan: "free" });
+  const r = await enforceGatewayCap({ toolName: "novada_search", monthlyQuota: 1000, ctxBalance: 12, deps });
+  assert.equal(r.allowed, true);
+  assert.equal(calls.fetchBalance, 0, "a positive ctxBalance must be trusted without a live fetch");
 });
 
 test("gate: call #1001, no orders + no balance → BLOCKED (trial user stays capped)", async () => {

@@ -118,6 +118,58 @@ export function shouldAllowOverCap(plan: "free" | "pro", balance: number | undef
   return typeof balance === "number" && balance > 0;
 }
 
+// ─── Aggregate balance across ledgers (2026-07-30 incident fix) ──────────────
+//
+// Incident: a paid-plan account (Scraping Solutions — capture-ledger balance
+// $99,994.78) was capped by the free-gateway limit because the OR-fallback
+// balance check only ever looked at the MASTER WALLET ledger ($0 for this
+// account — its spend is billed against the capture/scraper plan, a SEPARATE
+// ledger). A customer who has genuinely paid was told to top up a wallet they
+// have no reason to use. Fix: treat "balance" as the max across both ledgers
+// the developer-api exposes, not the wallet alone.
+
+/** Injected upstream probes — one per ledger. Each returns the RAW `data` field. */
+export interface BalanceProbeDeps {
+  /** POST /v1/wallet/balance data shape: `{ balance: number }`. */
+  fetchWalletBalance: () => Promise<unknown>;
+  /** POST /v1/capture/get_balance data shape: a BARE number (not an object). */
+  fetchCaptureBalance: () => Promise<unknown>;
+}
+
+/**
+ * Parse a single ledger's `data` payload into a number. Handles both upstream
+ * shapes seen across developer-api balance endpoints:
+ *   - bare number         — /v1/capture/get_balance
+ *   - { balance: number } — /v1/wallet/balance
+ * Anything else (missing, wrong type, NaN/Infinity) → 0. NEVER throws.
+ */
+export function parseBalanceValue(data: unknown): number {
+  if (typeof data === "number" && Number.isFinite(data)) return data;
+  if (data && typeof data === "object") {
+    const balance = (data as { balance?: unknown }).balance;
+    if (typeof balance === "number" && Number.isFinite(balance)) return balance;
+  }
+  return 0;
+}
+
+/**
+ * Aggregate paid-tier balance across BOTH ledgers, queried in parallel. Each
+ * ledger degrades to 0 INDEPENDENTLY on fetch failure or malformed shape —
+ * one ledger being down (or a brand-new account never having touched it)
+ * must never suppress a genuine balance on the other ledger. Result is the
+ * max of the two, matching "the caller has spendable balance somewhere".
+ * This function itself NEVER throws (fail-safe contract of this module).
+ */
+export async function fetchAggregateBalance(deps: BalanceProbeDeps): Promise<number> {
+  const [walletResult, captureResult] = await Promise.allSettled([
+    deps.fetchWalletBalance(),
+    deps.fetchCaptureBalance(),
+  ]);
+  const wallet = walletResult.status === "fulfilled" ? parseBalanceValue(walletResult.value) : 0;
+  const capture = captureResult.status === "fulfilled" ? parseBalanceValue(captureResult.value) : 0;
+  return Math.max(wallet, capture);
+}
+
 // ─── Plan resolution with KV cache ───────────────────────────────────────────
 
 /** Injected dependencies — defaults wire Vercel KV + the developer-api client. */
@@ -285,7 +337,14 @@ export async function enforceGatewayCap(opts: {
   let plan: "free" | "pro" = "free";
   try { plan = await deps.resolvePlan(); } catch { plan = "free"; }
 
-  let balance = ctxBalance;
+  // ctxBalance (2026-07-30 incident fix): only trust the cached ctx balance
+  // when it is POSITIVE. ctxBalance is captured once at token-verification
+  // time from the WALLET ledger alone (see mcp.ts validateToken) — a $0
+  // wallet on a capture-funded account would otherwise short-circuit this
+  // branch and skip deps.fetchBalance() (the aggregate, both-ledger probe)
+  // entirely, permanently hiding a real balance sitting on the OTHER ledger.
+  // undefined/<=0 always falls through to the live aggregate fetch.
+  let balance = ctxBalance !== undefined && ctxBalance > 0 ? ctxBalance : undefined;
   if (plan !== "pro" && balance === undefined) {
     try { balance = await deps.fetchBalance(); } catch { balance = 0; }
   }
