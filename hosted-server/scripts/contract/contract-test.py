@@ -61,6 +61,19 @@ Invariants — FREE set (run by default in deploy gate; also the stdio set):
                                a WWW-Authenticate header carrying resource_metadata=
                                [http ONLY — stdio has no HTTP surface at all. SKIPPED
                                on stdio.]
+    11. ACTIONABLE_ERRORS    — every error response (tool-call OR protocol-level)
+                               carries a non-empty agent_instruction line. Table-
+                               driven (ACTIONABLE_ERRORS_CASES): unknown operation
+                               on a known scrape platform, missing required scrape
+                               param, missing required extract param — all three
+                               fail in preflightScrape()/Zod validation BEFORE any
+                               backend round-trip (FREE). A 4th row (unknown
+                               resources/read URI) is a KNOWN GAP: readResource()
+                               throws a plain Error with no agent_instruction at
+                               all — EXPECTED TO FAIL, reported as a real finding,
+                               never weakened to a skip.
+                               [http + stdio — preflightScrape/Zod/readResource
+                               are all shared npm-package/src code]
 
 Invariants — CONTRACT_FULL=1 only (billable — costs a few cents; http only,
 CONTRACT_FULL is refused outright for stdio, see StdioTransport):
@@ -87,6 +100,48 @@ CONTRACT_FULL is refused outright for stdio, see StdioTransport):
                                rejection ("## Free Gateway Cap Reached") FAILS.
                                [billed, http only in practice since CONTRACT_FULL
                                never runs against stdio]
+    9. PARAM_HONESTY         — class-level generalization of NO_SILENT_NOOP
+                               (2026-07-30, TOW2-349 postmortem round 2: a correct
+                               principle fixed for ONE param pair instead of the
+                               CLASS). Table-driven (PARAM_HONESTY_CASES): every
+                               known tool input the server accepts syntactically
+                               but does not honor semantically must be disclosed
+                               — on BOTH surfaces (response body AND, separately,
+                               the agent_instruction line — round-3 finding:
+                               checking only "anywhere in body" was itself a
+                               one-surface-not-all-surfaces bug), unless the row
+                               is `agent_instruction_exempt` for a verified
+                               structural reason. novada_proxy isp+country is the
+                               PRECEDENT row (body-level fix live, but
+                               agent_instruction_exempt — proxy.ts has zero
+                               agent_instruction surface at all). novada_browser
+                               country, novada_ai_monitor topics[1:], and
+                               novada_extract country-on-the-static/auto-path
+                               (the 4th member, coordinator-flagged in a parallel
+                               round-2 code review) are the three non-exempt rows
+                               — under the dual-surface check, ALL THREE now read
+                               known_pending_deploy=True (novada_browser flipped
+                               from a false-PASS in the round-2 draft, which only
+                               checked the body). See each row's
+                               `known_pending_deploy`/`agent_instruction_exempt`
+                               flags for this worker's 2026-07-30 finding. The
+                               table growing from 3 rows → 4 rows → a stricter
+                               dual-surface assertion, mid-task, with zero new
+                               code branches, is itself evidence the table-driven
+                               shape is the correct fix for the class-vs-instance
+                               root cause.
+    10. REAL_SOURCE_URLS     — every URL surfaced by a search/research response
+                               must be a direct destination, never a tracking
+                               redirector. Table-driven
+                               (REAL_SOURCE_URLS_FORBIDDEN_PATTERNS): bing.com/ck/a,
+                               google.com/url?q=, duckduckgo.com/l/?uddg=,
+                               r.msn.com. Checked against novada_search and
+                               novada_research (REAL_SOURCE_URLS_CASES). The Bing
+                               decode fix (utils/url.ts's decodeBingRedirect,
+                               commit 7e4a296) is committed to npm-package/src but
+                               NOT yet vendored into hosted-server's research.js —
+                               a research-row failure is a pending-deploy finding,
+                               not a code defect.
 """
 
 import abc
@@ -100,6 +155,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 KEY = os.environ.get("NOVADA_MCP_KEY") or os.environ.get("NOVADA_API_KEY")
 
@@ -243,21 +299,85 @@ _CAP_TEXT_MARKER = "## Free Gateway Cap Reached"
 _CAP_INSTRUCTION_MARKER = "agent_instruction: free_gateway_cap_reached"
 
 
+def _build_multipart_body(fields: dict) -> tuple[bytes, str]:
+    """
+    Build a minimal `multipart/form-data` request body, stdlib only (no
+    `requests`, no `form-data` — matches this script's "stdlib only"
+    constraint; npm-package's equivalent, `toMultipart()` in
+    _core/developer_api.ts, has the `form-data` npm dep available, this
+    script does not). Returns (body_bytes, content_type_header_value).
+
+    One `Content-Disposition: form-data; name="..."` part per field, values
+    coerced to str() — sufficient for the scalar-only ledger probes below;
+    no file parts needed.
+
+    NOT a general-purpose/hardened multipart encoder: `name`/`value` are
+    interpolated verbatim with no escaping, so a value containing CRLF, a
+    literal `"`, or the boundary string itself would corrupt the encoding.
+    Only safe for known-safe scalar test fixtures (today's only call site is
+    the hardcoded `{"d": ""}` in `_probe_ledger_balance` below) — do not widen
+    this to untrusted/caller-supplied input without adding escaping first.
+    """
+    boundary = uuid.uuid4().hex
+    lines = []
+    for name, value in fields.items():
+        lines.append(f"--{boundary}\r\n")
+        lines.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n')
+        lines.append(f"{value}\r\n")
+    lines.append(f"--{boundary}--\r\n")
+    body = "".join(lines).encode("utf-8")
+    content_type = f"multipart/form-data; boundary={boundary}"
+    return body, content_type
+
+
 def _probe_ledger_balance(url: str, key: str, extract_balance) -> float:
     """
-    POST an empty JSON body with Bearer auth to a ledger balance endpoint
-    (free read — not billed) and return the balance as a float via
-    `extract_balance(parsed_json)`. ANY failure — network error, non-200,
-    malformed JSON, unexpected response shape, extractor raising — returns
-    0.0 rather than propagating. A probe failure means "treat this ledger as
-    unfunded", never a crashed invariant runner — mirrors how invariant_3
-    isolates upstream flakiness from reporting-layer failures.
+    POST a `multipart/form-data` body (NOT JSON) with Bearer auth to a ledger
+    balance endpoint (free read — not billed) and return the balance as a
+    float via `extract_balance(parsed_json)`.
+
+    2026-07-30 fix: this probe previously sent `Content-Type: application/json`
+    with a `{}` body, which api-m.novada.com does not accept the same way as
+    multipart — every OTHER caller of api-m.novada.com in this repo already
+    uses multipart/form-data (see developer_api.ts's header comment: an
+    earlier "JSON body" assumption there was the confirmed root cause of
+    historical `code:10001 Invalid parameter` responses from
+    /v1/proxy_account/*). A direct multipart probe against the same two
+    endpoints was reported live-verified on 2026-07-30 with a working key:
+      POST /v1/capture/get_balance  -F "d="  -> {"code":0,"data":<n>,"msg":"success"}
+      POST /v1/wallet/balance       -F "d="  -> {"code":0,"data":{"balance":<n>},"msg":"success"}
+    so the probe sends the same single empty-valued "d" field.
+
+    RETRACTED (same day, verified after the fact): an earlier revision of this
+    comment claimed the contract key hits a permanent `401 authentication
+    failure:10000` against api-m.novada.com and that "BILLING_TRUTH will SKIP
+    rather than PASS until a developer-api-authenticated key is provisioned."
+    That is FALSE and was based on a transient 401 seen during a burst of
+    verification traffic (most likely upstream rate limiting). Re-running this
+    exact function afterwards with the same key returns capture=99993.99, and a
+    full CONTRACT_FULL run reports `[8/PASS] BILLING_TRUTH: funded on
+    capture=99993.98942`. The multipart fix works; the invariant ARMS.
+    The retraction is kept rather than deleted because the false claim was the
+    dangerous part: a plausible external attribution ("their auth is broken")
+    permanently disarms a guard by convincing the next reader not to look. If
+    this probe ever returns 0.0 for a key you believe is funded, re-probe by
+    hand before concluding anything about the account.
+
+    ANY failure — network error, non-200, malformed JSON, unexpected response
+    shape, extractor raising — returns 0.0 rather than propagating. A probe
+    failure means "treat this ledger as unfunded", never a crashed invariant
+    runner — mirrors how invariant_3 isolates upstream flakiness from
+    reporting-layer failures. This isolation is per-ledger: one ledger's
+    probe raising has no effect on the other ledger's probe or its returned
+    value — see invariant_8_billing_truth's max(wallet_balance,
+    capture_balance) aggregation, which is unchanged by this fix.
     """
+    body, content_type = _build_multipart_body({"d": ""})
     req = urllib.request.Request(
         url,
-        data=b"{}",
+        data=body,
         headers={
-            "Content-Type": "application/json",
+            "Content-Type": content_type,
             "Authorization": "Bearer " + key,
         },
         method="POST",
@@ -268,6 +388,344 @@ def _probe_ledger_balance(url: str, key: str, extract_balance) -> float:
         return float(extract_balance(parsed))
     except Exception:
         return 0.0
+
+
+def _looks_like_upstream_error(text: str) -> bool:
+    """
+    Heuristic shared by invariants 9/10 (new 2026-07-30): does an is_error=True
+    response look like upstream/backend flakiness rather than a genuine
+    contract violation? Mirrors invariant_3's inline check conceptually, kept
+    as a separate function (not a refactor of invariant_3) so this change stays
+    additive-only and invariant_3's existing, already-verified behavior is
+    untouched.
+    """
+    t = text.lower()
+    return (
+        "timeout" in t or "upstream" in t or "backend" in t or
+        "503" in text or "504" in text or "502" in text or
+        "not activated" in t or "11006" in text or
+        "not enabled" in t or "not available" in t
+    )
+
+
+_AGENT_INSTRUCTION_LINE_RE = re.compile(r'(?im)^\s*agent_instruction\s*:\s*(.+)$')
+
+
+def _extract_agent_instruction_text(text: str) -> str:
+    """
+    Return the content of the first 'agent_instruction: ...' line in `text`,
+    or '' if no such line exists.
+
+    Used by PARAM_HONESTY (invariant 9) to check disclosure on the
+    agent_instruction surface SEPARATELY from the response body as a whole —
+    2026-07-30 coordinator finding: checking only "does the marker appear
+    ANYWHERE in the body" let a disclosure that lives exclusively in a
+    "## Warnings" block (never reaching agent_instruction) count as honest,
+    even though an agent that reads only agent_instruction — our own
+    agent-first convention — would still be misled. That was itself a
+    class-vs-instance bug (one surface checked, not all surfaces), the same
+    failure shape this whole invariant exists to catch.
+
+    SINGLE-LINE ASSUMPTION (round 4, explicit): `_AGENT_INSTRUCTION_LINE_RE` is
+    a single-line `$`-anchored match — it captures only the text up to the
+    first newline after "agent_instruction:". Verified against every current
+    emission site (proxy.ts, browser.ts, ai_monitor.ts, extract.ts,
+    index.ts's ZodError path, _core/errors.ts's toAgentString()): all of them
+    build this line as one un-wrapped string, so this is inert today. If a
+    FUTURE emission site ever wraps its agent_instruction across multiple
+    physical lines, this function will silently return only the first line's
+    text and PARAM_HONESTY's disclosure check may under-match — fails safe
+    (toward FAIL, never a false PASS, since less text can only make a marker
+    harder to find, not easier), but not correct. Do not assume multi-line
+    support without extending this regex first.
+    """
+    m = _AGENT_INSTRUCTION_LINE_RE.search(text)
+    return m.group(1) if m else ""
+
+
+# ─── PARAM_HONESTY case table (invariant 9) ────────────────────────────────────
+# CLASS-VS-INSTANCE ROOT CAUSE (2026-07-30, TOW2-349 postmortem round 2):
+# NO_SILENT_NOOP (invariant 2) hard-codes honesty for exactly ONE param pair
+# (novada_proxy type=isp + country). The actual principle is "every input a
+# tool accepts syntactically but does not honor semantically must be disclosed
+# in the response" — a CLASS, not one param pair. novada_browser's `country`,
+# novada_ai_monitor's `topics[1:]`, and novada_extract's `country` on the
+# default render="auto" static/proxy path are three more members of that same
+# class that went unchecked (the novada_extract member was flagged by a
+# parallel code review AFTER this table's first draft shipped with only 3 rows
+# — proof the class was under-enumerated, exactly the failure mode this
+# table-driven shape exists to make cheap to fix: one more row, zero new code).
+# This table enumerates every KNOWN member; extending coverage from here on is
+# a new row, never a new code branch or a new
+# invariant function.
+#
+# DUAL-SURFACE REQUIREMENT (2026-07-30, coordinator round 3): checking only
+# "does the marker appear ANYWHERE in the response body" is itself a
+# class-vs-instance bug — the same shape as the ledger/param incidents this
+# invariant exists to catch. An agent that reads only `agent_instruction:`
+# (our own agent-first convention, actively encouraged elsewhere in this repo)
+# would still be misled by a disclosure that lives ONLY in a "## Warnings"
+# body block and never reaches an agent_instruction line. So every row must
+# disclose on BOTH surfaces — body text AND, separately, the content of an
+# `agent_instruction:` line (see `_extract_agent_instruction_text`) — unless
+# the row is explicitly marked `agent_instruction_exempt` with a verified
+# structural reason (never a convenience opt-out).
+#
+# Row shape:
+#   tool                     — MCP tool name to call
+#   args                     — arguments that supply the unhonored input
+#   param_note               — human-readable label of the unhonored input (report only)
+#   markers                  — case-insensitive substrings; BOTH the response body
+#                              AND (unless exempt) the agent_instruction line must
+#                              contain AT LEAST ONE to count as an honest disclosure
+#   precondition_markers     — if the response text contains ANY of these
+#                              (checked unconditionally, regardless of is_error —
+#                              see invariant_9's docstring for why), the row is
+#                              a provisioning gap for THIS tool/key/env (missing
+#                              product/creds) — SKIP, not a PARAM_HONESTY
+#                              finding. Mirrors invariant_2's isp/residential
+#                              precondition gate. Empty list = no such gap exists
+#                              for this tool (e.g. novada_extract).
+#   agent_instruction_exempt — True ONLY when this row's tool has been verified
+#                              to have ZERO agent_instruction: surface anywhere
+#                              in its response-building source (not just for
+#                              this disclosure) — a structural fact, documented
+#                              in `exemption_reason`, never a convenience
+#                              downgrade. Exempt rows are checked on the body
+#                              surface only.
+#   exemption_reason         — required when agent_instruction_exempt is True;
+#                              the verified structural reason (file(s) grepped).
+#   known_pending_deploy     — True marks a row this worker's 2026-07-30 research
+#                              found UNCOMMITTED (`git status` shows `M`) and/or
+#                              unvendored at write time. Annotation only — it NEVER
+#                              changes pass/fail logic. Every row runs the exact
+#                              same assertion; a pending-deploy failure is the
+#                              invariant working, not a reason to weaken the check.
+PARAM_HONESTY_CASES = [
+    {
+        "tool": "novada_proxy",
+        "args": {"type": "isp", "country": "de", "format": "url"},
+        "param_note": "type=isp + country=de (country is not applied for ISP proxies)",
+        "markers": ["not applied", "do not rely"],
+        "precondition_markers": ["not configured", "missing environment variables"],
+        # PRECEDENT — this is the exact instance NO_SILENT_NOOP (invariant 2)
+        # already fences (proxy.ts, commit 2752e2b). Body-only check applies —
+        # see agent_instruction_exempt below.
+        "known_pending_deploy": False,
+        # Verified 2026-07-30 by grep: `novada_proxy` dispatches to proxy.ts's
+        # novadaProxy() (core.ts dispatch()), which has ZERO occurrences of
+        # "agent_instruction" anywhere in the file — not just for this
+        # disclosure, for ANY response including genuine errors ("not
+        # configured" has no agent_instruction line either). The legacy
+        # per-type tools (proxy_isp.ts/proxy_residential.ts) DO use an
+        # "## agent_instruction" heading, but novada_proxy never routes there
+        # — those files are dead code for this call path. This is a real,
+        # separate gap (proxy.ts's whole error surface lacks
+        # agent_instruction, arguably an ACTIONABLE_ERRORS-class issue), but
+        # is OUT OF SCOPE for this invariant's assertion — documented here so
+        # the exemption is never mistaken for a convenience downgrade.
+        "agent_instruction_exempt": True,
+        "exemption_reason": (
+            "proxy.ts (the handler novada_proxy dispatches to) has zero "
+            "'agent_instruction' occurrences anywhere in its source — verified "
+            "by grep 2026-07-30. Structural, not per-disclosure."
+        ),
+    },
+    {
+        "tool": "novada_browser",
+        "args": {
+            "actions": [{"action": "navigate", "url": "https://example.com",
+                         "wait_until": "domcontentloaded"}],
+            "country": "de",
+        },
+        "param_note": "country=de (not applied to the Browser API's CDP exit node)",
+        "markers": ["not applied", "do not rely"],
+        "precondition_markers": ["novada_browser_ws", "browser api", "not configured", "not entitled"],
+        # Verified 2026-07-30 by reading source + vendor: browser.ts's base
+        # "## Warnings" body disclosure ("... not applied ... do not rely ...")
+        # is committed (2752e2b) AND already vendored — that surface alone
+        # WAS treated as sufficient in this table's first draft, which is
+        # exactly the bug the dual-surface requirement above fixes. The
+        # SEPARATE `agent_instruction:` line for this same disclosure exists
+        # ONLY in the uncommitted working tree (`git status` shows `M`) — so
+        # under the dual-surface check this row now correctly reads
+        # known_pending_deploy=True (flipped from False in the prior draft).
+        "known_pending_deploy": True,
+        "agent_instruction_exempt": False,
+    },
+    {
+        "tool": "novada_ai_monitor",
+        "args": {"brand": "novada", "topics": ["pricing", "support"]},
+        "param_note": "topics[1:] ('support') — only topics[0] is queried; the rest are silently accepted and ignored",
+        "markers": ["not applied", "do not rely"],
+        "precondition_markers": ["not configured", "not entitled"],
+        # Verified 2026-07-30: BOTH the body disclosure ("topics[1..] accepted
+        # but not applied ... do not rely ...") and the agent_instruction line
+        # exist ONLY in the uncommitted working tree (npm-package/src/tools/
+        # ai_monitor.ts, `git status` shows `M`).
+        # hosted-server/vercel/vendor/novada-mcp/tools/ai_monitor.js has ZERO
+        # occurrences of either. EXPECTED TO FAIL against prod on BOTH
+        # surfaces until the next deploy vendors this file.
+        "known_pending_deploy": True,
+        "agent_instruction_exempt": False,
+    },
+    {
+        "tool": "novada_extract",
+        "args": {"url": "https://example.com", "country": "de"},
+        "param_note": (
+            "country=de on the default render=\"auto\" static/proxy path — "
+            "extract.ts's fetchViaProxy call in the auto/static branch (around "
+            "line 1050) passes no `country` field at all; `country` is wired "
+            "ONLY into the render/unblocker path (extract.ts:950 and :1144)"
+        ),
+        "markers": ["not applied", "do not rely"],
+        "precondition_markers": [],
+        # 4TH CLASS MEMBER — coordinator-flagged in a parallel code review
+        # (2026-07-30, round 2): the tool description documents "no effect on a
+        # pure static fetch" but that caveat NEVER reaches the response text
+        # for a call that actually takes the static path — proving the class
+        # had a member nobody had enumerated yet (exactly what this table
+        # exists to catch).
+        #
+        # STALE-COMMENT FIX (round 4, 2026-07-30): this comment previously said
+        # "`git status` on extract.ts is CLEAN — no disclosure of any kind
+        # exists in source yet." That is NO LONGER TRUE — re-verified round 4:
+        # `git status` now shows `M` on extract.ts, and it contains BOTH the
+        # body disclosure (a `country_warning` field / summary-line text) AND
+        # an `agent_instruction:` line, both containing "not applied"/"do not
+        # rely" (grepped: extract.ts:361, :1709-1713, :2024-2029). The
+        # underlying mechanism this row exercises (fetchViaProxy on the
+        # auto/static path never forwards `country` — see param_note above) is
+        # UNCHANGED; only the disclosure was added on top of it. So this row is
+        # correctly FAIL-PENDING-DEPLOY (the fix exists in npm-package/src, not
+        # yet vendored into hosted-server) — NOT fail-pending-implementation,
+        # which is what this comment used to (incorrectly, as of round 4)
+        # imply.
+        "known_pending_deploy": True,
+        "agent_instruction_exempt": False,
+    },
+]
+
+
+# ─── REAL_SOURCE_URLS case table (invariant 10) ────────────────────────────────
+# Class: "every URL surfaced to the agent must be the direct, fetchable
+# destination — never a tracking redirector the agent then has to
+# base64/percent-decode by hand" (2026-07-30 field feedback on novada_research,
+# fixed via utils/url.ts's decodeBingRedirect, commit 7e4a296).
+# FORBIDDEN_PATTERNS enumerates the redirector shapes known across major search
+# engines; extending coverage is a new pattern string, never a new code branch.
+REAL_SOURCE_URLS_FORBIDDEN_PATTERNS = [
+    "bing.com/ck/a",
+    "google.com/url?q=",
+    "duckduckgo.com/l/?uddg=",
+    "r.msn.com",
+]
+
+# Row shape: {tool, args, note} — `note` records where the decode is supposed
+# to live and its known deploy state as of 2026-07-30, for report context only;
+# it never changes the assertion.
+REAL_SOURCE_URLS_CASES = [
+    {
+        "tool": "novada_search",
+        "args": {"query": "site:wikipedia.org python programming language", "num": 5},
+        "note": (
+            "search.ts calls the shared decodeBingRedirect (utils/url.ts, commit "
+            "7e4a296). The vendored copy (hosted-server/vercel/vendor) still has "
+            "its own older, private unwrapBingUrl that ALSO decodes ck/a — this "
+            "row is expected to PASS even before the shared-util deploy lands."
+        ),
+    },
+    {
+        "tool": "novada_research",
+        "args": {"question": "What is the capital of France and in what century was it founded?", "depth": "quick"},
+        "note": (
+            "research.ts FIX A (2026-07-30, commit 7e4a296) added the FIRST bing "
+            "decode research.ts has ever had. Grepped "
+            "hosted-server/vercel/vendor/novada-mcp/tools/research.js: ZERO "
+            "bing-decode occurrences. A bing.com/ck/a URL surfacing here is a "
+            "pending-deploy finding, not a code defect — the fix exists in "
+            "npm-package/src, just not vendored yet."
+        ),
+    },
+]
+
+_URL_RE = re.compile(r'https?://[^\s\)\]\>"\'`]+')
+
+
+def _extract_urls(text: str) -> list[str]:
+    """Pull every http(s) URL substring out of a tool response's text content."""
+    return _URL_RE.findall(text)
+
+
+# ─── ACTIONABLE_ERRORS case table (invariant 11) ───────────────────────────────
+# Class: "every error response — tool-call OR protocol-level — carries a
+# non-empty agent_instruction so the agent has a parseable recovery signal
+# instead of a bare error string it has to interpret itself." Table-driven so
+# adding a new cheap error-triggering call is a new row, never a new invariant
+# function. Every "tool" row below was verified by reading its source call
+# site to fail BEFORE any backend round-trip — this invariant is FREE and runs
+# in the default deploy-gate suite, not just CONTRACT_FULL.
+#
+# Row shape:
+#   kind        — "tool" (tools/call) or "resource" (resources/read)
+#   tool/uri    — the target for that kind
+#   args        — tool args (kind="tool" only)
+#   note        — why this call is expected to error, and which code path
+#   known_gap   — True marks a row this worker's research found has NO
+#                 agent_instruction at all in current source (a real,
+#                 structural class gap, not a transient bug). Annotation
+#                 only — never weakens the assertion; a failing known_gap row
+#                 is the invariant correctly reporting a finding.
+ACTIONABLE_ERRORS_CASES = [
+    {
+        "kind": "tool",
+        "tool": "novada_scrape",
+        "args": {"platform": "amazon.com", "operation": "totally_fake_operation_xyz_9000", "params": {}},
+        "note": (
+            "unknown operation for a KNOWN platform — preflightScrape() "
+            "(scrape.ts, detail='preflight:unknown_operation') rejects before "
+            "any backend round-trip"
+        ),
+        "known_gap": False,
+    },
+    {
+        "kind": "tool",
+        "tool": "novada_scrape",
+        "args": {"platform": "amazon.com", "operation": "amazon_product_asin", "params": {}},
+        "note": (
+            "known operation, missing its required 'asin' param — "
+            "preflightScrape() (detail='preflight:missing_param') rejects "
+            "before any backend round-trip"
+        ),
+        "known_gap": False,
+    },
+    {
+        "kind": "tool",
+        "tool": "novada_extract",
+        "args": {},
+        "note": (
+            "missing required 'url' — rejected by Zod schema validation "
+            "(ExtractParamsSchema) in index.ts's CallToolRequestSchema handler, "
+            "before dispatch() ever runs"
+        ),
+        "known_gap": False,
+    },
+    {
+        "kind": "resource",
+        "uri": "novada://does-not-exist",
+        "note": (
+            "unknown resource URI — resources/index.ts's readResource() throws "
+            "a plain Error('Unknown resource URI: ... Available: ...') with NO "
+            "agent_instruction field at all. The agent_instruction convention "
+            "was built for tool-call errors (index.ts's ZodError catch + "
+            "NovadaError.toAgentString()) and was never extended to "
+            "protocol-level resource errors — a real class gap."
+        ),
+        "known_gap": True,
+    },
+]
+
+_AGENT_INSTRUCTION_RE = re.compile(r'agent_instruction\s*:\s*\S')
 
 
 # ─── Transport abstraction ─────────────────────────────────────────────────────
@@ -1496,6 +1954,340 @@ def invariant_8_billing_truth(transport: Transport) -> list[str]:
     return failures
 
 
+def invariant_9_param_honesty(transport: Transport) -> list[str]:
+    """
+    INVARIANT 9 — PARAM_HONESTY [CONTRACT_FULL only — billable]:
+
+    Class-level generalization of NO_SILENT_NOOP (invariant 2). See
+    PARAM_HONESTY_CASES's module-level comment for the 2026-07-30
+    class-vs-instance root cause this invariant fences. For each row: call
+    `tool` with `args`; the response must disclose that the row's input was
+    accepted but not honored — and, per the 2026-07-30 round-3 coordinator
+    finding below, it must disclose this on BOTH surfaces, not just one.
+
+    DUAL-SURFACE ASSERTION (2026-07-30, round 3): checking only "does a
+    marker appear ANYWHERE in the response body" is itself a class-vs-instance
+    bug — one surface (body) checked, not all surfaces a real caller might
+    read. An agent that reads only `agent_instruction:` (this repo's own
+    agent-first convention) would be misled by a disclosure that lives
+    exclusively in a body block (e.g. "## Warnings") and never reaches
+    agent_instruction. So, unless a row is `agent_instruction_exempt` (a
+    verified structural fact about that tool, documented in
+    `exemption_reason` — never a convenience opt-out), disclosure requires
+    BOTH: at least one marker anywhere in the full response text, AND at
+    least one marker inside the specific text captured by
+    `_extract_agent_instruction_text` (the content of an `agent_instruction:`
+    line, if any).
+
+    Per-row isolation (Worker Done-Definition — a raising row must not crash
+    the suite):
+      - a raised exception on the tool call is recorded as a failure for that
+        row only; every other row still runs.
+      - a response whose text matches `precondition_markers` is a provisioning
+        gap for THAT row (missing product/creds on the contract key/env) —
+        SKIP, not a failure. This check is UNCONDITIONAL on is_error, exactly
+        mirroring invariant_2's `_proxy_not_configured` gate: a "not
+        configured" precondition response is not guaranteed to set
+        is_error=True (verified empirically 2026-07-30 — novada_proxy's
+        not-configured response for this contract key returns is_error=False;
+        gating the precondition check inside `if is_err:` was a real bug in
+        an earlier draft of this function that produced a false PARAM_HONESTY
+        failure on the precedent row).
+      - is_error=True with no precondition match is upstream flakiness, not a
+        PARAM_HONESTY finding — SKIP (see _looks_like_upstream_error).
+      - is_error=True with neither a precondition nor an upstream signal, or
+        is_error=False with the dual-surface check failing → FAIL, regardless
+        of `known_pending_deploy`. That flag is report-only context; the
+        assertion is identical for every non-exempt row, and a pending-deploy
+        failure is the invariant working correctly (2026-07-30 handoff: never
+        weaken this to reach green).
+
+    novada_proxy's row is the PRECEDENT for the underlying (body-level)
+    disclosure and is `agent_instruction_exempt` (proxy.ts genuinely has zero
+    agent_instruction surface — see the row's comment). novada_browser,
+    novada_ai_monitor, and novada_extract are NOT exempt: under the
+    dual-surface check, novada_browser now correctly reads
+    known_pending_deploy=True too (its body-only disclosure was previously
+    scored as a false PASS — exactly the failure shape this round-3 fix
+    closes). See each row's comment in PARAM_HONESTY_CASES for this worker's
+    2026-07-30 finding on deploy state.
+    """
+    if not CONTRACT_FULL:
+        raise SkipInvariant("CONTRACT_FULL=1 not set — billable invariant skipped")
+
+    failures = []
+    passed_rows = []
+    skipped_rows = []
+
+    for case in PARAM_HONESTY_CASES:
+        tool = case["tool"]
+        try:
+            is_err, text = transport.call_tool(tool, case["args"], timeout=90)
+        except Exception as e:
+            failures.append(
+                f"INVARIANT_9[{tool}]: tool call raised an exception instead of "
+                f"returning a result — {e!r}"
+            )
+            continue
+
+        text_l = text.lower()
+
+        # Precondition gate FIRST, unconditional on is_error — see the
+        # docstring note above on why this must not be nested inside
+        # `if is_err:`. An empty precondition_markers list (e.g. novada_extract,
+        # which has no comparable "not configured" concept) makes `any([])`
+        # False, so this simply never matches for that row.
+        if case["precondition_markers"] and any(m in text_l for m in case["precondition_markers"]):
+            skipped_rows.append(tool)
+            print(
+                f"  [9] SKIP[{tool}]: not provisioned for the contract key/env — "
+                f"precondition not met, not a PARAM_HONESTY finding."
+            )
+            continue
+
+        if is_err:
+            if _looks_like_upstream_error(text):
+                skipped_rows.append(tool)
+                print(f"  [9] SKIP[{tool}]: upstream/backend error — {text[:150]!r}")
+                continue
+            failures.append(
+                f"INVARIANT_9[{tool}]: is_error=True with no provisioning/upstream "
+                f"signal — {case['param_note']}.\n"
+                f"  actual (first 400 chars): {text[:400]!r}"
+            )
+            continue
+
+        body_disclosed = any(m in text_l for m in case["markers"])
+        exempt = case.get("agent_instruction_exempt", False)
+
+        if exempt:
+            disclosed = body_disclosed
+            instruction_disclosed = None  # not applicable — never checked for an exempt row
+        else:
+            instruction_text_l = _extract_agent_instruction_text(text).lower()
+            instruction_disclosed = any(m in instruction_text_l for m in case["markers"])
+            disclosed = body_disclosed and instruction_disclosed
+
+        if not disclosed:
+            pending = " [KNOWN PENDING DEPLOY — see 2026-07-30 handoff]" if case["known_pending_deploy"] else ""
+            if exempt:
+                surface_note = (
+                    f"(body-only check — agent_instruction_exempt: "
+                    f"{case.get('exemption_reason', 'no reason recorded')})"
+                )
+            else:
+                missing = []
+                if not body_disclosed:
+                    missing.append("response body")
+                if not instruction_disclosed:
+                    missing.append("agent_instruction line")
+                surface_note = f"(missing on: {', '.join(missing)})"
+            failures.append(
+                f"INVARIANT_9[{tool}]: response does not disclose that "
+                f"{case['param_note']} is not honored {surface_note}.{pending}\n"
+                f"  expected one of: {case['markers']}\n"
+                f"  actual (first 400 chars): {text[:400]!r}"
+            )
+        else:
+            passed_rows.append(tool)
+
+    if not failures:
+        print(
+            f"  [9/PASS] PARAM_HONESTY: {len(passed_rows)} row(s) disclosed honestly "
+            f"({passed_rows}); {len(skipped_rows)} row(s) skipped (not provisioned/upstream)."
+        )
+    else:
+        print(f"  [9/FAIL] PARAM_HONESTY: {len(failures)} row(s) failed to disclose.")
+
+    return failures
+
+
+def invariant_10_real_source_urls(transport: Transport) -> list[str]:
+    """
+    INVARIANT 10 — REAL_SOURCE_URLS [CONTRACT_FULL only — billable]:
+
+    Class-level guard: every URL a search/research response hands to the agent
+    must be a direct, fetchable destination — never a tracking redirector the
+    agent then has to decode by hand (2026-07-30, commit 7e4a296). See
+    REAL_SOURCE_URLS_CASES / REAL_SOURCE_URLS_FORBIDDEN_PATTERNS's module-level
+    comments for the full table.
+
+    For each row: call `tool`, extract every http(s) URL from the response
+    text (_extract_urls), and fail if ANY extracted URL contains ANY forbidden
+    redirector pattern. is_error=True rows that look like upstream flakiness
+    are SKIPPED (this invariant tests our reporting layer's URL hygiene, not
+    upstream SERP availability) and a row with zero URLs is also skipped
+    (nothing to check) — never silently counted as a pass.
+
+    See each row's `note` for this worker's 2026-07-30 deploy-state finding —
+    a failure on the novada_research row is EXPECTED (research.ts's decode is
+    committed to npm-package/src but not yet vendored into hosted-server) and
+    must be reported as a pending-deploy finding, never silently downgraded to
+    a skip.
+    """
+    if not CONTRACT_FULL:
+        raise SkipInvariant("CONTRACT_FULL=1 not set — billable invariant skipped")
+
+    failures = []
+    checked_rows = []
+
+    for case in REAL_SOURCE_URLS_CASES:
+        tool = case["tool"]
+        try:
+            is_err, text = transport.call_tool(tool, case["args"], timeout=150)
+        except Exception as e:
+            failures.append(
+                f"INVARIANT_10[{tool}]: tool call raised an exception instead of "
+                f"returning a result — {e!r}"
+            )
+            continue
+
+        if is_err:
+            if _looks_like_upstream_error(text):
+                print(f"  [10] SKIP[{tool}]: upstream/backend error — {text[:150]!r}")
+                continue
+            failures.append(
+                f"INVARIANT_10[{tool}]: is_error=True with no upstream signal.\n"
+                f"  error (first 300 chars): {text[:300]!r}"
+            )
+            continue
+
+        urls = _extract_urls(text)
+        if not urls:
+            print(f"  [10] SKIP[{tool}]: response contained 0 URLs to check.")
+            continue
+
+        checked_rows.append(tool)
+        offenders = [(u, p) for u in urls for p in REAL_SOURCE_URLS_FORBIDDEN_PATTERNS if p in u]
+        if offenders:
+            failures.append(
+                f"INVARIANT_10[{tool}]: {len(offenders)} URL(s) matched a forbidden "
+                f"tracking-redirector pattern instead of the direct destination.\n"
+                f"  {case['note']}\n"
+                f"  offenders (first 5): {offenders[:5]}"
+            )
+
+    if not checked_rows and not failures:
+        raise SkipInvariant(
+            "no row produced any URL to check (all rows skipped) — inconclusive, not a pass"
+        )
+
+    if not failures:
+        print(f"  [10/PASS] REAL_SOURCE_URLS: {len(checked_rows)} row(s) checked, "
+              f"no tracking-redirector URLs found.")
+    else:
+        print(f"  [10/FAIL] REAL_SOURCE_URLS: {len(failures)} row(s) surfaced "
+              f"redirector URLs.")
+
+    return failures
+
+
+def invariant_11_actionable_errors(transport: Transport) -> list[str]:
+    """
+    INVARIANT 11 — ACTIONABLE_ERRORS [FREE — http + stdio]:
+
+    Class-level guard: every error response carries a non-empty
+    `agent_instruction` line. See ACTIONABLE_ERRORS_CASES's module-level
+    comment for the full table. No row makes a billed backend call — every
+    "tool" row's error path was verified by reading its source call site
+    (preflightScrape() in scrape.ts, Zod .parse() in types.ts) to run BEFORE
+    any network request; resources/read is a local lookup against RESOURCES.
+
+    Each row must produce is_error=True (tool rows) or a JSON-RPC error
+    (resource row) whose text contains a non-empty `agent_instruction:` line.
+    A row that unexpectedly succeeds is also a failure — the whole point of
+    the row is to exercise a known error path.
+
+    The resources/read row is a KNOWN GAP (see ACTIONABLE_ERRORS_CASES) and is
+    EXPECTED TO FAIL: readResource()'s plain Error has no agent_instruction at
+    all. That failure is the invariant correctly reporting a real, un-fixed
+    inconsistency in the class — never downgraded to a skip.
+
+    Applies identically to stdio: preflightScrape, Zod validation, and
+    readResource all live in npm-package/src — the SAME code the hosted server
+    vendors, with no HTTP-only wrapper involved in any of these four paths.
+    """
+    failures = []
+    passed_rows = []
+
+    for case in ACTIONABLE_ERRORS_CASES:
+        if case["kind"] == "tool":
+            tool = case["tool"]
+            try:
+                is_err, text = transport.call_tool(tool, case["args"], timeout=30)
+            except Exception as e:
+                failures.append(
+                    f"INVARIANT_11[{tool}]: tool call raised an exception instead "
+                    f"of returning a result — {e!r}"
+                )
+                continue
+
+            if not is_err:
+                failures.append(
+                    f"INVARIANT_11[{tool}]: expected an error response ({case['note']}) "
+                    f"but got is_error=False.\n"
+                    f"  actual (first 300 chars): {text[:300]!r}"
+                )
+                continue
+
+            if not _AGENT_INSTRUCTION_RE.search(text):
+                gap = "  [KNOWN GAP]" if case.get("known_gap") else ""
+                failures.append(
+                    f"INVARIANT_11[{tool}]: error response has no non-empty "
+                    f"'agent_instruction:' line ({case['note']}).{gap}\n"
+                    f"  actual (first 400 chars): {text[:400]!r}"
+                )
+            else:
+                passed_rows.append(tool)
+
+        elif case["kind"] == "resource":
+            uri = case["uri"]
+            try:
+                obj, raw = transport.rpc_raw("resources/read", {"uri": uri})
+            except Exception as e:
+                # Round 4 (coordinator finding): was `except RuntimeError` — the
+                # only per-row branch in this diff that didn't match the
+                # `except Exception` isolation contract every other row (and
+                # this row's own docstring) advertises. Both Transport impls'
+                # rpc_raw only ever raise RuntimeError today, so this was inert
+                # in practice, but it would silently become a real
+                # suite-crashing masking bug the moment a second resource row
+                # is appended after this one and something else raises.
+                failures.append(
+                    f"INVARIANT_11[resources/read {uri}]: network/parse error: {e}"
+                )
+                continue
+
+            err = obj.get("error")
+            if err is None and isinstance(obj.get("result"), dict):
+                err = obj["result"].get("error")
+            message = err.get("message", "") if isinstance(err, dict) else str(err or "")
+
+            if not err:
+                failures.append(
+                    f"INVARIANT_11[resources/read {uri}]: expected a JSON-RPC error "
+                    f"for an unknown URI but got none.\n"
+                    f"  response (first 300 chars): {json.dumps(obj)[:300]!r}"
+                )
+            elif not _AGENT_INSTRUCTION_RE.search(message):
+                gap = "  [KNOWN GAP]" if case.get("known_gap") else ""
+                failures.append(
+                    f"INVARIANT_11[resources/read {uri}]: error message has no "
+                    f"non-empty 'agent_instruction:' text ({case['note']}).{gap}\n"
+                    f"  message: {message[:400]!r}"
+                )
+            else:
+                passed_rows.append(f"resources/read {uri}")
+
+    if not failures:
+        print(f"  [11/PASS] ACTIONABLE_ERRORS: {len(passed_rows)} row(s) all carried "
+              f"a non-empty agent_instruction.")
+    else:
+        print(f"  [11/FAIL] ACTIONABLE_ERRORS: {len(failures)} row(s) missing agent_instruction.")
+
+    return failures
+
+
 # ─── runner ───────────────────────────────────────────────────────────────────
 
 INVARIANTS = [
@@ -1507,6 +2299,9 @@ INVARIANTS = [
     ("HEALTH_TRUTH",          invariant_6_health_truth),
     ("OAUTH_METADATA",        invariant_7_oauth_metadata),
     ("BILLING_TRUTH",         invariant_8_billing_truth),
+    ("PARAM_HONESTY",         invariant_9_param_honesty),
+    ("REAL_SOURCE_URLS",      invariant_10_real_source_urls),
+    ("ACTIONABLE_ERRORS",     invariant_11_actionable_errors),
 ]
 
 
