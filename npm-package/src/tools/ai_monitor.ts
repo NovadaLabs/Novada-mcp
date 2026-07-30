@@ -91,6 +91,11 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
   const brand = params.brand;
   const models = params.models ?? DEFAULT_MODELS;
   const topics = params.topics ?? [];
+  // PARAM-HONESTY (TOW2-353 fan-out is the eventual real fix; this is disclosure-only):
+  // only topics[0] is ever queried — topics[1..] are silently accepted and ignored.
+  // Compute once so both the body warning and agent_instruction stay in sync, and so
+  // the disclosure fires ONLY when a caller actually supplied more than one topic.
+  const ignoredTopics = topics.length > 1 ? topics.slice(1) : [];
 
   // INC-192: Parallelize all model queries instead of sequential.
   // Also add per-query timeout to prevent hosted (Vercel Edge) timeouts.
@@ -197,9 +202,19 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
     `domains_searched: ${models.join(", ")} | mentions_found: ${foundMentions.length} | sentiment: +${sentimentCounts.positive} neutral:${sentimentCounts.neutral} -${sentimentCounts.negative}`,
     `NOTE: results reflect indexed PUBLIC PAGES on these domains — not how the live AI models respond to queries about this brand.`,
     ``,
-    `---`,
-    ``,
   ];
+
+  if (ignoredTopics.length > 0) {
+    lines.push(
+      `## Warnings`,
+      JSON.stringify([
+        `topics[1..] accepted but not applied — only topics[0] ("${topics[0]}") was queried; do not rely on the rest being honored (ignored: ${ignoredTopics.map(t => JSON.stringify(t)).join(", ")})`,
+      ]),
+      ``,
+    );
+  }
+
+  lines.push(`---`, ``);
 
   if (foundMentions.length === 0) {
     // INC-192: Distinguish "all searches failed/timed out" from "genuinely no mentions"
@@ -266,7 +281,10 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
   lines.push(`brand: ${brand}`);
   lines.push(`domains_searched: ${models.join(", ")}`);
   if (allCompetitors.length > 0) lines.push(`competitors_found: ${allCompetitors.join(", ")}`);
-  lines.push(`agent_instruction: Domain presence check complete. Results show indexed PUBLIC PAGES on AI-company domains — not live model responses. To deep-dive into any source URL, call novada_extract. To check a competitor, call novada_ai_monitor with their brand name.`);
+  const ignoredTopicsInstruction = ignoredTopics.length > 0
+    ? ` topics ${ignoredTopics.map(t => JSON.stringify(t)).join(", ")} were NOT queried — only topics[0] is used per call. Issue one novada_ai_monitor call per topic to cover the rest.`
+    : "";
+  lines.push(`agent_instruction: Domain presence check complete. Results show indexed PUBLIC PAGES on AI-company domains — not live model responses. To deep-dive into any source URL, call novada_extract. To check a competitor, call novada_ai_monitor with their brand name.${ignoredTopicsInstruction}`);
 
   return lines.join("\n");
 }

@@ -275,6 +275,23 @@ export async function novadaBrowser(params: BrowserParams, apiKey?: string): Pro
     lines.push(`  3. Use evaluate action with script="document.querySelector('<selector>')" to test if element exists.`);
   }
 
+  // PARAM-HONESTY: country is accepted but never applied to the Browser API's exit
+  // node (see the ## Warnings block above). Only fire when the caller actually
+  // supplied it, so agents who omit country see no extra noise.
+  //
+  // Review round 1 (HIGH): the original wording here overclaimed novada_extract as a
+  // clean workaround. novada_extract's country param ONLY applies on the render/js
+  // path (extract.ts fetchWithRender call sites) — its own DEFAULT render="auto" races
+  // a plain static fetch (fetchViaProxy, which has no country field at all) and a
+  // geo-blocked page is usually plain static HTML, so it won't escalate and country
+  // gets silently dropped there too (extract.ts now discloses that case itself — see
+  // the PARAM-HONESTY comments in extract.ts). Tightened to require render="render"
+  // (or "js") explicitly; kept the accurate render="browser" caveat.
+  if (country) {
+    lines.push(``);
+    lines.push(`agent_instruction: country="${country}" was accepted but not applied to the browser exit node — do not rely on it for geo-restricted content. novada_browser's Browser API has no per-call geo-routing today. If interactive automation isn't required, use novada_extract with country="${country}" AND render="render" (or render="js") instead — it routes render/js fetches through a real exit IP in that country; novada_extract's DEFAULT render="auto"/"static" path drops country just like this tool does, and render="browser" shares this same non-geo-routed Browser API path, so neither of those two modes will honor it either.`);
+  }
+
   return lines.join("\n");
 }
 
