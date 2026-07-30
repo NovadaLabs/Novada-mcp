@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
 import https from "https";
-import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, type SearchIntent } from "../utils/index.js";
+import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect, type SearchIntent } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
@@ -57,6 +57,41 @@ const ENGINE_MAP: Record<string, ScraperSearchEngine> = {
 
 function scraperSleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// FIX B (2026-07-30): field feedback reported novada_search throwing one
+// transient `API_DOWN: ... upstream SERP failure` (the no-task_id branch in
+// submitSearchScrapeTask below, or its sibling body.code===500 branch) that
+// self-healed on a manual retry — the agent shouldn't have to redo the tool's
+// job by hand. Retry ONCE, after a short backoff, but ONLY the classified
+// transient (API_DOWN) failure mode; auth/validation/quota errors
+// (INVALID_API_KEY, INVALID_PARAMS, a plain non-NovadaError from a generic
+// non-zero scraper code, etc.) are not retryable and must fail immediately —
+// retrying those just wastes a call on something that cannot self-heal.
+// Mirrors the retry idiom in src/_core/developer_api.ts (short fixed backoff,
+// bounded attempt count, no retry outside the one known-transient class).
+const SEARCH_SUBMIT_RETRY_DELAY_MS = 500;
+
+/**
+ * Run `op` once; on a transient (`NovadaErrorCode.API_DOWN`) `NovadaError`,
+ * wait `delayMs` and run it exactly one more time. Any other error (including
+ * a non-NovadaError) propagates immediately without a retry. Exported so the
+ * retry/no-retry behavior can be unit-tested directly against a mock `op`
+ * without needing to fake the underlying axios/HTTP layer.
+ */
+export async function withSingleSerpRetry<T>(
+  op: () => Promise<T>,
+  delayMs: number = SEARCH_SUBMIT_RETRY_DELAY_MS,
+): Promise<T> {
+  try {
+    return await op();
+  } catch (err) {
+    if (err instanceof NovadaError && err.code === NovadaErrorCode.API_DOWN) {
+      await scraperSleep(delayMs);
+      return op();
+    }
+    throw err;
+  }
 }
 
 /** Parse Bing SERP HTML (returned in sync mode with is_auto_push=false) into search results. */
@@ -529,7 +564,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   try {
     {
       const engineCfg = ENGINE_MAP[engine];
-      const submitted = await submitSearchScrapeTask(
+      // FIX B: absorb a single transient "upstream SERP failure" ourselves
+      // instead of surfacing it on the first hit — see withSingleSerpRetry above.
+      const submitted = await withSingleSerpRetry(() => submitSearchScrapeTask(
         apiKey,
         engineCfg.scraper_name,
         engineCfg.scraper_id,
@@ -544,7 +581,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
           country: params.country || undefined,
           language: params.language || undefined,
         }
-      );
+      ));
       // Fast path: inline results from submit response (no download round-trip needed)
       if (submitted.inlineResults) {
         scraperResults = parseScraperSearchResults(submitted.inlineResults);
@@ -814,7 +851,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         const result: Record<string, unknown> = {
           rank: i + 1,
           title: r.title || "Untitled",
-          url: url ? unwrapBingUrl(url) : null,
+          url: url ? decodeBingRedirect(url) : null,
           snippet: r.description || r.snippet || "",
         };
         if (r.published || r.date) result.published = r.published || r.date;
@@ -906,7 +943,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     const r = reranked[i];
     const rawUrl = r.url || r.link;
     if (!rawUrl) continue; // Skip results with no URL — would render as "N/A" and break agents
-    let url = unwrapBingUrl(rawUrl);
+    let url = decodeBingRedirect(rawUrl);
 
     // Item 2: strip inline HTML tags from snippets preserving word-boundary spaces.
     // Tag-boundary joins (e.g. <b>is</b> an) without a space produce "isan". Replace
@@ -1009,27 +1046,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   return finalResult;
 }
 
-/** Unwrap Bing redirect/base64 encoded URLs */
-function unwrapBingUrl(url: string): string {
-  if (url.includes("bing.com/ck/a") || url.includes("r.bing.com")) {
-    try {
-      const u = new URL(url);
-      const realUrl = u.searchParams.get("r") || u.searchParams.get("u");
-      if (realUrl) {
-        const cleaned = realUrl.replace(/^a1/, "");
-        try {
-          const decoded = Buffer.from(cleaned, "base64").toString("utf8");
-          if (decoded.startsWith("http")) return decoded;
-        } catch { /* not base64 */ }
-        return decodeURIComponent(cleaned);
-      }
-    } catch { /* keep original */ }
-  }
-  if (!url.startsWith("http") && /^[A-Za-z0-9+/=]+$/.test(url) && url.length > 20) {
-    try {
-      const decoded = Buffer.from(url, "base64").toString("utf8");
-      if (decoded.startsWith("http")) return decoded;
-    } catch { /* keep original */ }
-  }
-  return url;
-}
+// FIX A (2026-07-30): unwrapBingUrl moved to src/utils/url.ts as the shared,
+// exported `decodeBingRedirect` — research.ts needed the same decode (its
+// bing.com fallback engine's result URLs were reaching the agent as raw
+// ck/a tracking redirects, never routed through this file's decoder) and a
+// second private copy would have drifted. See utils/url.ts for the
+// implementation, fail-safe behavior, and provenance notes.

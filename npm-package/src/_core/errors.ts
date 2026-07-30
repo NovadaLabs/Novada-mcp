@@ -93,6 +93,67 @@ export class NovadaError extends Error {
   }
 }
 
+// ─── AggregateError Summarization ────────────────────────────────────────────
+
+/** Max number of distinct causes surfaced from an AggregateError summary. */
+const AGGREGATE_CAUSE_LIMIT = 3;
+/** Max length (chars) of each individual cause snippet in an aggregate-error summary. */
+const AGGREGATE_CAUSE_MAX_CHARS = 120;
+
+/**
+ * FIX-A (2026-07-30, agent-first extract error path): `Promise.any()` escalation
+ * ladders (e.g. extract.ts's direct-fetch-vs-proxy race) reject with a bare
+ * `AggregateError` whose default `.message` is the literal string
+ * "All promises were rejected" — an implementation detail with zero actionable
+ * content for an agent (live field report: extracting cell.com surfaced this raw
+ * string verbatim and the caller guessed "可能是限流" out of nowhere).
+ *
+ * This maps that AggregateError to a summary of its DISTINCT underlying causes
+ * (first `AGGREGATE_CAUSE_LIMIT`, each truncated to `AGGREGATE_CAUSE_MAX_CHARS`
+ * chars) so the caller has something to act on instead of nothing.
+ *
+ * Defensive by design (Worker Done-Definition #1 — a cause-summarizer that itself
+ * throws must never mask the original error): every step is wrapped so any failure
+ * here degrades to `null`, letting the caller fall back to the untouched original
+ * error message.
+ */
+export function summarizeAggregateError(err: unknown): { message: string; causes: string[] } | null {
+  try {
+    const isAggregate =
+      (typeof AggregateError !== "undefined" && err instanceof AggregateError) ||
+      (typeof err === "object" && err !== null && "errors" in err && Array.isArray((err as { errors?: unknown }).errors));
+    if (!isAggregate) return null;
+
+    const rawErrors = (err as { errors: unknown[] }).errors;
+    if (!Array.isArray(rawErrors) || rawErrors.length === 0) return null;
+
+    const toCause = (e: unknown): string => {
+      const s = e instanceof Error ? e.message : String(e);
+      const oneLine = s.replace(/[\r\n]+/g, " ").trim();
+      return oneLine.length > AGGREGATE_CAUSE_MAX_CHARS
+        ? oneLine.slice(0, AGGREGATE_CAUSE_MAX_CHARS - 1) + "…"
+        : oneLine;
+    };
+
+    const seen = new Set<string>();
+    const causes: string[] = [];
+    for (const e of rawErrors) {
+      const cause = toCause(e);
+      if (cause && !seen.has(cause)) {
+        seen.add(cause);
+        causes.push(cause);
+        if (causes.length >= AGGREGATE_CAUSE_LIMIT) break;
+      }
+    }
+    if (causes.length === 0) return null;
+
+    const message = `All ${rawErrors.length} fetch strategies failed: ${causes.join("; ")}`;
+    return { message, causes };
+  } catch {
+    return null;
+  }
+}
+
 // ─── agent_instruction Templates ─────────────────────────────────────────────
 
 const INSTRUCTIONS: Record<NovadaErrorCode, string> = {

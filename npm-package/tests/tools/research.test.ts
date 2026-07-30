@@ -131,6 +131,55 @@ describe("novadaResearch", () => {
     expect(sourceMatches).not.toBeNull();
     expect(sourceMatches!.length).toBeLessThanOrEqual(4); // material + finding + 2 table cells
   });
+
+  // ─── FIX A (2026-07-30): bing.com/ck/a redirects must reach the agent decoded ──
+  // Field feedback: novada_research returned source links as bing.com/ck/a
+  // tracking redirects — the downstream agent had to base64-decode them by hand
+  // to cite the real URL. The tool must do that decoding itself.
+
+  it("decodes a bing.com/ck/a redirect URL before it reaches the Sources table / cited material", async () => {
+    const realUrl = "https://source-behind-bing.example.com/real-article";
+    const wrappedUrl = `https://www.bing.com/ck/a?ld=abc&u=a1${Buffer.from(realUrl, "utf8").toString("base64")}&ntb=1`;
+
+    mockedAxios.post.mockResolvedValue(
+      searchEnvelope([
+        { title: "Wrapped Source", url: wrappedUrl, description: "Info about the redirect topic behind a bing tracking link" },
+      ])
+    );
+    mockedAxios.get.mockResolvedValue(
+      extractResponse("<article><p>This page explains the redirect topic in detail with a full worked example and clear analysis of the subject.</p></article>")
+    );
+
+    const result = await novadaResearch({ question: "How does the redirect topic work?", depth: "quick" }, API_KEY);
+
+    // The raw tracking redirect must never reach the agent...
+    expect(result).not.toContain("bing.com/ck/a");
+    // ...and the real destination must appear instead, in the Sources table.
+    expect(result).toContain(realUrl);
+  });
+
+  it("collapses two differently-tracked bing.com/ck/a redirects to the same real URL into one source", async () => {
+    const realUrl = "https://same-behind-bing.example.com/page";
+    const encoded = Buffer.from(realUrl, "utf8").toString("base64");
+    let callCount = 0;
+    // Each of the 3 "quick" queries gets a DIFFERENT bing tracking wrapper
+    // (different ld= session/tracking param) around the SAME real URL —
+    // simulates Bing issuing a fresh redirect per query/session.
+    mockedAxios.post.mockImplementation(async () => {
+      callCount++;
+      return searchEnvelope([
+        { title: "Same Page, Different Wrapper", url: `https://www.bing.com/ck/a?ld=session${callCount}&u=a1${encoded}`, description: "Info about the collapse topic here" },
+      ]);
+    });
+    mockedAxios.get.mockResolvedValue(
+      extractResponse("<article><p>The collapse topic is explained in full here with a clear and detailed walkthrough of the concept.</p></article>")
+    );
+
+    const result = await novadaResearch({ question: "Explain the collapse topic here", depth: "quick" }, API_KEY);
+
+    const sourceTableRows = result.match(new RegExp(`^\\| \\d+ \\| \\[[^\\]]*\\]\\(${realUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\)`, "gm"));
+    expect(sourceTableRows, "differently-wrapped redirects to the same real URL must collapse to one Sources-table row").toHaveLength(1);
+  });
 });
 
 describe("novadaResearch source-material assembly", () => {
