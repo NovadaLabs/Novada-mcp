@@ -226,6 +226,19 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
       return m ? m[1].trim() : null;
     }
 
+    // PARAM-HONESTY (review round 2, MEDIUM): the country-not-applied disclosure
+    // (## Warnings block / country_warning field, emitted by extractSingleInner) sits
+    // BEFORE the "---\n" separator this loop slices from below, then gets truncated
+    // away by perItemBudget for any realistically-sized page — types.ts explicitly
+    // promotes batch mode for cross-country price comparison, the single most
+    // country-sensitive use case, so silently losing the disclosure there defeats
+    // the whole point of this fix. Anchor on the exact phrase this file's own
+    // PARAM-HONESTY code emits (not a loose substring) so real scraped page content
+    // that happens to contain "accepted but not applied" can't false-positive.
+    function extractCountryNotAppliedFromBlock(content: string): boolean {
+      return /accepted but not applied — resolved via mode=/.test(content);
+    }
+
     // F1: Consolidated fields summary table (≥3 URLs + fields requested).
     // Parses each result to build one compact cross-URL comparison table at the top.
     // Full detail sections remain below. Handles both markdown and JSON per-URL output.
@@ -293,6 +306,13 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
       summaryLines.push(``);
     }
 
+    // PARAM-HONESTY: count items where country was supplied but the per-item block
+    // discloses it wasn't applied, so the aggregate ## Agent Hints below can point
+    // the agent at the retry workaround even though each item's own agent_instruction
+    // line is likely truncated out of THIS inline summary (still on disk, and still
+    // on the header line below either way).
+    let countryNotAppliedCount = 0;
+
     // Build compact per-item rows
     for (const r of results) {
       const stats = parseItemStats(r.content);
@@ -301,8 +321,15 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
       const totalPart = stats.totalChars !== null ? ` | total_chars:${stats.totalChars}` : "";
       const availPart = availability ? ` | availability:${availability}` : "";
       const statusPart = r.ok ? "ok" : "failed";
+      // PARAM-HONESTY (review round 2, MEDIUM): surface on the HEADER line — which is
+      // never truncated — rather than relying on it surviving inside the per-item
+      // snippet slice below, which drops the ## Warnings block for any realistically
+      // sized page (see extractCountryNotAppliedFromBlock's doc comment).
+      const countryNotAppliedForItem = Boolean(params.country) && r.ok && extractCountryNotAppliedFromBlock(r.content);
+      if (countryNotAppliedForItem) countryNotAppliedCount++;
+      const countryPart = countryNotAppliedForItem ? ` | country_not_applied:true` : "";
 
-      summaryLines.push(`### [${r.i + 1}/${urls.length}] ${statusPart.toUpperCase()}: ${r.url}`);
+      summaryLines.push(`### [${r.i + 1}/${urls.length}] ${statusPart.toUpperCase()}: ${r.url}${countryPart}`);
       summaryLines.push(`title: ${itemTitle}`);
       summaryLines.push(`chars:${stats.returnedChars} | content_truncated:${stats.truncated}${totalPart}${availPart}`);
 
@@ -327,6 +354,11 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     summaryLines.push(`## Agent Hints`);
     if (failed > 0) {
       summaryLines.push(`- ${failed} URL(s) failed. Re-run failed URLs individually for details.`);
+    }
+    // PARAM-HONESTY: batch-level agent_instruction equivalent — fires only when at
+    // least one item actually has the per-item country_not_applied:true header flag.
+    if (countryNotAppliedCount > 0) {
+      summaryLines.push(`- country="${params.country}" was accepted but NOT applied on ${countryNotAppliedCount} of ${urls.length} URL(s) above (see their header line) — do not rely on it for geo-restricted content there. Retry those URLs individually with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`);
     }
     summaryLines.push(`- Inline content is a compact snippet (${perItemBudget} chars/item). Full content per page is saved to disk — see path: line below.`);
     summaryLines.push(`- To get full content for a specific URL, call novada_extract with that single URL.`);
@@ -880,6 +912,23 @@ async function extractSingleInner(
   let html: string;
   let usedMode: "static" | "render" | "browser" | "render-failed" = "static";
   let renderError: string | null = null;
+  // PARAM-HONESTY: true only when `params.country` was actually included in the
+  // fetch call whose result is the content currently held in `html`/`usedMode`.
+  // fetchWithRender is called from three sites below — two forward params.country,
+  // one (the low-quality-score escalation) does not — and Wayback/GitBook/browser
+  // fallbacks never honor country regardless of what preceded them. Set precisely
+  // at each site rather than inferred from usedMode alone, since usedMode can end
+  // up "render" via the country-less escalation path too.
+  //
+  // Review round 2: audited by enumerating EVERY write site of `usedMode` in this
+  // function (grep `usedMode = `) rather than spot-fixing the one reported bug —
+  // three sibling `pickBetterHtml({ html: renderHtml, mode: "render" }, ...)` calls
+  // exist and only one of them (the "render still JS-heavy → try browser" branch)
+  // had forgotten to propagate this flag when the render candidate wins. The other
+  // two pickBetterHtml call sites in this function never offer the country-fetched
+  // render candidate at all (they compare pre-render static html against browser
+  // html), so `best.mode` can never resolve to "render" there — nothing to set.
+  let countryAppliedToServedContent = false;
   /** NOV-GB1: raw markdown from GitBook .md fallback, used to override mainContent extraction */
   let gitbookMdContent: string | null = null;
   /** Anti-bot provider detected during fetch (null = none detected) */
@@ -1039,6 +1088,8 @@ async function extractSingleInner(
       }
     } else if (gitbookMdContent === null) {
       usedMode = "render";
+      // This branch's fetchWithRender call above forwarded params.country.
+      countryAppliedToServedContent = Boolean(params.country);
     }
   } else {
     // Auto or static:
@@ -1168,6 +1219,8 @@ async function extractSingleInner(
           html = renderHtml;
           usedMode = "render";
           antiBotResolved = detectedAntiBot !== null;
+          // The fetchWithRender call above (line ~1154) forwarded params.country.
+          countryAppliedToServedContent = Boolean(params.country);
         } else if (isBrowserConfigured()) {
           // render also JS-heavy — try full browser
           // #1/#12: keep the best of {static html, render html, browser html}.
@@ -1177,10 +1230,21 @@ async function extractSingleInner(
           html = best.html;
           usedMode = best.mode;
           antiBotResolved = best.adopted;
+          // Review round 2 (HIGH): unlike its two siblings above/below, this branch
+          // offers the country-fetched renderHtml itself as a pickBetterHtml candidate
+          // (mode:"render") — so when the browser candidate does NOT win (best.adopted
+          // false, best.mode stays "render"), the SERVED content is that render fetch,
+          // which forwarded params.country at line ~1154. Must be set here too, not
+          // just in the two branches that skip pickBetterHtml entirely.
+          if (usedMode === "render") {
+            countryAppliedToServedContent = Boolean(params.country);
+          }
         } else {
           // render worked but still JS-heavy, use it (better than static)
           html = renderHtml;
           usedMode = "render";
+          // Same fetchWithRender call as above — params.country was forwarded.
+          countryAppliedToServedContent = Boolean(params.country);
         }
       } catch (err) {
         // Early exit for SSL/TLS certificate errors — escalation won't fix server-side cert issues
@@ -1353,6 +1417,10 @@ async function extractSingleInner(
   if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !quality.content_present && !html.startsWith("pdf_pages:") && !domainHint) {
     escalationAttempted = true;
     try {
+      // PARAM-HONESTY: this call deliberately does NOT forward params.country (pre-existing
+      // behavior, unchanged here) — so even if it sets usedMode="render" below,
+      // countryAppliedToServedContent must stay false; do not add country here as a side
+      // effect of this fix.
       const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract" });
       if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
         const renderHtml = renderResponse.data;
@@ -1470,10 +1538,22 @@ async function extractSingleInner(
           quality = scoreExtraction(wbHtml, wbMain, usedMode, hasStructuredData);
           if (quality.score === 0 && wbMain.length > 0) quality.score = 1;
           waybackFallback = true;
+          // PARAM-HONESTY: archive.org is fetched via fetchViaProxy with no country
+          // option — served content no longer reflects any earlier country-aware
+          // render, regardless of what usedMode still says.
+          countryAppliedToServedContent = false;
         }
       }
     } catch { /* Wayback unavailable — keep original result */ }
   }
+
+  // PARAM-HONESTY: country is accepted but silently dropped on the default auto/static
+  // path (fetchViaProxy has no country field — utils/http.ts) — types.ts:186 already
+  // says so in the schema description, but that fine print never reaches a runtime
+  // response. Fires only when the caller actually supplied country AND it genuinely
+  // was not applied to the content that ended up being served (usedMode/countryAppliedToServedContent
+  // are set precisely at each fetch call site above, not inferred/guessed here).
+  const countryNotApplied = Boolean(params.country) && !countryAppliedToServedContent;
 
   // max_chars truncation for markdown format
   // NOV-671: use table-preserving truncation — when a table sits in the last ~30%
@@ -1626,6 +1706,12 @@ async function extractSingleInner(
       ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
       ...(gitbookMdContent !== null ? { gitbook_md_fallback: true } : {}),
       ...(waybackFallback ? { wayback_fallback: true } : {}),
+      // PARAM-HONESTY: country accepted but not applied — fires only when the caller
+      // supplied it AND it was genuinely dropped (see countryNotApplied above).
+      ...(countryNotApplied ? {
+        country_warning: `country="${params.country}" accepted but not applied — resolved via mode="${usedMode}", not "render" (country only takes effect on render/js fetches; do not rely on it here)`,
+        agent_instruction: `country="${params.country}" was accepted but NOT applied to this extraction (resolved mode: "${usedMode}") — do not rely on it for geo-restricted content. Retry with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`,
+      } : {}),
       // NOV-668: Kufer availability data
       ...(kuferResult ? {
         kufer_availability: {
@@ -1644,6 +1730,7 @@ async function extractSingleInner(
     if (redditUrl) hints.push("Reddit URL rewritten to old.reddit.com — new reddit.com blocks all scrapers.");
     if (gitbookMdContent !== null) hints.push("Content retrieved via GitBook .md fallback — the live page is JS-rendered; the raw markdown endpoint returned richer content.");
     if (waybackFallback) hints.push("Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.");
+    if (countryNotApplied) hints.push(`country="${params.country}" accepted but not applied on this fetch (mode="${usedMode}") — retry with render="render" to have it honored.`);
     try {
       const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
       if (extractedHost === "trends24.in") hints.push("[THIRD-PARTY DATA] trends24.in is an independent aggregator, not an official X/Twitter source.");
@@ -1724,9 +1811,21 @@ async function extractSingleInner(
     ...(description ? [`description: ${headerLine(description)}`] : []),
     `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? ` | auto_escalated:true${autoEscalatedTo ? ` | escalated_to:${autoEscalatedTo}` : ""}` : ""}${detectedAntiBot ? ` | anti_bot:${detectedAntiBot} | resolved:${antiBotResolved}` : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
     ``,
-    `---`,
-    ``,
   ];
+
+  // PARAM-HONESTY: country accepted but not applied — fires only when supplied AND
+  // genuinely dropped (countryNotApplied computed above from the actual fetch path).
+  if (countryNotApplied) {
+    lines.push(
+      `## Warnings`,
+      JSON.stringify([
+        `country="${params.country}" accepted but not applied — resolved via mode="${usedMode}", not "render" (country only takes effect on render/js fetches; do not rely on it here)`,
+      ]),
+      ``,
+    );
+  }
+
+  lines.push(`---`, ``);
 
   // Requested Fields block (before Structured Data)
   if (fieldResults && fieldResults.length > 0) {
@@ -1922,7 +2021,12 @@ async function extractSingleInner(
   });
   lines.push(``);
   lines.push(`## Agent Action`);
-  lines.push(`agent_instruction: ${agentInstruction}`);
+  // PARAM-HONESTY: appended only when country was supplied AND genuinely not applied
+  // (see countryNotApplied above) — never fires when country was honored via render/js.
+  const countryInstruction = countryNotApplied
+    ? ` country="${params.country}" was accepted but NOT applied (resolved mode: "${usedMode}") — do not rely on it for geo-restricted content. Retry with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`
+    : "";
+  lines.push(`agent_instruction: ${agentInstruction}${countryInstruction}`);
   const mdOutput = lines.join("\n");
 
   // Wire output save — best-effort, never breaks the tool.
