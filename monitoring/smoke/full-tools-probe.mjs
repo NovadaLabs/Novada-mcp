@@ -387,6 +387,19 @@ async function callToolWithNetworkRetry(name, args, opts, callToolFn, backoffMs)
 // `makeNovadaError(NovadaErrorCode.INVALID_API_KEY, ...)` call site.
 const INVALID_API_KEY_RE = /invalid_api_key/i;
 
+// Test key over the hosted free-gateway cap (2026-07-30 incident): the hosted
+// gateway rejects an over-cap key with a markdown error starting "## Free
+// Gateway Cap Reached" and an agent_instruction containing
+// "free_gateway_cap_reached". On 2026-07-30 the daily probe hit this on
+// EVERY tool because classifyFailure() had no pattern for it: 20 core tools
+// fail-safed to ①-mcp-code P0 (false "code bug" Linear alerts, TOW2-349),
+// while known-flaky platforms (youtube/github/perplexity) swallowed the SAME
+// error into ③-backend (also wrong). This is a billing/test-infra state, not
+// a code bug and not a backend outage — checked right after INVALID_API_KEY
+// and, critically, BEFORE the isFlaky branch so a flaky platform can't
+// swallow it.
+const FREE_CAP_RE = /free gateway cap reached|free_gateway_cap_reached/i;
+
 // Patterns for errors that are OURS to fix (schema/validation/logic bugs in
 // this repo's tool wrappers) — checked BEFORE the generic backend-signal
 // pattern, since a validation error can otherwise superficially resemble one
@@ -416,27 +429,35 @@ const BACKEND_SIGNAL_RE =
  *      scraper platform regardless of that platform's flakiness, and it is
  *      unambiguously OUR test-infra to fix (rotate/provision the key), never
  *      the platform's fault.
- *   2. Known-flaky backend platform (TOW2-305) -> ③-backend, P3 — ALWAYS,
+ *   2. FREE_CAP_RE signal (2026-07-30 incident) -> ②-gateway/config (P0/P1).
+ *      Checked SECOND, immediately after INVALID_API_KEY and unconditionally
+ *      BEFORE the isFlaky branch below: the test key being over the hosted
+ *      free-gateway cap surfaces identically on every tool including
+ *      known-flaky scraper platforms, and a flaky platform must not be
+ *      allowed to swallow it into ③-backend — it is billing/test-infra to
+ *      fix (top up the key or fix the gateway paid-exemption), never a code
+ *      bug and never a backend outage.
+ *   3. Known-flaky backend platform (TOW2-305) -> ③-backend, P3 — ALWAYS,
  *      including when the specific failure mode is a stuck/still-processing
  *      task after one poll (fixed 2026-07-24: previously the
  *      stillProcessingAfterPoll branch was checked first and always
  *      returned P2, even for a documented-chronic-flake platform).
- *   3. Scraper task still stuck after the one poll attempt (non-flaky
+ *   4. Scraper task still stuck after the one poll attempt (non-flaky
  *      platform) -> ③-backend, P2.
- *   4. Our own validation/logic error text (bad op id, missing required
+ *   5. Our own validation/logic error text (bad op id, missing required
  *      param, etc.) -> ①-mcp-code — this is OUR schema/preflight, not theirs.
- *   5. HTTP 5xx, or ANY network-level failure (httpStatus === 0, whether or
+ *   6. HTTP 5xx, or ANY network-level failure (httpStatus === 0, whether or
  *      not the message says "timeout" — after callToolWithNetworkRetry's one
  *      retry, a lingering httpStatus 0 means the client never reached the
  *      server) -> ②-gateway.
- *   6. Backend/upstream signal text (BACKEND_SIGNAL_RE, or the shared
+ *   7. Backend/upstream signal text (BACKEND_SIGNAL_RE, or the shared
  *      isBackendSignal() from tool-probes.mjs — e.g. the scraper `50004:
  *      context deadline exceeded` timeout, reproduced 2026-07-28 via a raw
  *      curl with zero MCP involved) -> ③-backend. Checked for EVERY tool,
  *      regardless of platform — this is what keeps a bare backend outage from
- *      defaulting to ①-mcp-code at step 7 below for any platform not already
+ *      defaulting to ①-mcp-code at step 8 below for any platform not already
  *      on the known-flaky list.
- *   7. Anything else unclassified -> ①-mcp-code (fail-safe toward "ours until
+ *   8. Anything else unclassified -> ①-mcp-code (fail-safe toward "ours until
  *      proven otherwise" — we'd rather over-investigate a real backend blip
  *      once than silently blame the backend for something we broke).
  *
@@ -460,6 +481,14 @@ function classifyFailure(probe, res, { stillProcessingAfterPoll = false } = {}) 
       domain: "②-gateway",
       severity: isCore ? "P0" : "P1",
       note: "test key invalid/unprovisioned for scraper products (NovadaError INVALID_API_KEY) — not a code bug",
+    };
+  }
+
+  if (FREE_CAP_RE.test(msg)) {
+    return {
+      domain: "②-gateway",
+      severity: isCore ? "P0" : "P1",
+      note: "test key over the hosted free-gateway cap — billing/config state (top up the key or fix the gateway paid-exemption), NOT a code bug",
     };
   }
 
@@ -523,6 +552,9 @@ function adviceFor(row) {
   if (row.domain === "②-gateway") {
     if (typeof row.note === "string" && row.note.includes("test key invalid/unprovisioned")) {
       return "Test key misconfigured/unprovisioned for scraper products — verify NOVADA_TEST_KEY, not a code bug.";
+    }
+    if (typeof row.note === "string" && row.note.includes("free-gateway cap")) {
+      return "Test key over the hosted free-gateway cap — top up the key or fix the gateway paid-exemption, not a code bug.";
     }
     return "Ours — check hosted-server Vercel function health, timeout budget, and streaming behavior.";
   }
