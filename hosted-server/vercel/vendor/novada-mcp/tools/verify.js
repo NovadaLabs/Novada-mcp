@@ -1,16 +1,29 @@
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
-import { makeNovadaError, NovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, LINE_TERMINATOR_CHARS } from "../_core/errors.js";
 import { classifyAuthority } from "../utils/authority.js";
 // FIX-4: Max claim length — prevents excessively long claims from blowing up search queries
 const CLAIM_MAX_LENGTH = 1000;
+// Review round 1 (2026-07-30, same class as _core/errors.ts's line-terminator
+// fix): the old `[\r\n\0]` class only caught ASCII CR/LF — U+2028/U+2029
+// (also true line terminators per ECMA-262, see errors.ts's
+// ANY_LINE_TERMINATORS_RE comment) sailed through untouched, undermining this
+// exact function's own stated purpose ("prevents false 'supported' verdicts
+// via injection into SERP context"). Reuses errors.ts's shared
+// LINE_TERMINATOR_CHARS class instead of a second ad-hoc definition.
+const CLAIM_LINE_TERMINATORS_RE = new RegExp(`[\\0${LINE_TERMINATOR_CHARS}]+`, "g");
+const CLAIM_HAS_LINE_TERMINATOR_RE = new RegExp(`[\\0${LINE_TERMINATOR_CHARS}]`);
 /**
  * FIX-4: Sanitize a claim before embedding it into search query strings.
  * Strips CRLF, null bytes, and HTML/JS that could cause false 'supported' verdicts
  * via injection into SERP context, and removes leading javascript: scheme.
  */
-function sanitizeClaim(claim) {
+// Exported (no external behavior change — still module-internal to novadaVerify's
+// control flow) so review-round-1's U+2028/U+2029 line-terminator fix can be
+// unit-tested directly rather than only inferred through the mock-heavy
+// novadaVerify() integration surface.
+export function sanitizeClaim(claim) {
     return claim
-        .replace(/[\r\n\0]+/g, " ") // collapse CRLF + null-byte to space
+        .replace(CLAIM_LINE_TERMINATORS_RE, " ") // collapse CRLF/U+2028/U+2029 + null-byte to space
         .replace(/javascript:/gi, "") // strip javascript: scheme
         .replace(/<[^>]*>/g, " ") // strip HTML tags that embed context
         .replace(/\s{2,}/g, " ") // collapse runs of whitespace
@@ -165,8 +178,10 @@ export async function novadaVerify(params, apiKey) {
     if (params.claim.length > CLAIM_MAX_LENGTH) {
         throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `claim exceeds maximum length of ${CLAIM_MAX_LENGTH} characters (got ${params.claim.length}).`, `claim_length:${params.claim.length} max:${CLAIM_MAX_LENGTH}`);
     }
-    // FIX-4: Reject null bytes and CRLF at input validation level
-    if (/[\0\r\n]/.test(params.claim)) {
+    // FIX-4: Reject null bytes and any Unicode line-terminator character (CR,
+    // LF, U+2028, U+2029 — see CLAIM_HAS_LINE_TERMINATOR_RE's comment above) at
+    // input validation level.
+    if (CLAIM_HAS_LINE_TERMINATOR_RE.test(params.claim)) {
         throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "claim must not contain null bytes or newline characters.", "claim: contains CRLF or null");
     }
     // FIX-4: Reject javascript: scheme in claim

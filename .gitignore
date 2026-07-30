@@ -58,3 +58,6 @@ reports/
 # Python
 __pycache__/
 *.pyc
+
+# tooling cache (opencli explore scratch)
+npm-package/.opencli/

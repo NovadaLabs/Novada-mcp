@@ -68,6 +68,24 @@ describe("summarizeAggregateError", () => {
     expect(result!.causes[0]).toContain("line1 line2 line3");
   });
 
+  // Review round 1 (2026-07-30, CRITICAL, same class as errors.test.ts's
+  // sanitizeServerMsg/toAgentString fix): U+2028/U+2029 are ECMA-262 line
+  // terminators too, not just \r\n. A cause's message could otherwise smuggle
+  // one past the old `[\r\n]`-only collapse, then land — uncollapsed — in the
+  // combined `message` this function returns, which itself gets embedded in a
+  // NovadaError.message and ultimately in toAgentString()'s output ahead of
+  // the real agent_instruction line.
+  it.each([
+    ["U+2028 (LINE SEPARATOR)", "\u2028"],
+    ["U+2029 (PARAGRAPH SEPARATOR)", "\u2029"],
+  ])("collapses an embedded %s in a cause to a single line", (_label, sep) => {
+    const agg = new AggregateError([new Error(`line1${sep}line2${sep}line3`)], "All promises were rejected");
+    const result = summarizeAggregateError(agg);
+    expect(result).not.toBeNull();
+    expect(result!.causes[0]).not.toMatch(/[\r\n\u2028\u2029]/);
+    expect(result!.causes[0]).toBe("line1 line2 line3");
+  });
+
   it("returns null for a plain (non-aggregate) Error", () => {
     expect(summarizeAggregateError(new Error("plain failure"))).toBeNull();
   });
