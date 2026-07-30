@@ -78,6 +78,15 @@ CONTRACT_FULL is refused outright for stdio, see StdioTransport):
                                attempted:true; probe result agrees with entitlement
                                [CONTRACT_FULL part — billed, http only in practice since
                                CONTRACT_FULL never runs against stdio]
+    8. BILLING_TRUTH         — permanent regression guard for the 2026-07-30 incident
+                               (TOW2-349): a key with purchasable balance on ANY ledger
+                               (wallet OR capture) is never denied service by the
+                               free-gateway cap. Probes both ledgers directly; a key
+                               unfunded on both is SKIPPED (test-infra state, not a
+                               product lie); a funded key that still gets the cap
+                               rejection ("## Free Gateway Cap Reached") FAILS.
+                               [billed, http only in practice since CONTRACT_FULL
+                               never runs against stdio]
 """
 
 import abc
@@ -216,6 +225,49 @@ _STATUS_LINE_RE = re.compile(r'(?m)^(?:⚠ )?gateway:.*$')
 def count_status_lines(text: str) -> list[str]:
     """Return all status footer lines found in text."""
     return _STATUS_LINE_RE.findall(text)
+
+
+# ─── ledger probe helpers (BILLING_TRUTH) ──────────────────────────────────────
+# Bare developer-api host — NOT the MCP endpoint under test (mcp.novada.com or a
+# local hosted-server dev instance). Same two ledgers fetchAggregateBalance()
+# (hosted-server/vercel/api/_plan.ts, the 2026-07-30 fix) reads to decide the
+# free-gateway-cap paid exemption.
+WALLET_BALANCE_URL = "https://api-m.novada.com/v1/wallet/balance"
+CAPTURE_BALANCE_URL = "https://api-m.novada.com/v1/capture/get_balance"
+
+# Cap-rejection signature — verified against hosted-server/vercel/api/mcp.ts's
+# enforceGatewayCap block: a single text content item joined with "\n" whose
+# first line is exactly "## Free Gateway Cap Reached" and whose last line
+# starts with "agent_instruction: free_gateway_cap_reached".
+_CAP_TEXT_MARKER = "## Free Gateway Cap Reached"
+_CAP_INSTRUCTION_MARKER = "agent_instruction: free_gateway_cap_reached"
+
+
+def _probe_ledger_balance(url: str, key: str, extract_balance) -> float:
+    """
+    POST an empty JSON body with Bearer auth to a ledger balance endpoint
+    (free read — not billed) and return the balance as a float via
+    `extract_balance(parsed_json)`. ANY failure — network error, non-200,
+    malformed JSON, unexpected response shape, extractor raising — returns
+    0.0 rather than propagating. A probe failure means "treat this ledger as
+    unfunded", never a crashed invariant runner — mirrors how invariant_3
+    isolates upstream flakiness from reporting-layer failures.
+    """
+    req = urllib.request.Request(
+        url,
+        data=b"{}",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + key,
+        },
+        method="POST",
+    )
+    try:
+        raw = urllib.request.urlopen(req, timeout=20).read().decode()
+        parsed = json.loads(raw)
+        return float(extract_balance(parsed))
+    except Exception:
+        return 0.0
 
 
 # ─── Transport abstraction ─────────────────────────────────────────────────────
@@ -584,6 +636,18 @@ def invariant_1_version_agreement(transport: Transport) -> list[str]:
     return failures
 
 
+def _proxy_not_configured(text: str) -> bool:
+    """
+    True if a novada_proxy response is an honest "not configured" precondition
+    declaration (missing NOVADA_PROXY_* env vars for the account/key under
+    test) rather than a served response that could exhibit — or hide — a
+    silent-noop bug. The tool never reached the point where the
+    country-not-applied disclosure would apply, so this is an account/env
+    provisioning gap, not evidence either way about NO_SILENT_NOOP.
+    """
+    return ("not configured" in text) and ("Missing environment variables" in text)
+
+
 def invariant_2_no_silent_noop(transport: Transport) -> list[str]:
     """
     INVARIANT 2 — NO_SILENT_NOOP [CONTRACT_FULL only — billable]:
@@ -604,11 +668,23 @@ def invariant_2_no_silent_noop(transport: Transport) -> list[str]:
     CONTRACT_FULL never runs against stdio (see StdioTransport / main()), so in
     practice this only ever executes against the http transport, but the logic
     itself is transport-agnostic (novada_proxy exists identically on both surfaces).
+
+    Precondition gate (2026-07-30, TOW2-349 round 2 — nightly false-red fix): if
+    novada_proxy honestly reports itself unconfigured for the account under test
+    ("not configured" + "Missing environment variables: NOVADA_PROXY_...") for a
+    given sub-check, that sub-check never reached the point where the
+    country-not-applied disclosure applies at all — an account/env provisioning
+    gap, not a silent-noop lie. Each sub-check (isp+country, residential+country)
+    is evaluated independently: a not-configured response for that sub-check is
+    reported as a SKIP-style line and does NOT count as a failure. A configured
+    proxy that still silently ignores country is unaffected and still FAILS.
     """
     if not CONTRACT_FULL:
         raise SkipInvariant("CONTRACT_FULL=1 not set — billable invariant skipped")
 
     failures = []
+    isp_skipped = False
+    res_skipped = False
 
     # ── ISP + country → MUST contain warning ──────────────────────────────────
     is_err_isp, isp_text = transport.call_tool("novada_proxy", {
@@ -622,14 +698,21 @@ def invariant_2_no_silent_noop(transport: Transport) -> list[str]:
         # warning at all; a cred-error before the warning block IS a real gap.
         print(f"  [2] novada_proxy ISP returned is_error=True: {isp_text[:200]!r}")
 
-    # Accept either canonical phrase.
-    isp_warned = ("not applied" in isp_text) or ("do not rely" in isp_text)
-    if not isp_warned:
-        failures.append(
-            f"INVARIANT_2[isp+country]: response must contain 'not applied' or 'do not rely' "
-            f"when type=isp + country=de is passed.\n"
-            f"  actual (first 400 chars): {isp_text[:400]!r}"
+    if _proxy_not_configured(isp_text):
+        isp_skipped = True
+        print(
+            "  [2] SKIP[isp+country]: proxy not provisioned for the contract "
+            "key/env — precondition not met, not a silent-noop violation."
         )
+    else:
+        # Accept either canonical phrase.
+        isp_warned = ("not applied" in isp_text) or ("do not rely" in isp_text)
+        if not isp_warned:
+            failures.append(
+                f"INVARIANT_2[isp+country]: response must contain 'not applied' or 'do not rely' "
+                f"when type=isp + country=de is passed.\n"
+                f"  actual (first 400 chars): {isp_text[:400]!r}"
+            )
 
     # ── Residential + country → must NOT contain the warning ──────────────────
     is_err_res, res_text = transport.call_tool("novada_proxy", {
@@ -637,16 +720,30 @@ def invariant_2_no_silent_noop(transport: Transport) -> list[str]:
         "country": "de",
         "format": "url",
     })
-    res_warned = ("not applied" in res_text) or ("do not rely" in res_text)
-    if res_warned:
-        failures.append(
-            f"INVARIANT_2[residential+country]: residential proxy must NOT emit a "
-            f"country-not-applied warning (country IS applied for residential).\n"
-            f"  actual (first 400 chars): {res_text[:400]!r}"
+    if _proxy_not_configured(res_text):
+        res_skipped = True
+        print(
+            "  [2] SKIP[residential+country]: proxy not provisioned for the "
+            "contract key/env — precondition not met, not a silent-noop violation."
         )
+    else:
+        res_warned = ("not applied" in res_text) or ("do not rely" in res_text)
+        if res_warned:
+            failures.append(
+                f"INVARIANT_2[residential+country]: residential proxy must NOT emit a "
+                f"country-not-applied warning (country IS applied for residential).\n"
+                f"  actual (first 400 chars): {res_text[:400]!r}"
+            )
 
     if not failures:
-        print(f"  [2/PASS] NO_SILENT_NOOP: ISP emitted warning; residential did not.")
+        if isp_skipped or res_skipped:
+            print(
+                f"  [2/PASS] NO_SILENT_NOOP: no violations "
+                f"(isp {'skipped' if isp_skipped else 'checked, warned'}; "
+                f"residential {'skipped' if res_skipped else 'checked, no warning'})."
+            )
+        else:
+            print(f"  [2/PASS] NO_SILENT_NOOP: ISP emitted warning; residential did not.")
     else:
         print(f"  [2/FAIL] NO_SILENT_NOOP: see failures above.")
 
@@ -1305,6 +1402,100 @@ def invariant_7_oauth_metadata(transport: Transport) -> list[str]:
     return failures
 
 
+def invariant_8_billing_truth(transport: Transport) -> list[str]:
+    """
+    INVARIANT 8 — BILLING_TRUTH [CONTRACT_FULL only — billable; http only in
+    practice since CONTRACT_FULL is refused outright for stdio, see StdioTransport]:
+
+    Permanent regression guard for the 2026-07-30 incident (TOW2-349): the
+    hosted gateway's free-gateway-cap paid-exemption check once read ONLY the
+    master wallet ledger to decide whether a key was "paid" — so a key funded
+    exclusively on the capture ledger (where Scraping Solutions money actually
+    lives; wallet is a pass-through and legitimately sits near 0 for paying
+    customers — pay -> wallet (transit) -> buy products -> money lives in
+    product/plan credits) got capped as if it were free. Fixed via
+    fetchAggregateBalance() (hosted-server/vercel/api/_plan.ts), which queries
+    both ledgers and takes their max.
+
+    Invariant: "a key with purchasable balance on ANY ledger is never denied
+    service."
+
+    Steps:
+      1. Probe both ledgers directly (free reads, NOT billed) with the contract
+         key: wallet balance (data.balance) and capture balance (data is a bare
+         number). Either probe failing/malformed degrades to 0 for that ledger
+         — see _probe_ledger_balance — never crashes the runner.
+      2. If neither ledger shows a positive balance, SKIP — an unfunded
+         contract key is a test-infra state, not a product lie; this invariant
+         cannot distinguish "correctly capped" from "regression" without a
+         funded key.
+      3. If funded on at least one ledger, make ONE cheap billable MCP call
+         (novada_search, num=1, trivial query). If the response matches the
+         free-gateway-cap rejection signature → FAIL: this is exactly the
+         2026-07-30 regression class. is_error for any OTHER reason (upstream
+         flake, SERP not enabled, etc.) is NOT a BILLING_TRUTH failure — this
+         invariant tests the gate, not upstream availability — reported as an
+         inconclusive SKIP with the error head instead. Success (no cap
+         rejection) → PASS.
+    """
+    if not CONTRACT_FULL:
+        raise SkipInvariant("CONTRACT_FULL=1 not set — billable invariant skipped")
+
+    failures = []
+
+    wallet_balance = _probe_ledger_balance(
+        WALLET_BALANCE_URL, KEY, lambda p: p.get("data", {}).get("balance", 0)
+    )
+    capture_balance = _probe_ledger_balance(
+        CAPTURE_BALANCE_URL, KEY, lambda p: p.get("data", 0)
+    )
+
+    funded_ledgers = []
+    if wallet_balance > 0:
+        funded_ledgers.append(f"wallet={wallet_balance}")
+    if capture_balance > 0:
+        funded_ledgers.append(f"capture={capture_balance}")
+
+    if max(wallet_balance, capture_balance) <= 0:
+        raise SkipInvariant(
+            "contract key not funded on any ledger — provision a funded key to "
+            "arm BILLING_TRUTH"
+        )
+
+    is_err, text = transport.call_tool("novada_search", {
+        "query": "test",
+        "num": 1,
+    }, timeout=90)
+
+    if is_err:
+        is_cap_rejection = (
+            text.strip().startswith(_CAP_TEXT_MARKER) and
+            _CAP_INSTRUCTION_MARKER in text
+        )
+        if is_cap_rejection:
+            failures.append(
+                f"INVARIANT_8[cap-rejection]: funded key (ledgers: {', '.join(funded_ledgers)}) "
+                f"was denied service by the free-gateway-cap gate — this is the 2026-07-30 "
+                f"ledger-split regression class (TOW2-349): the gate must check ALL ledgers, "
+                f"not just wallet.\n"
+                f"  response (first 400 chars): {text[:400]!r}"
+            )
+            print(f"  [8/FAIL] BILLING_TRUTH: {len(failures)} check(s) failed.")
+            return failures
+        raise SkipInvariant(
+            f"novada_search returned is_error=True for a reason unrelated to the "
+            f"free-gateway-cap gate — inconclusive, not a BILLING_TRUTH failure "
+            f"(this invariant tests the gate, not upstream availability).\n"
+            f"  error (first 300 chars): {text[:300]!r}"
+        )
+
+    print(
+        f"  [8/PASS] BILLING_TRUTH: funded on {', '.join(funded_ledgers)} — "
+        f"novada_search was NOT denied by the free-gateway-cap gate."
+    )
+    return failures
+
+
 # ─── runner ───────────────────────────────────────────────────────────────────
 
 INVARIANTS = [
@@ -1315,6 +1506,7 @@ INVARIANTS = [
     ("COST_VISIBILITY",       invariant_5_cost_visibility),
     ("HEALTH_TRUTH",          invariant_6_health_truth),
     ("OAUTH_METADATA",        invariant_7_oauth_metadata),
+    ("BILLING_TRUTH",         invariant_8_billing_truth),
 ]
 
 

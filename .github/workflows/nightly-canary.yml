@@ -23,9 +23,10 @@ name: Nightly Canary (prod backend — Layers 2/6/7)
 # contract-test.py invocation:
 #   1. capture-golden.py  https://mcp.novada.com/mcp  -> fresh snapshot dir
 #   2. diff-golden.py     <checked-in baseline/>  <fresh snapshot dir>
-#   3. contract-test.py   https://mcp.novada.com/mcp   (FREE set only — no
-#      CONTRACT_FULL=1 here; CONTRACT_FULL is billable and stays a manual/
-#      deploy-time-only decision, not a nightly default)
+#   3. contract-test.py   https://mcp.novada.com/mcp   (CONTRACT_FULL=1 —
+#      billable invariants armed nightly since 2026-07-30 to keep BILLING_TRUTH
+#      [funded key never denied service, TOW2-349 regression guard] on watch;
+#      costs a few billable calls/night on the funded test key)
 #
 # Secret required: secrets.NOVADA_TEST_KEY — the same repo secret the (green)
 # synthetic-monitor.yml already uses against mcp.novada.com. The env VAR name
@@ -80,10 +81,20 @@ jobs:
       # contract invariants also failed — both signals are worth seeing in the
       # same nightly run, exactly like deploy-hosted.sh reports both gates
       # before combining them into one final verdict.
-      - name: Contract invariant tests (FREE set — no CONTRACT_FULL)
+      #
+      # CONTRACT_FULL=1 (2026-07-30, TOW2-349): arms the billable invariant set,
+      # including the new BILLING_TRUTH permanent regression guard for the
+      # ledger-split incident (a funded key — wallet OR capture balance > 0 —
+      # must never be denied service by the free-gateway cap). This also arms
+      # the existing NO_SILENT_NOOP / NO_LYING_ZERO / HEALTH_TRUTH-probe billable
+      # invariants — intended: costs a few billable calls nightly on the funded
+      # NOVADA_TEST_KEY, in exchange for nightly (not just deploy-time) coverage
+      # of this regression class.
+      - name: Contract invariant tests (CONTRACT_FULL — billable)
         if: always()
         env:
           NOVADA_MCP_KEY: ${{ secrets.NOVADA_TEST_KEY }}
+          CONTRACT_FULL: "1"
         run: |
           python3 hosted-server/scripts/contract/contract-test.py https://mcp.novada.com/mcp
 
