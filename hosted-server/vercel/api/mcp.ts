@@ -7,7 +7,7 @@
  * Vercel KV (Upstash Redis under the hood) via @vercel/kv.
  *
  * Auth (Tavily-style, both accepted):
- *   1. ?token=YOUR_NOVADA_API_KEY
+ *   1. ?apikey=YOUR_NOVADA_API_KEY  (aliases: ?api_key=, legacy ?token= — all accepted, canonical is apikey)
  *   2. Authorization: Bearer YOUR_NOVADA_API_KEY
  *
  * Quota: per-token monthly KV counter at <token>:<YYYY-MM>. Decrement
@@ -869,8 +869,13 @@ function extractToken(req: Request): { token: string; authMethod: AuthMethod } |
   const pathAuthMatch = url.pathname.match(/^\/([a-zA-Z0-9_\-]{16,})\/mcp$/);
   if (pathAuthMatch) return { token: pathAuthMatch[1], authMethod: "path" };
 
-  // 2. Query param: ?token=YOUR_API_KEY
-  const qp = url.searchParams.get("token");
+  // 2. Query param: ?apikey= is canonical (matches the NOVADA_API_KEY brand and is
+  //    the only form shown in UI/docs). ?api_key= (novada-web parity) and the legacy
+  //    ?token= are accepted as silent aliases so pre-existing links keep working.
+  //    First non-empty wins.
+  const qp = url.searchParams.get("apikey")
+    || url.searchParams.get("api_key")
+    || url.searchParams.get("token");
   if (qp) return { token: qp.trim(), authMethod: "query" };
 
   // 3. Bearer header: Authorization: Bearer YOUR_API_KEY
@@ -1808,8 +1813,8 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     // 401 responses into a shared helper breaks that contract test — update the
     // test first if you ever refactor this.
     return jsonError(401, "MISSING_TOKEN",
-      "Missing API key. Pass your own Novada API key as ?token=YOUR_KEY or Authorization: Bearer YOUR_KEY — the hosted endpoint bills each call to your own Novada balance.",
-      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.",
+      "Missing API key. Pass your own Novada API key as ?apikey=YOUR_KEY or Authorization: Bearer YOUR_KEY — the hosted endpoint bills each call to your own Novada balance.",
+      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the apikey in your MCP URL.",
       { "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 
@@ -1837,7 +1842,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     // accurate diagnosis instead of always being told "check the format".
     const message = info.verified
       ? "Your API key is not a valid or active Novada API key. It was rejected by the Novada account API — verify you copied the correct key from your OWN Novada account."
-      : "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the token.";
+      : "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the apikey.";
     // pre_auth guard-site emit: token is present (even though rejected) — hash/
     // encrypt it so HQ can still resolve which account attempted the call.
     emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
@@ -1869,8 +1874,8 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   const apiKey = token?.trim();
   if (!apiKey) {
     return jsonError(401, "MISSING_TOKEN",
-      "No Novada API key provided. Pass your own key as ?token=YOUR_KEY (or Authorization: Bearer YOUR_KEY) — the hosted endpoint bills each call to your own Novada balance and never to a shared account.",
-      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the token in your MCP URL.",
+      "No Novada API key provided. Pass your own key as ?apikey=YOUR_KEY (or Authorization: Bearer YOUR_KEY) — the hosted endpoint bills each call to your own Novada balance and never to a shared account.",
+      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the apikey in your MCP URL.",
       { "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 
