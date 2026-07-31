@@ -188,6 +188,7 @@ test("hqStatusBucket: governed mapping table (row-field combinations -> bucket)"
     [{ status_bucket: "failed", error_code: null, rejection_stage: "cap_blocked", gateway_ceiling_hit: false }, "client_error", "cap_blocked"],
     [{ status_bucket: "failed", error_code: NovadaErrorCode.WRONG_TARGET, rejection_stage: null, gateway_ceiling_hit: false }, "client_error", "WRONG_TARGET"],
     [{ status_bucket: "failed", error_code: NovadaErrorCode.PRODUCT_UNAVAILABLE, rejection_stage: null, gateway_ceiling_hit: false }, "client_error", "PRODUCT_UNAVAILABLE"],
+    [{ status_bucket: "failed", error_code: NovadaErrorCode.SPA_NO_URLS_FOUND, rejection_stage: null, gateway_ceiling_hit: false }, "client_error", "SPA_NO_URLS_FOUND (map hit a JS SPA — target condition, not a Novada outage)"],
     [{ status_bucket: "blocked", error_code: null, rejection_stage: null, gateway_ceiling_hit: false }, "client_error", "TARGET_BLOCKED"],
     [{ status_bucket: "failed", error_code: NovadaErrorCode.URL_UNREACHABLE, rejection_stage: null, gateway_ceiling_hit: false }, "client_error", "URL_UNREACHABLE"],
     [{ status_bucket: "failed", error_code: NovadaErrorCode.RATE_LIMITED, rejection_stage: null, gateway_ceiling_hit: false }, "client_error", "target 429 / RATE_LIMITED"],

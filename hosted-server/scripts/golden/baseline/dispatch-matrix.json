@@ -97,16 +97,16 @@
     "structural": "markdown"
   },
   "novada_monitor": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
-      "Monitor: No Changes",
+      "Monitor: First Check",
       "Agent Instruction"
     ],
     "status": "ok",
     "structural": "markdown"
   },
   "novada_plan_balance_all": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
       "Plan Balances"
     ],
@@ -117,7 +117,8 @@
     "length_band": "s",
     "markers": [
       "Proxy Configuration",
-      "Setup",
+      "Usage Examples",
+      "as curl:",
       "Agent Hints"
     ],
     "status": "ok",
@@ -139,7 +140,8 @@
     "length_band": "s",
     "markers": [
       "Proxy Configuration",
-      "Setup",
+      "Usage Examples",
+      "as curl:",
       "Agent Hints"
     ],
     "status": "ok",
@@ -157,7 +159,8 @@
     "length_band": "s",
     "markers": [
       "Proxy Configuration",
-      "Setup",
+      "Usage Examples",
+      "as curl:",
       "Agent Hints"
     ],
     "status": "ok",
@@ -167,7 +170,8 @@
     "length_band": "s",
     "markers": [
       "Proxy Configuration",
-      "Setup",
+      "Usage Examples",
+      "as curl:",
       "Agent Hints"
     ],
     "status": "ok",
@@ -177,7 +181,8 @@
     "length_band": "s",
     "markers": [
       "Proxy Configuration",
-      "Setup",
+      "Usage Examples",
+      "as curl:",
       "Agent Hints"
     ],
     "status": "ok",
@@ -287,7 +292,7 @@
     "structural": "markdown"
   },
   "novada_wallet_usage_record": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
       "Wallet Usage History"
     ],

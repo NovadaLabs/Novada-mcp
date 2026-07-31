@@ -89,6 +89,29 @@ test("buildToolCallEvent: scalar fields passed through correctly", () => {
   assert.equal(row.region, "fra1");
 });
 
+test("buildToolCallEvent: oversized tool name is capped to 64 chars (storage/egress abuse fence) [audit 2026-07-31 P7]", () => {
+  const huge = "x".repeat(5000);
+  const row = buildToolCallEvent({
+    request_id: "req-cap",
+    token_hash: null,
+    plan: null,
+    client_name: null,
+    client_version: null,
+    protocol_version: null,
+    tool: huge,
+    args: null,
+    outcome: "ok",
+    latency_ms: 1,
+    charged: false,
+    over_cap_allowed: false,
+    quota_remaining: 0,
+    server_version: null,
+    region: null,
+  });
+  assert.equal(row.tool.length, 64, "tool must be capped to 64 chars, not passed through raw");
+  assert.equal(row.tool, "x".repeat(64));
+});
+
 test("buildToolCallEvent: arg_keys contains only key names, not values", () => {
   const row = buildToolCallEvent({
     request_id: "req-3",

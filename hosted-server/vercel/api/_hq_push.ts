@@ -92,6 +92,12 @@ export function hqStatusBucket(row: HqStatusBucketRow): "success" | "client_erro
   if (row.rejection_stage === "cap_blocked") return "client_error";
   if (row.error_code === NovadaErrorCode.WRONG_TARGET) return "client_error";
   if (row.error_code === NovadaErrorCode.PRODUCT_UNAVAILABLE) return "client_error";
+  // SPA_NO_URLS_FOUND: novada_map hit a JS-rendered SPA and the static crawl found
+  // no URLs — a TARGET-shape condition the caller can act on (render mode / a
+  // different tool), same "permanent" failure_class as WRONG_TARGET/PRODUCT_UNAVAILABLE
+  // above. Folds to client_error, NOT the server_error default — otherwise an ordinary
+  // SPA target misreports as a Novada outage on HQ's customer dashboard. [audit 2026-07-31 P3]
+  if (row.error_code === NovadaErrorCode.SPA_NO_URLS_FOUND) return "client_error";
   // TARGET_BLOCKED (WS-B, npm-package — not yet emitted by any code path today) is
   // the ONLY outcome that produces internal status_bucket "blocked" (see
   // ./_telemetry.ts statusBucket()) — so this needs zero further edits once

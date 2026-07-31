@@ -327,6 +327,18 @@ function safeArgKeys(args: Record<string, unknown> | null): string[] {
     .map((k) => (k.length > ARG_KEY_MAX_CHARS ? k.slice(0, ARG_KEY_MAX_CHARS) : k));
 }
 
+// ─── tool-name defensive cap ──────────────────────────────────────────────────
+// `tool` comes from request.params.name (z.string with no .max() in the vendored
+// MCP SDK), so an authenticated caller can supply an arbitrarily large name. Its
+// sibling fields (arg_keys/operation/user_agent) are all capped; cap this one too
+// so a multi-MB name can't ride into the row, the HQ payload, or the push retry
+// loop (storage/egress abuse). Real tool names are ≤ ~30 chars. [audit 2026-07-31 P7]
+const TOOL_MAX_CHARS = 64;
+function capTool(tool: string | null): string | null {
+  if (tool === null) return null;
+  return tool.length > TOOL_MAX_CHARS ? tool.slice(0, TOOL_MAX_CHARS) : tool;
+}
+
 // ─── `operation` allowlist extraction (owner-signed exception, 2026-07-23) ───
 // This is the ONLY place a param VALUE (not just its key name) is captured.
 // Scope is deliberately narrow: exactly these 4 top-level keys, each expected to
@@ -472,6 +484,7 @@ export function buildToolCallEvent(params: {
   key_version?: string | null;
 }): McpEventRow {
   const errorCode = params.error_code ?? null;
+  const cappedTool = capTool(params.tool);
   return {
     event_type: "tool_call",
     request_id: params.request_id,
@@ -480,7 +493,7 @@ export function buildToolCallEvent(params: {
     client_name: params.client_name,
     client_version: params.client_version,
     protocol_version: params.protocol_version,
-    tool: params.tool,
+    tool: cappedTool,
     arg_keys: safeArgKeys(params.args),
     target_domain: extractTargetDomain(params.args),
     outcome: params.outcome,
@@ -492,7 +505,7 @@ export function buildToolCallEvent(params: {
     region: params.region,
     channel: "mcp",
     account_uid: null,
-    product: resolveProduct(params.tool),
+    product: resolveProduct(cappedTool),
     status_bucket: statusBucket({ outcome: params.outcome, gatewayCeilingHit: !!params.gateway_ceiling_hit }),
     error_code: errorCode,
     failure_class: resolveFailureClass(errorCode),
