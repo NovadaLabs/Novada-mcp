@@ -44,6 +44,20 @@ function normalizeStatus(raw: string | undefined): TaskStatus {
   return "pending";
 }
 
+export interface RawTaskStatusItem { task_id?: string; status?: string; msg?: string }
+export interface RawTaskStatusResp { task_id?: string; status?: string; msg?: string; list?: RawTaskStatusItem[] }
+/**
+ * Single source of truth for the POST /v1/scraper/task_status response shape.
+ * LIVE API returns { list: [{ task_id, status }] } (verified 2026-08-03:
+ * {"list":[{"status":"Running","task_id":"…"}]}); legacy callers assumed a flat
+ * { status }. Handle BOTH; prefer the list entry matching taskId. Every caller of
+ * this endpoint MUST parse via this helper — never read `.status` directly.
+ */
+export function extractRawTaskStatus(resp: RawTaskStatusResp | undefined, taskId?: string): { status?: string; msg?: string } {
+  const item = taskId ? (resp?.list?.find((t) => t?.task_id === taskId) ?? resp?.list?.[0]) : resp?.list?.[0];
+  return { status: resp?.status ?? item?.status, msg: resp?.msg ?? item?.msg };
+}
+
 /**
  * Lightweight existence check for a task_id.
  * Uses the primary devApiPost path (POST /v1/scraper/task_status).
@@ -62,17 +76,12 @@ export async function checkTaskExists(
   apiKey: string
 ): Promise<"exists" | "not_found" | "unknown"> {
   try {
-    interface TaskStatusData {
-      task_id?: string;
-      status?: string;
-      msg?: string;
-    }
-    const statusResp = await devApiPost<TaskStatusData>(
+    const statusResp = await devApiPost<RawTaskStatusResp>(
       "/v1/scraper/task_status",
       { task_ids: task_id },
       { apiKey, timeoutMs: 10_000 }
     );
-    const rawStatus = (statusResp as TaskStatusData)?.status;
+    const { status: rawStatus } = extractRawTaskStatus(statusResp, task_id);
     // Non-empty status = task exists.
     if (rawStatus) return "exists";
     // Empty status with code=0 — API returned success but no status data: task not found.
@@ -100,18 +109,13 @@ export async function novadaScraperStatus(
   // POST /v1/scraper/task_status — returns { code: 200, data: { task_id, status, ... } }
   // status values: "Pending" | "Running" | "Ready" | "Failed"
   try {
-    interface TaskStatusData {
-      task_id?: string;
-      status?: string;
-      msg?: string;
-    }
-    const statusResp = await devApiPost<TaskStatusData>(
+    const statusResp = await devApiPost<RawTaskStatusResp>(
       "/v1/scraper/task_status",
       { task_ids: task_id },
       { apiKey }
     );
 
-    const rawStatus = (statusResp as TaskStatusData)?.status;
+    const { status: rawStatus, msg: rawMsg } = extractRawTaskStatus(statusResp, task_id);
     const normalized = normalizeStatus(rawStatus);
 
     // NOV-666: if the API returned successfully (code=0) but status is absent/null,
@@ -143,7 +147,7 @@ export async function novadaScraperStatus(
         return JSON.stringify({
           status: "failed",
           task_id,
-          error: (statusResp as TaskStatusData)?.msg ?? "Task failed on the server side.",
+          error: rawMsg ?? "Task failed on the server side.",
           agent_instruction: `Task failed. Re-submit with novada_scraper_submit or try novada_extract as an alternative.`,
         }, null, 2);
       case "running":

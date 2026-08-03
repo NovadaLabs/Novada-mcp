@@ -6,6 +6,7 @@ import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
 import { devApiPost } from "../_core/developer_api.js";
+import { extractRawTaskStatus, type RawTaskStatusResp } from "./scraper_status.js";
 
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 
@@ -322,9 +323,10 @@ async function pollForResult(apiKey: string, taskId: string, timeoutMs: number =
 // endpoint scraper_status.ts's checkTaskExists()/novadaScraperStatus() call
 // (POST /v1/scraper/task_status on api-m.novada.com via devApiPost) — fast and
 // non-blocking, returning {task_id,status,msg} with status ∈
-// Pending|Running|Ready|Failed. The normalizer here is intentionally a smaller,
-// local duplicate of scraper_status.ts's private normalizeStatus (not exported,
-// and not imported to keep this a single-file edit): we only need to branch on
+// Pending|Running|Ready|Failed. The raw response is parsed via the shared
+// extractRawTaskStatus() helper from scraper_status.ts (the single source of
+// truth for this endpoint's response shape — see that file). The status
+// vocabulary below is a smaller local mapping: we only need to branch on
 // ready / pending-or-running / failed / unknown, not the full richer status
 // vocabulary novada_scraper_status's own response shape handles.
 type FastTaskStatus = "pending" | "running" | "ready" | "failed" | "unknown";
@@ -337,18 +339,17 @@ type FastTaskStatus = "pending" | "running" | "ready" | "failed" | "unknown";
  */
 async function fastTaskStatus(apiKey: string, taskId: string): Promise<{ status: FastTaskStatus; msg?: string }> {
   try {
-    interface TaskStatusItem { task_id?: string; status?: string; msg?: string }
-    interface TaskStatusData { task_id?: string; status?: string; msg?: string; list?: TaskStatusItem[] }
-    const resp = await devApiPost<TaskStatusData>(
+    const resp = await devApiPost<RawTaskStatusResp>(
       "/v1/scraper/task_status",
       { task_ids: taskId },
       { apiKey, timeoutMs: 10_000 },
     );
     // The LIVE API returns { list: [{ task_id, status }] } (verified 2026-08-03:
     // {"list":[{"status":"Running","task_id":"…"}]}). Older callers assumed a flat
-    // top-level { status }. Accept BOTH — prefer the list item matching our task_id.
-    const item = resp?.list?.find((t) => t?.task_id === taskId) ?? resp?.list?.[0];
-    const raw = resp?.status ?? item?.status;
+    // top-level { status }. extractRawTaskStatus() is the single shared parser for
+    // this response shape (see scraper_status.ts) — it accepts BOTH shapes and
+    // prefers the list item matching our task_id.
+    const { status: raw, msg } = extractRawTaskStatus(resp, taskId);
     // Empty/absent status — API returned successfully but doesn't recognize the
     // task_id (or a genuine ambiguity). Do NOT invent behavior here — "unknown"
     // tells the caller to fall through to the existing (unchanged) poll path.
@@ -357,7 +358,7 @@ async function fastTaskStatus(apiKey: string, taskId: string): Promise<{ status:
     if (s === "ready" || s === "complete" || s === "completed" || s === "success" || s === "done") {
       return { status: "ready" };
     }
-    if (s === "failed" || s === "error" || s === "failure") return { status: "failed", msg: resp?.msg ?? item?.msg };
+    if (s === "failed" || s === "error" || s === "failure") return { status: "failed", msg };
     if (s === "running" || s === "processing" || s === "in_progress") return { status: "running" };
     if (s === "pending" || s === "waiting") return { status: "pending" };
     return { status: "unknown" };
