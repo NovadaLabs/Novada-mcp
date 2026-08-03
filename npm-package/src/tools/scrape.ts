@@ -1,10 +1,11 @@
 import axios, { AxiosError } from "axios";
-import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS } from "../config.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHostedEnvironment } from "../config.js";
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
+import { devApiPost } from "../_core/developer_api.js";
 
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 
@@ -21,6 +22,22 @@ const SYNC_POLL_CEILING_MS = 45_000;
 // bumped past the ceiling, clamp so the tool always returns before the 504 kill.
 const POLL_TIMEOUT_MS = Math.min(SYNC_POLL_CEILING_MS, HOSTED_SAFE_CEILING_MS);
 const POLL_INTERVAL_MS = 2_000;
+
+// TOW2-257 Phase 1: on HOSTED (Vercel/Lambda — see isHostedEnvironment()), keep the
+// FIRST synchronous poll SHORT so novada_scrape hands back a task_id + processing
+// envelope in ~10s instead of riding the full 45s ceiling. This models the
+// Bright-Data-style "202 + snapshot_id" shape onto our existing task_id/
+// status:processing envelope: hosted callers get the task_id fast and are expected
+// to resume (which is now itself instant — see fastTaskStatus below — rather than
+// re-entering another ~45s block). LOCAL npx (stdio, no serverless wall-clock kill)
+// keeps the existing 45s ceiling unchanged — there is no function-timeout pressure
+// locally, and a longer sync wait is a better one-shot UX there.
+const HOSTED_FIRST_TRY_CEILING_MS = 10_000;
+
+/** The sync poll ceiling to use for THIS call: short on hosted, unchanged on local. */
+function syncPollCeilingMs(): number {
+  return isHostedEnvironment() ? HOSTED_FIRST_TRY_CEILING_MS : POLL_TIMEOUT_MS;
+}
 
 interface SubmitApiResponse {
   code: number;
@@ -204,12 +221,17 @@ type PollOutcome =
   | { kind: "done"; items: DownloadResultItem[] }
   | { kind: "pending"; taskId: string };
 
-/** Poll the download endpoint until the task completes or the sync ceiling elapses. */
-async function pollForResult(apiKey: string, taskId: string): Promise<PollOutcome> {
+/**
+ * Poll the download endpoint until the task completes or `timeoutMs` elapses.
+ * TOW2-257 Phase 1: `timeoutMs` defaults to POLL_TIMEOUT_MS (unchanged local
+ * behavior) but callers pass `syncPollCeilingMs()` so hosted gets the short
+ * ~10s first-try ceiling instead of always riding the full 45s.
+ */
+async function pollForResult(apiKey: string, taskId: string, timeoutMs: number = POLL_TIMEOUT_MS): Promise<PollOutcome> {
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
   // H3: safe version of URL for error messages — strips the apikey value to prevent key exposure
   const safeUrl = url.replace(/apikey=[^&]+/, "apikey=***");
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
     const resp = await axios.get(url, { timeout: 30000 });
@@ -291,6 +313,98 @@ async function pollForResult(apiKey: string, taskId: string): Promise<PollOutcom
   // retry novada_scrape shortly (the download is idempotent by task_id, so no
   // duplicate work is triggered on the completed side).
   return { kind: "pending", taskId };
+}
+
+// ─── Fast, non-blocking resume status probe (TOW2-257 Phase 1) ──────────────
+// Models the Bright-Data-style "202 + snapshot_id" pattern onto our existing
+// task_id/status:processing envelope: RESUME must be INSTANT, not a re-entry
+// into pollForResult's ~45s blocking download-poll loop. This reuses the SAME
+// endpoint scraper_status.ts's checkTaskExists()/novadaScraperStatus() call
+// (POST /v1/scraper/task_status on api-m.novada.com via devApiPost) — fast and
+// non-blocking, returning {task_id,status,msg} with status ∈
+// Pending|Running|Ready|Failed. The normalizer here is intentionally a smaller,
+// local duplicate of scraper_status.ts's private normalizeStatus (not exported,
+// and not imported to keep this a single-file edit): we only need to branch on
+// ready / pending-or-running / failed / unknown, not the full richer status
+// vocabulary novada_scraper_status's own response shape handles.
+type FastTaskStatus = "pending" | "running" | "ready" | "failed" | "unknown";
+
+/**
+ * Lightweight, non-blocking probe of a task's current status. Never throws —
+ * any network/auth error on the probe itself resolves to "unknown" so the
+ * RESUME caller can safely fall through to today's existing poll behavior
+ * rather than fail the whole resume on a transient status-endpoint hiccup.
+ */
+async function fastTaskStatus(apiKey: string, taskId: string): Promise<{ status: FastTaskStatus; msg?: string }> {
+  try {
+    interface TaskStatusItem { task_id?: string; status?: string; msg?: string }
+    interface TaskStatusData { task_id?: string; status?: string; msg?: string; list?: TaskStatusItem[] }
+    const resp = await devApiPost<TaskStatusData>(
+      "/v1/scraper/task_status",
+      { task_ids: taskId },
+      { apiKey, timeoutMs: 10_000 },
+    );
+    // The LIVE API returns { list: [{ task_id, status }] } (verified 2026-08-03:
+    // {"list":[{"status":"Running","task_id":"…"}]}). Older callers assumed a flat
+    // top-level { status }. Accept BOTH — prefer the list item matching our task_id.
+    const item = resp?.list?.find((t) => t?.task_id === taskId) ?? resp?.list?.[0];
+    const raw = resp?.status ?? item?.status;
+    // Empty/absent status — API returned successfully but doesn't recognize the
+    // task_id (or a genuine ambiguity). Do NOT invent behavior here — "unknown"
+    // tells the caller to fall through to the existing (unchanged) poll path.
+    if (!raw) return { status: "unknown" };
+    const s = raw.toLowerCase();
+    if (s === "ready" || s === "complete" || s === "completed" || s === "success" || s === "done") {
+      return { status: "ready" };
+    }
+    if (s === "failed" || s === "error" || s === "failure") return { status: "failed", msg: resp?.msg ?? item?.msg };
+    if (s === "running" || s === "processing" || s === "in_progress") return { status: "running" };
+    if (s === "pending" || s === "waiting") return { status: "pending" };
+    return { status: "unknown" };
+  } catch {
+    // Network/auth error on the fast probe — never fail the resume because of
+    // this optional fast path; fall through to today's existing poll behavior.
+    return { status: "unknown" };
+  }
+}
+
+/**
+ * Build the "status: processing" envelope for a still-running task. Shared by
+ * two call sites (TOW2-257 Phase 1):
+ *   - The synchronous poll ceiling elapses (fresh submit, or a resumed task
+ *     whose fast probe said ready/unknown but the download endpoint itself is
+ *     still pending) — `waitedMs` is the actual ceiling used this call (short
+ *     on hosted, unchanged 45s on local).
+ *   - A RESUME whose fast task_status probe reports Pending/Running — no wait
+ *     happened this call at all (instant), so `waitedMs` is omitted.
+ * Text is unchanged from the original inline block except the elapsed clause
+ * is now the REAL ceiling used (was previously always the 45s constant, which
+ * was already wrong once hosted got a shorter ceiling) plus one appended
+ * poll-cadence hint line.
+ */
+function processingEnvelope(
+  platform: string,
+  displayOperation: string,
+  taskId: string,
+  waitedMs?: number,
+): string {
+  const elapsedClause = waitedMs !== undefined ? ` after ${Math.round(waitedMs / 1000)}s` : "";
+  return [
+    `## Scrape Results`,
+    `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
+    ``,
+    `status: processing`,
+    `⏳ Task still running (task_id="${taskId}")${elapsedClause}.`,
+    `To fetch the result WITHOUT re-charging, call novada_scrape again with task_id="${taskId}" (skips re-submit).`,
+    `A plain retry with the same params starts a NEW billable task.`,
+    ``,
+    `---`,
+    `## Agent Hints`,
+    `- Pass task_id="${taskId}" to novada_scrape in ~10-20s to resume for free.`,
+    `- platform and operation are still required when resuming (used for display only).`,
+    `- Do not treat this as a failure — the task is finishing server-side.`,
+    `- Expected poll cadence: retry with task_id every ~10-20s until it completes.`,
+  ].join("\n");
 }
 
 /** Flatten a potentially nested object for tabular display.
@@ -1229,7 +1343,31 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   //   - Otherwise: submit a new task → resolves to inline records, empty-serp, or a task_id.
   let submitOutcome: SubmitOutcome;
   if (resumeTaskId) {
-    // Resume: go straight to polling with the caller-supplied task_id.
+    // TOW2-257 Phase 1: RESUME must be INSTANT, not a re-entry into the ~45s
+    // blocking download-poll loop. Probe the FAST, non-blocking task_status
+    // endpoint FIRST (same one scraper_status.ts uses) to learn the task's
+    // current state before ever touching the slow download endpoint:
+    //   Pending|Running → return the processing envelope IMMEDIATELY (no wait,
+    //                      no download-endpoint call at all).
+    //   Failed          → typed, retryable error — never masquerade as a
+    //                      0-record success.
+    //   Ready|unknown   → fall through to the existing poll/fetch path below
+    //                      unchanged (Ready resolves on the first GET; unknown
+    //                      preserves today's not-found/pending behavior when
+    //                      the fast probe itself is ambiguous or errors).
+    const fast = await fastTaskStatus(apiKey, resumeTaskId);
+    if (fast.status === "pending" || fast.status === "running") {
+      return processingEnvelope(platform, displayOperation, resumeTaskId);
+    }
+    if (fast.status === "failed") {
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
+        `Scraper task failed (task_id="${resumeTaskId}"): ${sanitizeServerMsg(fast.msg || "the task did not complete successfully")}. ` +
+        `This task_id cannot be resumed further — re-submit novada_scrape with fresh params (a new billable task), or try novada_extract as an alternative.`,
+        "resume_task_failed",
+      );
+    }
+    // "ready" or "unknown" → resume: go straight to polling with the caller-supplied task_id.
     submitOutcome = { kind: "task", taskId: resumeTaskId };
   } else {
     try {
@@ -1287,9 +1425,13 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     // NOV-697: results were already in the submit response — no poll round-trip.
     resultItems = submitOutcome.items;
   } else {
+    // TOW2-257 Phase 1: use the short hosted first-try ceiling on hosted, the
+    // unchanged 45s ceiling on local (syncPollCeilingMs()) — and capture the
+    // actual value used so the pending-envelope's elapsed clause is honest.
+    const ceilingMs = syncPollCeilingMs();
     let pollOutcome: PollOutcome;
     try {
-      pollOutcome = await pollForResult(apiKey, submitOutcome.taskId);
+      pollOutcome = await pollForResult(apiKey, submitOutcome.taskId, ceilingMs);
     } catch (error) {
       if (error instanceof AxiosError) {
         throw new Error(`Failed to retrieve scraper results: ${sanitizeServerMsg(error.message)}`);
@@ -1301,21 +1443,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     // A slow-but-valid task is not a failure; return an honest message with the task_id
     // so the caller can resume WITHOUT re-submitting (and without a new charge).
     if (pollOutcome.kind === "pending") {
-      return [
-        `## Scrape Results`,
-        `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
-        ``,
-        `status: processing`,
-        `⏳ Task still running (task_id="${pollOutcome.taskId}") after ${POLL_TIMEOUT_MS / 1000}s.`,
-        `To fetch the result WITHOUT re-charging, call novada_scrape again with task_id="${pollOutcome.taskId}" (skips re-submit).`,
-        `A plain retry with the same params starts a NEW billable task.`,
-        ``,
-        `---`,
-        `## Agent Hints`,
-        `- Pass task_id="${pollOutcome.taskId}" to novada_scrape in ~10-20s to resume for free.`,
-        `- platform and operation are still required when resuming (used for display only).`,
-        `- Do not treat this as a failure — the task is finishing server-side.`,
-      ].join("\n");
+      return processingEnvelope(platform, displayOperation, pollOutcome.taskId, ceilingMs);
     }
 
     resultItems = pollOutcome.items;

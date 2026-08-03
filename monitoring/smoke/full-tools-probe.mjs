@@ -64,16 +64,29 @@
  *      whole run (this exact ordering bug — guard-by-name-only, thrown
  *      outside any try/catch — previously FATAL-exited the run at probe #14
  *      and dropped all 16 scrapers; fixed 2026-07-24).
- *   5. Processing→poll disambiguation: a scraper response whose text shows
- *      `status: processing` and `records: 0` means the platform is just slow,
- *      not broken (see npm-package/src/tools/scrape.ts's `pending` outcome).
- *      This script extracts the `task_id="..."` and polls ONCE via the
- *      generic `novada_scrape({ platform, operation: <catalog id>, task_id })`
- *      with a 90s timeout. `records >= 1` on the poll → SLOW (works, just
- *      needed a poll). Still processing/0 → domain ③ backend (task never
- *      completed server-side) — UNLESS no task_id could be extracted at all,
- *      in which case this is OUR extraction/format assumption breaking, not
- *      a backend problem, so it classifies ①-mcp-code and skips polling
+ *   5. Processing→poll-AND-RESUME disambiguation (TOW2-257 Phase 4): a
+ *      scraper response whose text shows `status: processing` and
+ *      `records: 0` means the platform is just slow, not broken (see
+ *      npm-package/src/tools/scrape.ts's `pending` outcome). This script
+ *      extracts the `task_id="..."` and RESUMES up to
+ *      PROCESSING_POLL_MAX_ATTEMPTS times (default 4, ~10s apart between
+ *      attempts) via the generic
+ *      `novada_scrape({ platform, operation: <catalog id>, task_id })` —
+ *      free, no re-charge. On any attempt: `records >= 1` → SLOW (works,
+ *      just needed N poll(s)); a poll that resolves to a genuine Failed
+ *      outcome (isError, e.g. a Novada-side task error code) → domain
+ *      ③-backend FAIL immediately, no further attempts. STILL `status:
+ *      processing` after every attempt is exhausted → status `"ASYNC"`
+ *      (domain "-", severity none) — this is NORMAL async behavior for a
+ *      slow-but-healthy platform, NOT a failure and NOT a ③-backend finding
+ *      (this is what kills the recurring false daily red on
+ *      amazon/x/tiktok/perplexity: previously ANY still-processing task
+ *      after just ONE poll was misclassified as a ③-backend FAIL). ASYNC
+ *      rows never count toward `oursCount`/`backendCount`/the exit code,
+ *      exactly like PASS/SLOW — see buildSummary and main()'s `oursP0P1`
+ *      computation. UNLESS no task_id could be extracted at all, in which
+ *      case this is OUR extraction/format assumption breaking, not a
+ *      backend problem, so it classifies ①-mcp-code and skips polling
  *      entirely (fixed 2026-07-24 — previously silently misrouted to ③).
  *   6. Classifies every result into a fault DOMAIN (①-mcp-code / ②-gateway /
  *      ③-backend / "-" pass) and a SEVERITY (P0/P1/P2/P3/none) — see the
@@ -88,12 +101,18 @@
  *      summary carries both `maxSeverity` (across all domains) and
  *      `maxOursSeverity` (①/② rows only) so a backend-only event never reads
  *      as "we got paged" — render-report.py's 汇总 sheet headlines the latter.
+ *      `summary.byStatus` is keyed by whatever `status` string each row got
+ *      (PASS/SLOW/FAIL/MISSING/ASYNC) — no separate wiring needed per status,
+ *      it falls out of buildSummary's generic reduce.
  *   8. Exit code: non-zero (1) ONLY when the run found an OURS-domain (①/②)
  *      finding at severity P0 or P1, OR a PROBE tool went MISSING from the
  *      live tool list. Backend-only (③) findings — including a full-blown
  *      "≥4 backend platforms down at once" systemic event — always exit 0:
  *      they are reported for visibility, never used to page us, because we
- *      don't own the Novada Scraper API backend.
+ *      don't own the Novada Scraper API backend. ASYNC findings (a scraper
+ *      task still processing after every resume attempt) are, likewise,
+ *      never a failure and never affect the exit code — domain "-" puts
+ *      them outside both `oursP0P1` and `backendCount` by construction.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -120,6 +139,23 @@ const QUIET = process.env.MONITOR_QUIET === "1";
 // affected — Layer B's all-tools-smoke.mjs is untouched. Overridable via
 // runProbe/runAllProbes' deps so the offline self-test can use a tiny value.
 const NETWORK_RETRY_BACKOFF_MS = 1000;
+
+// TOW2-257 Phase 4: poll-and-resume budget for the processing→ASYNC
+// disambiguation. A scraper task still `status: processing` after the
+// initial submit call is normal async behavior for a slow-but-healthy
+// platform (amazon/x/tiktok/perplexity et al chronically need more than one
+// poll) — not a failure. Resume up to PROCESSING_POLL_MAX_ATTEMPTS times,
+// sleeping PROCESSING_POLL_INTERVAL_MS between attempts (never before the
+// first — the initial submit call already spent time getting to
+// "processing"). This bounds this script's OWN added sleep budget to
+// (PROCESSING_POLL_MAX_ATTEMPTS - 1) * PROCESSING_POLL_INTERVAL_MS ≈ 30s,
+// plus each resume call's own round-trip (bounded total ≈40-50s in the
+// common case) — the number of network round-trips is capped at N
+// regardless of how long any single one takes. Both overridable via
+// runProbe/runAllProbes' deps so the offline self-test can shrink these to
+// ~0 and run in milliseconds instead of tens of seconds.
+const PROCESSING_POLL_MAX_ATTEMPTS = 4;
+const PROCESSING_POLL_INTERVAL_MS = 10000;
 
 // Core tools whose failure alone can legitimately be called "endpoint-wide"
 // (P0), per the brief's severity rubric — everything else that fails on our
@@ -535,6 +571,9 @@ function adviceFor(row) {
   if (row.status === "MISSING") {
     return "Tool vanished from live tools/list — check hosted deploy/registry.ts wiring; this is our regression, not backend.";
   }
+  if (row.status === "ASYNC") {
+    return `Still processing after every resume attempt (task_id="${row.taskId}") — normal async behavior for a slow platform, NOT a failure. No action; resume manually with this task_id or wait for tomorrow's run.`;
+  }
   if (row.domain === "-") return "-";
   if (row.domain === "③-backend") {
     if (row.severity === "P3") return "Known-flaky platform (TOW2-305) — no action; trend-watch only.";
@@ -575,7 +614,13 @@ function adviceFor(row) {
  */
 async function runProbe(
   probe,
-  { callToolFn = callTool, delayMs = CALL_DELAY_MS, networkRetryBackoffMs = NETWORK_RETRY_BACKOFF_MS } = {}
+  {
+    callToolFn = callTool,
+    delayMs = CALL_DELAY_MS,
+    networkRetryBackoffMs = NETWORK_RETRY_BACKOFF_MS,
+    processingPollMaxAttempts = PROCESSING_POLL_MAX_ATTEMPTS,
+    processingPollIntervalMs = PROCESSING_POLL_INTERVAL_MS,
+  } = {}
 ) {
   const base = {
     name: probe.name,
@@ -645,37 +690,100 @@ async function runProbe(
 
     const pollArgs = { platform: probe.resumePlatform, operation: probe.catalogOpId, task_id: taskId };
     assertExecutable("novada_scrape", pollArgs);
-    const pollRes = await callToolWithNetworkRetry("novada_scrape", pollArgs, { timeoutMs: 90000 }, callToolFn, networkRetryBackoffMs);
-    if (delayMs > 0) await sleep(delayMs);
 
-    const pollRecords = pollRes.ok ? extractRecordsCount(pollRes.text) : null;
-    if (pollRes.ok && pollRecords !== null && pollRecords >= 1) {
+    // Resume up to processingPollMaxAttempts times, ~processingPollIntervalMs
+    // apart (see the PROCESSING_POLL_MAX_ATTEMPTS doc comment above). Each
+    // attempt resolves to exactly one of three outcomes: records>=1 (PASS/
+    // SLOW, return immediately), a genuine Failed outcome (③-backend FAIL,
+    // return immediately), or still processing (loop again). Only run out
+    // the clock — falling through to the ASYNC bucket below — when every
+    // attempt comes back still processing.
+    for (let attempt = 1; attempt <= processingPollMaxAttempts; attempt += 1) {
+      if (attempt > 1 && processingPollIntervalMs > 0) await sleep(processingPollIntervalMs);
+
+      const pollRes = await callToolWithNetworkRetry("novada_scrape", pollArgs, { timeoutMs: 90000 }, callToolFn, networkRetryBackoffMs);
+
+      if (pollRes.ok) {
+        const pollRecords = extractRecordsCount(pollRes.text);
+        if (pollRecords !== null && pollRecords >= 1) {
+          if (delayMs > 0) await sleep(delayMs);
+          return {
+            ...base,
+            status: "SLOW",
+            domain: "-",
+            severity: null,
+            httpStatus: res.httpStatus,
+            timeMs: res.timeMs,
+            records: pollRecords,
+            taskId,
+            error: null,
+            note: `needed ${attempt} poll(s) (task_id="${taskId}") to resolve with ${pollRecords} record(s)`,
+          };
+        }
+        if (isProcessingText(pollRes.text)) {
+          continue; // still processing — try again (or fall through to ASYNC below)
+        }
+        // ok, not "processing" anymore, but not enough records either (e.g.
+        // the task "completed" server-side with zero usable items) — same
+        // terminal ③-backend classification the single-poll code used.
+        if (delayMs > 0) await sleep(delayMs);
+        const cls = classifyFailure(probe, res, { stillProcessingAfterPoll: true });
+        return {
+          ...base,
+          status: "FAIL",
+          domain: cls.domain,
+          severity: cls.severity,
+          httpStatus: res.httpStatus,
+          timeMs: res.timeMs,
+          records: pollRecords ?? 0,
+          taskId,
+          error: `task_id="${taskId}" resolved after ${attempt} poll(s) with no usable records (${cls.note}); poll error: ${errorText(pollRes) || "none"}`,
+          note: cls.note,
+        };
+      }
+
+      // The resumed call itself came back isError:true — the task DID
+      // resolve, just to a genuine Failed outcome (a Novada-side task error
+      // code, an auth failure, a network failure, etc.), never "still
+      // processing" — classify it like any other failure, immediately, no
+      // more attempts.
+      if (delayMs > 0) await sleep(delayMs);
+      const cls = classifyFailure(probe, pollRes, {});
       return {
         ...base,
-        status: "SLOW",
-        domain: "-",
-        severity: null,
-        httpStatus: res.httpStatus,
-        timeMs: res.timeMs,
-        records: pollRecords,
+        status: "FAIL",
+        domain: cls.domain,
+        severity: cls.severity,
+        httpStatus: pollRes.httpStatus,
+        timeMs: pollRes.timeMs,
+        records: 0,
         taskId,
-        error: null,
-        note: `needed one poll (task_id="${taskId}") to resolve with ${pollRecords} record(s)`,
+        error: `task_id="${taskId}" resumed to a Failed outcome after ${attempt} poll(s) (${cls.note}): ${errorText(pollRes) || "(no error message)"}`,
+        note: cls.note,
       };
     }
 
-    const cls = classifyFailure(probe, res, { stillProcessingAfterPoll: true });
+    // Every attempt came back still processing — this is NORMAL async
+    // behavior for a slow-but-healthy platform, not a failure and not a
+    // ③-backend finding. Report an honest ASYNC status: domain "-" (the same
+    // non-fault convention PASS/SLOW use) so it can never be miscounted as an
+    // ours-domain (①/②) or backend (③) failure downstream, and never fails
+    // the run's exit code (see main()'s oursP0P1 computation, which only
+    // inspects domain ①/②).
+    if (delayMs > 0) await sleep(delayMs);
     return {
       ...base,
-      status: "FAIL",
-      domain: cls.domain,
-      severity: cls.severity,
+      status: "ASYNC",
+      domain: "-",
+      severity: null,
       httpStatus: res.httpStatus,
       timeMs: res.timeMs,
       records: 0,
       taskId,
-      error: `task_id="${taskId}" still processing/unresolved after one poll (${cls.note}); poll error: ${errorText(pollRes) || "none"}`,
-      note: cls.note,
+      error: null,
+      note:
+        `still processing after ${processingPollMaxAttempts} resume attempt(s), ~${processingPollIntervalMs / 1000}s apart ` +
+        `(task_id="${taskId}") — async in progress, not a failure; resume later with this task_id`,
     };
   }
 
@@ -717,11 +825,18 @@ async function runProbe(
  * stub instead of the live network.
  *
  * @param {typeof PROBES} probeList
- * @param {{callToolFn?: typeof callTool, listToolsFn?: typeof listTools, delayMs?: number, networkRetryBackoffMs?: number}} [deps]
+ * @param {{callToolFn?: typeof callTool, listToolsFn?: typeof listTools, delayMs?: number, networkRetryBackoffMs?: number, processingPollMaxAttempts?: number, processingPollIntervalMs?: number}} [deps]
  */
 async function runAllProbes(
   probeList,
-  { callToolFn = callTool, listToolsFn = listTools, delayMs = CALL_DELAY_MS, networkRetryBackoffMs = NETWORK_RETRY_BACKOFF_MS } = {}
+  {
+    callToolFn = callTool,
+    listToolsFn = listTools,
+    delayMs = CALL_DELAY_MS,
+    networkRetryBackoffMs = NETWORK_RETRY_BACKOFF_MS,
+    processingPollMaxAttempts = PROCESSING_POLL_MAX_ATTEMPTS,
+    processingPollIntervalMs = PROCESSING_POLL_INTERVAL_MS,
+  } = {}
 ) {
   const liveTools = await listToolsFn();
   const liveNames = new Set(liveTools.map((t) => t.name));
@@ -749,7 +864,7 @@ async function runAllProbes(
       });
       continue;
     }
-    const row = await runProbe(probe, { callToolFn, delayMs, networkRetryBackoffMs });
+    const row = await runProbe(probe, { callToolFn, delayMs, networkRetryBackoffMs, processingPollMaxAttempts, processingPollIntervalMs });
     results.push(row);
     if (delayMs > 0) await sleep(delayMs);
   }
@@ -866,6 +981,8 @@ async function main() {
     listToolsFn: listTools,
     delayMs: CALL_DELAY_MS,
     networkRetryBackoffMs: NETWORK_RETRY_BACKOFF_MS,
+    processingPollMaxAttempts: PROCESSING_POLL_MAX_ATTEMPTS,
+    processingPollIntervalMs: PROCESSING_POLL_INTERVAL_MS,
   });
   console.log(`[full-tools-probe] live tools/list returned ${liveTools.length} tool(s)`);
 
