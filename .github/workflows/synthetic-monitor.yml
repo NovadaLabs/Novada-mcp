@@ -9,8 +9,9 @@ name: Synthetic Monitor
 # manual only, on purpose, so routine commits never burn NOVADA_TEST_KEY
 # budget or k6 minutes. Do not add a `push:`/`pull_request:` trigger here.
 #
-# Three independent cron schedules fan out to three independent jobs. GitHub
-# Actions cron is ALWAYS UTC, regardless of repo/org timezone settings.
+# Two cron schedules (Layer B smoke, Layer D probe) fan out to their jobs; Layer C
+# (stress) is manual-only (see its note below). GitHub Actions cron is ALWAYS UTC,
+# regardless of repo/org timezone settings.
 on:
   workflow_dispatch:
     inputs:
@@ -24,9 +25,12 @@ on:
     # every other repo's "0 */6 * * *"/"0 * * * *" cron collides into on
     # GitHub's shared runners.
     - cron: "17 */6 * * *"
-    # Layer C (stress): once daily at 04:23 UTC — off-peak (low traffic on
-    # mcp.novada.com) and off-round-minute for the same pile-up reason.
-    - cron: "23 4 * * *"
+    # Layer C (stress): NO daily schedule as of 2026-08-04. A 20-VU flood against
+    # prod trips the gateway rate-limiter BY DESIGN (~1000 GATEWAY_RATE_LIMITED
+    # telemetry rows per run) — which the HQ log-push reconciler then forwards to
+    # the customer-facing HQ log as junk. A rate-limit-verification load test does
+    # not need to run daily against customer prod → Layer C is manual-only now
+    # (workflow_dispatch). Re-run it on demand when validating the rate limiter.
     # Layer D (full-tools probe): once daily at 00:17 UTC (~02:00 Berlin time
     # in winter / CET; ~01:00 in CEST DST — this cron is DST-naive, GitHub
     # Actions schedules don't shift with the clock, so the local wall-clock
