@@ -68,6 +68,54 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ─── Locale default table (TOW2-372 / audit F1) ──────────────────────────────
+// Locale default applied ONLY when the caller supplied no locale at all.
+// Verified live 2026-08-04 (TOW2-372 / audit F1): the backend routes locale-less
+// google_search through a non-US proxy whose SERP is genuinely empty for English
+// long-tail queries. Extend op-by-op ONLY after live-verifying the op reproduces
+// (candidates listed in TOW2-372): new coverage = new ROW, never a new branch.
+//
+// Evidence (live-verified against scraper.novada.com/request, TOW2-257-audit F1):
+// the identical query returns 0 organic results without `country` (backend
+// genuinely attempts the search — cost_time ~3.9s, not a fast param-validation
+// reject — then comes back `code:400`/"serp returns empty") and ~2000-3000 real
+// results with `country=us`. `hl=en` ALONE does NOT fix it (tested, still empty) —
+// `country` is what selects the proxy region. This reproduced golden-v1's
+// `scrape-google-web-search` FATAL 1:1 with the documented wire contract, no
+// client-side malformed payload involved. Only fires when the caller hasn't
+// specified a region via either `country` or Google's own `gl` param name — never
+// overrides an explicit choice, including an explicit empty/whitespace-only
+// string, which counts as "no choice" (see isLocaleValueAbsent below, aligned
+// with preflightScrape's `String(v).trim().length === 0` convention at ~line 1144).
+const LOCALE_DEFAULT_ON_MISSING: Record<string, Record<string, string>> = {
+  "google.com": { "google_search": "us" },
+};
+
+/** True when a locale value counts as ABSENT — undefined/null/empty/whitespace-only. */
+function isLocaleValueAbsent(v: unknown): boolean {
+  return v === undefined || v === null || String(v).trim().length === 0;
+}
+
+/**
+ * Returns the locale value to apply for (scraperName, scraperId), or undefined
+ * when no default is configured OR the caller already supplied a usable
+ * country/gl. Single source of truth shared by submitScrapeTask (applies the
+ * default on the wire) and novadaScrape (discloses it to the agent) — both stay
+ * in lockstep on the same emptiness semantics, they can never disagree on what
+ * was actually sent.
+ */
+function resolveLocaleDefault(
+  scraperName: string,
+  scraperId: string,
+  opParams: Record<string, unknown>,
+): string | undefined {
+  const def = LOCALE_DEFAULT_ON_MISSING[scraperName]?.[scraperId];
+  if (!def) return undefined;
+  const callerSuppliedLocale =
+    !isLocaleValueAbsent(opParams["country"]) || !isLocaleValueAbsent(opParams["gl"]);
+  return callerSuppliedLocale ? undefined : def;
+}
+
 /**
  * Submit a scraper task. Returns a discriminated SubmitOutcome:
  *   - inline records (skip poll), empty serp (graceful no-results), or a task_id to poll.
@@ -123,6 +171,13 @@ export async function submitScrapeTask(
   if (useFlat) {
     // Format A: flat form fields for search-engine-style ops
     if (!("json" in opParams)) opParams["json"] = 1; // request JSON output format
+    // F1 fix (TOW2-372): apply the class-level LOCALE_DEFAULT_ON_MISSING table
+    // (see above) — REPLACES an absent/empty country value, never overrides an
+    // explicit one. See resolveLocaleDefault for the full evidence/rationale.
+    const localeDefault = resolveLocaleDefault(scraper_name, scraper_id, opParams);
+    if (localeDefault) {
+      opParams["country"] = localeDefault;
+    }
     for (const [k, v] of Object.entries(opParams)) {
       form.append(k, String(v));
     }
@@ -1343,6 +1398,12 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   //   - If task_id is provided: skip submit entirely (no billable task created).
   //   - Otherwise: submit a new task → resolves to inline records, empty-serp, or a task_id.
   let submitOutcome: SubmitOutcome;
+  // TOW2-372 change 2: agent-visible disclosure — true only when THIS call
+  // actually applied the locale default (a fresh submit whose caller supplied no
+  // country/gl). A resume (task_id path) never fires a new submit, so it stays
+  // false there. Re-derived via the SAME resolveLocaleDefault() submitScrapeTask
+  // itself uses, so the two can never disagree on what was actually sent.
+  let localeDefaulted = false;
   if (resumeTaskId) {
     // TOW2-257 Phase 1: RESUME must be INSTANT, not a re-entry into the ~45s
     // blocking download-poll loop. Probe the FAST, non-blocking task_status
@@ -1372,6 +1433,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     submitOutcome = { kind: "task", taskId: resumeTaskId };
   } else {
     try {
+      localeDefaulted = resolveLocaleDefault(platform, operation, (opParams ?? {}) as Record<string, unknown>) !== undefined;
       submitOutcome = await submitScrapeTask(apiKey, platform, operation, opParams as Record<string, unknown>);
     } catch (error) {
       if (error instanceof AxiosError) {
@@ -1536,6 +1598,13 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   // lead with curated key columns (title/price/rating/url/…). Display-only.
   const tabularRecords = curateTabularRecords(records);
 
+  // TOW2-372 change 2: one shared disclosure line, threaded into every
+  // populated-record format branch below — never rendered unless the locale
+  // default actually applied on THIS call (see `localeDefaulted` above).
+  const localeDefaultHint = localeDefaulted
+    ? `- No country/gl specified — defaulted to country="us" (this operation returns an empty SERP without a region hint).`
+    : null;
+
   let output: string;
   switch (format) {
     case "json":
@@ -1552,10 +1621,11 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `---`,
         `## Agent Hints`,
+        localeDefaultHint,
         `- Increase limit (max 100) to retrieve more records.`,
         `- For human-readable output: use format='markdown'. For spreadsheets: format='csv' or format='excel'.`,
         `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
-      ].join("\n");
+      ].filter((line): line is string => line !== null).join("\n");
       break;
 
     case "csv": {
@@ -1573,10 +1643,11 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `---`,
         `## Agent Hints`,
+        localeDefaultHint,
         `- Copy the CSV block above and paste into Excel, Google Sheets, or any spreadsheet app.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- Use format='excel' to get a real .xlsx file instead.`,
-      ].join("\n");
+      ].filter((line): line is string => line !== null).join("\n");
       break;
     }
 
@@ -1600,10 +1671,11 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `---`,
         `## Agent Hints`,
+        localeDefaultHint,
         `- Base64 → xlsx: \`echo "<base64>" | base64 -d > data.xlsx\` or use any online base64-to-file converter.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- Use format='csv' for a smaller inline text alternative.`,
-      ].join("\n");
+      ].filter((line): line is string => line !== null).join("\n");
       break;
     }
 
@@ -1619,10 +1691,11 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `---`,
         `## Agent Hints`,
+        localeDefaultHint,
         `- The HTML above is a standalone <table> document — save it as .html and open in a browser, or embed the <table> element in a page.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- Use format='csv' or format='excel' for spreadsheet-ready output, format='json' for code.`,
-      ].join("\n");
+      ].filter((line): line is string => line !== null).join("\n");
       break;
     }
 
@@ -1644,13 +1717,14 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `---`,
         `## Agent Hints`,
+        localeDefaultHint,
         `- TOON format: first line starts with "HEADERS:" listing columns, subsequent lines are pipe-separated values.`,
         `- Use format='json' for downstream code processing, format='markdown' for human-readable output.`,
         `- Increase limit (max 100) to retrieve more records.`,
         ``,
         `## Agent Memory`,
         `remember: ${platform}/${operation} — ${records.length} records retrieved`,
-      ].join("\n");
+      ].filter((line): line is string => line !== null).join("\n");
       break;
     }
 
@@ -1666,6 +1740,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `---`,
         `## Agent Hints`,
+        localeDefaultHint,
         `- Use format='json' or format='csv' for downstream processing. Use format='excel' for a .xlsx spreadsheet.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- For structured scraping of other platforms, change platform and operation.`,
@@ -1677,7 +1752,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `## Agent Memory`,
         `remember: ${platform}/${operation} — ${records.length} records retrieved`,
-      ].join("\n");
+      ].filter((line): line is string => line !== null).join("\n");
       break;
   }
 
