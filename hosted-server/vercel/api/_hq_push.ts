@@ -284,7 +284,7 @@ async function updatePushStatus(
  * specifically so tests never have to mutate global process.env to exercise the
  * env-gated branches.
  */
-export async function pushToHq(row: McpEventRow, env: NodeJS.ProcessEnv = process.env, eventTsMs: number = Date.now()): Promise<void> {
+export async function pushToHq(row: McpEventRow, env: NodeJS.ProcessEnv = process.env, eventTsMs: number = Date.now(), maxAttempts: number = 1 + HQ_RETRY_DELAYS_MS.length): Promise<void> {
   try {
     const url = env.NOVADA_HQ_LOG_URL?.trim();
     if (!url) return; // absent/empty → no push, no error (dark-deploy safe)
@@ -293,7 +293,10 @@ export async function pushToHq(row: McpEventRow, env: NodeJS.ProcessEnv = proces
     if (!payload) return; // not a tool_call row, or no hq_identity — nothing to push
 
     let outcome: PostOutcome = { ok: false, permanent: false };
-    const totalAttempts = 1 + HQ_RETRY_DELAYS_MS.length;
+    // Inline caller uses the full retry ladder (default). The reconciler passes
+    // maxAttempts=1 — a single POST per run — because the every-60s cron IS its retry
+    // loop, so a persistent failure must not burn ~23s of the serverless budget here.
+    const totalAttempts = Math.max(1, Math.min(maxAttempts, 1 + HQ_RETRY_DELAYS_MS.length));
     for (let attempt = 0; attempt < totalAttempts; attempt++) {
       if (attempt > 0) await sleep(HQ_RETRY_DELAYS_MS[attempt - 1]);
       outcome = await postOnce(url, payload);
