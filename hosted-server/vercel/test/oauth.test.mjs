@@ -37,6 +37,7 @@ import {
   decryptApiKey,
   buildAsMetadata,
   buildPrMetadata,
+  buildAuthorizeCsp,
   renderConsentPage,
   isOAuthPath,
   handleOAuthRequest,
@@ -375,6 +376,11 @@ test("T12 authorize GET happy: 200 HTML with escaped client_name, hidden challen
   const csp = res.headers.get("content-security-policy");
   assert.ok(csp, "consent page must carry a Content-Security-Policy header");
   assert.ok(csp.includes("default-src 'none'"), "CSP must lock down with default-src 'none'");
+  // form-action must include the VALIDATED redirect_uri's origin — plain
+  // 'self' blocks the eventual cross-origin 302 the form submission produces
+  // (P0, 2026-08: Authorize silently did nothing in Safari/Chrome).
+  assert.ok(csp.includes("form-action 'self' https://claude.ai"),
+    "form-action must widen to the validated redirect_uri's origin, not stay plain 'self'");
   const html = await res.text();
   assert.ok(html.includes("Cool &amp; &lt;Fancy&gt; App"), "client_name must render HTML-escaped");
   assert.ok(html.includes('name="code_challenge"') && html.includes(RFC_CHALLENGE),
@@ -768,4 +774,57 @@ test("T32 _oauth.ts TTL fences: codes 120s, access tokens 3600s", () => {
   assert.ok(src.includes("{ ex: CODE_TTL_S }"), "code records must be stored with the 120s TTL");
   assert.ok(src.includes("{ ex: AT_TTL_S }"), "AT records must be stored with the 3600s TTL");
   assert.ok(src.includes("expires_in: AT_TTL_S"), "expires_in must report the same 3600s constant");
+});
+
+// ─── Regression: form-action CSP must widen to the VALIDATED redirect_uri
+// origin (P0, 2026-08 — plain 'self' blocked the cross-origin 302 that
+// follows the Authorize form submission, so clicking Authorize silently did
+// nothing in Safari/Chrome for every DCR client) ──────────────────────────────
+
+test("T33 buildAuthorizeCsp: widens form-action to the redirect_uri's origin; malformed input falls back to plain 'self'", () => {
+  const csp = buildAuthorizeCsp("https://claude.ai/api/mcp/auth_callback");
+  assert.ok(csp.includes("form-action 'self' https://claude.ai"),
+    "form-action must include exactly the redirect_uri's origin, scheme+host only (no path)");
+  assert.ok(csp.includes("default-src 'none'") && csp.includes("frame-ancestors 'none'"),
+    "the rest of the locked-down policy must be preserved unchanged");
+
+  // A path-only origin difference (different subdomain/port) must NOT be
+  // conflated — origin comparison, not substring/startsWith.
+  const csp2 = buildAuthorizeCsp("http://localhost:4747/cb");
+  assert.ok(csp2.includes("form-action 'self' http://localhost:4747"));
+
+  // Fallback: an unparseable redirect_uri must never widen form-action —
+  // fail safe to plain 'self' rather than throwing or emitting garbage.
+  const cspFallback = buildAuthorizeCsp("not a url");
+  assert.ok(cspFallback.includes("form-action 'self';") || cspFallback.endsWith("form-action 'self'"),
+    "malformed redirect_uri must fall back to plain 'self', never widen form-action");
+  assert.ok(!cspFallback.includes("form-action 'self' "),
+    "fallback CSP must not have appended any extra origin after 'self'");
+});
+
+// ─── Known caveat (reported, NOT fixed here — see task output): the
+// POST /authorize error-re-render path (wrong/empty api_key) still emits the
+// pre-fix plain-'self' CSP even though its redirect_uri has already passed
+// the same validation as the GET happy path. A user who lands on that error
+// page and then resubmits with a correct key would hit the SAME silently-
+// broken redirect this task fixes for the initial GET render. ────────────────
+
+test("T34 authorize POST invalid-key re-render widens form-action to the validated redirect origin (TOW2-377 retry path)", async () => {
+  const deps = makeDeps({ verifyKey: async () => ({ valid: false, verified: true }) });
+  const clientId = await registerClient(deps, ["https://claude.ai/api/mcp/auth_callback"]);
+  const res = await handleAuthorizePost(postForm("https://mcp.novada.com/authorize", {
+    api_key: "wrong-key-1234567890",
+    client_id: clientId,
+    redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+    code_challenge: RFC_CHALLENGE,
+    code_challenge_method: "S256",
+    state: "xyz",
+  }), IP, deps);
+  assert.equal(res.status, 200);
+  const csp = res.headers.get("content-security-policy");
+  // Flipped 2026-08-05 when the reRender path got the same buildAuthorizeCsp
+  // treatment as the GET consent page: the retry-after-typo submit must be
+  // able to follow the cross-origin redirect too.
+  assert.ok(csp.includes("form-action 'self' https://claude.ai"),
+    "retry path must widen form-action to the validated redirect origin");
 });
