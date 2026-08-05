@@ -6,8 +6,12 @@
  * Makes ZERO network calls and needs NO NOVADA_TEST_KEY — it injects a stub
  * callTool/listTools into full-tools-probe.mjs's exported `runAllProbes` and
  * asserts on the real classification pipeline (classifyFailure, the
- * processing→poll disambiguation, the write-guard, the network-retry
- * wrapper), not a re-implementation of it.
+ * processing→poll-AND-RESUME disambiguation, the write-guard, the
+ * network-retry wrapper), not a re-implementation of it. The
+ * processingPollIntervalMs dependency is zeroed out for this run (see the
+ * runAllProbes call below) so the real ~10s-apart, up-to-4-attempt resume
+ * loop (TOW2-257 Phase 4) still executes for real but completes in
+ * milliseconds instead of tens of seconds.
  *
  * This exists because the CRITICAL bug found in code review (2026-07-24) —
  * an args-unaware write-guard throwing OUTSIDE any try/catch at probe #14,
@@ -24,17 +28,24 @@
  *   2. preflightAssertAllProbesExecutable() does not throw for the real,
  *      committed PROBES list (confirms the args-aware carve-out for
  *      novada_proxy_account_create's no-confirm dry-run actually works).
- *   3. Thirteen scripted canned scenarios (a plain pass; an isolated backend
- *      520; processing→poll-completes; processing→still-stuck on a
- *      non-flaky platform; processing→still-stuck on a KNOWN-FLAKY platform;
- *      processing-matched-but-no-task_id; a validation error we own; an
- *      INVALID_API_KEY auth error; httpStatus-0-then-retry-recovers;
- *      httpStatus-0-retry-exhausted; a scraper `50004: context deadline
- *      exceeded` backend timeout on a NON-flaky platform; a 2026-07-30
- *      free-gateway-cap error on a CORE tool; the SAME free-gateway-cap
- *      error on a KNOWN-FLAKY platform) each classify to the EXACT
- *      domain+severity this script's 2026-07-24/2026-07-28/2026-07-30
- *      review fixes specify. The `novada_scrape_google` scenario is the
+ *   3. Fifteen scripted canned scenarios (a plain pass; an isolated backend
+ *      520; processing→poll-completes-on-attempt-1; processing→resolves-only-
+ *      on-attempt-3 (TOW2-257 Phase 4 fixture (a) — proves the resume LOOP
+ *      actually iterates); processing→NEVER resolves, exhausts all 4 resume
+ *      attempts on a non-flaky platform (fixture (b) — must be ASYNC, not a
+ *      ③-backend FAIL); the SAME never-resolves case on a KNOWN-FLAKY
+ *      platform (fixture (b) again — flakiness must not change the ASYNC
+ *      outcome); processing→resumes to a genuine Failed outcome on attempt 2
+ *      (fixture (c) — must be ③-backend FAIL, stopping immediately instead of
+ *      waiting out the remaining attempts); processing-matched-but-no-
+ *      task_id; a validation error we own; an INVALID_API_KEY auth error;
+ *      httpStatus-0-then-retry-recovers; httpStatus-0-retry-exhausted; a
+ *      scraper `50004: context deadline exceeded` backend timeout on a
+ *      NON-flaky platform; a 2026-07-30 free-gateway-cap error on a CORE
+ *      tool; the SAME free-gateway-cap error on a KNOWN-FLAKY platform) each
+ *      classify to the EXACT status+domain+severity this script's
+ *      2026-07-24/2026-07-28/2026-07-30/TOW2-257-Phase-4 review fixes
+ *      specify. The `novada_scrape_google` scenario is the
  *      ratchet for the real-world mislabel found 2026-07-28:
  *      `scraper.novada.com/request` returning `{code:50004,
  *      msg:"context deadline exceeded"}` (a genuine BACKEND outage,
@@ -70,7 +81,14 @@
  * must never crash").
  */
 
-import { PROBES, runAllProbes, preflightAssertAllProbesExecutable, adviceFor } from "./full-tools-probe.mjs";
+import {
+  PROBES,
+  runAllProbes,
+  preflightAssertAllProbesExecutable,
+  adviceFor,
+  applySeverityEscalations,
+  buildSummary,
+} from "./full-tools-probe.mjs";
 
 // ─── Stub callTool: canned responses for 10 scripted scenarios, a default
 // PASS for every other probe, and generic-dispatcher poll routing keyed by
@@ -100,14 +118,67 @@ function stubCallTool(name, args) {
       });
     }
     if (args.task_id === "linkedin-task-1" || args.task_id === "github-task-1") {
-      // Poll is STILL processing/stuck (records: 0) — same clean "pending"
-      // shape scrape.ts itself would render on a second poll.
+      // Poll is STILL processing/stuck (records: 0) on EVERY resume attempt —
+      // same clean "pending" shape scrape.ts itself would render on any
+      // poll. Unconditional (not gated by attempt count): TOW2-257 Phase 4
+      // exercises what happens when a task genuinely never resolves within
+      // the probe's whole poll-and-resume budget -> ASYNC, not a FAIL.
       return Promise.resolve({
         ok: true,
         httpStatus: 200,
         timeMs: 800,
         text: `## Scrape Results\nplatform: x | operation: y | records: 0 | source: live\n\nstatus: processing\n⏳ Task still running (task_id="${args.task_id}") after 45s.`,
         error: null,
+      });
+    }
+    if (args.task_id === "bing-task-1") {
+      // TOW2-257 Phase 4, fixture (a): stays processing for the first two
+      // resume attempts, then resolves with real records on the 3rd — proves
+      // the poll-and-resume LOOP actually iterates (not just a single poll)
+      // before reporting a non-fail outcome.
+      const pollAttempt = callLog.filter((c) => c.name === "novada_scrape" && c.args?.task_id === "bing-task-1").length;
+      if (pollAttempt < 3) {
+        return Promise.resolve({
+          ok: true,
+          httpStatus: 200,
+          timeMs: 700,
+          text: `## Scrape Results\nplatform: bing.com | operation: web_search | records: 0 | source: live\n\nstatus: processing\n⏳ Task still running (task_id="bing-task-1") after 45s.`,
+          error: null,
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        httpStatus: 200,
+        timeMs: 700,
+        text: "## Scrape Results\nplatform: bing.com | operation: web_search | records: 2 | source: live\n\nstatus: ok",
+        error: null,
+      });
+    }
+    if (args.task_id === "tiktok-task-1") {
+      // TOW2-257 Phase 4, fixture (c): stays processing on the first resume
+      // attempt, then resolves to a genuine Failed outcome (isError, backend
+      // 520 signal) on the 2nd — proves the loop stops IMMEDIATELY on a
+      // Failed outcome instead of waiting out all remaining attempts.
+      const pollAttempt = callLog.filter((c) => c.name === "novada_scrape" && c.args?.task_id === "tiktok-task-1").length;
+      if (pollAttempt < 2) {
+        return Promise.resolve({
+          ok: true,
+          httpStatus: 200,
+          timeMs: 700,
+          text: `## Scrape Results\nplatform: tiktok.com | operation: profile_by_url | records: 0 | source: live\n\nstatus: processing\n⏳ Task still running (task_id="tiktok-task-1") after 45s.`,
+          error: null,
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        httpStatus: 200,
+        timeMs: 500,
+        text: null,
+        error: {
+          toolError: true,
+          message:
+            "Error [API_DOWN]: Scraper task failed (520): upstream returned 520.\nfailure_class: backend\nretry_recommended: true",
+        },
       });
     }
   }
@@ -162,6 +233,29 @@ function stubCallTool(name, args) {
         httpStatus: 200,
         timeMs: 900,
         text: '## Scrape Results\nplatform: github.com | operation: repository_by_url | records: 0 | source: live\n\nstatus: processing\n⏳ Task still running (task_id="github-task-1") after 45s.',
+        error: null,
+      });
+
+    case "novada_scrape_bing":
+      // TOW2-257 Phase 4, fixture (a) initial call: processing, resolves via
+      // poll (on the 3rd resume attempt, see the bing-task-1 branch above).
+      return Promise.resolve({
+        ok: true,
+        httpStatus: 200,
+        timeMs: 900,
+        text: '## Scrape Results\nplatform: bing.com | operation: web_search | records: 0 | source: live\n\nstatus: processing\n⏳ Task still running (task_id="bing-task-1") after 45s.',
+        error: null,
+      });
+
+    case "novada_scrape_tiktok":
+      // TOW2-257 Phase 4, fixture (c) initial call: processing, resumes to a
+      // Failed outcome on the 2nd resume attempt (see the tiktok-task-1
+      // branch above).
+      return Promise.resolve({
+        ok: true,
+        httpStatus: 200,
+        timeMs: 900,
+        text: '## Scrape Results\nplatform: tiktok.com | operation: profile_by_url | records: 0 | source: live\n\nstatus: processing\n⏳ Task still running (task_id="tiktok-task-1") after 45s.',
         error: null,
       });
 
@@ -306,6 +400,12 @@ async function main() {
     listToolsFn: stubListTools,
     delayMs: 0,
     networkRetryBackoffMs: 5,
+    // TOW2-257 Phase 4: keep the REAL processingPollMaxAttempts (4) so the
+    // multi-attempt loop is genuinely exercised end-to-end, but zero out the
+    // ~10s inter-attempt sleep — this is an offline test, it must run in
+    // milliseconds, not tens of seconds.
+    processingPollMaxAttempts: 4,
+    processingPollIntervalMs: 0,
   });
 
   console.log("");
@@ -324,9 +424,11 @@ async function main() {
   const scenarios = [
     { name: "novada_setup", status: "PASS", domain: "-", severity: null, why: "a plain pass" },
     { name: "novada_scrape_amazon", status: "FAIL", domain: "③-backend", severity: "P2", why: "an isolated backend 520 (non-flaky platform)" },
-    { name: "novada_scrape_walmart", status: "SLOW", domain: "-", severity: null, why: "processing → poll completes with real records" },
-    { name: "novada_scrape_linkedin", status: "FAIL", domain: "③-backend", severity: "P2", why: "processing → poll still stuck (non-flaky platform)" },
-    { name: "novada_scrape_github", status: "FAIL", domain: "③-backend", severity: "P3", why: "processing → poll still stuck on a KNOWN-FLAKY platform (LOW fix: must be P3, not P2)" },
+    { name: "novada_scrape_walmart", status: "SLOW", domain: "-", severity: null, why: "processing → poll completes with real records on the very 1st resume attempt" },
+    { name: "novada_scrape_bing", status: "SLOW", domain: "-", severity: null, why: "TOW2-257 fixture (a): processing → resolves with real records only on the 3rd resume attempt — proves the poll-and-resume loop actually iterates, not just a single poll" },
+    { name: "novada_scrape_linkedin", status: "ASYNC", domain: "-", severity: null, why: "TOW2-257 fixture (b): processing → stays processing on EVERY resume attempt (non-flaky platform) → exhausts all 4 attempts → ASYNC, NOT a ③-backend FAIL (the whole point of Phase 4: kills the recurring false daily red)" },
+    { name: "novada_scrape_github", status: "ASYNC", domain: "-", severity: null, why: "TOW2-257 fixture (b), same as linkedin but on a KNOWN-FLAKY platform (github) — flakiness must NOT change the outcome: still-processing-after-all-attempts is ASYNC regardless of platform" },
+    { name: "novada_scrape_tiktok", status: "FAIL", domain: "③-backend", severity: "P2", why: "TOW2-257 fixture (c): processing on attempt 1, resumes to a genuine Failed outcome (520) on attempt 2 — must stop IMMEDIATELY as ③-backend FAIL, not wait out the remaining attempts" },
     { name: "novada_scrape_shein", status: "FAIL", domain: "①-mcp-code", severity: "P1", why: 'processing matched but no task_id extracted (HIGH fix: must be ①, not ③)' },
     { name: "novada_map", status: "FAIL", domain: "①-mcp-code", severity: "P1", why: "our own validation error (INVALID_PARAMS)" },
     { name: "novada_scrape_facebook", status: "FAIL", domain: "②-gateway", severity: "P1", why: "an INVALID_API_KEY auth error (MEDIUM fix: must be ②/config, not ①)" },
@@ -347,6 +449,49 @@ async function main() {
     expect(
       row.severity === sc.severity,
       `${sc.name}: severity === ${JSON.stringify(sc.severity)} (got ${JSON.stringify(row.severity)}) — ${sc.why}`
+    );
+  }
+
+  // TOW2-257 Phase 4: run the SAME post-processing main() applies
+  // (applySeverityEscalations, which also computes `.advice` via adviceFor,
+  // then buildSummary) over these exact results, so the assertions below
+  // exercise the real summary/exit-code path a live run would hit — not just
+  // each row's raw classification. Mutates `results` in place; safe here
+  // because every scenario assertion above already ran and does not re-read
+  // these rows afterward.
+  applySeverityEscalations(results);
+  const summary = buildSummary(results);
+  const asyncRows = results.filter((r) => r.status === "ASYNC");
+
+  console.log("");
+  expect(asyncRows.length === 2, `exactly 2 rows are ASYNC this run (linkedin + github fixtures) — got ${asyncRows.length}`);
+  expect(
+    asyncRows.every((r) => r.domain === "-" && r.severity === null),
+    "every ASYNC row has domain '-' and severity null — the same non-fault convention PASS/SLOW use, never ①/②/③"
+  );
+  expect(
+    asyncRows.every((r) => typeof r.taskId === "string" && r.taskId.length > 0),
+    "every ASYNC row carries the task_id it never resolved, so a human/agent can resume it manually later"
+  );
+  expect(
+    (summary.byStatus.ASYNC || 0) === asyncRows.length,
+    `summary.byStatus.ASYNC counts the still-processing-after-all-attempts rows (got ${JSON.stringify(summary.byStatus)})`
+  );
+  expect(
+    summary.backendCount === results.filter((r) => r.domain === "③-backend").length && asyncRows.every((r) => r.domain !== "③-backend"),
+    "summary.backendCount excludes ASYNC rows by construction (domain '-', not '③-backend') — TOW2-257 Phase 4's whole point: still-processing is not a backend failure"
+  );
+  const oursP0P1Equivalent = results.filter(
+    (r) => (r.domain === "①-mcp-code" || r.domain === "②-gateway") && (r.severity === "P0" || r.severity === "P1")
+  );
+  expect(
+    asyncRows.every((r) => !oursP0P1Equivalent.includes(r)),
+    "no ASYNC row appears in the ours-domain P0/P1 set main() uses to decide the exit code — ASYNC never fails the run, same as backend-only findings"
+  );
+  for (const r of asyncRows) {
+    expect(
+      typeof r.advice === "string" && /async in progress|not a failure/i.test(r.advice),
+      `adviceFor()-derived .advice on ASYNC row "${r.name}" explains it is in-progress, not a failure (got: ${JSON.stringify(r.advice)})`
     );
   }
 

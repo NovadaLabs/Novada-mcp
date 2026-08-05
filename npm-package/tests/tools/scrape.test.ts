@@ -780,7 +780,20 @@ describe("novadaScrape — backend_broken op warning on error path (FIX-1)", () 
 // NOV-689: task_id resume path — skip submit when task_id is provided
 describe("novadaScrape — task_id resume path (NOV-689)", () => {
   it("skips submit when task_id is provided and fetches result directly", async () => {
-    // Arrange: provide task_id — POST (submit) must NOT be called
+    // Arrange: provide task_id — the BILLABLE submit endpoint (scraper.novada.com/request)
+    // must NOT be called. TOW2-257 Phase 1: resume now DOES issue one POST — the fast,
+    // non-blocking task_status probe (api-m.novada.com) — before falling through to the
+    // download endpoint, so this test mocks that probe to "Ready" and asserts specifically
+    // that the SUBMIT endpoint (not just "any POST") was never hit.
+    mockedAxios.post.mockImplementation(async (url: unknown) => {
+      if (typeof url === "string" && url.includes("task_status")) {
+        return {
+          data: { code: 0, msg: "success", data: { task_id: "resume-task-abc123", status: "Ready" } },
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        };
+      }
+      return SUBMIT_OK;
+    });
     mockedAxios.get.mockResolvedValue(makeDownloadOk(MOCK_RECORDS));
 
     const result = await novadaScrape(
@@ -795,8 +808,11 @@ describe("novadaScrape — task_id resume path (NOV-689)", () => {
       "test-key"
     );
 
-    // submit must NOT be called — no new billable task
-    expect(mockedAxios.post).not.toHaveBeenCalled();
+    // The billable submit endpoint must NOT be called — no new billable task.
+    const submitCall = mockedAxios.post.mock.calls.find(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("scraper.novada.com/request"),
+    );
+    expect(submitCall).toBeUndefined();
     // download must be called with the provided task_id
     expect(mockedAxios.get).toHaveBeenCalled();
     const [url] = mockedAxios.get.mock.calls[0];
@@ -850,6 +866,194 @@ describe("novadaScrape — task_id resume path (NOV-689)", () => {
 // friendly name on a successful call but the internal slug on every no-data path.
 // These tests exercise all 4 return paths directly via novadaScrape + an explicit
 // `displayName`, proving each one now threads the friendly name through.
+// TOW2-257 Phase 1: resume must be INSTANT for a still-running task instead of
+// re-entering the ~45s blocking download-poll loop. A fast, non-blocking probe
+// against the same endpoint scraper_status.ts uses (POST /v1/scraper/task_status)
+// is checked BEFORE any polling. Pending/Running → return the processing envelope
+// immediately (no wait, no download-endpoint GET at all). Ready → proceed to the
+// normal fetch/format path. Failed → a typed, retryable error, never a masqueraded
+// success.
+describe("novadaScrape — resume fast-status pre-check (TOW2-257 Phase 1)", () => {
+  /** Mock axios.post to route by URL: task_status probe vs. the (should-not-be-called
+   *  on resume) submit endpoint, so the same mockedAxios.post spy can serve both. */
+  function mockTaskStatus(status: string, msg?: string) {
+    mockedAxios.post.mockImplementation(async (url: unknown) => {
+      if (typeof url === "string" && url.includes("task_status")) {
+        return {
+          // LIVE API shape (verified 2026-08-03): the /v1/scraper/task_status payload
+          // is { list: [{ task_id, status }] } — NOT a flat { status }. The earlier
+          // flat mock is exactly why the unit suite missed the list-parsing bug that
+          // made every real resume fall through to the slow poll. Keep this shape real.
+          data: { code: 0, msg: "success", data: { list: [{ task_id: "resume-task-abc123", status, msg }] } },
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        };
+      }
+      // Resume must never hit the submit endpoint — if it does, this generic
+      // SUBMIT_OK response would mask that bug rather than crash the test, so
+      // the explicit assertions below (mockedAxios.post URL/call-count) are what
+      // actually catches an accidental re-submit.
+      return SUBMIT_OK;
+    });
+  }
+
+  it("status=Pending returns the processing envelope FAST — no download-poll GET at all", async () => {
+    mockTaskStatus("Pending");
+
+    const result = await novadaScrape(
+      {
+        platform: "amazon.com",
+        operation: "amazon_product_keywords",
+        params: { keyword: "iphone" },
+        format: "markdown",
+        limit: 20,
+        task_id: "resume-task-abc123",
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+
+    // Fast, non-blocking status probe was called (POST task_status)...
+    expect(mockedAxios.post).toHaveBeenCalled();
+    const statusCall = mockedAxios.post.mock.calls.find(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("task_status"),
+    );
+    expect(statusCall).toBeDefined();
+    // ...but the SLOW download-poll endpoint (GET scraper_download) must NEVER be
+    // reached — proving we short-circuited BEFORE the ~45s blocking loop.
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+
+    expect(result).toContain("status: processing");
+    expect(result).toContain("resume-task-abc123");
+  });
+
+  it("status=Running returns the processing envelope FAST — no download-poll GET at all", async () => {
+    mockTaskStatus("Running");
+
+    const result = await novadaScrape(
+      {
+        platform: "amazon.com",
+        operation: "amazon_product_keywords",
+        params: { keyword: "iphone" },
+        format: "markdown",
+        limit: 20,
+        task_id: "resume-task-abc123",
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+    expect(result).toContain("status: processing");
+    expect(result).toContain("resume-task-abc123");
+  });
+
+  it("also accepts the legacy FLAT {status} shape (backward-compat)", async () => {
+    // fastTaskStatus reads `resp.status ?? resp.list[0].status`, so a flat payload
+    // must still resolve — proves the live-shape fix didn't drop the old form.
+    mockedAxios.post.mockImplementation(async (url: unknown) => {
+      if (typeof url === "string" && url.includes("task_status")) {
+        return {
+          data: { code: 0, msg: "success", data: { task_id: "resume-task-abc123", status: "Running" } },
+          status: 200, headers: {}, config: {} as never, statusText: "OK",
+        };
+      }
+      return SUBMIT_OK;
+    });
+
+    const result = await novadaScrape(
+      {
+        platform: "amazon.com",
+        operation: "amazon_product_keywords",
+        params: { keyword: "iphone" },
+        format: "markdown",
+        limit: 20,
+        task_id: "resume-task-abc123",
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+    expect(result).toContain("status: processing");
+  });
+
+  it("status=Ready proceeds to fetch and format the real result", async () => {
+    mockTaskStatus("Ready");
+    mockedAxios.get.mockResolvedValue(makeDownloadOk(MOCK_RECORDS));
+
+    const result = await novadaScrape(
+      {
+        platform: "amazon.com",
+        operation: "amazon_product_keywords",
+        params: { keyword: "iphone" },
+        format: "markdown",
+        limit: 20,
+        task_id: "resume-task-abc123",
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+
+    // Ready → the normal result-fetch path runs: download endpoint IS called,
+    // and the real records are formatted into the output.
+    expect(mockedAxios.get).toHaveBeenCalled();
+    const [url] = mockedAxios.get.mock.calls[0];
+    expect(url).toContain("resume-task-abc123");
+    expect(result).toContain("iPhone 16 Pro");
+  });
+
+  it("status=Failed returns a clean error — must NOT masquerade as success", async () => {
+    mockTaskStatus("Failed", "upstream extraction failed");
+
+    let thrown: unknown;
+    let result: string | undefined;
+    try {
+      result = await novadaScrape(
+        {
+          platform: "amazon.com",
+          operation: "amazon_product_keywords",
+          params: { keyword: "iphone" },
+          format: "markdown",
+          limit: 20,
+          task_id: "resume-task-abc123",
+        } as Parameters<typeof novadaScrape>[0],
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
+
+    // Must throw (isError:true at the MCP boundary) — never resolve to a
+    // success-shaped string.
+    expect(result).toBeUndefined();
+    expect(thrown).toBeInstanceOf(NovadaError);
+    const err = thrown as NovadaError;
+    expect(err.message).not.toContain("## Scrape Results");
+    expect(err.message.toLowerCase()).toContain("fail");
+    // The download endpoint must never be reached for a task already known Failed.
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  it("status=unknown (probe ambiguous/not-found) falls through to today's existing poll behavior unchanged", async () => {
+    // The fast probe itself is inconclusive (empty status) — must NOT invent new
+    // behavior; fall through to the same download-poll path that ran before this
+    // change existed.
+    mockTaskStatus("");
+    mockedAxios.get.mockResolvedValue(makeDownloadOk(MOCK_RECORDS));
+
+    const result = await novadaScrape(
+      {
+        platform: "amazon.com",
+        operation: "amazon_product_keywords",
+        params: { keyword: "iphone" },
+        format: "markdown",
+        limit: 20,
+        task_id: "resume-task-abc123",
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+
+    expect(mockedAxios.get).toHaveBeenCalled();
+    expect(result).toContain("iPhone 16 Pro");
+  });
+});
+
 describe("novadaScrape — C1 fix: friendly operation name on no-data return paths", () => {
   const FRIENDLY = "product_by_asin";
 

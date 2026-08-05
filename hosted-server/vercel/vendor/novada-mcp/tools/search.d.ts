@@ -12,6 +12,14 @@ export declare function boundQuery(query: string): {
     query: string;
     truncated: string | null;
 };
+/**
+ * Run `op` once; on a transient (`NovadaErrorCode.API_DOWN`) `NovadaError`,
+ * wait `delayMs` and run it exactly one more time. Any other error (including
+ * a non-NovadaError) propagates immediately without a retry. Exported so the
+ * retry/no-retry behavior can be unit-tested directly against a mock `op`
+ * without needing to fake the underlying axios/HTTP layer.
+ */
+export declare function withSingleSerpRetry<T>(op: () => Promise<T>, delayMs?: number): Promise<T>;
 interface SearchFilterParams {
     time_range?: string;
     start_date?: string;

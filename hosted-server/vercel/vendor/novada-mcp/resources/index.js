@@ -7,6 +7,16 @@ import { SCRAPER_CATALOG } from "../data/scraper_catalog.js";
 // TOOL_REGISTRY.length instead of hardcoding a number means this can never drift
 // again the way the literal did.
 import { TOOL_REGISTRY } from "../tools/registry.js";
+// 2026-07-30 (ACTIONABLE_ERRORS class fix): reuse the SAME sanitizer tool-call
+// errors already run untrusted strings through before embedding them in an
+// agent_instruction-bearing message (see _core/errors.ts's classifyError ->
+// sanitizeMessage -> sanitizeServerMsg chain). Needed here because `uri` in
+// readResource() is raw, client-controlled resources/read input — without this,
+// a uri containing its own "\nagent_instruction:"-shaped line could inject a
+// fake instruction ahead of the real one below (the exact injection class
+// sanitizeServerMsg's `\nagent_instruction:` rewrite + newline-collapse exists
+// to block for tool errors; resources/read gets no less protection).
+import { sanitizeServerMsg } from "../_core/errors.js";
 export const RESOURCES = [
     {
         uri: "novada://engines",
@@ -567,8 +577,68 @@ failure modes) and abuse prevention (cap enforcement, anomalous usage patterns).
 support@novada.com`,
                     }],
             };
-        default:
-            throw new Error(`Unknown resource URI: ${uri}. Available: ${RESOURCES.map(r => r.uri).join(", ")}`);
+        default: {
+            // ACTIONABLE_ERRORS class fix (2026-07-30, TOW2-353 contract invariant):
+            // this is the only error path REACHABLE INSIDE THIS FUNCTION (enumerated
+            // case by case — listResources() is a static array with no throw; every
+            // known-URI case above builds a static template string with no throw
+            // EXCEPT "novada://scraper-platforms", which calls
+            // buildScraperPlatformsText() — the one matched case with real control
+            // flow (iterates + groups SCRAPER_CATALOG) — and that function is a pure
+            // computation over an already-loaded, already-validated in-memory
+            // constant, with no I/O and no throw site of its own).
+            //
+            // Review round 1 correction (2026-07-30): an EARLIER version of this
+            // comment claimed this was "the ONLY error path on the resources
+            // surface" full stop. That is FALSE and was corrected after independent
+            // review reproduced it live: `resources/read` with a non-string or
+            // MISSING `uri` never reaches this function at all — the MCP SDK's
+            // `ReadResourceRequestSchema` (Zod) rejects it in
+            // `Protocol.setRequestHandler`'s `parseWithCompat()` call, BEFORE
+            // `src/index.ts`'s registered handler (and therefore this function) is
+            // ever invoked, and surfaces a raw Zod-issue dump with NO
+            // agent_instruction. That is a real, separate, currently-un-instrumented
+            // error path on the same `resources/read` method — just enforced one
+            // layer up, outside this file. Investigated giving it an
+            // agent_instruction from `src/index.ts` (the only place that registers
+            // the handler): the SDK offers no interception point for a
+            // schema-rejection response — `setRequestHandler` only exposes
+            // "supply a Zod schema, get a parsed+validated request", so the only way
+            // to intercept this would be replacing the SDK's own
+            // `ReadResourceRequestSchema` with a hand-rolled, more permissive
+            // schema — reimplementing Zod-v3/v4-mini parse-compat semantics
+            // (`parseWithCompat`) and `_meta`/task-augmentation field preservation
+            // outside the SDK's control, for a path only reachable via a
+            // hand-crafted raw JSON-RPC message (no spec-compliant MCP client sends
+            // a non-string/missing uri). That is exactly "hacking SDK internals" for
+            // near-zero real exploitability — not attempted; reported as a gap
+            // instead (see reports/resource-error-actionability-2026-07-30.md's
+            // "Review round 1" section).
+            //
+            // Previously this threw a plain Error with no agent_instruction —
+            // additive fix: preserve the exact original message content when `uri`
+            // doesn't trip sanitizeServerMsg's redaction patterns (a normal/expected
+            // uri never does — see the injection-defense note below for the one
+            // case where the echoed uri IS altered, by design) and append a genuine
+            // agent_instruction line naming the two real ways to discover a valid
+            // URI (resources/list, or one of the ACTUAL advertised URIs computed
+            // from RESOURCES itself — never a hand-typed/invented list that could
+            // drift).
+            const available = RESOURCES.map(r => r.uri).join(", ");
+            // `uri` is untrusted client input (see import comment above) — sanitize
+            // before it's echoed into the message we throw. sanitizeServerMsg is a
+            // no-op for any ordinary uri string; it only rewrites uris that contain
+            // credential-shaped, host-shaped, or (as of the review-round-1 fix)
+            // agent_instruction-line-shaped content — i.e. the "additive-only, exact
+            // original message" property above holds for every uri EXCEPT ones
+            // deliberately crafted to trip those redaction patterns, where altering
+            // the echoed text is the intended defense, not a regression.
+            const safeUri = sanitizeServerMsg(String(uri));
+            throw new Error([
+                `Unknown resource URI: ${safeUri}. Available: ${available}`,
+                `agent_instruction: "Call resources/list to discover valid resource URIs, or use one of the advertised URIs verbatim — ${available}. Do not guess or invent a resource URI."`,
+            ].join("\n"));
+        }
     }
 }
 //# sourceMappingURL=index.js.map

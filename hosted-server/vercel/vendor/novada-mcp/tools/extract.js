@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitleFrom, extractDescriptionFrom, extractLinksFrom, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredDataFrom, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT, detectKuferAvailability, truncatePreservingTable, stripBoilerplate } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import { saveOutput } from "../utils/output.js";
-import { makeNovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
+import { makeNovadaError, NovadaErrorCode, redactSecrets, summarizeAggregateError } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
@@ -119,7 +119,10 @@ export async function novadaExtract(params, apiKey) {
             const rawMessage = err instanceof Error ? err.message : String(err);
             const message = redactSecrets(rawMessage);
             const fix = getSuggestedFix(url, rawMessage);
-            return { i, url, content: `Error: ${message}\n${fix}`, ok: false, renderRetried: false };
+            // FIX-B: PMC mirror hint — null (no-op) for every other host.
+            const pmcHint = getPmcMirrorHint(url);
+            const fullFix = pmcHint ? `${fix} | ${pmcHint}` : fix;
+            return { i, url, content: `Error: ${message}\n${fullFix}`, ok: false, renderRetried: false };
         })));
         // F2: Per-URL render escalation for all-unresolved fields on static fetch.
         // Trigger: ok=true AND extraction_quality:none AND mode:static AND fields were requested.
@@ -189,6 +192,18 @@ export async function novadaExtract(params, apiKey) {
             const m = content.match(/^availability_status:\s*(.+)$/m);
             return m ? m[1].trim() : null;
         }
+        // PARAM-HONESTY (review round 2, MEDIUM): the country-not-applied disclosure
+        // (## Warnings block / country_warning field, emitted by extractSingleInner) sits
+        // BEFORE the "---\n" separator this loop slices from below, then gets truncated
+        // away by perItemBudget for any realistically-sized page — types.ts explicitly
+        // promotes batch mode for cross-country price comparison, the single most
+        // country-sensitive use case, so silently losing the disclosure there defeats
+        // the whole point of this fix. Anchor on the exact phrase this file's own
+        // PARAM-HONESTY code emits (not a loose substring) so real scraped page content
+        // that happens to contain "accepted but not applied" can't false-positive.
+        function extractCountryNotAppliedFromBlock(content) {
+            return /accepted but not applied — resolved via mode=/.test(content);
+        }
         // F1: Consolidated fields summary table (≥3 URLs + fields requested).
         // Parses each result to build one compact cross-URL comparison table at the top.
         // Full detail sections remain below. Handles both markdown and JSON per-URL output.
@@ -255,6 +270,12 @@ export async function novadaExtract(params, apiKey) {
             summaryLines.push(...tableRows);
             summaryLines.push(``);
         }
+        // PARAM-HONESTY: count items where country was supplied but the per-item block
+        // discloses it wasn't applied, so the aggregate ## Agent Hints below can point
+        // the agent at the retry workaround even though each item's own agent_instruction
+        // line is likely truncated out of THIS inline summary (still on disk, and still
+        // on the header line below either way).
+        let countryNotAppliedCount = 0;
         // Build compact per-item rows
         for (const r of results) {
             const stats = parseItemStats(r.content);
@@ -263,7 +284,15 @@ export async function novadaExtract(params, apiKey) {
             const totalPart = stats.totalChars !== null ? ` | total_chars:${stats.totalChars}` : "";
             const availPart = availability ? ` | availability:${availability}` : "";
             const statusPart = r.ok ? "ok" : "failed";
-            summaryLines.push(`### [${r.i + 1}/${urls.length}] ${statusPart.toUpperCase()}: ${r.url}`);
+            // PARAM-HONESTY (review round 2, MEDIUM): surface on the HEADER line — which is
+            // never truncated — rather than relying on it surviving inside the per-item
+            // snippet slice below, which drops the ## Warnings block for any realistically
+            // sized page (see extractCountryNotAppliedFromBlock's doc comment).
+            const countryNotAppliedForItem = Boolean(params.country) && r.ok && extractCountryNotAppliedFromBlock(r.content);
+            if (countryNotAppliedForItem)
+                countryNotAppliedCount++;
+            const countryPart = countryNotAppliedForItem ? ` | country_not_applied:true` : "";
+            summaryLines.push(`### [${r.i + 1}/${urls.length}] ${statusPart.toUpperCase()}: ${r.url}${countryPart}`);
             summaryLines.push(`title: ${itemTitle}`);
             summaryLines.push(`chars:${stats.returnedChars} | content_truncated:${stats.truncated}${totalPart}${availPart}`);
             // Short snippet — strip the header block, take first perItemBudget chars of content
@@ -287,6 +316,11 @@ export async function novadaExtract(params, apiKey) {
         summaryLines.push(`## Agent Hints`);
         if (failed > 0) {
             summaryLines.push(`- ${failed} URL(s) failed. Re-run failed URLs individually for details.`);
+        }
+        // PARAM-HONESTY: batch-level agent_instruction equivalent — fires only when at
+        // least one item actually has the per-item country_not_applied:true header flag.
+        if (countryNotAppliedCount > 0) {
+            summaryLines.push(`- country="${params.country}" was accepted but NOT applied on ${countryNotAppliedCount} of ${urls.length} URL(s) above (see their header line) — do not rely on it for geo-restricted content there. Retry those URLs individually with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`);
         }
         summaryLines.push(`- Inline content is a compact snippet (${perItemBudget} chars/item). Full content per page is saved to disk — see path: line below.`);
         summaryLines.push(`- To get full content for a specific URL, call novada_extract with that single URL.`);
@@ -348,6 +382,8 @@ export async function novadaExtract(params, apiKey) {
         const rawMessage = err instanceof Error ? err.message : String(err);
         const message = redactSecrets(rawMessage);
         const suggestedFix = getSuggestedFix(urlList[0], rawMessage);
+        // FIX-B: PMC mirror hint — null (no-op) for every other host.
+        const pmcHint = getPmcMirrorHint(urlList[0]);
         return [
             `## Extract Failed`,
             `url: ${urlList[0]}`,
@@ -360,7 +396,7 @@ export async function novadaExtract(params, apiKey) {
             `- For JS-heavy pages returning empty content, try with render="render".`,
             ``,
             `## Agent Action`,
-            `agent_instruction: status:failed | ${suggestedFix}`,
+            `agent_instruction: status:failed | ${suggestedFix}${pmcHint ? ` | ${pmcHint}` : ""}`,
         ].join("\n");
     }
 }
@@ -405,20 +441,35 @@ function buildContextualAgentInstruction(ctx) {
         }
         return `status:success`;
     }
+    // FIX-B (2026-07-30): every remaining branch below is a genuine no-content/blocked
+    // outcome. pmc.ncbi.nlm.nih.gov hard-blocks automated extraction — surface the free
+    // official mirror (europepmc.org / NCBI efetch) instead of just "retry render",
+    // which PMC will block again. Hint-only: getPmcMirrorHint returns null (no-op) for
+    // every other host, and this point is never reached by rule 4's success return above.
+    const pmcHint = getPmcMirrorHint(params.url);
+    const withPmcHint = (base) => (pmcHint ? `${base} | ${pmcHint}` : base);
     // 5. Content genuinely absent (empty / bot-challenge / JS-empty) → escalation helps.
     // R4: only reached when content is NOT present, so "retry render" is honest here.
     if (!contentPresent && usedMode === "static" && renderMode === "auto") {
-        return `status:no_content | page returned no usable content — retry with render="render" for JS-heavy or bot-protected pages`;
+        return withPmcHint(`status:no_content | page returned no usable content — retry with render="render" for JS-heavy or bot-protected pages`);
     }
     // 6. Generic no-content on static.
     if (!contentPresent && usedMode === "static") {
-        return `status:no_content | retry with render="render"`;
+        return withPmcHint(`status:no_content | retry with render="render"`);
     }
-    return `status:no_content quality:${qualityScore}/100`;
+    return withPmcHint(`status:no_content quality:${qualityScore}/100`);
 }
 /** Derive a suggested_fix hint from a URL + error message */
 function getSuggestedFix(url, errorMsg) {
     const lower = errorMsg.toLowerCase();
+    // FIX-A (2026-07-30): the aggregate-fetch-failure marker text is emitted ONLY by
+    // summarizeAggregateError's crafted message ("All N fetch strategies failed: ...").
+    // Must be checked FIRST — a distinct cause quoted verbatim inside that message can
+    // itself contain "403"/"blocked"/"bot"/etc., which would otherwise match a LATER,
+    // more generic branch below and produce a less accurate fix for a total-failure case.
+    if (lower.includes("fetch strategies failed")) {
+        return `suggested_fix: retry_recommended after 30s (use exponential backoff for repeated retries). If it persists, the site likely blocks both the datacenter proxy and the web unblocker — try render="browser" (novada_browser with NOVADA_BROWSER_WS configured), or accept the URL is currently unavailable`;
+    }
     // P0: 5001 / PRODUCT_UNAVAILABLE — Web Unblocker not activated.
     // Must be checked FIRST: the 5001 message contains "render/JS modes" which would
     // otherwise match the generic "js" branch below and incorrectly suggest re-using
@@ -460,6 +511,43 @@ function getSuggestedFix(url, errorMsg) {
     }
     catch { /* ignore */ }
     return `suggested_fix: retry with render="render" for JS-heavy pages. If blocked: novada_extract(url="${url}", format="html") returns raw HTML via stealth browser`;
+}
+/**
+ * FIX-B (2026-07-30): pmc.ncbi.nlm.nih.gov hard-blocks automated extraction
+ * (reCAPTCHA on the static fetch; the Web Unblocker render tier 503s on this host).
+ * PMC full texts are freely available via two official mirrors that are NOT blocked
+ * the same way: europepmc.org (same PMCID, different host) and NCBI E-utilities
+ * efetch. This is a HINT ONLY — no auto-reroute this round (owner decision,
+ * 2026-07-30) — so a blocked/failed extraction can tell the agent where the free
+ * mirror lives instead of leaving it to guess "可能是限流" again.
+ *
+ * Matches both the modern host (pmc.ncbi.nlm.nih.gov) and the legacy path
+ * (www.ncbi.nlm.nih.gov/pmc/...). The PMCID regex is a fixed literal run against
+ * the URL string — never constructed from caller input — so no additional
+ * MCP-param RegExp hardening is needed.
+ *
+ * @returns null for non-PMC hosts or unparsable URLs (never throws).
+ */
+export function getPmcMirrorHint(url) {
+    let host;
+    let pathname;
+    try {
+        const parsed = new URL(url);
+        host = parsed.hostname.toLowerCase();
+        pathname = parsed.pathname.toLowerCase();
+    }
+    catch {
+        return null;
+    }
+    const isPmc = host === "pmc.ncbi.nlm.nih.gov" ||
+        (host === "www.ncbi.nlm.nih.gov" && pathname.includes("/pmc"));
+    if (!isPmc)
+        return null;
+    const pmcid = url.match(/PMC\d+/)?.[0];
+    if (pmcid) {
+        return `mirror_hint: pmc.ncbi.nlm.nih.gov blocks automated extraction (reCAPTCHA on static, 503 on render). Free official mirror with the same content: https://europepmc.org/article/PMC/${pmcid} — or NCBI E-utilities efetch with id=${pmcid}.`;
+    }
+    return `mirror_hint: pmc.ncbi.nlm.nih.gov blocks automated extraction (reCAPTCHA on static, 503 on render). Free official mirrors: europepmc.org (search by PMCID) or NCBI E-utilities efetch.`;
 }
 function rewriteRedditUrl(url) {
     try {
@@ -732,6 +820,23 @@ async function extractSingleInner(params, apiKey) {
     let html;
     let usedMode = "static";
     let renderError = null;
+    // PARAM-HONESTY: true only when `params.country` was actually included in the
+    // fetch call whose result is the content currently held in `html`/`usedMode`.
+    // fetchWithRender is called from three sites below — two forward params.country,
+    // one (the low-quality-score escalation) does not — and Wayback/GitBook/browser
+    // fallbacks never honor country regardless of what preceded them. Set precisely
+    // at each site rather than inferred from usedMode alone, since usedMode can end
+    // up "render" via the country-less escalation path too.
+    //
+    // Review round 2: audited by enumerating EVERY write site of `usedMode` in this
+    // function (grep `usedMode = `) rather than spot-fixing the one reported bug —
+    // three sibling `pickBetterHtml({ html: renderHtml, mode: "render" }, ...)` calls
+    // exist and only one of them (the "render still JS-heavy → try browser" branch)
+    // had forgotten to propagate this flag when the render candidate wins. The other
+    // two pickBetterHtml call sites in this function never offer the country-fetched
+    // render candidate at all (they compare pre-render static html against browser
+    // html), so `best.mode` can never resolve to "render" there — nothing to set.
+    let countryAppliedToServedContent = false;
     /** NOV-GB1: raw markdown from GitBook .md fallback, used to override mainContent extraction */
     let gitbookMdContent = null;
     /** Anti-bot provider detected during fetch (null = none detected) */
@@ -879,6 +984,8 @@ async function extractSingleInner(params, apiKey) {
         }
         else if (gitbookMdContent === null) {
             usedMode = "render";
+            // This branch's fetchWithRender call above forwarded params.country.
+            countryAppliedToServedContent = Boolean(params.country);
         }
     }
     else {
@@ -895,10 +1002,26 @@ async function extractSingleInner(params, apiKey) {
                     const body = typeof r.data === "string" ? r.data : null;
                     if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body))
                         return r;
-                    throw new Error("not-static");
+                    // FIX-A polish: a descriptive rejection reason (not a bare sentinel like
+                    // "not-static") so that if this leg ends up inside an AggregateError's
+                    // cause list (summarizeAggregateError), the surfaced cause is actionable
+                    // rather than an internal implementation detail.
+                    throw new Error("direct fetch returned bot-challenge/JS-heavy content, deferring to proxy");
                 }),
                 fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }),
-            ])
+            ]).catch(err => {
+                // FIX-A (2026-07-30): a bare Promise.any AggregateError leaks the literal
+                // "All promises were rejected" — zero actionable content (live report:
+                // extracting cell.com surfaced this raw string, agent guessed "可能是限流").
+                // Map it to a NovadaError carrying the DISTINCT underlying causes so the
+                // top-level catch + getSuggestedFix below can build a real agent_instruction.
+                // Non-aggregate rejections (e.g. a single fetch throwing directly) pass
+                // through completely unchanged — never mask the original error.
+                const agg = summarizeAggregateError(err);
+                if (!agg)
+                    throw err;
+                throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, agg.message, `url:${params.url} direct-fetch and proxy-fetch both rejected`);
+            })
             : fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }));
         const contentType = String(response.headers?.["content-type"] ?? "");
         if (isPdfResponse(params.url, contentType)) {
@@ -990,6 +1113,8 @@ async function extractSingleInner(params, apiKey) {
                     html = renderHtml;
                     usedMode = "render";
                     antiBotResolved = detectedAntiBot !== null;
+                    // The fetchWithRender call above (line ~1154) forwarded params.country.
+                    countryAppliedToServedContent = Boolean(params.country);
                 }
                 else if (isBrowserConfigured()) {
                     // render also JS-heavy — try full browser
@@ -1000,11 +1125,22 @@ async function extractSingleInner(params, apiKey) {
                     html = best.html;
                     usedMode = best.mode;
                     antiBotResolved = best.adopted;
+                    // Review round 2 (HIGH): unlike its two siblings above/below, this branch
+                    // offers the country-fetched renderHtml itself as a pickBetterHtml candidate
+                    // (mode:"render") — so when the browser candidate does NOT win (best.adopted
+                    // false, best.mode stays "render"), the SERVED content is that render fetch,
+                    // which forwarded params.country at line ~1154. Must be set here too, not
+                    // just in the two branches that skip pickBetterHtml entirely.
+                    if (usedMode === "render") {
+                        countryAppliedToServedContent = Boolean(params.country);
+                    }
                 }
                 else {
                     // render worked but still JS-heavy, use it (better than static)
                     html = renderHtml;
                     usedMode = "render";
+                    // Same fetchWithRender call as above — params.country was forwarded.
+                    countryAppliedToServedContent = Boolean(params.country);
                 }
             }
             catch (err) {
@@ -1172,6 +1308,10 @@ async function extractSingleInner(params, apiKey) {
     if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !quality.content_present && !html.startsWith("pdf_pages:") && !domainHint) {
         escalationAttempted = true;
         try {
+            // PARAM-HONESTY: this call deliberately does NOT forward params.country (pre-existing
+            // behavior, unchanged here) — so even if it sets usedMode="render" below,
+            // countryAppliedToServedContent must stay false; do not add country here as a side
+            // effect of this fix.
             const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract" });
             if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
                 const renderHtml = renderResponse.data;
@@ -1303,11 +1443,22 @@ async function extractSingleInner(params, apiKey) {
                     if (quality.score === 0 && wbMain.length > 0)
                         quality.score = 1;
                     waybackFallback = true;
+                    // PARAM-HONESTY: archive.org is fetched via fetchViaProxy with no country
+                    // option — served content no longer reflects any earlier country-aware
+                    // render, regardless of what usedMode still says.
+                    countryAppliedToServedContent = false;
                 }
             }
         }
         catch { /* Wayback unavailable — keep original result */ }
     }
+    // PARAM-HONESTY: country is accepted but silently dropped on the default auto/static
+    // path (fetchViaProxy has no country field — utils/http.ts) — types.ts:186 already
+    // says so in the schema description, but that fine print never reaches a runtime
+    // response. Fires only when the caller actually supplied country AND it genuinely
+    // was not applied to the content that ended up being served (usedMode/countryAppliedToServedContent
+    // are set precisely at each fetch call site above, not inferred/guessed here).
+    const countryNotApplied = Boolean(params.country) && !countryAppliedToServedContent;
     // max_chars truncation for markdown format
     // NOV-671: use table-preserving truncation — when a table sits in the last ~30%
     // of content and would be cut, we trim boilerplate above and keep the table intact.
@@ -1452,6 +1603,12 @@ async function extractSingleInner(params, apiKey) {
             ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
             ...(gitbookMdContent !== null ? { gitbook_md_fallback: true } : {}),
             ...(waybackFallback ? { wayback_fallback: true } : {}),
+            // PARAM-HONESTY: country accepted but not applied — fires only when the caller
+            // supplied it AND it was genuinely dropped (see countryNotApplied above).
+            ...(countryNotApplied ? {
+                country_warning: `country="${params.country}" accepted but not applied — resolved via mode="${usedMode}", not "render" (country only takes effect on render/js fetches; do not rely on it here)`,
+                agent_instruction: `country="${params.country}" was accepted but NOT applied to this extraction (resolved mode: "${usedMode}") — do not rely on it for geo-restricted content. Retry with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`,
+            } : {}),
             // NOV-668: Kufer availability data
             ...(kuferResult ? {
                 kufer_availability: {
@@ -1473,6 +1630,8 @@ async function extractSingleInner(params, apiKey) {
             hints.push("Content retrieved via GitBook .md fallback — the live page is JS-rendered; the raw markdown endpoint returned richer content.");
         if (waybackFallback)
             hints.push("Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.");
+        if (countryNotApplied)
+            hints.push(`country="${params.country}" accepted but not applied on this fetch (mode="${usedMode}") — retry with render="render" to have it honored.`);
         try {
             const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
             if (extractedHost === "trends24.in")
@@ -1498,6 +1657,11 @@ async function extractSingleInner(params, apiKey) {
             if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
                 hints.push(`Page is bot-protected. Try: render="browser" with NOVADA_BROWSER_WS, or format="html" for raw HTML with anti-bot bypass.`);
             }
+            // FIX-B (2026-07-30): PMC-specific mirror hint — mirrors the markdown path's
+            // buildContextualAgentInstruction wiring. Null (no-op) for every other host.
+            const pmcHint = getPmcMirrorHint(params.url);
+            if (pmcHint)
+                hints.push(pmcHint);
         }
         if (isTruncated)
             hints.push(`Content truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more.`);
@@ -1555,9 +1719,15 @@ async function extractSingleInner(params, apiKey) {
         ...(description ? [`description: ${headerLine(description)}`] : []),
         `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? ` | auto_escalated:true${autoEscalatedTo ? ` | escalated_to:${autoEscalatedTo}` : ""}` : ""}${detectedAntiBot ? ` | anti_bot:${detectedAntiBot} | resolved:${antiBotResolved}` : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
         ``,
-        `---`,
-        ``,
     ];
+    // PARAM-HONESTY: country accepted but not applied — fires only when supplied AND
+    // genuinely dropped (countryNotApplied computed above from the actual fetch path).
+    if (countryNotApplied) {
+        lines.push(`## Warnings`, JSON.stringify([
+            `country="${params.country}" accepted but not applied — resolved via mode="${usedMode}", not "render" (country only takes effect on render/js fetches; do not rely on it here)`,
+        ]), ``);
+    }
+    lines.push(`---`, ``);
     // Requested Fields block (before Structured Data)
     if (fieldResults && fieldResults.length > 0) {
         const allUnresolved = fieldResults.every(r => r.source === "unresolved");
@@ -1756,7 +1926,12 @@ async function extractSingleInner(params, apiKey) {
     });
     lines.push(``);
     lines.push(`## Agent Action`);
-    lines.push(`agent_instruction: ${agentInstruction}`);
+    // PARAM-HONESTY: appended only when country was supplied AND genuinely not applied
+    // (see countryNotApplied above) — never fires when country was honored via render/js.
+    const countryInstruction = countryNotApplied
+        ? ` country="${params.country}" was accepted but NOT applied (resolved mode: "${usedMode}") — do not rely on it for geo-restricted content. Retry with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`
+        : "";
+    lines.push(`agent_instruction: ${agentInstruction}${countryInstruction}`);
     const mdOutput = lines.join("\n");
     // Wire output save — best-effort, never breaks the tool.
     // Prepend the file path to the HEADER so agents that truncate long responses still see it.

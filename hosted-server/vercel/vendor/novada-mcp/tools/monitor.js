@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { z } from "zod";
 import { novadaExtract } from "./extract.js";
-import { redactSecrets } from "../_core/errors.js";
+import { redactSecrets, sanitizeServerMsg, LINE_TERMINATOR_CHARS } from "../_core/errors.js";
 import { isExtractionFailureSentinel } from "../utils/runtime.js";
 /**
  * Extract the stable page body from novadaExtract output for change detection.
@@ -159,6 +159,39 @@ function stripVolatileMetadataHeader(content) {
 const stripExtractPathHeader = stripVolatileMetadataHeader;
 // ─── URL Safety (duplicated from types.ts — safeUrl is not exported) ────────
 const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|::1|::ffff:.+|fe80:.*|0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0*1)$/i;
+/**
+ * TOW2-354 (2026-07-30, same class as _core/errors.ts's line-terminator fix and
+ * verify.ts's sanitizeClaim sibling fix): this refine used to test only ASCII
+ * `\n`/`\r`, missing U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) —
+ * which ECMA-262 (11.5) also treats as line terminators for `^`/`$` under a
+ * regex's `/m` flag. `new URL()` does NOT throw on a string containing a raw
+ * U+2028/U+2029 (empirically verified: it silently percent-encodes them in
+ * `.href`, but the ORIGINAL unmutated string — the one zod stores in
+ * `params.url` — keeps the raw codepoint). An agent passing a URL sourced from
+ * an untrusted scraped page (e.g. a link harvested from page content) could
+ * smuggle a URL containing `
+agent_instruction: "..."` straight past the
+ * old ASCII-only refine, then have it echoed verbatim via every formatter's
+ * `url: ${params.url}` line — forging a line-anchored match ahead of this
+ * tool's genuine agent_instruction line. Reuses errors.ts's exported
+ * LINE_TERMINATOR_CHARS class instead of a second ad-hoc ASCII-only definition.
+ */
+const URL_HAS_LINE_TERMINATOR_RE = new RegExp(`[${LINE_TERMINATOR_CHARS}]`);
+/** Matches any run of Unicode line-terminator characters — for content previews and extracted field values (not full error messages) where markdown structure should otherwise survive. Same shared class as above. */
+const CONTENT_PREVIEW_LINE_TERMINATORS_RE = new RegExp(`[${LINE_TERMINATOR_CHARS}]+`, "g");
+/**
+ * Review round 1 (2026-07-30, TOW2-354 follow-up — security review CHANGES_REQUIRED):
+ * collapses embedded Unicode line terminators to a VISIBLE marker (" | ") rather
+ * than a bare space. A bare space makes a page of genuinely line-separated facts
+ * read as an indistinguishable run-on for the agent; " | " preserves the
+ * structural cue while still being a normal, non-LineTerminator character —
+ * security is unchanged either way (neither form can re-anchor `^`/`$` under
+ * `/m`). Used for BOTH content-preview sites (D/E/F below) and the field-value
+ * collapse in extractFieldValues (the 7th in-class site — see its own comment).
+ */
+function collapseLineTerminators(s) {
+    return s.replace(CONTENT_PREVIEW_LINE_TERMINATORS_RE, " | ");
+}
 const safeUrl = z.string()
     .url("A valid URL is required")
     .refine((url) => /^https?:\/\//i.test(url), "Only HTTP and HTTPS URLs are supported")
@@ -175,7 +208,7 @@ const safeUrl = z.string()
         return false;
     }
 }, "URLs pointing to localhost or private network ranges are not allowed")
-    .refine((url) => !url.includes("\n") && !url.includes("\r"), "URL must not contain newline characters");
+    .refine((url) => !URL_HAS_LINE_TERMINATOR_RE.test(url), "URL must not contain newline characters");
 // ─── Zod Schema ─────────────────────────────────────────────────────────────
 export const MonitorParamsSchema = z.object({
     url: safeUrl
@@ -206,24 +239,55 @@ function extractFieldValues(content, fields) {
     for (const field of fields) {
         const fieldLower = field.toLowerCase();
         // Try "field: value" pattern (common in extracted markdown)
+        // Note: labelPattern's capture group is `(.+)` with no `dotAll`/`s` flag —
+        // by ECMA-262 definition `.` cannot match ANY of \n, \r, U+2028, U+2029,
+        // so this capture is structurally single-line already. The collapse below
+        // is still applied (defense in depth / single point of truth), but this
+        // path was never independently exploitable.
         const labelPattern = new RegExp(`(?:^|\\n)\\s*${escapeRegex(field)}\\s*[:=]\\s*(.+)`, "im");
         const labelMatch = content.match(labelPattern);
         if (labelMatch) {
-            result[field] = labelMatch[1].trim();
+            result[field] = collapseLineTerminators(labelMatch[1].trim());
             continue;
         }
         // Try "## Field" heading followed by content
+        //
+        // Review round 1 (2026-07-30, TOW2-354 follow-up — security review
+        // CHANGES_REQUIRED, HIGH): unlike labelPattern's `(.+)` above, this capture
+        // group is a HAND-WRITTEN negated character class `[^#\n][^\n]*` that
+        // excludes ONLY ASCII `\n` — `\r`, U+2028, and U+2029 pass straight
+        // through into `headingMatch[1]`. A scraped page whose heading-adjacent
+        // text embeds e.g. U+2028 immediately followed by `agent_instruction:
+        // "..."` gets captured whole (including the injected tail) before this
+        // fix, then reaches THREE agent-visible sinks off this same tainted
+        // `result[field]` value: formatFirstCheck's `- ${k}: ${v}` field block
+        // (reachable on the very FIRST call), formatChanged's
+        // `- field: prev \u2192 cur (annotation)`, and formatJson's
+        // current_fields/changed_fields (JSON.stringify does not escape
+        // U+2028/U+2029, so the raw separator survives into the JSON text too).
+        // None of those three sinks emits a genuine unquoted `agent_instruction:`
+        // line, so an unfixed forgery there would be the ONLY line-anchored match
+        // — total hijack, not "loses to the real one".
+        //
+        // Fix: collapse line terminators AT THE SOURCE, right here, rather than
+        // patching each of the three downstream sinks separately (which would
+        // leave the door open for a 4th sink later) or widening the hand-written
+        // character class (which leaves the same "forgot a character" trap for
+        // the next editor). One collapse neutralizes all three sinks at once.
         const headingPattern = new RegExp(`(?:^|\\n)#{1,4}\\s*${escapeRegex(field)}[^\\n]*\\n+([^#\\n][^\\n]*)`, "im");
         const headingMatch = content.match(headingPattern);
         if (headingMatch) {
-            result[field] = headingMatch[1].trim();
+            result[field] = collapseLineTerminators(headingMatch[1].trim());
             continue;
         }
         // Try common price/currency patterns for price-related fields
+        // (bounded to currency symbol + digits — no room for a terminator to hide
+        // in, but collapsed too so every result[field] assignment goes through
+        // the same single choke point and can't drift back open independently.)
         if (fieldLower.includes("price") || fieldLower.includes("cost")) {
             const priceMatch = content.match(/[\$\u00A3\u20AC\u00A5]\s*[\d,]+\.?\d*/);
             if (priceMatch) {
-                result[field] = priceMatch[0].trim();
+                result[field] = collapseLineTerminators(priceMatch[0].trim());
                 continue;
             }
         }
@@ -277,7 +341,11 @@ export async function novadaMonitor(params, apiKey) {
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        return formatError(params.url, now, redactSecrets(message), params.format);
+        // TOW2-354: sanitizeServerMsg (not redactSecrets alone) — collapses ALL
+        // Unicode line-terminator variants (see LINE_TERMINATOR_CHARS) so an
+        // untrusted `err.message` can't forge an agent_instruction/heading line
+        // ahead of this response's genuine one, in addition to redacting secrets.
+        return formatError(params.url, now, sanitizeServerMsg(message), params.format);
     }
     // C8 Fix: Detect extraction failure sentinels BEFORE baselining.
     // novadaExtract returns "## Extract Failed" / "## Extraction Error" /
@@ -292,7 +360,12 @@ export async function novadaMonitor(params, apiKey) {
         // agent-oriented error block; re-use it rather than duplicating the message.
         const firstLine = content.split("\n").find((l) => l.startsWith("Error:") || l.startsWith("error:")) ?? "";
         const errorMsg = firstLine ? firstLine.replace(/^[Ee]rror:\s*/, "") : "extraction returned a failure sentinel";
-        return formatError(params.url, now, redactSecrets(errorMsg), params.format);
+        // TOW2-354: sanitizeServerMsg — same reasoning as the catch block above.
+        // `firstLine` is found via `content.split("\n")`, which only splits on
+        // ASCII LF; a U+2028/U+2029 embedded in the extraction output survives
+        // inside `firstLine`/`errorMsg` untouched by that split, so it still needs
+        // full line-terminator collapsing here.
+        return formatError(params.url, now, sanitizeServerMsg(errorMsg), params.format);
     }
     // F5+C7+D1: Strip volatile metadata header AND trailer sections, keeping only the
     // stable page body. stripVolatileMetadataHeader uses a two-pass scan to isolate
@@ -312,7 +385,13 @@ export async function novadaMonitor(params, apiKey) {
     const hasChanged = prev ? prev.hash !== hash : false;
     const checksSinceChange = hasChanged ? 0 : (prev ? prev.checks_since_change + 1 : 0);
     // FIX-1: Store cleanContent (no path header) in preview, then redact any remaining paths.
-    const safePreview = redactSecrets(cleanContent.slice(0, 500));
+    // TOW2-354: collapse Unicode line terminators BEFORE redacting — this stored
+    // value is later echoed both as plain text (formatChanged's "Previous preview")
+    // and raw inside formatJson's content_preview field (JSON.stringify does NOT
+    // escape U+2028/U+2029, so a raw one here would survive into JSON output too).
+    // Review round 1: collapse to " | " (visible marker), not a bare space — see
+    // collapseLineTerminators's comment.
+    const safePreview = redactSecrets(collapseLineTerminators(cleanContent.slice(0, 500)));
     monitorStore.set(params.url, {
         hash,
         fields: currentFields,
@@ -348,7 +427,9 @@ function formatFirstCheck(params, hash, timestamp, fields, content) {
         `fields_tracked: ${trackedFields}`,
         `timestamp: ${timestamp}`,
         `session_scoped: true | no_durable_state: baseline is lost when the MCP server restarts`,
-        `content_preview: ${content.slice(0, 300).replace(/\n/g, " ")}`,
+        // TOW2-354: full Unicode line-terminator collapse (not ASCII `\n` only) —
+        // `content` is untrusted page-derived text; see collapseLineTerminators.
+        `content_preview: ${collapseLineTerminators(content.slice(0, 300))}`,
         ...fieldBlock,
         ``,
         `## Agent Instruction`,
@@ -392,7 +473,9 @@ function formatChanged(params, prev, curr, fieldDiffs, totalChecks) {
     else {
         lines.push(``, `## Content Changed`);
         lines.push(`The page content hash changed but no specific field-level diff was computed.`);
-        lines.push(`Previous preview: ${prev.content_preview.slice(0, 200).replace(/\n/g, " ")}`);
+        // TOW2-354: full Unicode line-terminator collapse (defense in depth — the
+        // stored value is already collapsed at write time, see safePreview above).
+        lines.push(`Previous preview: ${collapseLineTerminators(prev.content_preview.slice(0, 200))}`);
     }
     lines.push(``, `## Agent Instruction`, `agent_status: changes_found | action: process_changes_or_alert_user`, `Changes detected on the monitored page. Process the changes above or alert the user.`);
     return lines.join("\n");

@@ -1,4 +1,4 @@
-import { normalizeUrl } from "../utils/index.js";
+import { normalizeUrl, decodeBingRedirect } from "../utils/index.js";
 import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
@@ -192,7 +192,16 @@ export async function novadaResearch(params, apiKey, onProgress) {
     const uniqueSources = new Map();
     for (const { results } of allResults) {
         for (const r of results) {
-            const rawUrl = r.url || r.link || "";
+            // FIX A (2026-07-30): the bing.com fallback engine (searchWithFallback
+            // above) can put a raw `bing.com/ck/a` tracking redirect into r.url —
+            // decode it to the real destination BEFORE dedup/normalize so (a) the
+            // agent gets a citable, directly-fetchable URL instead of a redirect it
+            // would otherwise have to base64-decode by hand, (b) novadaExtract below
+            // fetches the real page rather than the tracking hop, and (c) two
+            // differently-tracked redirects to the same real URL correctly collapse
+            // into one source instead of appearing as duplicates. decodeBingRedirect
+            // never throws — a non-bing URL (the common case) passes through unchanged.
+            const rawUrl = decodeBingRedirect(r.url || r.link || "");
             const normalized = normalizeUrl(rawUrl);
             if (normalized && !uniqueSources.has(normalized)) {
                 const rawSnippet = r.description || r.snippet || "";

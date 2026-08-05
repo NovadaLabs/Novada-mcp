@@ -14,6 +14,23 @@ export { detectJsHeavyContent } from "../utils/index.js";
  */
 export declare function novadaExtract(params: ExtractParams, apiKey?: string): Promise<string>;
 /**
+ * FIX-B (2026-07-30): pmc.ncbi.nlm.nih.gov hard-blocks automated extraction
+ * (reCAPTCHA on the static fetch; the Web Unblocker render tier 503s on this host).
+ * PMC full texts are freely available via two official mirrors that are NOT blocked
+ * the same way: europepmc.org (same PMCID, different host) and NCBI E-utilities
+ * efetch. This is a HINT ONLY — no auto-reroute this round (owner decision,
+ * 2026-07-30) — so a blocked/failed extraction can tell the agent where the free
+ * mirror lives instead of leaving it to guess "可能是限流" again.
+ *
+ * Matches both the modern host (pmc.ncbi.nlm.nih.gov) and the legacy path
+ * (www.ncbi.nlm.nih.gov/pmc/...). The PMCID regex is a fixed literal run against
+ * the URL string — never constructed from caller input — so no additional
+ * MCP-param RegExp hardening is needed.
+ *
+ * @returns null for non-PMC hosts or unparsable URLs (never throws).
+ */
+export declare function getPmcMirrorHint(url: string): string | null;
+/**
  * TOW2-307: True when a text body reads as markdown-structured content — it has at
  * least one ATX heading (`# Heading`), or is long enough to be document-like
  * (>=40 words). Used to decide whether a `text/plain` response should be treated
