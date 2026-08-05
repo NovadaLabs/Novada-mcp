@@ -33,7 +33,7 @@ test("buildUndeliveredQuery: filters to undelivered + attributable + tool_call, 
   assert.ok(q.includes("hq_identity=not.is.null"), "only attributable rows");
   assert.ok(q.includes("event_type=eq.tool_call"), "Phase 1 scope = tool_call");
   assert.ok(q.includes("rejection_stage=neq.pre_auth"), "exclude pre-auth junk (inline never pushes it)");
-  assert.ok(q.includes("order=ts.asc"), "oldest first");
+  assert.ok(q.includes("order=ts.desc"), "newest first — recent real rows never park behind old junk");
   assert.ok(q.includes("limit=100"), "bounded batch");
   assert.ok(q.includes(`ts=gte.${encodeURIComponent("2026-08-01T00:00:00.000Z")}`), "window bound, encoded");
 });

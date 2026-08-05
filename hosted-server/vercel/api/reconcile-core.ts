@@ -45,6 +45,10 @@ export function isCronAuthorized(authHeader: string | undefined | null, secret: 
  *                                         would resend unattributable junk to HQ AND clog the
  *                                         oldest-first queue behind the canary's bad-key bursts.
  *   - ts >= sinceIso                    — bound the scan window (avoid ancient rows)
+ *   - order ts.DESC (newest first)      — a fresh real failure must reach HQ within one
+ *                                         tick (~60s) even while a large OLD backlog (e.g.
+ *                                         the canary's rate-limit junk) is still draining;
+ *                                         oldest-first would park recent rows behind it.
  * Built as a literal query string (not URLSearchParams) so PostgREST operators like
  * `in.(a,b)` and `not.is.null` are not over-encoded.
  */
@@ -55,7 +59,7 @@ export function buildUndeliveredQuery(baseUrl: string, sinceIso: string, limit: 
     "event_type=eq.tool_call",
     "rejection_stage=neq.pre_auth",
     `ts=gte.${encodeURIComponent(sinceIso)}`,
-    "order=ts.asc",
+    "order=ts.desc",
     `limit=${limit}`,
   ].join("&");
   return `${baseUrl.replace(/\/+$/, "")}/rest/v1/mcp_events?${qs}`;

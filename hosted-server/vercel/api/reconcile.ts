@@ -87,7 +87,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   try {
     const result = await drainRows(rows, {
       push: (row, eventTsMs) => pushToHq(row, pushEnv, eventTsMs, 1),
-      concurrency: 10,
+      concurrency: 20, // higher parallelism so a batch of slow (timeout-bound) junk pushes still clears within the 50s budget
       budgetMs: DRAIN_BUDGET_MS,
     });
     return send(res, 200, { scanned: result.scanned, attempted: result.attempted });
