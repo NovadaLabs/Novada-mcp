@@ -401,15 +401,25 @@ const HTML_HEADERS: Record<string, string> = {
  * same checks); doing so would let this header itself green-light an
  * attacker-chosen redirect target.
  */
+// Only https/http origins made of hostname-legal chars + optional :port may be
+// spliced into the CSP. WHATWG URL.origin can still carry CSP-meaningful
+// punctuation (e.g. `https://evil.com;x` — the host parser accepts `;`), and
+// registration is public (DCR), so treat the validated redirect_uri's origin as
+// UNTRUSTED input to a security header: allowlist the shape, else fall back to
+// plain 'self'. Defense-in-depth independent of validateRedirectUri (TOW2-377 review).
+const SAFE_ORIGIN_RE = /^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?$/;
+
 export function buildAuthorizeCsp(validatedRedirectUri: string): string {
   let formAction = "'self'";
   try {
-    formAction = `'self' ${new URL(validatedRedirectUri).origin}`;
+    const origin = new URL(validatedRedirectUri).origin;
+    if (SAFE_ORIGIN_RE.test(origin)) {
+      formAction = `'self' ${origin}`;
+    }
+    // origin === "null" (opaque scheme) or containing CSP-meaningful punctuation
+    // → not allowlisted → stay 'self' (fail closed, never widen on junk).
   } catch {
-    // Malformed input: keep plain 'self'. Unreachable via the public
-    // handlers today (redirect_uri is URL-parsed by validateRedirectUri at
-    // registration and exact-string-matched again at authorize time), but
-    // this function fails safe rather than throwing if that ever changes.
+    // Malformed input: keep plain 'self'. Fails safe rather than throwing.
   }
   return `default-src 'none'; style-src 'unsafe-inline'; form-action ${formAction}; frame-ancestors 'none'`;
 }

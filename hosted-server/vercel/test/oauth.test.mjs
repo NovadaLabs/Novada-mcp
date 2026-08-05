@@ -809,6 +809,16 @@ test("T33 buildAuthorizeCsp: widens form-action to the redirect_uri's origin; ma
 // page and then resubmits with a correct key would hit the SAME silently-
 // broken redirect this task fixes for the initial GET render. ────────────────
 
+test("T35 buildAuthorizeCsp rejects a redirect origin carrying CSP-meaningful punctuation (injection defense)", () => {
+  // WHATWG URL host parser accepts ';' — origin becomes "https://evil.com;x".
+  const csp = buildAuthorizeCsp("https://evil.com;x/cb");
+  assert.ok(!csp.includes("evil.com;x"), "must not splice a ;-bearing origin into the CSP");
+  assert.ok(csp.includes("form-action 'self';") || /form-action 'self'; frame-ancestors/.test(csp),
+    "unsafe origin must fall back to plain 'self'");
+  // sanity: a clean origin still widens
+  assert.ok(buildAuthorizeCsp("https://claude.ai/api/mcp/auth_callback").includes("form-action 'self' https://claude.ai"));
+});
+
 test("T34 authorize POST invalid-key re-render widens form-action to the validated redirect origin (TOW2-377 retry path)", async () => {
   const deps = makeDeps({ verifyKey: async () => ({ valid: false, verified: true }) });
   const clientId = await registerClient(deps, ["https://claude.ai/api/mcp/auth_callback"]);
