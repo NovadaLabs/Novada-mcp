@@ -277,13 +277,43 @@ type PollOutcome =
   | { kind: "done"; items: DownloadResultItem[] }
   | { kind: "pending"; taskId: string };
 
+// Record keys extractRecords() (below) treats as "this object wraps a records
+// array". Single source of truth: pollForResult's TOW2-382 html-page guard
+// reuses this SAME list (fix-round-2 HIGH#2) so "does this download response
+// have real records under some other key" can never diverge from what
+// extractRecords() itself would actually pull out.
+const RECORD_ARRAY_KEYS = ["organic_results", "organic", "results", "items", "records", "data", "products", "posts"] as const;
+
+/**
+ * True when the caller's submit params explicitly requested an HTML-inclusive
+ * scraper response (json=2 "JSON+HTML" or json=3 "HTML" — see submitScrapeTask's
+ * flat-format branch, ~line 173). `json` is an unvalidated pass-through param,
+ * so arbitrary callers may send it as a number or a string — accept both.
+ * Fix-round-2 HIGH#1: when true, a {filename,html} download body is NOT the
+ * TOW2-382 bug — it is exactly what the caller asked for — so pollForResult
+ * must not classify it as API_DOWN/download_html_page.
+ */
+function isHtmlRequested(opParams: Record<string, unknown> | undefined): boolean {
+  const j = opParams?.["json"];
+  return j === 2 || j === 3 || j === "2" || j === "3";
+}
+
 /**
  * Poll the download endpoint until the task completes or `timeoutMs` elapses.
  * TOW2-257 Phase 1: `timeoutMs` defaults to POLL_TIMEOUT_MS (unchanged local
  * behavior) but callers pass `syncPollCeilingMs()` so hosted gets the short
  * ~10s first-try ceiling instead of always riding the full 45s.
+ * Fix-round-2 (TOW2-382 HIGH#1): `htmlRequested` tells the TOW2-382 html-page
+ * guard below whether the caller explicitly asked for HTML — see
+ * isHtmlRequested(). Defaults to false so every other existing call site
+ * behavior (there is only one — novadaScrape) is unaffected unless it opts in.
  */
-async function pollForResult(apiKey: string, taskId: string, timeoutMs: number = POLL_TIMEOUT_MS): Promise<PollOutcome> {
+async function pollForResult(
+  apiKey: string,
+  taskId: string,
+  timeoutMs: number = POLL_TIMEOUT_MS,
+  htmlRequested: boolean = false,
+): Promise<PollOutcome> {
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
   // H3: safe version of URL for error messages — strips the apikey value to prevent key exposure
   const safeUrl = url.replace(/apikey=[^&]+/, "apikey=***");
@@ -357,6 +387,42 @@ async function pollForResult(apiKey: string, taskId: string, timeoutMs: number =
       // Direct result object — Google SERP and similar formats return organic/search_metadata at top level
       if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {
         return { kind: "done", items: [{ spider_code: 200 as const, rest: bErr }] };
+      }
+      // TOW2-382 / Sentry NOVADA-MCP-HOSTED-4 (live in prod 0.9.34, 141x since
+      // 2026-07-03): the download endpoint sometimes serves a raw HTML page —
+      // { filename, html } — instead of structured records, because the target
+      // platform returned a challenge/consent/interstitial page (e.g. Perplexity,
+      // or any JS-heavy/anti-bot-gated platform) rather than the requested
+      // content. Class fix: this triggers on the RESPONSE SHAPE (html + filename
+      // present, no usable records elsewhere in the body), not on any single
+      // platform or operation. The original bare `Error` below would skip
+      // makeNovadaError entirely, so the hosted dispatch logged it as an
+      // error-level Sentry ALERT instead of retryable upstream weather (a
+      // breadcrumb) — and the agent received a raw-HTML dump instead of an
+      // actionable message. Map to API_DOWN (transient/retryable), matching the
+      // 10001/10002/10003/27203 precedent above; never echo the HTML itself.
+      const hasHtmlPage =
+        typeof bErr.html === "string" && bErr.html.length > 0 &&
+        typeof bErr.filename === "string" && bErr.filename.length > 0;
+      // Fix-round-2 HIGH#2: "has records" means a non-empty array under ANY key
+      // extractRecords() recognizes (RECORD_ARRAY_KEYS above), not just `data`.
+      // A present-but-empty array does NOT count (LOW item, folded in here) —
+      // an empty `data: []` alongside an html page is still the TOW2-382 bug.
+      const hasUsableRecords = RECORD_ARRAY_KEYS.some(key => {
+        const v = bErr[key];
+        return Array.isArray(v) && v.length > 0;
+      });
+      // Fix-round-2 HIGH#1: never fire when the caller explicitly requested an
+      // HTML-inclusive response (json=2/3) — that's the caller getting exactly
+      // what they asked for, not the TOW2-382 bug. Preserve prior behavior
+      // exactly in that case (fall through to the bare-Error catch-all below).
+      // A proper json=2/3 HTML-return path is a separate follow-up.
+      if (hasHtmlPage && !hasUsableRecords && !htmlRequested) {
+        throw makeNovadaError(
+          NovadaErrorCode.API_DOWN,
+          `Scraper backend returned an HTML page instead of structured data for this operation — the target platform likely served a challenge/consent/interstitial page rather than the requested content. Retry once; if it persists, this is a Novada-side extraction gap for this platform — not your request or parameters.`,
+          "download_html_page",
+        );
       }
       throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${sanitizeServerMsg(errMsg || JSON.stringify(bErr).slice(0, 150))}`);
     }
@@ -812,7 +878,10 @@ function extractRecords(data: unknown): Record<string, unknown>[] {
   }
   if (data !== null && typeof data === "object") {
     const d = data as Record<string, unknown>;
-    for (const key of ["organic_results", "organic", "results", "items", "records", "data", "products", "posts"]) {
+    // Fix-round-2 (TOW2-382 HIGH#2): RECORD_ARRAY_KEYS is the single source of
+    // truth, also reused by pollForResult's html-page guard above — never
+    // hardcode a second, divergent key list here.
+    for (const key of RECORD_ARRAY_KEYS) {
       if (Array.isArray(d[key])) return extractRecords(d[key]);
     }
     return [d];
@@ -1492,9 +1561,15 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     // unchanged 45s ceiling on local (syncPollCeilingMs()) — and capture the
     // actual value used so the pending-envelope's elapsed clause is honest.
     const ceilingMs = syncPollCeilingMs();
+    // Fix-round-2 (TOW2-382 HIGH#1): tell pollForResult whether THIS caller's
+    // raw submit params asked for an HTML-inclusive response (json=2/3), so a
+    // {filename,html} download body in that case is never misclassified as
+    // the TOW2-382 bug. opParams here is the caller's raw params (pre
+    // submitScrapeTask's internal json=1 auto-fill) — see isHtmlRequested().
+    const htmlRequested = isHtmlRequested(opParams as Record<string, unknown> | undefined);
     let pollOutcome: PollOutcome;
     try {
-      pollOutcome = await pollForResult(apiKey, submitOutcome.taskId, ceilingMs);
+      pollOutcome = await pollForResult(apiKey, submitOutcome.taskId, ceilingMs, htmlRequested);
     } catch (error) {
       if (error instanceof AxiosError) {
         throw new Error(`Failed to retrieve scraper results: ${sanitizeServerMsg(error.message)}`);
