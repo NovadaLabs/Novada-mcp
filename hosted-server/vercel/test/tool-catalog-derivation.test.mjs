@@ -169,15 +169,37 @@ test("novada_scrape_amazon: real core tool, not hidden, reachable via ?groups=ec
 // TOOLS/HOSTED_HIDDEN/HOSTED_ROUTABLE_ALIASES data, so a future revert of the computation
 // itself — not just a change to its input data — fails this test loudly.
 
-const hostedRoutableAliasesSlice = sliceBetween(
-  "const HOSTED_ROUTABLE_ALIASES = new Set<string>([",
-  "\n]);",
-  "HOSTED_ROUTABLE_ALIASES",
-);
-// The block spreads `...NPM_HIDDEN_ALIASES` (not a quoted string, so namesIn() skips it)
-// plus literal additions (today: just "novada_verify") — reconstruct the real runtime
-// Set the exact same way mcp.ts builds it.
-const HOSTED_ROUTABLE_ALIASES = new Set([...NPM_HIDDEN_ALIASES, ...namesIn(hostedRoutableAliasesSlice)]);
+/**
+ * Extract and EXECUTE mcp.ts's real HOSTED_NEVER_ROUTABLE_NPM_ALIASES +
+ * HOSTED_ROUTABLE_ALIASES expressions (not a reimplementation) against the given
+ * NPM_HIDDEN_ALIASES input. Mirrors test/hosted-hidden-fail-closed.test.mjs's helper
+ * of the same name.
+ *
+ * This file used to reconstruct HOSTED_ROUTABLE_ALIASES by hand as
+ * `new Set([...NPM_HIDDEN_ALIASES, ...namesIn(hostedRoutableAliasesSlice)])` — the
+ * UNFILTERED, pre-fix spread that omits the HOSTED_NEVER_ROUTABLE_NPM_ALIASES filter
+ * mcp.ts actually applies (see hosted-hidden-fail-closed.test.mjs's part (d) tests for
+ * the regression that filter guards against: novada_scraper_task_mgmt leaking through
+ * as routable, canary run 31300731838 / TOW2-349). That hand reconstruction only
+ * avoided a false-pass here because this file's own assertions never probed
+ * novada_scraper_task_mgmt — extract-and-execute keeps this file's
+ * HOSTED_ROUTABLE_ALIASES in lockstep with production even if the filter expression
+ * changes again.
+ */
+function computeHostedRoutableAliasesFromSource(npmHiddenAliases) {
+  const code = sliceBetween(
+    "const HOSTED_NEVER_ROUTABLE_NPM_ALIASES = new Set(",
+    "\n]);",
+    "HOSTED_ROUTABLE_ALIASES",
+  ).replace("Set<string>", "Set");
+  const fn = new Function(
+    "NPM_HIDDEN_ALIASES",
+    `${code}\n]);\nreturn HOSTED_ROUTABLE_ALIASES;`,
+  );
+  return fn(npmHiddenAliases);
+}
+
+const HOSTED_ROUTABLE_ALIASES = computeHostedRoutableAliasesFromSource(NPM_HIDDEN_ALIASES);
 
 /**
  * Extract and EXECUTE mcp.ts's real `listedOnHosted` / `HOSTED_HIDDEN_ALIASES`
@@ -297,4 +319,99 @@ test("hosted-server/vercel/README.md states the full core registry count ('38-to
     new RegExp(`${CORE_TOOL_NAMES.size}[- ]tool`),
     `hosted-server/vercel/README.md must state "${CORE_TOOL_NAMES.size}-tool" (the full npm-package registry size) — not a stale hand-count`,
   );
+});
+
+// ─── (i) NPM_HIDDEN_ALIASES cardinality tripwire (class-not-instance structural
+// defense — security-review follow-up, 2026-08-09, on top of the
+// HOSTED_NEVER_ROUTABLE_NPM_ALIASES fix in commit 6561658) ────────────────────────
+//
+// Root problem this guards against: `HOSTED_ROUTABLE_ALIASES` folds in
+// `...NPM_HIDDEN_ALIASES` (npm core's OWN "dispatched-but-unlisted" set) minus a
+// deny-set (`HOSTED_NEVER_ROUTABLE_NPM_ALIASES`, currently just
+// novada_scraper_task_mgmt). That deny-set is hand-enumerated — if npm core ever
+// adds a 20th HIDDEN_ALIASES member (e.g. a new destructive/account-mutation
+// backward-compat alias), it silently defaults to ROUTABLE on hosted unless a human
+// explicitly adds it to the deny-set first. This is exactly the "hardcoding one
+// member of a class instead of enumerating the class" failure mode: the fix for
+// novada_scraper_task_mgmt (one instance) didn't add a structural check that a
+// FUTURE new member of NPM_HIDDEN_ALIASES (the class) gets the same triage.
+//
+// This test pins NPM_HIDDEN_ALIASES.size AND requires every member not in the deny
+// list to be an explicitly reviewed, enumerated routable name (a table, not a
+// branch). If npm adds a 20th HIDDEN_ALIASES member, this test fails loudly,
+// forcing a human to triage "hosted-routable (add to REVIEWED_HOSTED_ROUTABLE_
+// NPM_ALIASES below) or never-ported (add to HOSTED_NEVER_ROUTABLE_NPM_ALIASES in
+// mcp.ts)?" instead of it silently riding through the `...NPM_HIDDEN_ALIASES`
+// spread as routable. Mirrors the "HOSTED_HIDDEN has exactly 8 entries (pinned)"
+// guard above (test (h)) — same pattern, applied to npm core's hidden-alias class
+// instead of hosted's own never-ported class.
+//
+// NPM_HIDDEN_ALIASES itself is the REAL imported Set from the vendored core.js
+// (same import at the top of this file used by every other test here) — this is
+// NOT a hardcoded private copy of the 19 names standing in as the source of truth.
+// The pin is on `.size` plus an explicit reviewed allow/deny enumeration of the
+// CURRENT members, so a genuinely new member (not just a reshuffled existing one)
+// is what trips this test.
+
+const hostedNeverRoutableSlice = sliceBetween(
+  "const HOSTED_NEVER_ROUTABLE_NPM_ALIASES = new Set([",
+  "]);",
+  "HOSTED_NEVER_ROUTABLE_NPM_ALIASES",
+);
+const HOSTED_NEVER_ROUTABLE_NPM_ALIASES = new Set(namesIn(hostedNeverRoutableSlice));
+
+// Explicitly reviewed as safe to route on hosted (backward-compat aliases that fold
+// into novada_extract/novada_account/novada_proxy/novada_scrape — see
+// npm-package/src/core.ts's HIDDEN_ALIASES comment for what each folds into). This
+// is the full current NPM_HIDDEN_ALIASES membership MINUS
+// HOSTED_NEVER_ROUTABLE_NPM_ALIASES (today: just novada_scraper_task_mgmt).
+const REVIEWED_HOSTED_ROUTABLE_NPM_ALIASES = new Set([
+  // → novada_extract(format:"html")
+  "novada_unblock",
+  // → novada_account(section=...)
+  "novada_health",
+  "novada_health_all",
+  "novada_wallet_balance",
+  "novada_wallet_usage_record",
+  "novada_traffic_daily",
+  "novada_plan_balance_all",
+  "novada_capture_logs",
+  "novada_account_summary",
+  // → novada_proxy(type=...)
+  "novada_proxy_residential",
+  "novada_proxy_isp",
+  "novada_proxy_datacenter",
+  "novada_proxy_mobile",
+  "novada_proxy_static",
+  "novada_proxy_dedicated",
+  // → novada_scrape / benign stubs
+  "novada_scraper_submit",
+  "novada_scraper_status",
+  "novada_scraper_result",
+]);
+
+test("NPM_HIDDEN_ALIASES has exactly 19 entries (pinned)", () => {
+  assert.equal(
+    NPM_HIDDEN_ALIASES.size,
+    19,
+    `npm core's HIDDEN_ALIASES size changed from 19 — a NEW hidden alias must be triaged by a human: either add it to HOSTED_NEVER_ROUTABLE_NPM_ALIASES in mcp.ts (if it's a never-ported/destructive tool) or to REVIEWED_HOSTED_ROUTABLE_NPM_ALIASES in this test (if it's safe to route on hosted) — do not let it silently default to routable via the unfiltered spread.`,
+  );
+});
+
+test("every NPM_HIDDEN_ALIASES member not in HOSTED_NEVER_ROUTABLE_NPM_ALIASES is an explicitly reviewed, enumerated routable alias (class-not-instance tripwire)", () => {
+  const untriaged = [...NPM_HIDDEN_ALIASES].filter(
+    (n) => !HOSTED_NEVER_ROUTABLE_NPM_ALIASES.has(n) && !REVIEWED_HOSTED_ROUTABLE_NPM_ALIASES.has(n),
+  );
+  assert.deepEqual(
+    untriaged,
+    [],
+    `untriaged NPM_HIDDEN_ALIASES member(s) found: ${untriaged.join(", ")} — each must be explicitly added to either HOSTED_NEVER_ROUTABLE_NPM_ALIASES (mcp.ts, never-ported) or REVIEWED_HOSTED_ROUTABLE_NPM_ALIASES (this test, reviewed-routable) before it is allowed to reach hosted.`,
+  );
+});
+
+test("HOSTED_NEVER_ROUTABLE_NPM_ALIASES (real, extracted from mcp.ts) plus REVIEWED_HOSTED_ROUTABLE_NPM_ALIASES together equal NPM_HIDDEN_ALIASES exactly (no member double-classified, none missing)", () => {
+  const union = new Set([...HOSTED_NEVER_ROUTABLE_NPM_ALIASES, ...REVIEWED_HOSTED_ROUTABLE_NPM_ALIASES]);
+  assert.deepEqual([...union].sort(), [...NPM_HIDDEN_ALIASES].sort(), "the deny-set + reviewed-routable-set must partition NPM_HIDDEN_ALIASES exactly");
+  const overlap = [...HOSTED_NEVER_ROUTABLE_NPM_ALIASES].filter((n) => REVIEWED_HOSTED_ROUTABLE_NPM_ALIASES.has(n));
+  assert.deepEqual(overlap, [], `a name must not be in BOTH the deny-set and the reviewed-routable set: ${overlap.join(", ")}`);
 });
