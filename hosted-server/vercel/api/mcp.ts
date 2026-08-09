@@ -486,6 +486,13 @@ const TOOLS = CORE_TOOLS.map((t) => ({
 //     still fully dispatchable by name (see HOSTED_ROUTABLE_ALIASES below).
 // This is now the ONLY exclusion list — TOOLS derives from core, so anything NOT
 // listed here that core registers is visible on hosted by default.
+// NOTE: novada_scraper_task_mgmt is NOT listed here even though it's also
+// never-ported — it's already invisible in raw TOOLS (npm core hides it as one
+// of its OWN HIDDEN_ALIASES, unrelated to hosted policy), so it would never be a
+// real member of the CORE_TOOLS-minus-HOSTED_HIDDEN derivation this Set's size is
+// pinned against elsewhere (test/tool-catalog-derivation.test.mjs). Its
+// exclusion from HOSTED_ROUTABLE_ALIASES is handled by
+// HOSTED_NEVER_ROUTABLE_NPM_ALIASES below instead.
 const HOSTED_HIDDEN = new Set([
   "novada_browser_flow",
   "novada_site_copy",
@@ -507,8 +514,20 @@ const HOSTED_HIDDEN = new Set([
 // billable/mutating WRITE actions (static_ip_mgmt spends money, ip_whitelist
 // mutates the account) and site_copy writes to the read-only serverless FS —
 // auto-exposing them would be a security/billing regression.
+// NPM_HIDDEN_ALIASES is npm core's own "dispatched-but-unlisted" set (health*,
+// wallet*, plan, traffic, capture_logs, account_summary, unblock, 6 proxy type
+// variants, 4 scraper stubs — 19 total) — a classification about npm's OWN
+// ListTools output, independent of hosted's never-ported policy above. One of
+// those 4 scraper stubs, novada_scraper_task_mgmt, is ALSO one of the
+// never-ported tools named in the comment above — spreading NPM_HIDDEN_ALIASES
+// unfiltered let it ride through as routable (TOW2-349: canary run 31300731838
+// caught it dispatching instead of refusing with TOOL_NOT_ENABLED). Enumerate
+// any such overlaps here — one row per name, a table not a branch — so a
+// future npm hidden alias that also belongs to hosted's never-ported set is
+// excluded the same way instead of leaking through again.
+const HOSTED_NEVER_ROUTABLE_NPM_ALIASES = new Set(["novada_scraper_task_mgmt"]);
 const HOSTED_ROUTABLE_ALIASES = new Set<string>([
-  ...NPM_HIDDEN_ALIASES,   // health*, wallet*, plan, traffic, capture_logs, account_summary, unblock, 6 proxy type variants, 4 scraper stubs (19 total)
+  ...[...NPM_HIDDEN_ALIASES].filter((n) => !HOSTED_NEVER_ROUTABLE_NPM_ALIASES.has(n)),
   "novada_verify",
 ]);
 // NOTE: base this on the hosted-VISIBLE set (TOOLS minus HOSTED_HIDDEN), NOT raw

@@ -31,7 +31,7 @@ const MCP_TS = join(__dirname, "..", "api", "mcp.ts");
 const VENDOR_CORE = join(__dirname, "..", "vendor", "novada-mcp", "core.js");
 
 const mcpSrc = readFileSync(MCP_TS, "utf8");
-const { TOOLS: CORE_TOOLS } = await import(VENDOR_CORE);
+const { TOOLS: CORE_TOOLS, HIDDEN_ALIASES: NPM_HIDDEN_ALIASES } = await import(VENDOR_CORE);
 
 function sliceBetween(startAnchor, endAnchor, label) {
   const start = mcpSrc.indexOf(startAnchor);
@@ -146,4 +146,76 @@ test("CallTool guard rejects the destructive HOSTED_HIDDEN tool (novada_ip_white
 test("every currently-listed HOSTED_HIDDEN tool is a real, dispatchable core tool (sanity: the guard is exercising a real tool, not a typo)", () => {
   const coreNames = new Set(CORE_TOOLS.map((t) => t.name));
   assert.ok(coreNames.has(DESTRUCTIVE_TOOL), `${DESTRUCTIVE_TOOL} must be a real core tool for this test to be meaningful`);
+});
+
+// ─── (d) novada_scraper_task_mgmt regression (canary run 31300731838, TOW2-349) ──
+//
+// Root cause this guards against: HOSTED_ROUTABLE_ALIASES used to fold in ALL of
+// npm core's HIDDEN_ALIASES unconditionally (`...NPM_HIDDEN_ALIASES`). npm core hides
+// novada_scraper_task_mgmt from its OWN ListTools as one of its "4 scraper stubs"
+// (dispatched-but-unlisted, for backward compat — see npm-package/src/core.ts's
+// HIDDEN_ALIASES comment), which is an npm-internal classification unrelated to
+// hosted's OWN "never-ported" policy. But this file's HOSTED_ROUTABLE_ALIASES
+// comment explicitly lists scraper_task_mgmt among the never-ported tools that
+// "stay refused-by-default" (same class as novada_ip_whitelist / static_ip_mgmt /
+// capture_apikey / session_stats / search_feedback / site_copy). Spreading
+// NPM_HIDDEN_ALIASES unfiltered let it leak through as routable, so CallTool
+// dispatched it instead of refusing with TOOL_NOT_ENABLED — the fix filters the
+// spread against a dedicated HOSTED_NEVER_ROUTABLE_NPM_ALIASES table (deliberately
+// NOT folded into HOSTED_HIDDEN: scraper_task_mgmt is absent from raw TOOLS, so
+// adding it to HOSTED_HIDDEN would silently inflate that Set's size without
+// removing anything from the CORE_TOOLS-minus-HOSTED_HIDDEN derivation pinned in
+// test/tool-catalog-derivation.test.mjs).
+
+const LEAKED_ALIAS = "novada_scraper_task_mgmt";
+
+/** Extract and EXECUTE mcp.ts's real HOSTED_NEVER_ROUTABLE_NPM_ALIASES +
+ *  HOSTED_ROUTABLE_ALIASES expressions (not a reimplementation) against the
+ *  given NPM_HIDDEN_ALIASES input. */
+function computeHostedRoutableAliasesFromSource(npmHiddenAliases) {
+  const code = sliceBetween(
+    "const HOSTED_NEVER_ROUTABLE_NPM_ALIASES = new Set(",
+    "\n]);",
+    "HOSTED_ROUTABLE_ALIASES",
+  ).replace("Set<string>", "Set");
+  const fn = new Function(
+    "NPM_HIDDEN_ALIASES",
+    `${code}\n]);\nreturn HOSTED_ROUTABLE_ALIASES;`,
+  );
+  return fn(npmHiddenAliases);
+}
+
+test("sanity: novada_scraper_task_mgmt is one of npm core's own HIDDEN_ALIASES (otherwise this regression can't occur)", () => {
+  assert.ok(NPM_HIDDEN_ALIASES.has(LEAKED_ALIAS), `${LEAKED_ALIAS} must be an npm-core hidden alias for the leak scenario to be real`);
+});
+
+test("HOSTED_ROUTABLE_ALIASES (real, executed mcp.ts expression) excludes novada_scraper_task_mgmt", () => {
+  const routable = computeHostedRoutableAliasesFromSource(NPM_HIDDEN_ALIASES);
+  assert.ok(!routable.has(LEAKED_ALIAS), `${LEAKED_ALIAS} must not be routable — it is one of the never-ported tools named in the HOSTED_ROUTABLE_ALIASES comment`);
+});
+
+test("HOSTED_ROUTABLE_ALIASES (real, executed mcp.ts expression) still includes novada_verify (no regression from the new filter)", () => {
+  const routable = computeHostedRoutableAliasesFromSource(NPM_HIDDEN_ALIASES);
+  assert.ok(routable.has("novada_verify"), "novada_verify must stay routable — it is explicitly re-added after the HOSTED_NEVER_ROUTABLE_NPM_ALIASES filter");
+});
+
+test("HOSTED_HIDDEN keeps its original 8 entries (novada_scraper_task_mgmt must NOT be folded into it — see comment above HOSTED_HIDDEN)", () => {
+  assert.ok(!HOSTED_HIDDEN.has(LEAKED_ALIAS), `${LEAKED_ALIAS} must not be a HOSTED_HIDDEN member — it was never a raw TOOLS entry, so adding it there would desync the CORE_TOOLS-minus-HOSTED_HIDDEN count pinned in test/tool-catalog-derivation.test.mjs`);
+});
+
+test("CallTool guard rejects novada_scraper_task_mgmt with TOOL_NOT_ENABLED, while a sibling (novada_ip_whitelist) and novada_verify stay correctly classified (control)", () => {
+  const visibleTools = computeVisibleToolsFromSource(CORE_TOOLS, HOSTED_HIDDEN, { allowedTools: null });
+  const visibleToolNames = new Set(visibleTools.map((t) => t.name));
+  const hostedRoutableAliases = computeHostedRoutableAliasesFromSource(NPM_HIDDEN_ALIASES);
+
+  // Replays mcp.ts's real CallTool guard:
+  //   if (!visibleToolNames.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) { ... TOOL_NOT_ENABLED ... }
+  // HOSTED_HIDDEN_ALIASES only ever contains HOSTED_ROUTABLE_ALIASES members that
+  // aren't already visible, so it's equivalent to check hostedRoutableAliases directly
+  // for any name that (like these three) is never in visibleToolNames.
+  const isRejected = (name) => !visibleToolNames.has(name) && !hostedRoutableAliases.has(name);
+
+  assert.equal(isRejected(LEAKED_ALIAS), true, `CallTool('${LEAKED_ALIAS}') must be rejected with TOOL_NOT_ENABLED — canary run 31300731838 found it dispatching instead`);
+  assert.equal(isRejected(DESTRUCTIVE_TOOL), true, `CallTool('${DESTRUCTIVE_TOOL}') must still be rejected (sibling control — must not regress)`);
+  assert.equal(isRejected("novada_verify"), false, "CallTool('novada_verify') must still be dispatchable (it is intentionally routable-but-hidden, not never-ported)");
 });
