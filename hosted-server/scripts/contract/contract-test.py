@@ -37,9 +37,20 @@ Usage:
     python3 contract-test.py --transport=stdio
     python3 contract-test.py --transport=stdio /path/to/npm-package/build/index.js
 
+    # Self-test the 429-retry/SKIP and TOW2-376/XFAIL classifiers with
+    # synthetic, in-process inputs — no network, no live key, no billable
+    # call. See run_self_test()'s docstring block.
+    python3 contract-test.py --self-test
+
 Exit codes:
-    0  all invariants pass (skipped invariants do NOT fail)
-    1  one or more invariants fail, or the transport itself could not start
+    0  all invariants pass (skipped invariants do NOT fail; a persistent
+       HTTP 429 from OUR OWN gateway rate-limiter is retried 3x then SKIPped,
+       never failed — see GatewayThrottled; the 4 TOW2-376-tracked
+       PARAM_HONESTY rows in KNOWN_ISSUES are XFAILed, printed as
+       "KNOWN (TOW2-376)", never failed)
+    1  one or more invariants fail for a reason with NO known signature
+       (a genuine owned-invariant regression, or a new/unrecognized failure),
+       or the transport itself could not start
 
 Invariants — FREE set (run by default in deploy gate; also the stdio set):
     1. VERSION_AGREEMENT     — initialize.serverInfo.version == novada_setup.server_version
@@ -145,6 +156,8 @@ CONTRACT_FULL is refused outright for stdio, see StdioTransport):
 """
 
 import abc
+import contextlib
+import io
 import json
 import os
 import queue
@@ -179,6 +192,83 @@ class SkipInvariant(Exception):
     to the transport under test — does NOT fail the suite."""
 
 
+# ─── gateway 429 self-throttle handling (nightly-canary policy, 2026-08-11) ────
+# Evidence (GitHub runs 31368424384 / 31300731838 / 31469660659): the canary's
+# own test key trips OUR gateway's per-IP rate limiter (rateLimitExceeded() in
+# hosted-server/vercel/api/mcp.ts, HTTP 429). Before this fix, ANY invariant
+# function that calls transport.rpc()/rpc_raw() directly (no local try/except)
+# let the raw urllib.error.HTTPError propagate straight to run_invariants'
+# generic `except Exception` handler, which logged "ERROR (invariant runner
+# crashed)" and marked that invariant FAILED — and because the rate limit is a
+# per-minute bucket, EVERY subsequent HTTP call in the same run hit it too,
+# cascading one self-inflicted throttle into a wall of unrelated red
+# invariants. A 429 from OUR OWN gateway carries zero signal about the product
+# under test — it must never fail the run.
+#
+# GatewayThrottled is a distinct exception (not a bare RuntimeError or string
+# match) so every call site — the driver loop AND the three invariants that
+# run their own per-row try/except (9/10/11) — can classify it as SKIP without
+# re-deriving "was this a 429" from a formatted message each time.
+class GatewayThrottled(RuntimeError):
+    """Raised by the HTTP helpers below when OUR OWN gateway's rate limiter
+    (HTTP 429) is still active after every retry attempt. Every call site
+    that catches this must treat it as SKIP, never FAIL — see module header
+    comment above."""
+
+
+# 3 attempts total: first attempt immediate (delay 0), then +2s, then +5s —
+# short exponential-ish backoff, cheap enough not to meaningfully lengthen a
+# nightly run even if every invariant hits it once.
+_GATEWAY_429_BACKOFF_SECONDS = (0, 2, 5)
+
+
+def _is_http_429(exc: BaseException) -> bool:
+    """True if `exc` is (or, after being collapsed into a message string by
+    one of the call sites below, still recognizably) an HTTP 429 from our own
+    gateway. Prefers the structured `urllib.error.HTTPError.code` check;
+    falls back to a string match only for the two call sites
+    (_http_rpc_raw, _http_call_tool) whose EXISTING (pre-2026-08-11) contract
+    already collapses the original exception into a message string before
+    any caller sees it — so a raw isinstance check alone would miss them."""
+    if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
+        return True
+    msg = str(exc)
+    if "429" not in msg:
+        return False
+    msg_l = msg.lower()
+    return "too many requests" in msg_l or "rate_limited" in msg_l or "rate limited" in msg_l
+
+
+def _retry_on_429(fn, *, label: str = "request"):
+    """
+    Call `fn()` (a zero-arg callable performing one HTTP round-trip). If it
+    raises an exception that `_is_http_429` recognizes as our own gateway's
+    rate limiter, retry per `_GATEWAY_429_BACKOFF_SECONDS` (0s / 2s / 5s —
+    3 attempts total). Any OTHER exception propagates immediately, unretried
+    — this is a 429-specific circuit breaker, not a generic retry-everything
+    wrapper, and must not mask or delay a genuine product failure.
+
+    If still 429 after the last attempt, raises GatewayThrottled (never the
+    raw HTTPError) so every caller can classify it as SKIP without
+    string-sniffing.
+    """
+    last_exc: BaseException | None = None
+    for delay in _GATEWAY_429_BACKOFF_SECONDS:
+        if delay:
+            time.sleep(delay)
+        try:
+            return fn()
+        except Exception as e:
+            if _is_http_429(e):
+                last_exc = e
+                continue
+            raise
+    raise GatewayThrottled(
+        f"gateway 429 self-throttle after {len(_GATEWAY_429_BACKOFF_SECONDS)} "
+        f"attempt(s) — infra, not product ({label}): {last_exc}"
+    )
+
+
 def _headers(key: str):
     return {
         "Content-Type": "application/json",
@@ -205,31 +295,54 @@ def _parse_sse(raw: str):
 
 def _http_rpc(url: str, key: str, method: str, params: dict, timeout: int = 60):
     """Send a JSON-RPC request over HTTP+SSE; returns parsed result dict or raises.
-    UNCHANGED from the original single-transport implementation."""
+    Behavior is UNCHANGED from the original single-transport implementation
+    EXCEPT: a persistent HTTP 429 from our own gateway is retried with backoff
+    (see _retry_on_429) and, only if still 429 after every attempt, raises
+    GatewayThrottled instead of the raw HTTPError — callers/the driver loop
+    classify GatewayThrottled as SKIP. Any other exception (including a
+    non-429 HTTPError) propagates immediately and unretried, exactly as
+    before this change."""
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-    req = urllib.request.Request(url, data=body, headers=_headers(key))
-    raw = urllib.request.urlopen(req, timeout=timeout).read().decode()
-    objects = _parse_sse(raw)
-    for o in objects:
-        if "result" in o:
-            return o["result"]
-        if "error" in o:
-            raise RuntimeError("JSON-RPC error: " + json.dumps(o["error"]))
-    raise RuntimeError("no result in response: " + raw[:200])
+    headers = _headers(key)
+
+    def _do():
+        req = urllib.request.Request(url, data=body, headers=headers)
+        raw = urllib.request.urlopen(req, timeout=timeout).read().decode()
+        objects = _parse_sse(raw)
+        for o in objects:
+            if "result" in o:
+                return o["result"]
+            if "error" in o:
+                raise RuntimeError("JSON-RPC error: " + json.dumps(o["error"]))
+        raise RuntimeError("no result in response: " + raw[:200])
+
+    return _retry_on_429(_do, label=f"{method} (rpc)")
 
 
 def _http_rpc_raw(url: str, key: str, method: str, params: dict, timeout: int = 60):
     """
     Send a JSON-RPC request over HTTP+SSE; returns the raw first parsed SSE object
     (may have "result" or "error" at top level — caller decides).
-    Raises only on network/parse failure. UNCHANGED from the original.
+    Raises only on network/parse failure. UNCHANGED from the original, EXCEPT:
+    a persistent HTTP 429 from our own gateway is retried with backoff (see
+    _retry_on_429) and, only if still 429 after every attempt, raises
+    GatewayThrottled instead of the generic "network error: ..." RuntimeError
+    — callers classify GatewayThrottled as SKIP. Any other network/parse
+    failure is still wrapped as "network error: ..." exactly as before.
     """
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-    req = urllib.request.Request(url, data=body, headers=_headers(key))
-    try:
-        raw = urllib.request.urlopen(req, timeout=timeout).read().decode()
-    except Exception as e:
-        raise RuntimeError(f"network error: {e}")
+    headers = _headers(key)
+
+    def _do():
+        req = urllib.request.Request(url, data=body, headers=headers)
+        try:
+            return urllib.request.urlopen(req, timeout=timeout).read().decode()
+        except Exception as e:
+            if _is_http_429(e):
+                raise  # let _retry_on_429 see the real exception for classification
+            raise RuntimeError(f"network error: {e}")
+
+    raw = _retry_on_429(_do, label=f"{method} (rpc_raw)")
     objects = _parse_sse(raw)
     if not objects:
         raise RuntimeError("no parseable SSE objects in response: " + raw[:300])
@@ -237,12 +350,28 @@ def _http_rpc_raw(url: str, key: str, method: str, params: dict, timeout: int = 
 
 
 def _http_call_tool(url: str, key: str, name: str, args: dict, timeout: int = 60):
-    """Call tools/call over HTTP+SSE; returns (is_error, text_content). UNCHANGED."""
+    """Call tools/call over HTTP+SSE; returns (is_error, text_content).
+    UNCHANGED for every case except a persistent HTTP 429 from our own
+    gateway: that is retried with backoff (see _retry_on_429) and, only if
+    still 429 after every attempt, RAISES GatewayThrottled instead of
+    returning (True, "EXCEPTION: ..."). Every call site of call_tool() either
+    lets this propagate to run_invariants' driver loop (classified SKIP) or
+    catches it explicitly in its own per-row loop (invariants 9/10/11) — see
+    each site. Any OTHER exception (timeout, DNS failure, non-429 HTTP
+    status, ...) keeps the original, unretried, never-raises contract:
+    caught and returned as (True, f"EXCEPTION: {e}")."""
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                        "params": {"name": name, "arguments": args}}).encode()
-    req = urllib.request.Request(url, data=body, headers=_headers(key))
+    headers = _headers(key)
+
+    def _do():
+        req = urllib.request.Request(url, data=body, headers=headers)
+        return urllib.request.urlopen(req, timeout=timeout).read().decode()
+
     try:
-        raw = urllib.request.urlopen(req, timeout=timeout).read().decode()
+        raw = _retry_on_429(_do, label=f"tools/call {name}")
+    except GatewayThrottled:
+        raise
     except Exception as e:
         return True, f"EXCEPTION: {e}"
     objects = _parse_sse(raw)
@@ -373,17 +502,28 @@ def _probe_ledger_balance(url: str, key: str, extract_balance) -> float:
     capture_balance) aggregation, which is unchanged by this fix.
     """
     body, content_type = _build_multipart_body({"d": ""})
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Content-Type": content_type,
-            "Authorization": "Bearer " + key,
-        },
-        method="POST",
-    )
+
+    def _do():
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Content-Type": content_type,
+                "Authorization": "Bearer " + key,
+            },
+            method="POST",
+        )
+        return urllib.request.urlopen(req, timeout=20).read().decode()
+
     try:
-        raw = urllib.request.urlopen(req, timeout=20).read().decode()
+        # A transient 429 here gets a retry budget (2026-08-11) before this
+        # function's own documented "ANY failure -> 0.0" contract kicks in —
+        # otherwise a throttled probe could misreport a genuinely funded
+        # ledger as unfunded, turning an infra blip into a false BILLING_TRUTH
+        # SKIP. The outer except Exception below is UNCHANGED: it still
+        # swallows every failure (including an exhausted GatewayThrottled)
+        # into 0.0, exactly as before.
+        raw = _retry_on_429(_do, label=f"ledger probe {url}")
         parsed = json.loads(raw)
         return float(extract_balance(parsed))
     except Exception:
@@ -506,6 +646,11 @@ PARAM_HONESTY_CASES = [
         "tool": "novada_proxy",
         "args": {"type": "isp", "country": "de", "format": "url"},
         "param_note": "type=isp + country=de (country is not applied for ISP proxies)",
+        # Canonical match key for _known_issue_ticket's (invariant, tool, param)
+        # lookup (2026-08-11 tightening) — MUST be byte-identical to this row's
+        # counterpart in KNOWN_ISSUES above, or this real, ticketed gap starts
+        # hard-FAILing instead of XFAILing. See KNOWN_ISSUES's module comment.
+        "param": "type=isp+country",
         "markers": ["not applied", "do not rely"],
         "precondition_markers": ["not configured", "missing environment variables"],
         # PRECEDENT — this is the exact instance NO_SILENT_NOOP (invariant 2)
@@ -539,6 +684,9 @@ PARAM_HONESTY_CASES = [
             "country": "de",
         },
         "param_note": "country=de (not applied to the Browser API's CDP exit node)",
+        # See EDIT #1 comment on the novada_proxy row above — must exactly
+        # match this tool's row in KNOWN_ISSUES.
+        "param": "country (Browser API CDP exit)",
         "markers": ["not applied", "do not rely"],
         "precondition_markers": ["novada_browser_ws", "browser api", "not configured", "not entitled"],
         # Verified 2026-07-30 by reading source + vendor: browser.ts's base
@@ -557,6 +705,9 @@ PARAM_HONESTY_CASES = [
         "tool": "novada_ai_monitor",
         "args": {"brand": "novada", "topics": ["pricing", "support"]},
         "param_note": "topics[1:] ('support') — only topics[0] is queried; the rest are silently accepted and ignored",
+        # See EDIT #1 comment on the novada_proxy row above — must exactly
+        # match this tool's row in KNOWN_ISSUES.
+        "param": "topics[1:]",
         "markers": ["not applied", "do not rely"],
         "precondition_markers": ["not configured", "not entitled"],
         # Verified 2026-07-30: BOTH the body disclosure ("topics[1..] accepted
@@ -578,6 +729,9 @@ PARAM_HONESTY_CASES = [
             "line 1050) passes no `country` field at all; `country` is wired "
             "ONLY into the render/unblocker path (extract.ts:950 and :1144)"
         ),
+        # See EDIT #1 comment on the novada_proxy row above — must exactly
+        # match this tool's row in KNOWN_ISSUES.
+        "param": "country (render=auto/static path)",
         "markers": ["not applied", "do not rely"],
         "precondition_markers": [],
         # 4TH CLASS MEMBER — coordinator-flagged in a parallel code review
@@ -605,6 +759,56 @@ PARAM_HONESTY_CASES = [
         "agent_instruction_exempt": False,
     },
 ]
+
+
+# ─── KNOWN-ISSUE registry (nightly-canary policy layer, 2026-08-11) ────────────
+# Class-not-instance registry of product gaps that are KNOWN, TICKETED, and
+# deliberately allowed to keep the nightly canary GREEN instead of paging on
+# every run until the underlying fix ships. Extending coverage to a NEW
+# tracked-known gap is a new ROW here, never a new inline branch/if inside an
+# invariant function. Row shape: {invariant, tool, param, ticket}.
+#
+# Today's 4 rows are exactly the PARAM_HONESTY_CASES table (invariant 9) —
+# TOW2-376 tracks all four: novada_proxy (type=isp+country), novada_browser
+# (country not applied to the Browser API's CDP exit), novada_ai_monitor
+# (topics[1:] silently ignored), novada_extract (country not applied on the
+# default render=auto/static path). A row here only downgrades the SPECIFIC
+# "disclosure missing" assertion that row's invariant makes — it does NOT
+# touch that invariant's OTHER failure paths (is_error with no
+# provisioning/upstream signal, exceptions, ...), which stay hard failures.
+# See _known_issue_ticket / invariant_9_param_honesty's XFAIL branch.
+KNOWN_ISSUES = [
+    {"invariant": "PARAM_HONESTY", "tool": "novada_proxy",
+     "param": "type=isp+country", "ticket": "TOW2-376"},
+    {"invariant": "PARAM_HONESTY", "tool": "novada_browser",
+     "param": "country (Browser API CDP exit)", "ticket": "TOW2-376"},
+    {"invariant": "PARAM_HONESTY", "tool": "novada_ai_monitor",
+     "param": "topics[1:]", "ticket": "TOW2-376"},
+    {"invariant": "PARAM_HONESTY", "tool": "novada_extract",
+     "param": "country (render=auto/static path)", "ticket": "TOW2-376"},
+]
+
+
+def _known_issue_ticket(invariant: str, tool: str, param: str) -> str | None:
+    """Return the tracking ticket for a (invariant, tool, param) triple if
+    it's a registered KNOWN_ISSUES row, else None.
+
+    TIGHTENED 2026-08-11 (review finding): matching on (invariant, tool)
+    alone ignored the `param` field every KNOWN_ISSUES row already carries —
+    a disclosure gap on a tool that HAS a registered row but for a
+    DIFFERENT, unregistered param would have silently XFAILed under someone
+    else's ticket instead of hard-failing as the new, untracked gap it
+    actually is. `param` must now match exactly (same string the row's
+    `param` was authored with) for a row to apply.
+
+    A None result means "no known signature" — the caller must treat any
+    resulting failure as a genuine, unswallowed FAIL, never a silent
+    downgrade."""
+    for row in KNOWN_ISSUES:
+        if (row["invariant"] == invariant and row["tool"] == tool
+                and row["param"] == param):
+            return row["ticket"]
+    return None
 
 
 # ─── REAL_SOURCE_URLS case table (invariant 10) ────────────────────────────────
@@ -783,10 +987,17 @@ class HttpSseTransport(Transport):
 
     def get_json(self, url: str):
         """GET url → (parsed_dict, None) on success, (None, reason) on any failure.
-        HTTP-only capability used exclusively by invariant 7."""
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        HTTP-only capability used exclusively by invariant 7. A persistent 429
+        gets the same retry budget as every other HTTP call site (2026-08-11)
+        before falling into the unchanged "GET failed: ..." failure shape —
+        invariant 7 is gated behind CONTRACT_OAUTH=1 and off by default in the
+        nightly canary, so its own failure classification is intentionally
+        left as-is here; only the retry is added."""
+        def _do():
+            req = urllib.request.Request(url, headers={"Accept": "application/json"})
+            return urllib.request.urlopen(req, timeout=30).read().decode()
         try:
-            raw = urllib.request.urlopen(req, timeout=30).read().decode()
+            raw = _retry_on_429(_do, label=f"GET {url}")
         except Exception as e:
             return None, f"GET failed: {e}"
         try:
@@ -1394,6 +1605,9 @@ def invariant_4_advertised_capability(transport: Transport) -> list[str]:
         # resources/read must return non-empty content.
         try:
             read_result = transport.rpc("resources/read", {"uri": uri})
+        except GatewayThrottled as e:
+            print(f"  [4] SKIP[{uri}]: {e}")
+            continue
         except RuntimeError as e:
             failures.append(
                 f"INVARIANT_4[read]: resources/read({uri!r}) returned JSON-RPC error "
@@ -1418,6 +1632,8 @@ def invariant_4_advertised_capability(transport: Transport) -> list[str]:
     FAKE_URI = "novada://does-not-exist"
     try:
         obj, raw = transport.rpc_raw("resources/read", {"uri": FAKE_URI})
+    except GatewayThrottled as e:
+        print(f"  [4] SKIP[error-format]: {e}")
     except RuntimeError as e:
         failures.append(
             f"INVARIANT_4[error-format]: network/parse error fetching unknown URI: {e}"
@@ -2018,11 +2234,16 @@ def invariant_9_param_honesty(transport: Transport) -> list[str]:
     failures = []
     passed_rows = []
     skipped_rows = []
+    xfailed_rows = []
 
     for case in PARAM_HONESTY_CASES:
         tool = case["tool"]
         try:
             is_err, text = transport.call_tool(tool, case["args"], timeout=90)
+        except GatewayThrottled as e:
+            skipped_rows.append(tool)
+            print(f"  [9] SKIP[{tool}]: {e}")
+            continue
         except Exception as e:
             failures.append(
                 f"INVARIANT_9[{tool}]: tool call raised an exception instead of "
@@ -2082,22 +2303,41 @@ def invariant_9_param_honesty(transport: Transport) -> list[str]:
                 if not instruction_disclosed:
                     missing.append("agent_instruction line")
                 surface_note = f"(missing on: {', '.join(missing)})"
-            failures.append(
-                f"INVARIANT_9[{tool}]: response does not disclose that "
+            detail = (
+                f"PARAM_HONESTY[{tool}]: response does not disclose that "
                 f"{case['param_note']} is not honored {surface_note}.{pending}\n"
                 f"  expected one of: {case['markers']}\n"
                 f"  actual (first 400 chars): {text[:400]!r}"
             )
+            # 2026-08-11 nightly-canary policy: a disclosure-missing failure on
+            # a row registered in KNOWN_ISSUES is a TICKETED, already-known
+            # product gap — the check still RAN and still DETECTED the exact
+            # signature, it is just downgraded from FAIL to XFAIL so a known,
+            # tracked gap doesn't page every night. This does NOT touch the
+            # is_error/exception branches above (still hard failures for an
+            # unswallowed unknown signature) and does NOT apply to any row
+            # absent from KNOWN_ISSUES — a brand-new disclosure gap on a row
+            # with no ticket still hard-fails, exactly as before.
+            ticket = _known_issue_ticket("PARAM_HONESTY", tool, case["param"])
+            if ticket:
+                xfailed_rows.append(tool)
+                print(f"  [9] XFAIL: KNOWN ({ticket}) — {tool}: {case['param_note']}")
+                for line in detail.splitlines():
+                    print(f"      {line}")
+            else:
+                failures.append(detail)
         else:
             passed_rows.append(tool)
 
     if not failures:
         print(
             f"  [9/PASS] PARAM_HONESTY: {len(passed_rows)} row(s) disclosed honestly "
-            f"({passed_rows}); {len(skipped_rows)} row(s) skipped (not provisioned/upstream)."
+            f"({passed_rows}); {len(skipped_rows)} row(s) skipped (not provisioned/"
+            f"upstream/429); {len(xfailed_rows)} row(s) XFAILed as KNOWN ({xfailed_rows})."
         )
     else:
-        print(f"  [9/FAIL] PARAM_HONESTY: {len(failures)} row(s) failed to disclose.")
+        print(f"  [9/FAIL] PARAM_HONESTY: {len(failures)} row(s) failed to disclose "
+              f"with no known-issue ticket.")
 
     return failures
 
@@ -2135,6 +2375,9 @@ def invariant_10_real_source_urls(transport: Transport) -> list[str]:
         tool = case["tool"]
         try:
             is_err, text = transport.call_tool(tool, case["args"], timeout=150)
+        except GatewayThrottled as e:
+            print(f"  [10] SKIP[{tool}]: {e}")
+            continue
         except Exception as e:
             failures.append(
                 f"INVARIANT_10[{tool}]: tool call raised an exception instead of "
@@ -2215,6 +2458,9 @@ def invariant_11_actionable_errors(transport: Transport) -> list[str]:
             tool = case["tool"]
             try:
                 is_err, text = transport.call_tool(tool, case["args"], timeout=30)
+            except GatewayThrottled as e:
+                print(f"  [11] SKIP[{tool}]: {e}")
+                continue
             except Exception as e:
                 failures.append(
                     f"INVARIANT_11[{tool}]: tool call raised an exception instead "
@@ -2244,6 +2490,9 @@ def invariant_11_actionable_errors(transport: Transport) -> list[str]:
             uri = case["uri"]
             try:
                 obj, raw = transport.rpc_raw("resources/read", {"uri": uri})
+            except GatewayThrottled as e:
+                print(f"  [11] SKIP[resources/read {uri}]: {e}")
+                continue
             except Exception as e:
                 # Round 4 (coordinator finding): was `except RuntimeError` — the
                 # only per-row branch in this diff that didn't match the
@@ -2319,6 +2568,12 @@ def run_invariants(transport: Transport) -> int:
     passed = []
     failed = []
     skipped = []
+    throttled = []  # subset of `skipped` caused specifically by a gateway 429
+                     # self-throttle (see EDIT #2, 2026-08-11) — tracked
+                     # separately so an all-/many-429 run is visually
+                     # distinguishable from a clean PASS in the verdict output
+                     # below, without changing the (intentionally non-fatal)
+                     # exit code.
 
     for name, fn in INVARIANTS:
         print(f"\n[{name}]")
@@ -2333,6 +2588,17 @@ def run_invariants(transport: Transport) -> int:
         except SkipInvariant as e:
             print(f"  SKIP: {e}")
             skipped.append(name)
+        except GatewayThrottled as e:
+            # Must be caught BEFORE the generic `except Exception` below —
+            # GatewayThrottled subclasses RuntimeError/Exception. This is the
+            # crash-cascade fix (2026-08-11): an invariant that calls
+            # transport.rpc()/rpc_raw()/call_tool() directly (no local
+            # try/except — invariants 1/2/3/6/7/8) previously let a 429
+            # propagate all the way here and got misreported as "invariant
+            # runner crashed" -> FAIL. It is now a clean, visible SKIP.
+            print(f"  SKIP (gateway 429 self-throttle — infra, not product): {e}")
+            skipped.append(name)
+            throttled.append(name)
         except Exception as e:
             print(f"  ERROR (invariant runner crashed): {e}")
             failed.append(name)
@@ -2342,11 +2608,336 @@ def run_invariants(transport: Transport) -> int:
     print(f"  failed:  {len(failed)}  {failed}")
     print(f"  skipped: {len(skipped)}  {skipped}")
 
+    if throttled:
+        # Print-only signal (2026-08-11, EDIT #2) — does NOT change the exit
+        # code. A 429-throttled invariant stays a non-fatal SKIP by design
+        # (infra rate-limiting, not a product defect), but an all-/many-429
+        # run must be visually distinct from a clean PASS in scrollback/CI
+        # logs, or a self-throttled no-op run silently masquerades as a
+        # verified green run.
+        print(
+            f"\n⚠ {len(throttled)} invariant(s) SKIPPED (gateway 429 self-throttle) "
+            f"— NOT a clean PASS: {throttled}"
+        )
+
     if failed:
         print("\nVERDICT: FAIL")
         return 1
     print("\nVERDICT: PASS")
     return 0
+
+
+# ─── self-test (--self-test, 2026-08-11) ───────────────────────────────────────
+# Exercises the REAL classifier functions (_retry_on_429/GatewayThrottled,
+# _known_issue_ticket/KNOWN_ISSUES, and the owned invariant functions
+# themselves — invariant_9_param_honesty / invariant_11_actionable_errors) with
+# synthetic, in-process inputs. No network call, no live key, no billable
+# spend — this is what proves the 429->SKIP and TOW2-376->XFAIL policy changes
+# behave as specified WITHOUT running the full CONTRACT_FULL suite against
+# prod. Run with: python3 contract-test.py --self-test
+#
+# Deliberately calls the same functions run_invariants() calls — NOT a
+# reimplementation of their logic — so a self-test PASS is actual evidence
+# about the real classifier, not a vacuous tautology.
+
+class _FakeTransport(Transport):
+    """In-memory Transport double for --self-test only. `tool_responses` maps
+    tool name -> either a (is_error, text) tuple, or a zero-arg callable
+    (used to simulate an exception, e.g. GatewayThrottled). `rpc`/`rpc_raw`
+    are wired just enough for the invariants exercised by the self-test
+    scenarios below (call_tool is the one every scenario needs)."""
+
+    def __init__(self, tool_responses: dict | None = None,
+                 rpc_raw_response=None,
+                 has_http_surface: bool = True,
+                 has_gateway_cost_footer: bool = True):
+        self.label = "faketransport (self-test)"
+        self.has_http_surface = has_http_surface
+        self.has_gateway_cost_footer = has_gateway_cost_footer
+        self.tool_responses = tool_responses or {}
+        # Default: a top-level JSON-RPC error WITH a non-empty
+        # agent_instruction line, so the ACTIONABLE_ERRORS resources/read
+        # known_gap row doesn't incidentally fail a scenario that isn't
+        # testing that row.
+        self._rpc_raw_response = rpc_raw_response or (
+            {"error": {"message": "agent_instruction: self-test default — unknown resource"}},
+            "{}",
+        )
+
+    def rpc(self, method, params, timeout=60):
+        raise NotImplementedError(f"self-test FakeTransport.rpc({method!r}) not wired — "
+                                   f"no self-test scenario needs it today")
+
+    def rpc_raw(self, method, params, timeout=60):
+        resp = self._rpc_raw_response
+        return resp() if callable(resp) else resp
+
+    def call_tool(self, name, args, timeout=60):
+        resp = self.tool_responses.get(name)
+        if resp is None:
+            return False, ""
+        return resp() if callable(resp) else resp
+
+
+def _self_test_scenario_429() -> bool:
+    """(a) synthetic 429 -> SKIP, exit 0.
+    Exercises the REAL _retry_on_429 helper directly (proves: exactly 3
+    attempts, raises GatewayThrottled, never a bare HTTPError) AND the REAL
+    invariant_9_param_honesty with every row raising GatewayThrottled (proves:
+    a 429'd row contributes zero failures — SKIP, not FAIL)."""
+    print("\n[self-test a] synthetic 429 -> SKIP")
+
+    attempts = {"n": 0}
+
+    def always_429():
+        attempts["n"] += 1
+        raise urllib.error.HTTPError("http://fake.invalid/mcp", 429, "Too Many Requests", {}, None)
+
+    orig_sleep = time.sleep
+    time.sleep = lambda _seconds: None  # keep the self-test fast; still runs 3 real attempts
+    try:
+        try:
+            _retry_on_429(always_429, label="self-test")
+            print("  FAIL: _retry_on_429 did not raise after exhausting retries")
+            return False
+        except GatewayThrottled:
+            pass
+        except Exception as e:
+            print(f"  FAIL: expected GatewayThrottled, got {e!r}")
+            return False
+    finally:
+        time.sleep = orig_sleep
+
+    if attempts["n"] != 3:
+        print(f"  FAIL: expected exactly 3 attempts (0/2s/5s backoff), got {attempts['n']}")
+        return False
+
+    global CONTRACT_FULL
+    prev_full = CONTRACT_FULL
+    CONTRACT_FULL = True
+    try:
+        def raise_throttled():
+            raise GatewayThrottled("self-test: synthetic exhausted 429")
+
+        ft = _FakeTransport({case["tool"]: raise_throttled for case in PARAM_HONESTY_CASES})
+        failures = invariant_9_param_honesty(ft)
+    finally:
+        CONTRACT_FULL = prev_full
+
+    if failures:
+        print(f"  FAIL: invariant_9 reported failures on an all-429 run: {failures}")
+        return False
+
+    print("  PASS: _retry_on_429 makes exactly 3 attempts then raises GatewayThrottled; "
+          "invariant_9_param_honesty treats every 429'd row as SKIP (0 failures).")
+    return True
+
+
+def _self_test_scenario_known_xfail() -> bool:
+    """(b) each of the 4 TOW2-376 known signatures -> XFAIL, exit 0,
+    'KNOWN (TOW2-376)' printed. Exercises the REAL invariant_9_param_honesty
+    with every row responding is_error=False but with NO disclosure marker —
+    the exact 'not yet disclosed' signature PARAM_HONESTY_CASES exists to
+    catch — and asserts it contributes 0 failures while printing the XFAIL
+    marker for all 4 tools."""
+    print("\n[self-test b] 4 TOW2-376 known signatures -> XFAIL (0 failures, marker printed)")
+
+    global CONTRACT_FULL
+    prev_full = CONTRACT_FULL
+    CONTRACT_FULL = True
+    try:
+        responses = {case["tool"]: (False, "ok — nothing disclosed in this synthetic response")
+                     for case in PARAM_HONESTY_CASES}
+        ft = _FakeTransport(responses)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            failures = invariant_9_param_honesty(ft)
+        output = buf.getvalue()
+    finally:
+        CONTRACT_FULL = prev_full
+
+    print(output, end="")
+
+    if failures:
+        print(f"  FAIL: expected 0 failures (all 4 rows are registered in KNOWN_ISSUES), "
+              f"got: {failures}")
+        return False
+
+    expected_tools = {case["tool"] for case in PARAM_HONESTY_CASES}
+    xfail_lines = [l for l in output.splitlines() if "KNOWN (TOW2-376)" in l]
+    xfailed_tools = {tool for tool in expected_tools if any(tool in l for l in xfail_lines)}
+    if xfailed_tools != expected_tools:
+        print(f"  FAIL: expected all 4 tools to print 'KNOWN (TOW2-376)', got "
+              f"{sorted(xfailed_tools)} (missing {sorted(expected_tools - xfailed_tools)})")
+        return False
+
+    print(f"  PASS: all {len(expected_tools)} known TOW2-376 rows printed "
+          f"'KNOWN (TOW2-376)' and contributed 0 failures.")
+    return True
+
+
+def _self_test_scenario_owned_failure() -> bool:
+    """(c) a synthetic OWNED-invariant failure (hidden/bad tool call NOT
+    refused) -> FAIL, non-zero exit. Exercises the REAL
+    invariant_11_actionable_errors: novada_scrape's unknown-operation row is
+    supposed to be refused (is_error=True) before any backend round-trip;
+    simulate a regression where it is NOT refused and assert this is still a
+    hard failure — the tripwire must still bite."""
+    print("\n[self-test c] synthetic OWNED-invariant failure (bad op NOT refused) -> FAIL")
+
+    responses = {
+        "novada_scrape": (False, "## Scrape Results\n(pretend the bad operation went through)"),
+        "novada_extract": (True, "agent_instruction: missing required 'url'\nsome error text"),
+    }
+    ft = _FakeTransport(responses)
+    failures = invariant_11_actionable_errors(ft)
+
+    if not failures:
+        print("  FAIL: expected invariant_11 to report a failure for the hidden/bad "
+              "operation that was NOT refused — got 0 failures")
+        return False
+    if not any("novada_scrape" in f for f in failures):
+        print(f"  FAIL: failure list didn't mention the regressed row: {failures}")
+        return False
+
+    print(f"  PASS: ACTIONABLE_ERRORS (an OWNED invariant) correctly reports "
+          f"{len(failures)} failure(s) for a hidden/bad tool call that was NOT "
+          f"refused — the tripwire still bites.")
+    return True
+
+
+def _self_test_scenario_unknown_failure() -> bool:
+    """(d) an unknown/new is_error with no known signature -> FAIL, not
+    swallowed. Exercises the REAL invariant_9_param_honesty: 3 rows disclose
+    honestly (or at least don't matter for this assertion), one row returns
+    is_error=True with a never-seen-before error string (no precondition
+    marker, no upstream signal, no 429) — that row must still hard-fail, not
+    be silently downgraded to SKIP or XFAIL."""
+    print("\n[self-test d] unknown is_error, no known signature -> FAIL (not swallowed)")
+
+    global CONTRACT_FULL
+    prev_full = CONTRACT_FULL
+    CONTRACT_FULL = True
+    try:
+        responses = {case["tool"]: (False, "ok — nothing disclosed in this synthetic response")
+                     for case in PARAM_HONESTY_CASES}
+        target = PARAM_HONESTY_CASES[1]["tool"]  # novada_browser
+        responses[target] = (True, "totally novel internal error 0xDEADBEEF — never seen before")
+        ft = _FakeTransport(responses)
+        failures = invariant_9_param_honesty(ft)
+    finally:
+        CONTRACT_FULL = prev_full
+
+    if not any(target in f and "no provisioning/upstream" in f for f in failures):
+        print(f"  FAIL: expected an unswallowed failure mentioning {target!r}, got: {failures}")
+        return False
+
+    print(f"  PASS: an unknown is_error with no known signature ({target}) still "
+          f"produced a hard failure — not silently swallowed as XFAIL or SKIP.")
+    return True
+
+
+def _self_test_scenario_known_tool_wrong_param() -> bool:
+    """(e) a PARAM_HONESTY disclosure gap on a tool that HAS a KNOWN_ISSUES
+    row but for a DIFFERENT param not in the table -> FAIL, not XFAIL.
+
+    Proves the 2026-08-11 match-key tightening in _known_issue_ticket: a
+    tool-only match ((invariant, tool)) is no longer sufficient to XFAIL — the
+    row's exact `param` must also match, or a disclosure gap is a genuine,
+    untracked new gap that must hard-fail. Exercises the REAL
+    invariant_9_param_honesty / _known_issue_ticket end-to-end (not a
+    reimplementation): mutates a copy of the real PARAM_HONESTY_CASES table so
+    novada_proxy's row carries a param string absent from KNOWN_ISSUES, then
+    asserts novada_proxy hard-FAILs while the other 3 real TOW2-376 rows
+    (unchanged) still XFAIL."""
+    print("\n[self-test e] KNOWN tool, DIFFERENT param -> FAIL (not XFAIL)")
+
+    global CONTRACT_FULL, PARAM_HONESTY_CASES
+    prev_full = CONTRACT_FULL
+    prev_cases = PARAM_HONESTY_CASES
+    CONTRACT_FULL = True
+
+    mutated_tool = "novada_proxy"
+    bogus_param = "format=url (NOT a registered TOW2-376 param)"
+
+    try:
+        new_cases = [dict(case) for case in prev_cases]
+        for case in new_cases:
+            if case["tool"] == mutated_tool:
+                case["param"] = bogus_param
+        PARAM_HONESTY_CASES = new_cases
+
+        responses = {case["tool"]: (False, "ok — nothing disclosed in this synthetic response")
+                     for case in new_cases}
+        ft = _FakeTransport(responses)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            failures = invariant_9_param_honesty(ft)
+        output = buf.getvalue()
+    finally:
+        CONTRACT_FULL = prev_full
+        PARAM_HONESTY_CASES = prev_cases
+
+    print(output, end="")
+
+    if not any(mutated_tool in f for f in failures):
+        print(f"  FAIL: expected a hard FAIL for {mutated_tool!r} (registered tool, "
+              f"unregistered param) — got failures: {failures}")
+        return False
+
+    xfail_lines = [l for l in output.splitlines() if "KNOWN (TOW2-376)" in l]
+    if any(mutated_tool in l for l in xfail_lines):
+        print(f"  FAIL: {mutated_tool!r} was XFAILed despite carrying a param absent "
+              f"from KNOWN_ISSUES — the (invariant, tool, param) match key is not "
+              f"being enforced.")
+        return False
+
+    other_tools = {case["tool"] for case in new_cases if case["tool"] != mutated_tool}
+    xfailed_others = {tool for tool in other_tools if any(tool in l for l in xfail_lines)}
+    if xfailed_others != other_tools:
+        print(f"  FAIL: expected the other {len(other_tools)} real KNOWN_ISSUES rows "
+              f"to still XFAIL, got {sorted(xfailed_others)} (missing "
+              f"{sorted(other_tools - xfailed_others)})")
+        return False
+
+    print(f"  PASS: {mutated_tool!r} with an unregistered param hard-FAILed (not "
+          f"XFAILed), while the other {len(other_tools)} real KNOWN_ISSUES rows "
+          f"correctly still XFAILed — the (invariant, tool, param) match key works.")
+    return True
+
+
+def run_self_test() -> int:
+    print("[contract-test] --self-test: exercising the real classifier functions "
+          "with synthetic, in-process inputs (no network, no live key).")
+    print("[contract-test] ─────────────────────────────────────────────────────")
+
+    scenarios = [
+        ("(a) synthetic 429 -> SKIP", _self_test_scenario_429),
+        ("(b) 4x TOW2-376 known signatures -> XFAIL", _self_test_scenario_known_xfail),
+        ("(c) owned-invariant regression -> FAIL", _self_test_scenario_owned_failure),
+        ("(d) unknown is_error -> FAIL (not swallowed)", _self_test_scenario_unknown_failure),
+        ("(e) known tool, different param -> FAIL (not XFAIL)", _self_test_scenario_known_tool_wrong_param),
+    ]
+    results = []
+    for name, fn in scenarios:
+        try:
+            ok = fn()
+        except Exception as e:
+            print(f"  FAIL: scenario raised unexpectedly: {e!r}")
+            ok = False
+        results.append((name, ok))
+
+    print("\n[contract-test] ─────────────────────────────────────────────────────")
+    for name, ok in results:
+        print(f"  {'PASS' if ok else 'FAIL'}: {name}")
+
+    if all(ok for _, ok in results):
+        print("\nSELF-TEST VERDICT: PASS")
+        return 0
+    print("\nSELF-TEST VERDICT: FAIL")
+    return 1
 
 
 def run(base_url: str) -> int:
@@ -2399,6 +2990,12 @@ def _run_stdio(entry_path: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    if "--self-test" in argv:
+        # No network, no live key, no billable spend — see run_self_test()'s
+        # docstring block. Takes priority over --transport=/positional args,
+        # which self-test doesn't use.
+        return run_self_test()
+
     transport_kind = "http"
     positional: list[str] = []
     for a in argv:

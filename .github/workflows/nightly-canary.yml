@@ -90,6 +90,22 @@ jobs:
       # invariants — intended: costs a few billable calls nightly on the funded
       # NOVADA_TEST_KEY, in exchange for nightly (not just deploy-time) coverage
       # of this regression class.
+      # Exit-code contract (2026-08-11, contract-test.py): a run exits 0 when
+      # the only findings are (a) our OWN gateway's HTTP 429 rate-limiter
+      # (retried 3x with backoff, then SKIPped — self-inflicted throttle
+      # carries zero signal about the product) or (b) the 4 PARAM_HONESTY
+      # rows tracked as TOW2-376 (novada_proxy/_browser/_ai_monitor/_extract
+      # param-honesty gaps — still RUN and detected every night, just
+      # downgraded to a visible "XFAIL: KNOWN (TOW2-376)" line instead of a
+      # hard failure). Every other invariant (hidden/bad-tool refusal,
+      # agent_instruction presence, redaction, tool-list correctness,
+      # server-up/auth, real-source-URLs, and any PARAM_HONESTY row NOT in
+      # contract-test.py's KNOWN_ISSUES table) still hard-fails on a genuine
+      # regression — a nonzero exit here means a real, un-tracked break, and
+      # this step failing is what should trigger GitHub's failure email.
+      # Run `python3 hosted-server/scripts/contract/contract-test.py
+      # --self-test` to exercise this classifier with synthetic inputs
+      # (no network, no live key) if this step's meaning is ever in doubt.
       - name: Contract invariant tests (CONTRACT_FULL — billable)
         if: always()
         env:
