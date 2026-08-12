@@ -373,7 +373,10 @@ function renderErrorPage(title: string, message: string): string {
 
 // ─── Response helpers ─────────────────────────────────────────────────────────
 
-/** Security headers for every text/html response (consent page + error pages). */
+/** Security headers for every text/html response (consent page + error pages).
+ *  content-security-policy here is the DEFAULT (form-action 'self' only) —
+ *  the authorize consent page overrides it per-response via buildAuthorizeCsp
+ *  once its redirect_uri is validated (see htmlResponse's cspOverride param). */
 const HTML_HEADERS: Record<string, string> = {
   "content-type": "text/html; charset=utf-8",
   "cache-control": "no-store",
@@ -383,8 +386,52 @@ const HTML_HEADERS: Record<string, string> = {
   "referrer-policy": "no-referrer",
 };
 
-function htmlResponse(status: number, html: string): Response {
-  return new Response(html, { status, headers: { ...HTML_HEADERS } });
+/**
+ * form-action CSP for the authorize consent page's <form>. Browsers enforce
+ * form-action against the WHOLE navigation resulting from a form submission,
+ * including any redirect that follows — not just the (same-origin,
+ * action="/authorize") submission target. Plain 'self' therefore silently
+ * blocks the 302 this flow eventually issues back to the client's
+ * cross-origin redirect_uri, so clicking "Authorize" appears to do nothing in
+ * Safari/Chrome (P0, 2026-08 — affects every DCR client: claude.ai, Cursor,
+ * etc). Widen form-action to the redirect_uri's origin ONLY when
+ * validatedRedirectUri is passed in — callers MUST NOT call this with a
+ * redirect_uri that has not already passed the registered-client exact-match
+ * check (handleAuthorizeGet steps 1-2, and handleAuthorizePost's re-run of the
+ * same checks); doing so would let this header itself green-light an
+ * attacker-chosen redirect target.
+ */
+// Only https/http origins made of hostname-legal chars + optional :port may be
+// spliced into the CSP. WHATWG URL.origin can still carry CSP-meaningful
+// punctuation (e.g. `https://evil.com;x` — the host parser accepts `;`), and
+// registration is public (DCR), so treat the validated redirect_uri's origin as
+// UNTRUSTED input to a security header: allowlist the shape, else fall back to
+// plain 'self'. Defense-in-depth independent of validateRedirectUri (TOW2-377 review).
+const SAFE_ORIGIN_RE = /^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?$/;
+
+export function buildAuthorizeCsp(validatedRedirectUri: string): string {
+  let formAction = "'self'";
+  try {
+    const origin = new URL(validatedRedirectUri).origin;
+    if (SAFE_ORIGIN_RE.test(origin)) {
+      formAction = `'self' ${origin}`;
+    }
+    // origin === "null" (opaque scheme) or containing CSP-meaningful punctuation
+    // → not allowlisted → stay 'self' (fail closed, never widen on junk).
+  } catch {
+    // Malformed input: keep plain 'self'. Fails safe rather than throwing.
+  }
+  return `default-src 'none'; style-src 'unsafe-inline'; form-action ${formAction}; frame-ancestors 'none'`;
+}
+
+function htmlResponse(status: number, html: string, cspOverride?: string): Response {
+  return new Response(html, {
+    status,
+    headers: {
+      ...HTML_HEADERS,
+      ...(cspOverride ? { "content-security-policy": cspOverride } : {}),
+    },
+  });
 }
 
 /** Every JSON response (metadata included) carries CORS * + no-store. */
@@ -784,6 +831,9 @@ export async function handleAuthorizeGet(url: URL, deps: OAuthDeps): Promise<Res
   }
 
   // 4. Happy path — render the consent page (Option A: user pastes their key).
+  // redirectUri is validated above (step 2: exact match against the client's
+  // registered redirect_uris) — safe to widen form-action to its origin so
+  // the browser follows the eventual cross-origin 302 (see buildAuthorizeCsp).
   return htmlResponse(200, renderConsentPage({
     clientName: client.client_name || "An MCP client",
     redirectUri,
@@ -793,7 +843,7 @@ export async function handleAuthorizeGet(url: URL, deps: OAuthDeps): Promise<Res
     state,
     resource: q.get("resource") || undefined,
     scope: q.get("scope") || undefined,
-  }));
+  }), buildAuthorizeCsp(redirectUri));
 }
 
 // ─── POST /authorize — verify key, mint the authorization code ───────────────
@@ -864,7 +914,11 @@ export async function handleAuthorizePost(request: Request, ip: string, deps: OA
       resource,
       scope,
       errorMessage,
-    }));
+      // Same CSP widening as the GET consent page: redirectUri is exact-match
+      // validated against the registered client above, and without this the
+      // retry-after-typo submit hits the same silently-blocked cross-origin
+      // redirect this fix exists to prevent (TOW2-377).
+    }), buildAuthorizeCsp(redirectUri));
 
   const pastedKey = (form.get("api_key") ?? "").trim();
   if (!pastedKey) {
