@@ -385,13 +385,65 @@ def compare(baseline_dir: Path, after_dir: Path) -> int:
     return 0
 
 
-def main(argv: list) -> int:
-    if len(argv) < 3:
-        print("Usage: diff-golden.py <baseline_dir> <after_dir>", file=sys.stderr)
+def _run_single_check(check_file: str, baseline_dir: Path, after_dir: Path) -> int:
+    """Run ONE named hard-gate check in isolation and print just its verdict.
+
+    Added (F6 fix, 2026-08-11) so deploy-hosted.sh's VERIFY phase can get
+    JUST the redaction-probe.json field-scoped verdict from this module
+    instead of re-implementing _check_redaction_probe's field-scoping inline.
+    deploy-hosted.sh already runs its own inline whole-file comparison for
+    the other 6 HARD_GATE_FILES plus the dispatch-matrix.json advisory tier
+    (that duplication is a separate, larger tracked follow-up — see module
+    docstring); calling the full compare() here for a single-file need would
+    just print a second, redundant, confusing verdict for the same dirs.
+    This entry point is purely additive: it does not change compare()'s
+    existing whole-dir default behavior (invoked with no --check-file flag).
+    """
+    name = check_file.replace(".json", "")
+    if name != "redaction-probe":
+        print(f"ERROR: unsupported --check-file value: {check_file!r} "
+              f"(supported: redaction-probe)", file=sys.stderr)
         return 1
 
-    baseline_dir = Path(argv[1])
-    after_dir = Path(argv[2])
+    print(f"[diff-golden --check-file redaction-probe] baseline={baseline_dir}  after={after_dir}")
+    issues = _check_redaction_probe(baseline_dir, after_dir)
+
+    if issues:
+        print("\n--- HARD GATE FAILURES (redaction-probe.json) ---")
+        for iss in issues:
+            print(iss)
+        print("--- END HARD GATE ---\n")
+        print("VERDICT: NEEDS_REVIEW")
+        return 1
+
+    print("\nVERDICT: CLEAN")
+    return 0
+
+
+def main(argv: list) -> int:
+    args = list(argv[1:])
+
+    # Additive CLI mode (F6 fix, 2026-08-11): an optional leading
+    # `--check-file <name>` flag runs ONLY that named hard-gate check
+    # (currently just "redaction-probe") instead of the full whole-dir
+    # compare(). MUST NOT change the default 2-arg invocation below, which
+    # the nightly canary depends on.
+    check_file = None
+    if args and args[0] == "--check-file":
+        if len(args) < 2:
+            print("Usage: diff-golden.py --check-file <name> <baseline_dir> <after_dir>",
+                  file=sys.stderr)
+            return 1
+        check_file = args[1]
+        args = args[2:]
+
+    if len(args) < 2:
+        print("Usage: diff-golden.py [--check-file <name>] <baseline_dir> <after_dir>",
+              file=sys.stderr)
+        return 1
+
+    baseline_dir = Path(args[0])
+    after_dir = Path(args[1])
 
     # Fail loud on a bad invocation rather than let a typo'd path silently
     # compare against nothing (Path.exists()/read_text() on a missing dir
@@ -404,6 +456,9 @@ def main(argv: list) -> int:
         print(f"ERROR: after_dir does not exist or is not a directory: {after_dir}",
               file=sys.stderr)
         return 1
+
+    if check_file is not None:
+        return _run_single_check(check_file, baseline_dir, after_dir)
 
     return compare(baseline_dir, after_dir)
 

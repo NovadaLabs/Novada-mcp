@@ -7,11 +7,19 @@
 #   3. GATES   — vendor core loads, barrel has ≥50 keys, hosted-server tsc clean
 #   4. DEPLOY  — vercel deploy --prod from repo ROOT (not vercel/ — avoids the /vercel/vercel path bug)
 #   5. VERIFY  — curl live serverInfo.version, capture golden snapshot, TWO-TIER diff vs baseline:
-#               HARD GATE (zero-diff = pass): 7 deterministic files — refused-set (firewall),
-#                 toolslist-default/all/groups (tool contract), error-path, redaction-probe,
-#                 initialize (capabilities). ADVISORY (printed, not gated): dispatch-matrix.json
-#                 per-tool shape, EXCEPT a tool's status crossing a refused/unknown routing
-#                 boundary, which escalates to the hard gate.
+#               HARD GATE: 7 deterministic files. 6 are zero-diff whole-file compares —
+#                 refused-set (firewall), toolslist-default/all/groups (tool contract),
+#                 error-path, initialize (capabilities). The 7th, redaction-probe, is
+#                 FIELD-SCOPED (not whole-file), delegated to
+#                 `golden/diff-golden.py --check-file redaction-probe` — hard-fails only
+#                 on leaked=true, an absent `leaked` key, or drift in
+#                 triggered/trigger_tool/leak_checks-keys/note; sample_markers
+#                 (entitlement-dependent copy) is advisory-only (F6 fix, 2026-08-11 —
+#                 this used to be whole-file here too and would false-fail on the same
+#                 sample_markers drift diff-golden.py already field-scopes).
+#                 ADVISORY (printed, not gated): dispatch-matrix.json per-tool shape,
+#                 EXCEPT a tool's status crossing a refused/unknown routing boundary,
+#                 which escalates to the hard gate.
 #
 # 3 GOTCHAS THIS SCRIPT HANDLES:
 #   a) Deploy from repo ROOT, not vercel/  — deploying from vercel/ causes a /vercel/vercel
@@ -226,13 +234,20 @@ baseline_dir = Path(sys.argv[1])
 after_dir    = Path(sys.argv[2])
 
 # ── TIER 1: HARD GATE — deterministic + security/contract files (zero-diff required) ──
+# redaction-probe.json is DELIBERATELY NOT in this list (F6 fix, 2026-08-11): it is the
+# 7th hard-gate file but gets a FIELD-SCOPED comparison, delegated to
+# `diff-golden.py --check-file redaction-probe` (see the shell code after this heredoc),
+# instead of the whole-file comparison below. redaction-probe.json's `sample_markers`
+# field is entitlement-dependent copy (varies with the API key's account tier), not a
+# security signal — whole-file-diffing it here would false-fail the gate on unrelated
+# copy drift, exactly the cosmetic failure diff-golden.py's field-scoping already fixed
+# for the nightly canary; this script must not keep its own un-field-scoped duplicate.
 HARD_GATE_FILES = [
     "refused-set.json",        # firewall: a refused tool becoming reachable = security regression
     "toolslist-default.json",  # tool contract (visible-by-default set)
     "toolslist-all.json",      # tool contract (full set)
     "toolslist-groups.json",   # tool contract (per-group routing)
     "error-path.json",         # error handling
-    "redaction-probe.json",    # secret redaction (also fail if leaked=true)
     "initialize.json",         # server capabilities
 ]
 
@@ -267,14 +282,10 @@ for fname in HARD_GATE_FILES:
             n=3))
         hard_issues.append(f"{fname} DIFFERS (HARD GATE):\n" + "".join(diff_lines[:60]))
 
-    # Extra hard check: redaction-probe must never report leaked=true
-    if fname == "redaction-probe.json":
-        try:
-            probe = json.loads(a_txt)
-            if probe.get("leaked") is True:
-                hard_issues.append("redaction-probe.json: leaked=true — SECRET LEAK ON HOSTED")
-        except Exception as e:
-            hard_issues.append(f"redaction-probe.json parse error: {e}")
+# NOTE: redaction-probe.json (the 7th hard-gate file) is checked separately, AFTER this
+# heredoc exits, via `diff-golden.py --check-file redaction-probe` (field-scoped: hard-
+# fails on leaked=true / absent `leaked` key / stable-field drift; sample_markers is
+# advisory-only). See REDACTION_EXIT below.
 
 # ── TIER 2: ADVISORY — dispatch-matrix.json per-tool shape (print, don't gate) ──
 # EXCEPT: escalate any tool whose status crosses a routing-bad boundary.
@@ -338,12 +349,47 @@ if hard_issues:
     print("--- END HARD GATE ---\n")
     print("VERDICT: NEEDS_REVIEW")
 else:
-    print("\n[HARD GATE] all 7 deterministic + security/contract files clean; no routing regression.")
+    print("\n[HARD GATE] all 6 whole-file deterministic + security/contract files clean; no routing regression.")
     print("VERDICT: CLEAN")
 PYEOF
 )
 
 echo "$DIFF_RESULT"
+
+# ── REDACTION-PROBE FIELD-SCOPED CHECK (HARD GATE, delegated) ────────────────
+# redaction-probe.json is the 7th hard-gate file but is checked HERE, not in the
+# HARD_GATE_FILES whole-file loop above (F6 fix, 2026-08-11): this delegates to
+# diff-golden.py's _check_redaction_probe so this script and the nightly canary
+# share ONE field-scoping implementation instead of two copies that silently
+# drift out of sync. Hard-fails on leaked=true, an absent `leaked` key, or
+# drift in the stable contract fields (triggered/trigger_tool/leak_checks
+# key-set/note); sample_markers (entitlement-dependent copy) is advisory-only
+# — see diff-golden.py's module docstring for the full rationale.
+DIFF_GOLDEN_PY="$SCRIPT_DIR/golden/diff-golden.py"
+REDACTION_PASS=true
+
+echo ""
+echo "[VERIFY] running redaction-probe field-scoped check (delegated to diff-golden.py)..."
+if [[ -f "$DIFF_GOLDEN_PY" ]]; then
+    # SAFE exit-capture idiom: `if VAR=$(...); then EXIT=0; else EXIT=$?; fi`
+    # rather than `VAR=$(...); EXIT=$?`, which aborts the whole script under
+    # `set -euo pipefail` the moment the subshell returns non-zero.
+    if REDACTION_OUT=$(python3 "$DIFF_GOLDEN_PY" --check-file redaction-probe "$GOLDEN_BASELINE" "$GOLDEN_TMP" 2>&1); then
+        REDACTION_EXIT=0
+    else
+        REDACTION_EXIT=$?
+    fi
+    echo "$REDACTION_OUT"
+    if [[ $REDACTION_EXIT -ne 0 ]]; then
+        REDACTION_PASS=false
+        echo "[VERIFY] ⚠ redaction-probe check FAILED (exit $REDACTION_EXIT) — see output above"
+    else
+        echo "[VERIFY] ✓ redaction-probe check passed"
+    fi
+else
+    REDACTION_PASS=false
+    echo "[VERIFY] WARNING: $DIFF_GOLDEN_PY not found — cannot run redaction-probe field-scoped check" >&2
+fi
 
 # ── CONTRACT TEST (HARD GATE) ────────────────────────────────────────────────
 # Runs AFTER the golden diff so both gates get to report before we exit.
@@ -354,8 +400,18 @@ CONTRACT_PASS=true
 echo ""
 echo "[VERIFY] running contract invariant tests..."
 if [[ -f "$CONTRACT_TEST_PY" ]]; then
-    CONTRACT_OUT=$(NOVADA_MCP_KEY="$NOVADA_MCP_KEY" python3 "$CONTRACT_TEST_PY" "$MCP_URL" 2>&1)
-    CONTRACT_EXIT=$?
+    # SAFE exit-capture idiom (F7 fix, 2026-08-12): `if VAR=$(...); then EXIT=0;
+    # else EXIT=$?; fi` rather than `VAR=$(...); EXIT=$?`. The latter aborts the
+    # whole script the instant contract-test.py exits non-zero (a REAL contract
+    # failure), under `set -euo pipefail` — so the NEEDS-REVIEW banner and
+    # rollback instructions below never print; the deploy silently dies mid-VERIFY
+    # instead of surfacing the failure. This idiom keeps the non-zero exit code
+    # in $CONTRACT_EXIT without letting `set -e` fire on the assignment.
+    if CONTRACT_OUT=$(NOVADA_MCP_KEY="$NOVADA_MCP_KEY" python3 "$CONTRACT_TEST_PY" "$MCP_URL" 2>&1); then
+        CONTRACT_EXIT=0
+    else
+        CONTRACT_EXIT=$?
+    fi
     echo "$CONTRACT_OUT"
     if [[ $CONTRACT_EXIT -ne 0 ]]; then
         CONTRACT_PASS=false
@@ -367,11 +423,11 @@ else
     echo "[VERIFY] WARNING: $CONTRACT_TEST_PY not found — skipping contract tests"
 fi
 
-# ── FINAL VERDICT (golden + contract combined) ────────────────────────────────
+# ── FINAL VERDICT (golden + redaction-probe + contract combined) ─────────────
 GOLDEN_CLEAN=false
 echo "$DIFF_RESULT" | grep -q "^VERDICT: CLEAN" && GOLDEN_CLEAN=true
 
-if $GOLDEN_CLEAN && $CONTRACT_PASS; then
+if $GOLDEN_CLEAN && $REDACTION_PASS && $CONTRACT_PASS; then
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║  DEPLOY VERIFIED — hard gate clean (firewall + contract +     ║"
@@ -379,11 +435,14 @@ if $GOLDEN_CLEAN && $CONTRACT_PASS; then
     echo "║  contract invariants all pass (or skip pending phase D)        ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     [[ -n "$PREV_URL" ]] && echo "Previous URL (rollback if needed): npx vercel promote $PREV_URL --scope novadateam-mvps"
+
+    # Cleanup temp golden dir
+    rm -rf "$GOLDEN_TMP"
 else
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║  DEPLOY NEEDS REVIEW — golden gate OR contract gate failed.    ║"
-    echo "║  Check output above for details.                               ║"
+    echo "║  DEPLOY NEEDS REVIEW — golden, redaction-probe, or contract    ║"
+    echo "║  gate failed. Check output above for details.                  ║"
     echo "║  (advisory dispatch-matrix shape changes alone are not this.)  ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
@@ -394,7 +453,14 @@ else
         echo "  npx vercel promote <prev-deployment-url> --scope novadateam-mvps"
         echo "  (prev URL not detected from deploy output — check: npx vercel ls)"
     fi
-fi
 
-# Cleanup temp golden dir
-rm -rf "$GOLDEN_TMP"
+    # Cleanup temp golden dir
+    rm -rf "$GOLDEN_TMP"
+
+    # F8 fix (2026-08-12): fail CLOSED. This branch used to fall through to the
+    # cleanup below and then exit 0 (the script's implicit last-command status)
+    # even on a REAL hard-gate failure — any automation gating on `$?` (CI,
+    # cron, a wrapper script) would see success and never know to roll back.
+    # A non-zero exit here is the whole point of a NEEDS-REVIEW banner.
+    exit 1
+fi
