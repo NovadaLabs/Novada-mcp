@@ -41,6 +41,7 @@ import { listResources, readResource } from "./resources/index.js";
 import { checkProxyConfiguration } from "./utils/domains.js";
 import { resolveProxyCredentials } from "./utils/credentials.js";
 import { maybeGetFirstRunNotice } from "./utils/first-run-notice.js";
+import { logUsage, summarizeTarget } from "./utils/usage-log.js";
 
 const API_KEY = process.env.NOVADA_API_KEY?.trim();
 
@@ -291,6 +292,7 @@ class NovadaMCPServer {
         };
       }
 
+      const t0 = Date.now();
       try {
         // NOV-321: record every dispatched tool call for novada_session_stats telemetry.
         recordToolCall(name);
@@ -301,6 +303,8 @@ class NovadaMCPServer {
           ? new Set(ACTIVE_TOOLS.map(t => t.name))
           : undefined;
         const result = await dispatch(name, args as Record<string, unknown>, API_KEY, { onProgress, visibleTools });
+        // Local usage log (user-facing audit trail). Fire-and-forget — never blocks or throws.
+        void logUsage({ tool: name, status: "success", ms: Date.now() - t0, target: summarizeTarget(args) });
         // TOW2-242: one-time first-run notice. Appended as a SEPARATE content block
         // (never concatenated into `result` — that would corrupt JSON-format outputs)
         // and ONLY on a successful dispatch. All logic + copy lives in the module;
@@ -310,6 +314,8 @@ class NovadaMCPServer {
         if (notice) content.push({ type: "text" as const, text: notice });
         return { content };
       } catch (error) {
+        // Local usage log for the failed call. Fire-and-forget — never throws.
+        void logUsage({ tool: name, status: "error", ms: Date.now() - t0, target: summarizeTarget(args), error: String(error) });
         // Zod validation errors → clear, structured message for the agent including
         // agent_instruction so the caller has a programmatic, parseable recovery signal.
         if (error instanceof ZodError) {

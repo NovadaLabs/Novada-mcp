@@ -4,6 +4,7 @@ import https from "https";
 import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect, type SearchIntent } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js";
 import { saveOutput } from "../utils/output.js";
+import { telemetryHeaders } from "../utils/http.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
@@ -244,6 +245,7 @@ export async function submitSearchScrapeTask(
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      ...telemetryHeaders("search"), // NOV-321: mark MCP-originated so the backend can log it (live submit path — search + research)
     },
     timeout: 60000,
     httpsAgent: keepAliveAgent,
@@ -327,7 +329,7 @@ export async function pollSearchResult(apiKey: string, taskId: string): Promise<
   // saves ~300ms on the slow path and has zero cost on the fast path.
 
   while (Date.now() < deadline) {
-    const resp = await axios.get(url, { timeout: 30000, httpsAgent: keepAliveAgent });
+    const resp = await axios.get(url, { timeout: 30000, httpsAgent: keepAliveAgent, headers: telemetryHeaders("search") });
     const body = resp.data;
 
     // Pending: exponential backoff capped at 1000ms (was 2000ms).

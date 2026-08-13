@@ -2,6 +2,7 @@ import axios, { AxiosError } from "axios";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHostedEnvironment } from "../config.js";
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
+import { telemetryHeaders } from "../utils/http.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
@@ -191,6 +192,7 @@ export async function submitScrapeTask(
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      ...telemetryHeaders("scrape"), // NOV-321: mark this as MCP-originated so the backend can log it (covers local + hosted)
     },
     timeout: 60000,
   });
@@ -320,7 +322,7 @@ async function pollForResult(
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
-    const resp = await axios.get(url, { timeout: 30000 });
+    const resp = await axios.get(url, { timeout: 30000, headers: telemetryHeaders("scrape") });
     const body = resp.data;
 
     // Pending: { code: 27202, data: null, msg: "" }
