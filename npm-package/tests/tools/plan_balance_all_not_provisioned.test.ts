@@ -68,15 +68,22 @@ vi.mock("../../src/tools/health.js", () => ({
   novadaHealth: vi.fn().mockResolvedValue("## health\n"),
 }));
 
-import { devApiParallel } from "../../src/_core/developer_api.js";
+import { devApiParallel, devApiPost } from "../../src/_core/developer_api.js";
+import { NovadaError, NovadaErrorCode } from "../../src/_core/errors.js";
 import { novadaPlanBalanceAll } from "../../src/tools/plan_balance_all.js";
 import { novadaAccount, validateAccountParams } from "../../src/tools/account.js";
 
 const mockedParallel = vi.mocked(devApiParallel);
+const mockedPost = vi.mocked(devApiPost);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockedParallel.mockReset();
+  // Restore the harmless default (empty static_house/list) after any
+  // per-test override (mockRejectedValueOnce etc.) — clearAllMocks() does
+  // NOT remove a configured implementation, but be explicit so test order
+  // never matters.
+  mockedPost.mockResolvedValue({ list: [], total: 0 });
 });
 
 /** Real captured shape (2026-08, live capture): HTTP 200, business code 11009 —
@@ -210,5 +217,97 @@ describe("novadaAccount(section=summary) — end-to-end: no contradictory 'servi
     expect(parsed.plans.per_product.residential.status).toBe("not_provisioned");
     expect(parsed.plans.not_provisioned).toContain("residential");
     expect(parsed.errors.some((e) => e.product === "residential")).toBe(false);
+  });
+});
+
+// ─── 4. static ISP — same class, DIFFERENT codepath (fetchStaticIpSummary) ───
+//
+// static is NOT a flow-metered product (see file-header comment on
+// plan_balance_all.ts) — it goes through devApiPost("/v1/static_house/list")
+// + fetchStaticIpSummary's own catch, not devApiParallel/the flow loop. Left
+// unfixed, the SAME "not provisioned" class check would drift/duplicate
+// (or simply be missing) on this second codepath — class-not-instance review
+// flagged this gap: the flow-loop fix alone left static reproducing the exact
+// "⛔ not provisioned in the table + service error in the Issues list"
+// contradiction. isNotProvisioned() is now the single source of truth shared
+// by BOTH codepaths (flow loop + fetchStaticIpSummary's catch).
+
+describe("plan_balance_all — static ISP shares the same not-provisioned class (code 11009)", () => {
+  beforeEach(() => {
+    // Only the static leg is under test here — give the flow loop one benign
+    // passing product so devApiParallel's mock has a trivial fixed shape.
+    mockedParallel.mockResolvedValue([
+      { key: "mobile", ok: true, data: { balance: 0, times: 5, total: 100, used: 5 } },
+    ]);
+  });
+
+  it("static_house/list rejects with businessCode 11009 -> static unavailable:true, absent from errors[], rendered 'not provisioned', zero 'service error'", async () => {
+    mockedPost.mockRejectedValueOnce(
+      new NovadaError({
+        code: NovadaErrorCode.INVALID_PARAMS,
+        message: CODE_11009_ERROR,
+        agent_instruction: "x",
+        retryable: false,
+        businessCode: 11009,
+      }),
+    );
+
+    // (a) plan_balance_all's own contract
+    const raw = await novadaPlanBalanceAll({ products: ["mobile", "static"] });
+    const parsed = JSON.parse(raw) as {
+      summary: { unavailable_products: string[] };
+      per_product: Record<string, { status: string; unavailable?: boolean }>;
+      errors?: Array<{ product: string; error: string }>;
+    };
+    expect(parsed.summary.unavailable_products).toContain("static");
+    expect(parsed.per_product.static.status).toBe("error");
+    expect(parsed.per_product.static.unavailable).toBe(true);
+    expect((parsed.errors ?? []).some((e) => e.product === "static")).toBe(false);
+
+    // (b) rendered through the REAL account.ts — card shows "not provisioned",
+    // never "service error", for the same product.
+    mockedPost.mockRejectedValueOnce(
+      new NovadaError({
+        code: NovadaErrorCode.INVALID_PARAMS,
+        message: CODE_11009_ERROR,
+        agent_instruction: "x",
+        retryable: false,
+        businessCode: 11009,
+      }),
+    );
+    const card = await novadaAccount(
+      validateAccountParams({ section: "plans", format: "card", products: ["mobile", "static"] }),
+    );
+    const staticRow = card.split("\n").find((l) => l.startsWith("| Static ISP"));
+    expect(staticRow).toBeTruthy();
+    expect(staticRow).toContain("⛔ not provisioned");
+    expect(card).not.toContain("service error");
+  });
+
+  it("guard: static_house/list rejects with a TRANSIENT error (no businessCode) -> stays a REAL error, NOT hidden as not-provisioned", async () => {
+    mockedPost.mockRejectedValueOnce(
+      new NovadaError({
+        code: NovadaErrorCode.API_DOWN,
+        message: "Developer-api returned HTTP 503. Treat as transient — retry after 30s.",
+        agent_instruction: "x",
+        retryable: true,
+        // businessCode intentionally undefined: a transient 5xx, not a
+        // structured "not provisioned" business code.
+      }),
+    );
+
+    const raw = await novadaPlanBalanceAll({ products: ["mobile", "static"] });
+    const parsed = JSON.parse(raw) as {
+      summary: { unavailable_products: string[] };
+      per_product: Record<string, { status: string; unavailable?: boolean; error: string }>;
+      errors?: Array<{ product: string; error: string }>;
+    };
+
+    expect(parsed.summary.unavailable_products).not.toContain("static");
+    expect(parsed.per_product.static.unavailable).toBeUndefined();
+    expect(parsed.per_product.static.status).toBe("error");
+    // Must still surface as a real, actionable error — never silently
+    // relabeled "not provisioned" just because it failed.
+    expect((parsed.errors ?? []).some((e) => e.product === "static")).toBe(true);
   });
 });

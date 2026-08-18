@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import { devApiParallel, devApiPost } from "../_core/developer_api.js";
+import { NovadaError } from "../_core/errors.js";
 
 // ─── Endpoint table ──────────────────────────────────────────────────────────
 
@@ -78,6 +79,21 @@ function enrichBalance(raw: unknown): { expired?: boolean; expires_at_human?: st
 }
 
 /**
+ * THE CLASS ("not provisioned") — SINGLE SOURCE OF TRUTH for every callsite
+ * that needs to tell "this product isn't on the account" apart from a
+ * genuine/transient error: HTTP 404 (message literal, existing) OR business
+ * code 11009 (structural — live-captured 2026-08, confirmed for
+ * residential/isp/datacenter: a flow-balance endpoint for a plan the account
+ * lacks returns HTTP 200 with envelope `{code:11009, msg:"Failed to obtain
+ * user information"}`). Used by BOTH the flow-loop classifier below AND
+ * fetchStaticIpSummary's catch — one helper, so the two callsites can never
+ * drift apart. Do NOT broaden beyond these two class members.
+ */
+function isNotProvisioned(code: number | undefined, msg: string): boolean {
+  return code === 11009 || msg.includes("Product not provisioned") || msg.includes("HTTP 404");
+}
+
+/**
  * static ISP is billed per-IP (not by traffic volume) — summarize ownership
  * via static_house/list instead of a flow-balance call. Region breakdown is
  * best-effort: the list-item shape isn't documented beyond page/limit/total,
@@ -112,10 +128,21 @@ async function fetchStaticIpSummary(apiKey?: string): Promise<PerProductResult> 
     };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
+    const businessCode = err instanceof NovadaError ? err.businessCode : undefined;
+    if (isNotProvisioned(businessCode, errMsg)) {
+      return {
+        status: "error",
+        error: `No static ISP IPs provisioned (billed per-IP, not by traffic — see novada_static_ip_mgmt to open one). Underlying error: ${errMsg}`,
+        unavailable: true,
+      };
+    }
+    // NOT the not-provisioned class (e.g. transient 5xx, auth failure, network
+    // error) — surface as a genuine error. Do NOT mislabel it "not
+    // provisioned": that would hide a real outage/misconfiguration behind a
+    // reassuring "known account state" signal.
     return {
       status: "error",
-      error: `No static ISP IPs provisioned (billed per-IP, not by traffic — see novada_static_ip_mgmt to open one). Underlying error: ${errMsg}`,
-      unavailable: true,
+      error: errMsg,
     };
   }
 }
@@ -156,17 +183,7 @@ export async function novadaPlanBalanceAll(
       else active_products.push(r.key);
     } else {
       const errMsg = r.error ?? "unknown error";
-      // THE CLASS ("not provisioned"): HTTP 404 (message literal, existing) OR
-      // business code 11009 (structural — live-captured 2026-08, confirmed for
-      // residential/isp/datacenter: a flow-balance endpoint for a plan the
-      // account lacks returns HTTP 200 with envelope
-      // `{code:11009, msg:"Failed to obtain user information"}`). 11009 is
-      // shared across all flow products, so this ONE check covers the whole
-      // class — no per-product branches. Do NOT broaden beyond these two.
-      const isUnavailable =
-        r.code === 11009 ||
-        errMsg.includes("Product not provisioned") ||
-        errMsg.includes("HTTP 404");
+      const isUnavailable = isNotProvisioned(r.code, errMsg);
       summary[r.key] = { status: "error", error: errMsg, ...(isUnavailable ? { unavailable: true } : {}) };
       if (isUnavailable) {
         // Not-provisioned is known account state, not a transient failure —
@@ -187,8 +204,13 @@ export async function novadaPlanBalanceAll(
     summary.static = staticResult;
     if (staticResult.status === "ok") {
       active_products.push("static");
+    } else if (staticResult.unavailable) {
+      // Mirror the flow-loop: not-provisioned is known account state, already
+      // signaled via `unavailable_products`/`per_product.static.unavailable` —
+      // do NOT also push it into `errors[]` (see the flow-loop comment above
+      // for why a double signal is contradictory downstream).
+      unavailable_products.push("static");
     } else {
-      if (staticResult.unavailable) unavailable_products.push("static");
       errors.push({ product: "static", error: staticResult.error });
     }
   }
