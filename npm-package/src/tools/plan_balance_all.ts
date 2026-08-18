@@ -156,10 +156,30 @@ export async function novadaPlanBalanceAll(
       else active_products.push(r.key);
     } else {
       const errMsg = r.error ?? "unknown error";
-      const isUnavailable = errMsg.includes("Product not provisioned") || errMsg.includes("HTTP 404");
+      // THE CLASS ("not provisioned"): HTTP 404 (message literal, existing) OR
+      // business code 11009 (structural — live-captured 2026-08, confirmed for
+      // residential/isp/datacenter: a flow-balance endpoint for a plan the
+      // account lacks returns HTTP 200 with envelope
+      // `{code:11009, msg:"Failed to obtain user information"}`). 11009 is
+      // shared across all flow products, so this ONE check covers the whole
+      // class — no per-product branches. Do NOT broaden beyond these two.
+      const isUnavailable =
+        r.code === 11009 ||
+        errMsg.includes("Product not provisioned") ||
+        errMsg.includes("HTTP 404");
       summary[r.key] = { status: "error", error: errMsg, ...(isUnavailable ? { unavailable: true } : {}) };
-      if (isUnavailable) unavailable_products.push(r.key);
-      errors.push({ product: r.key, error: errMsg });
+      if (isUnavailable) {
+        // Not-provisioned is known account state, not a transient failure —
+        // it's already surfaced via `unavailable_products`/`per_product[key]
+        // .unavailable`. Do NOT also push it into `errors[]`: a downstream
+        // consumer (account.ts) would otherwise render BOTH "⛔ not
+        // provisioned" (table, keyed off the structured flag) AND a generic
+        // "service error" line (errors list) for the same product — two
+        // contradictory signals for one piece of account state.
+        unavailable_products.push(r.key);
+      } else {
+        errors.push({ product: r.key, error: errMsg });
+      }
     }
   }
 
