@@ -9,15 +9,18 @@
 // string outputs. All three already throw NovadaError on failure, so partial
 // failures bubble up via Promise.allSettled isolation.
 //
-// capture_logs start_time (live-confirmed 2026-08): /v1/capture/logs REQUIRES
-// a start_time — calling it with none returns `code 10000, "解析开始时间失败:
-// parsing time \"\" ..."`, which then rendered as a misleading generic
-// "service error" for capture_recent even on a perfectly healthy account.
-// Both "YYYY-MM-DD HH:MM:SS" and "YYYY-MM-DD" formats are confirmed to return
-// `code 0 success`; we use the tool's existing public "YYYY-MM-DD" param
-// (flows through withDateRangeCompat -> emits both start_time + strat_time).
-// The window is computed at request time (new Date()), so it's always valid
-// relative to TODAY, never a stale hardcoded date.
+// capture_logs date range (live-confirmed 2026-08): /v1/capture/logs REQUIRES
+// BOTH start_time AND end_time. {start_time only} returns
+// `code 10000, "解析结束时间失败: parsing time \"\" ..."` (parse END time
+// failed — withDateRangeCompat only emits end_time when opts.end is
+// provided, so an omitted end_time stays empty and the server rejects); with
+// neither date it fails on start_time first ("解析开始时间失败"). Both errors
+// rendered as a misleading generic "service error" for capture_recent even
+// on a perfectly healthy account. {start_time + end_time} is confirmed to
+// return `code 0 success`; "YYYY-MM-DD" (date-only) is a confirmed-accepted
+// format for both fields. Both dates are computed at request time
+// (new Date()), so the window is always valid relative to TODAY, never a
+// stale hardcoded date — start_time = 7 days ago, end_time = today.
 
 import { z } from "zod";
 import { novadaWalletBalance } from "./wallet_balance.js";
@@ -219,7 +222,12 @@ export async function novadaAccountSummary(
     runSection<PlanPayload>("plan_balance_all", () => novadaPlanBalanceAll({} as never, apiKey)),
     runSection<CaptureLogsPayload>("capture_logs", () =>
       novadaCaptureLogs(
-        { page: 1, page_size: 5, start_time: isoDateDaysAgo(CAPTURE_LOOKBACK_DAYS) } as never,
+        {
+          page: 1,
+          page_size: 5,
+          start_time: isoDateDaysAgo(CAPTURE_LOOKBACK_DAYS),
+          end_time: isoDateDaysAgo(0), // today
+        } as never,
         apiKey,
       ),
     ),
