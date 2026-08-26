@@ -48,6 +48,17 @@ jobs:
   canary:
     name: golden capture + diff + contract (FREE) vs mcp.novada.com
     runs-on: ubuntu-latest
+    # Job-level env so TELEMETRY_SUPABASE_URL/TELEMETRY_SUPABASE_SERVICE_KEY are
+    # readable via the `env` context in the telemetry-canary step's `if:`
+    # condition below — GitHub Actions FORBIDS the `secrets` context inside a
+    # step `if:` (see synthetic-monitor.yml's identical comment on this same
+    # constraint); the `env` context IS allowed there, but only for vars set at
+    # job/workflow scope — a step's OWN `env:` block is not visible to its own
+    # `if:` condition, so these must be promoted here rather than left inline
+    # on the step.
+    env:
+      TELEMETRY_SUPABASE_URL: ${{ secrets.TELEMETRY_SUPABASE_URL }}
+      TELEMETRY_SUPABASE_SERVICE_KEY: ${{ secrets.TELEMETRY_SUPABASE_SERVICE_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -126,3 +137,28 @@ jobs:
           name: golden-canary-capture-${{ github.run_id }}
           path: /tmp/golden-canary/
           retention-days: 14
+
+      # 2026-08-26 addition (telemetry capture+delivery hardening): proves a
+      # REAL synthetic call against live prod produces a `pushed` mcp_events
+      # row within ~90s — the ONE check nothing above exercises (the golden/
+      # contract steps assert tool BEHAVIOR, not that telemetry for that call
+      # ever reached HQ). See hosted-server/scripts/telemetry-delivery-canary.mjs.
+      #
+      # Gated on the env context (not `secrets.*` directly — GitHub forbids
+      # `secrets.*` inside a step `if:`, see synthetic-monitor.yml's identical
+      # comment) because TELEMETRY_SUPABASE_URL/TELEMETRY_SUPABASE_SERVICE_KEY
+      # are NOT YET provisioned as repo secrets as of this writing — this step
+      # is dark-deploy safe and no-ops (skip, exit 0) until the owner adds
+      # them, same pattern as every other credential-gated step in this repo.
+      - name: Setup Node.js 20
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Telemetry delivery canary (synthetic call -> pushed row within budget)
+        if: always() && env.TELEMETRY_SUPABASE_URL != '' && env.TELEMETRY_SUPABASE_SERVICE_KEY != ''
+        env:
+          NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
+          MCP_URL: https://mcp.novada.com/mcp
+        run: node hosted-server/scripts/telemetry-delivery-canary.mjs

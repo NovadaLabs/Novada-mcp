@@ -374,6 +374,36 @@ test("emitEvent: fetch-throw is swallowed when env vars present", async () => {
   delete process.env.TELEMETRY_SUPABASE_KEY;
 });
 
+test("emitEvent: POST carries Prefer: resolution=ignore-duplicates (ON CONFLICT DO NOTHING against the request_id+event_type UNIQUE constraint)", async () => {
+  const savedFetch = globalThis.fetch;
+  let capturedHeaders = null;
+  globalThis.fetch = async (_url, opts) => {
+    capturedHeaders = opts.headers;
+    return { ok: true, status: 201 };
+  };
+  process.env.TELEMETRY_SUPABASE_URL = "https://test.supabase.co";
+  process.env.TELEMETRY_SUPABASE_KEY = "test-key-dedup";
+
+  const row = buildToolCallEvent({
+    request_id: "dedup-req", token_hash: null, plan: null,
+    client_name: null, client_version: null, protocol_version: null,
+    tool: "novada_search", args: {}, outcome: "ok",
+    latency_ms: 1, charged: false, over_cap_allowed: false, quota_remaining: 0,
+    server_version: null, region: null,
+  });
+
+  try {
+    await emitEvent(row);
+    assert.ok(capturedHeaders, "fetch must have been called");
+    assert.match(capturedHeaders["Prefer"], /resolution=ignore-duplicates/, "a retried capture must be idempotent (ON CONFLICT DO NOTHING), not a 409/23505 on the retry");
+    assert.match(capturedHeaders["Prefer"], /return=minimal/, "return=minimal must be preserved");
+  } finally {
+    globalThis.fetch = savedFetch;
+    delete process.env.TELEMETRY_SUPABASE_URL;
+    delete process.env.TELEMETRY_SUPABASE_KEY;
+  }
+});
+
 // ─── 6. Wire-level static check: cap_blocked path emits telemetry ─────────────
 
 test("mcp.ts source: scheduleToolEvent helper present in CallToolRequestSchema handler", () => {
@@ -381,6 +411,96 @@ test("mcp.ts source: scheduleToolEvent helper present in CallToolRequestSchema h
   assert.match(src, /const scheduleToolEvent/, "scheduleToolEvent helper must be defined in the tool handler");
   assert.ok(src.includes("buildToolCallEvent"), "mcp.ts must import/call buildToolCallEvent");
   assert.ok(src.includes("emitEvent"), "mcp.ts must call emitEvent");
+});
+
+// ─── Capture/delivery split (2026-08-26 fix) ──────────────────────────────────
+// Root cause: mcp.ts used to wrap the mcp_events INSERT itself inside
+// waitUntil (best-effort, can be dropped entirely if the function instance
+// dies before the callback runs). CAPTURE must now be AWAITED before every
+// response returns; only DELIVERY (the HQ push) stays on waitUntil.
+
+test("mcp.ts source: captureEvent helper exists and awaits emitEvent (the durable CAPTURE leg)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  assert.match(src, /async function captureEvent\(/, "captureEvent must be an async helper");
+  const fnIdx = src.indexOf("async function captureEvent(");
+  const fnSrc = src.slice(fnIdx, fnIdx + 800);
+  assert.match(fnSrc, /await emitEvent\(row\)/, "captureEvent must AWAIT emitEvent, not fire-and-forget it");
+});
+
+test("mcp.ts source: scheduleToolEvent is async and every call site is awaited", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  assert.match(src, /const scheduleToolEvent = async \(/, "scheduleToolEvent must be an async function so its CAPTURE leg can be awaited by callers");
+  // Every invocation of scheduleToolEvent({ ... must be preceded by `await ` —
+  // an un-awaited call here silently regresses back to the fire-and-forget bug.
+  const calls = [...src.matchAll(/^(\s*)(await )?scheduleToolEvent\(/gm)]
+    .filter((m) => !src.slice(m.index, m.index + 40).includes("const scheduleToolEvent")); // exclude the definition itself
+  assert.ok(calls.length >= 8, `expected at least 8 scheduleToolEvent call sites, found ${calls.length}`);
+  for (const m of calls) {
+    assert.ok(m[2] === "await ", `scheduleToolEvent call site at offset ${m.index} must be awaited: "${m[0].trim()}"`);
+  }
+});
+
+test("mcp.ts source: scheduleToolEvent awaits captureEvent (CAPTURE) before scheduling pushToHq via waitUntil (DELIVERY)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  const defIdx = src.indexOf("const scheduleToolEvent = async (");
+  assert.ok(defIdx >= 0, "scheduleToolEvent definition must exist");
+  const bodyEnd = src.indexOf("\n    };", defIdx);
+  const body = src.slice(defIdx, bodyEnd > 0 ? bodyEnd : defIdx + 3000);
+  const captureIdx = body.indexOf("await captureEvent(row)");
+  const pushIdx = body.indexOf("waitUntil(pushToHq(row");
+  assert.ok(captureIdx >= 0, "scheduleToolEvent body must await captureEvent(row)");
+  assert.ok(pushIdx >= 0, "scheduleToolEvent body must schedule pushToHq via waitUntil");
+  assert.ok(captureIdx < pushIdx, "CAPTURE (awaited) must happen before DELIVERY is scheduled (waitUntil)");
+});
+
+test("mcp.ts source: scheduleToolEvent wraps its WHOLE body (row-building AND captureEvent) in one try/catch — not just the final capture call", () => {
+  // Regression guard: an earlier draft of this fix wrapped ONLY the final
+  // `await captureEvent(row)` call, leaving encryptHqIdentity/
+  // buildToolCallEvent unprotected — a throw there would have escaped
+  // scheduleToolEvent (now async + awaited by every caller) straight into
+  // the customer's tool-call response path, which is exactly what the
+  // original fire-and-forget `.then(...).catch(() => {})` chain always
+  // prevented. This must be AT LEAST as fail-open as the code it replaced.
+  const src = readFileSync(MCP_TS, "utf8");
+  const defIdx = src.indexOf("const scheduleToolEvent = async (");
+  assert.ok(defIdx >= 0, "scheduleToolEvent definition must exist");
+  const bodyEnd = src.indexOf("\n    };", defIdx);
+  const body = src.slice(defIdx, bodyEnd > 0 ? bodyEnd : defIdx + 4000);
+  const tryIdx = body.indexOf("try {");
+  const encryptIdx = body.indexOf("await encryptHqIdentity(apiKey)");
+  const captureIdx = body.indexOf("await captureEvent(row)");
+  const catchIdx = body.indexOf("} catch (err) {");
+  assert.ok(tryIdx >= 0, "scheduleToolEvent body must open a try block");
+  assert.ok(encryptIdx >= 0 && captureIdx >= 0 && catchIdx >= 0, "encryptHqIdentity, captureEvent, and a catch block must all be present");
+  assert.ok(tryIdx < encryptIdx, "the try block must open BEFORE encryptHqIdentity (row-building) — not just before captureEvent");
+  assert.ok(encryptIdx < captureIdx && captureIdx < catchIdx, "row-building must happen between try and catch, ahead of captureEvent");
+  assert.ok(body.slice(catchIdx, catchIdx + 500).includes("capture_degraded"), "the catch block must log capture_degraded (fail-open, distinguishable from a silent swallow)");
+});
+
+test("mcp.ts source: emitGuardRejection wraps its WHOLE body (row-building AND captureEvent) in one try/catch", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  const defIdx = src.indexOf("async function emitGuardRejection(params: {");
+  assert.ok(defIdx >= 0, "emitGuardRejection definition must exist");
+  const bodyEnd = src.indexOf("\n}\n", defIdx);
+  const body = src.slice(defIdx, bodyEnd > 0 ? bodyEnd : defIdx + 3000);
+  const tryIdx = body.indexOf("try {");
+  const tokenHashIdx = body.indexOf("await tokenKvHash(params.token)");
+  const captureIdx = body.indexOf("await captureEvent(row)");
+  const catchIdx = body.indexOf("} catch (err) {");
+  assert.ok(tryIdx >= 0 && tokenHashIdx >= 0 && captureIdx >= 0 && catchIdx >= 0, "try/tokenKvHash/captureEvent/catch must all be present");
+  assert.ok(tryIdx < tokenHashIdx, "the try block must open BEFORE tokenKvHash (row-building) — not just before captureEvent");
+  assert.ok(tokenHashIdx < captureIdx && captureIdx < catchIdx, "row-building must happen between try and catch, ahead of captureEvent");
+  assert.ok(body.slice(catchIdx, catchIdx + 500).includes("capture_degraded"), "the catch block must log capture_degraded");
+});
+
+test("mcp.ts source: emitGuardRejection is async and every guard-site call is awaited", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  assert.match(src, /async function emitGuardRejection\(/, "emitGuardRejection must be async so pre_auth/rate_limited rows are captured before the 401/429 response returns");
+  const calls = [...src.matchAll(/^(\s*)(await )?emitGuardRejection\(\{/gm)];
+  assert.ok(calls.length >= 4, `expected at least 4 emitGuardRejection call sites (MISSING_TOKEN, INVALID_TOKEN x2, GATEWAY_RATE_LIMITED), found ${calls.length}`);
+  for (const m of calls) {
+    assert.ok(m[2] === "await ", `emitGuardRejection call site at offset ${m.index} must be awaited: "${m[0].trim()}"`);
+  }
 });
 
 test("mcp.ts source: cap_blocked path emits scheduleToolEvent", () => {

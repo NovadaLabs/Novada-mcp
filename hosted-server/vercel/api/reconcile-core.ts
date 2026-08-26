@@ -34,6 +34,43 @@ export function isCronAuthorized(authHeader: string | undefined | null, secret: 
   return timingSafeEqual(got, want);         // constant-time (defense-in-depth vs timing)
 }
 
+// ─── One-shot widened-window drain (built, never auto-invoked) ───────────────
+// The routine per-minute cron always uses reconcile.ts's fixed LOOKBACK_MS/
+// BATCH_LIMIT defaults — this pair exists ONLY so an operator can trigger a
+// single manual wide-window pass (e.g. `?lookbackHours=720&limit=500`) to
+// chase backlog older than the routine 48h window, without touching the
+// routine cadence's behavior. Both are clamped so a malformed or malicious
+// query param can never turn one cron tick into an unbounded table scan.
+export const MAX_LOOKBACK_HOURS = 24 * 30; // 30 days — generous but bounded
+export const MAX_BATCH_LIMIT = 500;
+
+/**
+ * Parse + clamp an optional `lookbackHours` query param into milliseconds.
+ * Invalid (non-numeric, <=0) or absent -> `defaultMs` unchanged. A value
+ * above MAX_LOOKBACK_HOURS is clamped down, never rejected outright — an
+ * operator asking for "everything" gets the widest safe window, not an error.
+ */
+export function resolveLookbackMs(param: string | null | undefined, defaultMs: number): number {
+  if (!param) return defaultMs;
+  const hours = Number(param);
+  if (!Number.isFinite(hours) || hours <= 0) return defaultMs;
+  const clampedHours = Math.min(hours, MAX_LOOKBACK_HOURS);
+  return clampedHours * 60 * 60 * 1000;
+}
+
+/**
+ * Parse + clamp an optional `limit` query param (rows per run). Invalid/absent
+ * -> `defaultLimit`. Clamped to [1, MAX_BATCH_LIMIT] — never 0 (a no-op run
+ * that still "succeeds" would mask a real drain failure) and never unbounded
+ * (a huge limit could blow the reconciler's own DRAIN_BUDGET_MS wall-clock).
+ */
+export function resolveBatchLimit(param: string | null | undefined, defaultLimit: number): number {
+  if (!param) return defaultLimit;
+  const n = Number(param);
+  if (!Number.isFinite(n) || n <= 0) return defaultLimit;
+  return Math.min(Math.floor(n), MAX_BATCH_LIMIT);
+}
+
 /**
  * PostgREST URL for the undelivered, ATTRIBUTABLE backlog, oldest first:
  *   - push_status IN (pending, failed)  — not yet delivered to HQ
