@@ -22,7 +22,7 @@
 
 import axios, { AxiosError } from "axios";
 import FormData from "form-data";
-import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg } from "./errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg } from "./errors.js";
 
 export const DEVELOPER_API_BASE = "https://api-m.novada.com";
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -298,6 +298,8 @@ export async function devApiPost<T = unknown>(
     throw makeNovadaError(
       NovadaErrorCode.INVALID_PARAMS,
       `Developer-api rejected request (code=${envelope.code}): ${serverMsg}`,
+      undefined,
+      typeof envelope.code === "number" ? envelope.code : undefined,
     );
   }
 }
@@ -308,6 +310,14 @@ export interface ParallelResult<T> {
   ok: boolean;
   data?: T;
   error?: string;
+  /**
+   * Upstream developer-api business `code` from the envelope, when the
+   * failure carries one (see NovadaError.businessCode). Lets callers (e.g.
+   * plan_balance_all's `isUnavailable` classifier) key off the STRUCTURED
+   * code — e.g. 11009 = "product not provisioned" for flow-balance endpoints —
+   * instead of pattern-matching `error`.
+   */
+  code?: number;
 }
 
 export async function devApiParallel<T = unknown>(
@@ -324,6 +334,7 @@ export async function devApiParallel<T = unknown>(
     }
     const reason = r.reason;
     const msg = reason instanceof Error ? reason.message : String(reason);
-    return { key: c.key, ok: false, error: msg };
+    const code = reason instanceof NovadaError ? reason.businessCode : undefined;
+    return { key: c.key, ok: false, error: msg, ...(code !== undefined ? { code } : {}) };
   });
 }

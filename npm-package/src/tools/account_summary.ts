@@ -1,6 +1,6 @@
 // Single-call account dashboard for Novada.
 //
-// Calls wallet_balance + plan_balance_all + capture_logs (last 1 day) in
+// Calls wallet_balance + plan_balance_all + capture_logs (last 7 days) in
 // parallel and folds the three results into a single human-readable + agent-
 // readable JSON summary. Designed for the most common prompt: "tell me my
 // Novada account status" — agents shouldn't have to make 3 round-trips.
@@ -8,6 +8,19 @@
 // Composition pattern: invokes existing tool functions and parses their JSON
 // string outputs. All three already throw NovadaError on failure, so partial
 // failures bubble up via Promise.allSettled isolation.
+//
+// capture_logs date range (live-confirmed 2026-08): /v1/capture/logs REQUIRES
+// BOTH start_time AND end_time. {start_time only} returns
+// `code 10000, "解析结束时间失败: parsing time \"\" ..."` (parse END time
+// failed — withDateRangeCompat only emits end_time when opts.end is
+// provided, so an omitted end_time stays empty and the server rejects); with
+// neither date it fails on start_time first ("解析开始时间失败"). Both errors
+// rendered as a misleading generic "service error" for capture_recent even
+// on a perfectly healthy account. {start_time + end_time} is confirmed to
+// return `code 0 success`; "YYYY-MM-DD" (date-only) is a confirmed-accepted
+// format for both fields. Both dates are computed at request time
+// (new Date()), so the window is always valid relative to TODAY, never a
+// stale hardcoded date — start_time = 7 days ago, end_time = today.
 
 import { z } from "zod";
 import { novadaWalletBalance } from "./wallet_balance.js";
@@ -34,6 +47,18 @@ type Section<T> = SectionOk<T> | SectionErr;
 function tryParse<T = unknown>(jsonText: string): T {
   try { return JSON.parse(jsonText) as T; }
   catch { return { _parse_error: true, raw: jsonText.slice(0, 200) } as unknown as T; }
+}
+
+/** How many days back the "recent capture activity" snapshot looks. */
+const CAPTURE_LOOKBACK_DAYS = 7;
+
+/**
+ * YYYY-MM-DD for `daysAgo` days before now (UTC), computed at request time so
+ * it's always valid relative to TODAY — never a stale hardcoded date. Used to
+ * satisfy capture_logs' required start_time (see file-header comment).
+ */
+function isoDateDaysAgo(daysAgo: number): string {
+  return new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 async function runSection<T>(label: string, fn: () => Promise<string>): Promise<Section<T>> {
@@ -196,7 +221,15 @@ export async function novadaAccountSummary(
     runSection<WalletPayload>("wallet_balance", () => novadaWalletBalance({} as never, apiKey)),
     runSection<PlanPayload>("plan_balance_all", () => novadaPlanBalanceAll({} as never, apiKey)),
     runSection<CaptureLogsPayload>("capture_logs", () =>
-      novadaCaptureLogs({ page: 1, page_size: 5 } as never, apiKey),
+      novadaCaptureLogs(
+        {
+          page: 1,
+          page_size: 5,
+          start_time: isoDateDaysAgo(CAPTURE_LOOKBACK_DAYS),
+          end_time: isoDateDaysAgo(0), // today
+        } as never,
+        apiKey,
+      ),
     ),
   ]);
 

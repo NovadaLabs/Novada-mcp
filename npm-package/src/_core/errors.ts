@@ -53,6 +53,15 @@ export class NovadaError extends Error {
   readonly retryable: boolean;
   /** Optional short reason supplied by callers for INVALID_PARAMS detail. */
   readonly detail?: string;
+  /**
+   * Raw upstream business `code` from a developer-api envelope (e.g. `11009` =
+   * "product not provisioned" for flow-balance endpoints), when known. Lets
+   * callers classify on the STRUCTURED code instead of parsing `message` —
+   * see plan_balance_all.ts's `isUnavailable` check, which keys off this field
+   * (plus the pre-existing HTTP-404 message literal) instead of guessing from
+   * upstream prose that can vary per endpoint/locale.
+   */
+  readonly businessCode?: number;
 
   constructor(opts: {
     code: NovadaErrorCode;
@@ -60,6 +69,7 @@ export class NovadaError extends Error {
     agent_instruction: string;
     retryable: boolean;
     detail?: string;
+    businessCode?: number;
   }) {
     super(opts.message);
     this.name = "NovadaError";
@@ -67,6 +77,7 @@ export class NovadaError extends Error {
     this.agent_instruction = opts.agent_instruction;
     this.retryable = opts.retryable;
     this.detail = opts.detail;
+    this.businessCode = opts.businessCode;
   }
 
   /** Formats the error as an agent-readable string with failure classification. */
@@ -593,11 +604,14 @@ export function classifyError(error: unknown): NovadaError {
 /**
  * Creates a NovadaError for a specific code with a custom message.
  * Convenience factory used by tools that detect error codes from API response bodies.
+ * `businessCode` optionally preserves the raw upstream developer-api envelope
+ * `code` (e.g. 11009) so callers can classify structurally — see NovadaError.businessCode.
  */
 export function makeNovadaError(
   code: NovadaErrorCode,
   message: string,
-  detail?: string
+  detail?: string,
+  businessCode?: number,
 ): NovadaError {
   return new NovadaError({
     code,
@@ -610,5 +624,6 @@ export function makeNovadaError(
       NovadaErrorCode.TASK_PENDING,
     ].includes(code),
     detail,
+    businessCode,
   });
 }
