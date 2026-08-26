@@ -38,9 +38,17 @@
 import { callTool } from "../../monitoring/lib/mcp-client.mjs";
 
 export const POLL_INTERVAL_MS = 5_000;
-/** 90s — a little over the reconciler's 60s cron period, so a healthy
- *  pipeline has time for at least one full drain tick even if the inline
- *  push happened to fail and fell through to the reconciler. */
+/**
+ * 90s. The inline push (waitUntil, see _hq_push.ts) usually still delivers a row
+ * within a couple seconds — that's the common case this budget is sized for. It is
+ * NOT sized to guarantee catching the reconciler's own sweep: since 2026-08-26 the
+ * reconciler is triggered by a GitHub Actions scheduled workflow on a ~5-15 min
+ * cadence (see reconcile.ts's module doc), not the old every-60s Vercel Cron, so a
+ * 90s window can easily end before the reconciler ever ticks. That's why a row still
+ * `pending`/`failed` when the budget runs out is treated as "recorded, delivery
+ * pending" (non-fatal) below rather than a hard failure — see pollForDelivery's
+ * `pending` outcome and main()'s handling of it.
+ */
 export const POLL_BUDGET_MS = 90_000;
 
 function sleep(ms) {
@@ -48,11 +56,25 @@ function sleep(ms) {
 }
 
 /**
- * Poll mcp_events for a row matching `userAgent`, until it reaches
- * push_status='pushed' or the budget elapses. Injectable fetchImpl/sleepImpl
- * for tests — production callers omit both.
+ * Poll mcp_events for a row matching `userAgent`, until it reaches a terminal
+ * `push_status` (`pushed` or `dead`) or the budget elapses. Injectable
+ * fetchImpl/sleepImpl for tests — production callers omit both.
  *
- * @returns {Promise<{found: boolean, pushed: boolean, row: object|null, elapsedMs: number}>}
+ * Three distinct outcomes when the row IS found:
+ *   - pushed=true              → delivered. Success.
+ *   - pushed=false, pending=false → `push_status='dead'` (terminal,
+ *     non-retryable). A real bug, not a timing artifact.
+ *   - pushed=false, pending=true  → still `pending`/`failed` when the budget
+ *     ran out. NOT a failure: since the reconciler now runs on a ~5-15 min
+ *     GitHub Actions cadence (see reconcile.ts's module doc) rather than the
+ *     old every-60s Vercel Cron, this poll's 90s budget can easily end
+ *     before the reconciler's next tick even on a perfectly healthy
+ *     pipeline. Capture already succeeded (the row exists) — only delivery
+ *     timing is still open.
+ * And when the row is never found at all (found=false): capture itself
+ * looks broken — still a hard failure regardless of cadence.
+ *
+ * @returns {Promise<{found: boolean, pushed: boolean, pending: boolean, row: object|null, elapsedMs: number}>}
  */
 export async function pollForDelivery({
   url,
@@ -66,6 +88,7 @@ export async function pollForDelivery({
 }) {
   const start = now();
   const qs = `user_agent=eq.${encodeURIComponent(userAgent)}&event_type=eq.tool_call&order=ts.desc&limit=1`;
+  let lastSeenRow = null;
   while (now() - start < budgetMs) {
     const res = await fetchImpl(`${url.replace(/\/+$/, "")}/rest/v1/mcp_events?${qs}`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
@@ -74,20 +97,26 @@ export async function pollForDelivery({
       const rows = await res.json();
       if (rows.length > 0) {
         const row = rows[0];
+        lastSeenRow = row;
         if (row.push_status === "pushed") {
-          return { found: true, pushed: true, row, elapsedMs: now() - start };
+          return { found: true, pushed: true, pending: false, row, elapsedMs: now() - start };
         }
         if (row.push_status === "dead") {
           // Terminal, non-retryable — no point polling further.
-          return { found: true, pushed: false, row, elapsedMs: now() - start };
+          return { found: true, pushed: false, pending: false, row, elapsedMs: now() - start };
         }
-        // found but still pending/failed — keep polling, the reconciler
-        // cron may still pick it up within the budget.
+        // found but still pending/failed — keep polling, the reconciler's
+        // next GitHub Actions tick may still pick it up within the budget.
       }
     }
     await sleepImpl(intervalMs);
   }
-  return { found: false, pushed: false, row: null, elapsedMs: now() - start };
+  // Budget exhausted. A row that was captured but never reached a terminal
+  // state is "delivery pending", not a total loss — see the JSDoc above.
+  if (lastSeenRow) {
+    return { found: true, pushed: false, pending: true, row: lastSeenRow, elapsedMs: now() - start };
+  }
+  return { found: false, pushed: false, pending: false, row: null, elapsedMs: now() - start };
 }
 
 async function main() {
@@ -111,11 +140,25 @@ async function main() {
   console.log(JSON.stringify({ userAgent, ...result }, null, 2));
 
   if (result.pushed) process.exit(0);
+  if (result.found && result.pending) {
+    // Non-fatal: capture succeeded (the row exists), delivery just hadn't
+    // finished within this poll's 90s budget. Expected occasionally now that
+    // the reconciler runs on a ~5-15 min GitHub Actions cadence instead of
+    // the old every-60s Vercel Cron (see POLL_BUDGET_MS's doc comment above)
+    // — inline push (waitUntil) usually still lands fast, but when it
+    // doesn't, the reconciler's next tick (not this canary run) is what
+    // finishes the job. Do NOT treat this as a hard failure; a row that
+    // never appears at all is handled separately below and still is one.
+    console.log(
+      "[telemetry-delivery-canary] recorded, delivery pending — row was captured but still pending/failed at the end of the poll window; the GitHub Actions reconciler (~5-15 min cadence) may not have ticked yet. Non-fatal."
+    );
+    process.exit(0);
+  }
   if (result.found && !result.pushed) {
     console.error("[telemetry-delivery-canary] row was captured but reached a terminal non-pushed state (push_status='dead') — this is a buildHqPayload()/HQ payload bug, not a transient blip");
     process.exit(1);
   }
-  console.error(`[telemetry-delivery-canary] no mcp_events row for this synthetic call within ${POLL_BUDGET_MS}ms — CAPTURE or DELIVERY is broken (or the reconciler cron isn't running — check vercel.json's crons + CRON_SECRET/TELEMETRY_SUPABASE_SERVICE_KEY env vars)`);
+  console.error(`[telemetry-delivery-canary] no mcp_events row for this synthetic call within ${POLL_BUDGET_MS}ms — CAPTURE itself is broken (this is NOT about the reconciler's cadence — an ungrouped row should be captured near-instantly by the inline push; check CRON_SECRET/TELEMETRY_SUPABASE_SERVICE_KEY env vars and .github/workflows/reconcile-cron.yml as a secondary check)`);
   process.exit(1);
 }
 

@@ -218,7 +218,14 @@ export async function novadaPlanBalanceAll(
   const totalSelected = selected.length + (wantStatic ? 1 : 0);
 
   // Treat unavailable-products as not a "real" error for status-summarising
-  // purposes — they're known account state, not transient failures.
+  // purposes — they're known account state, not transient failures. NOTE:
+  // this filter is currently a no-op by construction — both loops above
+  // deliberately never push an unavailable product into `errors[]` (see
+  // their own comments) — but it's kept (rather than replaced with `errors`
+  // directly) as a defensive invariant guard for `overall` below: if a
+  // future edit ever did push an unavailable product into `errors[]`, this
+  // line is what would keep it from corrupting the "all_failed"/"partial"
+  // classification.
   const realErrors = errors.filter(e => !unavailable_products.includes(e.product));
   const overall =
     realErrors.length === 0

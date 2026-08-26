@@ -167,13 +167,20 @@ async function rpcRequest(method, params, { timeoutMs = 60000, headers = {} } = 
     const res = await fetch(url, {
       method: "POST",
       headers: {
+        // Caller-supplied headers merge ON TOP of (i.e. spread FIRST, so the
+        // required headers below can overwrite them) the required
+        // content-type/accept/authorization — never the other way around.
+        // Spreading `...headers` last would let a caller silently override
+        // `authorization` (or `accept`, breaking the SDK's response
+        // negotiation) — see this function's own JSDoc, which already
+        // documents "merges ON TOP ... never replaces them" as the contract.
+        ...headers,
         "content-type": "application/json",
         // The MCP SDK's StreamableHTTPServerTransport requires BOTH types to
         // be listed or it replies 406 Not Acceptable — see file header.
         accept: "application/json, text/event-stream",
         // Bearer header, never a URL query param — see file header.
         authorization: `Bearer ${token}`,
-        ...headers,
       },
       body,
       signal: controller.signal,

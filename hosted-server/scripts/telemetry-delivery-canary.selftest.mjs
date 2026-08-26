@@ -15,6 +15,9 @@
  *   3. row reaches push_status='dead' -> found=true, pushed=false (stops polling immediately, does not exhaust the budget)
  *   4. no row ever appears -> found=false, pushed=false, exhausts the full budget
  *   5. the PostgREST query targets user_agent + event_type=tool_call + ordered newest-first
+ *   6. row exists but stays 'pending' for the whole budget -> found=true, pushed=false,
+ *      pending=true (the 2026-08-26 GitHub-Actions-cadence tolerance: distinct from both
+ *      "dead" (3) and "never appeared" (4) — see pollForDelivery's JSDoc)
  */
 import { pollForDelivery } from "./telemetry-delivery-canary.mjs";
 
@@ -106,6 +109,21 @@ async function main() {
     expect(capturedUrl.includes("event_type=eq.tool_call"), "query scoped to tool_call rows");
     expect(capturedUrl.includes("order=ts.desc"), "query orders newest-first (the canary's own call is always the most recent for this unique UA)");
     expect(capturedUrl.includes("limit=1"), "query bounded to 1 row");
+  }
+
+  // ── 6. stuck 'pending' for the whole budget -> non-fatal "delivery pending" ──
+  console.log("[selftest] (6) row exists but stays 'pending' for the entire budget -> pending=true, not a hard failure...");
+  {
+    const { now, sleepImpl } = makeClock(5000);
+    let call = 0;
+    const fetchImpl = async () => {
+      call += 1;
+      return { ok: true, json: async () => [{ push_status: "pending", request_id: "r6" }] };
+    };
+    const result = await pollForDelivery({ url: "https://tel.example.test", key: "k", userAgent: "ua-6", fetchImpl, sleepImpl, now, budgetMs: 20_000, intervalMs: 5000 });
+    expect(result.found === true && result.pushed === false && result.pending === true, `found+not-pushed+pending at timeout, distinct from 'dead' and 'never found' (got ${JSON.stringify(result)})`);
+    expect(result.row?.request_id === "r6", `last-seen row is surfaced, not discarded (got ${JSON.stringify(result.row)})`);
+    expect(result.elapsedMs >= 20_000, `polling ran for the full budget before giving up on reaching a terminal state (got ${result.elapsedMs}ms, want >=20000ms)`);
   }
 
   console.log("");

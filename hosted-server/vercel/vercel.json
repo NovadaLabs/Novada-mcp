@@ -1,9 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
-  "crons": [
-    { "path": "/api/reconcile", "schedule": "* * * * *" }
-  ],
   "rewrites": [
     { "source": "/api/reconcile", "destination": "/api/reconcile" },
     { "source": "/:key/mcp", "destination": "/api/mcp?pathKey=:key" },

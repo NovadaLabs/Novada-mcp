@@ -1,17 +1,30 @@
 /**
- * reconcile.ts — HQ outbox drain, triggered by Vercel Cron every minute.
+ * reconcile.ts — HQ outbox drain, triggered by a GitHub Actions scheduled workflow
+ * (.github/workflows/reconcile-cron.yml) POSTing here every ~5-15 min.
+ *
+ * WHY GITHUB ACTIONS, NOT VERCEL CRON: this project runs on the Vercel HOBBY plan,
+ * which does not support per-minute Vercel Cron (that needs Vercel Pro). Rather than
+ * pay for an upgrade, this route is triggered externally over HTTP by GitHub Actions'
+ * own scheduler at $0 — see reconcile-cron.yml's header comment for the full rationale
+ * and the CADENCE CAVEAT (GitHub Actions' schedule trigger has a 5-minute floor and can
+ * drift or skip a tick under load, so "~5-15 min" is typical, not guaranteed).
  *
  * WHY: HQ (api-m.novada.com) is the system of record for customer-facing MCP usage
  * logs; our telemetry Supabase is only a backup. The inline push (see _hq_push.ts,
  * scheduled in mcp.ts's waitUntil) drops a row after 3 immediate retries if HQ is
  * transiently unavailable — with no replay, those rows never reached HQ. This route is
- * that replay: every minute it re-sends the undelivered, attributable backlog, so every
- * recorded tool_call lands in HQ within ~60s even across an api-m outage. Idempotent by
+ * that replay: on each trigger it re-sends the undelivered, attributable backlog, so
+ * every recorded tool_call lands in HQ within roughly 5-15 minutes via the GitHub
+ * Actions scheduler (upgrade to Vercel Pro for native per-minute cron) even across an
+ * api-m outage — eventually 100%, nothing permanently dropped, regardless of exact
+ * cadence, since the drainer retries the same backlog until it succeeds. Idempotent by
  * contract (HQ dedups on request_id+event_type), so re-sending an already-stored row is
  * a no-op on their side.
  *
- * SECURITY: refuses anything without `Authorization: Bearer $CRON_SECRET` (Vercel Cron
- * sends this automatically when CRON_SECRET is set) → no public trigger.
+ * SECURITY: refuses anything without `Authorization: Bearer $CRON_SECRET` (the GitHub
+ * Actions workflow sends this explicitly, sourced from the `CRON_SECRET` repo secret —
+ * which must be kept in sync with the same-named Vercel project env var this handler
+ * reads) → no public trigger.
  *
  * READ KEY: SELECTing the backlog needs a read-capable key. The gateway's normal
  * TELEMETRY_SUPABASE_KEY is INSERT-only under RLS, so this route uses a separate
@@ -29,15 +42,18 @@ import {
   type OutboxRow,
 } from "./reconcile-core.js";
 
-// Vercel Node.js Function. maxDuration 60 == the cron period, so a run can never
-// overlap the next tick; the drain's own 50s budget (below) keeps it safely under this.
+// Vercel Node.js Function. maxDuration 60 was originally sized to equal the (Vercel
+// Cron) trigger period so a run could never overlap the next tick; the trigger is now
+// the GitHub Actions workflow's ~5-15 min cadence (see module doc above), so that
+// specific overlap concern no longer applies, but 60s is still a sane ceiling — the
+// drain's own 50s budget (below) keeps it safely under this regardless of trigger source.
 export const config = {
   runtime: "nodejs",
   maxDuration: 60,
 };
 
 const LOOKBACK_MS = 48 * 60 * 60 * 1000; // only chase the last 48h of backlog
-const BATCH_LIMIT = 100; // per run; single-attempt pushes → comfortably < 60s
+const BATCH_LIMIT = 100; // per run; single-attempt pushes → comfortably fits the 60s function budget
 const DRAIN_BUDGET_MS = 50_000;
 const SELECT_TIMEOUT_MS = 8_000; // bound the backlog SELECT (mirrors _hq_push's timeouts) — a hung PostgREST must not eat the whole cron tick and get force-killed
 
@@ -64,7 +80,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // One-shot widened-window override (built for, and ONLY for, a manual
   // operator-triggered drain of backlog older than the routine 48h window —
   // e.g. `/api/reconcile?lookbackHours=720&limit=500`, still gated by the
-  // SAME CRON_SECRET bearer check above). The routine per-minute cron
+  // SAME CRON_SECRET bearer check above). The routine GitHub Actions reconcile
   // invocation carries NO query string, so it always falls through to the
   // fixed LOOKBACK_MS/BATCH_LIMIT defaults below — this override changes
   // nothing about the routine cadence unless a caller explicitly asks for it.

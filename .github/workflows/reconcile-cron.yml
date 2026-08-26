@@ -1,0 +1,76 @@
+name: Telemetry Reconcile Cron
+
+# Triggers the HQ outbox reconciler (hosted-server/vercel/api/reconcile.ts) on
+# a schedule. This REPLACES a Vercel Cron entry that used to live in
+# hosted-server/vercel/vercel.json (`"crons": [{ "path": "/api/reconcile",
+# "schedule": "* * * * *" }]`).
+#
+# WHY GITHUB ACTIONS INSTEAD OF VERCEL CRON: this project is deployed on the
+# Vercel HOBBY plan. Hobby does not support per-minute Vercel Cron — that
+# requires Vercel Pro — so the `"* * * * *"` entry above either fails the
+# deploy outright or gets silently downgraded to Vercel's Hobby-tier cap of
+# once per day, neither of which is acceptable for an outbox drain that's
+# supposed to run frequently. Upgrading to Pro would fix this natively, but
+# that's a paid-plan decision the owner hasn't made (2026-08-26). This
+# workflow gets equivalent behavior at $0 by having GitHub Actions' own
+# scheduler hit the route over HTTP instead of relying on Vercel's scheduler.
+#
+# CADENCE CAVEAT: GitHub Actions' `schedule` trigger has a 5-minute minimum
+# interval, and GitHub explicitly reserves the right to delay or entirely
+# SKIP a scheduled run under load (their docs: "scheduled workflows may be
+# delayed during periods of high loads"). So `*/5 * * * *` below is a
+# "somewhere in the 5-15 minute range, most of the time" cadence, NOT a hard
+# guarantee — see reconcile.ts's module doc and npm-package/CHANGELOG.md's
+# 0.9.37 entry for the accuracy fix this drove. This is an accepted tradeoff:
+# the reconciler is idempotent and re-selects the full undelivered backlog on
+# every tick (see reconcile-core.ts's buildUndeliveredQuery), so a delayed or
+# skipped tick just pushes eventual delivery a few minutes later — nothing is
+# ever permanently dropped.
+#
+# THIS IS NOT A PR GATE. It never runs on push/pull_request — scheduled +
+# manual only, so routine commits never trigger a reconcile call.
+on:
+  schedule:
+    # Every 5 minutes — the shortest interval GitHub Actions allows. GitHub
+    # Actions cron is ALWAYS UTC; irrelevant here since this isn't a
+    # time-of-day-sensitive schedule. See the CADENCE CAVEAT above for why
+    # actual firing can drift or be skipped.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  reconcile:
+    name: POST /api/reconcile (HQ outbox drain)
+    # Self-guard: only run on the canonical repo. The post-commit hook mirrors
+    # main → NovadaLabs/test-novada-mcp-test, which has no CRON_SECRET secret
+    # configured there — same mirror-guard pattern as synthetic-monitor.yml's
+    # `smoke` job (see its comment for the full rationale). Without this, every
+    # scheduled tick on the mirror would fail loudly for a reason that has
+    # nothing to do with a real outage.
+    if: github.repository == 'NovadaLabs/Novada-mcp'
+    runs-on: ubuntu-latest
+    steps:
+      # reconcile.ts refuses (401) anything without `Authorization: Bearer
+      # $CRON_SECRET` — see reconcile-core.ts's isCronAuthorized. CRON_SECRET
+      # here must be the SAME value as the `CRON_SECRET` env var already set
+      # on the Vercel project (owner-provisioned there); it also needs adding
+      # as a GitHub Actions repo secret with the same value for this workflow
+      # to authenticate.
+      #
+      # --fail-with-body (curl >=7.76, present on ubuntu-latest): fails the
+      # step (nonzero exit) on any non-2xx response WHILE STILL printing the
+      # response body first — plain --fail would swallow the body, hiding
+      # exactly the diagnostic (e.g. a 401 from a missing/rotated secret) a
+      # human would need. On a 2xx response, curl prints the JSON body to the
+      # step log unconditionally (no -o redirect), so a soft-skip response
+      # like {"skipped":"telemetry read not configured"} — reconcile.ts's
+      # fail-safe when TELEMETRY_SUPABASE_URL/TELEMETRY_SUPABASE_SERVICE_KEY
+      # aren't set — is VISIBLE in the log instead of reading as a silent,
+      # meaningless green checkmark.
+      - name: Trigger reconcile
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            https://mcp.novada.com/api/reconcile
