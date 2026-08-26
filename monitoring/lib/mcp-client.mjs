@@ -146,10 +146,14 @@ function extractText(parsed) {
  *
  * @param {string} method
  * @param {Record<string, unknown>} params
- * @param {{timeoutMs?: number}} [opts]
+ * @param {{timeoutMs?: number, headers?: Record<string, string>}} [opts]
+ *   `headers` merges ON TOP of the required content-type/accept/authorization
+ *   headers below (never replaces them) — e.g. a caller can pass a
+ *   distinctive `user-agent` to correlate this specific request against a
+ *   telemetry row later (see telemetry-delivery-canary.mjs).
  * @returns {Promise<{ok: boolean, httpStatus: number, timeMs: number, text: string|null, error: unknown, result: unknown}>}
  */
-async function rpcRequest(method, params, { timeoutMs = 60000 } = {}) {
+async function rpcRequest(method, params, { timeoutMs = 60000, headers = {} } = {}) {
   const token = requireTestKey();
   const url = MCP_URL;
   const id = nextRequestId();
@@ -169,6 +173,7 @@ async function rpcRequest(method, params, { timeoutMs = 60000 } = {}) {
         accept: "application/json, text/event-stream",
         // Bearer header, never a URL query param — see file header.
         authorization: `Bearer ${token}`,
+        ...headers,
       },
       body,
       signal: controller.signal,
@@ -235,7 +240,7 @@ async function rpcRequest(method, params, { timeoutMs = 60000 } = {}) {
  *
  * @param {string} name tool name, e.g. "novada_search"
  * @param {Record<string, unknown>} [args] tool arguments
- * @param {{timeoutMs?: number}} [opts]
+ * @param {{timeoutMs?: number, headers?: Record<string, string>}} [opts]
  * @returns {Promise<{ok: boolean, httpStatus: number, timeMs: number, text: string|null, error: unknown}>}
  */
 export async function callTool(name, args = {}, opts = {}) {

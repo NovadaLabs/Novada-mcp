@@ -35,7 +35,7 @@ import {
   emitEvent,
   encryptHqIdentity,
 } from "./_telemetry.js";
-import type { RejectionStage, AuthMethod } from "./_telemetry.js";
+import type { RejectionStage, AuthMethod, McpEventRow } from "./_telemetry.js";
 // HQ log-ingest push (Leo's /mcp/log/create contract) — see ./_hq_push.ts. Fail-safe
 // (no-op without NOVADA_HQ_LOG_URL) and fail-silent (never throws); chained after
 // emitEvent below so our own backup insert is always scheduled regardless of push outcome.
@@ -903,25 +903,81 @@ function extractToken(req: Request): { token: string; authMethod: AuthMethod } |
   return null;
 }
 
+// ─── Two-phase telemetry: CAPTURE (durable, awaited) vs DELIVERY (best-effort, waitUntil) ──
+// Root cause fixed here (2026-08-26): mcp.ts used to wrap BOTH the mcp_events
+// INSERT (emitEvent) and the HQ push (pushToHq) inside waitUntil — a
+// best-effort callback Vercel runs "if the function instance survives long
+// enough." If the instance froze or was recycled before that callback ran,
+// the row was NEVER written at all (not "pending", not "failed" — simply
+// absent), which is indistinguishable from "no traffic happened" and cannot
+// be reconciled after the fact. CAPTURE (this helper) is now AWAITED before
+// every guard-rejection/tool-call response returns, so the row's existence no
+// longer depends on the function instance surviving past the response.
+// DELIVERY (pushToHq, still scheduled via waitUntil at each call site below)
+// keeps its original best-effort timing — a dropped push still leaves a
+// `pending`/`failed` row for the reconciler cron to pick up within ~60s, so
+// there is no durability requirement on the push leg the way there is on the
+// insert leg.
+//
+// captureEvent() itself NEVER throws (emitEvent already never throws — this
+// wraps it defensively in case a future emitEvent change regresses that
+// contract) and is bounded by emitEvent's own TELEMETRY_TIMEOUT_MS (3s) abort,
+// so awaiting it adds at most ~3s of latency in the worst case (a stalled
+// Supabase endpoint), typically <50ms. On the defensive catch path, it falls
+// back to the OLD fire-and-forget waitUntil insert (best-effort, same as
+// before this fix) and logs a distinct `capture_degraded` line so ops can see
+// whenever this fallback is actually exercised (should be near-never given
+// emitEvent's own fail-open contract).
+async function captureEvent(row: McpEventRow): Promise<void> {
+  try {
+    await emitEvent(row);
+  } catch (err) {
+    console.error(JSON.stringify({
+      evt: "capture_degraded",
+      request_id: row.request_id,
+      event_type: row.event_type,
+      tool: row.tool,
+      msg: "awaited emitEvent() threw unexpectedly — falling back to fire-and-forget waitUntil insert",
+      error: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+    }));
+    try { waitUntil(emitEvent(row).catch(() => { /* fail-open, matches emitEvent's own contract */ })); }
+    catch { /* outside Vercel context (e.g. local dev / tests) */ }
+  }
+}
+
 /**
  * Emits a telemetry row for a request rejected BEFORE a tool name is even known
  * (pre_auth / rate_limited guard sites in fetchHandler, ahead of buildServer).
- * Fire-and-forget via waitUntil, mirroring scheduleToolEvent's style — never
- * awaited by the caller, never blocks the rejection response.
+ * AWAITED by every call site below, before its corresponding rejection
+ * response returns (see captureEvent's doc comment above for why). pre_auth
+ * rows are never pushed to HQ (reconcile-core.ts's buildUndeliveredQuery
+ * explicitly excludes rejection_stage=pre_auth — an unattributable/bad-key
+ * attempt has nothing for HQ to attribute), so this only ever does the
+ * CAPTURE leg — there is no DELIVERY leg to schedule here.
  *
  * `token` is the RAW presented key when one exists (even a rejected one — HQ
  * identity resolution still wants to know which account attempted the call);
  * null only for MISSING_TOKEN, where there is nothing to hash or encrypt.
+ *
+ * The ENTIRE body (row construction + captureEvent) is wrapped in a single
+ * try/catch — matching the original fire-and-forget IIFE's single
+ * `.catch(() => {})` that covered this whole chain. captureEvent() alone
+ * never throws, but tokenKvHash/encryptHqIdentity/buildToolCallEvent run
+ * BEFORE it and are NOT individually guarded — narrowing this function's
+ * safety net to only the final emitEvent call (as an earlier draft of this
+ * fix did) would let a hash/encrypt failure escape into the caller's 401/429
+ * response path. This function must be AT LEAST as fail-open as the code it
+ * replaced, never less.
  */
-function emitGuardRejection(params: {
+async function emitGuardRejection(params: {
   requestId: string;
   token: string | null;
   outcome: string;
   rejectionStage: RejectionStage;
   authMethod: AuthMethod | null;
   userAgent: string | null;
-}): void {
-  const promise = (async () => {
+}): Promise<void> {
+  try {
     const tokenHash = params.token ? await tokenKvHash(params.token) : null;
     const hq = params.token
       ? await encryptHqIdentity(params.token)
@@ -948,9 +1004,19 @@ function emitGuardRejection(params: {
       hq_identity: hq.hq_identity,
       key_version: hq.key_version,
     });
-    await emitEvent(row);
-  })().catch(() => { /* fail-open — telemetry must never affect the rejection response */ });
-  try { waitUntil(promise); } catch { /* outside Vercel context */ }
+    await captureEvent(row);
+  } catch (err) {
+    // Fail-open, matching the original code's whole-chain `.catch(() => {})`
+    // — a row could not even be BUILT (nothing for captureEvent's own
+    // fallback to retry), so this is a distinct, coarser degradation than
+    // captureEvent's internal capture_degraded log.
+    console.error(JSON.stringify({
+      evt: "capture_degraded",
+      request_id: params.requestId,
+      msg: "emitGuardRejection threw before a row could be built — telemetry row dropped, rejection response unaffected",
+      error: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+    }));
+  }
 }
 
 function logUsage(env: Env, token: string, tool: string, ok: boolean, ms: number): void {
@@ -1123,8 +1189,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     const argsObj = (args as Record<string, unknown>) ?? {};
     const started = Date.now();
 
-    // Telemetry helper — schedule a fire-and-forget INSERT after the response.
-    // waitUntil keeps the Vercel function alive long enough for the fetch to complete.
+    // Telemetry helper — CAPTURE (mcp_events insert) is now AWAITED before the
+    // caller's response returns; DELIVERY (the HQ push) stays scheduled via
+    // waitUntil, unchanged. See captureEvent's doc comment above buildServer
+    // for the full root-cause writeup of this split.
     // Falls back gracefully when called outside a Vercel context (tests, local dev).
     const telSV = process.env.NOVADA_SERVER_VERSION ?? null;
     const telRegion = process.env.VERCEL_REGION ?? null;
@@ -1136,9 +1204,16 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // synthesized for ZodError, the one non-NovadaError case classified here);
     // every other guard-site rejection legitimately has no NovadaError instance
     // and leaves both null. hq_identity needs a FRESH nonce PER ROW, so
-    // encryptHqIdentity(apiKey) is awaited fresh on every call, chained into the
-    // same waitUntil-tracked promise (never blocks the caller).
-    const scheduleToolEvent = (opts: {
+    // encryptHqIdentity(apiKey) is awaited fresh on every call. This is now an
+    // async function — every call site below MUST `await` it so the CAPTURE
+    // leg actually completes before the tool response returns (an un-awaited
+    // call here would silently regress back to the original bug). The ENTIRE
+    // body is wrapped in a single try/catch — matching the original
+    // fire-and-forget `.then(...).catch(() => {})` chain's whole-chain
+    // coverage. captureEvent() itself never throws, but encryptHqIdentity/
+    // buildToolCallEvent run BEFORE it and are not individually guarded — this
+    // function must be AT LEAST as fail-open as the code it replaced.
+    const scheduleToolEvent = async (opts: {
       outcome: string;
       gate: { charged: boolean; over_cap_allowed: boolean; quota_remaining: number };
       plan: string | null;
@@ -1146,12 +1221,13 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       isHostedLimitation?: boolean;
       gatewayCeilingHit?: boolean;
       error?: unknown;
-    }) => {
-      const novadaErr = opts.error instanceof NovadaError ? opts.error : null;
-      const isZod = opts.error instanceof ZodError;
-      const errorCode = novadaErr ? novadaErr.code : (isZod ? NovadaErrorCode.INVALID_PARAMS : null);
-      const retryable = novadaErr ? novadaErr.retryable : (isZod ? false : null);
-      const promise = encryptHqIdentity(apiKey).then((hq) => {
+    }): Promise<void> => {
+      try {
+        const novadaErr = opts.error instanceof NovadaError ? opts.error : null;
+        const isZod = opts.error instanceof ZodError;
+        const errorCode = novadaErr ? novadaErr.code : (isZod ? NovadaErrorCode.INVALID_PARAMS : null);
+        const retryable = novadaErr ? novadaErr.retryable : (isZod ? false : null);
+        const hq = await encryptHqIdentity(apiKey);
         const row = buildToolCallEvent({
           request_id: ctx.requestId,
           token_hash: ctx.tokenHash,
@@ -1178,22 +1254,33 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
           hq_identity: hq.hq_identity,
           key_version: hq.key_version,
         });
-        // emitEvent (our own mcp_events backup) is scheduled regardless of the HQ
-        // push outcome — pushToHq runs after it, on the SAME row, and never throws
-        // (see ./_hq_push.ts), so no extra .catch() is needed on this leg.
-        // `started` = the tool call's own start timestamp — Leo's contract wants
-        // EVENT time (事件发生时间), not push time; the emit hop + retries can lag
-        // tens of seconds behind on slow tools.
-        return emitEvent(row).then(() => pushToHq(row, process.env, started));
-      }).catch(() => { /* fail-open */ });
-      try { waitUntil(promise); } catch { /* outside Vercel context */ }
+        // CAPTURE — durable, awaited (see captureEvent doc comment).
+        await captureEvent(row);
+        // DELIVERY — best-effort, unchanged timing. `started` = the tool call's
+        // own start timestamp — Leo's contract wants EVENT time (事件发生时间), not
+        // push time; the emit hop + retries can lag tens of seconds on slow tools.
+        // pushToHq never throws (see ./_hq_push.ts) — no .catch() needed here.
+        try { waitUntil(pushToHq(row, process.env, started)); } catch { /* outside Vercel context */ }
+      } catch (err) {
+        // Fail-open, matching the original code's whole-chain
+        // `.catch(() => {})` — a row could not even be BUILT (nothing for
+        // captureEvent's own fallback to retry), so this is a distinct,
+        // coarser degradation than captureEvent's internal capture_degraded log.
+        console.error(JSON.stringify({
+          evt: "capture_degraded",
+          request_id: ctx.requestId,
+          tool: name,
+          msg: "scheduleToolEvent threw before a row could be built — telemetry row dropped, tool response unaffected",
+          error: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+        }));
+      }
     };
 
     // Tool-set filter: reject tools not in the endpoint's ?tools=/?groups= selection.
     // This is a CALLER config choice (their own URL params), not a hosted
     // architectural limitation — is_hosted_limitation stays false.
     if (ctx.allowedTools && !ctx.allowedTools.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
-      scheduleToolEvent({
+      await scheduleToolEvent({
         outcome: "TOOL_NOT_ENABLED",
         gate: { charged: false, over_cap_allowed: false, quota_remaining: 0 },
         plan: null,
@@ -1216,7 +1303,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // tool surface is available. This IS a hosted architectural limitation —
     // is_hosted_limitation is true.
     if (!visibleToolNames.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
-      scheduleToolEvent({
+      await scheduleToolEvent({
         outcome: "TOOL_NOT_ENABLED",
         gate: { charged: false, over_cap_allowed: false, quota_remaining: 0 },
         plan: null,
@@ -1247,11 +1334,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         // monthlyQuota is declared below (after this early-return block) — inline it here.
         const setupMonthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
         const setupFooter = buildStatusFooter(SETUP_GATE, setupMonthlyQuota);
-        scheduleToolEvent({ outcome: "ok", gate: setupGateFields, plan: null });
+        await scheduleToolEvent({ outcome: "ok", gate: setupGateFields, plan: null });
         return { content: [{ type: "text" as const, text: result + setupFooter }] };
       } catch (e) {
         logUsage(env, ctx.token, name, false, Date.now() - started);
-        scheduleToolEvent({ outcome: "error", gate: setupGateFields, plan: null, error: e });
+        await scheduleToolEvent({ outcome: "error", gate: setupGateFields, plan: null, error: e });
         return { content: [{ type: "text" as const, text: String(e) }], isError: true };
       }
     }
@@ -1284,7 +1371,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       },
     });
     if (!gate.allowed) {
-      scheduleToolEvent({
+      await scheduleToolEvent({
         outcome: "cap_blocked",
         gate: { charged: false, over_cap_allowed: false, quota_remaining: -1 },
         plan: "free",
@@ -1342,7 +1429,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       if (name === "novada_browser_flow") {
         logUsage(env, ctx.token, name, false, Date.now() - started);
         if (gate.charged) await refundQuota(ctx.tokenHash, env);
-        scheduleToolEvent({
+        await scheduleToolEvent({
           outcome: "NOT_AVAILABLE_ON_HOSTED",
           gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
           plan: gate.overCapAllowed ? "pro" : "free",
@@ -1372,7 +1459,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const discoverContent = [{ type: "text" as const, text: sanitized + discoverFooter }];
         const discoverNotice = await maybeGetFirstRunNoticeHosted(ctx.token);
         if (discoverNotice) discoverContent.push({ type: "text" as const, text: discoverNotice });
-        scheduleToolEvent({
+        await scheduleToolEvent({
           outcome: "ok",
           gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
           plan: gate.overCapAllowed ? "pro" : "free",
@@ -1411,7 +1498,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // starting with "## Extraction Error" (not thrown), so it reaches this success
       // path. Emitting "ok" for a timed-out request is misleading in telemetry.
       const isCeilingTimeout = typeof result === "string" && result.startsWith("## Extraction Error");
-      scheduleToolEvent({
+      await scheduleToolEvent({
         outcome: isCeilingTimeout ? "TIMEOUT" : "ok",
         gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
         plan: gate.overCapAllowed ? "pro" : "free",
@@ -1460,7 +1547,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // upstream TASK_PENDING — both share the same NovadaErrorCode (see the
       // GATEWAY_CEILING_ERRORS WeakSet doc comment above withWallClock).
       const gatewayCeilingHit = error instanceof NovadaError && GATEWAY_CEILING_ERRORS.has(error);
-      scheduleToolEvent({
+      await scheduleToolEvent({
         outcome: error instanceof NovadaError ? error.code : (error instanceof ZodError ? "INVALID_PARAMS" : "error"),
         gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
         plan: gate.overCapAllowed ? "pro" : "free",
@@ -1826,7 +1913,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   if (!token) {
     // pre_auth guard-site emit: no token at all → no tokenHash/hq_identity possible
     // (nothing to hash or encrypt) — emitGuardRejection handles that null case.
-    emitGuardRejection({ requestId, token: null, outcome: "MISSING_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
+    await emitGuardRejection({ requestId, token: null, outcome: "MISSING_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
     // The RFC 9728 challenge header below is written INLINE at each 401 site on
     // purpose: oauth.test.mjs T28 counts the literal per site. Consolidating these
     // 401 responses into a shared helper breaks that contract test — update the
@@ -1844,7 +1931,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   if (token.startsWith("nvo_at_")) {
     const resolved = await resolveAccessToken(token, buildOAuthDeps(env));
     if (!resolved) {
-      emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
+      await emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
       return jsonError(401, "INVALID_TOKEN",
         "This OAuth access token is expired, revoked, or unknown.",
         "Refresh via grant_type=refresh_token, or restart the OAuth flow at /.well-known/oauth-authorization-server.",
@@ -1864,7 +1951,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
       : "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the apikey.";
     // pre_auth guard-site emit: token is present (even though rejected) — hash/
     // encrypt it so HQ can still resolve which account attempted the call.
-    emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
+    await emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
     return jsonError(401, "INVALID_TOKEN", message,
       "Check your key at https://dashboard.novada.com/api-key/ — make sure it belongs to YOUR account, not a different one. Get a Novada API key with $10 free credits at https://novada.com if you don't have one.",
       { "www-authenticate": `Bearer error="invalid_token", resource_metadata="${resourceMetadataUrl(url)}"` });
@@ -1877,7 +1964,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     // rate_limited guard-site emit. Outcome is deliberately "GATEWAY_RATE_LIMITED"
     // (NOT a NovadaErrorCode) — distinct from a target-side 429 an upstream tool
     // might raise, per the roundtable doc §6's explicit "网关429 vs target 429" split.
-    emitGuardRejection({ requestId, token, outcome: "GATEWAY_RATE_LIMITED", rejectionStage: "rate_limited", authMethod, userAgent });
+    await emitGuardRejection({ requestId, token, outcome: "GATEWAY_RATE_LIMITED", rejectionStage: "rate_limited", authMethod, userAgent });
     return jsonError(429, "RATE_LIMITED",
       `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
       "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.");

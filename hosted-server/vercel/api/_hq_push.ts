@@ -243,7 +243,7 @@ function sleep(ms: number): Promise<void> {
 async function updatePushStatus(
   row: McpEventRow,
   env: NodeJS.ProcessEnv,
-  status: "pushed" | "failed",
+  status: "pushed" | "failed" | "dead",
 ): Promise<void> {
   const url = env.TELEMETRY_SUPABASE_URL;
   const key = env.TELEMETRY_SUPABASE_KEY;
@@ -303,7 +303,25 @@ export async function pushToHq(row: McpEventRow, env: NodeJS.ProcessEnv = proces
       if (outcome.ok || outcome.permanent) break;
     }
 
-    await updatePushStatus(row, env, outcome.ok ? "pushed" : "failed");
+    // Terminal `dead` state (distinct from transient `failed`): a permanent
+    // outcome (HQ code 10001 — OUR payload is malformed) will NEVER succeed on
+    // retry, so it must NOT re-enter the reconciler's undelivered-backlog query
+    // (push_status=in.(pending,failed) — see reconcile-core.ts). Writing it as
+    // an ordinary `failed` row instead would make the every-60s cron retry the
+    // same bad payload forever, burning its batch budget on rows that can never
+    // deliver. `dead` is a signal to fix buildHqPayload()/the row shape, so its
+    // first occurrence is logged loudly (not the fail-silent `console.warn`
+    // used elsewhere in this file) — this is OUR bug, worth a human looking at.
+    const status: "pushed" | "failed" | "dead" = outcome.ok ? "pushed" : (outcome.permanent ? "dead" : "failed");
+    if (status === "dead") {
+      console.error(JSON.stringify({
+        evt: "hq_push_dead",
+        request_id: row.request_id,
+        tool: row.tool,
+        msg: "HQ rejected this payload permanently (code 10001) — buildHqPayload()/row shape needs a fix; this row will never be retried.",
+      }));
+    }
+    await updatePushStatus(row, env, status);
   } catch {
     // Absolute catch-all — pushToHq must never throw into its caller.
   }

@@ -39,7 +39,18 @@ import type { FailureClass } from "../vendor/novada-mcp/_core/errors.js";
 export type StatusBucket = "success" | "blocked" | "failed" | "pending" | "not_applicable";
 export type RejectionStage = "pre_auth" | "rate_limited" | "cap_blocked" | "tool_filtered" | "dispatched";
 export type AuthMethod = "path" | "query" | "bearer";
-export type PushStatus = "pending" | "pushed" | "failed";
+/**
+ * pending — never yet attempted (or attempted and result unknown).
+ * pushed  — delivered to HQ, confirmed (code 0).
+ * failed  — a TRANSIENT push failure (network error, HQ 5xx/code 10000) — the
+ *   reconciler's undelivered-backlog query re-selects these every tick.
+ * dead    — a PERMANENT push failure (HQ code 10001, "our payload is malformed").
+ *   Retrying resends the identical bad payload forever, so `dead` rows are
+ *   DELIBERATELY excluded from the reconciler's `push_status=in.(pending,failed)`
+ *   query (see reconcile-core.ts's buildUndeliveredQuery) — they are a signal to
+ *   fix buildHqPayload()/the row shape, not a queue to keep draining.
+ */
+export type PushStatus = "pending" | "pushed" | "failed" | "dead";
 
 // ─── §7: governed TOOL -> PRODUCT static map ──────────────────────────────────
 // SINGLE authoritative place a tool name resolves to a product. Deliberately NOT
@@ -585,11 +596,21 @@ export function buildInitializeEvent(params: {
 const TELEMETRY_TIMEOUT_MS = 3_000;
 
 /**
- * Fire-and-forget Supabase INSERT.
+ * Durable-outbox Supabase INSERT — the CAPTURE half of the two-phase
+ * capture/delivery split (mcp.ts's scheduleToolEvent/emitGuardRejection AWAIT
+ * this directly, before the customer response returns; see those call sites'
+ * doc comments). Bounded by TELEMETRY_TIMEOUT_MS so a stalled Supabase endpoint
+ * can add AT MOST ~3s to a tool call's latency, never hang it.
  * - No-ops silently when telemetry is disabled (env vars absent).
- * - All errors are swallowed (logged as warn at most).
- * - Hard 3s fetch timeout so a stalled Supabase endpoint never blocks.
- * Called via waitUntil() in mcp.ts so it runs after the response is sent.
+ * - All errors are swallowed (logged as warn at most) — this function NEVER
+ *   throws, so awaiting it can never fail the caller's tool response.
+ * - `Prefer: resolution=ignore-duplicates` makes the INSERT an ON CONFLICT DO
+ *   NOTHING against mcp_events' UNIQUE(request_id, event_type) constraint
+ *   (hosted-server/migrations/2026-07-23-mcp-events-log-schema.sql §3.2) — a
+ *   platform-level retry of this same invocation (e.g. Vercel re-running a
+ *   function after a transient failure) re-POSTs the identical row instead of
+ *   erroring on the duplicate key, so a retried capture is idempotent rather
+ *   than a 409/23505 that would itself need handling.
  */
 export async function emitEvent(row: McpEventRow): Promise<void> {
   if (!telemetryEnabled()) return;
@@ -605,7 +626,7 @@ export async function emitEvent(row: McpEventRow): Promise<void> {
           "apikey": key,
           "Authorization": `Bearer ${key}`,
           "Content-Type": "application/json",
-          "Prefer": "return=minimal",
+          "Prefer": "return=minimal,resolution=ignore-duplicates",
         },
         body: JSON.stringify(row),
         signal: controller.signal,

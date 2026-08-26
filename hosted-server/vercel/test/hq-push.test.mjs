@@ -12,6 +12,9 @@
  *   5. pushToHq — 10001 (invalid params) -> single attempt, no retry
  *   6. pushToHq — 10000 (decrypt/DB failure) -> retries up to 3 attempts, ends failed
  *   7. pushToHq — success path (HTTP 200 + code 0) -> single attempt, pushed
+ *   8. pushToHq — 10001 (PERMANENT) -> push_status='dead' (NOT 'failed'), + console.error alert
+ *      (2026-08-26 fix: 'dead' is excluded from the reconciler's undelivered
+ *      query, so a permanent payload bug can no longer loop forever)
  *
  * Mocks globalThis.fetch throughout — NO real network calls are made.
  * Runs on plain Node ≥22.18 (`node --test`) — no extra deps. Imports api/_hq_push.ts
@@ -435,6 +438,98 @@ test("pushToHq: on exhausted retries, PATCHes push_status='failed'", async () =>
       assert.equal(patchCalls.length, 1);
     },
   );
+});
+
+// ─── 8. Terminal 'dead' state for PERMANENT (10001) failures ─────────────────
+
+test("pushToHq: code 10001 (PERMANENT) -> PATCHes push_status='dead', NOT 'failed'", async () => {
+  await withFetchMock(
+    async (url, opts) => {
+      const u = String(url);
+      if (u.includes("/mcp/log/create")) {
+        return { status: 200, json: async () => ({ code: 10001, data: null, msg: "無效參數", timestamp: 1 }) };
+      }
+      if (u.includes("/rest/v1/mcp_events")) {
+        const body = JSON.parse(opts.body);
+        assert.equal(body.push_status, "dead", "permanent failure must be 'dead', never 'failed' — 'failed' would loop forever in the reconciler's undelivered query");
+        assert.ok(!("pushed_at" in body), "pushed_at must not be set on a dead push");
+        return { ok: true, status: 200 };
+      }
+      throw new Error(`unexpected fetch to ${u}`);
+    },
+    async (calls) => {
+      const row = makeToolCallRow({ request_id: "req-patch-dead-1" });
+      await assert.doesNotReject(pushToHq(row, {
+        NOVADA_HQ_LOG_URL: "https://hq.example.test",
+        TELEMETRY_SUPABASE_URL: "https://tel.example.test",
+        TELEMETRY_SUPABASE_KEY: "tel-key",
+      }));
+      const postCalls = calls.filter((c) => c.url.includes("/mcp/log/create"));
+      assert.equal(postCalls.length, 1, "10001 must still never retry");
+      const patchCalls = calls.filter((c) => c.url.includes("/rest/v1/mcp_events"));
+      assert.equal(patchCalls.length, 1);
+    },
+  );
+});
+
+test("pushToHq: code 10001 (PERMANENT) logs a console.error alert (loud, not fail-silent)", async () => {
+  const savedError = console.error;
+  const errorCalls = [];
+  console.error = (...args) => errorCalls.push(args);
+  try {
+    await withFetchMock(
+      async (url) => {
+        const u = String(url);
+        if (u.includes("/mcp/log/create")) {
+          return { status: 200, json: async () => ({ code: 10001, data: null, msg: "無效參數", timestamp: 1 }) };
+        }
+        return { ok: true, status: 200 };
+      },
+      async () => {
+        const row = makeToolCallRow({ request_id: "req-dead-alert-1" });
+        await assert.doesNotReject(pushToHq(row, {
+          NOVADA_HQ_LOG_URL: "https://hq.example.test",
+          TELEMETRY_SUPABASE_URL: "https://tel.example.test",
+          TELEMETRY_SUPABASE_KEY: "tel-key",
+        }));
+      },
+    );
+    assert.equal(errorCalls.length, 1, "exactly one console.error for the dead row");
+    const logged = JSON.parse(errorCalls[0][0]);
+    assert.equal(logged.evt, "hq_push_dead");
+    assert.equal(logged.request_id, "req-dead-alert-1");
+  } finally {
+    console.error = savedError;
+  }
+});
+
+test("pushToHq: code 10000 (transient) does NOT log the dead-row console.error", async () => {
+  const savedError = console.error;
+  const errorCalls = [];
+  console.error = (...args) => errorCalls.push(args);
+  try {
+    await withFetchMock(
+      async (url) => {
+        const u = String(url);
+        if (u.includes("/mcp/log/create")) {
+          return { status: 400, json: async () => ({ code: 10000, data: null, msg: "fail", timestamp: 1 }) };
+        }
+        return { ok: true, status: 200 };
+      },
+      async () => {
+        const row = makeToolCallRow({ request_id: "req-transient-1" });
+        await assert.doesNotReject(pushToHq(row, {
+          NOVADA_HQ_LOG_URL: "https://hq.example.test",
+          TELEMETRY_SUPABASE_URL: "https://tel.example.test",
+          TELEMETRY_SUPABASE_KEY: "tel-key",
+        }));
+      },
+    );
+    const deadAlerts = errorCalls.filter((c) => { try { return JSON.parse(c[0]).evt === "hq_push_dead"; } catch { return false; } });
+    assert.equal(deadAlerts.length, 0, "a transient (retryable) failure must not fire the dead-row alert");
+  } finally {
+    console.error = savedError;
+  }
 });
 
 test("pushToHq: never throws even if fetch itself is undefined (catch-all)", async () => {

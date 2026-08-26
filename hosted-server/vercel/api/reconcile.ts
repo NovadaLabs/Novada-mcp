@@ -20,7 +20,14 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { pushToHq } from "./_hq_push.js";
-import { buildUndeliveredQuery, drainRows, isCronAuthorized, type OutboxRow } from "./reconcile-core.js";
+import {
+  buildUndeliveredQuery,
+  drainRows,
+  isCronAuthorized,
+  resolveLookbackMs,
+  resolveBatchLimit,
+  type OutboxRow,
+} from "./reconcile-core.js";
 
 // Vercel Node.js Function. maxDuration 60 == the cron period, so a run can never
 // overlap the next tick; the drain's own 50s budget (below) keeps it safely under this.
@@ -54,8 +61,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return send(res, 200, { skipped: "telemetry read not configured" });
   }
 
-  const sinceIso = new Date(Date.now() - LOOKBACK_MS).toISOString();
-  const query = buildUndeliveredQuery(url, sinceIso, BATCH_LIMIT);
+  // One-shot widened-window override (built for, and ONLY for, a manual
+  // operator-triggered drain of backlog older than the routine 48h window —
+  // e.g. `/api/reconcile?lookbackHours=720&limit=500`, still gated by the
+  // SAME CRON_SECRET bearer check above). The routine per-minute cron
+  // invocation carries NO query string, so it always falls through to the
+  // fixed LOOKBACK_MS/BATCH_LIMIT defaults below — this override changes
+  // nothing about the routine cadence unless a caller explicitly asks for it.
+  // Both params are parsed+clamped by reconcile-core.ts (MAX_LOOKBACK_HOURS /
+  // MAX_BATCH_LIMIT) so a wide request still can't turn one 60s cron tick
+  // into an unbounded scan.
+  const requestUrl = new URL(req.url ?? "/api/reconcile", "http://internal");
+  const lookbackMs = resolveLookbackMs(requestUrl.searchParams.get("lookbackHours"), LOOKBACK_MS);
+  const batchLimit = resolveBatchLimit(requestUrl.searchParams.get("limit"), BATCH_LIMIT);
+
+  const sinceIso = new Date(Date.now() - lookbackMs).toISOString();
+  const query = buildUndeliveredQuery(url, sinceIso, batchLimit);
 
   let rows: OutboxRow[] = [];
   const controller = new AbortController();
