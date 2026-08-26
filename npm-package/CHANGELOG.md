@@ -8,6 +8,19 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.37] — 2026-08-26
+
+Combined release candidate merging two independently code-reviewed branches: account error-classification/param fixes (`fix/account-not-provisioned`) and hosted-server telemetry delivery hardening (`fix/telemetry-100`). Zero file overlap between the two branches — merged clean, no conflicts.
+
+### Fixed
+- **`novada_account` / `novada_plan_balance_all`: business code 11009 now classifies as "not provisioned," not a generic service error** — including the Static ISP product, which was missed by the original class-sweep and is now checked alongside every other product on the shared not-provisioned path (class-not-instance fix).
+- **`novada_account` (`section=usage`, capture logs): `capture_recent` no longer errors** — the request now passes both `start_time` and `end_time` to the underlying `capture_logs` call (the first fix passed only `start_time` and was incomplete).
+
+### Changed (hosted server — `mcp.novada.com`, not part of the npm package)
+- **Telemetry delivery hardened toward 100% outbox durability**: events are captured before the response is awaited (no more fire-and-forget drops on cold shutdown), a reconcile cron sweeps unconfirmed pushes, a dead-state is introduced for permanently-undeliverable events instead of retrying forever, and new health/canary scripts (`telemetry-health.mjs`, `telemetry-delivery-canary.mjs`) monitor delivery in production. Ships with an **unapplied** migration (`hosted-server/migrations/2026-08-26-mcp-events-push-status-dead.sql`) — owner must apply it before deploy.
+
+---
+
 ## [0.9.32] — 2026-07-22
 
 Correctness patch found by dogfooding `novada_extract`/`novada_site_copy` against Novada's own `.md` docs (TOW2-307), plus a correction to one external-audit claim. No new tools — count stays **38** (self-host) / **30** (hosted).
