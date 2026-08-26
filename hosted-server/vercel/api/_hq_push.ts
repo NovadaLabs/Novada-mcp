@@ -294,7 +294,7 @@ export async function pushToHq(row: McpEventRow, env: NodeJS.ProcessEnv = proces
 
     let outcome: PostOutcome = { ok: false, permanent: false };
     // Inline caller uses the full retry ladder (default). The reconciler passes
-    // maxAttempts=1 — a single POST per run — because the every-60s cron IS its retry
+    // maxAttempts=1 — a single POST per run — because the reconcile cron (~5-15 min via GitHub Actions) IS its retry
     // loop, so a persistent failure must not burn ~23s of the serverless budget here.
     const totalAttempts = Math.max(1, Math.min(maxAttempts, 1 + HQ_RETRY_DELAYS_MS.length));
     for (let attempt = 0; attempt < totalAttempts; attempt++) {
@@ -307,7 +307,7 @@ export async function pushToHq(row: McpEventRow, env: NodeJS.ProcessEnv = proces
     // outcome (HQ code 10001 — OUR payload is malformed) will NEVER succeed on
     // retry, so it must NOT re-enter the reconciler's undelivered-backlog query
     // (push_status=in.(pending,failed) — see reconcile-core.ts). Writing it as
-    // an ordinary `failed` row instead would make the every-60s cron retry the
+    // an ordinary `failed` row instead would make the reconcile cron retry the
     // same bad payload forever, burning its batch budget on rows that can never
     // deliver. `dead` is a signal to fix buildHqPayload()/the row shape, so its
     // first occurrence is logged loudly (not the fail-silent `console.warn`

@@ -35,7 +35,7 @@ export function isCronAuthorized(authHeader: string | undefined | null, secret: 
 }
 
 // ─── One-shot widened-window drain (built, never auto-invoked) ───────────────
-// The routine per-minute cron always uses reconcile.ts's fixed LOOKBACK_MS/
+// The routine reconcile cron (~5-15 min via GitHub Actions) always uses reconcile.ts's fixed LOOKBACK_MS/
 // BATCH_LIMIT defaults — this pair exists ONLY so an operator can trigger a
 // single manual wide-window pass (e.g. `?lookbackHours=720&limit=500`) to
 // chase backlog older than the routine 48h window, without touching the
@@ -83,7 +83,7 @@ export function resolveBatchLimit(param: string | null | undefined, defaultLimit
  *                                         oldest-first queue behind the canary's bad-key bursts.
  *   - ts >= sinceIso                    — bound the scan window (avoid ancient rows)
  *   - order ts.DESC (newest first)      — a fresh real failure must reach HQ within one
- *                                         tick (~60s) even while a large OLD backlog (e.g.
+ *                                         tick (~5-15 min) even while a large OLD backlog (e.g.
  *                                         the canary's rate-limit junk) is still draining;
  *                                         oldest-first would park recent rows behind it.
  * Built as a literal query string (not URLSearchParams) so PostgREST operators like
@@ -117,7 +117,7 @@ export interface DrainDeps {
 /**
  * Drain `rows` to HQ with bounded concurrency and a wall-clock budget. Whether each row
  * ends up 'pushed' or stays 'failed' is decided inside `push` (pushToHq updates
- * push_status) — the every-60s cron re-selects anything still undelivered, so this loop
+ * push_status) — the reconcile cron (~5-15 min) re-selects anything still undelivered, so this loop
  * makes exactly one delivery attempt per row per run and never blocks on retries.
  * Returns {scanned, attempted}: attempted < scanned iff the budget cut the run short.
  */

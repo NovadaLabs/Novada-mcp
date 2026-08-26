@@ -10,7 +10,7 @@
  *
  *   1. Backlog age  — how old is the OLDEST still-undelivered (pending/failed)
  *      attributable tool_call row? The reconciler cron is supposed to drain
- *      this to ~0 every ~60s — a growing age means the cron isn't running
+ *      this to ~0 every ~5-15 min — a growing age means the cron isn't running
  *      (missing CRON_SECRET/TELEMETRY_SUPABASE_SERVICE_KEY -> silent 200-skip,
  *      see reconcile.ts) or HQ is down longer than the retry ladder can absorb.
  *        warn >= 5 min, critical >= 30 min.

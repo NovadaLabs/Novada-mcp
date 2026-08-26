@@ -915,7 +915,7 @@ function extractToken(req: Request): { token: string; authMethod: AuthMethod } |
 // longer depends on the function instance surviving past the response.
 // DELIVERY (pushToHq, still scheduled via waitUntil at each call site below)
 // keeps its original best-effort timing — a dropped push still leaves a
-// `pending`/`failed` row for the reconciler cron to pick up within ~60s, so
+// `pending`/`failed` row for the reconciler cron to pick up within ~5-15 min, so
 // there is no durability requirement on the push leg the way there is on the
 // insert leg.
 //
