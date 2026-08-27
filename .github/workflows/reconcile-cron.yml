@@ -71,6 +71,19 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          # Skip CLEANLY (green) when the secret isn't configured, instead of
+          # firing a curl that's guaranteed to 401 and fail the step every 5
+          # minutes. A missing optional secret is a "not enabled yet" state, not
+          # an outage — red here would be pure noise (the exact cry-wolf problem
+          # the 0.9.35 canary-green-on-noise work fixed). Real delivery problems
+          # are caught by the outcome metrics (backlog-age / delivery-rate /
+          # delivery canary), not by this trigger's presence. Auto-activates the
+          # moment CRON_SECRET is added as a GitHub Actions repo secret.
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::notice::CRON_SECRET GitHub secret not set — reconcile trigger disabled; skipping cleanly (not a failure)."
+            echo "To enable: add a repo secret CRON_SECRET equal to the Vercel project's CRON_SECRET env var."
+            exit 0
+          fi
           curl -sS --fail-with-body -X POST \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             https://mcp.novada.com/api/reconcile
