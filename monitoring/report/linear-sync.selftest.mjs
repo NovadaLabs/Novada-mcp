@@ -171,6 +171,30 @@ function makeGreenReport() {
   };
 }
 
+// 2026-08-27: a "product-green but test-key DEGRADED" run — the shared test
+// key is unfunded/over-cap so 2 tools came back configFault. maxOursSeverity/
+// maxSeverity are null (configFault excluded upstream in full-tools-probe.mjs),
+// so this routes to the HEARTBEAT path — the exact run that must NOT post
+// "✅ all healthy". testKeyDegradedCount/monitoringDegraded carry the signal.
+function makeDegradedReport() {
+  return {
+    finishedAt: "2026-07-24T09:52:52.244Z",
+    summary: {
+      maxOursSeverity: null,
+      maxSeverity: null,
+      oursCount: 0,
+      backendCount: 0,
+      testKeyDegradedCount: 2,
+      monitoringDegraded: true,
+    },
+    results: [
+      { name: "novada_search", status: "FAIL", domain: "②-gateway", severity: "P0", configFault: true, platform: "-", advice: "test key over cap" },
+      { name: "novada_scrape_amazon", status: "FAIL", domain: "②-gateway", severity: "P1", configFault: true, platform: "amazon.com", advice: "test key over cap" },
+      { name: "novada_setup", status: "PASS", domain: "-", severity: null, platform: "-" },
+    ],
+  };
+}
+
 let failureCount = 0;
 function expect(condition, message) {
   if (condition) {
@@ -289,13 +313,35 @@ async function main() {
     expect(!issueBody.includes(FAKE_ASSET_URL), `issue body does NOT contain a (nonexistent) assetUrl link when the upload failed`);
   }
 
+  // ── Assertion 6: LIVE, DEGRADED report (test key unfunded, product-green)
+  //    -> heartbeat path, but the comment MUST say DEGRADED, never "all
+  //    healthy". 2026-08-27 ratchet: locks the linear-sync half of the
+  //    configFault fix — a dead/unfunded shared test key must never post a
+  //    clean green heartbeat while the monitor is blind on those tools. ──
+  console.log("\n[selftest] (6) live, DEGRADED report (test key unfunded, product-green) -> heartbeat says DEGRADED, never 'all healthy'...");
+  {
+    const { requestFn, callLog } = makeStub({ trackerExists: true });
+    const { uploadFn } = makeUploadStub();
+    const result = await runSync(FAKE_API_KEY, makeDegradedReport(), filename, { requestFn, live: true, uploadFn });
+    expect(result.action === "heartbeat", `degraded-but-product-green routes to heartbeat, not an alert issue (got "${result.action}")`);
+    const commentBody = findCallVariables(callLog, "CommentCreateInput")?.input?.body || "";
+    expect(
+      /DEGRADED/i.test(commentBody) && commentBody.includes("2"),
+      `heartbeat comment flags DEGRADED with the degraded count (body: ${JSON.stringify(commentBody)})`
+    );
+    expect(
+      !commentBody.includes("all healthy"),
+      `a degraded run must NOT post the "✅ all healthy" heartbeat — the silent-green this fix prevents (body: ${JSON.stringify(commentBody)})`
+    );
+  }
+
   console.log("");
   if (failureCount > 0) {
     console.error(`[selftest] FAILED: ${failureCount} assertion(s) did not hold.`);
     process.exitCode = 1;
     return;
   }
-  console.log("[selftest] OK — all dry-run/live/search-error/upload-failure delivery assertions passed, 0 crashes.");
+  console.log("[selftest] OK — all dry-run/live/search-error/upload-failure/degraded delivery assertions passed, 0 crashes.");
   process.exitCode = 0;
 }
 

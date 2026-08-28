@@ -463,6 +463,16 @@ async function runSync(apiKey, report, filename, { requestFn = linearRequest, li
   const worst = rank(summary.maxOursSeverity) <= rank(summary.maxSeverity) ? summary.maxOursSeverity : summary.maxSeverity;
   const isAlertWorthy = worst === "P0" || worst === "P1" || worst === "P2";
 
+  // 2026-08-27: test-key degradation is deliberately NOT a product severity —
+  // configFault rows are excluded from maxOursSeverity/maxSeverity upstream, so
+  // a dead/unfunded shared NOVADA_TEST_KEY never drives `worst`/isAlertWorthy
+  // (no phantom P0 alert). But it MUST be surfaced in the delivered message, or
+  // a fully-degraded run posts a clean "✅ all healthy" heartbeat while the
+  // monitor is actually BLIND on those tools — the exact silent-green the
+  // configFault work exists to prevent (see full-tools-probe.mjs header item 9).
+  const degradedCount = Number(summary.testKeyDegradedCount) || 0;
+  const degraded = summary.monitoringDegraded === true || degradedCount > 0;
+
   const teamId = await resolveTeamId(apiKey, { requestFn });
   const projectId = await resolveProjectId(apiKey, { requestFn });
   const labelId = await resolveLabelId(apiKey, teamId, { requestFn });
@@ -490,6 +500,11 @@ async function runSync(apiKey, report, filename, { requestFn = linearRequest, li
         `**Severity:** ${worst}  (ours: ${summary.maxOursSeverity || "-"}, overall incl. backend: ${summary.maxSeverity || "-"})`,
         `**Pass rate:** ${passCount}/${total}${slowCount > 0 ? ` (${slowCount} slow)` : ""}`,
         `**Ours (①/②) issues:** ${summary.oursCount ?? 0}  ·  **Backend (③) issues:** ${summary.backendCount ?? 0}`,
+        ...(degraded
+          ? [
+              `**⚠️ Monitoring degraded:** ${degradedCount} tool(s) NOT tested — shared NOVADA_TEST_KEY unfunded/unprovisioned/over-cap (test-infra, not a product fault; fund/rotate the key). Coverage on those tools is BLIND this run.`,
+            ]
+          : []),
         "",
         buildMarkdownTable(results),
       ].join("\n") + attachmentSuffix;
@@ -541,7 +556,13 @@ async function runSync(apiKey, report, filename, { requestFn = linearRequest, li
 
     const healthNote = slowCount > 0 ? `${passCount}/${total}, ${slowCount} slow` : `${total}/${total}`;
     const attachmentSuffix = await attachReportSuffix();
-    const commentBody = `✅ ${date} all healthy (${healthNote})${attachmentSuffix}`;
+    // A degraded run is NOT "all healthy": the shared test key couldn't
+    // exercise `degradedCount` tools, so the monitor is blind on them. Flag it
+    // unmistakably instead of a clean green heartbeat (the silent-green the
+    // configFault work exists to prevent — see full-tools-probe.mjs item 9).
+    const commentBody = degraded
+      ? `⚠️ ${date} MONITORING DEGRADED — no product regression detected, but ${degradedCount} tool(s) could NOT be tested: the shared NOVADA_TEST_KEY is unfunded/unprovisioned/over-cap. NOT a clean green — blind on those tools until the key is funded/rotated. (Rest exercised OK: ${healthNote}.)${attachmentSuffix}`
+      : `✅ ${date} all healthy (${healthNote})${attachmentSuffix}`;
     const comment = await createComment(apiKey, tracker.id, commentBody, { requestFn, live });
     console.log(`[linear-sync] ${live ? "posted heartbeat comment on" : "dry-run previewed comment on"} ${tracker.identifier}`);
     return { action: "heartbeat", tracker, comment };

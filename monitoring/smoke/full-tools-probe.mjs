@@ -113,6 +113,20 @@
  *      task still processing after every resume attempt) are, likewise,
  *      never a failure and never affect the exit code — domain "-" puts
  *      them outside both `oursP0P1` and `backendCount` by construction.
+ *   9. TEST-KEY CONFIG faults are NOT paged (2026-08-27). An INVALID_API_KEY
+ *      or free-gateway-cap rejection means the shared NOVADA_TEST_KEY itself
+ *      is unfunded/unprovisioned/over-cap — test-infra state, NOT a product
+ *      regression (classifyFailure already labels these "not a code bug").
+ *      Such rows are marked `configFault:true` and EXCLUDED from the exit-1
+ *      set, the ≥4-ours escalation, and oursCount — so a dead/unfunded test
+ *      key can never cry-wolf a red wall (same green-on-noise principle as the
+ *      0.9.35 canary work + the reconcile-cron skip-clean). They stay LOUD in
+ *      the report via summary.testKeyDegradedCount + summary.monitoringDegraded
+ *      (and a non-quiet DEGRADED line) so a silently-dead key that blinds the
+ *      monitor is visible, never a misleading green. A real ①-mcp-code bug, a
+ *      genuine HTTP-5xx/network ②-gateway fault, or a MISSING tool STILL pages
+ *      — configFault is set ONLY on the two test-key signals, never on a real
+ *      server/network ②-gateway fault.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -516,7 +530,13 @@ function classifyFailure(probe, res, { stillProcessingAfterPoll = false } = {}) 
     return {
       domain: "②-gateway",
       severity: isCore ? "P0" : "P1",
-      note: "test key invalid/unprovisioned for scraper products (NovadaError INVALID_API_KEY) — not a code bug",
+      // configFault: this is the shared TEST KEY being bad/unprovisioned — a
+      // test-infra state, not a product regression. main()'s exit gate, the
+      // ≥4-ours escalation, and buildSummary's oursCount all exclude
+      // configFault rows so a dead key never cry-wolfs a red wall (see the
+      // header's item 9). It stays visible via summary.testKeyDegradedCount.
+      configFault: true,
+      note: "test key invalid/unprovisioned for scraper products (NovadaError INVALID_API_KEY) — test-infra config, not a code bug and NOT paged (configFault)",
     };
   }
 
@@ -524,7 +544,11 @@ function classifyFailure(probe, res, { stillProcessingAfterPoll = false } = {}) 
     return {
       domain: "②-gateway",
       severity: isCore ? "P0" : "P1",
-      note: "test key over the hosted free-gateway cap — billing/config state (top up the key or fix the gateway paid-exemption), NOT a code bug",
+      // configFault: see the INVALID_API_KEY branch above — the shared test
+      // key being over the free-gateway cap is billing/test-infra, never a
+      // code bug or a backend outage, so it must not fail the run.
+      configFault: true,
+      note: "test key over the hosted free-gateway cap — billing/config state (top up the key or fix the gateway paid-exemption), NOT a code bug and NOT paged (configFault)",
     };
   }
 
@@ -733,6 +757,7 @@ async function runProbe(
           status: "FAIL",
           domain: cls.domain,
           severity: cls.severity,
+          configFault: cls.configFault ?? false,
           httpStatus: res.httpStatus,
           timeMs: res.timeMs,
           records: pollRecords ?? 0,
@@ -754,6 +779,7 @@ async function runProbe(
         status: "FAIL",
         domain: cls.domain,
         severity: cls.severity,
+        configFault: cls.configFault ?? false,
         httpStatus: pollRes.httpStatus,
         timeMs: pollRes.timeMs,
         records: 0,
@@ -808,6 +834,7 @@ async function runProbe(
     status: "FAIL",
     domain: cls.domain,
     severity: cls.severity,
+    configFault: cls.configFault ?? false,
     httpStatus: res.httpStatus,
     timeMs: res.timeMs,
     records: null,
@@ -880,7 +907,14 @@ const SEVERITY_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
  * always matches the FINAL (post-escalation) severity.
  */
 function applySeverityEscalations(results) {
-  const oursFailingRows = results.filter((r) => r.domain === "①-mcp-code" || r.domain === "②-gateway");
+  // configFault rows (test-key unfunded/over-cap) are test-infra, not a
+  // product regression — they must NOT count toward the "≥4 ours-domain
+  // failures = shared root cause, escalate to P0" rule, or a single dead test
+  // key (which fails EVERY tool identically) would manufacture a false P0
+  // systemic page. Same exclusion the exit gate and oursCount apply.
+  const oursFailingRows = results.filter(
+    (r) => (r.domain === "①-mcp-code" || r.domain === "②-gateway") && !r.configFault
+  );
   if (oursFailingRows.length >= MANY_TOOLS_THRESHOLD) {
     for (const r of oursFailingRows) {
       r.severity = "P0";
@@ -921,7 +955,14 @@ function buildSummary(results) {
     return acc;
   }, {});
   const bySeverity = results.reduce((acc, r) => {
-    if (r.severity) acc[r.severity] = (acc[r.severity] || 0) + 1;
+    // configFault (test-key) rows carry a P0/P1 severity for the per-tool
+    // table's context, but must NOT inflate the aggregate product-severity
+    // headline (bySeverity → maxSeverity → linear-sync's alert-vs-heartbeat
+    // decision). A dead/unfunded test key is test-infra, surfaced via
+    // testKeyDegradedCount/monitoringDegraded — never a product P0/P1 alert.
+    // Without this, a dead key would just relocate the cry-wolf from the
+    // Actions exit code (already fixed) to a daily phantom-P0 Linear alert.
+    if (r.severity && !r.configFault) acc[r.severity] = (acc[r.severity] || 0) + 1;
     return acc;
   }, {});
   const maxSeverity =
@@ -929,19 +970,31 @@ function buildSummary(results) {
       ? Object.keys(bySeverity).sort((a, b) => SEVERITY_RANK[a] - SEVERITY_RANK[b])[0]
       : null;
 
+  // configFault (test-key) rows are excluded from maxOursSeverity/oursCount:
+  // a dead/unfunded test key is test-infra, never an "ours-product" P0 we got
+  // paged for. Its own visibility comes from testKeyDegradedCount below.
   const oursSeverities = results
-    .filter((r) => (r.domain === "①-mcp-code" || r.domain === "②-gateway") && r.severity)
+    .filter((r) => (r.domain === "①-mcp-code" || r.domain === "②-gateway") && !r.configFault && r.severity)
     .map((r) => r.severity);
   const maxOursSeverity =
     oursSeverities.length > 0 ? [...oursSeverities].sort((a, b) => SEVERITY_RANK[a] - SEVERITY_RANK[b])[0] : null;
+
+  const testKeyDegradedCount = results.filter((r) => r.configFault).length;
 
   return {
     maxSeverity,
     maxOursSeverity,
     byStatus,
     bySeverity,
-    oursCount: results.filter((r) => r.domain === "①-mcp-code" || r.domain === "②-gateway").length,
+    oursCount: results.filter((r) => (r.domain === "①-mcp-code" || r.domain === "②-gateway") && !r.configFault).length,
     backendCount: results.filter((r) => r.domain === "③-backend").length,
+    // How many tools failed ONLY because the shared NOVADA_TEST_KEY is
+    // unfunded/unprovisioned/over-cap (configFault). These do NOT fail the run
+    // (see the header's item 9), but a non-zero count means the monitor is
+    // partially/fully BLIND — surfaced loudly here + via monitoringDegraded so
+    // a silently-dead key never reads as a clean green.
+    testKeyDegradedCount,
+    monitoringDegraded: testKeyDegradedCount > 0,
     missingTools,
   };
 }
@@ -995,7 +1048,13 @@ async function main() {
 
   const summary = buildSummary(results);
   const oursP0P1 = results.filter(
-    (r) => (r.domain === "①-mcp-code" || r.domain === "②-gateway") && (r.severity === "P0" || r.severity === "P1")
+    (r) =>
+      (r.domain === "①-mcp-code" || r.domain === "②-gateway") &&
+      (r.severity === "P0" || r.severity === "P1") &&
+      // configFault = the shared test key is unfunded/over-cap (test-infra),
+      // never a product regression — excluded from the exit-1 set so a dead
+      // key can't cry-wolf a red wall. Real ①/②-server faults still page.
+      !r.configFault
   );
 
   if (!QUIET) {
@@ -1025,6 +1084,7 @@ async function main() {
       status: r.status,
       domain: r.domain,
       severity: r.severity,
+      configFault: r.configFault ?? false,
       httpStatus: r.httpStatus,
       timeMs: r.timeMs,
       records: r.records,
@@ -1047,6 +1107,18 @@ async function main() {
     console.error(
       `[full-tools-probe] OURS-DOMAIN REGRESSION (exit 1): missing=${JSON.stringify(summary.missingTools)} ` +
         `oursP0P1=${JSON.stringify(oursP0P1.map((r) => `${r.name}:${r.severity}`))}`
+    );
+  } else if (summary.testKeyDegradedCount > 0) {
+    // Exit 0, but NOT a clean green: the shared test key is unfunded/over-cap
+    // so N tools couldn't actually be exercised. Loud (non-quiet only — this
+    // names no tool/backend, but is still suppressed under MONITOR_QUIET to
+    // keep the public CI log to a bare probed-count + exit code; the private
+    // report carries summary.testKeyDegradedCount for the CI path).
+    console.warn(
+      `[full-tools-probe] DEGRADED (exit 0) — no product regression, but ${summary.testKeyDegradedCount} tool(s) ` +
+        `could not be tested because the shared test key is unfunded/unprovisioned/over-cap (configFault). ` +
+        `Monitoring is partially/fully BLIND until the key is funded — this is NOT a clean green. ` +
+        `Fix: provision/top-up NOVADA_TEST_KEY. (Real product regressions would still exit 1.)`
     );
   } else {
     console.log(
@@ -1106,6 +1178,11 @@ if (isDirectRun) {
           bySeverity: { P0: 1 },
           oursCount: 0,
           backendCount: 0,
+          // Schema completeness (a total endpoint-down FATAL already pages via
+          // exit 1 + P0 above; these keep the summary shape uniform so no
+          // consumer reads a missing field as an implicit "not degraded").
+          testKeyDegradedCount: 0,
+          monitoringDegraded: false,
           missingTools: [],
           fatalError: String(err?.message || err),
         },

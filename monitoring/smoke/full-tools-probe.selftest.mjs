@@ -482,7 +482,12 @@ async function main() {
     "summary.backendCount excludes ASYNC rows by construction (domain '-', not '③-backend') — TOW2-257 Phase 4's whole point: still-processing is not a backend failure"
   );
   const oursP0P1Equivalent = results.filter(
-    (r) => (r.domain === "①-mcp-code" || r.domain === "②-gateway") && (r.severity === "P0" || r.severity === "P1")
+    (r) =>
+      (r.domain === "①-mcp-code" || r.domain === "②-gateway") &&
+      (r.severity === "P0" || r.severity === "P1") &&
+      // Mirror main()'s exit gate exactly: configFault (test-key) rows are
+      // excluded — see the 2026-08-27 test-key-degraded assertion block below.
+      !r.configFault
   );
   expect(
     asyncRows.every((r) => !oursP0P1Equivalent.includes(r)),
@@ -528,6 +533,58 @@ async function main() {
       "novada_scrape_google (50004 backend timeout): does NOT contribute to oursP0P1 — a pure backend outage must not fail the run"
     );
   }
+
+  // ─── 2026-08-27: TEST-KEY CONFIG faults are excluded from the exit-1 set ──
+  // A dead/unfunded/over-cap shared test key fails EVERY billable tool with an
+  // INVALID_API_KEY or free-gateway-cap signal — test-infra state, not a
+  // product regression. classifyFailure now marks those configFault:true, and
+  // main()'s exit gate / escalation / oursCount all exclude them, so a bad key
+  // can never cry-wolf a red wall. This is the ratchet for that behavior: the
+  // three test-key scenarios must carry configFault:true and be EXCLUDED from
+  // oursP0P1; the real ours-faults (map ①, shein ①, instagram ②-network) must
+  // NOT be configFault and MUST still be in oursP0P1 (real bugs still page).
+  console.log("");
+  const testKeyRows = ["novada_scrape_facebook", "novada_search", "novada_scrape_yandex"].map((n) => byName[n]);
+  for (const r of testKeyRows) {
+    expect(Boolean(r), `${r?.name ?? "?"}: row present for configFault check`);
+    if (!r) continue;
+    expect(r.configFault === true, `${r.name}: configFault === true (test-key fault) — got ${JSON.stringify(r.configFault)}`);
+    expect(
+      !oursP0P1Equivalent.includes(r),
+      `${r.name}: EXCLUDED from oursP0P1 — a test-key fault must never fail the run`
+    );
+  }
+  const realOursRows = ["novada_map", "novada_scrape_shein", "novada_scrape_instagram"].map((n) => byName[n]);
+  for (const r of realOursRows) {
+    expect(Boolean(r), `${r?.name ?? "?"}: row present for real-ours check`);
+    if (!r) continue;
+    expect(!r.configFault, `${r.name}: configFault falsy (a REAL ours fault, not test-key) — got ${JSON.stringify(r.configFault)}`);
+    expect(
+      oursP0P1Equivalent.includes(r),
+      `${r.name}: STILL in oursP0P1 — a real ①/②-server fault must keep paging after the configFault change`
+    );
+  }
+  expect(
+    summary.testKeyDegradedCount === testKeyRows.length,
+    `summary.testKeyDegradedCount === ${testKeyRows.length} (facebook INVALID_API_KEY + search/yandex free-cap) — got ${summary.testKeyDegradedCount}`
+  );
+  expect(
+    summary.monitoringDegraded === true,
+    "summary.monitoringDegraded === true whenever any configFault row exists (loud degraded signal, not a silent green)"
+  );
+  // The configFault P0 (novada_search free-cap) must NOT become the aggregate
+  // severity headline that linear-sync uses for alert-vs-heartbeat — else a
+  // dead key just relocates the cry-wolf from the Actions exit code to a daily
+  // phantom-P0 Linear alert. The real ours-faults (map/shein/instagram, all
+  // P1) are the worst NON-configFault severity, so both headlines are P1.
+  expect(
+    summary.maxOursSeverity === "P1",
+    `maxOursSeverity === "P1" (configFault P0 from search must NOT headline) — got ${JSON.stringify(summary.maxOursSeverity)}`
+  );
+  expect(
+    summary.maxSeverity === "P1",
+    `maxSeverity === "P1" (configFault rows excluded from the aggregate severity headline) — got ${JSON.stringify(summary.maxSeverity)}`
+  );
 
   // The literal CRITICAL regression check: novada_proxy_account_create (no
   // confirm) is ALSO in NEVER_EXECUTE_TOOL_NAMES by name. The old,

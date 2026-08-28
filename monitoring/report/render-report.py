@@ -178,6 +178,17 @@ def build_summary_sheet(ws: Worksheet, report: dict[str, Any]) -> None:
         ("在线工具数 (tools/list)", report.get("liveToolCount", "-")),
         ("我方问题数 (①/②)", summary.get("oursCount", 0)),
         ("后端问题数 (③)", summary.get("backendCount", 0)),
+        # 2026-08-27: test-key degradation. A dead/unfunded/over-cap shared
+        # NOVADA_TEST_KEY fails every billable tool as configFault — those do
+        # NOT fail the run (green-on-noise), so maxOursSeverity/oursCount above
+        # read as a clean green. Surface the degradation EXPLICITLY here so a
+        # blind monitor is never mistaken for a healthy one (see
+        # full-tools-probe.mjs header item 9).
+        ("测试Key降级数 (testKeyDegradedCount) — 非0=该数量工具未被真正测到，监控盲区", summary.get("testKeyDegradedCount", 0)),
+        (
+            "监控降级? (monitoringDegraded) — 是=测试key失效/欠费，本次绿灯≠已覆盖，请充值/更换key",
+            "是 / DEGRADED" if summary.get("monitoringDegraded") else "否",
+        ),
     ]
 
     by_status = summary.get("byStatus", {}) or {}
