@@ -42,7 +42,7 @@ function remapAliases(
  *
  * @param aliases map of camelCaseAlias → snake_case_canonical
  */
-function withCamelCaseAliases<T extends z.ZodTypeAny>(
+export function withCamelCaseAliases<T extends z.ZodTypeAny>(
   schema: T,
   aliases: Record<string, string>,
 ) {
@@ -461,21 +461,32 @@ const scrapeBase = {
     ),
 };
 
+// DE-1 / C-1 (P1, ledger-verified −0.18 duplicate charge): `taskId` (camelCase) was
+// silently stripped by Zod's default strip-unknown-keys behavior because both scrape
+// schemas below were bare z.object — the money-bearing key was the ONE alias missing
+// from withCamelCaseAliases even though the shim already existed and covered 7 other
+// schemas (search/extract/crawl/map/site_copy/proxy/unblock). Applied here at the ONLY
+// two MCP/CLI-facing schema-definition sites for novada_scrape; the matching fix for
+// all 15 pinned platform-scraper tools (novada_scrape_<platform>) lives at their OWN
+// single shared factory site — platform_scraper.ts's `ParamsSchema` inside
+// `createPlatformScraperTool()` — never hand-applied per platform.
+const SCRAPE_CAMEL_ALIASES = { taskId: "task_id" };
+
 /** MCP tool schema — agent-optimized formats only */
-export const ScrapeParamsSchema = z.object({
+export const ScrapeParamsSchema = withCamelCaseAliases(z.object({
   ...scrapeBase,
   format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
     .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': structured records array — key fields (title/price/rating/url) surfaced, noise trimmed — returned inside a \"## Scrape Results\" wrapper as a fenced json block (not a bare object). 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 — paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
   project: z.string().max(30).optional()
     .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
-});
+}), SCRAPE_CAMEL_ALIASES);
 
 /** CLI/SDK schema — all output formats */
-export const ScrapeParamsFullSchema = z.object({
+export const ScrapeParamsFullSchema = withCamelCaseAliases(z.object({
   ...scrapeBase,
   format: z.enum(["markdown", "json", "toon", "csv", "excel", "html", "xlsx"]).default("markdown")
     .describe("Output format. 'markdown'/'json'/'toon' for agents/code. 'csv'/'excel'/'html'/'xlsx' for human download. 'excel' = alias for 'xlsx' (inline base64)."),
-});
+}), SCRAPE_CAMEL_ALIASES);
 
 /** MCP-restricted type: only markdown/json/toon formats (matches ScrapeParamsSchema) */
 export type ScrapeParams = z.infer<typeof ScrapeParamsSchema>;

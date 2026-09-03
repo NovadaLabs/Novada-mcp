@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { novadaScrape } from "./scrape.js";
-import { TASK_ID_REGEX, TASK_ID_REGEX_MSG } from "./types.js";
+import { TASK_ID_REGEX, TASK_ID_REGEX_MSG, withCamelCaseAliases } from "./types.js";
 import type { ToolCategory, ToolMeta } from "./registry.js";
 import { zodToMcpSchema } from "../utils/mcp-schema.js";
 
@@ -112,7 +112,13 @@ export function createPlatformScraperTool<TOpName extends string>(
     `Which ${config.platformLabel} operation to run. Each requires specific keys in \`params\`:\n` +
     opEntries.map(([name, opCfg]) => `- ${name}: ${opCfg.paramsDoc}`).join("\n");
 
-  const ParamsSchema = z.object({
+  // DE-1 / C-1 (P1, ledger-verified −0.18 duplicate charge): this is the ONE shared
+  // factory site for all 15 pinned platform-scraper tools (novada_scrape_<platform>) —
+  // wrapping it here with withCamelCaseAliases closes the taskId→task_id money-path hole
+  // across every one of them at once, mirroring the matching fix applied to
+  // ScrapeParamsSchema/ScrapeParamsFullSchema (types.ts) for the generic novada_scrape
+  // tool. Never hand-apply this per platform config — it belongs HERE.
+  const ParamsSchema = withCamelCaseAliases(z.object({
     operation: z.enum(opNames).describe(operationEnumDescription),
     params: z.record(z.string(), z.unknown()).default({}).describe(config.paramsFieldDoc),
     limit: z.number().int().min(1).max(100).default(20)
@@ -123,7 +129,7 @@ export function createPlatformScraperTool<TOpName extends string>(
       .describe("Optional. Resume a previous slow task by its task_id instead of submitting a new billable one — same semantics as novada_scrape's task_id."),
     project: z.string().max(30).optional()
       .describe("Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'."),
-  });
+  }), { taskId: "task_id" });
 
   type Params = z.infer<typeof ParamsSchema>;
 
@@ -183,6 +189,13 @@ export interface DispatchableScraperTool {
   toolDefinition: PlatformScraperToolDefinition;
   registryEntry: ToolMeta;
   dispatch: (args: Record<string, unknown>, apiKey: string) => Promise<string>;
+  /** Schema-only validation (no network call, no handler invocation) — exposed
+   *  separately from `dispatch` so callers (tests, class-sweep guards) can assert
+   *  parsing/aliasing behavior (e.g. taskId→task_id, DE-1) on a platform's real
+   *  ParamsSchema without paying for a live scrape. Widened to
+   *  `Record<string, unknown>` for the same reason `dispatch` is widened below —
+   *  only the OUTER shape is uniform across differently-typed per-platform params. */
+  validateParams: (args: Record<string, unknown> | undefined) => Record<string, unknown>;
   /** Read-only accessor to the platform's declarative config (platform domain +
    *  friendly-operation-name -> scraperId map), widened to `PlatformScraperConfig`'s
    *  default `string` operation-name type here — only the OUTER shape is uniform,
@@ -212,6 +225,7 @@ export function toDispatchableScraperTool<TParams>(tool: {
     toolDefinition: tool.toolDefinition,
     registryEntry: tool.registryEntry,
     dispatch: (args, apiKey) => tool.handler(tool.validateParams(args), apiKey),
+    validateParams: (args) => tool.validateParams(args) as unknown as Record<string, unknown>,
     config: tool.config,
   };
 }

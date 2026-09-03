@@ -452,13 +452,22 @@ async function pollForResult(
 // vocabulary below is a smaller local mapping: we only need to branch on
 // ready / pending-or-running / failed / unknown, not the full richer status
 // vocabulary novada_scraper_status's own response shape handles.
-type FastTaskStatus = "pending" | "running" | "ready" | "failed" | "unknown";
+// V2-N2: "not_found" is now DISTINCT from "unknown". A successful probe response that
+// simply carries no status entry for this task_id (empty list / empty status field) means
+// the backend genuinely does not recognize the id — reliable enough to act on directly
+// (mirrors checkTaskExists()'s identical distinction for this SAME endpoint, in
+// scraper_status.ts). "unknown" is now reserved for true ambiguity: a network/auth error
+// on the probe call itself, where we truly cannot tell and must preserve the historical
+// fall-through-to-poll behavior rather than invent a false negative.
+type FastTaskStatus = "pending" | "running" | "ready" | "failed" | "not_found" | "unknown";
 
 /**
- * Lightweight, non-blocking probe of a task's current status. Never throws —
- * any network/auth error on the probe itself resolves to "unknown" so the
- * RESUME caller can safely fall through to today's existing poll behavior
- * rather than fail the whole resume on a transient status-endpoint hiccup.
+ * Lightweight, non-blocking probe of a task's current status. Never throws — a
+ * network/auth error on the probe itself resolves to "unknown" so the RESUME caller can
+ * safely fall through to today's existing poll behavior rather than fail the whole resume
+ * on a transient status-endpoint hiccup. A CLEAN response with no status data resolves to
+ * "not_found" (see the FastTaskStatus comment above) so the caller can reject the resume
+ * immediately instead of polling a task_id that will never resolve (V2-N2).
  */
 async function fastTaskStatus(apiKey: string, taskId: string): Promise<{ status: FastTaskStatus; msg?: string }> {
   try {
@@ -473,10 +482,12 @@ async function fastTaskStatus(apiKey: string, taskId: string): Promise<{ status:
     // this response shape (see scraper_status.ts) — it accepts BOTH shapes and
     // prefers the list item matching our task_id.
     const { status: raw, msg } = extractRawTaskStatus(resp, taskId);
-    // Empty/absent status — API returned successfully but doesn't recognize the
-    // task_id (or a genuine ambiguity). Do NOT invent behavior here — "unknown"
-    // tells the caller to fall through to the existing (unchanged) poll path.
-    if (!raw) return { status: "unknown" };
+    // V2-N2: the probe call SUCCEEDED but returned no status entry for this task_id — the
+    // backend reached us and reports it doesn't know this id. Distinct from the catch
+    // block below (a network/auth error on the probe itself, which stays "unknown" and
+    // falls through unchanged) — a clean "no such task" response is reliable enough to
+    // act on directly.
+    if (!raw) return { status: "not_found" };
     const s = raw.toLowerCase();
     if (s === "ready" || s === "complete" || s === "completed" || s === "success" || s === "done") {
       return { status: "ready" };
@@ -486,10 +497,74 @@ async function fastTaskStatus(apiKey: string, taskId: string): Promise<{ status:
     if (s === "pending" || s === "waiting") return { status: "pending" };
     return { status: "unknown" };
   } catch {
-    // Network/auth error on the fast probe — never fail the resume because of
-    // this optional fast path; fall through to today's existing poll behavior.
+    // Network/auth error on the fast probe itself — genuine ambiguity, NOT a confirmed
+    // not_found. Never fail the resume because of this optional fast path; fall through
+    // to today's existing poll behavior.
     return { status: "unknown" };
   }
+}
+
+// ─── Resume task metadata: limit persistence (C-6) + age tracking (C-12/V2-N2) ────────
+//
+// In-memory, per-process store keyed by task_id. Populated the moment a task_id first
+// becomes known within THIS process — either a fresh submit's task_id (the common case),
+// or — if this process never saw the original submit (e.g. it restarted, or a resume
+// arrives for a task_id from a different session) — the FIRST resume call against an id
+// this process doesn't recognize yet. In that fallback case `submittedAt` is necessarily
+// an underestimate (the clock starts from now): safe by construction, since a LOWER
+// age_s can only make the escalation LESS aggressive, never trigger the give-up
+// instruction prematurely.
+//
+// Bounded (MAX_TASK_META_ENTRIES) with simple FIFO eviction so a very long-lived local
+// stdio server process can't grow this unboundedly.
+interface TaskMeta {
+  /** The `limit` that was in effect the moment THIS task_id was first recorded — the
+   *  original submit's limit (C-6), or (fallback case above) the first resume's limit. */
+  limit: number;
+  /** epoch ms when this task_id was first recorded — used to compute age_s (C-12). */
+  submittedAt: number;
+}
+const MAX_TASK_META_ENTRIES = 500;
+const TASK_META_STORE = new Map<string, TaskMeta>();
+
+/**
+ * Idempotently record task metadata: returns the EXISTING entry if one is already
+ * present (never overwrites — the original submit's limit/timestamp must survive
+ * repeated resumes), otherwise creates one stamped with `Date.now()`.
+ */
+function recordTaskMeta(taskId: string, limit: number): TaskMeta {
+  const existing = TASK_META_STORE.get(taskId);
+  if (existing) return existing;
+  if (TASK_META_STORE.size >= MAX_TASK_META_ENTRIES) {
+    const oldestKey = TASK_META_STORE.keys().next().value;
+    if (oldestKey !== undefined) TASK_META_STORE.delete(oldestKey);
+  }
+  const meta: TaskMeta = { limit, submittedAt: Date.now() };
+  TASK_META_STORE.set(taskId, meta);
+  return meta;
+}
+
+// ─── Processing-envelope age escalation (C-12 / V2-N2) ────────────────────────────────
+// Boundaries in SECONDS since the task was originally submitted. Checked HIGHEST
+// threshold FIRST (Worker Done-Def #3 — ternary/branch ordering) so a task that has been
+// running for e.g. 20 minutes is never caught by an earlier, looser "still fresh" check.
+const AGE_BUCKET_SLOW_S = 120; // 2 minutes
+const AGE_BUCKET_STALE_S = 900; // 15 minutes
+
+/**
+ * Escalating resume guidance keyed to how long ago the task was originally submitted.
+ * Pure (no I/O, no wall-clock read) so tests can assert exact boundary behavior with a
+ * synthetic age_s instead of faking real timers through the whole submit→poll→resume
+ * pipeline. Exported for direct unit coverage; also used by processingEnvelope() below.
+ */
+export function ageBucketInstruction(ageS: number): string {
+  if (ageS >= AGE_BUCKET_STALE_S) {
+    return "Task exceeded 15 min — treat as failed upstream. Do NOT keep polling. Resubmit once (a new billable task) or report this task_id as stuck.";
+  }
+  if (ageS >= AGE_BUCKET_SLOW_S) {
+    return "Upstream is slow — retry in 2-5 min.";
+  }
+  return "Retry in 10-20s.";
 }
 
 /**
@@ -505,29 +580,42 @@ async function fastTaskStatus(apiKey: string, taskId: string): Promise<{ status:
  * is now the REAL ceiling used (was previously always the 45s constant, which
  * was already wrong once hosted got a shorter ceiling) plus one appended
  * poll-cadence hint line.
+ *
+ * C-12 / V2-N2: also carries `submitted_at` + `age_s` (when known — see TaskMeta
+ * above) and swaps the old fixed "retry every ~10-20s forever" cadence line for an
+ * age-escalating `agent_instruction` (ageBucketInstruction) so an agent polling a
+ * task that has been running for 20+ minutes is told to stop and resubmit/report
+ * instead of being invited to keep polling indefinitely.
  */
 function processingEnvelope(
   platform: string,
   displayOperation: string,
   taskId: string,
   waitedMs?: number,
+  submittedAt?: number,
 ): string {
   const elapsedClause = waitedMs !== undefined ? ` after ${Math.round(waitedMs / 1000)}s` : "";
+  const ageS = submittedAt !== undefined
+    ? Math.max(0, Math.round((Date.now() - submittedAt) / 1000))
+    : undefined;
+  const instruction = ageS !== undefined
+    ? ageBucketInstruction(ageS)
+    : "Retry with task_id every ~10-20s until it completes.";
   return [
     `## Scrape Results`,
     `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
     ``,
     `status: processing`,
+    ...(ageS !== undefined ? [`submitted_at: ${new Date(submittedAt as number).toISOString()}`, `age_s: ${ageS}`] : []),
     `⏳ Task still running (task_id="${taskId}")${elapsedClause}.`,
     `To fetch the result WITHOUT re-charging, call novada_scrape again with task_id="${taskId}" (skips re-submit).`,
     `A plain retry with the same params starts a NEW billable task.`,
     ``,
     `---`,
     `## Agent Hints`,
-    `- Pass task_id="${taskId}" to novada_scrape in ~10-20s to resume for free.`,
+    `- Pass task_id="${taskId}" to novada_scrape to resume for free.`,
     `- platform and operation are still required when resuming (used for display only).`,
-    `- Do not treat this as a failure — the task is finishing server-side.`,
-    `- Expected poll cadence: retry with task_id every ~10-20s until it completes.`,
+    `agent_instruction: ${instruction}`,
   ].join("\n");
 }
 
@@ -1424,7 +1512,12 @@ export function assertYouTubeIdentity(
 }
 
 export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): Promise<string> {
-  const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
+  // C-6: `requestedLimit` is THIS call's own limit param (defaulted to 20 if omitted).
+  // On a fresh submit it IS the effective limit. On a RESUME, the effective limit is
+  // resolved later from TASK_META_STORE (the ORIGINAL submit's limit) — see
+  // `effectiveLimit` right before Step 3 below — so a resume that omits `limit` no
+  // longer silently reverts to 20 when the original submit asked for fewer records.
+  const requestedLimit = Math.max(1, Math.min(params.limit ?? 20, 100));
   const { params: opParams, format } = params;
   const platform = resolvePlatform(params.platform);
   // H-1: safe lookup — null-prototype + hasOwnProperty guard
@@ -1480,6 +1573,10 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     // blocking download-poll loop. Probe the FAST, non-blocking task_status
     // endpoint FIRST (same one scraper_status.ts uses) to learn the task's
     // current state before ever touching the slow download endpoint:
+    //   NotFound        → V2-N2: typed, non-retryable error IMMEDIATELY — never
+    //                      masquerade as "processing" for a task_id the backend
+    //                      does not recognize (the pre-fix bug: an agent with a
+    //                      typo'd/hallucinated task_id looped 45s-per-call forever).
     //   Pending|Running → return the processing envelope IMMEDIATELY (no wait,
     //                      no download-endpoint call at all).
     //   Failed          → typed, retryable error — never masquerade as a
@@ -1487,10 +1584,31 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     //   Ready|unknown   → fall through to the existing poll/fetch path below
     //                      unchanged (Ready resolves on the first GET; unknown
     //                      preserves today's not-found/pending behavior when
-    //                      the fast probe itself is ambiguous or errors).
+    //                      the fast probe itself is genuinely ambiguous — a
+    //                      network/auth error on the probe call, NOT a clean
+    //                      not-found response).
     const fast = await fastTaskStatus(apiKey, resumeTaskId);
+    if (fast.status === "not_found") {
+      throw new NovadaError({
+        code: NovadaErrorCode.TASK_NOT_FOUND,
+        message: `Task not found (task_id="${resumeTaskId}"). The scraper backend does not recognize this task_id.`,
+        agent_instruction:
+          `This task_id is not recognized by the scraper backend — it may be mistyped, from a different account/key, ` +
+          `or already expired. Do NOT keep polling with this task_id; it will never resolve. Double-check you copied ` +
+          `the EXACT task_id from the original novada_scrape response, or re-submit novada_scrape with ` +
+          `platform/operation/params to start a fresh task (this creates a new billable task).`,
+        retryable: false,
+        detail: "task_not_found",
+      });
+    }
+    // C-6 / C-12: from here the task_id is at least recognized (or the probe was
+    // ambiguous) — record/refresh metadata so limit + age survive across resume
+    // calls within this server process. Idempotent: a task already recorded (the
+    // common case — this process did the original submit) keeps its ORIGINAL
+    // limit/submittedAt untouched.
+    const meta = recordTaskMeta(resumeTaskId, requestedLimit);
     if (fast.status === "pending" || fast.status === "running") {
-      return processingEnvelope(platform, displayOperation, resumeTaskId);
+      return processingEnvelope(platform, displayOperation, resumeTaskId, undefined, meta.submittedAt);
     }
     if (fast.status === "failed") {
       throw makeNovadaError(
@@ -1506,6 +1624,13 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     try {
       localeDefaulted = resolveLocaleDefault(platform, operation, (opParams ?? {}) as Record<string, unknown>) !== undefined;
       submitOutcome = await submitScrapeTask(apiKey, platform, operation, opParams as Record<string, unknown>);
+      // C-6 / C-12: capture the ORIGINAL submit's limit + timestamp the moment the
+      // task_id first becomes known, so a later resume can honor this limit (C-6)
+      // and report an accurate age_s (C-12) instead of defaulting to the resume
+      // call's own params.
+      if (submitOutcome.kind === "task") {
+        recordTaskMeta(submitOutcome.taskId, requestedLimit);
+      }
     } catch (error) {
       if (error instanceof AxiosError) {
         const status = error.response?.status;
@@ -1583,11 +1708,25 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     // A slow-but-valid task is not a failure; return an honest message with the task_id
     // so the caller can resume WITHOUT re-submitting (and without a new charge).
     if (pollOutcome.kind === "pending") {
-      return processingEnvelope(platform, displayOperation, pollOutcome.taskId, ceilingMs);
+      // C-12: metadata was already recorded (fresh submit above, or the resume
+      // branch's recordTaskMeta) — its submittedAt drives the age_s escalation.
+      return processingEnvelope(
+        platform, displayOperation, pollOutcome.taskId, ceilingMs,
+        TASK_META_STORE.get(pollOutcome.taskId)?.submittedAt,
+      );
     }
 
     resultItems = pollOutcome.items;
   }
+
+  // C-6: the effective slicing limit for THIS response. A fresh submit always uses its
+  // own requestedLimit (no resumeTaskId, so the lookup below is skipped entirely — behavior
+  // unchanged). A RESUME honors the metadata recorded when the task_id first became known
+  // to this process — the ORIGINAL submit's limit, not this resume call's own (possibly
+  // reverted-to-default) limit param.
+  const effectiveLimit = resumeTaskId
+    ? (TASK_META_STORE.get(resumeTaskId)?.limit ?? requestedLimit)
+    : requestedLimit;
 
   // Step 3: Extract records — handle two response formats from the download endpoint:
   //   Format A (flat): array of direct record objects, e.g. [{title:"...", error:null, success:true}, ...]
@@ -1653,12 +1792,12 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   // price and a trustworthy is_available. Pure projection of the API json — no-op
   // for platforms (e.g. Walmart) whose flat fields are already populated.
   rawRecords = rawRecords.map(r => normalizeProductRecord(r));
-  const records = rawRecords.slice(0, limit).map(r => flattenRecord(r)) as Record<string, unknown>[];
+  const records = rawRecords.slice(0, effectiveLimit).map(r => flattenRecord(r)) as Record<string, unknown>[];
 
   // Identity oracle (TOW2-305): never surface a DIFFERENT YouTube video than requested as
   // success. Runs on the raw upstream records (which carry the real id/url). No-op for
   // everything except single-target YouTube video ops with a confidently-extracted id.
-  assertYouTubeIdentity(platform, operation, opParams as Record<string, unknown> | undefined, rawRecords.slice(0, limit));
+  assertYouTubeIdentity(platform, operation, opParams as Record<string, unknown> | undefined, rawRecords.slice(0, effectiveLimit));
 
   if (records.length === 0) {
     return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
@@ -1667,9 +1806,9 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   const title = `${platform} — ${displayOperation}`;
 
   // For json we want clean structured records (not the flattened dot-path display version).
-  // rawRecords are already sliced by limit above via `rawRecords.slice(0, limit)`.
+  // rawRecords are already sliced by effectiveLimit above via `rawRecords.slice(0, effectiveLimit)`.
   // `records` is the flattenRecord'd version used for markdown/toon tabular display.
-  const cleanRecords = rawRecords.slice(0, limit);
+  const cleanRecords = rawRecords.slice(0, effectiveLimit);
   // For the human tabular formats (csv/excel/html): drop base64-blob columns
   // (favicon/image data URIs — useless in a spreadsheet + fragile in CSV) and
   // lead with curated key columns (title/price/rating/url/…). Display-only.
@@ -1809,7 +1948,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     default:
       output = [
         `## Scrape Results`,
-        `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live${records.length >= limit ? ` (limit:${limit})` : ""}`,
+        `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live${records.length >= effectiveLimit ? ` (limit:${effectiveLimit})` : ""}`,
         ``,
         `---`,
         ``,
@@ -1840,7 +1979,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
       tool: "scrape",
       hint: domain,
       format: format === "json" ? "json" : "csv",
-      data: rawRecords.slice(0, limit),
+      data: rawRecords.slice(0, effectiveLimit),
       project: (params as ScrapeParams).project,
     });
     output += `\n\n## Output Saved\n${outputResult.summary}`;
