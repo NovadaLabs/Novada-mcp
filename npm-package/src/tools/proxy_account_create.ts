@@ -1,7 +1,11 @@
 // Wraps POST /v1/proxy_account/create on api-m.novada.com (developer-api).
 // ⚠️ WRITE tool — creates a billable sub-account.
-// Two-step gate: must be re-called with `confirm: true` after human approval.
-// Without `confirm: true` the tool returns a preview and does NOT hit the API.
+// Two-step APPROVAL-TOKEN gate (F2-2/G-7 fix, 2026-09): the first call (no
+// `approval_token`) returns a preview + a signed, expiring, payload-bound
+// token and does NOT hit the API. Only a second call carrying that exact
+// token AND the exact same parameters executes. `confirm: true` alone is a
+// deprecated no-op — see ../utils/approval.ts for the shared implementation
+// and the full rationale (this closes the self-supplied-confirm hole).
 //
 // Field names match the API spec exactly (verified against fudong screenshot 2026-06-05
 // and docs/novada-api/proxy-user-management.md): `product`, `account`, `password`,
@@ -11,6 +15,7 @@
 
 import { z } from "zod";
 import { devApiPost, maskPasswords } from "../_core/developer_api.js";
+import { evaluateApprovalGate } from "../utils/approval.js";
 
 // ─── Product code enum (per proxy-user-management.md docs) ───────────────────
 // 1 = Residential, 2 = Rotating ISP, 3 = Rotating Datacenter,
@@ -68,7 +73,14 @@ export const ProxyAccountCreateParamsSchema = z
       .literal(true)
       .optional()
       .describe(
-        "REQUIRED for execution. Pass `true` ONLY after the human user has approved this account creation. If omitted, the tool returns a dry-run preview instead of calling the API.",
+        "DEPRECATED — ignored. Setting this alone no longer authorizes execution (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.",
+      ),
+    approval_token: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Two-step approval token. Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value — an invented or stale token is rejected.",
       ),
   })
   .strict();
@@ -84,9 +96,11 @@ export function validateProxyAccountCreateParams(
 /**
  * Create a proxy sub-account on api-m.novada.com (`/v1/proxy_account/create`).
  *
- * Two-step confirm gate: without `confirm: true`, the tool returns a preview
- * payload and does NOT hit the API. Agents MUST surface the preview to the
- * human user and only re-call with `confirm: true` after explicit approval.
+ * Two-step APPROVAL-TOKEN gate: without a valid `approval_token`, the tool
+ * returns a preview payload plus a fresh token and does NOT hit the API.
+ * Agents MUST surface the preview to the human user and only re-call with
+ * the identical parameters plus that token after explicit approval.
+ * `confirm: true` alone never authorizes execution (see ../utils/approval.ts).
  *
  * Request body is multipart/form-data per the API contract — handled centrally
  * by devApiPost. Fields posted: product, account, password, status,
@@ -96,7 +110,8 @@ export async function novadaProxyAccountCreate(
   params: ProxyAccountCreateParams,
   apiKey?: string,
 ): Promise<string> {
-  if (params.confirm !== true) {
+  const gate = evaluateApprovalGate(params as Record<string, unknown>, "create_proxy_sub_account");
+  if (!gate.authorized) {
     return JSON.stringify(
       {
         status: "confirmation_required",
@@ -110,8 +125,11 @@ export async function novadaProxyAccountCreate(
           remark: params.remark,
           limit_flow_gb: params.limit_flow ?? null,
         },
+        approval_token: gate.approvalToken,
+        expires_at: new Date(gate.expiresAt).toISOString(),
+        expires_in_seconds: gate.expiresInSeconds,
         agent_instruction:
-          "This is a WRITE action that creates a billable proxy sub-account on the user's Novada plan. Show the preview (including product type and traffic cap) to the human user. Only re-call this tool with the same parameters PLUS `confirm: true` after the user explicitly approves.",
+          "This is a WRITE action that creates a billable proxy sub-account on the user's Novada plan. Show the preview (including product type and traffic cap) to the human user. To execute, call this tool again with the EXACT SAME parameters plus `approval_token` set to the value above (valid 10 minutes). `confirm: true` alone does nothing — it is deprecated and ignored.",
       },
       null,
       2,
