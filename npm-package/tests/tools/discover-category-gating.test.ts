@@ -120,7 +120,9 @@ describe("F13-S3: category partially visible in the filtered set", () => {
 
     // Should be a normal table listing, not a gated message
     expect(out).toContain(`\`${singleProxyTool}\``);
-    expect(out).toContain("| Tool | Description | Status |");
+    // Header gained Ledger/Cost columns (C-7/G-10 audit, W-B4) — update the
+    // literal to match, not the assertion's intent (still "normal table listing").
+    expect(out).toContain("| Tool | Description | Ledger | Cost | Status |");
 
     // Should NOT mention "registered tools but none are exposed"
     expect(out).not.toMatch(/registered tool.*but none/i);

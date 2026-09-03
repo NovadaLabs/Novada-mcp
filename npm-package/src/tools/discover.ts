@@ -5,6 +5,9 @@ import {
   POPULATED_TOOL_CATEGORIES,
   TOOL_GROUPS,
   GROUP_TOOL_NAMES,
+  TOOL_LEDGERS,
+  LEDGER_TOOL_NAMES,
+  LEDGER_EXPLAINER,
   type ToolMeta,
   type ToolCategory,
 } from "./registry.js";
@@ -37,6 +40,14 @@ export const DiscoverParamsSchema = z.object({
 });
 
 export type DiscoverParams = z.infer<typeof DiscoverParamsSchema>;
+
+/**
+ * C-7/G-10 fix: no Novada backend exposes a per-call monetary cost today (the
+ * hosted gateway's own footer prints the same "cost: unknown" admission). Print
+ * this literal string for every billable tool's Cost cell instead of omitting
+ * the column or inventing a number — never silence the fact that cost is unknown.
+ */
+const COST_NOT_REPORTED = "not reported (backend ③)";
 
 export function validateDiscoverParams(
   args: Record<string, unknown> | undefined
@@ -168,8 +179,8 @@ export async function novadaDiscover(
     const tools = grouped.get(cat)!;
     lines.push(`### ${cat}`);
     lines.push("");
-    lines.push("| Tool | Description | Status |");
-    lines.push("|------|-------------|--------|");
+    lines.push("| Tool | Description | Ledger | Cost | Status |");
+    lines.push("|------|-------------|--------|------|--------|");
 
     for (const tool of tools) {
       const statusIcon = tool.status === "active" ? "✅ active" : "🔜 todo";
@@ -178,7 +189,14 @@ export async function novadaDiscover(
         tool.description.length > 100
           ? tool.description.slice(0, 97) + "..."
           : tool.description;
-      lines.push(`| \`${tool.name}\` | ${desc} | ${statusIcon} |`);
+      // C-7/G-10 fix: surface which ledger funds this tool, and be explicit
+      // that per-call monetary cost is NOT known rather than silently omitting
+      // a cost column — "unset" would only ever appear if a registry row shipped
+      // without a ledger, which tests/consistency/registry-ledger-taxonomy.test.ts
+      // fails the build over; it is not expected to render in practice.
+      const ledgerCell = tool.ledger ?? "unset";
+      const costCell = tool.ledger === "none" ? "free" : COST_NOT_REPORTED;
+      lines.push(`| \`${tool.name}\` | ${desc} | ${ledgerCell} | ${costCell} | ${statusIcon} |`);
     }
 
     lines.push("");
@@ -236,6 +254,37 @@ export async function novadaDiscover(
       ` — filtering to only this group would hide ${hides} other tool${hides === 1 ? "" : "s"}.`
     );
   }
+  lines.push("");
+
+  // ─── Billing reference (C-7/G-10 audit, W-B4) ──────────────────────────────
+  // Class-driven from registry.ts's LEDGER_TOOL_NAMES/LEDGER_EXPLAINER — a new
+  // tool automatically appears under the right ledger here via its registry
+  // row's `ledger` field, no per-tool edit needed. Counts are narrowed to THIS
+  // session's visible set, mirroring the Tool Groups section above.
+  lines.push("---");
+  lines.push("## Billing");
+  lines.push("");
+  lines.push(
+    "The Ledger column above shows which balance a tool's call draws on. Per-call " +
+    `monetary cost is NOT reported anywhere in this catalog — no Novada backend exposes ` +
+    `a per-call price today — so the Cost column reads "${COST_NOT_REPORTED}" for every ` +
+    "non-free tool rather than silently omitting it or inventing a number. Treat the Ledger " +
+    "column as your cost-shape signal until a real per-call price is surfaced."
+  );
+  lines.push("");
+  lines.push("Which ledger funds what (tool counts narrowed to this session's visible tools):");
+  for (const l of TOOL_LEDGERS) {
+    const memberNames = LEDGER_TOOL_NAMES[l].filter((n) => visibleNames.has(n));
+    lines.push(
+      `- **${l}** (${memberNames.length} tool${memberNames.length === 1 ? "" : "s"}): ${LEDGER_EXPLAINER[l]}`
+    );
+  }
+  lines.push("");
+  lines.push(
+    "Check your balances any time with `novada_account` — section=\"balance\" for Wallet, " +
+    "section=\"plans\" for Capture and every other per-product ledger (both together via the " +
+    "default section=\"summary\")."
+  );
   lines.push("");
 
   lines.push("---");

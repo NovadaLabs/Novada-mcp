@@ -248,6 +248,20 @@ export async function novadaAccountSummary(
   const expiredCount = planSummary?.expired_products?.length ?? 0;
   const unavailableCount = planSummary?.unavailable_products?.length ?? 0;
 
+  // ─── G-12 (b): name BOTH ledgers in the human-readable headline ───────────
+  // plan_balance_all already includes "capture" as one of its 6 products (it's
+  // where the JSON payload's numeric capture balance actually lives —
+  // sections.plans.per_product.capture.balance.balance), but the headline used
+  // to surface ONLY Wallet + an aggregate active/expired COUNT — never the
+  // Capture NUMBER itself. Pull it out into its own headline segment so an
+  // agent sees both balances at a glance, not buried two levels deep in JSON.
+  const captureProduct = plansSection.per_product?.capture;
+  const captureBalanceNum =
+    captureProduct?.status === "ok" && captureProduct.balance && typeof captureProduct.balance === "object"
+      ? (captureProduct.balance as Record<string, unknown>).balance
+      : undefined;
+  const captureBalance = typeof captureBalanceNum === "number" ? captureBalanceNum : undefined;
+
   const headline: string[] = [];
   if (walletBalance !== undefined) {
     // API omits currency — print the bare number, never invent €/$.
@@ -256,15 +270,31 @@ export async function novadaAccountSummary(
   } else if (!wallet.ok) {
     headline.push(`Wallet: error`);
   }
+  if (captureBalance !== undefined) {
+    headline.push(`Capture: ${captureBalance.toFixed(2)}`);
+  } else if (captureProduct?.status === "error" || !plans.ok) {
+    // Two distinct failure shapes both land here: (a) plan_balance_all
+    // succeeded overall but the capture PRODUCT within it errored, or
+    // (b) the WHOLE plan_balance_all call failed (network/parse error), which
+    // leaves plansSection.per_product undefined entirely — never silently
+    // drop the Capture segment just because the failure was at the outer
+    // level instead of the per-product level.
+    headline.push(`Capture: error`);
+  }
   headline.push(
     `Plans: ${activeCount} active / ${expiredCount} expired / ${unavailableCount} unavailable`,
   );
   if (allExpired) headline.push(`⚠️ ALL plans expired — buy at dashboard.novada.com`);
 
   // ─── Agent instruction ──────────────────────────────────────────────────
-  let agent_instruction = "Account snapshot — wallet (currency), plans (per-product MB quotas), and recent capture activity.";
+  let agent_instruction = "Account snapshot — Wallet and Capture are SEPARATE ledgers (see headline for both); plans are per-product MB quotas funded by wallet purchases; recent capture activity is included.";
   if (allExpired && walletBalance && walletBalance > 0) {
     agent_instruction = `User has ${typeof walletSection.currency === "string" ? walletSection.currency : ""}${walletBalance.toFixed(2)} in wallet (currency as shown in their dashboard) but ALL flow plans are expired. Suggest the user purchase a new plan at https://dashboard.novada.com to unlock proxy traffic again. Capture is funded separately.`;
+  } else if (captureBalance !== undefined && captureBalance <= 0 && (walletBalance ?? 0) > 0) {
+    // THE G-12 incident shape: Wallet is funded but Capture (the ledger that
+    // funds search/scrape/render) is $0 — do not let this read as generic
+    // "you're fine" just because Wallet has money.
+    agent_instruction = `Capture balance is 0.00 — novada_search, novada_scrape (+ every platform scraper), novada_verify, novada_ai_monitor, and the JS-render/Browser escalation inside novada_extract/crawl/research/site_copy/monitor will fail with insufficient funds even though Wallet has ${typeof walletSection.currency === "string" ? walletSection.currency : ""}${walletBalance!.toFixed(2)}. Wallet and Capture are DIFFERENT ledgers — top up Capture specifically at https://dashboard.novada.com; Wallet funds do not cover it.`;
   } else if (!wallet.ok || !plans.ok || !capture.ok) {
     agent_instruction = "Partial fetch — some sections errored. See sections.*.error for details. Call the individual tools directly to retry just the failing sections.";
   }

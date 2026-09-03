@@ -50,6 +50,30 @@ export const TOOL_GROUPS = ["core", "scrapers", "account", "meta"] as const;
 
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
 
+/**
+ * Which billing LEDGER a tool call draws on (C-7/G-10/G-12 audit, W-B4). Verified
+ * per-tool against the tool's OWN source (network target + auth key), not guessed
+ * from the tool's name — see the per-row comments below for the code evidence.
+ *   - "capture"  — hits scraper.novada.com / webunlocker.novada.com only — i.e.
+ *     the Capture/scraper balance (novada_account section="plans", product="capture").
+ *   - "wallet"   — draws the master wallet-funded proxy-flow bandwidth (novada_proxy
+ *     once the returned credentials are USED) or spends wallet currency directly
+ *     (novada_static_ip_mgmt open/renew purchase/renew per-IP static allocations).
+ *   - "mixed"    — the tool's OWN logic can debit EITHER ledger depending on the
+ *     path taken for that specific call: its default fetch is wallet-funded proxy
+ *     bandwidth (utils/http.ts's fetchViaProxy); it can escalate to a Capture-billed
+ *     Web-Unblocker JS-render fetch, OR to a Browser/CDP fetch (which is ALSO
+ *     Wallet-billed — same product family as novada_proxy, not Capture). Not a
+ *     guess-once label — genuinely conditional per call.
+ *   - "none"     — no consumption ledger is debited (free / read-only / in-memory
+ *     / administrative account-management action).
+ * See LEDGER_EXPLAINER below for the human-readable "which ledger funds what" copy
+ * novada_discover renders from this same table (single source of truth).
+ */
+export const TOOL_LEDGERS = ["wallet", "capture", "mixed", "none"] as const;
+
+export type ToolLedger = (typeof TOOL_LEDGERS)[number];
+
 export interface ToolMeta {
   name: string;
   description: string;
@@ -59,7 +83,54 @@ export interface ToolMeta {
   title: string;
   /** Opt-in filtering group — see TOOL_GROUPS above. */
   group: ToolGroup;
+  /**
+   * Billing ledger — see TOOL_LEDGERS above. OPTIONAL ON THE TYPE ONLY so that
+   * src/tools/platform_scraper.ts's factory-built `registryEntry: ToolMeta`
+   * object literals (which predate this field and are owned by a different
+   * concurrent worker in this audit — not edited here) keep compiling without
+   * also being touched. Every REAL row in TOOL_REGISTRY nonetheless has one:
+   * the 22 hand-authored rows below set it directly, and the 16
+   * platform-scraper rows spread in from PLATFORM_SCRAPER_REGISTRY_ENTRIES have
+   * it injected via `.map()` at the spread site (all of them are "capture" —
+   * every platform scraper delegates to scrape.ts's SCRAPER_API_BASE, a single
+   * fact stamped once, not per-platform). A dedicated test
+   * (tests/consistency/registry-ledger-taxonomy.test.ts) enforces this
+   * NON-optionality at runtime for the actual registry, with a synthetic
+   * unassigned row proving the check isn't inert.
+   */
+  ledger?: ToolLedger;
 }
+
+/**
+ * Human-readable "which ledger funds what" explainer, one line per ToolLedger
+ * value. novada_discover renders this verbatim so an agent choosing between
+ * tools has a cost-basis, not just a name (C-7/G-10 fix). Source of truth for
+ * this copy lives here, not duplicated in discover.ts.
+ */
+export const LEDGER_EXPLAINER: Readonly<Record<ToolLedger, string>> = Object.freeze({
+  capture:
+    "Capture — the scraper/search balance (novada_account section=\"plans\", product=\"capture\"). " +
+    "Funds novada_search, novada_scrape (+ every platform-scraper tool), novada_verify, " +
+    "novada_ai_monitor, and the Web-Unblocker JS-render escalation inside " +
+    "novada_extract/crawl/research/site_copy/monitor.",
+  wallet:
+    "Wallet — the master currency balance (novada_account section=\"balance\"). Funds proxy " +
+    "bandwidth once novada_proxy's returned credentials are actually used, novada_static_ip_mgmt's " +
+    "open/renew per-IP purchases, and the Browser product (novada_browser / novada_browser_flow — " +
+    "billed via api-m.novada.com's developer-api / proxy_account family, product=10, the same " +
+    "mechanism and zone-suffix convention as the proxy family's product=1). The Browser product's " +
+    "balance is NOT separately surfaced in novada_account's ledger sections (not in " +
+    "plan_balance_all's product list) — check dashboard.novada.com directly for it.",
+  mixed:
+    "Mixed — this tool's default fetch draws Wallet-funded proxy bandwidth; a single call can " +
+    "escalate to a Capture-billed Web-Unblocker JS-render fetch, OR to a Browser (CDP) fetch — " +
+    "which is ALSO Wallet-billed (same product family as novada_proxy, not Capture) — depending on " +
+    "what the target page needs. Which ledger moves depends on the path taken for THAT call, not " +
+    "the tool as a whole.",
+  none:
+    "None — no consumption ledger is debited by this tool call (free, read-only, in-memory, or " +
+    "an account-management action).",
+});
 
 /**
  * One entry per registered tool. Descriptions here are the SHORT,
@@ -76,6 +147,10 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Web Search",
     group: "core",
+    // Code: search.ts:142,244 POST `${SCRAPER_API_BASE}/request` — Capture only.
+    // Live-verified (C-reliability-live.md spend ledger): Wallet unmoved, Capture
+    // debited across every search call in the audit.
+    ledger: "capture",
   },
   {
     name: "novada_extract",
@@ -84,6 +159,13 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Content Extractor",
     group: "core",
+    // Code: extract.ts imports fetchViaProxy (wallet-funded proxy bandwidth, the
+    // default fetch), fetchWithRender (Capture-billed Web-Unblocker escalation),
+    // AND fetchViaBrowser (Browser/CDP escalation — coordinator correction,
+    // 2026-09-03: this is ALSO wallet-billed, product=10 via the SAME api-m.novada.com
+    // developer-api/proxy_account family as novada_proxy's product=1, NOT Capture —
+    // see the "wallet" bullet in LEDGER_EXPLAINER). Genuinely conditional per call.
+    ledger: "mixed",
   },
   {
     name: "novada_crawl",
@@ -92,6 +174,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Site Crawler",
     group: "core",
+    // Code: crawl.ts:1,42 imports fetchViaProxy (wallet, default) AND fetchWithRender
+    // (Capture-billed Web Unblocker escalation) — same conditional-per-call shape as extract.
+    ledger: "mixed",
   },
   {
     name: "novada_research",
@@ -100,6 +185,10 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Deep Research",
     group: "core",
+    // Code: research.ts:4-5 composes novadaExtract (mixed: wallet + capture-on-
+    // escalation) AND submitSearchScrapeTask/resolveSearchResults from search.ts
+    // (capture-only) — a single research call draws BOTH ledgers by construction.
+    ledger: "mixed",
   },
   {
     name: "novada_map",
@@ -108,6 +197,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "URL Mapper",
     group: "core",
+    // Code: map.ts imports ONLY fetchViaProxy (no fetchWithRender/fetchViaBrowser
+    // import at all) — wallet-funded proxy bandwidth is the sole fetch path.
+    ledger: "wallet",
   },
   {
     name: "novada_site_copy",
@@ -116,6 +208,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Site Copy",
     group: "core",
+    // Code: site_copy.ts:3-4 imports fetchViaProxy AND fetchWithRender — same
+    // conditional-per-call shape as extract/crawl.
+    ledger: "mixed",
   },
   {
     name: "novada_search_feedback",
@@ -124,6 +219,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Search Feedback",
     group: "meta",
+    // Finding: G-security-billing.md write-gate table — "in-memory only, per-process,
+    // nothing persisted, nothing leaves the process" / "No external effect at all".
+    ledger: "none",
   },
   // ─── Scraping & Verification ────────────────────────────────────────────
   {
@@ -133,6 +231,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Platform Scraper",
     group: "scrapers",
+    // Code: scrape.ts:2,12 — SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`. Live-
+    // verified (C-reliability-live.md: github submit −0.18 Capture, Wallet unmoved).
+    ledger: "capture",
   },
   // novada_scrape_amazon (and, as they're added, its 15 per-platform siblings) is
   // GENERATED by the platform-scraper factory (src/tools/platform_scraper.ts) from a
@@ -140,7 +241,11 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   // hand-written so the registry entry can never drift from the generated tool.
   // Each generated entry carries its own title (derivePlatformTitle) and
   // group:"scrapers" — see createPlatformScraperTool in platform_scraper.ts.
-  ...PLATFORM_SCRAPER_REGISTRY_ENTRIES,
+  // ledger:"capture" is injected here (not in platform_scraper.ts, which this
+  // audit does not own/edit) because EVERY platform scraper's handler delegates
+  // to novadaScrape (scrape.ts) — the same SCRAPER_API_BASE fact as novada_scrape
+  // above, stamped once for the whole class instead of per-platform.
+  ...PLATFORM_SCRAPER_REGISTRY_ENTRIES.map((entry) => ({ ...entry, ledger: "capture" as const })),
   {
     name: "novada_ai_monitor",
     description: "Search indexed public pages on AI-company domains (chatgpt.com/openai.com, perplexity.ai, anthropic.com, ...) for brand mentions and sentiment. Does NOT query the live AI models — reflects indexed-page coverage only. Returns per-domain sentiment signals, key claims, competitor mentions, and source URLs.",
@@ -148,6 +253,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "AI Brand Monitor",
     group: "core",
+    // Code: ai_monitor.ts:1 imports submitSearchScrapeTask/resolveSearchResults
+    // from search.ts — same SCRAPER_API_BASE path as novada_search.
+    ledger: "capture",
   },
   {
     name: "novada_monitor",
@@ -156,6 +264,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Page Change Monitor",
     group: "core",
+    // Code: monitor.ts:3,400-419 — content fetch is entirely via novadaExtract, so
+    // this tool inherits extract's mixed wallet/capture shape (no direct fetch of its own).
+    ledger: "mixed",
   },
   {
     name: "novada_verify",
@@ -164,6 +275,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Fact Verification",
     group: "core",
+    // Code: verify.ts:2 imports submitSearchScrapeTask/resolveSearchResults from
+    // search.ts — same SCRAPER_API_BASE path as novada_search.
+    ledger: "capture",
   },
   // ─── Proxy ──────────────────────────────────────────────────────────────
   {
@@ -173,6 +287,11 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Proxy Credentials",
     group: "core",
+    // The tool call itself makes no billable request — it formats credentials.
+    // Ledger reflects what actually pays once those credentials are USED: Wallet-
+    // funded proxy-flow bandwidth (this is also the ledger the new C-11
+    // expired-plan entitlement check in proxy.ts verifies before handing out creds).
+    ledger: "wallet",
   },
   // ─── Browser & Rendering ────────────────────────────────────────────────
   {
@@ -182,6 +301,19 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Browser Automation",
     group: "core",
+    // RELABELED 2026-09-03 (coordinator correction — historical-P0-class
+    // wrong-ledger-assumption catch): the ORIGINAL "capture" stamp here reasoned
+    // from "same NOVADA_API_KEY" — which proves nothing, since every tool shares
+    // that key. The actual evidence points to Wallet: utils/credentials.ts's
+    // resolveBrowserWs()/auto-provision path fetches WSS creds via
+    // /v1/proxy_account/list product=10 on api-m.novada.com (developer-api) — the
+    // IDENTICAL mechanism + zone-suffix convention as novada_proxy's own
+    // product=1 lookup (also wallet). Never hits scraper.novada.com/
+    // webunlocker.novada.com (the actual Capture hosts). Product=10 is NOT one of
+    // plan_balance_all's ALL_PRODUCT_KEYS, so novada_account shows no balance for
+    // it under any ledger — flagged honestly in LEDGER_EXPLAINER's "wallet" entry
+    // rather than asserting an unverified Capture fact.
+    ledger: "wallet",
   },
   {
     name: "novada_browser_flow",
@@ -190,6 +322,17 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Browser Flow Automation",
     group: "core",
+    // RELABELED 2026-09-03 (coordinator correction — same historical-P0-class
+    // wrong-ledger-assumption catch as novada_browser above): the ORIGINAL
+    // "capture" stamp reasoned from "same NOVADA_API_KEY", which proves nothing
+    // (every tool shares that key). The billable POST is
+    // https://api-m.novada.com/v1/browser_flow/browser_flow_use — i.e.
+    // DEVELOPER_API_BASE (browser_flow.ts:78), NOT SCRAPER_API_BASE
+    // (scraper.novada.com, the actual Capture host). Same api-m.novada.com /
+    // developer-api family as the proxy-account mechanism → wallet, matching
+    // novada_browser. Not one of plan_balance_all's ALL_PRODUCT_KEYS, so no
+    // balance for it surfaces under any ledger in novada_account.
+    ledger: "wallet",
   },
   // ─── Account & Billing (KR-6 developer-api tools) ───────────────────────
   {
@@ -199,6 +342,10 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Account & Billing",
     group: "account",
+    // Reads (wallet_balance/plan_balance_all/capture_logs/health) — balance/plan
+    // lookups, not consumption charges. Code: account_summary.ts composes these
+    // three read-only sub-tools; account.ts's other sections are equally read-only.
+    ledger: "none",
   },
   {
     name: "novada_proxy_account_create",
@@ -207,6 +354,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Proxy Account Create",
     group: "account",
+    // Admin write against api-m.novada.com (NOVADA_DEVELOPER_API_KEY) — creates a
+    // sub-account record; no per-call consumption ledger is debited by the call itself.
+    ledger: "none",
   },
   {
     name: "novada_proxy_account_list",
@@ -215,6 +365,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Proxy Account List",
     group: "account",
+    ledger: "none",
   },
   {
     name: "novada_ip_whitelist",
@@ -223,6 +374,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "IP Whitelist Manager",
     group: "account",
+    // Account configuration (add/list/del/remark against /v1/white_list/*) — no
+    // consumption ledger.
+    ledger: "none",
   },
   {
     name: "novada_capture_apikey",
@@ -231,6 +385,9 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Capture API Key",
     group: "account",
+    // Manages the KEY that authenticates Capture-ledger calls — it does not itself
+    // spend the Capture balance (get/reset are administrative, not consumption).
+    ledger: "none",
   },
   {
     name: "novada_static_ip_mgmt",
@@ -239,6 +396,14 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Static IP Manager",
     group: "account",
+    // open/renew SPEND MONEY to purchase/renew per-IP static allocations (finding:
+    // G-security-billing.md's own write-gate table row calls this out explicitly:
+    // "open/renew — SPENDS MONEY"). Static ISP is a proxy product, purchased with
+    // wallet currency like every other flow plan (plan_balance_all.ts header
+    // comment: "Wallet ... Funds proxy-product plan purchases only"). export/list
+    // are free reads — the field is per-TOOL, not per-action, so the write actions'
+    // ledger is the honest label for the row as a whole.
+    ledger: "wallet",
   },
   // ─── Health & Discovery ─────────────────────────────────────────────────
   {
@@ -248,6 +413,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Tool Discovery",
     group: "meta",
+    ledger: "none",
   },
   {
     name: "novada_setup",
@@ -256,6 +422,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Setup & Configuration",
     group: "meta",
+    ledger: "none",
   },
   {
     name: "novada_session_stats",
@@ -264,6 +431,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
     status: "active",
     title: "Session Stats",
     group: "meta",
+    ledger: "none",
   },
 ];
 
@@ -276,6 +444,20 @@ export const GROUP_TOOL_NAMES: Readonly<Record<ToolGroup, readonly string[]>> = 
   Object.fromEntries(
     TOOL_GROUPS.map((g) => [g, TOOL_REGISTRY.filter((t) => t.group === g).map((t) => t.name)])
   ) as unknown as Record<ToolGroup, readonly string[]>
+);
+
+/**
+ * Every registered tool name -> ledger, derived from TOOL_REGISTRY (single source
+ * of truth). A row with no `ledger` set (should never happen for a real entry —
+ * see tests/consistency/registry-ledger-taxonomy.test.ts) simply does not appear
+ * under any key here; it is NOT silently coerced into "none", so an unassigned
+ * row is visible as a gap in the union rather than masquerading as a real value.
+ * Consumed by discover.ts's Billing section.
+ */
+export const LEDGER_TOOL_NAMES: Readonly<Record<ToolLedger, readonly string[]>> = Object.freeze(
+  Object.fromEntries(
+    TOOL_LEDGERS.map((l) => [l, TOOL_REGISTRY.filter((t) => t.ledger === l).map((t) => t.name)])
+  ) as unknown as Record<ToolLedger, readonly string[]>
 );
 
 /** Tool names in the canonical registry, as a Set for fast membership checks. */

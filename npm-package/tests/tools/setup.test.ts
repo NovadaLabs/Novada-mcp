@@ -12,6 +12,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("../../src/tools/wallet_balance.js", () => ({
   novadaWalletBalance: vi.fn(),
 }));
+// G-12 (W-B4): setup.ts now ALSO fetches the Capture ledger via
+// plan_balance_all({products:["capture"]}) for every "ready" call. Mocked here
+// so the pre-existing tests below (which never asserted Capture) don't make a
+// real network call — see tests/tools/setup_capture_ledger.test.ts for the
+// dedicated dual-ledger coverage.
+vi.mock("../../src/tools/plan_balance_all.js", () => ({
+  novadaPlanBalanceAll: vi.fn().mockResolvedValue(
+    JSON.stringify({ status: "ok", per_product: { capture: { status: "ok", balance: { balance: 42 } } } }),
+  ),
+}));
 
 import { novadaWalletBalance } from "../../src/tools/wallet_balance.js";
 const mockedWallet = vi.mocked(novadaWalletBalance);
