@@ -26,20 +26,51 @@ const MAX_CHARS_DEFAULT = 25000;
 
 /**
  * Cross-tool hint map: base domain → the best novada_scrape operation for structured data.
- * Used by both the JSON and markdown output paths to suggest novada_scrape when extraction
- * quality is poor (P2-3). Single source of truth so the two hint sites can never drift.
+ * Used by both the JSON and markdown output paths, and by getSuggestedFix's error-path
+ * hint, to suggest novada_scrape when extraction quality is poor (P2-3). Single source
+ * of truth so all three hint sites can never drift from each other.
  *
- * FIX-2: Only list ops that are NOT backend_broken in the catalog. When the best op for a
- * platform is broken, either point at the next working op (shein) or suppress the hint
- * entirely (chatgpt — all ops broken). We validate at hint-emit time too, as a belt-and-
- * suspenders guard for future catalog status changes.
+ * FIX-2 (2026-07-30): Only list ops that are NOT backend_broken in the catalog. When the
+ * best op for a platform is broken, either point at the next working op (shein) or
+ * suppress the hint entirely (chatgpt — all ops broken).
+ *
+ * FIX-3 (2026-09-02, audit): FIX-2 validated STATUS but not EXISTENCE — isCatalogOpUsable
+ * (below) used to be isCatalogOpBroken, which returned false (= "not broken, hint is
+ * safe") for any domain/op pair ABSENT from the catalog entirely, not just ones marked
+ * backend_broken. That's fail-OPEN: a typo'd or stale entry here silently passed the
+ * gate and emitted a phantom `novada_scrape(platform=..., operation=...)` suggestion the
+ * backend would reject with 11006/11008. Full audit against scraper_catalog.ts (16
+ * platforms, ~87 ops) found three bad entries, now fixed:
+ *   - "reddit.com"    → removed. reddit.com is not a catalog domain at all (confirmed by
+ *                       resources/index.ts's own "NOT AVAILABLE — use novada_extract
+ *                       instead" list, and tests/data/scraper_catalog.test.ts's
+ *                       "unknown domain returns undefined" case). Also currently
+ *                       unreachable via extractSingleInner's own hint sites because
+ *                       rewriteRedditUrl() rewrites reddit.com/www.reddit.com to
+ *                       old.reddit.com BEFORE baseDomain is computed — but the map entry
+ *                       was wrong regardless of that incidental shadowing, and
+ *                       getSuggestedFix's error-path hint (below) reads the ORIGINAL
+ *                       (pre-rewrite) url, so a fetch-throws case there was reachable.
+ *   - "glassdoor.com" → removed. Same as reddit.com: not one of the 16 active catalog
+ *                       domains (also explicitly listed as "NOT AVAILABLE" in
+ *                       resources/index.ts) — genuinely reachable via the hint sites
+ *                       below (glassdoor.com has no compensating URL-rewrite).
+ *   - "instagram.com" → corrected "instagram_profile_url" (never existed in the catalog)
+ *                       to "ins_profiles_profileurl" (real, status:"ok", takes the same
+ *                       `profileurl` shape an agent already has). Live-reachable bug —
+ *                       verified by driving novadaExtract() end-to-end against a mocked
+ *                       low-quality instagram.com response.
+ * "twitter.com" is intentionally kept pointing at the x.com-only op "twitter_profile_username":
+ * scrape.ts's own PLATFORM_ALIASES resolves platform:"twitter.com" → "x.com" at call time,
+ * so the hint is genuinely actionable even though CATALOG_BY_DOMAIN has no "twitter.com"
+ * key — isCatalogOpUsable applies the same alias before checking the catalog (HINT_DOMAIN_ALIASES).
  */
-const SCRAPER_PLATFORMS: Record<string, string> = {
-  "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
+export const SCRAPER_PLATFORMS: Record<string, string> = {
+  "amazon.com": "amazon_product_keywords",
   "github.com": "github_repository_repo-url", "tiktok.com": "tiktok_posts_url",
   "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
-  "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
-  "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
+  "instagram.com": "ins_profiles_profileurl", "twitter.com": "twitter_profile_username",
+  "x.com": "twitter_profile_username",
   // shein_products_keyword is backend_broken; shein_product_url is alive — use that instead
   "shein.com": "shein_product_url",
   // chatgpt.com: both chatgpt_answer_searchterm and chatgpt_answer_url are backend_broken — suppress
@@ -47,9 +78,45 @@ const SCRAPER_PLATFORMS: Record<string, string> = {
   "perplexity.ai": "perplexity_answer_searchterm",
 };
 
-/** Return true when the catalog confirms this op is backend_broken (safe-to-suppress hint). */
-function isCatalogOpBroken(domain: string, op: string): boolean {
-  return CATALOG_BY_DOMAIN.get(domain)?.get(op)?.status === "backend_broken";
+/**
+ * Domain aliases the generic novada_scrape tool resolves at call time (mirrors
+ * scrape.ts's own PLATFORM_ALIASES, currently `{ "twitter.com": "x.com" }`). scrape.ts
+ * does not export that table, so it is duplicated here — deliberately tiny (one entry)
+ * and referenced from both places via comment so it doesn't silently drift. Used ONLY to
+ * resolve a SCRAPER_PLATFORMS domain before validating it against the catalog; it has no
+ * effect on scrape.ts's actual runtime resolution.
+ */
+const HINT_DOMAIN_ALIASES: Record<string, string> = { "twitter.com": "x.com" };
+
+/**
+ * FAIL-CLOSED (FIX-3): true only when `op` is a real, non-backend_broken operation for
+ * `domain` (after alias resolution) in scraper_catalog.ts — the single source of truth
+ * for what novada_scrape can actually execute. A domain or op ABSENT from the catalog now
+ * returns false (suppress the hint) instead of the old isCatalogOpBroken's fail-open
+ * default of true-means-broken/false-means-safe, which treated "not found" the same as
+ * "confirmed working" (root cause of the reddit.com/instagram.com/glassdoor.com phantom
+ * hints — see the SCRAPER_PLATFORMS doc comment above).
+ */
+export function isCatalogOpUsable(domain: string, op: string): boolean {
+  const resolvedDomain = HINT_DOMAIN_ALIASES[domain] ?? domain;
+  const entry = CATALOG_BY_DOMAIN.get(resolvedDomain)?.get(op);
+  return entry !== undefined && entry.status !== "backend_broken";
+}
+
+/**
+ * Resolve the single-source-of-truth novada_scrape hint text for a domain, or null when
+ * SCRAPER_PLATFORMS has no entry or the catalog can't confirm it's usable. Shared by the
+ * two quality-hint emission sites and getSuggestedFix's error-path hint so there is
+ * exactly one place that decides "is this domain's scrape hint safe to show" — no more
+ * hand-duplicated per-domain override tables that can drift from SCRAPER_PLATFORMS
+ * (getSuggestedFix used to hardcode its own instagram.com/x.com/amazon.com/linkedin.com
+ * strings independently, which is how the instagram_profile_url phantom op survived in
+ * TWO places at once).
+ */
+export function getScrapeHint(domain: string): string | null {
+  const scraperOp = SCRAPER_PLATFORMS[domain];
+  if (!scraperOp || !isCatalogOpUsable(domain, scraperOp)) return null;
+  return `novada_scrape(platform="${domain}", operation="${scraperOp}")`;
 }
 
 /** Markdown annotation for a resolved field's source (used in the Requested Fields block). */
@@ -522,7 +589,7 @@ function buildContextualAgentInstruction(ctx: {
 }
 
 /** Derive a suggested_fix hint from a URL + error message */
-function getSuggestedFix(url: string, errorMsg: string): string {
+export function getSuggestedFix(url: string, errorMsg: string): string {
   const lower = errorMsg.toLowerCase();
   // FIX-A (2026-07-30): the aggregate-fetch-failure marker text is emitted ONLY by
   // summarizeAggregateError's crafted message ("All N fetch strategies failed: ...").
@@ -561,10 +628,15 @@ function getSuggestedFix(url: string, errorMsg: string): string {
   try {
     const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
     if (host === "zhihu.com") return `suggested_fix: zhihu.com blocks automated access. Use render="render" first; if blocked, use format="html" for raw HTML. Alternatively search via novada_search`;
-    if (host === "amazon.com") return `suggested_fix: try novada_scrape(platform="amazon.com", operation="amazon_product_keywords") for structured product data`;
-    if (host === "x.com" || host === "twitter.com") return `suggested_fix: try novada_scrape(platform="x.com", operation="twitter_profile_username") for Twitter/X data`;
-    if (host === "instagram.com") return `suggested_fix: try novada_scrape(platform="instagram.com", operation="instagram_profile_url")`;
-    if (host === "linkedin.com") return `suggested_fix: try novada_scrape(platform="linkedin.com", operation="linkedin_company_information_url")`;
+    // FIX-3 (2026-09-02, audit): derive from the single SCRAPER_PLATFORMS source (validated
+    // against scraper_catalog.ts via getScrapeHint) instead of a second, independently
+    // hand-maintained per-domain table. The old hardcoded instagram.com override above
+    // pointed at "instagram_profile_url" — a phantom op that never existed in the
+    // catalog — the SAME root cause as the reddit.com/glassdoor.com SCRAPER_PLATFORMS
+    // bug, just duplicated into a second call site. A single source means this can't
+    // drift from the two quality-hint sites again.
+    const scrapeHint = getScrapeHint(host);
+    if (scrapeHint) return `suggested_fix: try ${scrapeHint} for structured ${host} data`;
   } catch { /* ignore */ }
   return `suggested_fix: retry with render="render" for JS-heavy pages. If blocked: novada_extract(url="${url}", format="html") returns raw HTML via stealth browser`;
 }
@@ -1764,11 +1836,12 @@ async function extractSingleInner(
       if (!isBrowserConfigured()) hints.push("Set NOVADA_BROWSER_WS to enable Browser API as a final fallback for JS-heavy pages.");
     }
     // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor.
-    // FIX-2: Only emit the hint when the catalog confirms the op is NOT backend_broken.
+    // FIX-3: getScrapeHint is fail-closed — a catalog-absent domain/op (or backend_broken
+    // op) returns null and no hint is emitted, instead of the old fail-open check.
     if (!contentOk && baseDomain) {
-      const scraperOp = SCRAPER_PLATFORMS[baseDomain];
-      if (scraperOp && !isCatalogOpBroken(baseDomain, scraperOp)) {
-        hints.push(`For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
+      const scrapeHint = getScrapeHint(baseDomain);
+      if (scrapeHint) {
+        hints.push(`For structured ${baseDomain} data, try: ${scrapeHint}`);
       }
       // NOV-565: never show a bot-protection hint when the page already has full content.
       if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
@@ -1999,11 +2072,12 @@ async function extractSingleInner(
     }
   }
   // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor.
-  // FIX-2: Only emit the hint when the catalog confirms the op is NOT backend_broken.
+  // FIX-3: getScrapeHint is fail-closed — a catalog-absent domain/op (or backend_broken
+  // op) returns null and no hint is emitted, instead of the old fail-open check.
   if (!contentOk && baseDomain) {
-    const scraperOp = SCRAPER_PLATFORMS[baseDomain];
-    if (scraperOp && !isCatalogOpBroken(baseDomain, scraperOp)) {
-      lines.push(`- For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
+    const scrapeHint = getScrapeHint(baseDomain);
+    if (scrapeHint) {
+      lines.push(`- For structured ${baseDomain} data, try: ${scrapeHint}`);
     }
     // NOV-565: never show a bot-protection hint when the page already has full content.
     if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
