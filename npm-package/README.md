@@ -4,8 +4,6 @@
 
 **One MCP server for the entire live web.** Search, extract, scrape, crawl, proxy, browser automation, and AI-powered research — behind a single hosted connection, or one local install if you'd rather run it yourself.
 
-[screenshot: Novada connected in an MCP client, tool list visible]
-
 [![npm version](https://img.shields.io/npm/v/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![CI](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml)
@@ -26,7 +24,7 @@
 
 Novada is **hosted-first** — there's nothing to install. Point your client at the hosted URL and you're done. Every client below also has a local self-host fallback (`npx novada-mcp`) if you'd rather run the server yourself.
 
-> **Security note:** the hosted URL contains your API key in the `?token=` parameter — treat it like a password. Never share it, never post it publicly, and never configure it as a shared or organization-level connector.
+> **Security note:** the hosted URL contains your API key in the `?apikey=` parameter — treat it like a password. Never share it, never post it publicly, and never configure it as a shared or organization-level connector. Header-capable clients: prefer `Authorization: Bearer <key>` instead — it keeps the key out of URLs and access logs.
 
 ### claude.ai (web)
 
@@ -34,7 +32,7 @@ Novada is **hosted-first** — there's nothing to install. Point your client at 
 2. Name it `Novada`.
 3. Paste the URL (contains your key — see security note above):
    ```
-   https://mcp.novada.com/mcp?token=YOUR_KEY
+   https://mcp.novada.com/mcp?apikey=YOUR_KEY
    ```
 4. Click **Add**.
 
@@ -49,7 +47,7 @@ Uses the same **Settings → Connectors → Add custom connector** flow as claud
 {
   "mcpServers": {
     "novada": {
-      "url": "https://mcp.novada.com/mcp?token=YOUR_KEY"
+      "url": "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
     }
   }
 }
@@ -72,7 +70,7 @@ Uses the same **Settings → Connectors → Add custom connector** flow as claud
 
 **Hosted:**
 ```bash
-claude mcp add --transport http novada "https://mcp.novada.com/mcp?token=YOUR_KEY"
+claude mcp add --transport http novada "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
 ```
 
 **Local (self-host):**
@@ -89,7 +87,7 @@ Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-scoped):
 {
   "mcpServers": {
     "novada": {
-      "url": "https://mcp.novada.com/mcp?token=YOUR_KEY"
+      "url": "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
     }
   }
 }
@@ -117,7 +115,7 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "novada": {
-      "serverUrl": "https://mcp.novada.com/mcp?token=YOUR_KEY"
+      "serverUrl": "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
     }
   }
 }
@@ -146,7 +144,7 @@ Edit `.vscode/mcp.json` (top-level key is `servers`, not `mcpServers`):
   "servers": {
     "novada": {
       "type": "http",
-      "url": "https://mcp.novada.com/mcp?token=YOUR_KEY"
+      "url": "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
     }
   }
 }
@@ -174,8 +172,6 @@ novada_search({query: "Claude MCP tutorials"})          — web search
 novada_extract({url: "https://example.com"})            — read any URL
 novada_research({question: "how do MCP servers work?"}) — parallel multi-source research
 ```
-
-[screenshot: agent calling novada_search and returning results]
 
 > Self-hosting? Always use `npx -y novada-mcp` (not a global install) — a globally installed binary can silently shadow the package and run an old cached version.
 
@@ -213,11 +209,47 @@ These are the tools you reach for most:
 
 **38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38. The hosted default surface (`mcp.novada.com`) exposes **30** — the same registry minus 8 tools that don't apply to a stateless serverless endpoint: `novada_browser_flow` (needs a persistent browser session), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
 
+### Where does it run?
+
+<details>
+<summary>Full local/hosted breakdown, all 38 tools</summary>
+
+| Tool | Local (`npx novada-mcp`) | Hosted (`mcp.novada.com`) |
+|------|:--:|:--:|
+| `novada_search` | ✅ | ✅ |
+| `novada_extract` | ✅ | ✅ |
+| `novada_crawl` | ✅ | ✅ |
+| `novada_research` | ✅ | ✅ |
+| `novada_map` | ✅ | ✅ |
+| `novada_site_copy` | ✅ | ❌ writes to local disk |
+| `novada_search_feedback` | ✅ | ❌ per-process in-memory state |
+| `novada_scrape` | ✅ | ✅ |
+| `novada_scrape_amazon` … `_perplexity` (15 platform tools) | ✅ | ✅ |
+| `novada_ai_monitor` | ✅ | ✅ |
+| `novada_monitor` | ✅ | ✅ |
+| `novada_verify` | ✅ | ❌ not on `novada_discover`'s hosted listing |
+| `novada_proxy` | ✅ | ✅ |
+| `novada_browser` | ✅ | ✅ |
+| `novada_browser_flow` | ✅ | ❌ needs a persistent browser session |
+| `novada_account` | ✅ | ✅ |
+| `novada_proxy_account_create` | ✅ | ❌ write-gated account op |
+| `novada_proxy_account_list` | ✅ | ✅ |
+| `novada_ip_whitelist` | ✅ | ❌ write-gated account op |
+| `novada_capture_apikey` | ✅ | ❌ write-gated account op |
+| `novada_static_ip_mgmt` | ✅ | ❌ write-gated account op |
+| `novada_discover` | ✅ | ✅ |
+| `novada_setup` | ✅ | ✅ |
+| `novada_session_stats` | ✅ | ❌ per-process in-memory state |
+
+Full per-tool reference (same column) → [docs/TOOLS.md](../docs/TOOLS.md).
+
+</details>
+
 ---
 
 ## Configuration (self-host)
 
-Only relevant if you're running `npx novada-mcp` yourself — hosted users only need the `?token=` URL.
+Only relevant if you're running `npx novada-mcp` yourself — hosted users only need the `?apikey=` URL.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -235,7 +267,7 @@ Only relevant if you're running `npx novada-mcp` yourself — hosted users only 
 <summary>Tools not showing up in my client</summary>
 
 - Confirm the server registered: for Claude Code run `claude mcp list`; for other clients, check the connector/server status in settings.
-- If using the hosted URL, make sure it's exactly `https://mcp.novada.com/mcp?token=YOUR_KEY` with your real key substituted — a placeholder or malformed URL fails silently in some clients.
+- If using the hosted URL, make sure it's exactly `https://mcp.novada.com/mcp?apikey=YOUR_KEY` with your real key substituted — a placeholder or malformed URL fails silently in some clients.
 - If self-hosting, always use `npx -y novada-mcp` (never a global install) — a stale globally-installed binary can silently shadow the package and run an old cached version with a different tool list.
 - Call `novada_discover` once connected. Hosted and self-host expose different catalogs, so a "missing" tool may simply not be on the surface you're connected to.
 
@@ -285,6 +317,11 @@ Only relevant if you're running `npx novada-mcp` yourself — hosted users only 
 - **Drift-guarded tool registry.** `src/tools/registry.ts` is the single source of truth for the tool catalog; a test asserts the registered tools, the wired tools, and the `novada_discover` output can never diverge.
 - **`confirm:true` write-gate.** Every mutating tool (proxy sub-account creation, IP whitelist changes, static IP purchases, capture-key resets) requires an explicit two-step confirmation — no silent writes.
 - **Callable onboarding.** `novada_discover` and `novada_setup` are tools your agent can call itself to find the right tool or validate a key, without ever reading this README.
+
+**vs Firecrawl / Tavily (measured, not marketing):**
+- **4.9× more compact.** An identical 5-result search query returned 2,761 bytes from Novada vs 13,421 bytes from Firecrawl — less agent token cost per answer.
+- **Keyless to start.** `npx -y novada-mcp` cold-starts with no key; `novada_setup` walks you to one only when a tool needs it.
+- **Named anti-bot failures.** On an unresolvable target, Novada's response names the exact blocker (e.g. `anti_bot:kasada`) instead of a generic error, so an agent can branch on it.
 
 ---
 

@@ -73,8 +73,15 @@ if (Array.isArray(serverJson.packages)) {
     if (p && typeof p === "object" && "version" in p) p.version = pkg.version;
   }
 }
+// Kept to <=100 chars — the official MCP registry schema's server.json `description`
+// field has maxLength:100 (verified live against
+// https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json with ajv,
+// 2026-09-03: the prior 164-char string here was schema-INVALID, meaning every
+// `npm run build` silently reintroduced a registry-blocking server.json). Update this
+// string only if you also re-run the ajv check — see
+// tests/consistency/server-json-descriptions.test.ts, which now asserts the length bound.
 serverJson.description =
-  "Search the web (Google, DuckDuckGo, Yandex), extract any URL, crawl, map, multi-step research, scrape 16 platforms, browser automation, proxy routing — one API key.";
+  "Search, extract, crawl, map, research, scrape 16 platforms, browser automation, proxy — one API key.";
 serverJson.tools = TOOLS.map((t) => ({ name: t.name, description: shortDescription(t.description) }));
 
 writeFileSync(SERVER_JSON_PATH, JSON.stringify(serverJson, null, 2) + "\n");

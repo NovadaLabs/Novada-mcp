@@ -1,5 +1,5 @@
 name: novada-mcp
-description: "Real-time web data API for AI agents — search (Google, Bing, DuckDuckGo, Yahoo, Yandex), extract, crawl, map, and research the web. Powered by 100M+ proxy IPs across 195 countries with anti-bot bypass."
+description: "Real-time web data API for AI agents — search (Google, DuckDuckGo, Yandex), extract, crawl, map, and multi-step research the web. Scrape 16 platforms (Amazon, LinkedIn, TikTok, YouTube, ...), browser automation, and proxy routing — one API key. Powered by 100M+ proxy IPs across 195 countries with anti-bot bypass."
 startCommand:
   type: stdio
   configSchema:
@@ -14,12 +14,78 @@ startCommand:
     config => ({ command: 'npx', args: ['-y', 'novada-mcp'], env: { NOVADA_API_KEY: config.novadaApiKey } })
 tools:
   - name: novada_search
-    description: "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Returns structured results with titles, URLs, snippets, and optional date filtering."
+    description: "Search the web and get clean, ready-to-use content. Returns titles, URLs, snippets — reranked by relevance. Engines: google (default), duckduckgo, yandex."
   - name: novada_extract
-    description: "Extract main content, title, description, and links from one or multiple URLs. Supports markdown, text, and HTML output formats."
+    description: "Extract content from any URL. Handles Cloudflare, DataDome, Kasada automatically via auto-escalation (static → JS render → Browser CDP)."
   - name: novada_crawl
-    description: "Crawl a website using BFS or DFS and extract content from multiple pages concurrently. Supports path filtering and natural-language instructions."
-  - name: novada_map
-    description: "Discover all URLs on a website without extracting content. BFS link collection with path-diverse queuing and optional keyword filtering."
+    description: "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS or DFS, extracts content from each page inline."
   - name: novada_research
-    description: "Multi-step research: runs 3-10 parallel searches, deduplicates sources, returns a cited report with agent hints for follow-up extraction."
+    description: "One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extract full content from top sources → returns CITED SOURCE MATERIAL (numbered source sections), not a written answer. Extractive, not generative: it gathers and ranks the most relevant passages; YOU compose the final answer from them."
+  - name: novada_map
+    description: "Use when you need to know what URLs exist on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl."
+  - name: novada_site_copy
+    description: "Copy an entire docs site or site section to disk as clean markdown — one .md file per page — and return a COMPACT manifest, not the page bodies. Use when you need a whole knowledge base on disk (offline docs ingest, RAG corpus, full-site mirror)."
+  - name: novada_scrape
+    description: "Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity."
+  - name: novada_scrape_amazon
+    description: "Extract structured Amazon data — product details, reviews, seller info, bestseller lists, and category/brand listings — through an Amazon-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"amazon.com\"."
+  - name: novada_scrape_google
+    description: "Extract structured Google SERP data — organic web search results, AI Mode answers, Maps place/review details, Shopping listings, Jobs, Hotels, and Videos — through a Google-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"google.com\"."
+  - name: novada_scrape_bing
+    description: "Extract structured Bing SERP data — organic web search results, video results, news results, and shopping listings — through a Bing-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"bing.com\"."
+  - name: novada_scrape_duckduckgo
+    description: "Extract structured DuckDuckGo web search SERP data through a DuckDuckGo-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"duckduckgo.com\"."
+  - name: novada_scrape_yandex
+    description: "Extract structured Yandex web search SERP data through a Yandex-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"yandex.com\"."
+  - name: novada_scrape_youtube
+    description: "Extract structured YouTube data — video and channel metadata, transcripts, comments, and downloadable video/audio files — through a YouTube-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"youtube.com\"."
+  - name: novada_scrape_instagram
+    description: "Extract structured Instagram data — profiles, posts, reels, and comments — through an Instagram-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"instagram.com\"."
+  - name: novada_scrape_facebook
+    description: "Extract structured Facebook data — public profile pages, posts, comments, and events — through a Facebook-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"facebook.com\"."
+  - name: novada_scrape_tiktok
+    description: "Extract structured TikTok data — profile info, post/video details, and post lists by profile, hashtag, or search URL — through a TikTok-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"tiktok.com\"."
+  - name: novada_scrape_x
+    description: "Extract structured X (Twitter) data — a single post and profile lookups by username or URL — through an X-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"x.com\"."
+  - name: novada_scrape_walmart
+    description: "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — through a Walmart-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"walmart.com\"."
+  - name: novada_scrape_shein
+    description: "Extract structured SHEIN product data — product details by product ID or product URL — through a SHEIN-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"shein.com\"."
+  - name: novada_scrape_linkedin
+    description: "Extract structured LinkedIn data — job listings (by location/filters, by a jobs search-results URL, or a single job posting URL) and company profile info by URL — through a LinkedIn-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"linkedin.com\"."
+  - name: novada_scrape_github
+    description: "Extract structured GitHub repository data — repository details by URL, or multiple repositories from a GitHub search-results URL — through a GitHub-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"github.com\"."
+  - name: novada_scrape_perplexity
+    description: "Extract the actual AI-generated answer Perplexity returns for a query — by a Perplexity query URL or a raw search term — through a Perplexity-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"perplexity.ai\"."
+  - name: novada_proxy
+    description: "Use when you need to route your own HTTP requests through residential or mobile IPs — for geo-targeting, IP rotation, or bypassing IP-based rate limits. Returns proxy URL, shell export commands, or curl --proxy flag."
+  - name: novada_verify
+    description: "Use when you have a factual claim and need to check if it's supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data."
+  - name: novada_browser
+    description: "Use when you need to interact with a web page — click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Chain multiple actions in one call for efficiency."
+  - name: novada_browser_flow
+    description: "Simplified browser automation with a 5-action flow API (click, scroll, wait, type, screenshot). Use only if you specifically need this simplified flow interface or novada_browser is unavailable."
+  - name: novada_ai_monitor
+    description: "Search PUBLIC indexed pages on AI-company domains for brand mentions and sentiment — this is NOT page-change monitoring (that's novada_monitor) and does NOT query live AI models."
+  - name: novada_monitor
+    description: "Detect changes on a web page over time. Extracts content, computes a hash, compares with previous check."
+  - name: novada_discover
+    description: "List all available Novada tools with name, description, category, and status."
+  - name: novada_setup
+    description: "The onboarding concierge and first-run front door of the Novada MCP. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key."
+  - name: novada_account
+    description: "Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements based on the `section` param."
+  - name: novada_proxy_account_create
+    description: "⚠️ WRITE — Create a proxy sub-account. Two-step confirm gate."
+  - name: novada_proxy_account_list
+    description: "List proxy sub-accounts. Wraps developer-api POST /v1/proxy_account/list."
+  - name: novada_ip_whitelist
+    description: "Manage IP whitelist for proxy products. Supports add/list/delete/remark for Residential (1), Unlimited (4), and Static ISP (5) products."
+  - name: novada_capture_apikey
+    description: "Get or reset the Capture API key for the account. Wraps POST /v1/capture/get_apikey and /v1/capture/reset_apikey."
+  - name: novada_static_ip_mgmt
+    description: "Manage static ISP IPs on the account. Wraps /v1/static_house/* developer-api endpoints."
+  - name: novada_session_stats
+    description: "Return per-process / per-session usage telemetry: tool-call counts, the last-N calls, and process uptime."
+  - name: novada_search_feedback
+    description: "Record search-result quality so future ranking can learn from it. Returns a thank-you/echo confirmation with an agent_instruction."

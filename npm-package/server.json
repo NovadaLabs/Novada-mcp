@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.NovadaLabs/novada-mcp",
-  "description": "Search the web (Google, DuckDuckGo, Yandex), extract any URL, crawl, map, multi-step research, scrape 16 platforms, browser automation, proxy routing — one API key.",
+  "description": "Search, extract, crawl, map, research, scrape 16 platforms, browser automation, proxy — one API key.",
   "repository": {
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
@@ -197,7 +197,7 @@
     {
       "uri": "novada://guide",
       "name": "Agent Tool Selection Guide",
-      "description": "Decision tree and workflow patterns for choosing between all 11 novada tools: search, extract, crawl, map, research, proxy, scrape, verify, unblock, browser, health"
+      "description": "Decision tree and workflow patterns for choosing between all 38 novada tools: search, extract, crawl, map, research, site_copy, scrape (+15 per-platform scrapers), proxy, verify, browser, monitor, account, setup, discover"
     },
     {
       "uri": "novada://scraper-platforms",
@@ -208,7 +208,7 @@
   "skills": [
     {
       "name": "novada-agent",
-      "description": "Tool selection guide for 11 Novada MCP tools — decision tree, key parameters, common workflows (research+extract, competitive analysis, full site docs, fresh news, proxy setup), and when NOT to use each tool.",
+      "description": "Tool selection guide for all 38 Novada MCP tools — decision tree, key parameters, common workflows, and when NOT to use each tool.",
       "path": "skills/novada-agent/SKILL.md"
     }
   ],
@@ -245,6 +245,20 @@
           "isRequired": true,
           "isSecret": true,
           "format": "string"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.novada.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <NOVADA_API_KEY>",
+          "isRequired": true,
+          "isSecret": true
         }
       ]
     }
