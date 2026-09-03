@@ -3,6 +3,8 @@ import {
   TOOL_REGISTRY,
   TOOL_CATEGORIES,
   POPULATED_TOOL_CATEGORIES,
+  TOOL_GROUPS,
+  GROUP_TOOL_NAMES,
   type ToolMeta,
   type ToolCategory,
 } from "./registry.js";
@@ -184,6 +186,57 @@ export async function novadaDiscover(
 
   // Derive which Next Steps bullets to include based on the visible tool set.
   const visibleNames = new Set(visible.map((t) => t.name));
+
+  // ─── Tool Groups reference (F-1/F-7 audit, W-B1) ───────────────────────────
+  // Class-driven from registry.ts's GROUP_TOOL_NAMES — a new tool automatically
+  // appears here via its registry row's `group`, no per-tool edit needed. Counts
+  // are narrowed to THIS session's visible set so the "hides" math is honest when
+  // a NOVADA_TOOLS/NOVADA_GROUPS (local) or ?tools=/?groups= (hosted) filter is
+  // already active. Rendered as prose (no `| \`name\` |` table cells) so it never
+  // collides with the tools-table regex other callers/tests scan for.
+  //
+  // Copy note (W-B1, coordinator review): the 4-group partition below is a
+  // REFERENCE classification — it is only wired to the identical `?groups=`/
+  // `NOVADA_GROUPS` VALUE for "scrapers" (both surfaces) and "meta" (hosted only,
+  // narrowed — see caveat below). Hosted's PRE-EXISTING "core"/"account" keys
+  // return smaller, DIFFERENTLY-SCOPED sets and are called out explicitly so this
+  // text stays true on both surfaces instead of implying `?groups=core` reproduces
+  // the count below.
+  lines.push("---");
+  lines.push("## Tool Groups");
+  lines.push("");
+  lines.push(
+    "Canonical 4-group reference partition (registry-derived; every tool belongs to exactly one). " +
+    "Wiring to an actual filter differs by surface — this list itself is always accurate for THIS session; " +
+    "whether a given `?groups=`/`NOVADA_GROUPS` VALUE reproduces it depends on the surface:"
+  );
+  lines.push(
+    "- **Always exact, either surface:** `NOVADA_TOOLS=<names>` (local) / `?tools=<names>` (hosted) — list the exact tool names from any group below."
+  );
+  lines.push(
+    "- **`scrapers`:** exact match on BOTH `NOVADA_GROUPS=scraper` (local, pre-existing key) and `?groups=scrapers` (hosted)."
+  );
+  lines.push(
+    "- **`meta`:** hosted's `?groups=meta` returns a NARROWER 2-tool subset (novada_discover, novada_setup) — " +
+    "novada_session_stats/novada_search_feedback are permanently hidden on hosted (in-memory state that resets every serverless call)."
+  );
+  lines.push(
+    "- **`core` / `account`:** hosted already has its OWN, differently-scoped `?groups=core` (10 tools) and `?groups=account` (3 tools) — " +
+    "these do NOT match the counts below. Hosted permanently hides 8 write/stateful tools total (novada_site_copy, novada_browser_flow, " +
+    "novada_ip_whitelist, novada_capture_apikey, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback, novada_verify-from-listing). " +
+    "Call `novada_discover` on your actual endpoint to see this session's real filtered set — don't assume the counts below."
+  );
+  lines.push("");
+  for (const group of TOOL_GROUPS) {
+    const memberNames = GROUP_TOOL_NAMES[group].filter((n) => visibleNames.has(n));
+    const hides = visible.length - memberNames.length;
+    lines.push(
+      `- **${group}** (${memberNames.length} tool${memberNames.length === 1 ? "" : "s"}): ` +
+      memberNames.map((n) => `\`${n}\``).join(", ") +
+      ` — filtering to only this group would hide ${hides} other tool${hides === 1 ? "" : "s"}.`
+    );
+  }
+  lines.push("");
 
   lines.push("---");
   lines.push("## Next Steps");

@@ -4,6 +4,30 @@ import { TASK_ID_REGEX, TASK_ID_REGEX_MSG, withCamelCaseAliases } from "./types.
 import type { ToolCategory, ToolMeta } from "./registry.js";
 import { zodToMcpSchema } from "../utils/mcp-schema.js";
 
+// ─── Title derivation (F-7, W-B1) ────────────────────────────────────────────
+// Brand names whose correct capitalization isn't plain Titlecase — mirrors
+// hosted-server/vercel/api/mcp.ts's own TITLE_BRAND_MAP so both surfaces render
+// the identical "Scrape <Brand>" title for every platform-scraper tool (that
+// file independently derives the SAME title from the tool name for hosted
+// display; this is the npm-package-side equivalent, keyed by the human-readable
+// platformLabel already declared on each platform's config, so a 16th platform
+// config only needs a ROW here if its brand needs non-Titlecase — no other
+// per-tool wiring). Keep in sync if either brand list changes.
+const PLATFORM_TITLE_BRAND_MAP: Readonly<Record<string, string>> = {
+  "X (Twitter)": "X",
+  "DuckDuckGo": "DuckDuckGo",
+  "YouTube": "YouTube",
+  "GitHub": "GitHub",
+  "LinkedIn": "LinkedIn",
+  "TikTok": "TikTok",
+  "SHEIN": "SHEIN",
+};
+
+/** e.g. "Amazon" -> "Scrape Amazon", "X (Twitter)" -> "Scrape X". */
+function derivePlatformTitle(platformLabel: string): string {
+  return `Scrape ${PLATFORM_TITLE_BRAND_MAP[platformLabel] ?? platformLabel}`;
+}
+
 // ─── Platform-scraper factory ────────────────────────────────────────────────
 // Tools-v2: turns `novada_scrape_amazon` from a hand-written per-platform tool
 // into a CONFIG-DRIVEN FACTORY, so each of the remaining 15 per-platform tools
@@ -75,7 +99,7 @@ function renderDescription(d: PlatformScraperDescription): string {
     `**Use when:** ${d.useWhen.map((s) => `"${s}"`).join(", ")}.`,
     `**Not for:** ${d.notFor.map((x) => `${x.when} — use ${x.useInstead}`).join(". ")}.`,
     `**Returns:** ${d.returns}`,
-    `**Operations:** ${d.operationsNote}`,
+    `**Ops:** ${d.operationsNote}`,
   ].join("\n");
 }
 
@@ -109,7 +133,7 @@ export function createPlatformScraperTool<TOpName extends string>(
   const opNames = opEntries.map(([name]) => name) as [TOpName, ...TOpName[]];
 
   const operationEnumDescription =
-    `Which ${config.platformLabel} operation to run. Each requires specific keys in \`params\`:\n` +
+    `${config.platformLabel} operation to run (params keys per entry):\n` +
     opEntries.map(([name, opCfg]) => `- ${name}: ${opCfg.paramsDoc}`).join("\n");
 
   // DE-1 / C-1 (P1, ledger-verified −0.18 duplicate charge): this is the ONE shared
@@ -122,13 +146,13 @@ export function createPlatformScraperTool<TOpName extends string>(
     operation: z.enum(opNames).describe(operationEnumDescription),
     params: z.record(z.string(), z.unknown()).default({}).describe(config.paramsFieldDoc),
     limit: z.number().int().min(1).max(100).default(20)
-      .describe("Max records to return. Default 20, max 100."),
+      .describe("Max records (default 20, max 100)."),
     format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
-      .describe("Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format."),
+      .describe("Output format: markdown (default table), json (records array), csv/excel/html (spreadsheet), toon (compact pipe-separated)."),
     task_id: z.string().regex(TASK_ID_REGEX, TASK_ID_REGEX_MSG).optional()
-      .describe("Optional. Resume a previous slow task by its task_id instead of submitting a new billable one — same semantics as novada_scrape's task_id."),
+      .describe("Resume a previous slow task instead of submitting a new billable one (same as novada_scrape's task_id)."),
     project: z.string().max(30).optional()
-      .describe("Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'."),
+      .describe("Group outputs in a subfolder, e.g. 'competitor-pricing'."),
   }), { taskId: "task_id" });
 
   type Params = z.infer<typeof ParamsSchema>;
@@ -172,6 +196,11 @@ export function createPlatformScraperTool<TOpName extends string>(
     description: config.registryDescription,
     category: config.category,
     status: "active",
+    title: derivePlatformTitle(config.platformLabel),
+    // Every factory-generated platform-scraper tool belongs to the "scrapers"
+    // filtering group (F-1/F-7 audit) — a new platform config gets this for free,
+    // no per-tool edit needed (class-not-instance).
+    group: "scrapers",
   };
 
   return {

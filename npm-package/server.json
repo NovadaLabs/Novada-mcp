@@ -10,31 +10,31 @@
   "tools": [
     {
       "name": "novada_search",
-      "description": "Search the web and get clean, ready-to-use content. Returns titles, URLs, snippets — reranked by relevance."
+      "description": "Search the web for clean, ready-to-use content — titles, URLs, snippets, reranked by relevance. For multi-source questions, use novada_research instead (faster, more thorough)."
     },
     {
       "name": "novada_extract",
-      "description": "Extract content from any URL. Handles Cloudflare, DataDome, Kasada automatically via auto-escalation (static → JS render → Browser CDP)."
+      "description": "Extract content from any URL. Auto-handles Cloudflare/DataDome/Kasada via escalation (static → JS render → Browser CDP)."
     },
     {
       "name": "novada_crawl",
-      "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS or DFS, extracts content from each page inline."
+      "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS/DFS, extracts each page inline."
     },
     {
       "name": "novada_research",
-      "description": "One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extract full content from top sources → returns CITED SOURCE MATERIAL (numbered source sections), not a written answer. Extractive, not generative: it gathers and ranks the most relevant passages; YOU compose the final answer from them."
+      "description": "One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extracts full content from top sources → returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative — you compose the final answer from the gathered passages."
     },
     {
       "name": "novada_map",
-      "description": "Use when you need to know what URLs exist on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl."
+      "description": "Discover URLs on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl."
     },
     {
       "name": "novada_site_copy",
-      "description": "Copy an entire docs site or site section to disk as clean markdown — one .md file per page — and return a COMPACT manifest, not the page bodies. Use when you need a whole knowledge base on disk (offline docs ingest, RAG corpus, full-site mirror)."
+      "description": "Copy an entire docs site/section to disk as clean markdown — one .md file per page — returning a COMPACT manifest, not page bodies. Use for a whole knowledge base on disk (offline docs ingest, RAG corpus, full-site mirror)."
     },
     {
       "name": "novada_scrape",
-      "description": "Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity."
+      "description": "Use for structured data from a specific platform — clean tabular records, not raw HTML. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity."
     },
     {
       "name": "novada_scrape_amazon",
@@ -98,39 +98,39 @@
     },
     {
       "name": "novada_proxy",
-      "description": "Use when you need to route your own HTTP requests through residential or mobile IPs — for geo-targeting, IP rotation, or bypassing IP-based rate limits. Returns proxy URL, shell export commands, or curl --proxy flag."
+      "description": "Route your own HTTP requests through residential or mobile IPs — geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag."
     },
     {
       "name": "novada_verify",
-      "description": "Use when you have a factual claim and need to check if it's supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data."
+      "description": "Check whether a factual claim is supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data."
     },
     {
       "name": "novada_browser",
-      "description": "Use when you need to interact with a web page — click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Chain multiple actions in one call for efficiency."
+      "description": "Interact with a web page — click, fill forms, scroll, screenshot, or run JavaScript. Chain multiple actions in one call."
     },
     {
       "name": "novada_discover",
-      "description": "List all available Novada tools with name, description, category, and status."
+      "description": "List all available Novada tools — name, description, category, group, and status."
     },
     {
       "name": "novada_browser_flow",
-      "description": "Simplified browser automation with a 5-action flow API (click, scroll, wait, type, screenshot). Use only if you specifically need this simplified flow interface or novada_browser is unavailable."
+      "description": "Simplified browser automation — 5 actions (click, scroll, wait, type, screenshot). Use only if you need this simpler interface or novada_browser is unavailable."
     },
     {
       "name": "novada_ai_monitor",
-      "description": "Search PUBLIC indexed pages on AI-company domains for brand mentions and sentiment — this is NOT page-change monitoring (that's novada_monitor) and does NOT query live AI models."
+      "description": "Search PUBLIC indexed pages on AI-company domains (chatgpt.com/openai.com, perplexity.ai, anthropic.com, etc.) for brand mentions and sentiment. NOT page-change monitoring (novada_monitor) and does NOT query live AI models — a brand absent from indexed pages may still be discussed live; this only reflects indexed-page coverage."
     },
     {
       "name": "novada_monitor",
-      "description": "Detect changes on a web page over time. Extracts content, computes a hash, compares with previous check."
+      "description": "Detect changes on a web page over time. Extracts content, computes a hash, and compares it with the previous check."
     },
     {
       "name": "novada_setup",
-      "description": "The onboarding concierge and first-run front door of the Novada MCP. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key."
+      "description": "The onboarding concierge and first-run front door. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key."
     },
     {
       "name": "novada_account",
-      "description": "Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements based on the `section` param."
+      "description": "Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements via the `section` param."
     },
     {
       "name": "novada_proxy_account_create",
@@ -138,23 +138,23 @@
     },
     {
       "name": "novada_proxy_account_list",
-      "description": "List proxy sub-accounts. Wraps developer-api POST /v1/proxy_account/list."
+      "description": "List proxy sub-accounts (wraps developer-api POST /v1/proxy_account/list)."
     },
     {
       "name": "novada_ip_whitelist",
-      "description": "Manage IP whitelist for proxy products. Supports add/list/delete/remark for Residential (1), Unlimited (4), and Static ISP (5) products."
+      "description": "Manage the proxy IP whitelist — add/list/delete/remark — for Residential (1), Unlimited (4), and Static ISP (5)."
     },
     {
       "name": "novada_capture_apikey",
-      "description": "Get or reset the Capture API key for the account. Wraps POST /v1/capture/get_apikey and /v1/capture/reset_apikey."
+      "description": "Get or reset the Capture API key (wraps POST /v1/capture/get_apikey and /v1/capture/reset_apikey)."
     },
     {
       "name": "novada_static_ip_mgmt",
-      "description": "Manage static ISP IPs on the account. Wraps /v1/static_house/* developer-api endpoints."
+      "description": "Manage static ISP IPs (wraps /v1/static_house/* developer-api endpoints)."
     },
     {
       "name": "novada_session_stats",
-      "description": "Return per-process / per-session usage telemetry: tool-call counts, the last-N calls, and process uptime."
+      "description": "Per-process / per-session usage telemetry: tool-call counts, the last-N calls, and process uptime."
     },
     {
       "name": "novada_search_feedback",

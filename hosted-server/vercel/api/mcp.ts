@@ -565,6 +565,25 @@ const TOOL_GROUPS: Record<string, string[]> = {
   social: ["novada_scrape_instagram", "novada_scrape_facebook", "novada_scrape_tiktok", "novada_scrape_x", "novada_scrape_youtube", "novada_scrape_linkedin"],
   dev: ["novada_scrape_github"],
   ai: ["novada_scrape_perplexity", "novada_ai_monitor"],
+  // ── F-1/F-7 audit (W-B1) — canonical 4-way registry partition (core/scrapers/
+  // account/meta), mirroring npm-package's src/tools/registry.ts GROUP_TOOL_NAMES.
+  // Added ADDITIVELY: "core" and "account" ABOVE already exist with a DIFFERENT,
+  // pre-existing, product-curated scope (10 and 3 tools respectively) — redefining
+  // either would silently change behavior for hosted customers already using
+  // ?groups=core/?groups=account, so this audit deliberately does NOT touch them.
+  // Only the two NEW, non-colliding keys below are added:
+  //   - "scrapers" = novada_scrape + all 15 novada_scrape_<platform> siblings (the
+  //     registry's full "scrapers" bucket — none are HOSTED_HIDDEN, so this exactly
+  //     matches local's existing NOVADA_GROUPS="scrape"/"scraper" tool SET).
+  //   - "meta" = discovery/setup tools — narrowed to the hosted-VISIBLE subset of
+  //     the registry's 4-tool "meta" bucket: novada_session_stats and
+  //     novada_search_feedback are HOSTED_HIDDEN (in-memory state that resets every
+  //     serverless invocation — see HOSTED_HIDDEN's docstring above) and must NOT
+  //     be listed in any TOOL_GROUPS array (guarded by
+  //     test/tool-catalog-derivation.test.mjs's "no HOSTED_HIDDEN tool is reachable
+  //     through any TOOL_GROUPS entry" test).
+  scrapers: ["novada_scrape", ...PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name)],
+  meta: ["novada_discover", "novada_setup"],
 };
 // Built from the hosted-VISIBLE set (TOOLS minus HOSTED_HIDDEN), not raw TOOLS —
 // otherwise a HOSTED_HIDDEN tool name (e.g. ?tools=novada_ip_whitelist) would pass
