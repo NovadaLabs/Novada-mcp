@@ -114,7 +114,7 @@ export const SearchParamsSchema = withCamelCaseAliases(z.object({
   exclude_domains: z.array(z.string()).optional()
     .describe("Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10."),
   source_type: z.enum(["any", "news", "research", "official", "social"]).optional()
-    .describe("Bias result authority. 'research'/'official': prepend social+PR domains to the query exclusions and boost authoritative sources (*.gov, *.edu, sec.gov, arxiv.org, reuters.com, wikipedia.org, nature.com …). 'social': keep social results (no down-rank). 'news'/'any'/omitted: mild default reranking. Independent of, and combined with, automatic query-intent detection."),
+    .describe("Bias result authority. 'research'/'official': exclude social+PR domains, boost authoritative sources (*.gov, *.edu, arxiv.org, reuters.com, wikipedia.org). 'social': keep social results (no down-rank). 'news'/'any'/omitted: mild default reranking. Combines with automatic query-intent detection."),
   exclude_social: z.boolean().optional()
     .describe("When true, hard-drop social and press-release results (facebook, linkedin, x/twitter, instagram, tiktok, reddit, quora, medium, prnewswire, businesswire, globenewswire, prweb, einpresswire) from the response after fetching."),
   format: z.enum(["markdown", "json"]).default("markdown")
@@ -122,7 +122,7 @@ export const SearchParamsSchema = withCamelCaseAliases(z.object({
   enrich_top: z.boolean().optional()
     .describe("Auto-extract full content from the top result. Shorthand for extract_options.top_n=1. Adds ~2-4s latency. Default: false."),
   project: z.string().max(30).optional()
-    .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
+    .describe("Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only — no effect on hosted."),
   extract_options: withCamelCaseAliases(z.object({
     format: z.enum(["text", "markdown", "html", "json"]).optional().default("markdown")
       .describe("Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
@@ -132,9 +132,8 @@ export const SearchParamsSchema = withCamelCaseAliases(z.object({
       .describe("Number of top search results to auto-extract. Default: 3. Max: 10."),
   }), { maxChars: "max_chars", topN: "top_n" }).optional()
     .describe(
-      "When provided, automatically extracts content from the top top_n search result URLs " +
-      "and appends it to each result. Eliminates a separate novada_extract call. " +
-      "Note: adds latency proportional to top_n * extract_latency. Use top_n=1-3 for most queries."
+      "Auto-extracts content from the top top_n results and appends it — eliminates a separate " +
+      "novada_extract call. Adds latency proportional to top_n; use top_n=1-3 for most queries."
     ),
 }), {
   timeRange: "time_range",
@@ -175,28 +174,27 @@ const _ExtractParamsInner = z.object({
   render: z.enum(["auto", "static", "render", "js", "browser"]).default("auto")
     .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS)."),
   fields: z.array(z.string().min(1)).max(20).optional()
-    .describe("Specific fields to extract (e.g. ['price', 'author', 'availability', 'rating']). ADVISORY / confidence-gated: each field returns {value, source, confidence}. Source priority is structured-first — JSON-LD → infobox/table/microdata → anchored pattern → loose scan LAST. A match below the confidence floor (loose proximity scan) is SUPPRESSED: value=null with low_confidence:true + the rejected candidate in low_confidence_value, rather than emitting a confidently-wrong guess. Treat a resolved value as a strong hint, not ground truth — check the source/confidence, and re-read the content or retry with render='render' when a field is null/low_confidence."),
+    .describe("Specific fields to extract (e.g. ['price','author','availability','rating']). ADVISORY/confidence-gated: each returns {value, source, confidence}. Source priority: JSON-LD → infobox/table/microdata → anchored pattern → loose scan (last resort). Below the confidence floor, the match is SUPPRESSED (value=null, low_confidence:true, raw candidate in low_confidence_value) instead of a confidently-wrong guess. Treat a resolved value as a hint, not ground truth — check source/confidence and retry with render='render' when null/low_confidence."),
   max_chars: z.number().int().min(1000).max(100000).optional()
     .describe(
-      "Maximum characters to return (default: 25000, max: 100000). " +
-      "When content exceeds this limit, it is truncated and content_truncated:true plus total_chars are emitted. " +
-      "Raise up to 100000 only when you need the full page — do not set 100000 by default."
+      "Maximum characters to return (default 25000, max 100000). Truncated content emits " +
+      "content_truncated:true + total_chars. Raise only when you need the full page."
     ),
   wait_for: z.string().optional()
-    .describe("CSS selector to wait for before capturing content (browser mode only). E.g. '.price', '#product-title', '[data-testid=price]'. Delays capture until the element appears in the DOM. Max wait: 15s."),
+    .describe("CSS selector to wait for before capturing content (browser mode only). E.g. '.price', '#product-title'. Delays capture until the element appears in the DOM. Max wait: 15s."),
   wait_ms: z.number().int().min(0).max(30000).optional()
-    .describe("Fixed milliseconds to wait after page load before capturing content. Use wait_for (CSS selector) instead when possible — it is more reliable. wait_ms is a fallback for pages with no stable selector. Max: 30000ms."),
+    .describe("Fixed ms to wait after page load before capturing (browser mode only). Prefer wait_for (CSS selector) when possible — more reliable. Fallback for pages with no stable selector. Max 30000ms."),
   clean: z.boolean().optional()
     .describe("Set true to extract only main article content (strips nav, footer, ads). Default false returns full page markdown for maximum content coverage."),
   country: z.string().length(2).optional()
     .describe(
-      "ISO 3166-1 alpha-2 country code (e.g. 'de', 'us', 'gb') to route the fetch through an exit IP in that country. " +
-      "Useful for localized pricing, geo-restricted content, and per-country monitoring (e.g. comparing a product price across European countries). " +
-      "Only applies to render/unblocker fetches (render=\"render\"|\"js\" or auto-escalation to render); no effect on a pure static fetch. " +
-      "In batch mode (url array), the same country is applied to all URLs in the call."
+      "ISO 3166-1 alpha-2 country code (e.g. 'de','us','gb') to route the fetch through an exit IP " +
+      "there — for localized pricing, geo-restricted content, or per-country comparisons. Only applies " +
+      "to render/unblocker fetches (render=\"render\"|\"js\" or auto-escalation to render); no effect on a " +
+      "pure static fetch. Batch mode (url array) applies the same country to all URLs."
     ),
   project: z.string().max(30).optional()
-    .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
+    .describe("Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only — no effect on hosted."),
 });
 
 /**
@@ -239,7 +237,7 @@ export const CrawlParamsSchema = withCamelCaseAliases(z.object({
   strategy: z.enum(["bfs", "dfs"]).default("bfs")
     .describe("Crawl traversal order. 'bfs' (default): breadth-first — visits all pages at current depth before going deeper, good for broad discovery. 'dfs': depth-first — follows links deeply before backtracking, good for exploring specific paths."),
   instructions: z.string().optional()
-    .describe("Natural language hint for which pages to prioritize. E.g. 'only API reference pages', 'skip blog and changelog'. Applied as path-level filtering; semantic filtering is agent-side."),
+    .describe("Natural language hint for which pages to prioritize, e.g. 'only API reference pages', 'skip blog and changelog'. Echoed back in the output as a hint — it does NOT filter which pages get crawled; use select_paths/exclude_paths for actual filtering, or act on this hint yourself when choosing follow-up calls."),
   select_paths: z.array(z.string().min(1).max(200)).max(20).optional()
     .describe("Glob patterns to restrict crawled URL paths. '*' matches within a path segment, '**' matches across segments, '?' matches one char. E.g. ['/docs/**', '/api/**']."),
   exclude_paths: z.array(z.string().min(1).max(200)).max(20).optional()
@@ -269,7 +267,7 @@ export const ResearchParamsSchema = z.object({
   focus: z.string().optional()
     .describe("Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'."),
   project: z.string().max(30).optional()
-    .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
+    .describe("Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only — no effect on hosted."),
   time_range: z.enum(["day", "week", "month", "year"]).optional()
     .describe("Limit results to a time window. 'day'=last 24h, 'week'=last 7 days, 'month'=last 30 days, 'year'=last 12 months."),
   start_date: z.string().optional()
@@ -410,9 +408,9 @@ export interface NovadaApiResponse {
 
 export const ProxyParamsSchema = withCamelCaseAliases(z.object({
   type: z.enum(["residential", "isp", "datacenter", "mobile", "static", "dedicated"]).default("residential")
-    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static' for a dedicated ISP IP (same IP every request, requires session_id), 'dedicated' for an exclusive datacenter IP (not shared, requires session_id)."),
+    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static'/'dedicated' for a fixed IP — set session_id explicitly, or it silently falls back to a SHARED \"default\" identity (not an error)."),
   country: z.string().regex(/^[a-zA-Z]{2}$/, "country must be a 2-letter ISO code (e.g. 'us', 'gb', 'de')").optional()
-    .describe("ISO 2-letter country code (e.g. 'us', 'gb', 'de'). Omit for any country. NOTE: country targeting is NOT applied when type='isp' — it is silently ignored for that proxy type."),
+    .describe("ISO 2-letter country code (e.g. 'us','gb','de'). Omit for any country. NOTE: silently ignored when type='isp'."),
   city: z.string().max(50).regex(/^[a-zA-Z\s\-]+$/, "city must contain only letters, spaces, or hyphens").optional()
     .describe("City name for city-level targeting. Requires country to be set."),
   session_id: z.string().max(64).regex(/^[a-zA-Z0-9_\-]+$/, "session_id must be alphanumeric, hyphens, or underscores only").optional()
@@ -447,7 +445,7 @@ export const TASK_ID_REGEX_MSG = "task_id must be alphanumeric with underscores/
 const scrapeBase = {
   platform: z.string().min(1).max(100)
     .regex(/^[a-zA-Z0-9._\-]+$/, "platform must be a valid domain name (alphanumeric, dots, hyphens)")
-    .describe("Platform domain to scrape. E.g. 'amazon.com', 'reddit.com', 'tiktok.com', 'linkedin.com', 'google.com'."),
+    .describe("Platform domain to scrape. E.g. 'amazon.com', 'walmart.com', 'tiktok.com', 'linkedin.com', 'google.com'."),
   operation: z.string().min(1).max(100)
     .regex(/^[a-zA-Z0-9_\-]+$/, "operation must be alphanumeric with underscores/hyphens")
     .describe("Scraping operation ID. Examples: 'amazon_product_keywords', 'amazon_product_asin', 'tiktok_posts_url', 'linkedin_company_information_url', 'github_repository_repo-url', 'twitter_profile_username', 'youtube_video_search_label'. Read novada://scraper-platforms resource for the complete list with required params."),
@@ -485,9 +483,9 @@ const SCRAPE_CAMEL_ALIASES = { taskId: "task_id" };
 export const ScrapeParamsSchema = withCamelCaseAliases(z.object({
   ...scrapeBase,
   format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
-    .describe("Output format. 'markdown' (default): structured table, easy to read and reason over. 'json': structured records array — key fields (title/price/rating/url) surfaced, noise trimmed — returned inside a \"## Scrape Results\" wrapper as a fenced json block (not a bare object). 'csv': inline CSV text, header row + one row per record, copy-paste into any spreadsheet. 'excel': real .xlsx returned as inline base64 — paste the base64 block into a decoder or use the provided download hint. 'html': inline HTML <table> (header row + one row per record) ready to drop into a page or open in a browser. 'toon': token-optimized pipe-separated format (40-65% smaller than JSON/markdown)."),
+    .describe("'markdown' (default): structured table. 'json': records array with key fields surfaced — returned inside a \"## Scrape Results\" wrapper as a fenced json block, NOT a bare object. 'csv': inline CSV, header + one row/record. 'excel': real .xlsx as inline base64 — decode or use the download hint. 'html': inline HTML <table>. 'toon': token-optimized pipe-separated (40-65% smaller than json/markdown)."),
   project: z.string().max(30).optional()
-    .describe("Optional project name to group related outputs in a subfolder. E.g. 'france-vs-norway'. (local stdio only; no effect on the hosted endpoint)"),
+    .describe("Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only — no effect on hosted."),
 }), SCRAPE_CAMEL_ALIASES);
 
 /** CLI/SDK schema — all output formats */
@@ -547,7 +545,7 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
     action: z.literal("navigate"),
     url: safeUrl,
     wait_until: z.enum(["load", "domcontentloaded", "networkidle"]).default("domcontentloaded")
-      .describe("Page load event to wait for. Default 'domcontentloaded' works for most sites including SPAs (X, TikTok). Avoid 'networkidle' for SPAs — they continuously poll and never reach networkidle, causing a 30s timeout."),
+      .describe("Page load event. Default 'domcontentloaded' works for SPAs (X, TikTok). Avoid 'networkidle' for SPAs — they poll continuously and never idle, causing a 30s timeout."),
   }),
   z.object({ action: z.literal("click"), selector: z.string().min(1) }),
   z.object({ action: z.literal("type"), selector: z.string().min(1), text: z.string() }),
@@ -633,16 +631,11 @@ export const BrowserParamsSchema = z.preprocess((input) => {
 }, z.object({
   actions: z.array(BrowserActionSchema).min(1).max(20)
     .describe(
-      "Array of browser actions to execute sequentially. Max 20 per call. " +
-      "Each action MUST use the discriminated union format: {action: \"<type>\", ...fields}. " +
-      "Examples: " +
-      "{action: \"navigate\", url: \"https://example.com\"} | " +
-      "{action: \"click\", selector: \"#btn\"} | " +
-      "{action: \"type\", selector: \"#input\", text: \"hello\"} | " +
-      "{action: \"wait\", ms: 2000} | " +
-      "{action: \"screenshot\"} | " +
-      "{action: \"aria_snapshot\"}. " +
-      "Do NOT use string format (\"navigate\") or object-key format ({navigate: \"url\"}) — both are invalid."
+      "Array of browser actions to execute sequentially (max 20/call). Each action MUST use the " +
+      "discriminated union format {action: \"<type>\", ...fields}, e.g. " +
+      "{action:\"navigate\",url:\"https://example.com\"} | {action:\"click\",selector:\"#btn\"} | " +
+      "{action:\"wait\",ms:2000} | {action:\"screenshot\"}. " +
+      "Do NOT use a bare string (\"navigate\") or object-key format ({navigate:\"url\"}) — both are invalid."
     ),
   country: z.string().length(2).optional()
     .describe("ISO 2-letter country code (e.g. 'us', 'gb'). NOTE: accepted but NOT yet applied — the browser exit node is not geo-routed by this param today. Do not rely on it for geo-restricted platforms."),

@@ -220,7 +220,7 @@ export async function submitScrapeTask(
     if (body.code === 11008) {
       throw makeNovadaError(
         NovadaErrorCode.INVALID_PARAMS,
-        `Unknown platform '${scraper_name}'. Use the exact domain (e.g. 'amazon.com', 'reddit.com'). To find valid operation IDs: read the novada://scraper-platforms resource — operation names are exact and cannot be guessed.`,
+        `Unknown platform '${scraper_name}'. Use the exact domain (e.g. 'amazon.com', 'walmart.com'). To find valid operation IDs: read the novada://scraper-platforms resource — operation names are exact and cannot be guessed.`,
         "code 11008",
       );
     }

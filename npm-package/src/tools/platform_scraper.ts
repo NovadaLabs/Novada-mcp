@@ -148,9 +148,9 @@ export function createPlatformScraperTool<TOpName extends string>(
     limit: z.number().int().min(1).max(100).default(20)
       .describe("Max records (default 20, max 100)."),
     format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
-      .describe("Output format: markdown (default table), json (records array), csv/excel/html (spreadsheet), toon (compact pipe-separated)."),
+      .describe("markdown (default table), json (records array), csv/excel/html (spreadsheet), toon (compact pipe-separated)."),
     task_id: z.string().regex(TASK_ID_REGEX, TASK_ID_REGEX_MSG).optional()
-      .describe("Resume a previous slow task instead of submitting a new billable one (same as novada_scrape's task_id)."),
+      .describe("Resume a previous slow task instead of submitting a new billable one."),
     project: z.string().max(30).optional()
       .describe("Group outputs in a subfolder, e.g. 'competitor-pricing'."),
   }), { taskId: "task_id" });

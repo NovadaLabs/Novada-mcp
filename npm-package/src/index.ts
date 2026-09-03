@@ -627,7 +627,7 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
   novada_browser             Interactive browser automation (navigate, click, type, screenshot)
   novada_browser_flow        Cloud browser automation via action sequence API
   novada_account             Account & billing dashboard (balance, plans, usage, traffic)
-  novada_proxy_account_create  Create a proxy sub-account (WRITE, confirm gate)
+  novada_proxy_account_create  Create a proxy sub-account (WRITE, approval-token gate)
   novada_proxy_account_list  List proxy sub-accounts
   novada_ip_whitelist        Manage IP whitelist for proxy products (add/list/del/remark)
   novada_capture_apikey      Get or reset the Capture API key

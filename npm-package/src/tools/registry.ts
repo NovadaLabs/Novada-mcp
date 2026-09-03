@@ -349,7 +349,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   },
   {
     name: "novada_proxy_account_create",
-    description: "⚠️ WRITE — create a proxy sub-account against your master plan. Two-step confirm gate: returns a masked preview unless confirm:true is passed after human approval.",
+    description: "⚠️ WRITE — create a proxy sub-account against your master plan. Two-step approval-token gate: call once without approval_token to get a masked preview + a token, then re-call with that exact token and unchanged parameters after human approval.",
     category: "Account & Billing",
     status: "active",
     title: "Proxy Account Create",
@@ -369,7 +369,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   },
   {
     name: "novada_ip_whitelist",
-    description: "Manage the proxy IP whitelist (add/list/del/remark) for Residential (1), Unlimited (4), and Static ISP (5) products; add/del are writes requiring confirm:true.",
+    description: "Manage the proxy IP whitelist (add/list/del/remark) for Residential (1), Unlimited (4), and Static ISP (5) products; add/del are writes gated by a two-step approval_token (preview first, then re-call with the token). remark is ungated.",
     category: "Account & Billing",
     status: "active",
     title: "IP Whitelist Manager",
@@ -380,7 +380,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   },
   {
     name: "novada_capture_apikey",
-    description: "Get or reset the Capture API key for the account; reset is a WRITE action requiring confirm:true after human approval.",
+    description: "Get or reset the Capture API key for the account; reset is a WRITE action gated by a two-step approval_token — preview first, then re-call with the token after human approval.",
     category: "Account & Billing",
     status: "active",
     title: "Capture API Key",
@@ -391,7 +391,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   },
   {
     name: "novada_static_ip_mgmt",
-    description: "Manage static ISP IPs: open (WRITE, confirm gate), renew (WRITE, confirm gate), export, or list; wraps /v1/static_house/* developer-api endpoints.",
+    description: "Manage static ISP IPs: open (WRITE, approval-token gate), renew (WRITE, approval-token gate), export, or list; wraps /v1/static_house/* developer-api endpoints.",
     category: "Account & Billing",
     status: "active",
     title: "Static IP Manager",

@@ -56,21 +56,21 @@ export const X_SCRAPER_CONFIG: PlatformScraperConfig<XOperation> = {
     "post_by_url, { user_name: \"BillGates\" } for profile_by_username, { profile_url: \"https://x.com/BillGates\" } for profile_by_url.",
   description: {
     core:
-      "Extract structured X (Twitter) data — a single post and profile lookups by username or URL — through an X-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"x.com\".",
+      "Extract structured X (Twitter) data — a single post and profile lookups by username or URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"x.com\").",
     useWhen: [
       "get the text/engagement stats for this X post URL",
       "get this X profile's info by username",
       "get this X profile's info by profile URL",
     ],
     notFor: [
-      { when: "A single X/Twitter URL you just want read as plain text", useInstead: "novada_extract" },
+      { when: "A single X/Twitter URL to read as plain text", useInstead: "novada_extract" },
       { when: "A general web search not scoped to X", useInstead: "novada_search" },
-      { when: "A different platform's structured data (YouTube, Instagram, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
     ],
     returns:
-      "Structured post/profile records (post text, like/reply/repost counts, profile bio, follower count, etc.) in the chosen format (markdown/json/csv/excel/html/toon) — same rendering as novada_scrape.",
+      "Structured post/profile records (post text, like/reply/repost counts, profile bio, follower count, etc.) in the chosen output format — same rendering as novada_scrape.",
     operationsNote:
-      "3 verified-working X (Twitter) operations: a single post by URL, and profile lookup by username or by profile URL (see the `operation` param's description for the exact `params` keys each needs). Every x.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+      "3 verified-working X (Twitter) operations: a single post by URL, and profile lookup by username or by profile URL. Every x.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },
 };
 

@@ -198,7 +198,7 @@ export async function novadaProxyAccountList(
       status: "ok",
       data: projected,
       agent_instruction:
-        "Lists proxy sub-accounts for the given product code. Each account shows only products with a real quota or metered usage: `used` (and `limit`/`percent` when a cap exists). Products with no quota and no usage are omitted. Passwords are masked. To create one use novada_proxy_account_create with `confirm: true`. Repeat with different `product` codes to see other product tiers.",
+        "Lists proxy sub-accounts for the given product code. Each account shows only products with a real quota or metered usage: `used` (and `limit`/`percent` when a cap exists). Products with no quota and no usage are omitted. Passwords are masked. To create one, call novada_proxy_account_create WITHOUT approval_token first to get a preview and a token, then call it again with that exact token to execute. Repeat with different `product` codes to see other product tiers.",
     },
     null,
     2,

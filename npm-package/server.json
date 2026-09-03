@@ -38,63 +38,63 @@
     },
     {
       "name": "novada_scrape_amazon",
-      "description": "Extract structured Amazon data — product details, reviews, seller info, bestseller lists, and category/brand listings — through an Amazon-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"amazon.com\"."
+      "description": "Extract structured Amazon data — product details, reviews, seller info, bestseller lists, category/brand listings — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"amazon.com\")."
     },
     {
       "name": "novada_scrape_google",
-      "description": "Extract structured Google SERP data — organic web search results, AI Mode answers, Maps place/review details, Shopping listings, Jobs, Hotels, and Videos — through a Google-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"google.com\"."
+      "description": "Extract structured Google SERP data — organic web search, AI Mode answers, Maps place/review details, Shopping, Jobs, Hotels, Videos — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"google.com\"). Returns raw structured SERP records, not a generated answer."
     },
     {
       "name": "novada_scrape_bing",
-      "description": "Extract structured Bing SERP data — organic web search results, video results, news results, and shopping listings — through a Bing-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"bing.com\"."
+      "description": "Extract structured Bing SERP data — organic web search, video results, news results, shopping listings — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"bing.com\"). Bing is NOT a selectable engine on novada_search — this is the only intentional way to query Bing specifically."
     },
     {
       "name": "novada_scrape_duckduckgo",
-      "description": "Extract structured DuckDuckGo web search SERP data through a DuckDuckGo-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"duckduckgo.com\"."
+      "description": "Extract structured DuckDuckGo web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"duckduckgo.com\"). Returns the raw organic-results SERP, with region/time/adult-content filters novada_search does not expose, not a generated answer."
     },
     {
       "name": "novada_scrape_yandex",
-      "description": "Extract structured Yandex web search SERP data through a Yandex-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"yandex.com\"."
+      "description": "Extract structured Yandex web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"yandex.com\"). Returns the raw organic-results SERP, with TLD/language/time-range controls novada_search does not expose, not a generated answer."
     },
     {
       "name": "novada_scrape_youtube",
-      "description": "Extract structured YouTube data — video and channel metadata, transcripts, comments, and downloadable video/audio files — through a YouTube-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"youtube.com\"."
+      "description": "Extract structured YouTube data — video/channel metadata, transcripts, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\")."
     },
     {
       "name": "novada_scrape_instagram",
-      "description": "Extract structured Instagram data — profiles, posts, reels, and comments — through an Instagram-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"instagram.com\"."
+      "description": "Extract structured Instagram data — profiles, posts, reels, and comments — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"instagram.com\")."
     },
     {
       "name": "novada_scrape_facebook",
-      "description": "Extract structured Facebook data — public profile pages, posts, comments, and events — through a Facebook-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"facebook.com\"."
+      "description": "Extract structured Facebook data — public profile pages, posts, comments, and events — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"facebook.com\")."
     },
     {
       "name": "novada_scrape_tiktok",
-      "description": "Extract structured TikTok data — profile info, post/video details, and post lists by profile, hashtag, or search URL — through a TikTok-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"tiktok.com\"."
+      "description": "Extract structured TikTok data — profile info, post/video details, and post lists by profile, hashtag, or search URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"tiktok.com\")."
     },
     {
       "name": "novada_scrape_x",
-      "description": "Extract structured X (Twitter) data — a single post and profile lookups by username or URL — through an X-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"x.com\"."
+      "description": "Extract structured X (Twitter) data — a single post and profile lookups by username or URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"x.com\")."
     },
     {
       "name": "novada_scrape_walmart",
-      "description": "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — through a Walmart-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"walmart.com\"."
+      "description": "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"walmart.com\")."
     },
     {
       "name": "novada_scrape_shein",
-      "description": "Extract structured SHEIN product data — product details by product ID or product URL — through a SHEIN-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"shein.com\"."
+      "description": "Extract structured SHEIN product data — product details by product ID or product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"shein.com\")."
     },
     {
       "name": "novada_scrape_linkedin",
-      "description": "Extract structured LinkedIn data — job listings (by location/filters, by a jobs search-results URL, or a single job posting URL) and company profile info by URL — through a LinkedIn-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"linkedin.com\"."
+      "description": "Extract structured LinkedIn data — job listings (by location/filters, jobs search-results URL, or a single job posting URL) and company profile info by URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"linkedin.com\")."
     },
     {
       "name": "novada_scrape_github",
-      "description": "Extract structured GitHub repository data — repository details by URL, or multiple repositories from a GitHub search-results URL — through a GitHub-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"github.com\"."
+      "description": "Extract structured GitHub repository data — repository details by URL, or multiple repositories from a GitHub search-results URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"github.com\")."
     },
     {
       "name": "novada_scrape_perplexity",
-      "description": "Extract the actual AI-generated answer Perplexity returns for a query — by a Perplexity query URL or a raw search term — through a Perplexity-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"perplexity.ai\"."
+      "description": "Extract the actual AI-generated answer Perplexity returns for a query — by a Perplexity query URL or a raw search term — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"perplexity.ai\"). Scrapes Perplexity's own live-rendered answer page (the model's actual response text) — NOT a web search results list and NOT an indexed-page brand-mention scan."
     },
     {
       "name": "novada_proxy",
@@ -134,7 +134,7 @@
     },
     {
       "name": "novada_proxy_account_create",
-      "description": "⚠️ WRITE — Create a proxy sub-account. Two-step confirm gate."
+      "description": "⚠️ WRITE — Create a proxy sub-account. Two-step approval-token gate."
     },
     {
       "name": "novada_proxy_account_list",
@@ -176,7 +176,7 @@
     },
     {
       "name": "scrape_platform_data",
-      "description": "Scrape structured data from a specific platform (Amazon, Reddit, TikTok, LinkedIn, etc.) using the Novada Scraper API"
+      "description": "Scrape structured data from a specific platform (Amazon, Walmart, TikTok, LinkedIn, etc.) using the Novada Scraper API"
     },
     {
       "name": "browser_stateful_workflow",

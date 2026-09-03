@@ -48,22 +48,22 @@ export const DUCKDUCKGO_SCRAPER_CONFIG: PlatformScraperConfig<DuckduckgoOperatio
     "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\", kl: \"us-en\" } for web_search.",
   description: {
     core:
-      "Extract structured DuckDuckGo web search SERP data through a DuckDuckGo-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"duckduckgo.com\". Returns the raw organic-results SERP, with region/time/adult-content filters novada_search does not expose, not a generated answer.",
+      "Extract structured DuckDuckGo web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"duckduckgo.com\"). Returns the raw organic-results SERP, with region/time/adult-content filters novada_search does not expose, not a generated answer.",
     useWhen: [
       "get the raw DuckDuckGo search results (titles, links, ranks) for <query>",
       "search DuckDuckGo restricted to a specific region (params.kl) or time range (params.df)",
       "compare DuckDuckGo's ranking for <query> against another engine's raw SERP",
     ],
     notFor: [
-      { when: "A general question that just needs an answer or a few good links", useInstead: "novada_search with engine=\"duckduckgo\" — same engine, but ranked/reranked and answer-oriented instead of a raw SERP dump" },
+      { when: "A general question needing just an answer or a few good links", useInstead: "novada_search with engine=\"duckduckgo\" (ranked/reranked instead of a raw SERP dump)" },
       { when: "A complex question needing cited multi-source synthesis", useInstead: "novada_research" },
-      { when: "Reading one already-known URL's page content (not a search results page)", useInstead: "novada_extract" },
-      { when: "A different platform's structured data (Amazon, LinkedIn, TikTok, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+      { when: "Reading one already-known URL's page content", useInstead: "novada_extract" },
+      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
     ],
     returns:
-      "Structured organic-result SERP records (title/url/snippet/rank) in the chosen format (markdown/json/csv/excel/html/toon), same rendering as novada_scrape.",
+      "Structured organic-result SERP records (title/url/snippet/rank) in the chosen output format, same rendering as novada_scrape.",
     operationsNote:
-      "1 verified-working DuckDuckGo operation (web search — see the `operation` param's description for the exact `params` keys it needs). The single duckduckgo.com catalog operation is currently status:\"ok\".",
+      "1 verified-working DuckDuckGo operation (web search). The single duckduckgo.com catalog operation is currently status:\"ok\".",
   },
 };
 

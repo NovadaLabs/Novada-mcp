@@ -72,7 +72,7 @@ export const AMAZON_SCRAPER_CONFIG: PlatformScraperConfig<AmazonOperation> = {
     "seller_by_url/bestsellers/global_product_by_url, { keyword: \"wireless earbuds\" } for products_by_keywords.",
   description: {
     core:
-      "Extract structured Amazon data — product details, reviews, seller info, bestseller lists, and category/brand listings — through an Amazon-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"amazon.com\".",
+      "Extract structured Amazon data — product details, reviews, seller info, bestseller lists, category/brand listings — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"amazon.com\").",
     useWhen: [
       "get the price/rating/title for Amazon ASIN B0...",
       "pull the reviews for this Amazon product URL",
@@ -81,14 +81,14 @@ export const AMAZON_SCRAPER_CONFIG: PlatformScraperConfig<AmazonOperation> = {
       "what's in this Amazon Best Sellers list",
     ],
     notFor: [
-      { when: "Any other platform", useInstead: "novada_scrape with the target platform's domain instead (e.g. platform=\"walmart.com\")" },
+      { when: "Any other platform", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
       { when: "A general Google/web search", useInstead: "novada_search" },
       { when: "Reading one arbitrary URL's raw content", useInstead: "novada_extract" },
     ],
     returns:
-      "Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen format — same rendering as novada_scrape (markdown/json/csv/excel/html/toon).",
+      "Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen output format — same rendering as novada_scrape.",
     operationsNote:
-      "10 verified-working Amazon operations (see the `operation` param's description for the exact `params` keys each needs). 3 known backend-broken Amazon operations are intentionally NOT in this enum — this tool rejects them before any backend call, unlike novada_scrape(platform=\"amazon.com\", ...), which still forwards them with a warning.",
+      "10 verified-working Amazon operations. 3 known backend-broken ones are excluded from this enum (rejected client-side before any backend call) — unlike novada_scrape(platform=\"amazon.com\", ...), which still forwards them with a warning.",
   },
 };
 

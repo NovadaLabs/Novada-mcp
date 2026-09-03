@@ -231,6 +231,7 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
 
 **Best for:** e-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
 **Not for:** general web pages outside this platform list — use novada_extract instead.
+**Prefer the dedicated tool when one exists:** for amazon/google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/walmart/shein/linkedin/github/perplexity, call novada_scrape_<platform> instead — same engine, but its \`operation\` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling (e.g. ChatGPT) or when resuming by task_id.
 **Output formats:** markdown (default table), json (records array inside a fenced "## Scrape Results" block), toon (pipe-separated, 40-65% smaller — best for large result sets), csv, excel (base64), html.
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}.
 **Amazon price fields:** trust \`final_price\`/\`price\` (check \`_price_source\`) — \`initial_price\` and \`buybox_prices.final_price\` are often 0 by design, not a bug; \`buybox_prices.unit_price\` is raw per-unit data, never the listing price.
@@ -260,8 +261,8 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
 - \`isp\` — looks like a home user; best for social/ecommerce; ignores country param
 - \`datacenter\` — fastest/cheapest; non-anti-bot, high-volume targets
 - \`mobile\` — 4G/5G device IPs; mobile-targeted content and app APIs
-- \`static\` — same dedicated ISP IP every request (needs session_id + country); account-management workflows
-- \`dedicated\` — exclusive datacenter IP (needs session_id); high-trust platforms
+- \`static\` — same dedicated ISP IP every request; set session_id + country explicitly for account-management workflows — omitting either silently falls back to a SHARED "default"/"us" identity, not an error
+- \`dedicated\` — exclusive datacenter IP; set session_id explicitly for high-trust platforms — omitting it silently falls back to a SHARED "default" identity, not an error
 
 **Escalation when blocked:** datacenter → isp → residential.`,
     inputSchema: zodToMcpSchema(ProxyParamsSchema),
@@ -325,7 +326,7 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
 
 **Best for:** Account management, login-dependent workflows, platforms that flag IP changes as suspicious.
 **Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
-**Params:** url (optional), country (ISO 2-letter, REQUIRED), session_id (REQUIRED — determines your dedicated IP).
+**Params:** url (optional), country (ISO 2-letter, REQUIRED — each country has a distinct pool of dedicated IPs; omitting it errors), session_id (REQUIRED — determines which dedicated IP is assigned; omitting it errors. Same session_id always returns the same IP).
 **Formats:** "url", "env", "curl".
 **agent_instruction:** Same IP every request. Best for accounts requiring consistent identity. Keep the same session_id for the entire account lifecycle.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
@@ -338,7 +339,7 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
 
 **Best for:** High-trust platforms, workflows needing a pristine IP with no negative history.
 **Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
-**Params:** url (optional), session_id (REQUIRED — maps to your exclusive dedicated IP).
+**Params:** url (optional), session_id (REQUIRED — determines your exclusive datacenter IP assignment; omitting it errors. Same session_id always returns the same dedicated IP).
 **Formats:** "url", "env", "curl".
 **agent_instruction:** Exclusive datacenter IP. Best for high-trust platforms. No other user shares this IP. For human-like IP appearance, use novada_proxy_residential instead.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
@@ -420,7 +421,7 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
 
 **How it works:** for each selected domain group, runs a Google search scoped to that domain (e.g. site:openai.com "brandname") and analyzes snippets for sentiment, claims, and competitor co-mentions.
 **Best for:** checking brand presence on AI-company public docs/blogs/changelogs.
-**Not for:** live model answers about your brand (query the model directly), general web search (novada_search), real-time social monitoring (novada_scrape with twitter/reddit).
+**Not for:** live model answers about your brand (query the model directly), general web search (novada_search), real-time social monitoring (novada_scrape with twitter/instagram).
 **Output:** per-domain sentiment (positive/neutral/negative), key claims from indexed snippets, competitor mentions, mention counts, source URLs.
 **Domains:** chatgpt.com+openai.com, perplexity.ai, grok.com+x.com/i/grok, claude.ai+anthropic.com, gemini.google.com. Default: chatgpt, perplexity, grok.`,
     inputSchema: zodToMcpSchema(AiMonitorParamsSchema),
@@ -475,12 +476,12 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
   },
   {
     name: "novada_proxy_account_create",
-    description: `⚠️ WRITE — Create a proxy sub-account. Two-step confirm gate.
+    description: `⚠️ WRITE — Create a proxy sub-account. Two-step approval-token gate.
 
-**Behavior:** without \`confirm: true\`, returns a \`confirmation_required\` JSON preview (password masked) and does NOT hit the API. Show the preview to the human; only re-call with \`confirm: true\` after explicit approval.
+**Behavior:** call once WITHOUT \`approval_token\` to get a \`confirmation_required\` JSON preview (password masked) plus a fresh, single-use \`approval_token\` (valid 10 minutes) — this does NOT hit the API. Show the preview to the human, then re-call with the EXACT SAME parameters plus that \`approval_token\` after explicit approval. \`confirm: true\` is a deprecated no-op and does NOT substitute for the token.
 
 **Best for:** provisioning a team-member or per-project sub-account against your master plan.
-**Params:** product ("1"=Residential, "2"=Rotating ISP, "3"=Rotating Datacenter, "4"=Unlimited, "7"=Unblocker, "9"=Mobile), account (3-64, [a-zA-Z0-9_-]), password (8-64), status ("1" active default | "-3" disabled), remark?, limit_flow? (GB cap), confirm.
+**Params:** product ("1"=Residential, "2"=Rotating ISP, "3"=Rotating Datacenter, "4"=Unlimited, "7"=Unblocker, "9"=Mobile), account (3-64, [a-zA-Z0-9_-]), password (8-64), status ("1" active default | "-3" disabled), remark?, limit_flow? (GB cap), approval_token.
 **Wire format:** multipart/form-data.
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
     inputSchema: zodToMcpSchema(ProxyAccountCreateParamsSchema),
@@ -501,7 +502,8 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
     name: "novada_ip_whitelist",
     description: `Manage the proxy IP whitelist — add/list/delete/remark — for Residential (1), Unlimited (4), and Static ISP (5).
 
-**Actions:** "add" (WRITE, requires confirm), "list" (read-only), "del" (WRITE, requires confirm), "remark" (update a note).
+**Actions:** "add" (WRITE, gated by approval_token), "list" (read-only), "del" (WRITE, gated by approval_token), "remark" (update a note, ungated).
+**Behavior for "add"/"del":** call once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — this does NOT hit the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
 **Required:** action, product (1=Residential, 4=Unlimited, 5=Static ISP).
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
     inputSchema: zodToMcpSchema(IpWhitelistParamsSchema),
@@ -515,8 +517,8 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
     name: "novada_capture_apikey",
     description: `Get or reset the Capture API key (wraps POST /v1/capture/get_apikey and /v1/capture/reset_apikey).
 
-**Actions:** "get" = retrieve the current key (read-only). "reset" = regenerate it — DESTRUCTIVE, invalidates the old key, requires confirm:true.
-**Behavior:** without confirm:true on "reset", returns a warning preview and does NOT call the API.
+**Actions:** "get" = retrieve the current key (read-only). "reset" = regenerate it — DESTRUCTIVE, invalidates the old key, gated by a two-step approval_token.
+**Behavior:** call "reset" once WITHOUT \`approval_token\` to get a warning preview plus a fresh token (valid 10 minutes) — this does NOT call the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
     inputSchema: zodToMcpSchema(CaptureApikeyParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
@@ -531,8 +533,8 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
     name: "novada_static_ip_mgmt",
     description: `Manage static ISP IPs (wraps /v1/static_house/* developer-api endpoints).
 
-**Actions:** "open" = purchase new IPs (WRITE, requires confirm:true). "renew" = renew existing IPs (WRITE, requires confirm:true). "export"/"list" = read-only.
-**Behavior:** without confirm:true on "open"/"renew", returns a preview and does NOT hit the API.
+**Actions:** "open" = purchase new IPs (WRITE, gated by approval_token). "renew" = renew existing IPs (WRITE, gated by approval_token). "export"/"list" = read-only.
+**Behavior:** call "open"/"renew" once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — this does NOT hit the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
     inputSchema: zodToMcpSchema(StaticIpMgmtParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
