@@ -8,6 +8,7 @@ import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
 import { devApiPost } from "../_core/developer_api.js";
 import { extractRawTaskStatus, type RawTaskStatusResp } from "./scraper_status.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 
@@ -1827,6 +1828,17 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
       // Clean JSON: surface key fields prominently. rawRecords are the upstream objects;
       // they may still have deep nesting, but agents can navigate them. We emit them as-is
       // (not flattenRecord'd), keeping structure and avoiding the 70-column flat-object problem.
+      // G-2: NOT wrapUntrusted-wrapped in json/csv/html/toon — these formats are a
+      // documented MACHINE-CONSUMPTION contract (M1: "return a bare, PARSEABLE JSON
+      // envelope"; csv/html/toon are explicitly advertised as "paste into Excel" /
+      // "standalone <table>" / spreadsheet-ready). Confirmed by running the existing
+      // suite: wrapping broke JSON.parse(jsonMatch) in scrape.test.ts/scrape-item3-
+      // item5.test.ts/scrape-price-normalize.test.ts/scrape-resume-audit-*.test.ts,
+      // and broke the CSV/HTML header-column assertions. Corrupting a structured,
+      // machine-parsed contract is a worse regression than the injection-prose risk
+      // it would close (a naive text-in/text-out agent's PRIMARY read surface for
+      // scrape output is the markdown table, which IS wrapped below). Only the
+      // markdown (human/LLM-read) branch is wrapped.
       output = [
         `## Scrape Results`,
         `platform: ${platform} | operation: ${displayOperation} | records: ${cleanRecords.length} | source: live`,
@@ -1848,6 +1860,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
       // Inline CSV — header row + one row per record. Curated columns (base64 blobs
       // dropped, key fields first). formatAsCsv RFC-4180 quotes any cell with a
       // comma/quote/newline, so it round-trips in any spreadsheet or CSV parser.
+      // G-2: NOT wrapped — spreadsheet-consumption contract, see the json case's comment.
       const csvText = formatAsCsv(tabularRecords);
       output = [
         `## Scrape Results`,
@@ -1872,6 +1885,9 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
       // Real .xlsx via exceljs — inline base64 so no disk writes (serverless-safe).
       // Curated columns (base64 blobs dropped, key fields first) so the spreadsheet
       // opens with clean, meaningful columns instead of favicon/image data URIs.
+      // G-2: NOT wrapUntrusted-wrapped — this is a base64-encoded binary .xlsx blob,
+      // not text an LLM reads/follows as instructions (a wrapper would just add noise
+      // around opaque base64).
       const xlsxBuf = await formatAsXlsx(tabularRecords, operation.slice(0, 31));
       const b64 = xlsxBuf.toString("base64");
       output = [
@@ -1898,6 +1914,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     case "html": {
       // Inline HTML <table> — header <th> row + one <tr> per record. Curated columns
       // (base64 blobs dropped, key fields first). Ready to drop into a page or open in a browser.
+      // G-2: NOT wrapped — "standalone <table> document" contract, see the json case's comment.
       const htmlTable = formatAsHtml(tabularRecords, title);
       output = [
         `## Scrape Results`,
@@ -1925,6 +1942,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         `HEADERS: ${headers.join(" | ")}`,
         ...records.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
       ];
+      // G-2: NOT wrapped — token-optimized machine format, see the json case's comment.
       output = [
         `## Scrape Results`,
         `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: toon`,
@@ -1952,7 +1970,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `---`,
         ``,
-        formatAsMarkdown(records),
+        wrapUntrusted(formatAsMarkdown(records), `${platform}/${operation}`),
         ``,
         `---`,
         `## Agent Hints`,

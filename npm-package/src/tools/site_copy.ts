@@ -18,6 +18,7 @@ import type { SiteCopyParams } from "./types.js";
 import { SITE_COPY_HARD_MAX } from "./types.js";
 import { TIMEOUTS } from "../config.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 
 const SITE_COPY_CONCURRENCY = 3;
 /** Uncapped marker for extractMainContent — returns full clean markdown (no 3000-char crawl cap). */
@@ -461,7 +462,11 @@ export async function novadaSiteCopy(params: SiteCopyParams, apiKey?: string): P
     `manifest: ${manifestPath}`,
     ``,
     `### Pages (first ${Math.min(okPages.length, 10)} of ${okPages.length})`,
-    ...okPages.slice(0, 10).map((p, idx) => `${idx + 1}. ${p.title || "(untitled)"} — ${p.word_count}w — ${p.url}`),
+    // G-2: `p.title` is the page's own <title>/H1 (fetched text — the full page
+    // body is written to disk, not embedded in this response, but the title IS
+    // embedded here). "(untitled)" is OUR fallback when no title was found and
+    // stays unwrapped.
+    ...okPages.slice(0, 10).map((p, idx) => `${idx + 1}. ${p.title ? wrapUntrusted(p.title, p.url) : "(untitled)"} — ${p.word_count}w — ${p.url}`),
   ];
 
   if (okPages.length > 10) {

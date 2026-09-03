@@ -11,6 +11,7 @@ import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
 import { CATALOG_BY_DOMAIN } from "../data/scraper_catalog.js";
 import { isBrowserAvailableOnRuntime, getBrowserUnavailableError } from "../utils/runtime.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 
 export { detectJsHeavyContent } from "../utils/index.js";
 
@@ -833,6 +834,11 @@ function formatMarkdownExtract(
   // reported as "text/markdown" (TOW2-307 LOW). Fall back to the shape-based label
   // only when the header was empty.
   const contentTypeLabel = contentType.split(";")[0].trim() || (isMarkdown ? "text/markdown" : "text/plain");
+  // G-2: wrap only the fetched body text — every metadata field above/below (title,
+  // mode, chars, links, agent_instruction) stays OUR OWN text, unwrapped. Length/char
+  // metrics are computed from the unwrapped `content` so wrapper overhead never
+  // leaks into `chars:`/`total_chars`.
+  const wrappedContent = wrapUntrusted(content, url);
 
   if (outputFormat === "json") {
     return JSON.stringify({
@@ -841,7 +847,7 @@ function formatMarkdownExtract(
       mode,
       source: "live",
       content_type: contentTypeLabel,
-      content,
+      content: wrappedContent,
       content_truncated: isTruncated,
       total_chars: totalChars,
       links: { total: links.length, sample: links.slice(0, 15) },
@@ -858,7 +864,7 @@ function formatMarkdownExtract(
     ``,
     `---`,
     ``,
-    content,
+    wrappedContent,
   ];
   if (isTruncated) {
     const suggestedHigher = Math.min(limit * 2, 100000);
@@ -1566,12 +1572,24 @@ async function extractSingleInner(
   // Root cause: OUR CODE — the clean path did not call stripBoilerplate on output.
   let displayContent = params.clean === true ? stripBoilerplate(mainContent) : mainContent;
   let contentTruncated = false;
+  // G-2: kept OUT of displayContent (which gets wrapUntrusted-wrapped below) — this
+  // is OUR OWN notice, not fetched text, and must render outside the untrusted block.
+  let truncationNotice: string | null = null;
   if (displayContent.length > maxChars) {
     displayContent = truncatePreservingTable(displayContent, maxChars);
     const suggestedHigher = Math.min(maxChars * 2, 100000);
-    displayContent += `\n\n[Content may be truncated — showing first ${maxChars} of ${totalChars} total characters. Pass max_chars=${suggestedHigher} to get more.]`;
+    truncationNotice = `[Content may be truncated — showing first ${maxChars} of ${totalChars} total characters. Pass max_chars=${suggestedHigher} to get more.]`;
     contentTruncated = true;
   }
+  // G-2: the fetched page body — wrap ONCE here so both the JSON `content` field and
+  // the markdown body (below) carry the same untrusted-source marking. Everything else
+  // in this function's output (headers, quality, fields, hints, agent_instruction) is
+  // OUR OWN text and stays unwrapped.
+  const wrappedDisplayContent = wrapUntrusted(displayContent, params.url);
+  // G-2: the exact string the JSON branch's `content` field holds — wrapper +
+  // (when present) our own truncation notice appended AFTER the wrap so the
+  // notice itself is never inside the untrusted block.
+  const jsonContentField = wrappedDisplayContent + (truncationNotice ? `\n\n${truncationNotice}` : "");
 
   const contentLen = totalChars;
   const isTruncated = contentTruncated;
@@ -1677,9 +1695,13 @@ async function extractSingleInner(
         ...(isShortButComplete ? { note: `short page (${contentLen} chars, ${wordCount} words) — complete but brief` } : {}),
         reasons: displayQualityReasons,
       },
-      content: displayContent,
+      content: jsonContentField,
       content_truncated: contentTruncated,
-      returned_chars: displayContent.length,
+      // G-2: reflects the ACTUAL length of `content` above (wrapper included) — was
+      // `displayContent.length` pre-wrap, which is what extract.test.ts's
+      // `returned_chars === content.length` invariant asserts; keep that invariant
+      // true by deriving both from the same final string.
+      returned_chars: jsonContentField.length,
       total_chars: totalChars,
       structured_data: structuredData ?? null,
       fields: fieldResults
@@ -1875,7 +1897,8 @@ async function extractSingleInner(
     lines.push(``, `---`, ``);
   }
 
-  lines.push(displayContent);
+  lines.push(wrappedDisplayContent);
+  if (truncationNotice) lines.push(``, truncationNotice);
 
   if (sameDomainLinks.length > 0) {
     lines.push(``, `---`, `## Same-Domain Links (${sameDomainLinks.length} of ${allLinks.length})`);
@@ -2118,10 +2141,18 @@ function formatJsonExtract(url: string, mode: string, jsonStr: string, maxChars?
   // envelope — NOT a ```json markdown fence. Fencing broke JSON.parse on the
   // caller side (same class as the search F16 bug). The fetched body is embedded
   // as parsed JSON when it's valid, else as a raw string so nothing is lost.
+  //
+  // G-2: `content` is only wrapUntrusted-wrapped in the RAW-STRING branch (below).
+  // When jsonStr parses as valid JSON, `content` becomes the parsed structured
+  // object — wrapping would force it back into a string and defeat M1's whole
+  // point (a parseable, structured `content` field). Structured JSON data is a
+  // lower-risk shape than free-form prose for the prompt-injection this wrapper
+  // targets; the raw/unparseable/truncated fallback (the shape closest to
+  // arbitrary fetched text) is what gets marked untrusted.
   if (outputFormat === "json") {
-    let content: unknown = truncatedStr;
+    let content: unknown = wrapUntrusted(truncatedStr, url);
     if (!isTruncated) {
-      try { content = JSON.parse(jsonStr); } catch { content = truncatedStr; }
+      try { content = JSON.parse(jsonStr); } catch { /* keep the wrapUntrusted-wrapped raw string above */ }
     }
     return JSON.stringify({
       url,
@@ -2144,7 +2175,7 @@ function formatJsonExtract(url: string, mode: string, jsonStr: string, maxChars?
     `---`,
     ``,
     "```json",
-    truncated,
+    wrapUntrusted(truncated, url),
     "```",
     ``,
     `---`,

@@ -2,6 +2,7 @@ import type { VerifyParams, NovadaSearchResult } from "./types.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode, LINE_TERMINATOR_CHARS } from "../_core/errors.js";
 import { classifyAuthority } from "../utils/authority.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 
 // FIX-4: Max claim length — prevents excessively long claims from blowing up search queries
 const CLAIM_MAX_LENGTH = 1000;
@@ -183,6 +184,30 @@ function isRelevant(r: NovadaSearchResult, keyTerms: string[]): boolean {
   if (keyTerms.length === 0) return false;
   const hay = `${r.title || ""} ${r.description || r.snippet || ""}`.toLowerCase();
   return keyTerms.some(term => hay.includes(term));
+}
+
+/**
+ * G-2: shared renderer for both source-list sections below (claim-matching /
+ * negation-matching) — ONE wrapUntrusted call site for the whole tool, not one
+ * per section. Wraps the SERP snippet (fetched free text); `title` stays
+ * unwrapped — it's short, used inline in a `**title**` label, and lower-risk
+ * than the snippet body (same policy as search.ts).
+ *
+ * F7-C SAFETY: the wrap's `source` label uses `title`, NEVER `r.url`/`r.link`.
+ * This section intentionally never prints the raw URL (only the
+ * sanitizeEvidenceUrls-filtered "Claim-matching URLs" line does, later) — a
+ * redirect-poisoned URL (isRedirectPoisonedUrl) must not leak back in here via
+ * the wrapper's source label.
+ */
+function pushSourceList(sources: NovadaSearchResult[], lines: string[]): void {
+  for (let i = 0; i < sources.length; i++) {
+    const r = sources[i];
+    const title = r.title || "Untitled";
+    const snippet = r.description || r.snippet || "";
+    lines.push(`${i + 1}. **${title}**`);
+    lines.push(`   ${snippet ? wrapUntrusted(snippet, title) : ""}`);
+    lines.push(``);
+  }
 }
 
 export async function novadaVerify(params: VerifyParams, apiKey: string): Promise<string> {
@@ -455,14 +480,7 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   if (relevantSupportSources.length === 0) {
     lines.push(`_No sources matching the claim wording found._`);
   } else {
-    for (let i = 0; i < relevantSupportSources.length; i++) {
-      const r = relevantSupportSources[i];
-      const title = r.title || "Untitled";
-      const snippet = r.description || r.snippet || "";
-      lines.push(`${i + 1}. **${title}**`);
-      lines.push(`   ${snippet}`);
-      lines.push(``);
-    }
+    pushSourceList(relevantSupportSources, lines);
   }
   lines.push(``);
 
@@ -472,14 +490,7 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   if (relevantContradictSources.length === 0) {
     lines.push(`_No sources matching a negation of the claim found._`);
   } else {
-    for (let i = 0; i < relevantContradictSources.length; i++) {
-      const r = relevantContradictSources[i];
-      const title = r.title || "Untitled";
-      const snippet = r.description || r.snippet || "";
-      lines.push(`${i + 1}. **${title}**`);
-      lines.push(`   ${snippet}`);
-      lines.push(``);
-    }
+    pushSourceList(relevantContradictSources, lines);
   }
 
   lines.push(``);

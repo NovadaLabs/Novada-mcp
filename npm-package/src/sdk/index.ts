@@ -1,6 +1,19 @@
 import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaScrape, novadaVerify } from "../tools/index.js";
 import { withCredentials } from "../utils/credentials.js";
 import type { ToolCredentials } from "../utils/credentials.js";
+// G-2 (no marker leak into the SDK): the tool functions above wrap externally-fetched
+// text with wrapUntrusted/wrapUntrustedInline before returning it — correct for the
+// MCP path (an LLM reads that string directly and needs the "don't follow
+// instructions" marking). NovadaClient instead regex-parses that SAME string into
+// TYPED FIELDS for programmatic TS callers (SearchResult.snippet, ExtractResult.content,
+// ResearchResult.extracted[].content, CrawlPage.content) — those callers read a typed
+// string field, not an LLM prompt, so the marker is pure noise/corruption there
+// (e.g. `result.content.includes(expectedText)` breaks). Every regex-extracted field
+// below that can carry fetched text is run through unwrapUntrusted() so the SDK's
+// public contract is uniformly marker-free while the MCP response these methods
+// call under the hood stays wrapped (see the awaited `raw`/`formatted` variables,
+// which are never mutated).
+import { unwrapUntrusted } from "../utils/untrusted.js";
 import type {
   NovadaClientConfig, SearchResult, ExtractResult, CrawlPage,
   ResearchResult, MapResult, ProxyConfig, ScrapeResult, VerifyResult,
@@ -74,7 +87,9 @@ export class NovadaClient {
         const url = item?.url;
         if (typeof url !== "string" || !url) continue;
         const title = typeof item.title === "string" ? item.title : "";
-        const snippet = typeof item.snippet === "string" ? item.snippet : "";
+        // G-2: search.ts wraps `snippet` (fetched SERP text) with wrapUntrusted for
+        // the MCP path — strip it here so the SDK's typed field is marker-free.
+        const snippet = typeof item.snippet === "string" ? unwrapUntrusted(item.snippet) : "";
         const published = typeof item.published === "string" ? item.published : undefined;
         results.push({ title, url, snippet, ...(published ? { published } : {}) });
       }
@@ -115,6 +130,9 @@ export class NovadaClient {
       if (lastSep !== -1) {
         content = raw.slice(lastSep + 5, contentEnd).trim();
       }
+      // G-2: extract.ts wraps this body with wrapUntrusted for the MCP path — strip
+      // it so ExtractResult.content is the plain fetched text for typed TS callers.
+      content = unwrapUntrusted(content);
 
       const links: string[] = [];
       const linkSection = raw.split("## Same-Domain Links")[1];
@@ -170,7 +188,10 @@ export class NovadaClient {
         const titleLine = lines.find(l => l.startsWith("title:"))?.replace("title:", "").trim() ?? "";
         const depthMatch = block.match(/depth:(\d+)/);
         const wordsMatch = block.match(/words:(\d+)/);
-        const content = lines.slice(3).join("\n").split("---")[0].trim();
+        // G-2: crawl.ts wraps each page's body with wrapUntrusted for the MCP path
+        // (crawl.ts has carried this since before the G-2 audit) — strip it so
+        // CrawlPage.content is uniformly marker-free like every other SDK field.
+        const content = unwrapUntrusted(lines.slice(3).join("\n").split("---")[0].trim());
         if (pageUrl) {
           pages.push({
             url: pageUrl,
@@ -207,7 +228,9 @@ export class NovadaClient {
       for (const block of extractedSection.split(/\n### \[\d+\] /).slice(1)) {
         const title = block.split("\n")[0]?.trim() ?? "";
         const url = block.match(/url: (.+)/)?.[1]?.trim() ?? "";
-        const content = block.split("\n").slice(3).join("\n").split("---")[0].trim();
+        // G-2: research.ts wraps each cited excerpt with wrapUntrusted for the MCP
+        // path — strip it so ResearchResult.extracted[].content is marker-free.
+        const content = unwrapUntrusted(block.split("\n").slice(3).join("\n").split("---")[0].trim());
         if (title && url) extracted.push({ title, url, content });
       }
 

@@ -1,6 +1,7 @@
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 import type { NovadaSearchResult } from "./types.js";
 import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -247,10 +248,17 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
       lines.push(`### ${m.model} — ${m.sentiment}`);
       lines.push(`query: ${m.query_used}`);
       if (m.source_url) lines.push(`source: ${m.source_url}`);
-      if (m.snippet) lines.push(`snippet: ${m.snippet}`);
+      // G-2: `snippet`/`key_claims` are fetched SERP text only when sentiment !==
+      // "not_found" — that value also doubles as OUR OWN synthetic message ("No
+      // results found for this query.", "Search failed: invalid or missing API
+      // key.", "Search timed out or failed for this query.") on the no-result/
+      // error paths, which must stay unwrapped.
+      const isFetchedText = m.sentiment !== "not_found";
+      if (m.snippet) lines.push(`snippet: ${isFetchedText ? wrapUntrusted(m.snippet, m.source_url || m.model) : m.snippet}`);
       if (m.key_claims.length > 0) {
         lines.push(`claims:`);
-        for (const c of m.key_claims) lines.push(`  - ${c}`);
+        const claimsBlock = m.key_claims.map(c => `  - ${c}`).join("\n");
+        lines.push(isFetchedText ? wrapUntrusted(claimsBlock, m.source_url || m.model) : claimsBlock);
       }
       if (m.competitor_mentions.length > 0) {
         lines.push(`competitors_mentioned: ${m.competitor_mentions.join(", ")}`);
