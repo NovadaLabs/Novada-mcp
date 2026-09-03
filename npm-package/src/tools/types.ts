@@ -65,8 +65,17 @@ export function withCamelCaseAliases<T extends z.ZodTypeAny>(
  * (net.isIP) and blocks by range, covering forms a string regex misses (0.0.0.0/8,
  * 100.64.0.0/10 CGNAT, fc00::/7 ULA, IPv4-mapped/compatible loopback).
  */
-const safeUrl = z.string()
-  .url("A valid URL is required")
+const safeUrl = z.string({
+    // F-3/P3: without this, a wrong-type value (e.g. a number) reaching a
+    // union of safeUrl branches (novada_extract's `url: z.union([safeUrl,
+    // z.array(safeUrl)])`) surfaces Zod's bare, typeless "Invalid input" —
+    // the agent learns WHICH field is wrong but not what to change it to.
+    // This custom base-type message at least gives a self-contained fix even
+    // before the union-aware formatter (utils/validate.ts formatZodIssue)
+    // recovers the per-branch expected types.
+    message: "Expected a URL string (e.g. \"https://example.com\") — received a non-string value.",
+  })
+  .url("A valid URL is required — must start with http:// or https://")
   .refine(
     (url) => /^https?:\/\//i.test(url),
     "Only HTTP and HTTPS URLs are supported"

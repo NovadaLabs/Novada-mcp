@@ -450,6 +450,21 @@ export function classifyError(error: unknown): NovadaError {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
 
+    // Unknown tool name (core.ts's dispatch() default case). The message
+    // itself already lists every valid tool name, class-derived from the
+    // live registry (F-5) — give a crisp, specific instruction instead of
+    // falling through to the generic UNKNOWN template below.
+    if (msg.includes("unknown tool:")) {
+      return new NovadaError({
+        code: NovadaErrorCode.INVALID_PARAMS,
+        message: sanitizeMessage(error.message),
+        agent_instruction:
+          "The tool name is wrong. Call novada_discover to see every valid tool name, " +
+          "or pick one from the 'Available:' list already in this error's message, then retry.",
+        retryable: false,
+      });
+    }
+
     // Auth failures
     if (msg.includes("401") || msg.includes("api_key") || msg.includes("unauthorized") || msg.includes("invalid_api_key")) {
       return new NovadaError({

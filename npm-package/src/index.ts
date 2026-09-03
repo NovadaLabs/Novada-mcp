@@ -8,6 +8,11 @@
 // same core.ts. Full cross-artifact map: root ARCHITECTURE.md. Module map for this
 // package: npm-package/ARCHITECTURE.md.
 
+// A-11: FIRST import, before the SDK or anything else — fails loud with a
+// one-line stderr message + exit(1) on Node <20 instead of continuing into
+// whatever confusing runtime error an old Node happens to hit first.
+import "./utils/assert-node.js";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -26,12 +31,46 @@ import {
   recordToolCall,
   novadaSearchFeedback,
   validateSearchFeedbackParams,
+  // F2-3: pre-key-gate parameter validation (see PRE_KEY_VALIDATORS below)
+  // reuses these SAME validator functions dispatch() (core.ts) calls
+  // internally — one function per tool, imported here, not duplicated.
+  validateSearchParams,
+  validateExtractParams,
+  validateCrawlParams,
+  validateResearchParams,
+  validateMapParams,
+  validateSiteCopyParams,
+  validateProxyParams,
+  validateScrapeParams,
+  validateVerifyParams,
+  validateBrowserParams,
+  validateAccountParams,
+  validateBrowserFlowParams,
+  validateMonitorParams,
+  validateProxyAccountCreateParams,
+  validateProxyAccountListParams,
+  validateIpWhitelistParams,
+  validateCaptureApikeyParams,
+  validateStaticIpMgmtParams,
 } from "./tools/index.js";
+// Not re-exported through the tools/index.js barrel — imported the same way
+// core.ts itself imports it.
+import { validateAiMonitorParams } from "./tools/types.js";
 import type { ProgressReporter } from "./tools/crawl.js";
 import { classifyError, redactSecrets } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { TOOLS, dispatch } from "./core.js";
 import { PLATFORM_SCRAPER_TOOLS } from "./tools/platform_scrapers.js";
+// F-2/F-12/F2-3/P-4: the ONE shared parameter-validation formatter + unknown-key
+// warning + missing-required-param mechanisms, reused at every ZodError/success
+// site in this file instead of the four independent hand-rolled variants (and
+// the auth-check-before-validation ordering) that existed before.
+import {
+  formatZodError,
+  computeUnknownKeyWarning,
+  hasUnrecognizedKeysIssue,
+  computeMissingRequiredParams,
+} from "./utils/validate.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -133,6 +172,77 @@ function applyToolFilter(tools: typeof TOOLS): typeof TOOLS {
 
 const ACTIVE_TOOLS = applyToolFilter(TOOLS);
 
+// ─── F2-3: pre-key-gate parameter validation ─────────────────────────────────
+// Full Zod validators for the tools where one is separately exported — every
+// hand-written visible tool EXCEPT novada_setup/novada_session_stats/
+// novada_search_feedback (already pre-gated before the API_KEY check exists
+// at all) and novada_discover (exempted from the key gate entirely below,
+// since its dispatch case never reads apiKey). Each entry is the SAME
+// function core.ts's dispatch() calls internally — reused, not duplicated,
+// so a schema change in tools/*.ts is picked up here with zero drift risk.
+//
+// The 15 novada_scrape_<platform> tools have no separately-exported
+// validator (their Zod schema lives inside a private closure in
+// tools/platform_scraper.ts's factory, out of this pass's file ownership) —
+// computeMissingRequiredParams() covers those instead, with a lighter,
+// schema-derived "are the required fields even present" check.
+const PRE_KEY_VALIDATORS: Partial<Record<string, (args: Record<string, unknown> | undefined) => unknown>> = {
+  novada_search: validateSearchParams,
+  novada_extract: validateExtractParams,
+  novada_crawl: validateCrawlParams,
+  novada_research: validateResearchParams,
+  novada_map: validateMapParams,
+  novada_site_copy: validateSiteCopyParams,
+  novada_proxy: validateProxyParams,
+  novada_scrape: validateScrapeParams,
+  novada_verify: validateVerifyParams,
+  novada_browser: validateBrowserParams,
+  novada_account: validateAccountParams,
+  novada_browser_flow: validateBrowserFlowParams,
+  novada_ai_monitor: validateAiMonitorParams,
+  novada_monitor: validateMonitorParams,
+  novada_proxy_account_create: validateProxyAccountCreateParams,
+  novada_proxy_account_list: validateProxyAccountListParams,
+  novada_ip_whitelist: validateIpWhitelistParams,
+  novada_capture_apikey: validateCaptureApikeyParams,
+  novada_static_ip_mgmt: validateStaticIpMgmtParams,
+};
+
+// ─── Error formatting (F-4) ──────────────────────────────────────────────────
+// Matches a well-formed agent-facing message that a tool already pre-wrapped
+// itself (e.g. tools/setup.ts, tools/session_stats.ts catch their OWN
+// ZodError and rethrow a plain Error whose .message already ends in a
+// line-anchored `agent_instruction: ...` — the exact convention the rest of
+// this codebase parses for). `m` flag matches ECMA-262 line-terminator rules.
+const AGENT_INSTRUCTION_LINE_RE = /^\s*agent_instruction\s*:/im;
+
+/**
+ * The single "turn a caught error into agent-facing response text" chokepoint
+ * for this file's per-tool pre-gate catches (F-4: previously raw `String(e)`
+ * at the novada_setup / novada_session_stats / novada_search_feedback catch
+ * sites — index.ts:210-212, :223-225, :242-244 before this fix). Three cases:
+ *
+ *   1. `e` is a ZodError that slipped past a tool's own pre-wrap — format it
+ *      with the shared formatZodError() (F-12) instead of a raw String(e).
+ *   2. `e` is a plain Error a tool already pre-formatted into agent-facing
+ *      text (it already carries its own agent_instruction line) — pass it
+ *      through (redacted, defense in depth) rather than re-wrapping it in a
+ *      SECOND, more generic classifyError() envelope, which would squash the
+ *      original's newlines and bury its specific instruction under a vague
+ *      "an unexpected error occurred" one.
+ *   3. Anything else (a genuinely unclassified error) — classifyError().toAgentString(),
+ *      the same chokepoint the main dispatch catch already uses.
+ */
+function toAgentErrorText(error: unknown, toolName: string): string {
+  if (error instanceof ZodError) {
+    return formatZodError(toolName, error);
+  }
+  if (error instanceof Error && AGENT_INSTRUCTION_LINE_RE.test(error.message)) {
+    return redactSecrets(error.message);
+  }
+  return classifyError(error).toAgentString();
+}
+
 // ─── MCP Server ──────────────────────────────────────────────────────────────
 
 class NovadaMCPServer {
@@ -153,8 +263,12 @@ class NovadaMCPServer {
 
   private setupErrorHandling(): void {
     this.server.onerror = (error: unknown) => {
+      // Not an MCP tool-call response (protocol-level transport error) — no
+      // agent_instruction envelope needed here, but still route through the
+      // same redaction chokepoint as every other error surface in this file
+      // so a raw upstream string can't leak a credential into stderr.
       const msg = error instanceof Error ? error.message : String(error);
-      console.error("[novada]", msg);
+      console.error("[novada]", redactSecrets(msg));
     };
 
     process.on("SIGINT", async () => {
@@ -188,6 +302,21 @@ class NovadaMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const { name, arguments: args } = request.params;
 
+      // F-2: derive an "unknown parameter(s) ignored" warning from the tool's
+      // OWN declared inputSchema (utils/validate.ts — class-driven, no
+      // per-tool key list). Computed once per call; success paths below
+      // append it as a separate content block, and the ZodError paths append
+      // it too UNLESS the schema already hard-REJECTED via .strict() (that
+      // case gets its own "Unrecognized key" issue text — appending "ignored,
+      // had no effect" alongside a hard rejection would contradict it).
+      const unknownKeyWarning = computeUnknownKeyWarning(name, args as Record<string, unknown> | undefined, TOOLS);
+      const withUnknownKeyWarning = (
+        blocks: Array<{ type: "text"; text: string }>
+      ): Array<{ type: "text"; text: string }> => {
+        if (unknownKeyWarning) blocks.push({ type: "text" as const, text: unknownKeyWarning });
+        return blocks;
+      };
+
       // NOV-319: build a per-request progress reporter wired to notifications/progress.
       // Only active when the client supplied a progressToken in _meta; otherwise no-op so
       // long-running tools (novada_crawl per page, novada_research per phase) stay silent.
@@ -206,9 +335,12 @@ class NovadaMCPServer {
       if (name === "novada_setup") {
         try {
           const result = await novadaSetup(validateSetupParams(args as Record<string, unknown>));
-          return { content: [{ type: "text" as const, text: result }] };
+          return { content: withUnknownKeyWarning([{ type: "text" as const, text: result }]) };
         } catch (e) {
-          return { content: [{ type: "text" as const, text: String(e) }], isError: true };
+          // F-4: was raw String(e) — toAgentErrorText() passes through
+          // setup.ts's own pre-formatted agent_instruction text unchanged
+          // (it already carries one), or classifies anything else.
+          return { content: [{ type: "text" as const, text: toAgentErrorText(e, name) }], isError: true };
         }
       }
 
@@ -219,28 +351,76 @@ class NovadaMCPServer {
         try {
           recordToolCall(name);
           const result = await novadaSessionStats(validateSessionStatsParams(args as Record<string, unknown>));
-          return { content: [{ type: "text" as const, text: result }] };
+          return { content: withUnknownKeyWarning([{ type: "text" as const, text: result }]) };
         } catch (e) {
-          return { content: [{ type: "text" as const, text: String(e) }], isError: true };
+          return { content: [{ type: "text" as const, text: toAgentErrorText(e, name) }], isError: true };
         }
       }
       if (name === "novada_search_feedback") {
         try {
           recordToolCall(name);
           const result = await novadaSearchFeedback(validateSearchFeedbackParams(args as Record<string, unknown>));
-          return { content: [{ type: "text" as const, text: result }] };
+          return { content: withUnknownKeyWarning([{ type: "text" as const, text: result }]) };
         } catch (e) {
           if (e instanceof ZodError) {
-            const issues = e.issues.map(i => `  ${i.path.join(".")}: ${i.message}`).join("\n");
+            // F-4/F-12/P-4: was a bespoke formatter using the off-contract
+            // the off-contract "Next step" token instead of `agent_instruction:` — now the
+            // same shared formatZodError() every other ZodError site uses.
+            const content: Array<{ type: "text"; text: string }> = [
+              { type: "text" as const, text: formatZodError(name, e) },
+            ];
+            if (unknownKeyWarning && !hasUnrecognizedKeysIssue(e)) {
+              content.push({ type: "text" as const, text: unknownKeyWarning });
+            }
+            return { content, isError: true };
+          }
+          return { content: [{ type: "text" as const, text: toAgentErrorText(e, name) }], isError: true };
+        }
+      }
+
+      // F2-3: run parameter validation BEFORE the API_KEY check (except
+      // novada_discover, exempted from the key gate entirely below — its
+      // dispatch case never reads apiKey) so a caller with a bad param AND
+      // no key learns about the param, not just "missing key". Validation is
+      // local and free — no network call happens for either code path below.
+      if (name !== "novada_discover") {
+        const argsRecord = args as Record<string, unknown> | undefined;
+        const preValidator = PRE_KEY_VALIDATORS[name];
+        if (preValidator) {
+          try {
+            preValidator(argsRecord);
+          } catch (e) {
+            if (e instanceof ZodError) {
+              const content: Array<{ type: "text"; text: string }> = [
+                { type: "text" as const, text: formatZodError(name, e) },
+              ];
+              if (unknownKeyWarning && !hasUnrecognizedKeysIssue(e)) {
+                content.push({ type: "text" as const, text: unknownKeyWarning });
+              }
+              return { content, isError: true };
+            }
+            // A non-Zod throw from a "validate" function would be
+            // unexpected — don't swallow it here; fall through to the
+            // normal API_KEY/dispatch flow below, which will hit the same
+            // error again through the main catch's classifyError() path.
+          }
+        } else {
+          // No standalone validator for this tool (the 15 novada_scrape_<platform>
+          // tools) — fall back to a schema-derived "required fields present" check.
+          const missingRequired = computeMissingRequiredParams(name, argsRecord, TOOLS);
+          if (missingRequired && missingRequired.length > 0) {
             return {
-              content: [{
+              content: withUnknownKeyWarning([{
                 type: "text" as const,
-                text: `Invalid parameters for ${name}:\n${issues}\nNext step: Check parameter names and values — see tool description for valid options.`,
-              }],
+                text: [
+                  `Invalid parameters for ${name}:`,
+                  ...missingRequired.map((f) => `  ${f}: Invalid input: expected value, received undefined`),
+                  `agent_instruction: ${missingRequired.map((f) => `Add the required parameter ${f}.`).join(" ")} Do NOT retry with identical params — at least one field must change.`,
+                ].join("\n"),
+              }]),
               isError: true,
             };
           }
-          return { content: [{ type: "text" as const, text: String(e) }], isError: true };
         }
       }
 
@@ -266,7 +446,12 @@ class NovadaMCPServer {
       const hasDeveloperKey = !!process.env.NOVADA_DEVELOPER_API_KEY?.trim();
       const isKr6Bypass = KR6_TOOLS.has(name) && hasDeveloperKey;
 
-      if (!API_KEY && !isKr6Bypass) {
+      // A-7/F2-3: novada_discover is pure catalog metadata — its dispatch case
+      // never reads apiKey — so it needs no key at all, same as novada_setup
+      // above (that one gets its own pre-gate branch; this one is a single
+      // exemption here since it otherwise flows through the normal
+      // tool-filter + dispatch path unchanged).
+      if (!API_KEY && !isKr6Bypass && name !== "novada_discover") {
         return {
           content: [{
             type: "text" as const,
@@ -283,10 +468,19 @@ class NovadaMCPServer {
 
       // Enforce tool filter at execution time (not just at list time)
       if ((process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS) && !ACTIVE_TOOLS.find(t => t.name === name)) {
+        // F-4 gap #5: this already listed the available tools but carried no
+        // agent_instruction/failure_class fields — off-contract shape vs.
+        // every other error surface in this file.
         return {
           content: [{
             type: "text" as const,
-            text: `Tool '${name}' is not in the active set. NOVADA_TOOLS="${process.env.NOVADA_TOOLS ?? ""}" NOVADA_GROUPS="${process.env.NOVADA_GROUPS ?? ""}". Available: ${ACTIVE_TOOLS.map(t => t.name).join(", ")}`,
+            text: [
+              `Error [INVALID_PARAMS]: Tool '${name}' is not in the active set.`,
+              `failure_class: permanent`,
+              `retry_recommended: false`,
+              `NOVADA_TOOLS="${process.env.NOVADA_TOOLS ?? ""}" NOVADA_GROUPS="${process.env.NOVADA_GROUPS ?? ""}"`,
+              `agent_instruction: "Call one of the tools already active this session instead: ${ACTIVE_TOOLS.map(t => t.name).join(", ")}. Do not retry '${name}' — it is filtered out by this server's NOVADA_TOOLS/NOVADA_GROUPS config, not by anything in your request."`,
+            ].join("\n"),
           }],
           isError: true,
         };
@@ -309,34 +503,30 @@ class NovadaMCPServer {
         // (never concatenated into `result` — that would corrupt JSON-format outputs)
         // and ONLY on a successful dispatch. All logic + copy lives in the module;
         // this is the ~2-line glue. maybeGetFirstRunNotice() fails quiet → never throws.
-        const content = [{ type: "text" as const, text: result }];
+        const content = withUnknownKeyWarning([{ type: "text" as const, text: result }]);
         const notice = await maybeGetFirstRunNotice();
         if (notice) content.push({ type: "text" as const, text: notice });
         return { content };
       } catch (error) {
         // Local usage log for the failed call. Fire-and-forget — never throws.
-        void logUsage({ tool: name, status: "error", ms: Date.now() - t0, target: summarizeTarget(args), error: String(error) });
-        // Zod validation errors → clear, structured message for the agent including
-        // agent_instruction so the caller has a programmatic, parseable recovery signal.
+        // Redacted (defense in depth): this is a local audit-trail file, not a
+        // tool-call response, but an upstream error can still carry a credential.
+        void logUsage({ tool: name, status: "error", ms: Date.now() - t0, target: summarizeTarget(args), error: redactSecrets(String(error)) });
+        // Zod validation errors → the shared formatter (F-12/P-4): per-issue-class
+        // agent_instruction (missing/wrong-type/bad-enum/too-short/unknown-key/
+        // union-mismatch each get an instruction naming the actual fix), reused
+        // at every other ZodError site in this file instead of a private copy.
         if (error instanceof ZodError) {
-          const issues = error.issues.map(i => {
-            let msg = `  ${i.path.join(".")}: ${i.message}`;
-            if (i.code === "invalid_value" && "values" in i) {
-              msg += ` (valid values: ${(i.values as string[]).map(v => `'${v}'`).join(", ")})`;
-            }
-            return msg;
-          }).join("\n");
-          return {
-            content: [{
-              type: "text" as const,
-              text: [
-                `Invalid parameters for ${name}:`,
-                issues,
-                `agent_instruction: Fix the parameter(s) listed above and retry. Check the tool's inputSchema for required fields and valid values. Do NOT retry with identical params — at least one field must change.`,
-              ].join("\n"),
-            }],
-            isError: true,
-          };
+          const content: Array<{ type: "text"; text: string }> = [
+            { type: "text" as const, text: formatZodError(name, error) },
+          ];
+          // F-2: fold in the unknown-key warning UNLESS the schema already
+          // hard-rejected via .strict() (that issue is already named above —
+          // don't also say "ignored, had no effect", which would contradict it).
+          if (unknownKeyWarning && !hasUnrecognizedKeysIssue(error)) {
+            content.push({ type: "text" as const, text: unknownKeyWarning });
+          }
+          return { content, isError: true };
         }
 
         // Classified API/network errors with agent_instruction guidance
@@ -458,7 +648,10 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
 
 const server = new NovadaMCPServer();
 server.run().catch((error) => {
+  // Not an MCP tool-call response (the server failed to even start — stdio
+  // transport connect failure, etc.) — redact for the same defense-in-depth
+  // reason as the other stderr sites in this file.
   const msg = error instanceof Error ? error.message : String(error);
-  console.error("Fatal error:", msg);
+  console.error("Fatal error:", redactSecrets(msg));
   process.exit(1);
 });

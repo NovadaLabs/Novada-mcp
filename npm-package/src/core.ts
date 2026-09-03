@@ -752,8 +752,15 @@ export async function dispatch(
     case "novada_static_ip_mgmt":
       return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey);
     default:
+      // F-5 (class-not-instance): DERIVE the tool list from the live registry
+      // instead of a hand-maintained string — the old hardcoded list omitted
+      // 14 of 15 pinned scrapers + novada_session_stats + novada_search_feedback
+      // and presented 10 hidden aliases as if they were listed tools. TOOLS and
+      // HIDDEN_ALIASES are the SAME single source of truth tools/list itself
+      // uses, so this can never drift again; a 39th tool needs no edit here.
       throw new Error(
-        `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_scrape_amazon, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_browser, novada_account, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_ai_monitor, novada_monitor, novada_setup, novada_proxy_account_create, novada_proxy_account_list, novada_ip_whitelist, novada_capture_apikey, novada_scraper_task_mgmt, novada_static_ip_mgmt`
+        `Unknown tool: ${name}. Available: ${TOOLS.map((t) => t.name).join(", ")}. ` +
+        `Backward-compat aliases (dispatch but unlisted): ${[...HIDDEN_ALIASES].join(", ")}.`
       );
   }
 }

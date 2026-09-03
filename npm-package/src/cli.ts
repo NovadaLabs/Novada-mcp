@@ -11,6 +11,11 @@
  *   novadaresearch "How do AI agents use web scraping?"
  */
 
+// A-11: FIRST import, before anything else — fails loud with a one-line
+// stderr message + exit(1) on Node <20 instead of continuing into whatever
+// confusing runtime error an old Node happens to hit first.
+import "./utils/assert-node.js";
+
 import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaProxy, novadaScrape, novadaVerify, novadaHealth, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParamsFull, validateVerifyParams } from "./tools/index.js";
 import { VERSION } from "./config.js";
 
