@@ -52,25 +52,45 @@ export const TIER1_PROBES = Object.freeze([
 // None of these platforms are in BACKEND_KNOWN_FLAKY_PLATFORMS below — this
 // sample is deliberately restricted to platforms NOT already flagged flaky,
 // so a failure here is a real signal, not backend noise.
+//
+// V3-N1/C-2 follow-up (2026-09-03, CLASS-NOT-INSTANCE closure): Layer D
+// (full-tools-probe.mjs) fixed the `records >= 1`-only PASS predicate for the
+// SAME operations this Tier-3 sample exercises — see full-tools-probe.mjs's
+// SUBSTANCE_TABLE doc comment for the full mechanism (a bare/schema-
+// mismatched envelope, e.g. duckduckgo's `web_search` with no
+// `organic_results` array, wraps as a single synthetic "record" and reads as
+// `records: 1`). Tier-3 shares the exact same tool+operation
+// (novada_scrape_duckduckgo/web_search) and was ALSO substance-blind
+// (all-tools-smoke.mjs's runTier3() used a bare `res.ok` PASS predicate —
+// see that file). `catalogOpId` below is the SAME key
+// full-tools-probe.mjs's SUBSTANCE_TABLE uses, so runTier3() can call the
+// SAME `checkScraperSubstance()` (imported, never forked) that Layer D uses.
+// `format: "json"` is required for that function to parse real fields out of
+// the response — same reasoning as full-tools-probe.mjs's PROBES entries.
 export const TIER3_SAFE_SAMPLE = Object.freeze([
   Object.freeze({
     name: "novada_scrape_google",
-    args: Object.freeze({ operation: "web_search", params: Object.freeze({ q: "anthropic claude", num: 1 }), limit: 1 }),
+    catalogOpId: "google_search",
+    args: Object.freeze({ operation: "web_search", params: Object.freeze({ q: "anthropic claude", num: 1 }), limit: 1, format: "json" }),
   }),
   Object.freeze({
     name: "novada_scrape_duckduckgo",
-    args: Object.freeze({ operation: "web_search", params: Object.freeze({ q: "anthropic claude" }), limit: 1 }),
+    catalogOpId: "duckduckgo",
+    args: Object.freeze({ operation: "web_search", params: Object.freeze({ q: "anthropic claude" }), limit: 1, format: "json" }),
   }),
   Object.freeze({
     name: "novada_scrape_amazon",
-    args: Object.freeze({ operation: "products_by_keywords", params: Object.freeze({ keyword: "wireless earbuds" }), limit: 1 }),
+    catalogOpId: "amazon_product_keywords",
+    args: Object.freeze({ operation: "products_by_keywords", params: Object.freeze({ keyword: "wireless earbuds" }), limit: 1, format: "json" }),
   }),
   Object.freeze({
     name: "novada_scrape_walmart",
+    catalogOpId: "walmart_product_keywords",
     args: Object.freeze({
       operation: "product_by_keyword",
       params: Object.freeze({ domain: "https://www.walmart.com/", keyword: "shoes" }),
       limit: 1,
+      format: "json",
     }),
   }),
 ]);
@@ -82,7 +102,7 @@ export const TIER3_SAFE_SAMPLE = Object.freeze([
  * pays for exactly one scraper call.
  *
  * @param {Date} [now]
- * @returns {{name: string, args: Record<string, unknown>}}
+ * @returns {{name: string, catalogOpId: string, args: Record<string, unknown>}}
  */
 export function pickTier3Sample(now = new Date()) {
   const startOfYearUtc = Date.UTC(now.getUTCFullYear(), 0, 0);

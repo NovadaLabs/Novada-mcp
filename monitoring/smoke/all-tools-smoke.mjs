@@ -80,6 +80,13 @@ import {
   isBackendSignal,
   pickTier3Sample,
 } from "./tool-probes.mjs";
+// V3-N1/C-2 follow-up (2026-09-03): reuse (never fork) the SAME substance gate
+// Layer D (full-tools-probe.mjs) uses — see that file's SUBSTANCE_TABLE doc
+// comment for the mechanism. This import is side-effect-free: full-tools-
+// probe.mjs only calls its own main() when run directly (see its own
+// `isDirectRun` guard), never at module-load, so importing these two named
+// exports here never triggers a live network call or requires a test key.
+import { checkScraperSubstance, extractRecordsCount } from "./full-tools-probe.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MONITORING_DIR = path.resolve(__dirname, "..");
@@ -255,9 +262,21 @@ function runTier2(liveTools, baseline) {
   return { rows, currentNames, missingNames, newNames };
 }
 
-/** Tier-3: gated, ONE rotating scraper call, or a "skipped" placeholder row. */
-async function runTier3() {
-  const probe = pickTier3Sample();
+/**
+ * Tier-3: gated, ONE rotating scraper call, or a "skipped" placeholder row.
+ *
+ * V3-N1/C-2 follow-up (2026-09-03): `callToolFn`/`probeOverride` are
+ * dependency-injection points — mirroring full-tools-probe.mjs's
+ * `runProbe(probe, { callToolFn, ... })` pattern — so an offline self-test
+ * can exercise this EXACT function (not a reimplementation) against a
+ * stubbed response, without a live network call or NOVADA_TEST_KEY. Default
+ * behavior (both omitted) is byte-identical to the pre-refactor function:
+ * real `pickTier3Sample()` rotation + the real `callTool`.
+ *
+ * @param {{callToolFn?: typeof callTool, probeOverride?: {name: string, catalogOpId: string, args: Record<string, unknown>}}} [deps]
+ */
+async function runTier3({ callToolFn = callTool, probeOverride } = {}) {
+  const probe = probeOverride ?? pickTier3Sample();
 
   if (!RUN_SCRAPERS) {
     return [
@@ -275,16 +294,45 @@ async function runTier3() {
   assertExecutable(probe.name, "Tier-3");
   let res;
   try {
-    res = await callTool(probe.name, probe.args, { timeoutMs: 45000 });
+    res = await callToolFn(probe.name, probe.args, { timeoutMs: 45000 });
   } catch (err) {
     res = { ok: false, httpStatus: 0, timeMs: 0, text: null, error: String(err?.message || err) };
   }
 
   let status;
+  let error = res.ok ? null : res.error;
+  let note;
   if (!res.ok) {
     status = isBackendKnownFlaky(probe.name) ? "fail-backend-known" : "fail-server";
   } else {
-    status = res.timeMs > SLOW_MS ? "slow" : "pass";
+    // V3-N1/C-2 follow-up: records >= 1 is necessary but NOT sufficient — see
+    // full-tools-probe.mjs's SUBSTANCE_TABLE doc comment. A genuine
+    // `records: 0` graceful-empty response never reaches this gate
+    // (unchanged pre-existing behavior). `probe.catalogOpId` is REQUIRED on
+    // every TIER3_SAFE_SAMPLE entry (tool-probes.mjs) — if a future entry
+    // omits it, checkScraperSubstance() fails loudly (①-mcp-code-equivalent:
+    // "no SUBSTANCE_TABLE row"), never silently skips the gate.
+    const records = extractRecordsCount(res.text);
+    if (records !== null && records >= 1) {
+      const substance = checkScraperSubstance(probe.catalogOpId, res.text);
+      if (!substance.ok) {
+        // Mirrors Layer D's ③-backend/P2 classification in this file's own
+        // vocabulary: "fail-backend" already means "Novada backend issue,
+        // not a regression in this repo, never fails the run" (see Tier-1's
+        // classifyExecuted doc comment) — NEVER downgraded to
+        // "fail-backend-known" (that bucket is for isBackendKnownFlaky
+        // platforms only; duckduckgo is deliberately NOT on that list — see
+        // tool-probes.mjs's BACKEND_KNOWN_FLAKY_PLATFORMS — so this can
+        // never be silently swept into the known-flaky/no-action bucket).
+        status = "fail-backend";
+        error = substance.reason;
+        note = `substance check failed (records:${records} but no usable data) — see error`;
+      } else {
+        status = res.timeMs > SLOW_MS ? "slow" : "pass";
+      }
+    } else {
+      status = res.timeMs > SLOW_MS ? "slow" : "pass";
+    }
   }
 
   return [
@@ -295,7 +343,8 @@ async function runTier3() {
       status,
       httpStatus: res.httpStatus,
       timeMs: res.timeMs,
-      error: res.ok ? null : res.error,
+      error,
+      ...(note ? { note } : {}),
     },
   ];
 }
@@ -442,17 +491,35 @@ async function main() {
   process.exit(exitCode);
 }
 
-main().catch((err) => {
-  // MONITOR_QUIET applies here too (HIGH fix, code review 2026-07-24): an
-  // un-try/caught `listTools()` failure (endpoint down) used to bypass quiet
-  // mode entirely, printing a raw stack trace / HTTP status / upstream error
-  // text straight to this repo's PUBLIC Actions log at exactly the worst
-  // moment (an outage). In quiet mode this now prints ONLY the same
-  // non-revealing completion line normal quiet-mode completion uses.
-  if (QUIET) {
-    console.error(`[all-tools-smoke] complete: 0 probed, exit 1`);
-  } else {
-    console.error(`[all-tools-smoke] FATAL: ${err?.stack || err}`);
+// Only auto-run main() when this file is executed directly (`node
+// all-tools-smoke.mjs`), never when imported — matches full-tools-probe.mjs's
+// EXACT pattern (V3-N1/C-2 follow-up, 2026-09-03), so an offline self-test
+// can import runTier3()/classifyExecuted()/etc. without triggering a live
+// run (which would otherwise throw on a missing NOVADA_TEST_KEY or make real
+// network calls).
+const isDirectRun = (() => {
+  try {
+    return import.meta.url === `file://${process.argv[1]}`;
+  } catch {
+    return false;
   }
-  process.exit(1);
-});
+})();
+
+if (isDirectRun) {
+  main().catch((err) => {
+    // MONITOR_QUIET applies here too (HIGH fix, code review 2026-07-24): an
+    // un-try/caught `listTools()` failure (endpoint down) used to bypass quiet
+    // mode entirely, printing a raw stack trace / HTTP status / upstream error
+    // text straight to this repo's PUBLIC Actions log at exactly the worst
+    // moment (an outage). In quiet mode this now prints ONLY the same
+    // non-revealing completion line normal quiet-mode completion uses.
+    if (QUIET) {
+      console.error(`[all-tools-smoke] complete: 0 probed, exit 1`);
+    } else {
+      console.error(`[all-tools-smoke] FATAL: ${err?.stack || err}`);
+    }
+    process.exit(1);
+  });
+}
+
+export { runTier1, runTier2, runTier3, classifyExecuted, assertExecutable, loadBaseline, writeBaseline };
