@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# G-1 fix (audit 2026-09-02, findings/G-security-billing.md): local pre-commit
+# secret scan, so the credential-in-history class documented in G-1 (commit
+# a645022, 2026-07-06 redacted real Novada API keys, a Browser-WS credential,
+# proxy user/pass, and third-party key fragments from 31 tracked files) is
+# caught BEFORE a commit is made, not just at CI (.github/workflows/gitleaks.yml)
+# after it's already pushed. Same tool, same config (.gitleaks.toml) as CI —
+# a developer sees the identical verdict locally that CI would give.
+#
+# This repo has no root package.json (it's a monorepo of independent
+# npm-package/ and hosted-server/vercel/ projects), so this is a plain git
+# hook rather than a husky-managed one — husky's install step assumes a
+# single root package.json with a `prepare` script, which doesn't fit this
+# layout. Enable it once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# This is deliberately NOT auto-wired (no `git config` call runs on its own,
+# no postinstall script edits your global git config) — REDLINE: this repo
+# does not modify a developer's local git configuration without their explicit
+# opt-in. Uninstall: `git config --unset core.hooksPath`.
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "[pre-commit] gitleaks not found on PATH — skipping secret scan." >&2
+  echo "[pre-commit] Install: brew install gitleaks (or see https://github.com/gitleaks/gitleaks#installing)" >&2
+  echo "[pre-commit] CI (.github/workflows/gitleaks.yml) will still catch this commit's diff if you push it — but don't rely on that." >&2
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+
+if ! gitleaks protect --staged --no-banner -c "${repo_root}/.gitleaks.toml" -s "${repo_root}"; then
+  echo "" >&2
+  echo "[pre-commit] gitleaks found a potential secret in your STAGED changes — commit blocked." >&2
+  echo "[pre-commit] If this is a real credential: remove it, rotate it if it was ever committed before, and use an env var / placeholder instead." >&2
+  echo "[pre-commit] If this is a genuine false positive (e.g. a new documented test placeholder): add a narrowly-scoped, anchored entry to .gitleaks.toml's [allowlist].regexes — do not disable a whole rule." >&2
+  exit 1
+fi

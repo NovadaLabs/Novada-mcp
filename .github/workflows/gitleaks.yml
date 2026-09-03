@@ -1,0 +1,44 @@
+name: gitleaks
+
+# G-1 fix (audit 2026-09-02, findings/G-security-billing.md): CI secret-scan
+# gate so the credential-in-history class documented in G-1 (commit a645022,
+# 2026-07-06 redacted real Novada API keys, a Browser-WS credential, proxy
+# user/pass, and third-party key fragments from 31 tracked files) cannot
+# recur. Repo NovadaLabs/Novada-mcp is PUBLIC (NOV-809), so gitleaks-action
+# runs license-free here — no GITLEAKS_LICENSE secret required. If this repo
+# is ever made private, add that secret (see gitleaks-action's own README).
+#
+# Scope is the DIFF/TREE, not full git history: on `push` this scans the
+# commits just pushed; on `pull_request` it scans the PR's diff against its
+# base. Scanning the ALREADY-KNOWN a645022 history is a separate, owner-gated
+# decision (rewrite history vs. accept-and-rotate — G-1 fix #2) tracked as a
+# TODO in .gitleaks.toml's header comment; wiring a full-history scan in here
+# today would either permanently fail on that known/already-handled leak or
+# require a baseline that hides the exact class this gate exists to catch.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks-action diffs against the PR base / previous push — needs
+          # more than the default single-commit shallow clone to compute that.
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # No GITLEAKS_LICENSE — see header comment. gitleaks-action auto-
+        # discovers .gitleaks.toml at the repo root (this repo's narrow
+        # allowlist for known documentation/test placeholders).

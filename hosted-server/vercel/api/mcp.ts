@@ -732,9 +732,39 @@ async function validateToken(token: string, env: Env): Promise<TokenInfo & { ver
 }
 
 /**
+ * Cheap per-IP PRE-AUTH rate limit (G-5 / V2-N4). Returns true if the caller's
+ * IP has already made RATE_LIMIT_PER_MIN requests this minute, BEFORE any of:
+ *   - validateToken's KV read + live upstream `POST /v1/wallet/balance` probe
+ *     (mcp.ts ~line 707), which a fresh format-valid-but-unknown random token
+ *     burns on every call (the 90s verdict cache only absorbs repeats of the
+ *     SAME token — unique dummy keys are trivial to generate);
+ *   - emitGuardRejection's AES-encrypt + Supabase telemetry emit, which V2-N4
+ *     found ALSO ran pre-rate-limit on every rejected attempt.
+ * This is intentionally the cheapest possible gate: one atomic KV incr (same
+ * mechanics as rateLimitExceeded below, separate `pra:` key namespace so this
+ * bucket is never starved by, or starves, the post-auth one) and — critically
+ * — NO telemetry emit on rejection. Emitting telemetry here would just move
+ * the amplification target rather than closing it.
+ * Same per-minute window and default threshold as rateLimitExceeded (both
+ * read RATE_LIMIT_PER_MIN); this is a cost breaker, not a fairness policy, so
+ * sharing the default is deliberate rather than requiring a second env var.
+ */
+async function preAuthRateLimitExceeded(ip: string, env: Env): Promise<boolean> {
+  if (!ip || ip === "unknown") return false;
+  const limit = parseInt(env.RATE_LIMIT_PER_MIN || "60", 10);
+  const bucket = Math.floor(Date.now() / 60_000);
+  const key = `pra:${ip}:${bucket}`;
+  const count = await kv.incr(key);
+  if (count === 1) await kv.expire(key, 120);
+  return count > limit;
+}
+
+/**
  * Per-IP rate limit using Vercel KV. Returns true if rate exceeded → 429.
  * Keyed by IP + current minute bucket. TTL 2 min for KV GC headroom.
  * Defaults to 60 calls/min/IP (generous — legitimate agents won't hit).
+ * Runs AFTER auth (validateToken) — see preAuthRateLimitExceeded above for
+ * the cheap gate that runs BEFORE auth to bound unmetered pre-auth cost.
  */
 async function rateLimitExceeded(ip: string, env: Env): Promise<boolean> {
   if (!ip || ip === "unknown") return false;
@@ -1900,9 +1930,28 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // IP in telemetry (see the roundtable doc §4 privacy redline).
   const userAgent = request.headers.get("user-agent");
 
-  // Auth — validate the token FIRST and reject with 401 BEFORE touching KV.
-  // An unauthenticated request must not be able to spend a KV read/incr (the
-  // rate-limit counter below), so this runs ahead of rateLimitExceeded.
+  // G-5 / V2-N4: cheap per-IP PRE-AUTH gate — resolved and checked BEFORE
+  // token extraction, BEFORE validateToken's KV read + live upstream probe,
+  // and BEFORE every emitGuardRejection telemetry emit below. Without this, a
+  // client sending unlimited unique format-valid dummy keys from one IP could
+  // burn one upstream wallet-balance probe + one telemetry emit per request,
+  // completely unmetered — the post-auth rateLimitExceeded() further down
+  // never even sees the request because auth rejects it first. `ip` is
+  // resolved here (rather than just before the post-auth limiter, as before)
+  // specifically so this gate can run first; the post-auth limiter reuses the
+  // same value further down instead of re-resolving it.
+  const ip = getClientIp(request);
+  if (await preAuthRateLimitExceeded(ip, env)) {
+    return jsonError(429, "RATE_LIMITED",
+      `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
+      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.",
+      { "retry-after": "60" });
+  }
+
+  // Auth — validate the token and reject with 401 before any per-key work
+  // (dispatch, quota, upstream calls). The cheap per-IP counter above is the
+  // only KV op allowed to run ahead of this; validateToken's own KV read +
+  // live upstream probe still runs after it, bounded by that counter.
   // `token` is `let`-bound and REBOUND (never renamed) once an OAuth access
   // token resolves to the caller's real Novada key below — every downstream
   // consumer (validateToken, tokenHash, buildServer, the `apiKey` trim further
@@ -1958,16 +2007,19 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   }
 
   // Per-IP rate limit — slow down abusive loops from an authenticated key.
-  // Identity comes from a Vercel-trusted IP header (never spoofable raw XFF).
-  const ip = getClientIp(request);
+  // `ip` was already resolved above (Vercel-trusted header, never spoofable
+  // raw XFF) for the pre-auth gate; reused here rather than re-resolved.
   if (await rateLimitExceeded(ip, env)) {
     // rate_limited guard-site emit. Outcome is deliberately "GATEWAY_RATE_LIMITED"
     // (NOT a NovadaErrorCode) — distinct from a target-side 429 an upstream tool
     // might raise, per the roundtable doc §6's explicit "网关429 vs target 429" split.
     await emitGuardRejection({ requestId, token, outcome: "GATEWAY_RATE_LIMITED", rejectionStage: "rate_limited", authMethod, userAgent });
+    // G-3: Retry-After so standard HTTP clients/SDK backoff logic can act on
+    // it, not just the human-readable retry guidance in the message text.
     return jsonError(429, "RATE_LIMITED",
       `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
-      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.");
+      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.",
+      { "retry-after": "60" });
   }
 
   // Upstream Novada API key — the customer's own key, and ONLY their own key

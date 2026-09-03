@@ -1,0 +1,57 @@
+title = "novada-mcp gitleaks config"
+
+# G-1 fix (audit 2026-09-02, findings/G-security-billing.md): CI secret-scan
+# gate so the credential-in-history class documented in G-1 (commit a645022,
+# 2026-07-06) cannot recur. This config runs against the DIFF/TREE (working
+# tree + PR diff) — NOT full git history. Scanning the full history for the
+# already-known a645022 leak is a separate, owner-gated decision (rewrite
+# history vs. accept-and-rotate — see G-1's fix #2); wiring that in here would
+# either (a) immediately fail every future CI run on a known, already-handled
+# leak, or (b) require baking in a baseline that hides the exact commit this
+# gate exists to prevent recurrence of. TODO(owner): once the G-1 history
+# decision is made, add a scheduled `gitleaks git` full-history job (or a
+# `--baseline-path` pinned to the current tree) as a SEPARATE workflow.
+#
+# [extend] pulls in gitleaks' full built-in rule set (curl-auth-header,
+# generic-api-key, stripe-access-token, aws, gcp, the works) — this file only
+# ADDS a narrow allowlist for known documentation/test placeholders that were
+# false-positiving in this exact tree as of 2026-09-02 (verified: `gitleaks
+# dir . --no-banner` with no config = 114 findings, all of the shapes below;
+# G-security-billing.md's own audit independently verified the tree is CLEAN
+# of real key-shaped literals). Every entry below is anchored (`^...$`) to the
+# EXACT placeholder string, not a loose substring — a real secret that merely
+# CONTAINS one of these words is never allowlisted by accident.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known documentation/test placeholders (not real credentials) — see comment above"
+regexTarget = "match"
+regexes = [
+  # Doc examples: curl snippets in npm-package/docs/novada-api/* and
+  # hosted-server/*/README.md instructing the READER to substitute their own
+  # key — the literal string IS the placeholder, never a real value.
+  '''-H "Authorization: Bearer YOUR_API_KEY"''',
+  '''-u "your_username:your_api_key"''',
+  # hosted-server/{vercel,worker}/README.md example token in a curl snippet.
+  '''token=sk-eu-novada-test123''',
+  # hosted-server/vercel/test/oauth.test.mjs — deliberately-wrong test fixture
+  # values (asserting REJECTION) and a short/invalid-shaped AES key constant.
+  '''encKeyB64: SHORT_KEY_B64''',
+  '''api_key: "wrong-key-1234567890"''',
+  # hosted-server/vercel/test/telemetry.test.mjs — named test constant, not a
+  # literal key value (VALID_AES_KEY_B64 is itself a base64-encoded all-7s
+  # buffer defined earlier in the same test file for AES round-trip tests).
+  '''process.env.NOVADA_LOG_IDENTITY_AES_KEY = VALID_AES_KEY_B64;''',
+  # npm-package/tests/tools/capture_apikey.test.ts — Stripe-shaped dummy
+  # values used only to test the maskSecretsDeep() redaction helper itself.
+  '''api_key: "sk_live_abcd1234"''',
+  '''sk_live_newkey5678"''',
+  # monitoring/smoke/full-tools-probe.mjs — synthetic smoke-test fixture.
+  '''password: "placeholder1234"''',
+  # npm-package/tests/tools/round-3f-gap.test.ts — named test constant.
+  '''API_KEY = "test-key-round-3f"''',
+  # hosted-server/docs/2026-06-11-deploy-meeting-blockers.html — internal
+  # deploy-runbook curl snippet instructing the reader to substitute their key.
+  '''Authorization: Bearer sk-eu-novada-YOUR_KEY''',
+]

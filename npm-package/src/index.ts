@@ -28,7 +28,7 @@ import {
   validateSearchFeedbackParams,
 } from "./tools/index.js";
 import type { ProgressReporter } from "./tools/crawl.js";
-import { classifyError } from "./_core/errors.js";
+import { classifyError, redactSecrets } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { TOOLS, dispatch } from "./core.js";
 import { PLATFORM_SCRAPER_TOOLS } from "./tools/platform_scrapers.js";
@@ -369,7 +369,12 @@ class NovadaMCPServer {
         if (autoCreds) {
           process.env.NOVADA_PROXY_USER = autoCreds.user;
           process.env.NOVADA_PROXY_PASS = autoCreds.pass;
-          console.error(`[novada] Auto-provisioned proxy credentials (account: ${autoCreds.user})`);
+          // G-8: autoCreds.user is a Novada proxy sub-account username (Novada
+          // format `*-zone-*`, e.g. "customer-abc-zone-res") — the codebase's
+          // own redactSecrets() rule #4 (errors.ts) classifies that shape as a
+          // secret. Route it through the same choke-point every other error/log
+          // path uses instead of interpolating it raw into stderr.
+          console.error(`[novada] Auto-provisioned proxy credentials (account: ${redactSecrets(autoCreds.user)})`);
         }
       } catch {
         // Non-fatal: proxy tools will show a configuration error when invoked
