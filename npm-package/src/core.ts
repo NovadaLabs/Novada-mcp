@@ -502,8 +502,8 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
     name: "novada_ip_whitelist",
     description: `Manage the proxy IP whitelist — add/list/delete/remark — for Residential (1), Unlimited (4), and Static ISP (5).
 
-**Actions:** "add" (WRITE, gated by approval_token), "list" (read-only), "del" (WRITE, gated by approval_token), "remark" (update a note, ungated).
-**Behavior for "add"/"del":** call once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — this does NOT hit the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
+**Actions:** "add" (WRITE, gated by approval_token), "list" (read-only), "del" (WRITE, gated by approval_token), "remark" (WRITE, gated by approval_token).
+**Behavior for "add"/"del"/"remark":** call once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — this does NOT hit the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
 **Required:** action, product (1=Residential, 4=Unlimited, 5=Static ISP).
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
     inputSchema: zodToMcpSchema(IpWhitelistParamsSchema),
