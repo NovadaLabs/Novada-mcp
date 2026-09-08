@@ -1396,6 +1396,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // BEFORE the call so abusive loops can't burn free credits, but:
     //   • CAP_EXEMPT_TOOLS (setup/discover/account family) are never counted and
     //     never blocked — a cap-exhausted key can always self-diagnose.
+    //   • An approval-gate PREVIEW call (no approval_token on a gated tool/action —
+    //     see isApprovalGatePreviewCall in ./_plan.ts) is also never counted: it
+    //     does zero upstream work, only the matching EXECUTE call is charged.
     //   • Over the cap, paid accounts pass: orders-derived plan is the primary
     //     signal (lazily resolved, KV-cached), positive balance the OR-fallback
     //     (reusing the balance validateToken already fetched when available).
@@ -1406,6 +1409,13 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       toolName: name,
       monthlyQuota,
       ctxBalance: ctx.balance,
+      // MEDIUM fix (2026-09 audit, ADVERSARIAL-INTEGRATION.md): argsObj lets
+      // enforceGatewayCap detect an approval-gate PREVIEW call (no
+      // approval_token on a gated tool/action) and skip charging it — see
+      // isApprovalGatePreviewCall in ./_plan.ts. Without this, one logical
+      // write (proxy_account_create etc.) cost 2 quota units and a caller
+      // with exactly 1 unit left could get an approved-but-unexecutable write.
+      args: argsObj,
       deps: {
         decrementQuota: (plan) => decrementQuota(ctx.tokenHash, env, plan),
         resolvePlan: () => resolvePlan(apiKey, ctx.tokenHash),
