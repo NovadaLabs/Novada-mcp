@@ -8,11 +8,20 @@ import type { ToolCredentials } from "../utils/credentials.js";
 // TYPED FIELDS for programmatic TS callers (SearchResult.snippet, ExtractResult.content,
 // ResearchResult.extracted[].content, CrawlPage.content) — those callers read a typed
 // string field, not an LLM prompt, so the marker is pure noise/corruption there
-// (e.g. `result.content.includes(expectedText)` breaks). Every regex-extracted field
-// below that can carry fetched text is run through unwrapUntrusted() so the SDK's
-// public contract is uniformly marker-free while the MCP response these methods
-// call under the hood stays wrapped (see the awaited `raw`/`formatted` variables,
-// which are never mutated).
+// (e.g. `result.content.includes(expectedText)` breaks). Every field below that can
+// carry fetched text is run through unwrapUntrusted() so the SDK's public contract is
+// uniformly marker-free while the MCP response these methods call under the hood
+// stays wrapped.
+//
+// HIGH-1 (2026-09-03 adversarial integration pass): the ORIGINAL version of this
+// unwrap only covered 4 of the (then) 7 exposed methods — search/extract/crawl/
+// research — and this comment's "uniformly marker-free" claim was FALSE: scrape()'s
+// `formatted` field (markdown branch — scrape.ts wraps the whole table) and verify()'s
+// `raw` field (verify.ts's pushSourceList wraps every evidence snippet) both returned
+// the wrapped MCP string verbatim. Class-swept against every method NovadaClient
+// exposes (see marker-leak.test.ts's class-driven walker): search/extract/batchExtract/
+// crawl/research/map/scrape/verify/proxy. map() and proxy() never touch fetched text
+// (urls[] / locally-constructed proxy fields) — nothing to unwrap there.
 import { unwrapUntrusted } from "../utils/untrusted.js";
 import type {
   NovadaClientConfig, SearchResult, ExtractResult, CrawlPage,
@@ -291,7 +300,13 @@ export class NovadaClient {
         try { records = JSON.parse(jsonMatch[1]); } catch { /* keep empty */ }
       }
 
-      return { platform, operation, records, formatted };
+      // G-2 follow-up (HIGH-1, 2026-09 audit): scrape.ts's "markdown" format
+      // branch wraps its table with wrapUntrusted (json/csv/html/toon are
+      // deliberately NOT wrapped — machine-consumption contract, see
+      // scrape.ts's own comment); `formatted` is a documented public field
+      // (sdk/types.ts) callers read directly, same class as content/snippet
+      // below. unwrapUntrusted is a no-op for the non-markdown formats.
+      return { platform, operation, records, formatted: unwrapUntrusted(formatted) };
     });
   }
 
@@ -311,7 +326,13 @@ export class NovadaClient {
       const confidenceMatch = raw.match(/^confidence:\s*(\d+)/m);
       const confidence = parseInt(confidenceMatch?.[1] ?? "0", 10);
 
-      return { claim, verdict, confidence, raw };
+      // G-2 follow-up (HIGH-1, 2026-09 audit): verify.ts's pushSourceList wraps
+      // every evidence snippet it renders into the output with wrapUntrusted —
+      // `raw` is documented (sdk/types.ts) as "Full formatted output from
+      // novada_verify" and returned VERBATIM to typed TS callers, so it leaked
+      // the "<!-- BEGIN EXTERNAL CONTENT -->" marker uniformly with every other
+      // SDK field. Strip it here, same as every other unwrap in this file.
+      return { claim, verdict, confidence, raw: unwrapUntrusted(raw) };
     });
   }
 

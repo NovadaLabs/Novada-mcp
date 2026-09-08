@@ -74,7 +74,7 @@ export interface ScrapeResult {
   operation: string;
   /** Parsed records array (available when format='json') */
   records: Record<string, unknown>[];
-  /** Formatted output string (markdown/csv/html/xlsx depending on format option) */
+  /** Formatted output string (markdown/csv/html/xlsx depending on format option). Marker-free — see sdk/index.ts's G-2 comment. */
   formatted: string;
 }
 
@@ -83,6 +83,6 @@ export interface VerifyResult {
   verdict: "supported" | "unsupported" | "contested" | "insufficient_data";
   /** 0 = completely uncertain, 100 = all evidence agrees */
   confidence: number;
-  /** Full formatted output from novada_verify */
+  /** Full formatted output from novada_verify. Marker-free — see sdk/index.ts's G-2 comment. */
   raw: string;
 }

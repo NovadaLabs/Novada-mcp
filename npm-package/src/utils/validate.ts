@@ -191,6 +191,80 @@ const EXTRA_KNOWN_ALIASES: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
+ * Tools whose Zod schema actually wires camelCase aliasing — either via
+ * `withCamelCaseAliases()` (tools/types.ts, tools/platform_scraper.ts's
+ * `createPlatformScraperTool()` factory) or an equivalent bespoke
+ * `z.preprocess` alias step (`ExtractParamsSchema`, `BrowserParamsSchema`,
+ * both in tools/types.ts). ONLY for a tool in this set is `toCamelCase(key)`
+ * of a declared snake_case key an ACTUALLY-ACCEPTED parameter — not just a
+ * mechanical guess.
+ *
+ * F-2 false-negative fix (2026-09-03 ledger-closure audit, finding #5):
+ * `withCamelCaseAliases` wraps a schema in `z.preprocess`, which is INVISIBLE
+ * to `inputSchema.properties` (the JSON Schema this module reads — see that
+ * function's own doc comment in tools/types.ts: "the camelCase keys never
+ * appear in the agent-facing JSON schema"). The previous version of this
+ * module ran `toCamelCase()` over EVERY declared key on EVERY tool
+ * regardless of whether that tool's schema actually wires aliasing —
+ * accurate by coincidence for aliased tools, silently wrong for every other
+ * tool with a multi-word snake_case key. Concretely:
+ * `novada_research({startDate: "2024-01-01"})` produced ZERO warning even
+ * though `ResearchParamsSchema` (tools/types.ts) is a bare `z.object(...)`
+ * with no `withCamelCaseAliases` wrapper, so `startDate` is NOT a real
+ * parameter — Zod's non-strict default silently DROPS it and the call
+ * quietly does nothing.
+ *
+ * Investigated (2026-09 fix pass): every current `withCamelCaseAliases` /
+ * bespoke-preprocess call site's alias map covers 100% of that schema's
+ * declared multi-word snake_case keys (no partial coverage found anywhere in
+ * tools/types.ts or tools/platform_scraper.ts today) — so "does this tool
+ * alias at all" is an accurate, verified proxy for "is toCamelCase(key)
+ * known for this tool", and a per-tool allowlist (rather than a hand-kept
+ * per-key table) is the minimal correct fix.
+ *
+ * This module cannot import the real alias maps directly — they live inside
+ * z.preprocess closures in tools/types.ts / tools/platform_scraper.ts, not on
+ * inputSchema.properties, and pulling them out into an importable shape is
+ * outside this fix's file-ownership scope. So membership here is a hand-swept
+ * enumeration, verified against every current alias call site — NOT
+ * self-verifying the way reading inputSchema.properties directly would be.
+ * If a schema gains/loses camelCase aliasing, THIS LIST must be updated in
+ * lockstep or a future tool will silently regress back into this class of
+ * false-negative (or, less dangerously, false-positive). A stronger
+ * structural fix would export the alias maps themselves from tools/types.ts
+ * for this module to read — flagged here for a follow-up pass.
+ */
+const CAMELCASE_ALIASED_TOOLS: ReadonlySet<string> = new Set([
+  "novada_search", // SearchParamsSchema — withCamelCaseAliases
+  "novada_extract", // ExtractParamsSchema — bespoke preprocess (maxChars/waitFor/waitMs)
+  "novada_crawl", // CrawlParamsSchema — withCamelCaseAliases
+  "novada_map", // MapParamsSchema — withCamelCaseAliases
+  "novada_site_copy", // SiteCopyParamsSchema — withCamelCaseAliases
+  "novada_proxy", // ProxyParamsSchema — withCamelCaseAliases
+  "novada_browser", // BrowserParamsSchema — bespoke preprocess (sessionId at top level)
+  "novada_scrape", // ScrapeParamsSchema — withCamelCaseAliases (taskId)
+  "novada_unblock", // UnblockParamsSchema — withCamelCaseAliases; HIDDEN_ALIASES-only today
+  // The 15 novada_scrape_<platform> tools all share ONE factory
+  // (createPlatformScraperTool in tools/platform_scraper.ts) that wraps its
+  // generated ParamsSchema in withCamelCaseAliases({ taskId: "task_id" }).
+  "novada_scrape_amazon",
+  "novada_scrape_bing",
+  "novada_scrape_duckduckgo",
+  "novada_scrape_facebook",
+  "novada_scrape_github",
+  "novada_scrape_google",
+  "novada_scrape_instagram",
+  "novada_scrape_linkedin",
+  "novada_scrape_perplexity",
+  "novada_scrape_shein",
+  "novada_scrape_tiktok",
+  "novada_scrape_walmart",
+  "novada_scrape_x",
+  "novada_scrape_yandex",
+  "novada_scrape_youtube",
+]);
+
+/**
  * Diffs an incoming tool call's argument keys against the tool's OWN
  * declared JSON-Schema `inputSchema.properties` — already the single source
  * of truth for that tool's real Zod schema (see utils/mcp-schema.ts's
@@ -205,8 +279,10 @@ const EXTRA_KNOWN_ALIASES: Readonly<Record<string, readonly string[]>> = {
  *
  * Returns undefined when there is nothing to warn about: no args, the tool
  * isn't in `tools` (e.g. a hidden alias absent from the visible TOOLS list —
- * nothing declared to diff against), or every key is known (including its
- * mechanical camelCase alias, or an entry in EXTRA_KNOWN_ALIASES).
+ * nothing declared to diff against), or every key is known — either the
+ * declared key itself, its mechanical camelCase alias IF the tool is in
+ * CAMELCASE_ALIASED_TOOLS (its schema actually accepts that alias), or an
+ * entry in EXTRA_KNOWN_ALIASES.
  */
 export function computeUnknownKeyWarning(
   toolName: string,
@@ -223,7 +299,15 @@ export function computeUnknownKeyWarning(
 
   const declared = Object.keys(props as Record<string, unknown>);
   const known = new Set<string>(declared);
-  for (const key of declared) known.add(toCamelCase(key));
+  // F-2 fix: only credit the mechanical camelCase spelling as "known" for a
+  // tool whose schema ACTUALLY wires camelCase aliasing — see
+  // CAMELCASE_ALIASED_TOOLS's doc comment. For every other tool, a
+  // camelCase key is unknown unless it's the tool's real declared key (rare —
+  // e.g. a param whose canonical name has no underscore) or listed in
+  // EXTRA_KNOWN_ALIASES below.
+  if (CAMELCASE_ALIASED_TOOLS.has(toolName)) {
+    for (const key of declared) known.add(toCamelCase(key));
+  }
   for (const extra of EXTRA_KNOWN_ALIASES[toolName] ?? []) known.add(extra);
 
   const unknown = argKeys.filter((k) => !known.has(k));

@@ -369,7 +369,7 @@ export const TOOL_REGISTRY: readonly ToolMeta[] = [
   },
   {
     name: "novada_ip_whitelist",
-    description: "Manage the proxy IP whitelist (add/list/del/remark) for Residential (1), Unlimited (4), and Static ISP (5) products; add/del are writes gated by a two-step approval_token (preview first, then re-call with the token). remark is ungated.",
+    description: "Manage the proxy IP whitelist (add/list/del/remark) for Residential (1), Unlimited (4), and Static ISP (5) products; add/del/remark are writes gated by a two-step approval_token (preview first, then re-call with the token).",
     category: "Account & Billing",
     status: "active",
     title: "IP Whitelist Manager",

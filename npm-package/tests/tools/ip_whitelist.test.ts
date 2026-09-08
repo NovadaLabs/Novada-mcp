@@ -157,3 +157,68 @@ describe("novada_ip_whitelist — approval-token gate on WRITE actions (F2-2/G-7
     expect(mockedPost).not.toHaveBeenCalled();
   });
 });
+
+// ─── approval-token gate on "remark" (2026-09-03 ledger-closure finding #4) ──
+//
+// "remark" was shipped calling devApiPost directly with NO evaluateApprovalGate
+// while add/del WERE gated — a class-miss (this test file's own add/del suite
+// above proves the pattern was already established and tested; remark simply
+// never got it). Mirrors the add/del test shapes exactly so a future WRITE
+// action added to this tool without the gate fails the same way.
+describe("novada_ip_whitelist — approval-token gate on 'remark' (SEC-consistency fix)", () => {
+  it("RED: confirm:true on 'remark' with no prior approval_token is REJECTED and NEVER reaches devApi", async () => {
+    await expect(
+      dispatch(
+        "novada_ip_whitelist",
+        { action: "remark", product: "1", id: "entry-123", remark: "updated note", confirm: true },
+        "caller-key-wl",
+      ),
+    ).rejects.toThrow();
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  it("'remark' without any gate field returns a preview + approval_token, no API call", async () => {
+    const out = await dispatch("novada_ip_whitelist", { action: "remark", product: "1", id: "entry-123", remark: "note" });
+    expect(mockedPost).not.toHaveBeenCalled();
+    const obj = JSON.parse(out) as { status: string; approval_token?: string };
+    expect(obj.status).toBe("confirmation_required");
+    expect(typeof obj.approval_token).toBe("string");
+    expect((obj.approval_token ?? "").length).toBeGreaterThan(0);
+  });
+
+  it("GREEN: 'remark' preview -> approval_token -> execute with IDENTICAL params reaches devApi", async () => {
+    const payload = { action: "remark" as const, product: "1" as const, id: "entry-123", remark: "note" };
+    const preview = await dispatch("novada_ip_whitelist", { ...payload }, "caller-key-wl");
+    const { approval_token } = JSON.parse(preview) as { approval_token: string };
+    expect(approval_token).toBeTruthy();
+    expect(mockedPost).not.toHaveBeenCalled();
+
+    mockedPost.mockResolvedValueOnce({ code: 0, msg: "ok", data: {} });
+    const executed = await dispatch("novada_ip_whitelist", { ...payload, approval_token }, "caller-key-wl");
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+    const obj = JSON.parse(executed) as { status: string };
+    expect(obj.status).toBe("updated");
+
+    const call = mockedPost.mock.calls.at(-1);
+    const opts = call![2] as { apiKey?: string } | undefined;
+    expect(opts?.apiKey).toBe("caller-key-wl");
+  });
+
+  it("RED: a token minted for 'remark' with one remark text is rejected when the execute call changes the remark", async () => {
+    const preview = await dispatch(
+      "novada_ip_whitelist",
+      { action: "remark", product: "1", id: "entry-123", remark: "original" },
+      "caller-key-wl",
+    );
+    const { approval_token } = JSON.parse(preview) as { approval_token: string };
+
+    await expect(
+      dispatch(
+        "novada_ip_whitelist",
+        { action: "remark", product: "1", id: "entry-123", remark: "tampered", approval_token },
+        "caller-key-wl",
+      ),
+    ).rejects.toThrow();
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+});

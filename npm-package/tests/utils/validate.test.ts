@@ -9,6 +9,7 @@ import {
   type ToolLike,
 } from "../../src/utils/validate.js";
 import { SearchParamsSchema, ExtractParamsSchema, VerifyParamsSchema, CrawlParamsSchema } from "../../src/tools/types.js";
+import { TOOLS } from "../../src/core.js";
 
 function zodErrorFrom(schema: z.ZodTypeAny, input: unknown): ZodError {
   try {
@@ -179,6 +180,23 @@ const FAKE_TOOLS: ToolLike[] = [
       properties: { url: {}, max_pages: {}, select_paths: {}, exclude_paths: {} },
     },
   },
+  {
+    // ResearchParamsSchema (tools/types.ts) is a BARE z.object — no
+    // withCamelCaseAliases wrapper — so a camelCase spelling of any of these
+    // multi-word keys is NOT a real accepted parameter.
+    name: "novada_research",
+    inputSchema: {
+      properties: { question: {}, query: {}, depth: {}, focus: {}, start_date: {}, end_date: {}, time_range: {} },
+    },
+  },
+  {
+    // ScrapeParamsSchema (tools/types.ts) IS wrapped in
+    // withCamelCaseAliases({ taskId: "task_id" }) — taskId is a real alias.
+    name: "novada_scrape",
+    inputSchema: {
+      properties: { platform: {}, operation: {}, params: {}, limit: {}, task_id: {}, format: {} },
+    },
+  },
 ];
 
 describe("computeUnknownKeyWarning (F-2)", () => {
@@ -219,6 +237,111 @@ describe("computeUnknownKeyWarning (F-2)", () => {
     const warning = computeUnknownKeyWarning("novada_search", { query: "x", foo: 1, bar: 2 }, FAKE_TOOLS);
     expect(warning).toContain("'foo'");
     expect(warning).toContain("'bar'");
+  });
+
+  // ─── F-2 false-negative fix (2026-09-03 ledger-closure, finding #5) ────────
+  //
+  // withCamelCaseAliases wraps a schema in z.preprocess, invisible to
+  // inputSchema.properties — so the OLD "toCamelCase every declared key,
+  // unconditionally" guess was accurate only for tools that actually wire
+  // aliasing. novada_research({startDate}) is the ledger's concrete example:
+  // ResearchParamsSchema has NO withCamelCaseAliases wrapper, so startDate is
+  // not a real parameter and Zod's non-strict default silently drops it —
+  // this warning is the ONLY signal the caller gets that the param had zero
+  // effect.
+  it("WARNS on an unaliased camelCase key (novada_research startDate — ResearchParamsSchema has no camelCase aliasing, Zod silently drops it)", () => {
+    const warning = computeUnknownKeyWarning(
+      "novada_research",
+      { question: "What year did this happen?", startDate: "2024-01-01" },
+      FAKE_TOOLS,
+    );
+    expect(warning).toBeDefined();
+    expect(warning).toContain("'startDate'");
+    expect(warning).toContain("novada_research");
+  });
+
+  it("WARNS on every unaliased camelCase key at once (endDate, timeRange — same tool, same root cause)", () => {
+    const warning = computeUnknownKeyWarning(
+      "novada_research",
+      { question: "What year did this happen?", endDate: "2024-12-31", timeRange: "year" },
+      FAKE_TOOLS,
+    );
+    expect(warning).toBeDefined();
+    expect(warning).toContain("'endDate'");
+    expect(warning).toContain("'timeRange'");
+  });
+
+  it("does NOT false-positive on a real camelCase alias (novada_scrape taskId — ScrapeParamsSchema IS wrapped in withCamelCaseAliases)", () => {
+    const warning = computeUnknownKeyWarning(
+      "novada_scrape",
+      { platform: "amazon.com", operation: "product_by_asin", taskId: "sdk-task-123" },
+      FAKE_TOOLS,
+    );
+    expect(warning).toBeUndefined();
+  });
+
+  it("still WARNS on a genuinely unknown key on an aliased tool (taskId known, bogus is not)", () => {
+    const warning = computeUnknownKeyWarning(
+      "novada_scrape",
+      { platform: "amazon.com", operation: "product_by_asin", taskId: "sdk-task-123", bogus: 1 },
+      FAKE_TOOLS,
+    );
+    expect(warning).toBeDefined();
+    expect(warning).toContain("'bogus'");
+    expect(warning).not.toContain("'taskId'");
+  });
+
+  it("regression guard: aliased tools (novada_search, novada_crawl) are unaffected by the alias-aware gate — still no false positive", () => {
+    // Same assertions as the pre-existing "does NOT false-positive" tests
+    // above, re-run here to pin that gating camelCase-guessing behind
+    // CAMELCASE_ALIASED_TOOLS didn't regress the tools that DO alias.
+    expect(computeUnknownKeyWarning("novada_search", { query: "x", startDate: "2024-01-01" }, FAKE_TOOLS)).toBeUndefined();
+    expect(computeUnknownKeyWarning("novada_crawl", { url: "https://x.com", maxPages: 5, selectPaths: ["/docs/**"] }, FAKE_TOOLS)).toBeUndefined();
+  });
+});
+
+// ─── F-2 fix — no new false-positive across the REAL, LIVE tool registry ────
+//
+// The fixtures above are hand-built (necessary to pin the exact bug shape),
+// but CAMELCASE_ALIASED_TOOLS in src/utils/validate.ts is a hand-swept
+// enumeration of tool names, not something derivable from inputSchema.
+// This block cross-checks that enumeration against the REAL TOOLS registry
+// (src/core.ts) so drift between the two is caught here, not in production.
+describe("computeUnknownKeyWarning — no new false-positive across the REAL tool set (F-2 fix regression guard)", () => {
+  it("every registered tool's own declared keys never warn against themselves", () => {
+    for (const tool of TOOLS) {
+      const props = (tool.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties;
+      if (!props) continue;
+      const declaredKeys = Object.keys(props);
+      if (declaredKeys.length === 0) continue;
+      const args = Object.fromEntries(declaredKeys.map((k) => [k, "x"]));
+      const warning = computeUnknownKeyWarning(tool.name, args, TOOLS);
+      expect(
+        warning,
+        `${tool.name}: its own declared keys ${JSON.stringify(declaredKeys)} produced a warning: ${warning}`,
+      ).toBeUndefined();
+    }
+  });
+
+  it("real camelCase aliases on live-registered aliased tools produce no warning", () => {
+    // novada_crawl: maxPages/selectPaths/excludePaths (withCamelCaseAliases, tools/types.ts)
+    expect(computeUnknownKeyWarning("novada_crawl", { url: "https://x.com", maxPages: 5 }, TOOLS)).toBeUndefined();
+    // novada_map: includeSubdomains/maxDepth
+    expect(computeUnknownKeyWarning("novada_map", { url: "https://x.com", includeSubdomains: true, maxDepth: 3 }, TOOLS)).toBeUndefined();
+    // novada_scrape: taskId — the DE-1/C-1 money-path alias this exact class of fix protects
+    expect(computeUnknownKeyWarning("novada_scrape", { platform: "amazon.com", operation: "product_by_asin", taskId: "abc" }, TOOLS)).toBeUndefined();
+    // novada_scrape_amazon — one of the 15 platform_scraper.ts factory-generated tools
+    expect(computeUnknownKeyWarning("novada_scrape_amazon", { operation: "product_by_asin", taskId: "abc" }, TOOLS)).toBeUndefined();
+  });
+
+  it("novada_research (a REAL, currently-unaliased tool) still WARNS on startDate against the live registry", () => {
+    const warning = computeUnknownKeyWarning(
+      "novada_research",
+      { question: "Why did the market move in 2024?", startDate: "2024-01-01" },
+      TOOLS,
+    );
+    expect(warning).toBeDefined();
+    expect(warning).toContain("'startDate'");
   });
 });
 

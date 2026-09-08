@@ -478,7 +478,7 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
     name: "novada_proxy_account_create",
     description: `⚠️ WRITE — Create a proxy sub-account. Two-step approval-token gate.
 
-**Behavior:** call once WITHOUT \`approval_token\` to get a \`confirmation_required\` JSON preview (password masked) plus a fresh, single-use \`approval_token\` (valid 10 minutes) — this does NOT hit the API. Show the preview to the human, then re-call with the EXACT SAME parameters plus that \`approval_token\` after explicit approval. \`confirm: true\` is a deprecated no-op and does NOT substitute for the token.
+**Behavior:** call once WITHOUT \`approval_token\` to get a \`confirmation_required\` JSON preview (password masked) plus a fresh \`approval_token\` valid for 10 minutes — this does NOT hit the API. Show the preview to the human, then re-call with the EXACT SAME parameters plus that \`approval_token\` after explicit approval. \`confirm: true\` is a deprecated no-op and does NOT substitute for the token.
 
 **Best for:** provisioning a team-member or per-project sub-account against your master plan.
 **Params:** product ("1"=Residential, "2"=Rotating ISP, "3"=Rotating Datacenter, "4"=Unlimited, "7"=Unblocker, "9"=Mobile), account (3-64, [a-zA-Z0-9_-]), password (8-64), status ("1" active default | "-3" disabled), remark?, limit_flow? (GB cap), approval_token.

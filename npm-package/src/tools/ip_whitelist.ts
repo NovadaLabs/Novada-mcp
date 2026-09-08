@@ -2,14 +2,22 @@
 //   POST /v1/white_list/add    — add IP to whitelist (WRITE)
 //   POST /v1/white_list/list   — list whitelisted IPs (read-only)
 //   POST /v1/white_list/del    — delete whitelisted IPs (WRITE)
-//   POST /v1/white_list/remark — update remark on a whitelist entry (read-only-ish)
+//   POST /v1/white_list/remark — update remark on a whitelist entry (WRITE)
 //
 // Combined into a single tool with `action` discriminator per INC-111.
-// "add" and "del" are WRITE actions — gated by the shared APPROVAL-TOKEN
-// flow (F2-2/G-7 fix, 2026-09): first call (no `approval_token`) returns a
-// preview + a signed, expiring, payload-bound token; only a second call
-// carrying that exact token AND the exact same parameters executes.
-// `confirm: true` alone is a deprecated no-op — see ../utils/approval.ts.
+// "add", "del", AND "remark" are WRITE actions — gated by the shared
+// APPROVAL-TOKEN flow (F2-2/G-7 fix, 2026-09): first call (no
+// `approval_token`) returns a preview + a signed, expiring, payload-bound
+// token; only a second call carrying that exact token AND the exact same
+// parameters executes. `confirm: true` alone is a deprecated no-op — see
+// ../utils/approval.ts.
+//
+// SEC-consistency fix (2026-09-03 ledger-closure audit, finding #4): "remark"
+// is a real devApiPost WRITE (it mutates a whitelist entry server-side) and
+// was shipped WITHOUT the approval gate applied to add/del — a class-miss in
+// the original A1 pass. Gated identically to add/del below so "every write
+// is two-step" (as README/registry.ts document) is actually true for all
+// three, not two of three.
 //
 // Product codes for whitelist: 1=Residential, 4=Unlimited, 5=Static ISP
 // (subset of the full proxy product codes).
@@ -48,7 +56,7 @@ export const IpWhitelistParamsSchema = z
     action: z
       .enum(["add", "list", "del", "remark"])
       .describe(
-        'Action to perform. "add": add IP to whitelist (WRITE — requires approval_token). "list": list whitelisted IPs. "del": delete whitelisted IPs (WRITE — requires approval_token). "remark": update remark on a whitelist entry.',
+        'Action to perform. "add": add IP to whitelist (WRITE — requires approval_token). "list": list whitelisted IPs. "del": delete whitelisted IPs (WRITE — requires approval_token). "remark": update remark on a whitelist entry (WRITE — requires approval_token).',
       ),
     product: z
       .enum(WL_PRODUCT_CODES)
@@ -108,14 +116,14 @@ export const IpWhitelistParamsSchema = z
       .literal(true)
       .optional()
       .describe(
-        'DEPRECATED — ignored. Setting this alone no longer authorizes WRITE actions ("add"/"del") (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.',
+        'DEPRECATED — ignored. Setting this alone no longer authorizes WRITE actions ("add"/"del"/"remark") (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.',
       ),
     approval_token: z
       .string()
       .min(1)
       .optional()
       .describe(
-        'Two-step approval token, required to execute "add"/"del". Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value — an invented or stale token is rejected.',
+        'Two-step approval token, required to execute "add"/"del"/"remark". Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value — an invented or stale token is rejected.',
       ),
   })
   .strict();
@@ -296,6 +304,29 @@ async function handleRemark(params: IpWhitelistParams, apiKey?: string): Promise
         error: 'Missing required parameter "id" for action="remark".',
         agent_instruction:
           'Re-call with the id parameter set to the whitelist entry ID. Use action="list" first to find entry IDs.',
+      },
+      null,
+      2,
+    );
+  }
+
+  const remarkGate = evaluateApprovalGate(params as Record<string, unknown>, "ip_whitelist_remark");
+  if (!remarkGate.authorized) {
+    return JSON.stringify(
+      {
+        status: "confirmation_required",
+        action: "ip_whitelist_remark",
+        preview: {
+          product: params.product,
+          product_label: WL_PRODUCT_LABELS[params.product],
+          id: params.id,
+          remark: params.remark ?? null,
+        },
+        approval_token: remarkGate.approvalToken,
+        expires_at: new Date(remarkGate.expiresAt).toISOString(),
+        expires_in_seconds: remarkGate.expiresInSeconds,
+        agent_instruction:
+          "This is a WRITE action that updates the remark on a whitelist entry. Show the preview to the human user. To execute, call again with the EXACT SAME parameters plus `approval_token` set to the value above (valid 10 minutes). `confirm: true` alone does nothing — it is deprecated and ignored.",
       },
       null,
       2,
