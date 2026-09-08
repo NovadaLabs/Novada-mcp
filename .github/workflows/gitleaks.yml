@@ -1,0 +1,73 @@
+name: gitleaks
+
+# G-1 fix (audit 2026-09-02, findings/G-security-billing.md): CI secret-scan
+# gate so the credential-in-history class documented in G-1 (commit a645022,
+# 2026-07-06 redacted real Novada API keys, a Browser-WS credential, proxy
+# user/pass, and third-party key fragments from 31 tracked files) cannot
+# recur.
+#
+# This runs the gitleaks CLI directly (a pinned release binary, downloaded
+# and checksum-verified below) instead of gitleaks/gitleaks-action@v2.
+# gitleaks-action@v2 requires a GITLEAKS_LICENSE secret for ANY organization-
+# owned repository — public or private, it doesn't matter; the license gate
+# is keyed on "is the owner an org", not "is the repo public". NovadaLabs is
+# an organization, so the action fails immediately with "License key is
+# required" before it ever scans anything, i.e. the gate never actually ran.
+# The gitleaks CLI binary itself has no such license requirement — only the
+# GitHub Action wrapper does — so invoking it directly restores a working,
+# license-free gate without needing to buy/store a GITLEAKS_LICENSE secret.
+#
+# Scope is the WORKING TREE at the checked-out ref (`gitleaks dir .`), not
+# full git history — the same scope the local pre-commit hook
+# (.githooks/pre-commit, `gitleaks protect --staged`) and this repo's
+# .gitleaks.toml header both document. Scanning the ALREADY-KNOWN a645022
+# history is a separate, owner-gated decision (rewrite history vs.
+# accept-and-rotate — G-1 fix #2) tracked as a TODO in .gitleaks.toml's header
+# comment; wiring a full-history scan in here today would either permanently
+# fail on that known/already-handled leak or require a baseline that hides
+# the exact class this gate exists to catch.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  # Pin the gitleaks CLI version — never float `latest` in CI. Bump this (and
+  # the matching sha256 below, from that release's own
+  # gitleaks_<version>_checksums.txt) deliberately when upgrading.
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_LINUX_X64_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        # Working-tree scan only (no diffing against history needed), so the
+        # default shallow single-commit checkout is enough.
+
+      - name: Install gitleaks (pinned CLI binary, checksum-verified)
+        run: |
+          set -euo pipefail
+          asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${asset}"
+          curl -sSfL -o "${asset}" "${url}"
+          echo "${GITLEAKS_LINUX_X64_SHA256}  ${asset}" | sha256sum -c -
+          tar -xzf "${asset}" gitleaks
+          chmod +x gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+          rm -f "${asset}"
+          gitleaks version
+
+      - name: gitleaks (working-tree scan)
+        # `dir` scans the checked-out tree, not git history. gitleaks
+        # auto-discovers .gitleaks.toml at the repo root, but it's passed
+        # explicitly here too (matching the local pre-commit hook) — this
+        # repo's narrow allowlist for known documentation/test placeholders.
+        # Non-zero exit (a real finding) fails the job; clean tree = exit 0.
+        run: gitleaks dir . -c .gitleaks.toml --no-banner

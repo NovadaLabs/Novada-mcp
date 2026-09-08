@@ -1,10 +1,16 @@
 // Wraps POST /v1/capture/get_apikey and /v1/capture/reset_apikey on api-m.novada.com.
 // Combined into a single tool `novada_capture_apikey` with action discriminator.
 // "get" = read-only, no gate.
-// "reset" = DESTRUCTIVE (invalidates old key) — requires confirm:true gate.
+// "reset" = DESTRUCTIVE (invalidates old key) — gated by the shared
+// APPROVAL-TOKEN flow (F2-2/G-7 fix, 2026-09): first call (no
+// `approval_token`) returns a warning preview + a signed, expiring,
+// payload-bound token; only a second call carrying that exact token AND the
+// exact same parameters executes. `confirm: true` alone is a deprecated
+// no-op — see ../utils/approval.ts.
 
 import { z } from "zod";
 import { devApiPost } from "../_core/developer_api.js";
+import { evaluateApprovalGate } from "../utils/approval.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 
@@ -19,7 +25,14 @@ export const CaptureApikeyParamsSchema = z
       .literal(true)
       .optional()
       .describe(
-        "Required for 'reset' action. Pass `true` ONLY after the human user has confirmed they want to invalidate the current API key. Ignored for 'get' action.",
+        "DEPRECATED — ignored for both actions. Setting this alone no longer authorizes 'reset' (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.",
+      ),
+    approval_token: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Two-step approval token, required to execute 'reset'. Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value — an invented or stale token is rejected. Ignored for 'get' action.",
       ),
   })
   .strict();
@@ -74,8 +87,9 @@ function maskSecretsDeep(input: unknown): unknown {
  * Get or reset the capture (scraper/unblocker) API key.
  *
  * - `action: "get"` — read-only, returns current key immediately.
- * - `action: "reset"` — destructive, requires `confirm: true`. Without it,
- *   returns a warning preview instead of hitting the API.
+ * - `action: "reset"` — destructive, requires a valid `approval_token`
+ *   (see ../utils/approval.ts). Without one, returns a warning preview
+ *   plus a fresh token instead of hitting the API.
  */
 export async function novadaCaptureApikey(
   params: CaptureApikeyParams,
@@ -98,16 +112,20 @@ export async function novadaCaptureApikey(
     );
   }
 
-  // ── RESET: destructive — confirm gate ──────────────────────────────────────
-  if (params.confirm !== true) {
+  // ── RESET: destructive — approval-token gate ────────────────────────────────
+  const resetGate = evaluateApprovalGate(params as Record<string, unknown>, "reset_apikey");
+  if (!resetGate.authorized) {
     return JSON.stringify(
       {
         status: "confirmation_required",
         action: "reset_apikey",
         warning:
-          "This will invalidate your current capture API key. Any integrations using the old key will break immediately. Pass confirm:true to proceed.",
+          "This will invalidate your current capture API key. Any integrations using the old key will break immediately.",
+        approval_token: resetGate.approvalToken,
+        expires_at: new Date(resetGate.expiresAt).toISOString(),
+        expires_in_seconds: resetGate.expiresInSeconds,
         agent_instruction:
-          "DESTRUCTIVE action. Show this warning to the human user. Only re-call with the same parameters PLUS `confirm: true` after explicit user approval.",
+          "DESTRUCTIVE action. Show this warning to the human user. To execute, call again with the EXACT SAME parameters plus `approval_token` set to the value above (valid 10 minutes). `confirm: true` alone does nothing — it is deprecated and ignored.",
       },
       null,
       2,

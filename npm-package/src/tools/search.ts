@@ -8,6 +8,7 @@ import { telemetryHeaders } from "../utils/http.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
 const QUERY_MAX_LENGTH = 500;
@@ -850,11 +851,17 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       result_count: reranked.length,
       results: reranked.map((r, i) => {
         const url = r.url || r.link;
+        // G-2: wrap the snippet (free-text body from the SERP) — not `title`, which
+        // is short markdown/JSON-anchor text with lower prose-injection surface and,
+        // in the markdown branch below, sits inside a `[title](url)` link where the
+        // multi-line delimiter would corrupt the link syntax. `rank`/`url`/`published`
+        // are our own or purely structural fields, never wrapped.
+        const rawSnippet = r.description || r.snippet || "";
         const result: Record<string, unknown> = {
           rank: i + 1,
           title: r.title || "Untitled",
           url: url ? decodeBingRedirect(url) : null,
-          snippet: r.description || r.snippet || "",
+          snippet: rawSnippet ? wrapUntrusted(rawSnippet, url || "search result") : "",
         };
         if (r.published || r.date) result.published = r.published || r.date;
         // F15: include within_time_range annotation when present
@@ -975,7 +982,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
 
     lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
     if (r.published || r.date) lines.push(`published: ${r.published || r.date}`);
-    lines.push(cleanSnippet);
+    // G-2: "No description" is OUR fallback (no fetched text exists) — leave it
+    // unwrapped. A genuine snippet is fetched-from-web free text.
+    lines.push(cleanSnippet === "No description" ? cleanSnippet : wrapUntrusted(cleanSnippet, url));
     // extracted_content is always a string here (markdown path): either raw text, raw JSON string,
     // or null. The cast reflects this — the object case only arises in the JSON output path above.
     const rExt = r as NovadaSearchResult & { extracted_content?: string | null; extract_error?: string; within_time_range?: boolean | null };

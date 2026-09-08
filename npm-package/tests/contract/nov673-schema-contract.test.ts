@@ -14,10 +14,17 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { z, ZodError } from "zod";
 import {
   CrawlParamsSchema,
   validateCrawlParams,
 } from "../../src/tools/types.js";
+// F-12 (2026-09-02 audit fix): index.ts's ZodError handling was rewritten to
+// route through this ONE shared formatter (per-issue-class agent_instruction
+// templates) instead of a single generic string repeated for every failure
+// shape. Import the REAL production function so section 4 below exercises
+// the actual contract, not a copy of it.
+import { formatZodError } from "../../src/utils/validate.js";
 // TOOLS is the real, built tool catalog (name/title/description/inputSchema/
 // annotations) — importing it and reading .annotations directly is robust to
 // any description/title-length change, unlike the previous fixed-char-window
@@ -159,23 +166,70 @@ describe("novadaCrawl — mode/limit aliases removed from runtime", () => {
 });
 
 // ─── 4. Global ZodError handler: response contains agent_instruction ──────────
+//
+// 2026-09-02 audit (F-12): the old assertions here pinned the DEAD generic
+// literal `agent_instruction: Fix the parameter(s) listed above and retry...`
+// — the exact one-size-fits-all template F-12 was scoped to replace with
+// per-issue-class instructions (missing param / wrong type / bad enum /
+// too-short / unknown key / union mismatch each get their own wording now,
+// see utils/validate.ts formatZodIssue). Pinning that literal string made
+// this "contract" test assert the OLD, explicitly-defective behavior instead
+// of the underlying guarantee (NOV-673: schema/validation errors must be
+// agent-actionable). Rewritten to assert the STRUCTURAL contract instead:
+//   (a) the real, production formatZodError() function — the one index.ts's
+//       ZodError handlers actually call — always emits a line-anchored
+//       `agent_instruction:` line with per-issue-class (not generic) content;
+//   (b) index.ts's global dispatch ZodError handler is WIRED to that shared
+//       formatter (not a private/inline/bare-string variant), and still
+//       returns isError:true.
+// A future regression that drops agent_instruction from formatZodError(), or
+// that reverts index.ts to formatting ZodErrors inline instead of through
+// the shared formatter, fails this test.
 
 describe("Global ZodError handler — agent_instruction in error response", () => {
-  it("index.ts ZodError handler emits agent_instruction line", () => {
-    const src = readIndexSrc();
-    // The handler must include the agent_instruction literal so the error response
-    // is parseable by agents without free-text parsing.
-    expect(src).toMatch(/agent_instruction:\s*Fix the parameter/);
+  it("formatZodError() (the function index.ts's ZodError handlers call) emits a line-anchored agent_instruction with per-issue-class content, not the old generic template", () => {
+    // A missing-required-field ZodError — the P1-style case.
+    let err: ZodError;
+    try {
+      z.object({ query: z.string() }).parse({});
+      throw new Error("expected schema.parse to throw");
+    } catch (e) {
+      if (!(e instanceof ZodError)) throw e;
+      err = e;
+    }
+
+    const text = formatZodError("novada_test_tool", err);
+
+    // (a) The agent_instruction line exists and is machine-parseable —
+    // this is the actual NOV-673 guarantee, independent of wording.
+    expect(text).toMatch(/^agent_instruction:/m);
+
+    // (b) It is per-issue-class specific (F-12), not the retired generic
+    // paragraph — a regression back to the one-size-fits-all template
+    // must fail this test.
+    expect(text).not.toContain("Fix the parameter(s) listed above and retry");
+    expect(text).toMatch(/agent_instruction:.*Add the required parameter query/);
   });
 
-  it("index.ts ZodError handler still sets isError: true", () => {
+  it("index.ts's global dispatch ZodError handler calls the shared formatZodError() and still returns isError: true", () => {
     const src = readIndexSrc();
-    // Find the ZodError handler block and verify it sets isError:true.
-    const zodBlockStart = src.indexOf("error instanceof ZodError");
-    expect(zodBlockStart).toBeGreaterThan(-1);
-    // Extend the slice far enough to capture the full handler (including the isError line
-    // which appears after the multi-line content array construction).
-    const zodBlock = src.slice(zodBlockStart, zodBlockStart + 2000);
-    expect(zodBlock).toMatch(/isError\s*:\s*true/);
+
+    // Structural wiring check: the global handler's `error instanceof
+    // ZodError` branch must invoke the shared formatter (not format the
+    // error inline/bare) — anchors on the actual call site, not on any
+    // particular instruction wording.
+    const handlerMatch = src.match(/if \(error instanceof ZodError\) \{[\s\S]{0,400}?formatZodError\(name, error\)[\s\S]{0,400}?\}/);
+    expect(handlerMatch, "expected the global ZodError branch to call formatZodError(name, error)").not.toBeNull();
+
+    // isError:true check anchored on the unique formatZodError(name, error)
+    // call site (the global handler; the two per-tool pre-gate ZodError
+    // branches call formatZodError(name, e) with a different error binding
+    // name) instead of the bare "ZodError" string, which now also matches
+    // the toAgentErrorText() helper and other ZodError branches earlier in
+    // the file.
+    const callSite = src.indexOf("formatZodError(name, error)");
+    expect(callSite).toBeGreaterThan(-1);
+    const window = src.slice(callSite, callSite + 600);
+    expect(window).toMatch(/isError\s*:\s*true/);
   });
 });

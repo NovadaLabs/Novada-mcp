@@ -1030,27 +1030,43 @@ describe("novadaScrape — resume fast-status pre-check (TOW2-257 Phase 1)", () 
     expect(mockedAxios.get).not.toHaveBeenCalled();
   });
 
-  it("status=unknown (probe ambiguous/not-found) falls through to today's existing poll behavior unchanged", async () => {
-    // The fast probe itself is inconclusive (empty status) — must NOT invent new
-    // behavior; fall through to the same download-poll path that ran before this
-    // change existed.
+  // V2-N2 (audit 2026-09-02): superseded contract. A successful probe with an empty
+  // status (this exact mock — `mockTaskStatus("")`) used to be bucketed as "unknown"
+  // and fall through to the ~45s download-poll loop, which then returned
+  // "status: processing" forever for a task_id the backend never actually
+  // recognized — an agent with a typo'd/hallucinated task_id would loop indefinitely
+  // on the word of our own envelope. Fixed: a clean probe response with no status
+  // data is now classified "not_found" and rejected immediately (see
+  // scrape-resume-audit-2026-09-02.test.ts for the full class of tests this fix
+  // added, including the genuinely-ambiguous case — a network/auth error on the
+  // probe call itself — which still falls through unchanged).
+  it("status='' (empty status on a present list item) is NOT_FOUND, not 'unknown' — V2-N2 fix", async () => {
     mockTaskStatus("");
-    mockedAxios.get.mockResolvedValue(makeDownloadOk(MOCK_RECORDS));
 
-    const result = await novadaScrape(
-      {
-        platform: "amazon.com",
-        operation: "amazon_product_keywords",
-        params: { keyword: "iphone" },
-        format: "markdown",
-        limit: 20,
-        task_id: "resume-task-abc123",
-      } as Parameters<typeof novadaScrape>[0],
-      "test-key"
-    );
+    let thrown: unknown;
+    let result: string | undefined;
+    try {
+      result = await novadaScrape(
+        {
+          platform: "amazon.com",
+          operation: "amazon_product_keywords",
+          params: { keyword: "iphone" },
+          format: "markdown",
+          limit: 20,
+          task_id: "resume-task-abc123",
+        } as Parameters<typeof novadaScrape>[0],
+        "test-key"
+      );
+    } catch (e) {
+      thrown = e;
+    }
 
-    expect(mockedAxios.get).toHaveBeenCalled();
-    expect(result).toContain("iPhone 16 Pro");
+    // Must throw a typed NOT_FOUND error — never resolve to a success-shaped string,
+    // and never reach the slow download-poll endpoint.
+    expect(result).toBeUndefined();
+    expect(thrown).toBeInstanceOf(NovadaError);
+    expect((thrown as NovadaError).code).toBe(NovadaErrorCode.TASK_NOT_FOUND);
+    expect(mockedAxios.get).not.toHaveBeenCalled();
   });
 });
 

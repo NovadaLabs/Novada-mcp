@@ -32,6 +32,8 @@ import {
   enforceGatewayCap,
   parseBalanceValue,
   fetchAggregateBalance,
+  APPROVAL_GATED_TOOLS,
+  isApprovalGatePreviewCall,
 } from "../api/_plan.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -426,12 +428,234 @@ test("gate: PREFETCH_THRESHOLD is 900 per PRD", () => {
   assert.equal(PREFETCH_THRESHOLD, 900);
 });
 
+// ─── Layer 1: UNIT — isApprovalGatePreviewCall (MEDIUM fix, 2026-09 audit) ───
+// ADVERSARIAL-INTEGRATION.md: proxy_account_create's PREVIEW call (no
+// approval_token) was charged the same as its EXECUTE call — 2 quota units
+// for one logical write, with no refund path for the confirmation_required
+// outcome. Class table covers all four evaluateApprovalGate() tools, not
+// just proxy_account_create — including the two that are multi-action (only
+// SOME `action` values are gated; the rest must still be charged normally).
+
+test("previewCall: single-action gated tool (proxy_account_create), no approval_token → true (preview)", () => {
+  assert.equal(
+    isApprovalGatePreviewCall("novada_proxy_account_create", { product: "1", account: "a", password: "xxxxxxxx" }),
+    true,
+  );
+});
+
+test("previewCall: single-action gated tool, EMPTY approval_token → true (still a preview — mirrors evaluateApprovalGate's own `.length > 0` check)", () => {
+  assert.equal(
+    isApprovalGatePreviewCall("novada_proxy_account_create", { product: "1", approval_token: "" }),
+    true,
+  );
+});
+
+test("previewCall: single-action gated tool, deprecated confirm:true with NO token → true (zero upstream work either way — evaluateApprovalGate rejects this shape outright)", () => {
+  assert.equal(
+    isApprovalGatePreviewCall("novada_proxy_account_create", { product: "1", confirm: true }),
+    true,
+  );
+});
+
+test("previewCall: single-action gated tool, valid-shaped approval_token present → false (execute attempt, must be charged)", () => {
+  assert.equal(
+    isApprovalGatePreviewCall("novada_proxy_account_create", { product: "1", approval_token: "sig123|9999999999999" }),
+    false,
+  );
+});
+
+test("previewCall: multi-action tool (ip_whitelist), gated action \"add\" with no token → true (preview)", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_ip_whitelist", { action: "add", product: "1" }), true);
+});
+
+test("previewCall: multi-action tool (ip_whitelist), gated action \"del\" with no token → true (preview)", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_ip_whitelist", { action: "del", product: "1" }), true);
+});
+
+test("previewCall: multi-action tool (ip_whitelist), UNGATED action \"list\" with no token → false — must be charged normally, not misclassified as a free preview", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_ip_whitelist", { action: "list", product: "1" }), false);
+});
+
+// 2026-09-07: "remark" was folded into ip_whitelist's approval gate (SEC-consistency
+// fix, ledger-closure audit finding #4) — was ungated, now gated same as add/del.
+test("previewCall: multi-action tool (ip_whitelist), gated action \"remark\" with no token → true (preview) — remark was folded into the gate alongside add/del", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_ip_whitelist", { action: "remark", id: "wl_1" }), true);
+});
+
+test("previewCall: multi-action tool (ip_whitelist), \"remark\" WITH a valid-shaped approval_token → false (execute attempt, must be charged)", () => {
+  assert.equal(
+    isApprovalGatePreviewCall("novada_ip_whitelist", { action: "remark", id: "wl_1", approval_token: "sig123|9999999999999" }),
+    false,
+  );
+});
+
+test("previewCall: multi-action tool (static_ip_mgmt), gated action \"open\" with no token → true (preview)", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_static_ip_mgmt", { action: "open" }), true);
+});
+
+test("previewCall: multi-action tool (static_ip_mgmt), UNGATED action \"export\" with no token → false", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_static_ip_mgmt", { action: "export" }), false);
+});
+
+test("previewCall: multi-action tool (capture_apikey), gated action \"reset\" with no token → true (preview)", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_capture_apikey", { action: "reset" }), true);
+});
+
+test("previewCall: multi-action tool (capture_apikey), UNGATED action \"get\" with no token → false", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_capture_apikey", { action: "get" }), false);
+});
+
+test("previewCall: a tool NOT in APPROVAL_GATED_TOOLS (e.g. novada_search) → always false, regardless of args", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_search", {}), false);
+  assert.equal(isApprovalGatePreviewCall("novada_search", { approval_token: "" }), false);
+});
+
+test("APPROVAL_GATED_TOOLS: exactly the four evaluateApprovalGate() tools", () => {
+  assert.deepEqual(
+    [...APPROVAL_GATED_TOOLS.keys()].sort(),
+    ["novada_capture_apikey", "novada_ip_whitelist", "novada_proxy_account_create", "novada_static_ip_mgmt"],
+  );
+});
+
+// ─── Layer 2: RUNTIME — enforceGatewayCap approval-gate preview exemption ────
+
+test("gate: approval-gate PREVIEW call (no approval_token) → allowed, NOT charged, decrementQuota never touched — even cap-exhausted", async () => {
+  const { calls, deps } = makeGateDeps({ remainingFree: -1 }); // would reject if charged
+  const r = await enforceGatewayCap({
+    toolName: "novada_proxy_account_create",
+    monthlyQuota: 1000,
+    args: { product: "1", account: "sub1", password: "xxxxxxxx" }, // no approval_token
+    deps,
+  });
+  assert.equal(r.allowed, true, "a preview must be allowed even when the free quota is exhausted");
+  assert.equal(r.charged, false, "a preview must not be reported as charged");
+  assert.equal(calls.decrement.length, 0, "a preview must never call decrementQuota");
+  assert.equal(calls.resolvePlan, 0, "a preview must never trigger plan resolution");
+});
+
+test("gate: EXECUTE call on a gated tool (valid-shaped approval_token) → charged normally, exactly one decrement", async () => {
+  const { calls, deps } = makeGateDeps({ remainingFree: 999 });
+  const r = await enforceGatewayCap({
+    toolName: "novada_proxy_account_create",
+    monthlyQuota: 1000,
+    args: { product: "1", account: "sub1", password: "xxxxxxxx", approval_token: "sig123|9999999999999" },
+    deps,
+  });
+  assert.equal(r.allowed, true);
+  assert.equal(r.charged, true, "the execute call is the real billable event and must be charged");
+  assert.deepEqual(calls.decrement, ["free"], "exactly one decrement for the execute call");
+});
+
+test("gate: multi-action gated tool, UNGATED action (ip_whitelist \"list\") → charged normally, NOT treated as a free preview", async () => {
+  const { calls, deps } = makeGateDeps({ remainingFree: 999 });
+  const r = await enforceGatewayCap({
+    toolName: "novada_ip_whitelist",
+    monthlyQuota: 1000,
+    args: { action: "list", product: "1" }, // no approval_token — but "list" was never gated
+    deps,
+  });
+  assert.equal(r.charged, true, "an ungated action must still be charged even though the tool has a preview flow for other actions");
+  assert.deepEqual(calls.decrement, ["free"]);
+});
+
+// 2026-09-07: ip_whitelist "remark" moved from ungated to gated (SEC-consistency
+// fix). Runtime-level pair mirroring the pure isApprovalGatePreviewCall unit tests
+// above, through the actual enforceGatewayCap call path.
+test("gate: ip_whitelist \"remark\" PREVIEW (no approval_token) → allowed, NOT charged — remark now shares the gate with add/del", async () => {
+  const { calls, deps } = makeGateDeps({ remainingFree: -1 }); // would reject if charged
+  const r = await enforceGatewayCap({
+    toolName: "novada_ip_whitelist",
+    monthlyQuota: 1000,
+    args: { action: "remark", id: "wl_1" }, // no approval_token
+    deps,
+  });
+  assert.equal(r.allowed, true, "a remark preview must be allowed even when the free quota is exhausted");
+  assert.equal(r.charged, false, "a remark preview must not be charged");
+  assert.equal(calls.decrement.length, 0);
+});
+
+test("gate: ip_whitelist \"remark\" EXECUTE (valid-shaped approval_token) → charged normally, exactly one decrement", async () => {
+  const { calls, deps } = makeGateDeps({ remainingFree: 999 });
+  const r = await enforceGatewayCap({
+    toolName: "novada_ip_whitelist",
+    monthlyQuota: 1000,
+    args: { action: "remark", id: "wl_1", approval_token: "sig123|9999999999999" },
+    deps,
+  });
+  assert.equal(r.allowed, true);
+  assert.equal(r.charged, true, "the remark execute call is the real billable event and must be charged");
+  assert.deepEqual(calls.decrement, ["free"]);
+});
+
+test("gate: enforceGatewayCap called with no `args` (back-compat) → behaves exactly as before this fix, no crash", async () => {
+  const { calls, deps } = makeGateDeps({ remainingFree: 999 });
+  const r = await enforceGatewayCap({ toolName: "novada_proxy_account_create", monthlyQuota: 1000, deps });
+  assert.equal(r.allowed, true);
+  assert.equal(r.charged, true, "with no args to classify, the call must fall through to the normal charged path — never silently exempted");
+  assert.deepEqual(calls.decrement, ["free"]);
+});
+
+// A stateful decrementQuota mock mirroring the REAL kv.incr/kv.decr atomic
+// contract in mcp.ts's decrementQuota (over-cap increment is rolled back,
+// success returns `monthlyQuota - used`) — needed for the boundary test
+// below, where the SEQUENCE of calls (does decrementQuota fire once or
+// twice?) is exactly what the MEDIUM finding was about.
+function makeStatefulGateDeps(monthlyQuota) {
+  let used = 0;
+  const calls = { decrement: [] };
+  return {
+    calls,
+    deps: {
+      decrementQuota: async (plan) => {
+        calls.decrement.push(plan);
+        used += 1;
+        if (plan === "free" && used > monthlyQuota) {
+          used -= 1; // rollback, mirrors kv.decr in the real decrementQuota
+          return -1;
+        }
+        return Math.max(0, monthlyQuota - used);
+      },
+      resolvePlan: async () => "free",
+      fetchBalance: async () => 0,
+    },
+  };
+}
+
+test("gate: BOUNDARY — caller with exactly 1 unit left: preview (no charge) then execute (charges once) — the approved write completes (MEDIUM fix regression)", async () => {
+  const { calls, deps } = makeStatefulGateDeps(1);
+  const previewArgs = { product: "1", account: "sub_acct_1", password: "supersecret1" }; // no approval_token
+  const executeArgs = { ...previewArgs, approval_token: "sig123|9999999999999" };
+
+  const preview = await enforceGatewayCap({ toolName: "novada_proxy_account_create", monthlyQuota: 1, args: previewArgs, deps });
+  assert.equal(preview.allowed, true, "preview must be allowed");
+  assert.equal(preview.charged, false, "preview must NOT consume the caller's last unit");
+  assert.equal(calls.decrement.length, 0, "preview must not touch the quota counter at all");
+
+  const execute = await enforceGatewayCap({ toolName: "novada_proxy_account_create", monthlyQuota: 1, args: executeArgs, deps });
+  assert.equal(
+    execute.allowed,
+    true,
+    "the EXECUTE call must succeed — before this fix the preview already spent the caller's only unit, so this assertion failed with 'Free Gateway Cap Reached' and the approved write could never complete",
+  );
+  assert.equal(execute.charged, true, "execute is the one real billable event");
+  assert.equal(execute.remaining, 0, "one unit charged, one unit was available — 0 remaining, not -1");
+  assert.equal(calls.decrement.length, 1, "exactly ONE decrementQuota call total across preview+execute — was 2 before this fix");
+});
+
 // ─── Layer 3: STATIC — regression fence on api/mcp.ts ────────────────────────
 
 test("mcp.ts: gateway cap gate wired (enforceGatewayCap imported from ./_plan.js and called)", () => {
   const src = readFileSync(MCP_TS, "utf8");
   assert.match(src, /from "\.\/_plan\.js"/, "mcp.ts must import from ./_plan.js");
   assert.match(src, /enforceGatewayCap\(/, "mcp.ts must call enforceGatewayCap");
+});
+
+test("mcp.ts: enforceGatewayCap call site passes args (MEDIUM fix regression — without this, preview calls can't be detected and are double-charged)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  const callStart = src.indexOf("const gate = await enforceGatewayCap({");
+  assert.ok(callStart >= 0, "enforceGatewayCap call site must exist");
+  const callBody = src.slice(callStart, src.indexOf("});", callStart));
+  assert.match(callBody, /args:\s*argsObj/, "enforceGatewayCap must be called with args: argsObj so it can detect approval-gate preview calls");
 });
 
 

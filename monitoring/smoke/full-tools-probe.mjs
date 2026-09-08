@@ -257,34 +257,231 @@ const PROBES = Object.freeze([
   { name: "novada_proxy_account_create", platform: "-", operation: "-", catalogOpId: "-", args: { product: "1", account: "probe_ro", password: "placeholder1234" }, timeoutMs: 30000, isScraper: false },
 
   // ── generic scrape dispatch (takes the CATALOG scraper id directly) ──────
+  // V3-N1/C-2 fix (2026-09-03): every isScraper:true probe below now
+  // explicitly requests `format: "json"` — see the SUBSTANCE_TABLE doc
+  // comment further down for why (records>=1 alone is not enough to call a
+  // scraper response a PASS; the substance gate needs to parse real
+  // unflattened fields out of the response, not grep a markdown table).
   {
     name: "novada_scrape",
     platform: "google.com",
     operation: "google_search",
     catalogOpId: "google_search",
-    args: { platform: "google.com", operation: "google_search", params: { q: "anthropic", num: 1 }, limit: 1 },
+    args: { platform: "google.com", operation: "google_search", params: { q: "anthropic", num: 1 }, limit: 1, format: "json" },
     timeoutMs: 60000,
     isScraper: true,
     resumePlatform: "google.com",
   },
 
   // ── per-platform scrapers (semantic operation keys, resolved from source) ─
-  { name: "novada_scrape_google", platform: "google.com", operation: "web_search", catalogOpId: "google_search", args: { operation: "web_search", params: { q: "anthropic claude", num: 1 }, limit: 1 }, timeoutMs: 60000, isScraper: true, resumePlatform: "google.com" },
-  { name: "novada_scrape_bing", platform: "bing.com", operation: "web_search", catalogOpId: "bing_search", args: { operation: "web_search", params: { q: "anthropic claude" }, limit: 1 }, timeoutMs: 60000, isScraper: true, resumePlatform: "bing.com" },
-  { name: "novada_scrape_duckduckgo", platform: "duckduckgo.com", operation: "web_search", catalogOpId: "duckduckgo", args: { operation: "web_search", params: { q: "anthropic claude" }, limit: 1 }, timeoutMs: 60000, isScraper: true, resumePlatform: "duckduckgo.com" },
-  { name: "novada_scrape_yandex", platform: "yandex.com", operation: "web_search", catalogOpId: "yandex", args: { operation: "web_search", params: { q: "anthropic", yandex_domain: "yandex.com" }, limit: 1 }, timeoutMs: 60000, isScraper: true, resumePlatform: "yandex.com" },
-  { name: "novada_scrape_amazon", platform: "amazon.com", operation: "products_by_keywords", catalogOpId: "amazon_product_keywords", args: { operation: "products_by_keywords", params: { keyword: "wireless earbuds" }, limit: 1 }, timeoutMs: 60000, isScraper: true, resumePlatform: "amazon.com" },
-  { name: "novada_scrape_walmart", platform: "walmart.com", operation: "product_by_keyword", catalogOpId: "walmart_product_keywords", args: { operation: "product_by_keyword", params: { domain: "https://www.walmart.com/", keyword: "shoes" }, limit: 1 }, timeoutMs: 60000, isScraper: true, resumePlatform: "walmart.com" },
-  { name: "novada_scrape_shein", platform: "shein.com", operation: "product_by_id", catalogOpId: "shein_product_id", args: { operation: "product_by_id", params: { ID: "Tween-Girls-Casual-Solid-Color-Criss-Cross-Racerback-Sports-Dress-Kids-p-423721658" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "shein.com" },
-  { name: "novada_scrape_x", platform: "x.com", operation: "profile_by_username", catalogOpId: "twitter_profile_username", args: { operation: "profile_by_username", params: { user_name: "BillGates" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "x.com" },
-  { name: "novada_scrape_tiktok", platform: "tiktok.com", operation: "profile_by_url", catalogOpId: "tiktok_profiles_url", args: { operation: "profile_by_url", params: { url: "https://www.tiktok.com/@tiktok" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "tiktok.com" },
-  { name: "novada_scrape_instagram", platform: "instagram.com", operation: "profile_by_username", catalogOpId: "ins_profiles_username", args: { operation: "profile_by_username", params: { username: "instagram" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "instagram.com" },
-  { name: "novada_scrape_facebook", platform: "facebook.com", operation: "profile_by_url", catalogOpId: "facebook_profile_profiles-url", args: { operation: "profile_by_url", params: { url: "https://www.facebook.com/facebook" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "facebook.com" },
-  { name: "novada_scrape_youtube", platform: "youtube.com", operation: "video_by_id", catalogOpId: "youtube_product-videoid", args: { operation: "video_by_id", params: { video_id: "LCAY3PGHZyw" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "youtube.com" },
-  { name: "novada_scrape_linkedin", platform: "linkedin.com", operation: "company_by_url", catalogOpId: "linkedin_company_information_url", args: { operation: "company_by_url", params: { url: "https://www.linkedin.com/company/microsoft" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "linkedin.com" },
-  { name: "novada_scrape_github", platform: "github.com", operation: "repository_by_url", catalogOpId: "github_repository_repo-url", args: { operation: "repository_by_url", params: { url: "https://github.com/gin-gonic/gin" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "github.com" },
-  { name: "novada_scrape_perplexity", platform: "perplexity.ai", operation: "answer_by_search_term", catalogOpId: "perplexity_answer_searchterm", args: { operation: "answer_by_search_term", params: { search_terms: "today's weather" } }, timeoutMs: 60000, isScraper: true, resumePlatform: "perplexity.ai" },
+  { name: "novada_scrape_google", platform: "google.com", operation: "web_search", catalogOpId: "google_search", args: { operation: "web_search", params: { q: "anthropic claude", num: 1 }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "google.com" },
+  { name: "novada_scrape_bing", platform: "bing.com", operation: "web_search", catalogOpId: "bing_search", args: { operation: "web_search", params: { q: "anthropic claude" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "bing.com" },
+  { name: "novada_scrape_duckduckgo", platform: "duckduckgo.com", operation: "web_search", catalogOpId: "duckduckgo", args: { operation: "web_search", params: { q: "anthropic claude" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "duckduckgo.com" },
+  { name: "novada_scrape_yandex", platform: "yandex.com", operation: "web_search", catalogOpId: "yandex", args: { operation: "web_search", params: { q: "anthropic", yandex_domain: "yandex.com" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "yandex.com" },
+  { name: "novada_scrape_amazon", platform: "amazon.com", operation: "products_by_keywords", catalogOpId: "amazon_product_keywords", args: { operation: "products_by_keywords", params: { keyword: "wireless earbuds" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "amazon.com" },
+  { name: "novada_scrape_walmart", platform: "walmart.com", operation: "product_by_keyword", catalogOpId: "walmart_product_keywords", args: { operation: "product_by_keyword", params: { domain: "https://www.walmart.com/", keyword: "shoes" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "walmart.com" },
+  { name: "novada_scrape_shein", platform: "shein.com", operation: "product_by_id", catalogOpId: "shein_product_id", args: { operation: "product_by_id", params: { ID: "Tween-Girls-Casual-Solid-Color-Criss-Cross-Racerback-Sports-Dress-Kids-p-423721658" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "shein.com" },
+  { name: "novada_scrape_x", platform: "x.com", operation: "profile_by_username", catalogOpId: "twitter_profile_username", args: { operation: "profile_by_username", params: { user_name: "BillGates" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "x.com" },
+  { name: "novada_scrape_tiktok", platform: "tiktok.com", operation: "profile_by_url", catalogOpId: "tiktok_profiles_url", args: { operation: "profile_by_url", params: { url: "https://www.tiktok.com/@tiktok" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "tiktok.com" },
+  { name: "novada_scrape_instagram", platform: "instagram.com", operation: "profile_by_username", catalogOpId: "ins_profiles_username", args: { operation: "profile_by_username", params: { username: "instagram" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "instagram.com" },
+  { name: "novada_scrape_facebook", platform: "facebook.com", operation: "profile_by_url", catalogOpId: "facebook_profile_profiles-url", args: { operation: "profile_by_url", params: { url: "https://www.facebook.com/facebook" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "facebook.com" },
+  { name: "novada_scrape_youtube", platform: "youtube.com", operation: "video_by_id", catalogOpId: "youtube_product-videoid", args: { operation: "video_by_id", params: { video_id: "LCAY3PGHZyw" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "youtube.com" },
+  { name: "novada_scrape_linkedin", platform: "linkedin.com", operation: "company_by_url", catalogOpId: "linkedin_company_information_url", args: { operation: "company_by_url", params: { url: "https://www.linkedin.com/company/microsoft" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "linkedin.com" },
+  { name: "novada_scrape_github", platform: "github.com", operation: "repository_by_url", catalogOpId: "github_repository_repo-url", args: { operation: "repository_by_url", params: { url: "https://github.com/gin-gonic/gin" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "github.com" },
+  { name: "novada_scrape_perplexity", platform: "perplexity.ai", operation: "answer_by_search_term", catalogOpId: "perplexity_answer_searchterm", args: { operation: "answer_by_search_term", params: { search_terms: "today's weather" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "perplexity.ai" },
 ]);
+
+// ─── V3-N1 / C-2 FIX (2026-09-03): scraper "substance" gate ─────────────────
+// FINDING (novada-test-engineering ledger 2026-09-02-full-evaluation,
+// findings/V3-verification-CX.md §C-2 + §V3-N1): this script's PASS
+// criterion for a scraper probe was `records >= 1` ONLY (see the plain
+// `if (res.ok) { status: ...PASS... }` branch in runProbe, and the poll
+// loop's `pollRecords >= 1` branch). duckduckgo's `web_search` operation can
+// return a "bare SERP envelope" on a broken/schema-mismatched upstream
+// response — no `organic_results` array anywhere in the payload, so
+// scrape.ts's own extractRecords() (RECORD_ARRAY_KEYS fallback,
+// npm-package/src/tools/scrape.ts:875-892, imported/tested read-only for
+// this fix, never edited — this repo's REDLINE forbids touching product
+// code) wraps the WHOLE envelope object as a single synthetic "record"
+// ({search_metadata, spider_parameter, search_information, related_searches,
+// get_news, cache_status, code} — no title/link anywhere, confirmed against
+// scrape.ts:390 and :875-892). That single synthetic record makes
+// `records: 1` true, so the OLD predicate scored PASS on 3/3 live samples
+// with ZERO usable organic results (evidence/C-live-transcripts.md's two
+// manual DDG calls + the V3 auditor's independent 3rd sample). The monitor
+// was blind to this for weeks — "PASS records:1" days were very likely the
+// same empty envelope every time.
+//
+// FIX: PASS now requires records >= 1 AND, for every scraper-family probe,
+// that the FIRST returned record carries at least one non-empty field from
+// this operation's required SUBSTANCE_TABLE entry — the SAME generic
+// title/price/username/link vocabulary scrape.ts's own KEY_COLUMN_PRIORITY
+// uses (npm-package/src/tools/scrape.ts:916-922) to decide what a "real"
+// record looks like, so this is grounded in the product's own conventions,
+// not a guess. A genuine `records: 0` graceful-empty response is UNCHANGED
+// by this gate — it never reaches the substance check.
+//
+// CLASS-NOT-INSTANCE: SUBSTANCE_TABLE has one row per `catalogOpId` this
+// script's own PROBES list exercises above — 15 distinct catalog operations
+// across all 16 scraper probes (the generic `novada_scrape` probe shares
+// google_search's row with `novada_scrape_google`) — covering the SERP,
+// product, profile, video, repository, and answer families, not just
+// duckduckgo. See full-tools-probe.selftest.mjs's coverage assertion, which
+// fails if a future isScraper:true PROBES entry's catalogOpId has no row
+// here.
+//
+// A records>=1 response that FAILS its substance check classifies
+// ③-backend/P2 (an upstream schema/data-quality incident, visible in every
+// report and every exit-0 "backend-only" summary line) — it is NEVER
+// silenced and NEVER added to BACKEND_KNOWN_FLAKY_PLATFORMS
+// (monitoring/smoke/tool-probes.mjs). Adding duckduckgo to that list would
+// BE the "allowlist that hides DDG" this fix exists to prevent — known-flaky
+// rows are P3 and never escalate; a substance failure must stay a normal,
+// always-visible P2 like any other backend incident.
+//
+// Every isScraper:true PROBES entry above now explicitly requests
+// `format: "json"` so the substance check can parse real, unflattened
+// upstream fields out of the ```json ... ``` fence (scrape.ts's json
+// branch, :1687-1706, emits `JSON.stringify(cleanRecords, ...)` — the RAW
+// per-record objects, already through normalizeProductRecord's price/
+// availability reconciliation) instead of grep-matching a markdown table's
+// flattened dot-path columns. That distinction matters: duckduckgo's own
+// bare envelope has a `get_news` array whose items carry a REAL `title` key
+// (news headlines) — if this fix loosely substring-matched "title" against
+// a flattened markdown column list, `get_news.0.title` would false-positive
+// as organic-search substance. Requiring an EXACT top-level JSON key on the
+// FIRST record (not a nested/prefixed dot-path) avoids that trap entirely.
+
+/** Generic field-name synonym groups — mirrors scrape.ts's own
+ *  KEY_COLUMN_PRIORITY (npm-package/src/tools/scrape.ts:916-922), this
+ *  codebase's own "what does a real record look like" vocabulary. Kept as a
+ *  local copy (monitoring/** is dependency-free and runs standalone against
+ *  the LIVE hosted endpoint — it cannot import from npm-package/src) but
+ *  intentionally reuses the SAME field names so this monitor's idea of
+ *  "substance" never silently drifts from the product's own. */
+const TITLE_FIELDS = ["title", "name", "product_name", "headline", "display_name", "video_title"];
+const LINK_FIELDS = ["link", "url", "redirection_link", "permalink", "href", "product_url"];
+const PRICE_FIELDS = ["price", "final_price", "current_price", "initial_price"];
+const USERNAME_FIELDS = ["username", "user_name", "handle", "screen_name", "profile_name", "nickname"];
+const ANSWER_FIELDS = ["answer", "response", "content", "text", "answer_text"];
+const REPO_NAME_FIELDS = ["full_name", "name", "repo_name", "repository"];
+
+/**
+ * Per-catalog-operation substance rule: `groups` is a list of field-name
+ * groups; PASS requires >=1 non-empty field from EVERY group (AND across
+ * groups, OR within a group) on the first parsed record. `label` is used in
+ * the human-readable failure note / report advice column.
+ *
+ * Keyed by catalogOpId (not tool name) so the shared generic `novada_scrape`
+ * probe and its per-platform sibling (e.g. google_search: novada_scrape AND
+ * novada_scrape_google) reuse ONE row — see the fix doc comment above.
+ */
+const SUBSTANCE_TABLE = Object.freeze({
+  // ── SERP family (*_search / web_search): a genuine organic hit has BOTH a
+  // title and a link — the exact two fields duckduckgo's bare envelope has
+  // NEITHER of (see the fix doc comment above). ──────────────────────────
+  google_search: { label: "organic search result", groups: [TITLE_FIELDS, LINK_FIELDS] },
+  bing_search: { label: "organic search result", groups: [TITLE_FIELDS, LINK_FIELDS] },
+  duckduckgo: { label: "organic search result", groups: [TITLE_FIELDS, LINK_FIELDS] },
+  yandex: { label: "organic search result", groups: [TITLE_FIELDS, LINK_FIELDS] },
+
+  // ── product family: title OR price (either is real signal — some catalog
+  // ops legitimately omit one; see npm-package/src/tools/scrape.ts's own
+  // normalizeProductRecord, which reconciles price onto a flat top-level
+  // field before this script ever sees the record). ──────────────────────
+  amazon_product_keywords: { label: "product listing", groups: [[...TITLE_FIELDS, ...PRICE_FIELDS]] },
+  walmart_product_keywords: { label: "product listing", groups: [[...TITLE_FIELDS, ...PRICE_FIELDS]] },
+  shein_product_id: { label: "product listing", groups: [[...TITLE_FIELDS, ...PRICE_FIELDS]] },
+
+  // ── profile family: a real profile always carries a username/handle. ───
+  twitter_profile_username: { label: "profile", groups: [USERNAME_FIELDS] },
+  tiktok_profiles_url: { label: "profile", groups: [USERNAME_FIELDS] },
+  ins_profiles_username: { label: "profile", groups: [USERNAME_FIELDS] },
+  // Facebook pages/company profiles commonly key off `name` rather than a
+  // handle-style username — accept either.
+  "facebook_profile_profiles-url": { label: "profile", groups: [[...USERNAME_FIELDS, ...TITLE_FIELDS]] },
+  linkedin_company_information_url: { label: "company profile", groups: [TITLE_FIELDS] },
+
+  // ── single-item lookups ─────────────────────────────────────────────────
+  "youtube_product-videoid": { label: "video", groups: [TITLE_FIELDS] },
+  "github_repository_repo-url": { label: "repository", groups: [REPO_NAME_FIELDS] },
+  perplexity_answer_searchterm: { label: "answer", groups: [ANSWER_FIELDS] },
+});
+
+/** True when `v` is a real, non-empty substance value (not undefined/null/""/"null"). */
+function nonEmptySubstanceValue(v) {
+  if (v === undefined || v === null) return false;
+  if (typeof v === "string") return v.trim() !== "" && v.trim().toLowerCase() !== "null";
+  if (Array.isArray(v)) return v.length > 0;
+  return true; // numbers (including 0), booleans, objects — presence is the signal
+}
+
+/**
+ * Pull the parsed record array out of a `format: "json"` scrape response's
+ * ```json ... ``` fence (scrape.ts's json branch — see the fix doc comment
+ * above). Returns `null` if no fenced JSON array could be found/parsed —
+ * should be UNREACHABLE in production once every scraper PROBES entry
+ * requests format:"json" (scrape.ts's json branch always emits valid
+ * `JSON.stringify(array)`); this only fires for a non-JSON response text,
+ * e.g. an offline test stub predating this fix, or a genuine formatter
+ * regression worth investigating on its own.
+ *
+ * @param {string} text
+ * @returns {Record<string, unknown>[] | null}
+ */
+function extractJsonRecords(text) {
+  if (typeof text !== "string") return null;
+  const m = text.match(/```json\r?\n([\s\S]*?)\r?\n```/);
+  if (!m) return null;
+  try {
+    const parsed = JSON.parse(m[1]);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Substance check for a scraper-family probe result (V3-N1 / C-2 fix — see
+ * the doc comment above). Only meaningful when `records >= 1` — callers must
+ * not invoke this for a genuine `records: 0` graceful-empty response.
+ *
+ * @param {string} catalogOpId
+ * @param {string} text
+ * @returns {{ok: true} | {ok: false, reason: string}}
+ */
+function checkScraperSubstance(catalogOpId, text) {
+  const rule = SUBSTANCE_TABLE[catalogOpId];
+  if (!rule) {
+    // Every isScraper:true PROBES entry's catalogOpId MUST have a row (see
+    // full-tools-probe.selftest.mjs's coverage assertion). Reaching this
+    // means a NEW scraper probe was added without a matching SUBSTANCE_TABLE
+    // row — fail loudly (①-mcp-code, our own monitoring config gap) rather
+    // than silently skipping the gate for an uncovered operation.
+    return { ok: false, reason: `no SUBSTANCE_TABLE row for catalogOpId "${catalogOpId}" — monitoring config gap, add one` };
+  }
+  const records = extractJsonRecords(text);
+  if (!records || records.length === 0) {
+    // Unreachable in production (see extractJsonRecords doc comment) — but
+    // if it ever fires, do NOT silently pass; the caller already confirmed
+    // the header claimed records>=1.
+    return {
+      ok: false,
+      reason: "records header claimed >=1 but no parsable JSON record array found in the response (format:json fence missing/invalid)",
+    };
+  }
+  const first = records[0];
+  for (const group of rule.groups) {
+    const hasAny = group.some((f) => nonEmptySubstanceValue(first?.[f]));
+    if (!hasAny) {
+      return {
+        ok: false,
+        reason: `records header claimed >=1 but the first record has no non-empty ${rule.label} field (checked: ${group.join("|")}) — bare/schema-mismatched upstream envelope, not a real ${rule.label}`,
+      };
+    }
+  }
+  return { ok: true };
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -601,6 +798,17 @@ function adviceFor(row) {
   if (row.domain === "-") return "-";
   if (row.domain === "③-backend") {
     if (row.severity === "P3") return "Known-flaky platform (TOW2-305) — no action; trend-watch only.";
+    // V3-N1/C-2 fix: a substance-check failure means the backend reported
+    // records>=1 but the response has no usable data for this operation — a
+    // schema/data-quality incident on the Novada Scraper API side, NOT a
+    // stuck task and NOT an MCP bug. Distinct advice from the generic
+    // "still processing" / "upstream signal" branches below so a human
+    // reading the report knows exactly what to escalate (see
+    // .audit-fix/reports/REPORT-W-A4.md's upstream ticket draft).
+    if (typeof row.note === "string" && row.note.includes("substance check failed")) {
+      const label = SUBSTANCE_TABLE[row.catalogOpId]?.label ?? "usable data";
+      return `Backend reported records>=1 but returned no ${label} substance (bare/schema-mismatched envelope) — flag to Novada backend (灵匠) as a data-quality incident on catalogOpId="${row.catalogOpId}", not an MCP bug.`;
+    }
     if (typeof row.note === "string" && row.note.includes("still processing")) {
       return "Backend task never completed after one poll — flag to Novada backend (灵匠) as a stuck/slow task, not an MCP bug.";
     }
@@ -730,18 +938,39 @@ async function runProbe(
       if (pollRes.ok) {
         const pollRecords = extractRecordsCount(pollRes.text);
         if (pollRecords !== null && pollRecords >= 1) {
+          // V3-N1/C-2 fix: records>=1 is necessary but NOT sufficient — see
+          // the SUBSTANCE_TABLE doc comment above PROBES. A resolved task
+          // that "completed" with a bare/schema-mismatched envelope (the
+          // duckduckgo failure mode) must classify ③-backend/P2, never SLOW.
+          const substance = checkScraperSubstance(probe.catalogOpId, pollRes.text);
+          if (substance.ok) {
+            if (delayMs > 0) await sleep(delayMs);
+            return {
+              ...base,
+              status: "SLOW",
+              domain: "-",
+              severity: null,
+              httpStatus: res.httpStatus,
+              timeMs: res.timeMs,
+              records: pollRecords,
+              taskId,
+              error: null,
+              note: `needed ${attempt} poll(s) (task_id="${taskId}") to resolve with ${pollRecords} record(s)`,
+            };
+          }
           if (delayMs > 0) await sleep(delayMs);
           return {
             ...base,
-            status: "SLOW",
-            domain: "-",
-            severity: null,
+            status: "FAIL",
+            domain: "③-backend",
+            severity: "P2",
+            configFault: false,
             httpStatus: res.httpStatus,
             timeMs: res.timeMs,
             records: pollRecords,
             taskId,
-            error: null,
-            note: `needed ${attempt} poll(s) (task_id="${taskId}") to resolve with ${pollRecords} record(s)`,
+            error: substance.reason,
+            note: `substance check failed after ${attempt} poll(s): ${substance.reason}`,
           };
         }
         if (isProcessingText(pollRes.text)) {
@@ -814,6 +1043,31 @@ async function runProbe(
   }
 
   if (res.ok) {
+    const records = extractRecordsCount(res.text);
+
+    // V3-N1/C-2 fix: for a scraper-family probe, records>=1 is necessary but
+    // NOT sufficient for PASS — see the SUBSTANCE_TABLE doc comment above
+    // PROBES. A genuine `records: 0` graceful-empty response never reaches
+    // this gate (unchanged, pre-existing behavior).
+    if (probe.isScraper && records !== null && records >= 1) {
+      const substance = checkScraperSubstance(probe.catalogOpId, res.text);
+      if (!substance.ok) {
+        return {
+          ...base,
+          status: "FAIL",
+          domain: "③-backend",
+          severity: "P2",
+          configFault: false,
+          httpStatus: res.httpStatus,
+          timeMs: res.timeMs,
+          records,
+          taskId: null,
+          error: substance.reason,
+          note: `substance check failed: ${substance.reason}`,
+        };
+      }
+    }
+
     return {
       ...base,
       status: res.timeMs > SLOW_MS ? "SLOW" : "PASS",
@@ -821,7 +1075,7 @@ async function runProbe(
       severity: null,
       httpStatus: res.httpStatus,
       timeMs: res.timeMs,
-      records: extractRecordsCount(res.text),
+      records,
       taskId: null,
       error: null,
       note: null,
@@ -1210,6 +1464,11 @@ export {
   isProcessingText,
   classifyFailure,
   adviceFor,
+  // V3-N1/C-2 fix exports — see the SUBSTANCE_TABLE doc comment above PROBES.
+  SUBSTANCE_TABLE,
+  nonEmptySubstanceValue,
+  extractJsonRecords,
+  checkScraperSubstance,
   runProbe,
   runAllProbes,
   applySeverityEscalations,

@@ -65,7 +65,7 @@ export const BING_SCRAPER_CONFIG: PlatformScraperConfig<BingOperation> = {
     "web_search/videos/news/shopping; all four operations share the same q-driven query shape.",
   description: {
     core:
-      "Extract structured Bing SERP data — organic web search results, video results, news results, and shopping listings — through a Bing-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"bing.com\". Bing is NOT a selectable engine on novada_search — this is the only intentional way to query Bing specifically.",
+      "Extract structured Bing SERP data — organic web search, video results, news results, shopping listings — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"bing.com\"). Bing is NOT a selectable engine on novada_search — this is the only intentional way to query Bing specifically.",
     useWhen: [
       "get the raw Bing search results (titles, links, ranks) for <query>",
       "find Bing video results for <query>",
@@ -73,15 +73,15 @@ export const BING_SCRAPER_CONFIG: PlatformScraperConfig<BingOperation> = {
       "search Bing Shopping for <keyword>",
     ],
     notFor: [
-      { when: "A general question that just needs an answer or a few good links", useInstead: "novada_search — google/duckduckgo/yandex only (Bing is not selectable there); ranked, reranked, answer-oriented, and cheaper than a raw-SERP scrape" },
+      { when: "A general question needing just an answer or a few good links", useInstead: "novada_search — google/duckduckgo/yandex only (Bing is not selectable there); ranked, cheaper than a raw-SERP scrape" },
       { when: "A complex question needing cited multi-source synthesis", useInstead: "novada_research" },
-      { when: "Reading one already-known URL's page content (not a search results page)", useInstead: "novada_extract" },
-      { when: "A different platform's structured data (Amazon, LinkedIn, TikTok, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+      { when: "Reading one already-known URL's page content", useInstead: "novada_extract" },
+      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
     ],
     returns:
-      "Structured SERP records per operation — organic results (title/url/snippet/rank), video results, news results (with date), and shopping listings (price/rating) — in the chosen format (markdown/json/csv/excel/html/toon), same rendering as novada_scrape.",
+      "Structured SERP records per operation — organic results (title/url/snippet/rank), video results, news results (with date), shopping listings (price/rating) — in the chosen output format, same rendering as novada_scrape.",
     operationsNote:
-      "4 verified-working Bing operations: web search, videos, news, and shopping (see the `operation` param's description for the exact `params` keys each needs). Every bing.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+      "4 verified-working Bing operations: web search, videos, news, and shopping. Every bing.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },
 };
 

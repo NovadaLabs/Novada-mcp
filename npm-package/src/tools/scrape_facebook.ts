@@ -58,7 +58,7 @@ export const FACEBOOK_SCRAPER_CONFIG: PlatformScraperConfig<FacebookOperation> =
     "profile_by_url/post_by_url/comments_by_post_url/event_by_url/events_by_list_url/events_by_search_url.",
   description: {
     core:
-      "Extract structured Facebook data — public profile pages, posts, comments, and events — through a Facebook-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"facebook.com\".",
+      "Extract structured Facebook data — public profile pages, posts, comments, and events — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"facebook.com\").",
     useWhen: [
       "get this public Facebook page's profile info",
       "pull the comments on this Facebook post",
@@ -67,14 +67,14 @@ export const FACEBOOK_SCRAPER_CONFIG: PlatformScraperConfig<FacebookOperation> =
       "list the upcoming events on this Facebook page",
     ],
     notFor: [
-      { when: "A single Facebook URL you just want read as plain text", useInstead: "novada_extract" },
+      { when: "A single Facebook URL to read as plain text", useInstead: "novada_extract" },
       { when: "A general web search not scoped to Facebook", useInstead: "novada_search" },
-      { when: "A different platform's structured data (Instagram, X, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
     ],
     returns:
-      "Structured profile/post/comment/event records (page name, post text, comment author/text, event name/date/location, etc.) in the chosen format (markdown/json/csv/excel/html/toon) — same rendering as novada_scrape.",
+      "Structured profile/post/comment/event records (page name, post text, comment author/text, event name/date/location, etc.) in the chosen output format — same rendering as novada_scrape.",
     operationsNote:
-      "6 verified-working Facebook operations spanning public profile pages, posts, comments, and events (search / single event / event list) (see the `operation` param's description for the exact `params` keys each needs). Every facebook.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+      "6 verified-working Facebook operations spanning public profile pages, posts, comments, and events (search / single event / event list). Every facebook.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },
 };
 

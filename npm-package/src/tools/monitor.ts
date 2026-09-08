@@ -3,6 +3,14 @@ import { z } from "zod";
 import { novadaExtract } from "./extract.js";
 import { redactSecrets, sanitizeServerMsg, LINE_TERMINATOR_CHARS } from "../_core/errors.js";
 import { isExtractionFailureSentinel } from "../utils/runtime.js";
+// G-2: monitor.ts uses wrapUntrustedInline, NOT the multi-line wrapUntrused the other
+// 9 tools share — see the content_preview comments in formatFirstCheck/formatChanged/
+// formatJson below. wrapUntrusted's `\n`-joined delimiter would reintroduce exactly the
+// raw line terminators the TOW2-354 defense (collapseLineTerminators,
+// monitor_line_terminator_injection.test.ts) exists to strip from content_preview.
+// unwrapUntrusted strips novadaExtract's inner wrap before monitor re-wraps its own
+// derived preview — see the novadaMonitor comment above `stripVolatileMetadataHeader`.
+import { wrapUntrustedInline, unwrapUntrusted } from "../utils/untrusted.js";
 
 /**
  * Extract the stable page body from novadaExtract output for change detection.
@@ -436,6 +444,17 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
     return formatError(params.url, now, sanitizeServerMsg(errorMsg), params.format);
   }
 
+  // G-2 (no double-wrap): novadaExtract's body is ALREADY wrapUntrusted-wrapped
+  // (extract.ts's own G-2 coverage). Unwrap it here, BEFORE hashing/field-
+  // extraction/preview-slicing below — otherwise (a) the hash/field-diff would be
+  // computed over our own delimiter text instead of pure page content, and (b)
+  // content_preview would end up wrapped TWICE: extract.ts's multi-line marker
+  // (or a fragment of it, depending on where the slice lands) nested inside
+  // monitor's own wrapUntrustedInline marker. External text must be marked
+  // EXACTLY once in the final response — monitor's own wrapUntrustedInline call
+  // (see content_preview below) is that one mark.
+  content = unwrapUntrusted(content);
+
   // F5+C7+D1: Strip volatile metadata header AND trailer sections, keeping only the
   // stable page body. stripVolatileMetadataHeader uses a two-pass scan to isolate
   // the body between the last header-side separator and the first trailer heading
@@ -516,7 +535,14 @@ function formatFirstCheck(
     `session_scoped: true | no_durable_state: baseline is lost when the MCP server restarts`,
     // TOW2-354: full Unicode line-terminator collapse (not ASCII `\n` only) —
     // `content` is untrusted page-derived text; see collapseLineTerminators.
-    `content_preview: ${collapseLineTerminators(content.slice(0, 300))}`,
+    // G-2: content_preview uses wrapUntrustedInline (single-line marker), NOT
+    // wrapUntrusted (whose `\n`-joined delimiter would reintroduce exactly the raw
+    // line terminators collapseLineTerminators exists to strip — that broke
+    // monitor_line_terminator_injection.test.ts's TOW2-354 defense on first attempt).
+    // ORDER MATTERS: collapse FIRST (so the fetched text itself is single-line),
+    // THEN inline-wrap (whose own marker is single-line by construction and
+    // defensively re-collapses both args) — never the other way round.
+    `content_preview: ${wrapUntrustedInline(collapseLineTerminators(content.slice(0, 300)), params.url)}`,
     ...fieldBlock,
     ``,
     `## Agent Instruction`,
@@ -577,7 +603,8 @@ function formatChanged(
     lines.push(`The page content hash changed but no specific field-level diff was computed.`);
     // TOW2-354: full Unicode line-terminator collapse (defense in depth — the
     // stored value is already collapsed at write time, see safePreview above).
-    lines.push(`Previous preview: ${collapseLineTerminators(prev.content_preview.slice(0, 200))}`);
+    // G-2: wrapUntrustedInline, collapse-then-wrap — same reasoning as formatFirstCheck.
+    lines.push(`Previous preview: ${wrapUntrustedInline(collapseLineTerminators(prev.content_preview.slice(0, 200)), params.url)}`);
   }
 
   lines.push(
@@ -636,7 +663,9 @@ function formatJson(
     changed_fields: fieldDiffs.length > 0
       ? fieldDiffs.map(d => ({ field: d.field, previous: d.previous, current: d.current, annotation: d.annotation }))
       : null,
-    content_preview: curr.content_preview.slice(0, 300),
+    // G-2: `curr.content_preview` was already collapseLineTerminators'd at write time
+    // (see safePreview in novadaMonitor above) — inline-wrap the sliced result.
+    content_preview: wrapUntrustedInline(curr.content_preview.slice(0, 300), params.url),
     // F5-b: Surface session-scoped / non-durable state on first check so agents understand
     // that the baseline is lost on server restart. Subsequent calls omit this field.
     ...(isFirstCheck ? { session_scoped: true, no_durable_state: "Session-scoped only — baseline lost on server restart. Schedule from your own job runner for durable monitoring." } : {}),

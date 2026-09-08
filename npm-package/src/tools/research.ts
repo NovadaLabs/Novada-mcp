@@ -5,6 +5,7 @@ import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 import type { ProgressReporter } from "./crawl.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
+import { wrapUntrusted, unwrapUntrusted } from "../utils/untrusted.js";
 
 // C1: distinguish a REAL account-level entitlement failure (Scraper API not
 // activated / bad key / quota) from a transient blip (timeout, 5xx, DNS). Only
@@ -334,7 +335,17 @@ export async function novadaResearch(
           cleaned = cleaned.replace(/## Agent Memory\n(?:[\s\S]*?)(?=\n## |\n---\n|$)/, "");
           // Strip trailing metadata sections: Agent Hints, Agent Action
           const cleanContent = cleaned.split("## Agent Hints")[0].split("## Agent Action")[0].trim();
-          return { ok: true as const, title: source.title, url: source.url, content: cleanContent };
+          // G-2 (no double-wrap): novadaExtract's body is ALREADY wrapUntrusted-wrapped
+          // (G-2's own coverage of extract.ts). Unwrap it here, BEFORE it enters
+          // splitSentences/selectExtractForSource below — otherwise the delimiter
+          // lines (they end in a period, so they parse as "sentences") can leak
+          // through as garbage excerpt candidates, AND assembleSourceMaterial's
+          // formatter wraps the selected excerpt a second time, producing nested
+          // markers. External text must be marked EXACTLY once in the final
+          // response — research.ts's own wrap (below, around e.extract) is that
+          // one mark; this call keeps the intermediate NLP pipeline unwrapped.
+          const unwrappedContent = unwrapUntrusted(cleanContent);
+          return { ok: true as const, title: source.title, url: source.url, content: unwrappedContent };
         } catch {
           return { ok: false as const, title: source.title, url: source.url, snippet: source.snippet };
         }
@@ -921,7 +932,15 @@ function formatResearchOutput(args: {
       const label = sourceLabel(e.title, e.url);
       const tag = e.grounded ? "extracted" : "snippet";
       materialLines.push(`### [${e.index}] ${label} — ${tag}`);
-      materialLines.push(e.extract);
+      // G-2: e.extract is fetched-page prose (or a snippet) — wrap it. The
+      // "(no clean, on-topic extract available…)" / "(extraction blocked…)"
+      // placeholders (see assembleSourceMaterial) are OUR OWN text, not fetched —
+      // same `startsWith("(")` test the `anyUsable`/hasMaterial gates already use.
+      // Source label is `label` (title-derived), NOT e.url — a dedup'd source's
+      // URL already appears in a small fixed budget of places (material `Source:`
+      // line, Sources-table row/link) that research.test.ts's dedup test asserts a
+      // cap on; using e.url here added a 5th, uncounted occurrence and broke it.
+      materialLines.push(e.extract.startsWith("(") ? e.extract : wrapUntrusted(e.extract, label));
       materialLines.push(`Source: ${e.url}`);
       materialLines.push("");
     }

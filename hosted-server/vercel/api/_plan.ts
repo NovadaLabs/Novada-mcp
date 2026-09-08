@@ -70,6 +70,103 @@ export const CAP_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   ...ACCOUNT_TOOL_NAMES,
 ]);
 
+// ─── Approval-gate PREVIEW exemption (Layer 1.5, MEDIUM fix 2026-09) ────────
+// ADVERSARIAL-INTEGRATION.md finding: the four WRITE tools gated behind
+// evaluateApprovalGate() (npm-package/src/utils/approval.ts) each do a FIRST
+// call with no `approval_token` that returns a `confirmation_required`
+// PREVIEW — zero upstream API work, just an in-process HMAC sign (or an
+// immediate rejection when a bare `confirm: true` is supplied with no prior
+// token). Before this fix, enforceGatewayCap charged one quota unit for that
+// preview AND one for the real EXECUTE call (valid approval_token) — one
+// logical write cost 2 units, and a caller with exactly 1 unit left could get
+// an approved-but-unexecutable write: preview succeeds (quota → 0), execute
+// is then rejected by the cap with no refund path for the confirmation_required
+// outcome (refundQuota only fires on the error/browser-flow paths, not here).
+//
+// Fix: detect the preview SHAPE (no non-empty approval_token) BEFORE
+// enforceGatewayCap's decrementQuota call and skip charging — mirroring the
+// existing CAP_EXEMPT_TOOLS early-return exactly (same allowed/charged/
+// remaining/overCapAllowed shape, so buildStatusFooter's existing
+// charged=false && !overCapAllowed branch — "gateway: free call — no quota
+// consumed" — already renders correctly with zero new footer/telemetry
+// branches). The matching EXECUTE call (valid approval_token) is NOT a
+// preview and falls through to the normal charged path, so one logical write
+// still costs exactly one quota unit.
+//
+// This is a CLASS table, not a single tool name, so any gated tool — including
+// ip_whitelist/static_ip_mgmt/capture_apikey, all HOSTED_HIDDEN today but
+// wired here uniformly in case that ever changes — is covered by adding one
+// row, never a new branch at the call site. Three of the four tools are
+// MULTI-action (only SOME `action` values go through evaluateApprovalGate —
+// e.g. ip_whitelist's "list" never touches the gate and must still be
+// charged normally), so the table also records which action values are
+// gated. `actionParam: null` means the entire tool is a single gated write
+// (proxy_account_create has no action discriminator).
+//
+// 2026-09-07: ip_whitelist's "remark" action was folded into the approval
+// gate too (SEC-consistency fix, ledger-closure audit finding #4 — a WRITE
+// action must not be reachable via a stateless flag while its siblings
+// require a signed token) — see ip_whitelist.ts's evaluateApprovalGate(...,
+// "ip_whitelist_remark") call site. Updated here to keep this table accurate
+// to what the tool actually gates; ip_whitelist stays HOSTED_HIDDEN so this
+// has no live hosted-behavior effect today, only correctness-of-record.
+interface ApprovalGatedToolSpec {
+  /** Param name selecting an action within a multi-action tool, or null when
+   *  the whole tool is one gated write with no action discriminator. */
+  actionParam: string | null;
+  /** Action values that route through evaluateApprovalGate. Only meaningful
+   *  when actionParam is non-null. */
+  gatedActions?: ReadonlySet<string>;
+}
+
+/**
+ * Source of truth for each row: the tool's own evaluateApprovalGate() call
+ * site in npm-package/src/tools/*.ts (grep `evaluateApprovalGate(` there to
+ * re-verify after any tool change — hosted-server does not import those
+ * files, so this table cannot be derived automatically and must be kept in
+ * sync by hand).
+ */
+export const APPROVAL_GATED_TOOLS: ReadonlyMap<string, ApprovalGatedToolSpec> = new Map([
+  // proxy_account_create.ts: the entire tool is the gated write.
+  ["novada_proxy_account_create", { actionParam: null }],
+  // ip_whitelist.ts: "add"/"del"/"remark" call evaluateApprovalGate; only "list" doesn't.
+  ["novada_ip_whitelist", { actionParam: "action", gatedActions: new Set(["add", "del", "remark"]) }],
+  // static_ip_mgmt.ts: only "open"/"renew" call evaluateApprovalGate; "list"/"export" don't.
+  ["novada_static_ip_mgmt", { actionParam: "action", gatedActions: new Set(["open", "renew"]) }],
+  // capture_apikey.ts: only "reset" calls evaluateApprovalGate; "get" doesn't.
+  ["novada_capture_apikey", { actionParam: "action", gatedActions: new Set(["reset"]) }],
+]);
+
+/**
+ * True iff this call is a PREVIEW attempt on an approval-gated tool: the tool
+ * (and, for multi-action tools, the specific `action` requested) is one that
+ * routes through evaluateApprovalGate(), AND the caller supplied no
+ * non-empty `approval_token`. Mirrors evaluateApprovalGate's own token check
+ * exactly (`typeof approval_token === "string" && approval_token.length > 0`)
+ * so this classification never drifts from the gate it is describing —
+ * a preview call and a malformed `confirm: true`-without-token call (which
+ * evaluateApprovalGate rejects outright) are BOTH zero-upstream-work and BOTH
+ * must not be charged; a call with a token — valid or invalid — is an
+ * EXECUTE attempt and must be charged (an invalid/expired token still costs
+ * a unit, matching every other validation failure on this gateway).
+ *
+ * Pure / no I/O — fully unit-testable, and safe to call for every tool: an
+ * unrelated tool name (not in APPROVAL_GATED_TOOLS) always returns false.
+ */
+export function isApprovalGatePreviewCall(
+  toolName: string,
+  args: Record<string, unknown>,
+): boolean {
+  const spec = APPROVAL_GATED_TOOLS.get(toolName);
+  if (!spec) return false;
+  if (spec.actionParam !== null) {
+    const action = args[spec.actionParam];
+    if (typeof action !== "string" || !spec.gatedActions?.has(action)) return false;
+  }
+  const token = args.approval_token;
+  return !(typeof token === "string" && token.length > 0);
+}
+
 // ─── Pure classification (no I/O — fully unit-testable) ─────────────────────
 
 interface UsageRecordEntry {
@@ -296,11 +393,13 @@ export interface CapGateResult {
 /**
  * Enforce the free gateway cap for one tool call (PRD Layers 1+2, amended).
  *
- *   exempt tool          → allow, zero KV/quota/plan activity
- *   under cap            → allow, one atomic incr — ZERO plan lookups
- *   used > 900           → allow + fire resolvePlan async (pre-warm, not awaited;
+ *   exempt tool           → allow, zero KV/quota/plan activity
+ *   approval-gate preview → allow, zero KV/quota/plan activity (Layer 1.5,
+ *                          MEDIUM fix — see isApprovalGatePreviewCall above)
+ *   under cap             → allow, one atomic incr — ZERO plan lookups
+ *   used > 900            → allow + fire resolvePlan async (pre-warm, not awaited;
  *                          on a cache hit it costs one background KV read)
- *   over cap (incr = -1) → await resolvePlan; allow iff plan=="pro" OR balance>0
+ *   over cap (incr = -1)  → await resolvePlan; allow iff plan=="pro" OR balance>0
  *                          (ctx balance reused when present; else one live fetch);
  *                          allowed calls re-increment via the "pro" branch
  *                          (decrementQuota semantics unchanged — the exemption
@@ -312,12 +411,24 @@ export async function enforceGatewayCap(opts: {
   toolName: string;
   monthlyQuota: number;
   ctxBalance?: number;
+  /** The tool call's own args (post zod-defaults). Only consulted for the
+   *  Layer 1.5 approval-gate preview check below — omit only from tests that
+   *  don't exercise a gated tool; every real mcp.ts call site MUST pass it. */
+  args?: Record<string, unknown>;
   deps: CapGateDeps;
 }): Promise<CapGateResult> {
-  const { toolName, monthlyQuota, ctxBalance, deps } = opts;
+  const { toolName, monthlyQuota, ctxBalance, args, deps } = opts;
 
   // Layer 1: meta tools never counted, never blocked.
   if (CAP_EXEMPT_TOOLS.has(toolName)) {
+    return { allowed: true, charged: false, remaining: Number.MAX_SAFE_INTEGER, overCapAllowed: false };
+  }
+
+  // Layer 1.5: approval-gate PREVIEW calls never counted, never blocked — see
+  // isApprovalGatePreviewCall's doc comment for the full rationale. The
+  // matching EXECUTE call (valid approval_token) does NOT match this check
+  // and falls through to the normal charged path below.
+  if (args && isApprovalGatePreviewCall(toolName, args)) {
     return { allowed: true, charged: false, remaining: Number.MAX_SAFE_INTEGER, overCapAllowed: false };
   }
 

@@ -108,12 +108,18 @@ function stubCallTool(name, args) {
   // Generic-dispatcher poll calls: novada_scrape({ platform, operation, task_id }).
   if (name === "novada_scrape" && args && typeof args.task_id === "string") {
     if (args.task_id === "walmart-task-1") {
-      // Poll completes with real records -> SLOW, not a failure.
+      // Poll completes with real records -> SLOW, not a failure. V3-N1/C-2
+      // fix: PROBES now requests format:"json" for every scraper, and
+      // runProbe's substance gate parses the ```json fence — this stub must
+      // carry a genuine, non-empty product record (title+price) or the new
+      // gate correctly reclassifies it as ③-backend (bare-envelope shape).
       return Promise.resolve({
         ok: true,
         httpStatus: 200,
         timeMs: 800,
-        text: "## Scrape Results\nplatform: walmart.com | operation: product_by_keyword | records: 3 | source: live\n\nstatus: ok",
+        text:
+          "## Scrape Results\nplatform: walmart.com | operation: product_by_keyword | records: 3 | source: live | format: json\n\n" +
+          '```json\n[{"title": "Running Shoes", "price": 39.99, "url": "https://www.walmart.com/ip/1"}]\n```',
         error: null,
       });
     }
@@ -146,11 +152,16 @@ function stubCallTool(name, args) {
           error: null,
         });
       }
+      // V3-N1/C-2 fix: genuine organic hits (title+link on the first record)
+      // so the new substance gate reads this as a REAL resolved SERP, not a
+      // bare envelope.
       return Promise.resolve({
         ok: true,
         httpStatus: 200,
         timeMs: 700,
-        text: "## Scrape Results\nplatform: bing.com | operation: web_search | records: 2 | source: live\n\nstatus: ok",
+        text:
+          "## Scrape Results\nplatform: bing.com | operation: web_search | records: 2 | source: live | format: json\n\n" +
+          '```json\n[{"title": "Claude — Anthropic", "link": "https://claude.com"}, {"title": "Claude Product", "link": "https://claude.com/product"}]\n```',
         error: null,
       });
     }

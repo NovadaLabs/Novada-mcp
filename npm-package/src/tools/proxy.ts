@@ -2,6 +2,8 @@ import type { ProxyParams } from "./types.js";
 import { resolveProxyCredentials } from "../utils/credentials.js";
 import { novadaProxyStatic } from "./proxy_static.js";
 import { novadaProxyDedicated } from "./proxy_dedicated.js";
+import { novadaPlanBalanceAll } from "./plan_balance_all.js";
+import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 /**
  * Build Novada proxy username with targeting options.
@@ -67,6 +69,113 @@ function appendCityWarningsAndCurlSnippet(
   return parts.join("");
 }
 
+// ─── C-11 fix: expired/unprovisioned-plan entitlement gate ─────────────────
+// Finding (C-reliability-live.md, C-11): "novada_proxy hands out ready-to-use
+// config for EXPIRED plans with zero warning. type=residential returned
+// rotating-proxy config while the same server's account tool shows Residential
+// EXPIRED 2026-07-08 / 0.0 MB. Agent wires a dead proxy, fails at connect time
+// with no clue." Fix (as recommended by the finding): a cheap entitlement
+// cross-check via plan_balance_all — ONE scoped call to the single product in
+// question — before handing out credentials that would silently fail at
+// connect time.
+//
+// Scope: only the 4 flow-metered, auto-provisioned zone-based types
+// (residential/isp/mobile/datacenter) — these are the ones plan_balance_all
+// actually tracks (ALL_PRODUCT_KEYS) and the ones whose credentials come from
+// resolveProxyCredentials()'s account-API auto-fetch, which is exactly the
+// path the C-11 finding observed. static/dedicated use a DIFFERENT,
+// user-managed credential model (NOVADA_STATIC_PROXY_LIST /
+// NOVADA_DEDICATED_PROXY_LIST env vars — the user already owns those specific
+// IPs by having configured them), so there is no comparable "is this plan
+// still active" question to ask for them here.
+const FLOW_ENTITLEMENT_TYPES = new Set<ProxyParams["type"]>([
+  "residential", "isp", "mobile", "datacenter",
+]);
+
+const PLAN_LABELS: Record<string, string> = {
+  residential: "Residential",
+  isp: "ISP",
+  mobile: "Mobile",
+  datacenter: "Datacenter",
+};
+
+const URL_PROXY_PLANS = "https://dashboard.novada.com/overview/products/";
+
+/**
+ * Cap how long the entitlement pre-check is allowed to hold up an otherwise-
+ * fast credential-formatting call. plan_balance_all's underlying devApiPost
+ * uses a 30s default timeout — too slow to gate a normally-instant tool on. A
+ * timeout here degrades to "unknown" (fail OPEN, never fail closed on a slow
+ * network) rather than making every proxy call pay up to 30s of latency.
+ */
+const ENTITLEMENT_CHECK_TIMEOUT_MS = 5000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      const t = setTimeout(() => reject(new Error(`entitlement check timed out after ${ms}ms`)), ms);
+      // Never keep the process alive just for this timer.
+      (t as unknown as { unref?: () => void }).unref?.();
+    }),
+  ]);
+}
+
+type EntitlementStatus = "active" | "expired" | "unavailable" | "unknown";
+
+/**
+ * Check whether the flow-metered plan for `type` is active, using the SAME
+ * per-product lookup novada_account section="plans" already exposes (single
+ * source of truth — reuses plan_balance_all's expired/unavailable derivation
+ * rather than re-implementing the expire_time math here).
+ *
+ * Fails OPEN by design (returns "unknown", never throws) on anything that
+ * ISN'T an explicit expired/not-provisioned signal: no dev-api key configured,
+ * network error, malformed response, or a timeout. A diagnostics failure must
+ * never break a working credential formatter — this mirrors the codebase's own
+ * G-11 precedent (auth fail-open on upstream verification outage).
+ */
+async function checkPlanEntitlement(type: ProxyParams["type"]): Promise<EntitlementStatus> {
+  if (!FLOW_ENTITLEMENT_TYPES.has(type)) return "unknown";
+  try {
+    const raw = await withTimeout(
+      novadaPlanBalanceAll({ products: [type as "residential" | "isp" | "mobile" | "datacenter"] } as never),
+      ENTITLEMENT_CHECK_TIMEOUT_MS,
+    );
+    const parsed = JSON.parse(raw) as {
+      per_product?: Record<string, { status?: string; expired?: boolean; unavailable?: boolean }>;
+    };
+    const entry = parsed?.per_product?.[type];
+    if (!entry) return "unknown";
+    if (entry.status === "ok" && entry.expired === true) return "expired";
+    if (entry.status === "error" && entry.unavailable === true) return "unavailable";
+    return "active";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Throws a structured NovadaError (→ isError:true at the MCP dispatch layer)
+ * naming the specific plan + the renew URL + an agent_instruction, instead of
+ * silently returning working-looking credentials for a dead plan (C-11).
+ */
+function throwExpiredPlanError(type: ProxyParams["type"], entitlement: "expired" | "unavailable"): never {
+  const label = PLAN_LABELS[type] ?? type;
+  const reason = entitlement === "expired" ? "EXPIRED" : "not provisioned on this account";
+  throw new NovadaError({
+    code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
+    message: `Your ${label} proxy plan is ${reason} — Novada will not route traffic for it. Returning credentials would silently fail at connect time.`,
+    agent_instruction:
+      `Do NOT use novada_proxy(type="${type}") right now — the ${label} plan is ${reason.toLowerCase()}, ` +
+      `so any credentials returned would fail to connect with no further clue. Tell the user to renew/purchase ` +
+      `the ${label} plan at ${URL_PROXY_PLANS}, then retry novada_proxy. To confirm plan status across ALL ` +
+      `ledgers (Wallet + every product) before retrying, call novada_account(section="plans").`,
+    retryable: false,
+    detail: `plan=${label} type=${type} status=${entitlement}`,
+  });
+}
+
 /**
  * Return proxy configuration for use in HTTP clients, curl, or shell.
  *
@@ -74,6 +183,19 @@ function appendCityWarningsAndCurlSnippet(
  * bypass geo-restrictions, or maintain IP consistency across a session.
  */
 export async function novadaProxy(params: ProxyParams): Promise<string> {
+  // C-11 fix: refuse to hand out credentials for a plan we can positively
+  // confirm is expired or not provisioned. Runs BEFORE the static/dedicated
+  // branch checks below (those types are exempt — see FLOW_ENTITLEMENT_TYPES'
+  // doc comment) so it only ever gates the auto-provisioned zone-based path.
+  if (FLOW_ENTITLEMENT_TYPES.has(params.type)) {
+    const entitlement = await checkPlanEntitlement(params.type);
+    if (entitlement === "expired" || entitlement === "unavailable") {
+      throwExpiredPlanError(params.type, entitlement);
+    }
+    // "active" or "unknown" (couldn't verify) — proceed. "unknown" is a
+    // deliberate fail-open: we only ever BLOCK on a positive signal.
+  }
+
   // F1: On the hosted door (Vercel), when the caller did NOT explicitly pass a
   // format, default to "url" (a single pasteable proxy URL string) rather than
   // whatever the schema default is. Local/stdio callers are unaffected.

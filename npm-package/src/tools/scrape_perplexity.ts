@@ -56,23 +56,23 @@ export const PERPLEXITY_SCRAPER_CONFIG: PlatformScraperConfig<PerplexityOperatio
     "answer_by_url, { search_terms: \"Today's weather\" } for answer_by_search_term.",
   description: {
     core:
-      "Extract the actual AI-generated answer Perplexity returns for a query — by a Perplexity query URL or a raw search term — through a Perplexity-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"perplexity.ai\". This scrapes Perplexity's own live-rendered answer page (the model's actual response text) — it is NOT a web search results list and NOT an indexed-page brand-mention scan.",
+      "Extract the actual AI-generated answer Perplexity returns for a query — by a Perplexity query URL or a raw search term — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"perplexity.ai\"). Scrapes Perplexity's own live-rendered answer page (the model's actual response text) — NOT a web search results list and NOT an indexed-page brand-mention scan.",
     useWhen: [
       "what does Perplexity AI answer for <query>",
       "get Perplexity's generated answer for this perplexity.ai URL",
       "get Perplexity's answer for the search term <term>",
     ],
     notFor: [
-      { when: "A general web/multi-engine search for information (not specifically Perplexity's own generated answer)", useInstead: "novada_search" },
-      { when: "Checking whether a brand is mentioned on AI-company indexed public pages (chatgpt.com/perplexity.ai/openai.com/etc.)", useInstead: "novada_ai_monitor — that tool scans INDEXED PUBLIC PAGES for brand mentions across AI-company domains; it does not fetch a live generated answer for an arbitrary query the way this tool does" },
+      { when: "A general web/multi-engine search for information (not Perplexity's own generated answer)", useInstead: "novada_search" },
+      { when: "Checking whether a brand is mentioned on AI-company indexed public pages", useInstead: "novada_ai_monitor — scans INDEXED PUBLIC PAGES for brand mentions across AI-company domains; does not fetch a live generated answer for an arbitrary query" },
       { when: "A complex question needing cited, multi-source synthesis", useInstead: "novada_research" },
       { when: "Reading one already-known URL's raw page content", useInstead: "novada_extract" },
-      { when: "A different platform's structured data (Amazon, LinkedIn, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
     ],
     returns:
-      "Perplexity's rendered answer content (the text of its generated response) in the chosen format (markdown/json/csv/excel/html/toon) — same rendering as novada_scrape.",
+      "Perplexity's rendered answer content (the text of its generated response) in the chosen output format — same rendering as novada_scrape.",
     operationsNote:
-      "2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term (see the `operation` param's description for the exact `params` keys each needs). Every perplexity.ai catalog operation is currently status:\"ok\" — none are excluded for being backend_broken, unlike its sibling chatgpt.com, whose only 2 catalog operations are BOTH backend_broken (verified 2026-07-13, \"submit hangs >120s\") — which is why no novada_scrape_chatgpt tool exists.",
+      "2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term. Every perplexity.ai catalog operation is currently status:\"ok\" — unlike its sibling chatgpt.com, whose only 2 catalog operations are BOTH backend_broken (verified 2026-07-13, \"submit hangs >120s\") — which is why no novada_scrape_chatgpt tool exists.",
   },
 };
 
