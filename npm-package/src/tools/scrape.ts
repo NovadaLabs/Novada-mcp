@@ -1,4 +1,5 @@
 import axios, { AxiosError } from "axios";
+import { createHash } from "node:crypto";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHostedEnvironment } from "../config.js";
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
@@ -524,6 +525,13 @@ interface TaskMeta {
   limit: number;
   /** epoch ms when this task_id was first recorded — used to compute age_s (C-12). */
   submittedAt: number;
+  /** F10 (battery 2026-09-10, P1-5 class): number of "status: processing" envelopes THIS
+   *  server process has rendered for this task_id. Incremented by processingEnvelope()
+   *  itself (the one shared render site) so every poll/resume response visibly advances.
+   *  Per-process best-effort by construction: on serverless hosting a resume may land on
+   *  a fresh instance and restart at 1 — the envelope discloses exactly that and tells
+   *  the agent to keep its own attempt count too. */
+  pollCount: number;
 }
 const MAX_TASK_META_ENTRIES = 500;
 const TASK_META_STORE = new Map<string, TaskMeta>();
@@ -540,7 +548,7 @@ function recordTaskMeta(taskId: string, limit: number): TaskMeta {
     const oldestKey = TASK_META_STORE.keys().next().value;
     if (oldestKey !== undefined) TASK_META_STORE.delete(oldestKey);
   }
-  const meta: TaskMeta = { limit, submittedAt: Date.now() };
+  const meta: TaskMeta = { limit, submittedAt: Date.now(), pollCount: 0 };
   TASK_META_STORE.set(taskId, meta);
   return meta;
 }
@@ -587,11 +595,31 @@ export function ageBucketInstruction(ageS: number): string {
  * age-escalating `agent_instruction` (ageBucketInstruction) so an agent polling a
  * task that has been running for 20+ minutes is told to stop and resubmit/report
  * instead of being invited to keep polling indefinitely.
+ *
+ * F10 (battery 2026-09-10, P1-5 class — CONFIRMED byte-identical processing reply on a
+ * github resume round-trip; previously amazon/x/tiktok): every processing response now
+ * carries visible PROGRESS SEMANTICS so an agent can distinguish progress from a stall:
+ *   - checked_at         — ISO timestamp of THIS poll.
+ *   - poll_count         — TaskMeta.pollCount, incremented HERE (the one shared render
+ *                          site) — consecutive polls can never be byte-identical again.
+ *   - upstream_status    — the upstream-reported task state: "pending"/"running" from
+ *                          the fast task_status probe, or "processing" when only the
+ *                          download endpoint was consulted (its 27202 does not
+ *                          distinguish pending from running).
+ *   - state_fingerprint  — sha256(task_id | upstream_status), first 12 hex chars.
+ * CHOSEN MECHANISM for "changed-vs-last-poll" (the server is stateless per call on
+ * hosted, so a server-side diff is impossible): state_fingerprint is a content hash of
+ * the upstream-visible state — the AGENT compares it across its own polls (same value =
+ * no upstream-visible change yet; different = the task state advanced, e.g.
+ * pending → running), and checked_at/age_s give it the fields to compute the time delta
+ * itself. The envelope's Agent Hints state this explicitly, including that poll_count is
+ * per-server-process and may reset on serverless hosting.
  */
 function processingEnvelope(
   platform: string,
   displayOperation: string,
   taskId: string,
+  upstreamStatus: "pending" | "running" | "processing",
   waitedMs?: number,
   submittedAt?: number,
 ): string {
@@ -602,12 +630,22 @@ function processingEnvelope(
   const instruction = ageS !== undefined
     ? ageBucketInstruction(ageS)
     : "Retry with task_id every ~10-20s until it completes.";
+  // F10 progress bookkeeping — meta exists at both call sites (recorded on fresh submit
+  // and on resume before this renders); the optional-chaining guard only covers the
+  // FIFO-eviction edge on a very long-lived process.
+  const meta = TASK_META_STORE.get(taskId);
+  const pollCount = meta ? ++meta.pollCount : undefined;
+  const fingerprint = createHash("sha256").update(`${taskId}|${upstreamStatus}`).digest("hex").slice(0, 12);
   return [
     `## Scrape Results`,
     `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
     ``,
     `status: processing`,
+    `upstream_status: ${upstreamStatus}`,
     ...(ageS !== undefined ? [`submitted_at: ${new Date(submittedAt as number).toISOString()}`, `age_s: ${ageS}`] : []),
+    `checked_at: ${new Date().toISOString()}`,
+    ...(pollCount !== undefined ? [`poll_count: ${pollCount}`] : []),
+    `state_fingerprint: ${fingerprint}`,
     `⏳ Task still running (task_id="${taskId}")${elapsedClause}.`,
     `To fetch the result WITHOUT re-charging, call novada_scrape again with task_id="${taskId}" (skips re-submit).`,
     `A plain retry with the same params starts a NEW billable task.`,
@@ -616,7 +654,90 @@ function processingEnvelope(
     `## Agent Hints`,
     `- Pass task_id="${taskId}" to novada_scrape to resume for free.`,
     `- platform and operation are still required when resuming (used for display only).`,
+    `- Progress check (stateless server — compute the delta yourself): compare state_fingerprint with your previous poll. The SAME value means no upstream-visible change yet; a DIFFERENT value means the task state advanced (e.g. pending → running). Use checked_at and age_s to measure elapsed time between your own polls.`,
+    `- poll_count counts the processing responses served for this task_id by THIS server instance; on serverless hosting it can reset between calls — keep your own attempt count as well.`,
     `agent_instruction: ${instruction}`,
+  ].join("\n");
+}
+
+// ─── Shared empty-result honesty guard (F9 — battery 2026-09-10, P1-3 class) ──────────
+// CONFIRMED live on hosted 0.9.37: instagram/facebook/walmart returned 0 records as a
+// plain "status: ok" / isError:false (previously youtube/linkedin — per-instance fixes
+// kept missing members of the class). Class fix in the ONE shared path every scraper
+// tool funnels through (novadaScrape, this file): a 0-record outcome is CLASSIFIED as
+// `status: empty_result` — never plain ok — with an agent_instruction naming BOTH
+// hypotheses: (a) the target genuinely has no matching data, (b) the upstream returned
+// nothing (an extraction failure surfaced as an empty payload), weighted by the upstream
+// signal where one exists. All 15 platform-scraper tools + generic novada_scrape inherit
+// this automatically; tests/tools/scrape-empty-honesty-sweep.test.ts sweeps the whole
+// family from PLATFORM_SCRAPER_TOOLS so a future scraper config is covered by
+// construction (new coverage = new ROW, never a new branch).
+//
+// INVARIANT: a 0-records response must never surface as plain status:ok. It stays
+// isError:false — an empty result is a graceful outcome, not a failure — but the status
+// marker and instruction must make the ambiguity visible instead of asserting success.
+type EmptyResultSignal =
+  /** Submit response said so explicitly: inner code 400 / "serp returns empty" / null data. */
+  | "upstream_explicit_empty"
+  /** Download endpoint completed but returned a LITERALLY EMPTY items array — no signal. */
+  | "empty_download"
+  /** Items were present but contained no recognizable record fields. */
+  | "no_records_extracted";
+
+/** Per-signal human line + hypothesis-weighted agent_instruction. */
+const EMPTY_RESULT_TEXT: Record<EmptyResultSignal, { body: (msg?: string) => string; instruction: string }> = {
+  upstream_explicit_empty: {
+    body: (msg) => `_No results found for this query._ (upstream: ${sanitizeServerMsg(msg || "serp returns empty")})`,
+    instruction:
+      "The upstream backend ran this query and EXPLICITLY reported an empty result set — most likely the target " +
+      "genuinely has no data matching these params, though an upstream extraction gap that reports empty instead of " +
+      "failing cannot be fully ruled out. Verify the param value (keyword/url/asin/username) is spelled correctly and " +
+      "is a real, indexable target, then try a broader or differently-worded query. If you are confident matching data " +
+      "exists, retry once; a second identical empty means this target/operation has no data via this scraper — report it.",
+  },
+  empty_download: {
+    body: () => `_No records returned._ (the scraper backend completed the task but sent back zero items — no explicit "no results" signal was given)`,
+    instruction:
+      "Ambiguous empty: the upstream gave NO signal to distinguish (a) the target genuinely has no matching data from " +
+      "(b) the upstream scraper returned nothing (an extraction failure surfaced as an empty payload). Do not treat this as confirmation " +
+      "the data is absent. Verify the param value and retry once; if it is empty again and you expect data to exist, " +
+      "treat it as an upstream extraction gap — try novada_extract on the target URL as an alternative and report the operation.",
+  },
+  no_records_extracted: {
+    body: () => `_No records returned._ (the upstream payload contained no recognizable record fields)`,
+    instruction:
+      "Ambiguous empty: the upstream responded but its payload contained no recognizable records — either (a) the target " +
+      "genuinely has no matching data, or (b) the upstream response schema changed and extraction failed. Do not treat this as confirmation " +
+      "the data is absent. Retry once with format='json' to inspect the raw payload; if records are visibly present there, " +
+      "report this as an extraction gap. Otherwise verify the param value or try novada_extract on the target URL.",
+  },
+};
+
+/**
+ * Render the shared 0-record envelope. `upstreamMessage` is only used by the
+ * explicit-empty signal (the upstream's own wording, sanitized).
+ */
+function emptyResultEnvelope(
+  platform: string,
+  displayOperation: string,
+  signal: EmptyResultSignal,
+  upstreamMessage?: string,
+): string {
+  const text = EMPTY_RESULT_TEXT[signal];
+  return [
+    `## Scrape Results`,
+    `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
+    ``,
+    `status: empty_result`,
+    `empty_signal: ${signal}`,
+    text.body(upstreamMessage),
+    ``,
+    `---`,
+    `## Agent Hints`,
+    `- status is empty_result (NOT ok): zero records came back — see agent_instruction for how to interpret it.`,
+    `- Verify the parameter value (keyword/url/asin) is spelled correctly and is a real, indexable target.`,
+    `- Read novada://scraper-platforms to confirm the operation matches your intent.`,
+    `agent_instruction: ${text.instruction}`,
   ].join("\n");
 }
 
@@ -1609,7 +1730,9 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     // limit/submittedAt untouched.
     const meta = recordTaskMeta(resumeTaskId, requestedLimit);
     if (fast.status === "pending" || fast.status === "running") {
-      return processingEnvelope(platform, displayOperation, resumeTaskId, undefined, meta.submittedAt);
+      // F10: the fast probe's own state ("pending"/"running") is the upstream_status —
+      // its transition is exactly what state_fingerprint lets the agent detect.
+      return processingEnvelope(platform, displayOperation, resumeTaskId, fast.status, undefined, meta.submittedAt);
     }
     if (fast.status === "failed") {
       throw makeNovadaError(
@@ -1661,22 +1784,11 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     }
   }
 
-  // Empty serp / no-results → GRACEFUL success (status ok, NOT isError). The query
-  // was valid; it simply matched nothing. Returning a plain string keeps isError:false.
+  // Empty serp / no-results → GRACEFUL outcome (isError stays false) but NEVER a plain
+  // "status: ok" (F9 — see emptyResultEnvelope). The upstream explicitly reported an
+  // empty result set, which is the strongest no-data signal this pipeline can observe.
   if (submitOutcome.kind === "empty") {
-    return [
-      `## Scrape Results`,
-      `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
-      ``,
-      `status: ok`,
-      `_No results found for this query._ (upstream: ${sanitizeServerMsg(submitOutcome.message)})`,
-      ``,
-      `---`,
-      `## Agent Hints`,
-      `- This is not an error — the query returned zero results. Try a broader or differently-worded query.`,
-      `- Verify the parameter value (keyword/url/asin) is spelled correctly and is a real, indexable target.`,
-      `- Read novada://scraper-platforms to confirm the operation matches your intent.`,
-    ].join("\n");
+    return emptyResultEnvelope(platform, displayOperation, "upstream_explicit_empty", submitOutcome.message);
   }
 
   // Step 2: Obtain result items — inline (skip poll) or by polling the task_id.
@@ -1711,8 +1823,10 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     if (pollOutcome.kind === "pending") {
       // C-12: metadata was already recorded (fresh submit above, or the resume
       // branch's recordTaskMeta) — its submittedAt drives the age_s escalation.
+      // F10: the download endpoint's 27202 does not distinguish pending from running,
+      // so upstream_status is the coarser "processing" on this path.
       return processingEnvelope(
-        platform, displayOperation, pollOutcome.taskId, ceilingMs,
+        platform, displayOperation, pollOutcome.taskId, "processing", ceilingMs,
         TASK_META_STORE.get(pollOutcome.taskId)?.submittedAt,
       );
     }
@@ -1734,7 +1848,9 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   //   Format B (wrapped): [{spider_code:200, rest:{...}}, ...] or [{error:"msg", error_code:N}]
   const firstItem = resultItems[0];
   if (!firstItem) {
-    return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
+    // F9: a literally empty download body carries NO signal to distinguish no-data from
+    // an upstream extraction failure — classify, never plain-ok (see emptyResultEnvelope).
+    return emptyResultEnvelope(platform, displayOperation, "empty_download");
   }
 
   const firstAsRecord = firstItem as Record<string, unknown>;
@@ -1801,7 +1917,9 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   assertYouTubeIdentity(platform, operation, opParams as Record<string, unknown> | undefined, rawRecords.slice(0, effectiveLimit));
 
   if (records.length === 0) {
-    return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
+    // F9: items came back but nothing extractable was inside — ambiguous between
+    // no-data and schema-drift/extraction failure; classify, never plain-ok.
+    return emptyResultEnvelope(platform, displayOperation, "no_records_extracted");
   }
 
   const title = `${platform} — ${displayOperation}`;
