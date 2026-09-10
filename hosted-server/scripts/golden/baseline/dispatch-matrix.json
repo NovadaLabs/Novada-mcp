@@ -47,7 +47,7 @@
     "structural": "markdown"
   },
   "novada_discover": {
-    "length_band": "m",
+    "length_band": "l",
     "markers": [
       "Novada MCP \u2014 Tool Catalog",
       "Content Retrieval",
@@ -56,6 +56,8 @@
       "Browser & Rendering",
       "Account & Billing",
       "Health & Discovery",
+      "Tool Groups",
+      "Billing",
       "Next Steps"
     ],
     "status": "ok",
@@ -106,7 +108,7 @@
     "structural": "markdown"
   },
   "novada_plan_balance_all": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
       "Plan Balances"
     ],
@@ -119,15 +121,17 @@
       "Proxy Configuration",
       "Usage Examples",
       "as curl:",
-      "Agent Hints"
+      "Agent Hints",
+      "Ledger (plan preflight)",
+      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
     ],
     "status": "ok",
     "structural": "markdown"
   },
   "novada_proxy_account_create": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [],
-    "status": "ok",
+    "status": "err",
     "structural": "other"
   },
   "novada_proxy_account_list": {
@@ -142,7 +146,9 @@
       "Proxy Configuration",
       "Usage Examples",
       "as curl:",
-      "Agent Hints"
+      "Agent Hints",
+      "Ledger (plan preflight)",
+      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
     ],
     "status": "ok",
     "structural": "markdown"
@@ -161,7 +167,9 @@
       "Proxy Configuration",
       "Usage Examples",
       "as curl:",
-      "Agent Hints"
+      "Agent Hints",
+      "Ledger (plan preflight)",
+      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
     ],
     "status": "ok",
     "structural": "markdown"
@@ -172,7 +180,9 @@
       "Proxy Configuration",
       "Usage Examples",
       "as curl:",
-      "Agent Hints"
+      "Agent Hints",
+      "Ledger (plan preflight)",
+      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
     ],
     "status": "ok",
     "structural": "markdown"
@@ -183,7 +193,9 @@
       "Proxy Configuration",
       "Usage Examples",
       "as curl:",
-      "Agent Hints"
+      "Agent Hints",
+      "Ledger (plan preflight)",
+      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
     ],
     "status": "ok",
     "structural": "markdown"
@@ -209,13 +221,10 @@
     "structural": "markdown"
   },
   "novada_scrape": {
-    "length_band": "s",
-    "markers": [
-      "Scrape Results",
-      "Agent Hints"
-    ],
-    "status": "ok",
-    "structural": "markdown"
+    "length_band": "xs",
+    "markers": [],
+    "status": "err",
+    "structural": "other"
   },
   "novada_scraper_result": {
     "length_band": "xs",
@@ -268,9 +277,12 @@
   },
   "novada_unblock": {
     "length_band": "s",
-    "markers": [],
+    "markers": [
+      "Extract Failed",
+      "Agent Hints"
+    ],
     "status": "ok",
-    "structural": "other"
+    "structural": "markdown"
   },
   "novada_verify": {
     "length_band": "m",
@@ -292,7 +304,7 @@
     "structural": "markdown"
   },
   "novada_wallet_usage_record": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
       "Wallet Usage History"
     ],

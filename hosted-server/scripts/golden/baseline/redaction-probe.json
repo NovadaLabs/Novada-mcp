@@ -9,8 +9,10 @@
   "note": "proxy.novada.pro hostname appears in response (expected public endpoint). leaked=True only if unmasked credentials precede @host.",
   "sample_markers": [
     "Proxy Configuration",
-    "Setup",
-    "Agent Hints"
+    "Usage Examples",
+    "as curl:",
+    "Agent Hints",
+    "Ledger (plan preflight)"
   ],
   "trigger_tool": "novada_proxy",
   "triggered": true
