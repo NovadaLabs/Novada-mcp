@@ -65,7 +65,7 @@ export const YOUTUBE_SCRAPER_CONFIG = {
         "transcript_by_video/comments_by_video/video_by_id, { url: \"https://www.youtube.com/watch?v=...\" } for " +
         "video_file_by_url/audio_file_by_url/video_by_url, { keyword: \"proxy\" } for channels_by_keyword/videos_by_keyword.",
     description: {
-        core: "Extract structured YouTube data — video and channel metadata, transcripts, comments, and downloadable video/audio files — through a YouTube-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"youtube.com\".",
+        core: "Extract structured YouTube data — video/channel metadata, transcripts, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\").",
         useWhen: [
             "get the transcript/subtitles for this YouTube video",
             "pull the comments on this YouTube video",
@@ -74,12 +74,12 @@ export const YOUTUBE_SCRAPER_CONFIG = {
             "find YouTube videos matching <keyword>, filtered by duration/upload date/attributes",
         ],
         notFor: [
-            { when: "A single YouTube URL you just want read as plain text", useInstead: "novada_extract" },
+            { when: "A single YouTube URL to read as plain text", useInstead: "novada_extract" },
             { when: "A general web/video search not scoped to YouTube", useInstead: "novada_search" },
-            { when: "A different platform's structured data (TikTok, Instagram, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+            { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
         ],
-        returns: "Structured video/channel/comment records (title, views, transcript text, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen format (markdown/json/csv/excel/html/toon) — same rendering as novada_scrape.",
-        operationsNote: "13 verified-working YouTube operations spanning transcripts, video/audio file downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel (see the `operation` param's description for the exact `params` keys each needs). Every youtube.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+        returns: "Structured video/channel/comment records (title, views, transcript text, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format — same rendering as novada_scrape.",
+        operationsNote: "13 verified-working YouTube operations spanning transcripts, video/audio downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel. Every youtube.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
     },
 };
 /** The materialized YouTube platform-scraper tool (definition + registry entry + handler). */

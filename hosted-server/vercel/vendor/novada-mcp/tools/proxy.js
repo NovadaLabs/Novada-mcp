@@ -1,6 +1,8 @@
 import { resolveProxyCredentials } from "../utils/credentials.js";
 import { novadaProxyStatic } from "./proxy_static.js";
 import { novadaProxyDedicated } from "./proxy_dedicated.js";
+import { assertFlowLedgerActive, URL_PROXY_PLANS, } from "./proxy_preflight.js";
+import { verifyProxyExit, isVerifySupportedRuntime, pickProxyListEntry, sanitizeEchoField, DEFAULT_ECHO_TIMEOUT_MS, } from "./proxy_verify.js";
 /**
  * Build Novada proxy username with targeting options.
  * Novada format: baseUser-zone-res-country-us-city-london-session-abc123
@@ -58,6 +60,126 @@ function appendCityWarningsAndCurlSnippet(result, cityWarnings, format) {
     }
     return parts.join("");
 }
+// ─── F11 ledger + verification evidence (appended to every issued config) ────
+//
+// F11 CONFIRMED 2026-09-10: a key whose residential_flow ledger showed balance
+// 0 (plan expired 2026-07-08) received clean-looking credentials; the gateway
+// accepted auth then refused CONNECT with HTTP 402 — visible only as curl exit
+// 56. Two-part fix:
+//   1. PREFLIGHT (proxy_preflight.ts): before issuing, read the MATCHING
+//      product's flow-ledger row (balance + expire_time) via the shared
+//      FLOW_BALANCE_ENDPOINTS table — read with the BILLING account's key
+//      (HIGH-1: auto-fetched creds carry `billingApiKey`; direct env/SDK creds
+//      bill an unknowable account, so nothing is consulted and the response
+//      discloses "ledger unknown for the billing account") — and REFUSE
+//      (fail-closed, full evidence) on a positive 0/expired/not-provisioned
+//      signal. Indeterminate lookups fail open and are DISCLOSED below.
+//   2. VERIFY (proxy_verify.ts): after issuing, run exactly ONE IP-echo request
+//      through the issued proxy (5s timeout, never inside any retry loop) and
+//      put the evidence — exit_ip, org/ASN, country, latency — in the response;
+//      on failure still return the config plus a classified
+//      verification_failed note (402 payment / 407 auth / timeout / …).
+const FAILURE_HINTS = {
+    payment_required: `an exhausted/expired plan is the usual cause — check novada_account(section="plans") ` +
+        `and top up/renew at ${URL_PROXY_PLANS}.`,
+    auth_failed: `credentials were rejected — inspect/regenerate sub-accounts via novada_proxy_account_list, ` +
+        `or fix NOVADA_PROXY_USER/NOVADA_PROXY_PASS.`,
+    timeout: `the gateway did not answer within 5s — could be transient; the config may still work. ` +
+        `Try it yourself (this tool probes exactly once, never retries).`,
+    network_error: `the proxy gateway could not be reached from this machine — check NOVADA_PROXY_ENDPOINT ` +
+        `and local network egress.`,
+    bad_response: `the gateway answered, but not with the echo payload — an intermediary may be interfering; ` +
+        `try the curl line manually.`,
+};
+/**
+ * Ledger disclosure line. When the preflight was indeterminate the config is
+ * still issued (fail-open), but the response must say WHY the ledger is
+ * unverified — directly-supplied credentials (env/SDK) bill an account this
+ * server cannot identify, so NO ledger is consulted for them (HIGH-1: judging
+ * another account's ledger produced wrong-account denials and wrong-account
+ * evidence), while auto-fetched credentials imply a known billing key whose
+ * ledger lookup happened to fail.
+ */
+function ledgerDisclosure(ledger, credSource) {
+    if (!ledger)
+        return `unverified — no ledger information available`;
+    if (ledger.status === "active") {
+        return (`${ledger.label} flow ledger (${ledger.ledger}): active — ` +
+            `balance ${ledger.balance_human ?? "n/a"}, expires ${ledger.expires_at ?? "n/a"}`);
+    }
+    // status === "unknown" (expired/exhausted/unavailable never reach here — they throw)
+    if (credSource === "direct") {
+        return (`unverified — ledger unknown for the billing account (credentials were supplied via ` +
+            `env/SDK, so the account they bill cannot be read from here; no ledger was consulted)`);
+    }
+    return `unverified — ledger lookup failed (${ledger.detail ?? "no detail"})`;
+}
+const VERIFY_HEADER = `## Verification (one live IP-echo through this proxy — ~1 KB metered traffic, ~1s; disable with verify=false)`;
+/**
+ * Build the "## Ledger" + "## Verification" evidence block appended to every
+ * issued config. Runs the echo probe at most ONCE (opt-out via verify=false;
+ * local-stdio runtimes only — hosted runtimes cannot open raw proxied sockets,
+ * so the skip is disclosed instead of risking a false negative).
+ */
+async function buildEvidenceBlock(opts) {
+    const lines = [`## Ledger (plan preflight)`, opts.ledgerLine, ``, VERIFY_HEADER];
+    if (!opts.wantVerify) {
+        lines.push(`verification: skipped (verify=false — no live check performed)`);
+    }
+    else if (!isVerifySupportedRuntime()) {
+        lines.push(`verification: skipped (hosted runtime — raw proxied connections are unavailable here; ` +
+            `run the curl line locally to verify)`);
+    }
+    else if (!opts.target) {
+        lines.push(`verification: skipped (no verifiable credential entry resolved)`);
+    }
+    else {
+        // Exactly ONE probe — never retried, never inside a loop.
+        let result;
+        try {
+            result = await verifyProxyExit(opts.target, DEFAULT_ECHO_TIMEOUT_MS);
+        }
+        catch (err) {
+            // verifyProxyExit resolves on every expected path; a throw is a prober
+            // bug — verification must never break issuing.
+            result = {
+                verified: false,
+                failure_class: "network_error",
+                detail: `prober failed unexpectedly: ${err instanceof Error ? err.message : String(err)}`,
+                latency_ms: 0,
+            };
+        }
+        if (result.verified) {
+            lines.push(`status: VERIFIED — the proxy routed a live request`, `exit_ip: ${result.exit_ip}`);
+            if (result.org || result.asn) {
+                lines.push(`org: ${[result.org, result.asn ? `(${result.asn})` : ""].filter(Boolean).join(" ")}`);
+            }
+            // LOW-5: `country` has no current producer (ipinfo maps to country_code
+            // only), so it arrives here OUTSIDE verifyProxyExit's sanitized-at-source
+            // pin — sanitize at render so a future producer setting it raw cannot
+            // bypass the injection hardening.
+            const country = sanitizeEchoField(result.country);
+            if (country || result.country_code) {
+                // ipinfo.io-class echoes report only a 2-letter code (no full name) —
+                // render whichever evidence exists.
+                const name = country ?? result.country_code;
+                const code = country && result.country_code ? ` (${result.country_code})` : "";
+                lines.push(`country: ${name}${code}`);
+            }
+            lines.push(`latency_ms: ${result.latency_ms}`);
+            if (opts.requestedCountry &&
+                result.country_code &&
+                result.country_code.toLowerCase() !== opts.requestedCountry.toLowerCase()) {
+                lines.push(`warning: exit country ${result.country_code} does not match requested country ` +
+                    `${opts.requestedCountry} — geo-targeting may not have applied`);
+            }
+        }
+        else {
+            lines.push(`status: verification_failed (${result.failure_class})`, `detail: ${result.detail}${result.http_status !== undefined ? ` [HTTP ${result.http_status}]` : ""}`, `note: the configuration above is still returned — it may not work until the cause is fixed.`, `hint: ${FAILURE_HINTS[result.failure_class]}`);
+        }
+    }
+    return lines.join("\n");
+}
 /**
  * Return proxy configuration for use in HTTP clients, curl, or shell.
  *
@@ -75,6 +197,9 @@ export async function novadaProxy(params) {
     // If hosted/local defaults ever need to diverge, gate on
     // process.env.VERCEL || process.env.VERCEL_ENV here (review LOW-2 removed the
     // dead ternary that anchored this).
+    // Verification defaults ON; params.verify is optional in the schema so
+    // `undefined` (caller left it unset) means "verify".
+    const wantVerify = params.verify !== false;
     // F2: city is silently dropped for static and dedicated — warn the caller.
     const cityWarnings = [];
     if ((params.type === "static" || params.type === "dedicated") && params.city) {
@@ -82,16 +207,34 @@ export async function novadaProxy(params) {
     }
     // 0.9.4: static/dedicated are per-IP products with their own credential model —
     // delegate to their specialized handlers instead of the zone-based path.
-    if (params.type === "static") {
-        const result = await novadaProxyStatic({ country: params.country ?? "us", session_id: params.session_id ?? "default", format: effectiveFormat });
-        return appendCityWarningsAndCurlSnippet(result, cityWarnings, effectiveFormat);
-    }
-    if (params.type === "dedicated") {
-        const result = await novadaProxyDedicated({ session_id: params.session_id ?? "default", format: effectiveFormat });
-        return appendCityWarningsAndCurlSnippet(result, cityWarnings, effectiveFormat);
+    // Verification probes the SAME list entry the handler surfaces (the first
+    // valid line); when no entry resolves the handler returned a
+    // configuration_required message — nothing was issued, nothing to verify.
+    if (params.type === "static" || params.type === "dedicated") {
+        const result = params.type === "static"
+            ? await novadaProxyStatic({ country: params.country ?? "us", session_id: params.session_id ?? "default", format: effectiveFormat })
+            : await novadaProxyDedicated({ session_id: params.session_id ?? "default", format: effectiveFormat });
+        const body = appendCityWarningsAndCurlSnippet(result, cityWarnings, effectiveFormat);
+        const entry = pickProxyListEntry(params.type === "static" ? process.env.NOVADA_STATIC_PROXY_LIST : process.env.NOVADA_DEDICATED_PROXY_LIST);
+        if (!entry)
+            return body;
+        const evidence = await buildEvidenceBlock({
+            ledgerLine: `not applicable — type="${params.type}" is a per-IP product (user-managed credential list), ` +
+                `no flow ledger to preflight`,
+            wantVerify,
+            target: entry,
+            requestedCountry: params.type === "static" ? params.country : undefined,
+        });
+        return `${body}\n\n${evidence}`;
     }
     // INC-198: Use resolveProxyCredentials() which auto-fetches via account API
     // when only NOVADA_PROXY_ENDPOINT is set (no user/pass).
+    //
+    // Credentials are resolved BEFORE the F11 ledger preflight (HIGH-1): the
+    // gate must consult the ledger of the account the issued credentials BILL
+    // to, and only resolveProxyCredentials() knows that — `billingApiKey` for
+    // auto-fetched creds, unknowable for direct env/SDK creds (which therefore
+    // fail open with a disclosure instead of being judged on the wrong account).
     const proxyCreds = await resolveProxyCredentials();
     const proxyUser = proxyCreds?.user;
     const proxyPass = proxyCreds?.pass;
@@ -121,6 +264,13 @@ export async function novadaProxy(params) {
             `- For web extraction without managing proxies, use novada_extract or novada_crawl instead.`,
         ].join("\n");
     }
+    // F11: refuse to hand out credentials when the BILLING account's flow ledger
+    // positively says the plan cannot route (balance 0 / expired / not
+    // provisioned). Table-driven: static/dedicated never reach here (delegated
+    // above; no flow ledger row). Direct env/SDK creds bill an unknowable
+    // account, so no ledger is consulted and the disclosure below says so;
+    // indeterminate lookups fail OPEN — disclosed via ledgerDisclosure().
+    const ledger = await assertFlowLedgerActive(params.type, proxyCreds); // throws with full evidence on a positive bad signal
     // M7: never derive the masked username from the REAL value. Novada usernames
     // are structured (baseUser-zone-…) so even a 4-char prefix can reveal the
     // account. Use a fixed placeholder base — the zone/targeting/session suffix
@@ -149,8 +299,23 @@ export async function novadaProxy(params) {
     const endpointParts = proxyEndpoint.split(":");
     const proxyHost = endpointParts[0];
     const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
+    // VISIBILITY: probe the REAL issued config — the full username with
+    // zone/region/session suffix, against the configured endpoint — exactly once.
+    // Credentials go only into the probe's Proxy-Authorization header; the
+    // returned evidence contains no credential bytes.
+    const evidence = await buildEvidenceBlock({
+        ledgerLine: ledgerDisclosure(ledger, proxyCreds.source),
+        wantVerify,
+        target: {
+            host: proxyHost,
+            port: proxyPort,
+            username: buildProxyUsername(proxyUser, params),
+            password: proxyPass,
+        },
+        requestedCountry: appliedCountry,
+    });
     if (effectiveFormat === "env") {
-        return [
+        const formatted = [
             `## Proxy Configuration (Shell Environment)`,
             `type: ${typeLabel}`,
             targetingLine,
@@ -171,9 +336,10 @@ export async function novadaProxy(params) {
             `## as curl:`,
             `curl --proxy "${proxyUrlShell}" https://example.com`,
         ].filter(l => l !== "").join("\n");
+        return `${formatted}\n\n${evidence}`;
     }
     if (effectiveFormat === "curl") {
-        return [
+        const formatted = [
             `## Proxy Configuration (curl)`,
             `type: ${typeLabel}`,
             `proxy_url: ${maskedUrl}`,
@@ -186,9 +352,10 @@ export async function novadaProxy(params) {
             `- Add this flag to any curl command to route through the proxy.`,
             `- For multi-step workflows needing the same IP, add session_id param.`,
         ].join("\n");
+        return `${formatted}\n\n${evidence}`;
     }
     // Default: url format
-    return [
+    const formatted = [
         `## Proxy Configuration`,
         `type: ${typeLabel}`,
         targetingLine,
@@ -213,5 +380,6 @@ export async function novadaProxy(params) {
         `- For consistent IP across a workflow, set session_id (e.g. "my-session-1").`,
         `- For web extraction tasks, novada_extract handles proxy routing automatically.`,
     ].filter(l => l !== "").join("\n");
+    return `${formatted}\n\n${evidence}`;
 }
 //# sourceMappingURL=proxy.js.map

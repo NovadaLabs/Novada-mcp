@@ -32,7 +32,7 @@ export declare const GOOGLE_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             web_search: "web_search";
             web_search_by_domain: "web_search_by_domain";
@@ -60,7 +60,7 @@ export declare const GOOGLE_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "web_search" | "web_search_by_domain" | "search_by_url" | "ai_mode" | "hotels" | "jobs" | "videos" | "shopping" | "maps_by_location" | "maps_by_place_id" | "maps_by_cid" | "maps_by_url" | "maps_reviews_by_url";
         params: Record<string, unknown>;
@@ -79,7 +79,7 @@ export declare const GOOGLE_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"web_search" | "web_search_by_domain" | "search_by_url" | "ai_mode" | "hotels" | "jobs" | "videos" | "shopping" | "maps_by_location" | "maps_by_place_id" | "maps_by_cid" | "maps_by_url" | "maps_reviews_by_url">;
 };
-export declare const ScrapeGoogleParamsSchema: z.ZodObject<{
+export declare const ScrapeGoogleParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         web_search: "web_search";
         web_search_by_domain: "web_search_by_domain";
@@ -107,7 +107,7 @@ export declare const ScrapeGoogleParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeGoogleParams = z.infer<typeof ScrapeGoogleParamsSchema>;
 export declare function validateScrapeGoogleParams(args: Record<string, unknown> | undefined): ScrapeGoogleParams;
 /**

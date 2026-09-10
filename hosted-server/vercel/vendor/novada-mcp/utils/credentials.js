@@ -187,6 +187,46 @@ export async function resolveBrowserWs(apiKey) {
  * username selects the product/geo). Used when no per-account NOVADA_PROXY_ENDPOINT
  * is configured, e.g. on the hosted server. Verified live: routes residential IPs. */
 const UNIVERSAL_PROXY_ENDPOINT = "proxy.novada.pro:7777";
+let _bootProvisionedProxyCreds = null;
+/** Test-only: reset the boot-provision provenance marker. */
+export function clearBootProvisionedProxyCredentials() {
+    _bootProvisionedProxyCreds = null;
+}
+/**
+ * Boot-time proxy auto-provision (INC-198) — called ONCE from index.ts run():
+ * when NOVADA_PROXY_ENDPOINT is set but NOVADA_PROXY_USER/PASS are missing,
+ * resolve (auto-fetch) a sub-account and inject it into process.env, recording
+ * provenance so the F11 ledger gate keeps applying to the injected pair
+ * (MEDIUM-6, see the section comment above). Returns the provisioned account
+ * (for redacted logging) or null when nothing was provisioned. Never throws —
+ * a failed auto-provision must not stop the server booting; proxy tools
+ * surface a configuration error when invoked.
+ */
+export async function autoProvisionProxyCredentialsAtBoot() {
+    if (!process.env.NOVADA_PROXY_ENDPOINT ||
+        (process.env.NOVADA_PROXY_USER && process.env.NOVADA_PROXY_PASS)) {
+        return null;
+    }
+    try {
+        const autoCreds = await resolveProxyCredentials();
+        if (!autoCreds)
+            return null;
+        process.env.NOVADA_PROXY_USER = autoCreds.user;
+        process.env.NOVADA_PROXY_PASS = autoCreds.pass;
+        if (autoCreds.source === "auto_fetched" && autoCreds.billingApiKey) {
+            _bootProvisionedProxyCreds = {
+                user: autoCreds.user,
+                pass: autoCreds.pass,
+                fetchingKeyFingerprint: keyFingerprint(autoCreds.billingApiKey),
+            };
+        }
+        return { user: autoCreds.user };
+    }
+    catch {
+        // Non-fatal: proxy tools will show a configuration error when invoked.
+        return null;
+    }
+}
 /**
  * Resolve proxy credentials with priority:
  * 1. Explicit env vars (NOVADA_PROXY_USER + NOVADA_PROXY_PASS + NOVADA_PROXY_ENDPOINT) — no API call.
@@ -195,17 +235,51 @@ const UNIVERSAL_PROXY_ENDPOINT = "proxy.novada.pro:7777";
  *    gateway proxy.novada.pro:7777. This is the hosted-server path: the caller supplies
  *    only an API key, we derive a working {user,pass,endpoint} entirely from it.
  *
+ * `source` tells the caller HOW the credentials were obtained — "direct"
+ * (env vars / SDK-scoped store, bypassing the mgmt API: the account ledger for
+ * them is unknowable from here) vs "auto_fetched" (derived from the API key —
+ * at call time below, or at boot via autoProvisionProxyCredentialsAtBoot(),
+ * whose env-injected pair is re-identified by the provenance marker; MEDIUM-6).
+ * F11's disclosure requirements hinge on this distinction.
+ *
+ * `billingApiKey` (auto_fetched only) is the EXACT key the fetched sub-account
+ * bills to — the effective-key chain below (arg > store > env). HIGH-1: the F11
+ * flow-ledger preflight must read THIS key's ledger; reading the server env
+ * key's ledger for caller-billed creds refused healthy paying callers when the
+ * server was exhausted (the 2026-07-30 wrong-ledger-denial P0 class,
+ * cross-account) and issued dead creds when the caller was exhausted. The key
+ * is for in-process threading only — never print or log it.
+ *
  * @param apiKey - Caller's API key. Takes priority over the store-scoped key and NOVADA_API_KEY,
  *   so hosted-server requests are billed to the caller, not the server account.
  */
 export async function resolveProxyCredentials(apiKey) {
-    const direct = getProxyCredentials();
-    if (direct)
-        return direct;
     // Prefer the explicit arg, then the request-scoped store key (hosted pass-through),
     // then the server-level env var. Without the store fallback, hosted proxy calls would
     // bill the server account instead of the caller.
     const effectiveApiKey = apiKey ?? store.getStore()?.apiKey ?? process.env.NOVADA_API_KEY;
+    const direct = getProxyCredentials();
+    if (direct) {
+        // MEDIUM-6: PROVENANCE, not credential shape, decides the class. If this
+        // pair is EXACTLY the one autoProvisionProxyCredentialsAtBoot() injected
+        // into env, it was auto-fetched with the boot key and bills that key's
+        // account — classify it auto_fetched so the F11 fail-closed ledger gate
+        // applies (and the "billing account unknowable" disclosure, false for
+        // this class, never renders). The fingerprint check pins billingApiKey to
+        // the key that actually fetched the pair: after a key rotation the
+        // billing account genuinely cannot be read any more, so the pair falls
+        // back to the "direct" fail-open + disclose arm below — exactly where
+        // genuinely user-supplied env/SDK creds always stay.
+        const boot = _bootProvisionedProxyCreds;
+        if (boot &&
+            direct.user === boot.user &&
+            direct.pass === boot.pass &&
+            effectiveApiKey &&
+            keyFingerprint(effectiveApiKey) === boot.fetchingKeyFingerprint) {
+            return { ...direct, source: "auto_fetched", billingApiKey: effectiveApiKey };
+        }
+        return { ...direct, source: "direct" };
+    }
     const endpoint = process.env.NOVADA_PROXY_ENDPOINT ?? (effectiveApiKey ? UNIVERSAL_PROXY_ENDPOINT : undefined);
     if (!endpoint)
         return null;
@@ -215,7 +289,13 @@ export async function resolveProxyCredentials(apiKey) {
     const fetched = await fetchProxySubAccountCredentials(effectiveApiKey);
     if (!fetched)
         return null;
-    return { user: fetched.account, pass: fetched.password, endpoint };
+    return {
+        user: fetched.account,
+        pass: fetched.password,
+        endpoint,
+        source: "auto_fetched",
+        billingApiKey: effectiveApiKey,
+    };
 }
 /**
  * Redact a secret string to a last-4 fingerprint for safe logging.

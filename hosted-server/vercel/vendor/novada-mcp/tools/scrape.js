@@ -1,9 +1,14 @@
 import axios, { AxiosError } from "axios";
-import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS } from "../config.js";
+import { createHash } from "node:crypto";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHostedEnvironment } from "../config.js";
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
+import { telemetryHeaders } from "../utils/http.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 import { CATALOG_BY_DOMAIN } from "../data/scraper_catalog.js";
+import { devApiPost } from "../_core/developer_api.js";
+import { extractRawTaskStatus } from "./scraper_status.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 // How long the SYNC novada_scrape path will poll before returning a structured
 // (non-error) "still processing" result. 0.9.5: raised from 14s → 45s so slow
@@ -18,8 +23,63 @@ const SYNC_POLL_CEILING_MS = 45_000;
 // bumped past the ceiling, clamp so the tool always returns before the 504 kill.
 const POLL_TIMEOUT_MS = Math.min(SYNC_POLL_CEILING_MS, HOSTED_SAFE_CEILING_MS);
 const POLL_INTERVAL_MS = 2_000;
+// TOW2-257 Phase 1: on HOSTED (Vercel/Lambda — see isHostedEnvironment()), keep the
+// FIRST synchronous poll SHORT so novada_scrape hands back a task_id + processing
+// envelope in ~10s instead of riding the full 45s ceiling. This models the
+// Bright-Data-style "202 + snapshot_id" shape onto our existing task_id/
+// status:processing envelope: hosted callers get the task_id fast and are expected
+// to resume (which is now itself instant — see fastTaskStatus below — rather than
+// re-entering another ~45s block). LOCAL npx (stdio, no serverless wall-clock kill)
+// keeps the existing 45s ceiling unchanged — there is no function-timeout pressure
+// locally, and a longer sync wait is a better one-shot UX there.
+const HOSTED_FIRST_TRY_CEILING_MS = 10_000;
+/** The sync poll ceiling to use for THIS call: short on hosted, unchanged on local. */
+function syncPollCeilingMs() {
+    return isHostedEnvironment() ? HOSTED_FIRST_TRY_CEILING_MS : POLL_TIMEOUT_MS;
+}
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+// ─── Locale default table (TOW2-372 / audit F1) ──────────────────────────────
+// Locale default applied ONLY when the caller supplied no locale at all.
+// Verified live 2026-08-04 (TOW2-372 / audit F1): the backend routes locale-less
+// google_search through a non-US proxy whose SERP is genuinely empty for English
+// long-tail queries. Extend op-by-op ONLY after live-verifying the op reproduces
+// (candidates listed in TOW2-372): new coverage = new ROW, never a new branch.
+//
+// Evidence (live-verified against scraper.novada.com/request, TOW2-257-audit F1):
+// the identical query returns 0 organic results without `country` (backend
+// genuinely attempts the search — cost_time ~3.9s, not a fast param-validation
+// reject — then comes back `code:400`/"serp returns empty") and ~2000-3000 real
+// results with `country=us`. `hl=en` ALONE does NOT fix it (tested, still empty) —
+// `country` is what selects the proxy region. This reproduced golden-v1's
+// `scrape-google-web-search` FATAL 1:1 with the documented wire contract, no
+// client-side malformed payload involved. Only fires when the caller hasn't
+// specified a region via either `country` or Google's own `gl` param name — never
+// overrides an explicit choice, including an explicit empty/whitespace-only
+// string, which counts as "no choice" (see isLocaleValueAbsent below, aligned
+// with preflightScrape's `String(v).trim().length === 0` convention at ~line 1144).
+const LOCALE_DEFAULT_ON_MISSING = {
+    "google.com": { "google_search": "us" },
+};
+/** True when a locale value counts as ABSENT — undefined/null/empty/whitespace-only. */
+function isLocaleValueAbsent(v) {
+    return v === undefined || v === null || String(v).trim().length === 0;
+}
+/**
+ * Returns the locale value to apply for (scraperName, scraperId), or undefined
+ * when no default is configured OR the caller already supplied a usable
+ * country/gl. Single source of truth shared by submitScrapeTask (applies the
+ * default on the wire) and novadaScrape (discloses it to the agent) — both stay
+ * in lockstep on the same emptiness semantics, they can never disagree on what
+ * was actually sent.
+ */
+function resolveLocaleDefault(scraperName, scraperId, opParams) {
+    const def = LOCALE_DEFAULT_ON_MISSING[scraperName]?.[scraperId];
+    if (!def)
+        return undefined;
+    const callerSuppliedLocale = !isLocaleValueAbsent(opParams["country"]) || !isLocaleValueAbsent(opParams["gl"]);
+    return callerSuppliedLocale ? undefined : def;
 }
 /**
  * Submit a scraper task. Returns a discriminated SubmitOutcome:
@@ -68,6 +128,13 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
         // Format A: flat form fields for search-engine-style ops
         if (!("json" in opParams))
             opParams["json"] = 1; // request JSON output format
+        // F1 fix (TOW2-372): apply the class-level LOCALE_DEFAULT_ON_MISSING table
+        // (see above) — REPLACES an absent/empty country value, never overrides an
+        // explicit one. See resolveLocaleDefault for the full evidence/rationale.
+        const localeDefault = resolveLocaleDefault(scraper_name, scraper_id, opParams);
+        if (localeDefault) {
+            opParams["country"] = localeDefault;
+        }
         for (const [k, v] of Object.entries(opParams)) {
             form.append(k, String(v));
         }
@@ -81,6 +148,7 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
         headers: {
             "Authorization": `Bearer ${apiKey}`,
             "Content-Type": "application/x-www-form-urlencoded",
+            ...telemetryHeaders("scrape"), // NOV-321: mark this as MCP-originated so the backend can log it (covers local + hosted)
         },
         timeout: 60000,
     });
@@ -98,7 +166,7 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
             throw makeNovadaError(NovadaErrorCode.PRODUCT_UNAVAILABLE, `Scraper returned code 11006 for operation '${scraper_id}'. This means either: (1) the operation ID is invalid or unsupported for this account, or (2) Scraper API access is not activated. Verify the operation ID against novada://scraper-platforms before assuming it is an account issue.`, "code 11006");
         }
         if (body.code === 11008) {
-            throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `Unknown platform '${scraper_name}'. Use the exact domain (e.g. 'amazon.com', 'reddit.com'). To find valid operation IDs: read the novada://scraper-platforms resource — operation names are exact and cannot be guessed.`, "code 11008");
+            throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `Unknown platform '${scraper_name}'. Use the exact domain (e.g. 'amazon.com', 'walmart.com'). To find valid operation IDs: read the novada://scraper-platforms resource — operation names are exact and cannot be guessed.`, "code 11008");
         }
         const errorMessages = {
             10001: "Missing required parameters. Check platform and operation fields.",
@@ -140,14 +208,42 @@ export async function submitScrapeTask(apiKey, scraper_name, scraper_id, params)
     // for a valid-but-unmatched query; surfacing isError:true here misleads agents.
     return { kind: "empty", message: innerMsg || "no results returned" };
 }
-/** Poll the download endpoint until the task completes or the sync ceiling elapses. */
-async function pollForResult(apiKey, taskId) {
+// Record keys extractRecords() (below) treats as "this object wraps a records
+// array". Single source of truth: pollForResult's TOW2-382 html-page guard
+// reuses this SAME list (fix-round-2 HIGH#2) so "does this download response
+// have real records under some other key" can never diverge from what
+// extractRecords() itself would actually pull out.
+const RECORD_ARRAY_KEYS = ["organic_results", "organic", "results", "items", "records", "data", "products", "posts"];
+/**
+ * True when the caller's submit params explicitly requested an HTML-inclusive
+ * scraper response (json=2 "JSON+HTML" or json=3 "HTML" — see submitScrapeTask's
+ * flat-format branch, ~line 173). `json` is an unvalidated pass-through param,
+ * so arbitrary callers may send it as a number or a string — accept both.
+ * Fix-round-2 HIGH#1: when true, a {filename,html} download body is NOT the
+ * TOW2-382 bug — it is exactly what the caller asked for — so pollForResult
+ * must not classify it as API_DOWN/download_html_page.
+ */
+function isHtmlRequested(opParams) {
+    const j = opParams?.["json"];
+    return j === 2 || j === 3 || j === "2" || j === "3";
+}
+/**
+ * Poll the download endpoint until the task completes or `timeoutMs` elapses.
+ * TOW2-257 Phase 1: `timeoutMs` defaults to POLL_TIMEOUT_MS (unchanged local
+ * behavior) but callers pass `syncPollCeilingMs()` so hosted gets the short
+ * ~10s first-try ceiling instead of always riding the full 45s.
+ * Fix-round-2 (TOW2-382 HIGH#1): `htmlRequested` tells the TOW2-382 html-page
+ * guard below whether the caller explicitly asked for HTML — see
+ * isHtmlRequested(). Defaults to false so every other existing call site
+ * behavior (there is only one — novadaScrape) is unaffected unless it opts in.
+ */
+async function pollForResult(apiKey, taskId, timeoutMs = POLL_TIMEOUT_MS, htmlRequested = false) {
     const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
     // H3: safe version of URL for error messages — strips the apikey value to prevent key exposure
     const safeUrl = url.replace(/apikey=[^&]+/, "apikey=***");
-    const deadline = Date.now() + POLL_TIMEOUT_MS;
+    const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        const resp = await axios.get(url, { timeout: 30000 });
+        const resp = await axios.get(url, { timeout: 30000, headers: telemetryHeaders("scrape") });
         const body = resp.data;
         // Pending: { code: 27202, data: null, msg: "" }
         if (body !== null &&
@@ -196,6 +292,37 @@ async function pollForResult(apiKey, taskId) {
             if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {
                 return { kind: "done", items: [{ spider_code: 200, rest: bErr }] };
             }
+            // TOW2-382 / Sentry NOVADA-MCP-HOSTED-4 (live in prod 0.9.34, 141x since
+            // 2026-07-03): the download endpoint sometimes serves a raw HTML page —
+            // { filename, html } — instead of structured records, because the target
+            // platform returned a challenge/consent/interstitial page (e.g. Perplexity,
+            // or any JS-heavy/anti-bot-gated platform) rather than the requested
+            // content. Class fix: this triggers on the RESPONSE SHAPE (html + filename
+            // present, no usable records elsewhere in the body), not on any single
+            // platform or operation. The original bare `Error` below would skip
+            // makeNovadaError entirely, so the hosted dispatch logged it as an
+            // error-level Sentry ALERT instead of retryable upstream weather (a
+            // breadcrumb) — and the agent received a raw-HTML dump instead of an
+            // actionable message. Map to API_DOWN (transient/retryable), matching the
+            // 10001/10002/10003/27203 precedent above; never echo the HTML itself.
+            const hasHtmlPage = typeof bErr.html === "string" && bErr.html.length > 0 &&
+                typeof bErr.filename === "string" && bErr.filename.length > 0;
+            // Fix-round-2 HIGH#2: "has records" means a non-empty array under ANY key
+            // extractRecords() recognizes (RECORD_ARRAY_KEYS above), not just `data`.
+            // A present-but-empty array does NOT count (LOW item, folded in here) —
+            // an empty `data: []` alongside an html page is still the TOW2-382 bug.
+            const hasUsableRecords = RECORD_ARRAY_KEYS.some(key => {
+                const v = bErr[key];
+                return Array.isArray(v) && v.length > 0;
+            });
+            // Fix-round-2 HIGH#1: never fire when the caller explicitly requested an
+            // HTML-inclusive response (json=2/3) — that's the caller getting exactly
+            // what they asked for, not the TOW2-382 bug. Preserve prior behavior
+            // exactly in that case (fall through to the bare-Error catch-all below).
+            // A proper json=2/3 HTML-return path is a separate follow-up.
+            if (hasHtmlPage && !hasUsableRecords && !htmlRequested) {
+                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper backend returned an HTML page instead of structured data for this operation — the target platform likely served a challenge/consent/interstitial page rather than the requested content. Retry once; if it persists, this is a Novada-side extraction gap for this platform — not your request or parameters.`, "download_html_page");
+            }
             throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${sanitizeServerMsg(errMsg || JSON.stringify(bErr).slice(0, 150))}`);
         }
         throw new Error(`Unexpected download response: ${sanitizeServerMsg(JSON.stringify(body).slice(0, 200))}`);
@@ -206,6 +333,213 @@ async function pollForResult(apiKey, taskId) {
     // retry novada_scrape shortly (the download is idempotent by task_id, so no
     // duplicate work is triggered on the completed side).
     return { kind: "pending", taskId };
+}
+/**
+ * Lightweight, non-blocking probe of a task's current status. Never throws — a
+ * network/auth error on the probe itself resolves to "unknown" so the RESUME caller can
+ * safely fall through to today's existing poll behavior rather than fail the whole resume
+ * on a transient status-endpoint hiccup. A CLEAN response with no status data resolves to
+ * "not_found" (see the FastTaskStatus comment above) so the caller can reject the resume
+ * immediately instead of polling a task_id that will never resolve (V2-N2).
+ */
+async function fastTaskStatus(apiKey, taskId) {
+    try {
+        const resp = await devApiPost("/v1/scraper/task_status", { task_ids: taskId }, { apiKey, timeoutMs: 10_000 });
+        // The LIVE API returns { list: [{ task_id, status }] } (verified 2026-08-03:
+        // {"list":[{"status":"Running","task_id":"…"}]}). Older callers assumed a flat
+        // top-level { status }. extractRawTaskStatus() is the single shared parser for
+        // this response shape (see scraper_status.ts) — it accepts BOTH shapes and
+        // prefers the list item matching our task_id.
+        const { status: raw, msg } = extractRawTaskStatus(resp, taskId);
+        // V2-N2: the probe call SUCCEEDED but returned no status entry for this task_id — the
+        // backend reached us and reports it doesn't know this id. Distinct from the catch
+        // block below (a network/auth error on the probe itself, which stays "unknown" and
+        // falls through unchanged) — a clean "no such task" response is reliable enough to
+        // act on directly.
+        if (!raw)
+            return { status: "not_found" };
+        const s = raw.toLowerCase();
+        if (s === "ready" || s === "complete" || s === "completed" || s === "success" || s === "done") {
+            return { status: "ready" };
+        }
+        if (s === "failed" || s === "error" || s === "failure")
+            return { status: "failed", msg };
+        if (s === "running" || s === "processing" || s === "in_progress")
+            return { status: "running" };
+        if (s === "pending" || s === "waiting")
+            return { status: "pending" };
+        return { status: "unknown" };
+    }
+    catch {
+        // Network/auth error on the fast probe itself — genuine ambiguity, NOT a confirmed
+        // not_found. Never fail the resume because of this optional fast path; fall through
+        // to today's existing poll behavior.
+        return { status: "unknown" };
+    }
+}
+const MAX_TASK_META_ENTRIES = 500;
+const TASK_META_STORE = new Map();
+/**
+ * Idempotently record task metadata: returns the EXISTING entry if one is already
+ * present (never overwrites — the original submit's limit/timestamp must survive
+ * repeated resumes), otherwise creates one stamped with `Date.now()`.
+ */
+function recordTaskMeta(taskId, limit) {
+    const existing = TASK_META_STORE.get(taskId);
+    if (existing)
+        return existing;
+    if (TASK_META_STORE.size >= MAX_TASK_META_ENTRIES) {
+        const oldestKey = TASK_META_STORE.keys().next().value;
+        if (oldestKey !== undefined)
+            TASK_META_STORE.delete(oldestKey);
+    }
+    const meta = { limit, submittedAt: Date.now(), pollCount: 0 };
+    TASK_META_STORE.set(taskId, meta);
+    return meta;
+}
+// ─── Processing-envelope age escalation (C-12 / V2-N2) ────────────────────────────────
+// Boundaries in SECONDS since the task was originally submitted. Checked HIGHEST
+// threshold FIRST (Worker Done-Def #3 — ternary/branch ordering) so a task that has been
+// running for e.g. 20 minutes is never caught by an earlier, looser "still fresh" check.
+const AGE_BUCKET_SLOW_S = 120; // 2 minutes
+const AGE_BUCKET_STALE_S = 900; // 15 minutes
+/**
+ * Escalating resume guidance keyed to how long ago the task was originally submitted.
+ * Pure (no I/O, no wall-clock read) so tests can assert exact boundary behavior with a
+ * synthetic age_s instead of faking real timers through the whole submit→poll→resume
+ * pipeline. Exported for direct unit coverage; also used by processingEnvelope() below.
+ */
+export function ageBucketInstruction(ageS) {
+    if (ageS >= AGE_BUCKET_STALE_S) {
+        return "Task exceeded 15 min — treat as failed upstream. Do NOT keep polling. Resubmit once (a new billable task) or report this task_id as stuck.";
+    }
+    if (ageS >= AGE_BUCKET_SLOW_S) {
+        return "Upstream is slow — retry in 2-5 min.";
+    }
+    return "Retry in 10-20s.";
+}
+/**
+ * Build the "status: processing" envelope for a still-running task. Shared by
+ * two call sites (TOW2-257 Phase 1):
+ *   - The synchronous poll ceiling elapses (fresh submit, or a resumed task
+ *     whose fast probe said ready/unknown but the download endpoint itself is
+ *     still pending) — `waitedMs` is the actual ceiling used this call (short
+ *     on hosted, unchanged 45s on local).
+ *   - A RESUME whose fast task_status probe reports Pending/Running — no wait
+ *     happened this call at all (instant), so `waitedMs` is omitted.
+ * Text is unchanged from the original inline block except the elapsed clause
+ * is now the REAL ceiling used (was previously always the 45s constant, which
+ * was already wrong once hosted got a shorter ceiling) plus one appended
+ * poll-cadence hint line.
+ *
+ * C-12 / V2-N2: also carries `submitted_at` + `age_s` (when known — see TaskMeta
+ * above) and swaps the old fixed "retry every ~10-20s forever" cadence line for an
+ * age-escalating `agent_instruction` (ageBucketInstruction) so an agent polling a
+ * task that has been running for 20+ minutes is told to stop and resubmit/report
+ * instead of being invited to keep polling indefinitely.
+ *
+ * F10 (battery 2026-09-10, P1-5 class — CONFIRMED byte-identical processing reply on a
+ * github resume round-trip; previously amazon/x/tiktok): every processing response now
+ * carries visible PROGRESS SEMANTICS so an agent can distinguish progress from a stall:
+ *   - checked_at         — ISO timestamp of THIS poll.
+ *   - poll_count         — TaskMeta.pollCount, incremented HERE (the one shared render
+ *                          site) — consecutive polls can never be byte-identical again.
+ *   - upstream_status    — the upstream-reported task state: "pending"/"running" from
+ *                          the fast task_status probe, or "processing" when only the
+ *                          download endpoint was consulted (its 27202 does not
+ *                          distinguish pending from running).
+ *   - state_fingerprint  — sha256(task_id | upstream_status), first 12 hex chars.
+ * CHOSEN MECHANISM for "changed-vs-last-poll" (the server is stateless per call on
+ * hosted, so a server-side diff is impossible): state_fingerprint is a content hash of
+ * the upstream-visible state — the AGENT compares it across its own polls (same value =
+ * no upstream-visible change yet; different = the task state advanced, e.g.
+ * pending → running), and checked_at/age_s give it the fields to compute the time delta
+ * itself. The envelope's Agent Hints state this explicitly, including that poll_count is
+ * per-server-process and may reset on serverless hosting.
+ */
+function processingEnvelope(platform, displayOperation, taskId, upstreamStatus, waitedMs, submittedAt) {
+    const elapsedClause = waitedMs !== undefined ? ` after ${Math.round(waitedMs / 1000)}s` : "";
+    const ageS = submittedAt !== undefined
+        ? Math.max(0, Math.round((Date.now() - submittedAt) / 1000))
+        : undefined;
+    const instruction = ageS !== undefined
+        ? ageBucketInstruction(ageS)
+        : "Retry with task_id every ~10-20s until it completes.";
+    // F10 progress bookkeeping — meta exists at both call sites (recorded on fresh submit
+    // and on resume before this renders); the optional-chaining guard only covers the
+    // FIFO-eviction edge on a very long-lived process.
+    const meta = TASK_META_STORE.get(taskId);
+    const pollCount = meta ? ++meta.pollCount : undefined;
+    const fingerprint = createHash("sha256").update(`${taskId}|${upstreamStatus}`).digest("hex").slice(0, 12);
+    return [
+        `## Scrape Results`,
+        `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
+        ``,
+        `status: processing`,
+        `upstream_status: ${upstreamStatus}`,
+        ...(ageS !== undefined ? [`submitted_at: ${new Date(submittedAt).toISOString()}`, `age_s: ${ageS}`] : []),
+        `checked_at: ${new Date().toISOString()}`,
+        ...(pollCount !== undefined ? [`poll_count: ${pollCount}`] : []),
+        `state_fingerprint: ${fingerprint}`,
+        `⏳ Task still running (task_id="${taskId}")${elapsedClause}.`,
+        `To fetch the result WITHOUT re-charging, call novada_scrape again with task_id="${taskId}" (skips re-submit).`,
+        `A plain retry with the same params starts a NEW billable task.`,
+        ``,
+        `---`,
+        `## Agent Hints`,
+        `- Pass task_id="${taskId}" to novada_scrape to resume for free.`,
+        `- platform and operation are still required when resuming (used for display only).`,
+        `- Progress check (stateless server — compute the delta yourself): compare state_fingerprint with your previous poll. The SAME value means no upstream-visible change yet; a DIFFERENT value means the task state advanced (e.g. pending → running). Use checked_at and age_s to measure elapsed time between your own polls.`,
+        `- poll_count counts the processing responses served for this task_id by THIS server instance; on serverless hosting it can reset between calls — keep your own attempt count as well.`,
+        `agent_instruction: ${instruction}`,
+    ].join("\n");
+}
+/** Per-signal human line + hypothesis-weighted agent_instruction. */
+const EMPTY_RESULT_TEXT = {
+    upstream_explicit_empty: {
+        body: (msg) => `_No results found for this query._ (upstream: ${sanitizeServerMsg(msg || "serp returns empty")})`,
+        instruction: "The upstream backend ran this query and EXPLICITLY reported an empty result set — most likely the target " +
+            "genuinely has no data matching these params, though an upstream extraction gap that reports empty instead of " +
+            "failing cannot be fully ruled out. Verify the param value (keyword/url/asin/username) is spelled correctly and " +
+            "is a real, indexable target, then try a broader or differently-worded query. If you are confident matching data " +
+            "exists, retry once; a second identical empty means this target/operation has no data via this scraper — report it.",
+    },
+    empty_download: {
+        body: () => `_No records returned._ (the scraper backend completed the task but sent back zero items — no explicit "no results" signal was given)`,
+        instruction: "Ambiguous empty: the upstream gave NO signal to distinguish (a) the target genuinely has no matching data from " +
+            "(b) the upstream scraper returned nothing (an extraction failure surfaced as an empty payload). Do not treat this as confirmation " +
+            "the data is absent. Verify the param value and retry once; if it is empty again and you expect data to exist, " +
+            "treat it as an upstream extraction gap — try novada_extract on the target URL as an alternative and report the operation.",
+    },
+    no_records_extracted: {
+        body: () => `_No records returned._ (the upstream payload contained no recognizable record fields)`,
+        instruction: "Ambiguous empty: the upstream responded but its payload contained no recognizable records — either (a) the target " +
+            "genuinely has no matching data, or (b) the upstream response schema changed and extraction failed. Do not treat this as confirmation " +
+            "the data is absent. Retry once with format='json' to inspect the raw payload; if records are visibly present there, " +
+            "report this as an extraction gap. Otherwise verify the param value or try novada_extract on the target URL.",
+    },
+};
+/**
+ * Render the shared 0-record envelope. `upstreamMessage` is only used by the
+ * explicit-empty signal (the upstream's own wording, sanitized).
+ */
+function emptyResultEnvelope(platform, displayOperation, signal, upstreamMessage) {
+    const text = EMPTY_RESULT_TEXT[signal];
+    return [
+        `## Scrape Results`,
+        `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
+        ``,
+        `status: empty_result`,
+        `empty_signal: ${signal}`,
+        text.body(upstreamMessage),
+        ``,
+        `---`,
+        `## Agent Hints`,
+        `- status is empty_result (NOT ok): zero records came back — see agent_instruction for how to interpret it.`,
+        `- Verify the parameter value (keyword/url/asin) is spelled correctly and is a real, indexable target.`,
+        `- Read novada://scraper-platforms to confirm the operation matches your intent.`,
+        `agent_instruction: ${text.instruction}`,
+    ].join("\n");
 }
 /** Flatten a potentially nested object for tabular display.
  *  M-1: depth limit prevents stack overflow on deeply nested server responses. */
@@ -534,7 +868,10 @@ function extractRecords(data) {
     }
     if (data !== null && typeof data === "object") {
         const d = data;
-        for (const key of ["organic_results", "organic", "results", "items", "records", "data", "products", "posts"]) {
+        // Fix-round-2 (TOW2-382 HIGH#2): RECORD_ARRAY_KEYS is the single source of
+        // truth, also reused by pollForResult's html-page guard above — never
+        // hardcode a second, divergent key list here.
+        for (const key of RECORD_ARRAY_KEYS) {
             if (Array.isArray(d[key]))
                 return extractRecords(d[key]);
         }
@@ -989,7 +1326,12 @@ export function assertYouTubeIdentity(platform, operation, params, records) {
         `not your request. Do not use these records.`, `youtube_wrong_target:${requestedId}`);
 }
 export async function novadaScrape(params, apiKey) {
-    const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
+    // C-6: `requestedLimit` is THIS call's own limit param (defaulted to 20 if omitted).
+    // On a fresh submit it IS the effective limit. On a RESUME, the effective limit is
+    // resolved later from TASK_META_STORE (the ORIGINAL submit's limit) — see
+    // `effectiveLimit` right before Step 3 below — so a resume that omits `limit` no
+    // longer silently reverts to 20 when the original submit asked for fewer records.
+    const requestedLimit = Math.max(1, Math.min(params.limit ?? 20, 100));
     const { params: opParams, format } = params;
     const platform = resolvePlatform(params.platform);
     // H-1: safe lookup — null-prototype + hasOwnProperty guard
@@ -1032,13 +1374,73 @@ export async function novadaScrape(params, apiKey) {
         //   - If task_id is provided: skip submit entirely (no billable task created).
         //   - Otherwise: submit a new task → resolves to inline records, empty-serp, or a task_id.
         let submitOutcome;
+        // TOW2-372 change 2: agent-visible disclosure — true only when THIS call
+        // actually applied the locale default (a fresh submit whose caller supplied no
+        // country/gl). A resume (task_id path) never fires a new submit, so it stays
+        // false there. Re-derived via the SAME resolveLocaleDefault() submitScrapeTask
+        // itself uses, so the two can never disagree on what was actually sent.
+        let localeDefaulted = false;
         if (resumeTaskId) {
-            // Resume: go straight to polling with the caller-supplied task_id.
+            // TOW2-257 Phase 1: RESUME must be INSTANT, not a re-entry into the ~45s
+            // blocking download-poll loop. Probe the FAST, non-blocking task_status
+            // endpoint FIRST (same one scraper_status.ts uses) to learn the task's
+            // current state before ever touching the slow download endpoint:
+            //   NotFound        → V2-N2: typed, non-retryable error IMMEDIATELY — never
+            //                      masquerade as "processing" for a task_id the backend
+            //                      does not recognize (the pre-fix bug: an agent with a
+            //                      typo'd/hallucinated task_id looped 45s-per-call forever).
+            //   Pending|Running → return the processing envelope IMMEDIATELY (no wait,
+            //                      no download-endpoint call at all).
+            //   Failed          → typed, retryable error — never masquerade as a
+            //                      0-record success.
+            //   Ready|unknown   → fall through to the existing poll/fetch path below
+            //                      unchanged (Ready resolves on the first GET; unknown
+            //                      preserves today's not-found/pending behavior when
+            //                      the fast probe itself is genuinely ambiguous — a
+            //                      network/auth error on the probe call, NOT a clean
+            //                      not-found response).
+            const fast = await fastTaskStatus(apiKey, resumeTaskId);
+            if (fast.status === "not_found") {
+                throw new NovadaError({
+                    code: NovadaErrorCode.TASK_NOT_FOUND,
+                    message: `Task not found (task_id="${resumeTaskId}"). The scraper backend does not recognize this task_id.`,
+                    agent_instruction: `This task_id is not recognized by the scraper backend — it may be mistyped, from a different account/key, ` +
+                        `or already expired. Do NOT keep polling with this task_id; it will never resolve. Double-check you copied ` +
+                        `the EXACT task_id from the original novada_scrape response, or re-submit novada_scrape with ` +
+                        `platform/operation/params to start a fresh task (this creates a new billable task).`,
+                    retryable: false,
+                    detail: "task_not_found",
+                });
+            }
+            // C-6 / C-12: from here the task_id is at least recognized (or the probe was
+            // ambiguous) — record/refresh metadata so limit + age survive across resume
+            // calls within this server process. Idempotent: a task already recorded (the
+            // common case — this process did the original submit) keeps its ORIGINAL
+            // limit/submittedAt untouched.
+            const meta = recordTaskMeta(resumeTaskId, requestedLimit);
+            if (fast.status === "pending" || fast.status === "running") {
+                // F10: the fast probe's own state ("pending"/"running") is the upstream_status —
+                // its transition is exactly what state_fingerprint lets the agent detect.
+                return processingEnvelope(platform, displayOperation, resumeTaskId, fast.status, undefined, meta.submittedAt);
+            }
+            if (fast.status === "failed") {
+                throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper task failed (task_id="${resumeTaskId}"): ${sanitizeServerMsg(fast.msg || "the task did not complete successfully")}. ` +
+                    `This task_id cannot be resumed further — re-submit novada_scrape with fresh params (a new billable task), or try novada_extract as an alternative.`, "resume_task_failed");
+            }
+            // "ready" or "unknown" → resume: go straight to polling with the caller-supplied task_id.
             submitOutcome = { kind: "task", taskId: resumeTaskId };
         }
         else {
             try {
+                localeDefaulted = resolveLocaleDefault(platform, operation, (opParams ?? {})) !== undefined;
                 submitOutcome = await submitScrapeTask(apiKey, platform, operation, opParams);
+                // C-6 / C-12: capture the ORIGINAL submit's limit + timestamp the moment the
+                // task_id first becomes known, so a later resume can honor this limit (C-6)
+                // and report an accurate age_s (C-12) instead of defaulting to the resume
+                // call's own params.
+                if (submitOutcome.kind === "task") {
+                    recordTaskMeta(submitOutcome.taskId, requestedLimit);
+                }
             }
             catch (error) {
                 if (error instanceof AxiosError) {
@@ -1060,22 +1462,11 @@ export async function novadaScrape(params, apiKey) {
                 throw error;
             }
         }
-        // Empty serp / no-results → GRACEFUL success (status ok, NOT isError). The query
-        // was valid; it simply matched nothing. Returning a plain string keeps isError:false.
+        // Empty serp / no-results → GRACEFUL outcome (isError stays false) but NEVER a plain
+        // "status: ok" (F9 — see emptyResultEnvelope). The upstream explicitly reported an
+        // empty result set, which is the strongest no-data signal this pipeline can observe.
         if (submitOutcome.kind === "empty") {
-            return [
-                `## Scrape Results`,
-                `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
-                ``,
-                `status: ok`,
-                `_No results found for this query._ (upstream: ${sanitizeServerMsg(submitOutcome.message)})`,
-                ``,
-                `---`,
-                `## Agent Hints`,
-                `- This is not an error — the query returned zero results. Try a broader or differently-worded query.`,
-                `- Verify the parameter value (keyword/url/asin) is spelled correctly and is a real, indexable target.`,
-                `- Read novada://scraper-platforms to confirm the operation matches your intent.`,
-            ].join("\n");
+            return emptyResultEnvelope(platform, displayOperation, "upstream_explicit_empty", submitOutcome.message);
         }
         // Step 2: Obtain result items — inline (skip poll) or by polling the task_id.
         let resultItems;
@@ -1084,9 +1475,19 @@ export async function novadaScrape(params, apiKey) {
             resultItems = submitOutcome.items;
         }
         else {
+            // TOW2-257 Phase 1: use the short hosted first-try ceiling on hosted, the
+            // unchanged 45s ceiling on local (syncPollCeilingMs()) — and capture the
+            // actual value used so the pending-envelope's elapsed clause is honest.
+            const ceilingMs = syncPollCeilingMs();
+            // Fix-round-2 (TOW2-382 HIGH#1): tell pollForResult whether THIS caller's
+            // raw submit params asked for an HTML-inclusive response (json=2/3), so a
+            // {filename,html} download body in that case is never misclassified as
+            // the TOW2-382 bug. opParams here is the caller's raw params (pre
+            // submitScrapeTask's internal json=1 auto-fill) — see isHtmlRequested().
+            const htmlRequested = isHtmlRequested(opParams);
             let pollOutcome;
             try {
-                pollOutcome = await pollForResult(apiKey, submitOutcome.taskId);
+                pollOutcome = await pollForResult(apiKey, submitOutcome.taskId, ceilingMs, htmlRequested);
             }
             catch (error) {
                 if (error instanceof AxiosError) {
@@ -1098,30 +1499,30 @@ export async function novadaScrape(params, apiKey) {
             // A slow-but-valid task is not a failure; return an honest message with the task_id
             // so the caller can resume WITHOUT re-submitting (and without a new charge).
             if (pollOutcome.kind === "pending") {
-                return [
-                    `## Scrape Results`,
-                    `platform: ${platform} | operation: ${displayOperation} | records: 0 | source: live`,
-                    ``,
-                    `status: processing`,
-                    `⏳ Task still running (task_id="${pollOutcome.taskId}") after ${POLL_TIMEOUT_MS / 1000}s.`,
-                    `To fetch the result WITHOUT re-charging, call novada_scrape again with task_id="${pollOutcome.taskId}" (skips re-submit).`,
-                    `A plain retry with the same params starts a NEW billable task.`,
-                    ``,
-                    `---`,
-                    `## Agent Hints`,
-                    `- Pass task_id="${pollOutcome.taskId}" to novada_scrape in ~10-20s to resume for free.`,
-                    `- platform and operation are still required when resuming (used for display only).`,
-                    `- Do not treat this as a failure — the task is finishing server-side.`,
-                ].join("\n");
+                // C-12: metadata was already recorded (fresh submit above, or the resume
+                // branch's recordTaskMeta) — its submittedAt drives the age_s escalation.
+                // F10: the download endpoint's 27202 does not distinguish pending from running,
+                // so upstream_status is the coarser "processing" on this path.
+                return processingEnvelope(platform, displayOperation, pollOutcome.taskId, "processing", ceilingMs, TASK_META_STORE.get(pollOutcome.taskId)?.submittedAt);
             }
             resultItems = pollOutcome.items;
         }
+        // C-6: the effective slicing limit for THIS response. A fresh submit always uses its
+        // own requestedLimit (no resumeTaskId, so the lookup below is skipped entirely — behavior
+        // unchanged). A RESUME honors the metadata recorded when the task_id first became known
+        // to this process — the ORIGINAL submit's limit, not this resume call's own (possibly
+        // reverted-to-default) limit param.
+        const effectiveLimit = resumeTaskId
+            ? (TASK_META_STORE.get(resumeTaskId)?.limit ?? requestedLimit)
+            : requestedLimit;
         // Step 3: Extract records — handle two response formats from the download endpoint:
         //   Format A (flat): array of direct record objects, e.g. [{title:"...", error:null, success:true}, ...]
         //   Format B (wrapped): [{spider_code:200, rest:{...}}, ...] or [{error:"msg", error_code:N}]
         const firstItem = resultItems[0];
         if (!firstItem) {
-            return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
+            // F9: a literally empty download body carries NO signal to distinguish no-data from
+            // an upstream extraction failure — classify, never plain-ok (see emptyResultEnvelope).
+            return emptyResultEnvelope(platform, displayOperation, "empty_download");
         }
         const firstAsRecord = firstItem;
         let rawRecords;
@@ -1170,29 +1571,48 @@ export async function novadaScrape(params, apiKey) {
         // price and a trustworthy is_available. Pure projection of the API json — no-op
         // for platforms (e.g. Walmart) whose flat fields are already populated.
         rawRecords = rawRecords.map(r => normalizeProductRecord(r));
-        const records = rawRecords.slice(0, limit).map(r => flattenRecord(r));
+        const records = rawRecords.slice(0, effectiveLimit).map(r => flattenRecord(r));
         // Identity oracle (TOW2-305): never surface a DIFFERENT YouTube video than requested as
         // success. Runs on the raw upstream records (which carry the real id/url). No-op for
         // everything except single-target YouTube video ops with a confidently-extracted id.
-        assertYouTubeIdentity(platform, operation, opParams, rawRecords.slice(0, limit));
+        assertYouTubeIdentity(platform, operation, opParams, rawRecords.slice(0, effectiveLimit));
         if (records.length === 0) {
-            return `## Scrape Results\nplatform: ${platform} | operation: ${displayOperation}\n\n_No records returned._`;
+            // F9: items came back but nothing extractable was inside — ambiguous between
+            // no-data and schema-drift/extraction failure; classify, never plain-ok.
+            return emptyResultEnvelope(platform, displayOperation, "no_records_extracted");
         }
         const title = `${platform} — ${displayOperation}`;
         // For json we want clean structured records (not the flattened dot-path display version).
-        // rawRecords are already sliced by limit above via `rawRecords.slice(0, limit)`.
+        // rawRecords are already sliced by effectiveLimit above via `rawRecords.slice(0, effectiveLimit)`.
         // `records` is the flattenRecord'd version used for markdown/toon tabular display.
-        const cleanRecords = rawRecords.slice(0, limit);
+        const cleanRecords = rawRecords.slice(0, effectiveLimit);
         // For the human tabular formats (csv/excel/html): drop base64-blob columns
         // (favicon/image data URIs — useless in a spreadsheet + fragile in CSV) and
         // lead with curated key columns (title/price/rating/url/…). Display-only.
         const tabularRecords = curateTabularRecords(records);
+        // TOW2-372 change 2: one shared disclosure line, threaded into every
+        // populated-record format branch below — never rendered unless the locale
+        // default actually applied on THIS call (see `localeDefaulted` above).
+        const localeDefaultHint = localeDefaulted
+            ? `- No country/gl specified — defaulted to country="us" (this operation returns an empty SERP without a region hint).`
+            : null;
         let output;
         switch (format) {
             case "json":
                 // Clean JSON: surface key fields prominently. rawRecords are the upstream objects;
                 // they may still have deep nesting, but agents can navigate them. We emit them as-is
                 // (not flattenRecord'd), keeping structure and avoiding the 70-column flat-object problem.
+                // G-2: NOT wrapUntrusted-wrapped in json/csv/html/toon — these formats are a
+                // documented MACHINE-CONSUMPTION contract (M1: "return a bare, PARSEABLE JSON
+                // envelope"; csv/html/toon are explicitly advertised as "paste into Excel" /
+                // "standalone <table>" / spreadsheet-ready). Confirmed by running the existing
+                // suite: wrapping broke JSON.parse(jsonMatch) in scrape.test.ts/scrape-item3-
+                // item5.test.ts/scrape-price-normalize.test.ts/scrape-resume-audit-*.test.ts,
+                // and broke the CSV/HTML header-column assertions. Corrupting a structured,
+                // machine-parsed contract is a worse regression than the injection-prose risk
+                // it would close (a naive text-in/text-out agent's PRIMARY read surface for
+                // scrape output is the markdown table, which IS wrapped below). Only the
+                // markdown (human/LLM-read) branch is wrapped.
                 output = [
                     `## Scrape Results`,
                     `platform: ${platform} | operation: ${displayOperation} | records: ${cleanRecords.length} | source: live`,
@@ -1203,15 +1623,17 @@ export async function novadaScrape(params, apiKey) {
                     ``,
                     `---`,
                     `## Agent Hints`,
+                    localeDefaultHint,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- For human-readable output: use format='markdown'. For spreadsheets: format='csv' or format='excel'.`,
                     `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
-                ].join("\n");
+                ].filter((line) => line !== null).join("\n");
                 break;
             case "csv": {
                 // Inline CSV — header row + one row per record. Curated columns (base64 blobs
                 // dropped, key fields first). formatAsCsv RFC-4180 quotes any cell with a
                 // comma/quote/newline, so it round-trips in any spreadsheet or CSV parser.
+                // G-2: NOT wrapped — spreadsheet-consumption contract, see the json case's comment.
                 const csvText = formatAsCsv(tabularRecords);
                 output = [
                     `## Scrape Results`,
@@ -1223,10 +1645,11 @@ export async function novadaScrape(params, apiKey) {
                     ``,
                     `---`,
                     `## Agent Hints`,
+                    localeDefaultHint,
                     `- Copy the CSV block above and paste into Excel, Google Sheets, or any spreadsheet app.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='excel' to get a real .xlsx file instead.`,
-                ].join("\n");
+                ].filter((line) => line !== null).join("\n");
                 break;
             }
             case "excel":
@@ -1234,6 +1657,9 @@ export async function novadaScrape(params, apiKey) {
                 // Real .xlsx via exceljs — inline base64 so no disk writes (serverless-safe).
                 // Curated columns (base64 blobs dropped, key fields first) so the spreadsheet
                 // opens with clean, meaningful columns instead of favicon/image data URIs.
+                // G-2: NOT wrapUntrusted-wrapped — this is a base64-encoded binary .xlsx blob,
+                // not text an LLM reads/follows as instructions (a wrapper would just add noise
+                // around opaque base64).
                 const xlsxBuf = await formatAsXlsx(tabularRecords, operation.slice(0, 31));
                 const b64 = xlsxBuf.toString("base64");
                 output = [
@@ -1249,15 +1675,17 @@ export async function novadaScrape(params, apiKey) {
                     ``,
                     `---`,
                     `## Agent Hints`,
+                    localeDefaultHint,
                     `- Base64 → xlsx: \`echo "<base64>" | base64 -d > data.xlsx\` or use any online base64-to-file converter.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='csv' for a smaller inline text alternative.`,
-                ].join("\n");
+                ].filter((line) => line !== null).join("\n");
                 break;
             }
             case "html": {
                 // Inline HTML <table> — header <th> row + one <tr> per record. Curated columns
                 // (base64 blobs dropped, key fields first). Ready to drop into a page or open in a browser.
+                // G-2: NOT wrapped — "standalone <table> document" contract, see the json case's comment.
                 const htmlTable = formatAsHtml(tabularRecords, title);
                 output = [
                     `## Scrape Results`,
@@ -1267,10 +1695,11 @@ export async function novadaScrape(params, apiKey) {
                     ``,
                     `---`,
                     `## Agent Hints`,
+                    localeDefaultHint,
                     `- The HTML above is a standalone <table> document — save it as .html and open in a browser, or embed the <table> element in a page.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='csv' or format='excel' for spreadsheet-ready output, format='json' for code.`,
-                ].join("\n");
+                ].filter((line) => line !== null).join("\n");
                 break;
             }
             case "toon": {
@@ -1284,6 +1713,7 @@ export async function novadaScrape(params, apiKey) {
                     `HEADERS: ${headers.join(" | ")}`,
                     ...records.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
                 ];
+                // G-2: NOT wrapped — token-optimized machine format, see the json case's comment.
                 output = [
                     `## Scrape Results`,
                     `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live | format: toon`,
@@ -1292,27 +1722,29 @@ export async function novadaScrape(params, apiKey) {
                     ``,
                     `---`,
                     `## Agent Hints`,
+                    localeDefaultHint,
                     `- TOON format: first line starts with "HEADERS:" listing columns, subsequent lines are pipe-separated values.`,
                     `- Use format='json' for downstream code processing, format='markdown' for human-readable output.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     ``,
                     `## Agent Memory`,
                     `remember: ${platform}/${operation} — ${records.length} records retrieved`,
-                ].join("\n");
+                ].filter((line) => line !== null).join("\n");
                 break;
             }
             case "markdown":
             default:
                 output = [
                     `## Scrape Results`,
-                    `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live${records.length >= limit ? ` (limit:${limit})` : ""}`,
+                    `platform: ${platform} | operation: ${displayOperation} | records: ${records.length} | source: live${records.length >= effectiveLimit ? ` (limit:${effectiveLimit})` : ""}`,
                     ``,
                     `---`,
                     ``,
-                    formatAsMarkdown(records),
+                    wrapUntrusted(formatAsMarkdown(records), `${platform}/${operation}`),
                     ``,
                     `---`,
                     `## Agent Hints`,
+                    localeDefaultHint,
                     `- Use format='json' or format='csv' for downstream processing. Use format='excel' for a .xlsx spreadsheet.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- For structured scraping of other platforms, change platform and operation.`,
@@ -1324,7 +1756,7 @@ export async function novadaScrape(params, apiKey) {
                     ``,
                     `## Agent Memory`,
                     `remember: ${platform}/${operation} — ${records.length} records retrieved`,
-                ].join("\n");
+                ].filter((line) => line !== null).join("\n");
                 break;
         }
         // Wire output save — best-effort, never breaks the tool
@@ -1334,7 +1766,7 @@ export async function novadaScrape(params, apiKey) {
                 tool: "scrape",
                 hint: domain,
                 format: format === "json" ? "json" : "csv",
-                data: rawRecords.slice(0, limit),
+                data: rawRecords.slice(0, effectiveLimit),
                 project: params.project,
             });
             output += `\n\n## Output Saved\n${outputResult.summary}`;

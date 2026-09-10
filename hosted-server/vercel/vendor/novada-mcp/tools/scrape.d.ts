@@ -25,6 +25,13 @@ type SubmitOutcome = {
  */
 export declare function submitScrapeTask(apiKey: string, scraper_name: string, scraper_id: string, params: Record<string, unknown>): Promise<SubmitOutcome>;
 /**
+ * Escalating resume guidance keyed to how long ago the task was originally submitted.
+ * Pure (no I/O, no wall-clock read) so tests can assert exact boundary behavior with a
+ * synthetic age_s instead of faking real timers through the whole submit→poll→resume
+ * pipeline. Exported for direct unit coverage; also used by processingEnvelope() below.
+ */
+export declare function ageBucketInstruction(ageS: number): string;
+/**
  * Reconcile price + availability on a product record in place-safe fashion
  * (returns a NEW object; never mutates the input). Fills `final_price` (and
  * `price`) from derivePrice ONLY when the flat field is currently empty/zero, and

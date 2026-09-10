@@ -17,15 +17,18 @@ export declare const ProxyAccountCreateParamsSchema: z.ZodObject<{
     remark: z.ZodOptional<z.ZodString>;
     limit_flow: z.ZodOptional<z.ZodString>;
     confirm: z.ZodOptional<z.ZodLiteral<true>>;
+    approval_token: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 export type ProxyAccountCreateParams = z.infer<typeof ProxyAccountCreateParamsSchema>;
 export declare function validateProxyAccountCreateParams(args: Record<string, unknown> | undefined): ProxyAccountCreateParams;
 /**
  * Create a proxy sub-account on api-m.novada.com (`/v1/proxy_account/create`).
  *
- * Two-step confirm gate: without `confirm: true`, the tool returns a preview
- * payload and does NOT hit the API. Agents MUST surface the preview to the
- * human user and only re-call with `confirm: true` after explicit approval.
+ * Two-step APPROVAL-TOKEN gate: without a valid `approval_token`, the tool
+ * returns a preview payload plus a fresh token and does NOT hit the API.
+ * Agents MUST surface the preview to the human user and only re-call with
+ * the identical parameters plus that token after explicit approval.
+ * `confirm: true` alone never authorizes execution (see ../utils/approval.ts).
  *
  * Request body is multipart/form-data per the API contract — handled centrally
  * by devApiPost. Fields posted: product, account, password, status,

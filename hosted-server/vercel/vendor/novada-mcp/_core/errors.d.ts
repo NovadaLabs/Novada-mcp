@@ -11,6 +11,11 @@ export declare enum NovadaErrorCode {
     TASK_PENDING = "TASK_PENDING",
     SESSION_EXPIRED = "SESSION_EXPIRED",
     PROXY_AUTH_FAILURE = "PROXY_AUTH_FAILURE",
+    /** F15 (2026-09-10 audit): the fetch succeeded but OUR readability/Turndown parse
+     *  pass crashed on the page's markup (e.g. amazon.com/dp/B0CX23V2ZK → raw
+     *  "TypeError: … reading 'parentNode'"). Permanent for this page+parser — retrying
+     *  the same call re-runs the same crashing parser; format="html" bypasses it. */
+    PARSE_FAILED = "PARSE_FAILED",
     UNKNOWN = "UNKNOWN"
 }
 export type FailureClass = "transient" | "permanent" | "auth" | "quota";
@@ -20,12 +25,22 @@ export declare class NovadaError extends Error {
     readonly retryable: boolean;
     /** Optional short reason supplied by callers for INVALID_PARAMS detail. */
     readonly detail?: string;
+    /**
+     * Raw upstream business `code` from a developer-api envelope (e.g. `11009` =
+     * "product not provisioned" for flow-balance endpoints), when known. Lets
+     * callers classify on the STRUCTURED code instead of parsing `message` —
+     * see plan_balance_all.ts's `isUnavailable` check, which keys off this field
+     * (plus the pre-existing HTTP-404 message literal) instead of guessing from
+     * upstream prose that can vary per endpoint/locale.
+     */
+    readonly businessCode?: number;
     constructor(opts: {
         code: NovadaErrorCode;
         message: string;
         agent_instruction: string;
         retryable: boolean;
         detail?: string;
+        businessCode?: number;
     });
     /** Formats the error as an agent-readable string with failure classification. */
     toAgentString(): string;
@@ -109,6 +124,8 @@ export declare function classifyError(error: unknown): NovadaError;
 /**
  * Creates a NovadaError for a specific code with a custom message.
  * Convenience factory used by tools that detect error codes from API response bodies.
+ * `businessCode` optionally preserves the raw upstream developer-api envelope
+ * `code` (e.g. 11009) so callers can classify structurally — see NovadaError.businessCode.
  */
-export declare function makeNovadaError(code: NovadaErrorCode, message: string, detail?: string): NovadaError;
+export declare function makeNovadaError(code: NovadaErrorCode, message: string, detail?: string, businessCode?: number): NovadaError;
 //# sourceMappingURL=errors.d.ts.map

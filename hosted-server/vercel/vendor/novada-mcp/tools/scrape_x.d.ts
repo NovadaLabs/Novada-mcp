@@ -22,7 +22,7 @@ export declare const X_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             post_by_url: "post_by_url";
             profile_by_url: "profile_by_url";
@@ -40,7 +40,7 @@ export declare const X_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "post_by_url" | "profile_by_url" | "profile_by_username";
         params: Record<string, unknown>;
@@ -59,7 +59,7 @@ export declare const X_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"post_by_url" | "profile_by_url" | "profile_by_username">;
 };
-export declare const ScrapeXParamsSchema: z.ZodObject<{
+export declare const ScrapeXParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         post_by_url: "post_by_url";
         profile_by_url: "profile_by_url";
@@ -77,7 +77,7 @@ export declare const ScrapeXParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeXParams = z.infer<typeof ScrapeXParamsSchema>;
 export declare function validateScrapeXParams(args: Record<string, unknown> | undefined): ScrapeXParams;
 /**

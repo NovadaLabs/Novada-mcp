@@ -68,6 +68,21 @@ export declare function fetchBrowserSubAccountCredentials(apiKey: string): Promi
  * 3. Auto-fetch via NOVADA_API_KEY (product=10)
  */
 export declare function resolveBrowserWs(apiKey?: string): Promise<string | null>;
+/** Test-only: reset the boot-provision provenance marker. */
+export declare function clearBootProvisionedProxyCredentials(): void;
+/**
+ * Boot-time proxy auto-provision (INC-198) — called ONCE from index.ts run():
+ * when NOVADA_PROXY_ENDPOINT is set but NOVADA_PROXY_USER/PASS are missing,
+ * resolve (auto-fetch) a sub-account and inject it into process.env, recording
+ * provenance so the F11 ledger gate keeps applying to the injected pair
+ * (MEDIUM-6, see the section comment above). Returns the provisioned account
+ * (for redacted logging) or null when nothing was provisioned. Never throws —
+ * a failed auto-provision must not stop the server booting; proxy tools
+ * surface a configuration error when invoked.
+ */
+export declare function autoProvisionProxyCredentialsAtBoot(): Promise<{
+    user: string;
+} | null>;
 /**
  * Resolve proxy credentials with priority:
  * 1. Explicit env vars (NOVADA_PROXY_USER + NOVADA_PROXY_PASS + NOVADA_PROXY_ENDPOINT) — no API call.
@@ -76,6 +91,21 @@ export declare function resolveBrowserWs(apiKey?: string): Promise<string | null
  *    gateway proxy.novada.pro:7777. This is the hosted-server path: the caller supplies
  *    only an API key, we derive a working {user,pass,endpoint} entirely from it.
  *
+ * `source` tells the caller HOW the credentials were obtained — "direct"
+ * (env vars / SDK-scoped store, bypassing the mgmt API: the account ledger for
+ * them is unknowable from here) vs "auto_fetched" (derived from the API key —
+ * at call time below, or at boot via autoProvisionProxyCredentialsAtBoot(),
+ * whose env-injected pair is re-identified by the provenance marker; MEDIUM-6).
+ * F11's disclosure requirements hinge on this distinction.
+ *
+ * `billingApiKey` (auto_fetched only) is the EXACT key the fetched sub-account
+ * bills to — the effective-key chain below (arg > store > env). HIGH-1: the F11
+ * flow-ledger preflight must read THIS key's ledger; reading the server env
+ * key's ledger for caller-billed creds refused healthy paying callers when the
+ * server was exhausted (the 2026-07-30 wrong-ledger-denial P0 class,
+ * cross-account) and issued dead creds when the caller was exhausted. The key
+ * is for in-process threading only — never print or log it.
+ *
  * @param apiKey - Caller's API key. Takes priority over the store-scoped key and NOVADA_API_KEY,
  *   so hosted-server requests are billed to the caller, not the server account.
  */
@@ -83,6 +113,8 @@ export declare function resolveProxyCredentials(apiKey?: string): Promise<{
     user: string;
     pass: string;
     endpoint: string;
+    source: "direct" | "auto_fetched";
+    billingApiKey?: string;
 } | null>;
 /**
  * Redact a secret string to a last-4 fingerprint for safe logging.

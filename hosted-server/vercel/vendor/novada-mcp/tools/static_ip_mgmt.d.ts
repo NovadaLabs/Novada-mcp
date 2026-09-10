@@ -28,15 +28,16 @@ export declare const StaticIpMgmtParamsSchema: z.ZodObject<{
     key_word: z.ZodOptional<z.ZodString>;
     is_auto_renew: z.ZodOptional<z.ZodNumber>;
     confirm: z.ZodOptional<z.ZodLiteral<true>>;
+    approval_token: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 export type StaticIpMgmtParams = z.infer<typeof StaticIpMgmtParamsSchema>;
 export declare function validateStaticIpMgmtParams(args: Record<string, unknown> | undefined): StaticIpMgmtParams;
 /**
  * Unified static ISP IP management tool.
  *
- * "open" and "renew" are WRITE actions gated behind `confirm: true`.
- * Without confirm, they return a preview payload and do NOT hit the API.
- * "list" and "export" are read-only.
+ * "open" and "renew" are WRITE actions gated behind a valid `approval_token`
+ * (see ../utils/approval.ts). Without one, they return a preview payload
+ * plus a fresh token and do NOT hit the API. "list" and "export" are read-only.
  */
 export declare function novadaStaticIpMgmt(params: StaticIpMgmtParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=static_ip_mgmt.d.ts.map

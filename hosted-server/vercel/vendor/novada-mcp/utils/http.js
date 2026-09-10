@@ -26,7 +26,7 @@ const MCP_SESSION_ID = crypto.randomBytes(8).toString("hex");
  * Build the x-mcp-* header set for a given calling tool. client/session are
  * process-stable; only the tool varies per call.
  */
-function telemetryHeaders(tool) {
+export function telemetryHeaders(tool) {
     return {
         "x-mcp-client": MCP_CLIENT_ID,
         "x-mcp-session": MCP_SESSION_ID,

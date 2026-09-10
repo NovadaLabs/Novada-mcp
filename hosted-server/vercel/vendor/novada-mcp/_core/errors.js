@@ -14,6 +14,11 @@ export var NovadaErrorCode;
     NovadaErrorCode["TASK_PENDING"] = "TASK_PENDING";
     NovadaErrorCode["SESSION_EXPIRED"] = "SESSION_EXPIRED";
     NovadaErrorCode["PROXY_AUTH_FAILURE"] = "PROXY_AUTH_FAILURE";
+    /** F15 (2026-09-10 audit): the fetch succeeded but OUR readability/Turndown parse
+     *  pass crashed on the page's markup (e.g. amazon.com/dp/B0CX23V2ZK → raw
+     *  "TypeError: … reading 'parentNode'"). Permanent for this page+parser — retrying
+     *  the same call re-runs the same crashing parser; format="html" bypasses it. */
+    NovadaErrorCode["PARSE_FAILED"] = "PARSE_FAILED";
     NovadaErrorCode["UNKNOWN"] = "UNKNOWN";
 })(NovadaErrorCode || (NovadaErrorCode = {}));
 const FAILURE_CLASS = {
@@ -29,6 +34,7 @@ const FAILURE_CLASS = {
     [NovadaErrorCode.TASK_PENDING]: "transient",
     [NovadaErrorCode.SESSION_EXPIRED]: "permanent",
     [NovadaErrorCode.PROXY_AUTH_FAILURE]: "auth",
+    [NovadaErrorCode.PARSE_FAILED]: "permanent",
     [NovadaErrorCode.UNKNOWN]: "permanent",
 };
 const RETRY_AFTER_MS = {
@@ -44,6 +50,15 @@ export class NovadaError extends Error {
     retryable;
     /** Optional short reason supplied by callers for INVALID_PARAMS detail. */
     detail;
+    /**
+     * Raw upstream business `code` from a developer-api envelope (e.g. `11009` =
+     * "product not provisioned" for flow-balance endpoints), when known. Lets
+     * callers classify on the STRUCTURED code instead of parsing `message` —
+     * see plan_balance_all.ts's `isUnavailable` check, which keys off this field
+     * (plus the pre-existing HTTP-404 message literal) instead of guessing from
+     * upstream prose that can vary per endpoint/locale.
+     */
+    businessCode;
     constructor(opts) {
         super(opts.message);
         this.name = "NovadaError";
@@ -51,6 +66,7 @@ export class NovadaError extends Error {
         this.agent_instruction = opts.agent_instruction;
         this.retryable = opts.retryable;
         this.detail = opts.detail;
+        this.businessCode = opts.businessCode;
     }
     /** Formats the error as an agent-readable string with failure classification. */
     toAgentString() {
@@ -223,6 +239,12 @@ Action:
   1. Check NOVADA_PROXY_USER and NOVADA_PROXY_PASS are correctly set.
   2. Call novada_account section="summary" to confirm proxy credentials are loaded.
   3. Regenerate credentials at https://dashboard.novada.com/overview/proxy/ if expired.`,
+    [NovadaErrorCode.PARSE_FAILED]: `\
+The page was fetched successfully but its HTML crashed the content parser (readability/markdown pass).
+Do not retry the same call — the parser will crash on the same markup again. Changing render mode does not help: the failure is in parsing, not access.
+
+Action: Retry with format="html" to get the raw page HTML (bypasses the parser) and extract what you need from it directly.
+Alternative: For catalog platforms (amazon, github, tiktok, ...), use the matching novada_scrape operation for structured data.`,
     [NovadaErrorCode.UNKNOWN]: `\
 An unexpected error occurred.
 
@@ -376,6 +398,19 @@ export function classifyError(error) {
     }
     if (error instanceof Error) {
         const msg = error.message.toLowerCase();
+        // Unknown tool name (core.ts's dispatch() default case). The message
+        // itself already lists every valid tool name, class-derived from the
+        // live registry (F-5) — give a crisp, specific instruction instead of
+        // falling through to the generic UNKNOWN template below.
+        if (msg.includes("unknown tool:")) {
+            return new NovadaError({
+                code: NovadaErrorCode.INVALID_PARAMS,
+                message: sanitizeMessage(error.message),
+                agent_instruction: "The tool name is wrong. Call novada_discover to see every valid tool name, " +
+                    "or pick one from the 'Available:' list already in this error's message, then retry.",
+                retryable: false,
+            });
+        }
         // Auth failures
         if (msg.includes("401") || msg.includes("api_key") || msg.includes("unauthorized") || msg.includes("invalid_api_key")) {
             return new NovadaError({
@@ -512,8 +547,10 @@ export function classifyError(error) {
 /**
  * Creates a NovadaError for a specific code with a custom message.
  * Convenience factory used by tools that detect error codes from API response bodies.
+ * `businessCode` optionally preserves the raw upstream developer-api envelope
+ * `code` (e.g. 11009) so callers can classify structurally — see NovadaError.businessCode.
  */
-export function makeNovadaError(code, message, detail) {
+export function makeNovadaError(code, message, detail, businessCode) {
     return new NovadaError({
         code,
         message,
@@ -525,6 +562,7 @@ export function makeNovadaError(code, message, detail) {
             NovadaErrorCode.TASK_PENDING,
         ].includes(code),
         detail,
+        businessCode,
     });
 }
 //# sourceMappingURL=errors.js.map

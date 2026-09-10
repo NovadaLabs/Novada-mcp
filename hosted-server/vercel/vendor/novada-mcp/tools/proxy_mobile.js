@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { resolveProxyCredentials } from "../utils/credentials.js";
+import { assertFlowLedgerActive } from "./proxy_preflight.js";
 // ─── Schema ──────────────────────────────────────────────────────────────────
 export const ProxyMobileParamsSchema = z.object({
     url: z.string().optional()
@@ -46,7 +47,9 @@ function buildMobileUsername(user, params) {
  * content to mobile vs. desktop users.
  */
 export async function novadaProxyMobile(params) {
-    // INC-197/198: Use resolveProxyCredentials + friendly error format
+    // INC-197/198: Use resolveProxyCredentials + friendly error format.
+    // Resolved BEFORE the F11 gate (HIGH-1): the preflight must read the ledger
+    // of the account the creds BILL to, which only the resolver knows.
     const proxyCreds = await resolveProxyCredentials();
     if (!proxyCreds) {
         return [
@@ -63,6 +66,11 @@ export async function novadaProxyMobile(params) {
             `- For web extraction without managing proxies, use novada_extract or novada_crawl instead.`,
         ].join("\n");
     }
+    // F11: same table-driven flow-ledger preflight as novada_proxy (see
+    // proxy_preflight.ts) — fail-closed on a positive 0/expired signal from the
+    // BILLING account's ledger only; direct env/SDK creds are never judged on
+    // another account's ledger.
+    await assertFlowLedgerActive("mobile", proxyCreds, "novada_proxy_mobile");
     const { user, pass, endpoint } = proxyCreds;
     const username = buildMobileUsername(user, params);
     const encodedUser = encodeURIComponent(username);

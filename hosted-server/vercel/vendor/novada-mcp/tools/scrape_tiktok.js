@@ -40,7 +40,7 @@ export const TIKTOK_SCRAPER_CONFIG = {
     paramsFieldDoc: "Operation-specific parameters for the selected `operation`. E.g. { url: \"https://www.tiktok.com/@handle\" } for " +
         "profile_by_url/posts_by_profile/post_by_url, { search_url: \"https://www.tiktok.com/search?q=...\" } for profiles_by_search_url.",
     description: {
-        core: "Extract structured TikTok data — profile info, post/video details, and post lists by profile, hashtag, or search URL — through a TikTok-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"tiktok.com\".",
+        core: "Extract structured TikTok data — profile info, post/video details, and post lists by profile, hashtag, or search URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"tiktok.com\").",
         useWhen: [
             "get the latest posts from this TikTok profile",
             "get details for this single TikTok video URL",
@@ -49,12 +49,12 @@ export const TIKTOK_SCRAPER_CONFIG = {
             "get posts from this TikTok hashtag/discover page",
         ],
         notFor: [
-            { when: "A single TikTok URL you just want read as plain text", useInstead: "novada_extract" },
+            { when: "A single TikTok URL to read as plain text", useInstead: "novada_extract" },
             { when: "A general web search not scoped to TikTok", useInstead: "novada_search" },
-            { when: "A different platform's structured data (YouTube, Instagram, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+            { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
         ],
-        returns: "Structured profile/post records (username, follower count, video description, likes, view count, etc.) in the chosen format (markdown/json/csv/excel/html/toon) — same rendering as novada_scrape.",
-        operationsNote: "5 verified-working TikTok operations: profile search by list URL, profile by URL, posts by list URL, posts by profile URL, and a single post by URL (see the `operation` param's description for the exact `params` keys each needs). Every tiktok.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+        returns: "Structured profile/post records (username, follower count, video description, likes, view count, etc.) in the chosen output format — same rendering as novada_scrape.",
+        operationsNote: "5 verified-working TikTok operations: profile search by list URL, profile by URL, posts by list URL, posts by profile URL, and a single post by URL. Every tiktok.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
     },
 };
 /** The materialized TikTok platform-scraper tool (definition + registry entry + handler). */

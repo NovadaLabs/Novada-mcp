@@ -1,0 +1,302 @@
+/** field label for an issue's path — "(root)" for top-level / whole-object issues (e.g. unrecognized_keys). */
+function issueField(issue) {
+    return issue.path.length > 0 ? issue.path.map(String).join(".") : "(root)";
+}
+/**
+ * One Zod v4 validation issue -> one instruction fragment that names the
+ * ACTUAL fix (not a generic "check the schema" paragraph). Switches on
+ * `issue.code` so every issue class gets its own template:
+ *   invalid_type        -> "Add the required parameter X" | "Change X to type Y"
+ *   invalid_value        -> "Set X to one of: ..." (enum/literal mismatch)
+ *   too_small / too_big   -> "Increase/decrease X — minimum/maximum N ..."
+ *   unrecognized_keys    -> "Remove or rename unknown key(s): ..."
+ *   invalid_union        -> "Change X to one of these types: ..." (derived from
+ *                            the union's own branch issues — see the P3/F-3 fix
+ *                            this closes: novada_extract's `url` field is
+ *                            `z.union([safeUrl, z.array(safeUrl)])`, and Zod's
+ *                            top-level union message is the unhelpful bare
+ *                            "Invalid input" with no expected type — the real
+ *                            type info lives one level down, in `errors[]`)
+ *   invalid_format        -> "Fix X — must be a valid <format>"
+ *   not_multiple_of       -> "Set X to a multiple of N"
+ *   custom / anything else -> falls back to the issue's own message verbatim
+ */
+export function formatZodIssue(issue) {
+    const field = issueField(issue);
+    switch (issue.code) {
+        case "invalid_type": {
+            // A missing required param arrives as invalid_type with no distinct
+            // "missing" issue code — Zod's own message already says which one it
+            // was ("... received undefined" vs "... received <actual type>"), so
+            // parse THAT instead of issue.input: at runtime (verified against this
+            // project's zod 4.3.6) plain schema.parse() does NOT populate the
+            // issue's `input` field even though the type declares it optional —
+            // relying on it silently mis-templated every wrong-type issue as
+            // "missing" until this was caught by a test asserting on real output.
+            const received = issue.message.match(/received (\w+)/)?.[1];
+            if (received === "undefined") {
+                return `Add the required parameter ${field} (type: ${issue.expected}).`;
+            }
+            return received
+                ? `Change ${field} to type ${issue.expected} — got ${received}.`
+                : `Change ${field} to type ${issue.expected}.`;
+        }
+        case "invalid_value": {
+            const values = Array.isArray(issue.values) ? issue.values : [];
+            return values.length > 0
+                ? `Set ${field} to one of: ${values.map((v) => JSON.stringify(v)).join(" | ")}.`
+                : `Fix ${field}: ${issue.message}.`;
+        }
+        case "too_small": {
+            const unit = issue.origin === "string" ? "characters" : issue.origin === "array" ? "items" : "";
+            const bound = issue.inclusive === false ? "more than" : "at least";
+            return `Increase ${field} — needs ${bound} ${issue.minimum}${unit ? ` ${unit}` : ""}.`;
+        }
+        case "too_big": {
+            const unit = issue.origin === "string" ? "characters" : issue.origin === "array" ? "items" : "";
+            const bound = issue.inclusive === false ? "fewer than" : "at most";
+            return `Decrease ${field} — needs ${bound} ${issue.maximum}${unit ? ` ${unit}` : ""}.`;
+        }
+        case "unrecognized_keys": {
+            const keys = Array.isArray(issue.keys) ? issue.keys : [];
+            return `Remove or rename unknown key(s): ${keys.map((k) => `'${k}'`).join(", ")} — not part of this tool's schema.`;
+        }
+        case "invalid_union": {
+            // The union's OWN message is a generic "Invalid input" with no type
+            // info (F-3/P3) — recover the real expected types from the branch
+            // issues nested in `errors[]` instead.
+            const expectedTypes = new Set();
+            for (const branch of issue.errors) {
+                for (const sub of branch) {
+                    if (sub.code === "invalid_type")
+                        expectedTypes.add(sub.expected);
+                }
+            }
+            return expectedTypes.size > 0
+                ? `Change ${field} to one of these types: ${[...expectedTypes].join(" or ")}.`
+                : `Fix ${field} — it does not match any of the accepted shapes for this parameter.`;
+        }
+        case "invalid_format": {
+            const pattern = "pattern" in issue && issue.pattern ? ` matching ${issue.pattern}` : "";
+            return `Fix ${field} — must be a valid ${issue.format}${pattern}.`;
+        }
+        case "not_multiple_of":
+            return `Set ${field} to a multiple of ${issue.divisor}.`;
+        default:
+            // custom (.refine()/.superRefine() messages are already specific —
+            // e.g. safeUrl's "URLs pointing to localhost..." — echo verbatim),
+            // invalid_key, invalid_element: no dedicated template needed yet.
+            return `Fix ${field}: ${issue.message}.`;
+    }
+}
+/** One detail line per issue, matching the pre-existing "  field: message (valid values: ...)" shape. */
+function issueDetailLine(issue) {
+    let line = `  ${issueField(issue)}: ${issue.message}`;
+    if (issue.code === "invalid_value" && Array.isArray(issue.values)) {
+        line += ` (valid values: ${issue.values.map((v) => `'${String(v)}'`).join(", ")})`;
+    }
+    return line;
+}
+/**
+ * Full agent-facing text for a ZodError on a given tool call (F-12, P-4 — the
+ * ONE formatter). Callers that also have a computeUnknownKeyWarning() result
+ * to surface should push it as a SEPARATE content block (see index.ts) rather
+ * than concatenating it here, so it stays independently machine-parseable
+ * (its own line-anchored `agent_instruction:` token) instead of trailing
+ * inside this function's single instruction line.
+ */
+export function formatZodError(toolName, error) {
+    const detailLines = error.issues.map(issueDetailLine);
+    const instruction = error.issues.map(formatZodIssue).join(" ");
+    return [
+        `Invalid parameters for ${toolName}:`,
+        ...detailLines,
+        `agent_instruction: ${instruction} Do NOT retry with identical params — at least one field must change.`,
+    ].join("\n");
+}
+/** snake_case -> camelCase, e.g. "max_pages" -> "maxPages". */
+function toCamelCase(snake) {
+    return snake.replace(/_([a-z0-9])/g, (_match, c) => c.toUpperCase());
+}
+/**
+ * A handful of tools accept a documented alias whose name is NOT a pure
+ * camelCase spelling of its snake_case canonical key (every other alias in
+ * this codebase IS — see withCamelCaseAliases call sites in tools/types.ts
+ * and tools/platform_scraper.ts, which this module derives from
+ * automatically via toCamelCase() below). Enumerated here so those don't
+ * false-positive as "unknown" — this is the SMALL, explicitly-labeled
+ * exception list, not a per-tool key list (the full known-key set below is
+ * still derived from the live registry, not hand-maintained).
+ */
+const EXTRA_KNOWN_ALIASES = {
+    // novada_search: start_time/end_time alias start_date/end_date "for
+    // consistency with the developer-api tools" (tools/types.ts:134-136) —
+    // different wording, not just casing, so toCamelCase() can't derive it.
+    novada_search: ["start_time", "end_time"],
+};
+/**
+ * Tools whose Zod schema actually wires camelCase aliasing — either via
+ * `withCamelCaseAliases()` (tools/types.ts, tools/platform_scraper.ts's
+ * `createPlatformScraperTool()` factory) or an equivalent bespoke
+ * `z.preprocess` alias step (`ExtractParamsSchema`, `BrowserParamsSchema`,
+ * both in tools/types.ts). ONLY for a tool in this set is `toCamelCase(key)`
+ * of a declared snake_case key an ACTUALLY-ACCEPTED parameter — not just a
+ * mechanical guess.
+ *
+ * F-2 false-negative fix (2026-09-03 ledger-closure audit, finding #5):
+ * `withCamelCaseAliases` wraps a schema in `z.preprocess`, which is INVISIBLE
+ * to `inputSchema.properties` (the JSON Schema this module reads — see that
+ * function's own doc comment in tools/types.ts: "the camelCase keys never
+ * appear in the agent-facing JSON schema"). The previous version of this
+ * module ran `toCamelCase()` over EVERY declared key on EVERY tool
+ * regardless of whether that tool's schema actually wires aliasing —
+ * accurate by coincidence for aliased tools, silently wrong for every other
+ * tool with a multi-word snake_case key. Concretely:
+ * `novada_research({startDate: "2024-01-01"})` produced ZERO warning even
+ * though `ResearchParamsSchema` (tools/types.ts) is a bare `z.object(...)`
+ * with no `withCamelCaseAliases` wrapper, so `startDate` is NOT a real
+ * parameter — Zod's non-strict default silently DROPS it and the call
+ * quietly does nothing.
+ *
+ * Investigated (2026-09 fix pass): every current `withCamelCaseAliases` /
+ * bespoke-preprocess call site's alias map covers 100% of that schema's
+ * declared multi-word snake_case keys (no partial coverage found anywhere in
+ * tools/types.ts or tools/platform_scraper.ts today) — so "does this tool
+ * alias at all" is an accurate, verified proxy for "is toCamelCase(key)
+ * known for this tool", and a per-tool allowlist (rather than a hand-kept
+ * per-key table) is the minimal correct fix.
+ *
+ * This module cannot import the real alias maps directly — they live inside
+ * z.preprocess closures in tools/types.ts / tools/platform_scraper.ts, not on
+ * inputSchema.properties, and pulling them out into an importable shape is
+ * outside this fix's file-ownership scope. So membership here is a hand-swept
+ * enumeration, verified against every current alias call site — NOT
+ * self-verifying the way reading inputSchema.properties directly would be.
+ * If a schema gains/loses camelCase aliasing, THIS LIST must be updated in
+ * lockstep or a future tool will silently regress back into this class of
+ * false-negative (or, less dangerously, false-positive). A stronger
+ * structural fix would export the alias maps themselves from tools/types.ts
+ * for this module to read — flagged here for a follow-up pass.
+ */
+const CAMELCASE_ALIASED_TOOLS = new Set([
+    "novada_search", // SearchParamsSchema — withCamelCaseAliases
+    "novada_extract", // ExtractParamsSchema — bespoke preprocess (maxChars/waitFor/waitMs)
+    "novada_crawl", // CrawlParamsSchema — withCamelCaseAliases
+    "novada_map", // MapParamsSchema — withCamelCaseAliases
+    "novada_site_copy", // SiteCopyParamsSchema — withCamelCaseAliases
+    "novada_proxy", // ProxyParamsSchema — withCamelCaseAliases
+    "novada_browser", // BrowserParamsSchema — bespoke preprocess (sessionId at top level)
+    "novada_scrape", // ScrapeParamsSchema — withCamelCaseAliases (taskId)
+    "novada_unblock", // UnblockParamsSchema — withCamelCaseAliases; HIDDEN_ALIASES-only today
+    // The 15 novada_scrape_<platform> tools all share ONE factory
+    // (createPlatformScraperTool in tools/platform_scraper.ts) that wraps its
+    // generated ParamsSchema in withCamelCaseAliases({ taskId: "task_id" }).
+    "novada_scrape_amazon",
+    "novada_scrape_bing",
+    "novada_scrape_duckduckgo",
+    "novada_scrape_facebook",
+    "novada_scrape_github",
+    "novada_scrape_google",
+    "novada_scrape_instagram",
+    "novada_scrape_linkedin",
+    "novada_scrape_perplexity",
+    "novada_scrape_shein",
+    "novada_scrape_tiktok",
+    "novada_scrape_walmart",
+    "novada_scrape_x",
+    "novada_scrape_yandex",
+    "novada_scrape_youtube",
+]);
+/**
+ * Diffs an incoming tool call's argument keys against the tool's OWN
+ * declared JSON-Schema `inputSchema.properties` — already the single source
+ * of truth for that tool's real Zod schema (see utils/mcp-schema.ts's
+ * zodToMcpSchema, which every tool definition in core.ts is built from) —
+ * and returns a non-fatal warning line naming any key that isn't part of it.
+ *
+ * Deliberately generic over the live `tools` list (pass `TOOLS` from
+ * core.ts) instead of a hand-written per-tool key table, so adding a 39th
+ * tool needs ZERO new branches here (F-2 / F-5 class-not-instance
+ * requirement): its schema is picked up automatically the moment it's
+ * registered.
+ *
+ * Returns undefined when there is nothing to warn about: no args, the tool
+ * isn't in `tools` (e.g. a hidden alias absent from the visible TOOLS list —
+ * nothing declared to diff against), or every key is known — either the
+ * declared key itself, its mechanical camelCase alias IF the tool is in
+ * CAMELCASE_ALIASED_TOOLS (its schema actually accepts that alias), or an
+ * entry in EXTRA_KNOWN_ALIASES.
+ */
+export function computeUnknownKeyWarning(toolName, args, tools) {
+    if (!args)
+        return undefined;
+    const argKeys = Object.keys(args);
+    if (argKeys.length === 0)
+        return undefined;
+    const tool = tools.find((t) => t.name === toolName);
+    const props = tool?.inputSchema?.["properties"];
+    if (!props || typeof props !== "object")
+        return undefined;
+    const declared = Object.keys(props);
+    const known = new Set(declared);
+    // F-2 fix: only credit the mechanical camelCase spelling as "known" for a
+    // tool whose schema ACTUALLY wires camelCase aliasing — see
+    // CAMELCASE_ALIASED_TOOLS's doc comment. For every other tool, a
+    // camelCase key is unknown unless it's the tool's real declared key (rare —
+    // e.g. a param whose canonical name has no underscore) or listed in
+    // EXTRA_KNOWN_ALIASES below.
+    if (CAMELCASE_ALIASED_TOOLS.has(toolName)) {
+        for (const key of declared)
+            known.add(toCamelCase(key));
+    }
+    for (const extra of EXTRA_KNOWN_ALIASES[toolName] ?? [])
+        known.add(extra);
+    const unknown = argKeys.filter((k) => !known.has(k));
+    if (unknown.length === 0)
+        return undefined;
+    return (`agent_instruction: Unknown parameter(s) ignored on ${toolName}: ${unknown.map((k) => `'${k}'`).join(", ")}. ` +
+        `They had NO effect on this call. If one was a typo of a real parameter, re-call with the corrected name — ` +
+        `valid parameters (including camelCase aliases) are listed in the tool's inputSchema.`);
+}
+/**
+ * True if a ZodError already contains an `unrecognized_keys` issue — i.e. a
+ * `.strict()` schema HARD-REJECTED the call because of the unknown key(s),
+ * rather than silently dropping them. Callers should skip appending
+ * computeUnknownKeyWarning()'s "ignored ... had NO effect" note in that case
+ * — the two messages would contradict each other (rejected vs. ignored).
+ */
+export function hasUnrecognizedKeysIssue(error) {
+    return error.issues.some((i) => i.code === "unrecognized_keys");
+}
+// ─── F2-3: lightweight pre-key-gate "required params present" check ─────────
+/**
+ * A schema-derived (not hand-maintained) check for whether every REQUIRED
+ * top-level param is present in `args`, using the same live `inputSchema`
+ * JSON Schema `computeUnknownKeyWarning` reads (its `required[]` array is
+ * already accurate — see utils/mcp-schema.ts's Fix 1: keys with a Zod
+ * `.default()` are stripped from `required[]`, so it matches what Zod
+ * actually enforces at runtime).
+ *
+ * This is intentionally NOT full Zod validation — it only checks presence,
+ * not type/enum/refine correctness — but it is derivable for EVERY
+ * registered tool (including the 15 novada_scrape_<platform> tools, whose
+ * full Zod schema lives in a private closure in tools/platform_scraper.ts
+ * with no separately-exported validator to call). Callers that DO have a
+ * tool's real validator function available should prefer calling it
+ * directly and formatting the resulting ZodError with formatZodError() —
+ * see index.ts's PRE_KEY_VALIDATORS map — and use this only as the fallback
+ * for tools without one.
+ *
+ * Returns undefined when the tool isn't found, has no required fields, or
+ * every required field is present.
+ */
+export function computeMissingRequiredParams(toolName, args, tools) {
+    const tool = tools.find((t) => t.name === toolName);
+    const required = tool?.inputSchema?.["required"];
+    if (!Array.isArray(required) || required.length === 0)
+        return undefined;
+    const present = new Set(Object.keys(args ?? {}));
+    const missing = required.filter((f) => typeof f === "string" && !present.has(f));
+    return missing.length > 0 ? missing : undefined;
+}
+//# sourceMappingURL=validate.js.map

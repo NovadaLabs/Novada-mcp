@@ -1,6 +1,6 @@
 // Single-call account dashboard for Novada.
 //
-// Calls wallet_balance + plan_balance_all + capture_logs (last 1 day) in
+// Calls wallet_balance + plan_balance_all + capture_logs (last 7 days) in
 // parallel and folds the three results into a single human-readable + agent-
 // readable JSON summary. Designed for the most common prompt: "tell me my
 // Novada account status" — agents shouldn't have to make 3 round-trips.
@@ -8,6 +8,19 @@
 // Composition pattern: invokes existing tool functions and parses their JSON
 // string outputs. All three already throw NovadaError on failure, so partial
 // failures bubble up via Promise.allSettled isolation.
+//
+// capture_logs date range (live-confirmed 2026-08): /v1/capture/logs REQUIRES
+// BOTH start_time AND end_time. {start_time only} returns
+// `code 10000, "解析结束时间失败: parsing time \"\" ..."` (parse END time
+// failed — withDateRangeCompat only emits end_time when opts.end is
+// provided, so an omitted end_time stays empty and the server rejects); with
+// neither date it fails on start_time first ("解析开始时间失败"). Both errors
+// rendered as a misleading generic "service error" for capture_recent even
+// on a perfectly healthy account. {start_time + end_time} is confirmed to
+// return `code 0 success`; "YYYY-MM-DD" (date-only) is a confirmed-accepted
+// format for both fields. Both dates are computed at request time
+// (new Date()), so the window is always valid relative to TODAY, never a
+// stale hardcoded date — start_time = 7 days ago, end_time = today.
 import { z } from "zod";
 import { novadaWalletBalance } from "./wallet_balance.js";
 import { novadaPlanBalanceAll } from "./plan_balance_all.js";
@@ -24,6 +37,16 @@ function tryParse(jsonText) {
     catch {
         return { _parse_error: true, raw: jsonText.slice(0, 200) };
     }
+}
+/** How many days back the "recent capture activity" snapshot looks. */
+const CAPTURE_LOOKBACK_DAYS = 7;
+/**
+ * YYYY-MM-DD for `daysAgo` days before now (UTC), computed at request time so
+ * it's always valid relative to TODAY — never a stale hardcoded date. Used to
+ * satisfy capture_logs' required start_time (see file-header comment).
+ */
+function isoDateDaysAgo(daysAgo) {
+    return new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 async function runSection(label, fn) {
     try {
@@ -120,7 +143,12 @@ export async function novadaAccountSummary(_params, apiKey) {
     const [wallet, plans, capture] = await Promise.all([
         runSection("wallet_balance", () => novadaWalletBalance({}, apiKey)),
         runSection("plan_balance_all", () => novadaPlanBalanceAll({}, apiKey)),
-        runSection("capture_logs", () => novadaCaptureLogs({ page: 1, page_size: 5 }, apiKey)),
+        runSection("capture_logs", () => novadaCaptureLogs({
+            page: 1,
+            page_size: 5,
+            start_time: isoDateDaysAgo(CAPTURE_LOOKBACK_DAYS),
+            end_time: isoDateDaysAgo(0), // today
+        }, apiKey)),
     ]);
     // ─── Unwrap sub-tool envelopes (R8) ───────────────────────────────────────
     // Flatten each section so a value is reachable at one level (wallet.balance),
@@ -135,6 +163,18 @@ export async function novadaAccountSummary(_params, apiKey) {
     const activeCount = planSummary?.active_products?.length ?? 0;
     const expiredCount = planSummary?.expired_products?.length ?? 0;
     const unavailableCount = planSummary?.unavailable_products?.length ?? 0;
+    // ─── G-12 (b): name BOTH ledgers in the human-readable headline ───────────
+    // plan_balance_all already includes "capture" as one of its 6 products (it's
+    // where the JSON payload's numeric capture balance actually lives —
+    // sections.plans.per_product.capture.balance.balance), but the headline used
+    // to surface ONLY Wallet + an aggregate active/expired COUNT — never the
+    // Capture NUMBER itself. Pull it out into its own headline segment so an
+    // agent sees both balances at a glance, not buried two levels deep in JSON.
+    const captureProduct = plansSection.per_product?.capture;
+    const captureBalanceNum = captureProduct?.status === "ok" && captureProduct.balance && typeof captureProduct.balance === "object"
+        ? captureProduct.balance.balance
+        : undefined;
+    const captureBalance = typeof captureBalanceNum === "number" ? captureBalanceNum : undefined;
     const headline = [];
     if (walletBalance !== undefined) {
         // API omits currency — print the bare number, never invent €/$.
@@ -144,13 +184,31 @@ export async function novadaAccountSummary(_params, apiKey) {
     else if (!wallet.ok) {
         headline.push(`Wallet: error`);
     }
+    if (captureBalance !== undefined) {
+        headline.push(`Capture: ${captureBalance.toFixed(2)}`);
+    }
+    else if (captureProduct?.status === "error" || !plans.ok) {
+        // Two distinct failure shapes both land here: (a) plan_balance_all
+        // succeeded overall but the capture PRODUCT within it errored, or
+        // (b) the WHOLE plan_balance_all call failed (network/parse error), which
+        // leaves plansSection.per_product undefined entirely — never silently
+        // drop the Capture segment just because the failure was at the outer
+        // level instead of the per-product level.
+        headline.push(`Capture: error`);
+    }
     headline.push(`Plans: ${activeCount} active / ${expiredCount} expired / ${unavailableCount} unavailable`);
     if (allExpired)
         headline.push(`⚠️ ALL plans expired — buy at dashboard.novada.com`);
     // ─── Agent instruction ──────────────────────────────────────────────────
-    let agent_instruction = "Account snapshot — wallet (currency), plans (per-product MB quotas), and recent capture activity.";
+    let agent_instruction = "Account snapshot — Wallet and Capture are SEPARATE ledgers (see headline for both); plans are per-product MB quotas funded by wallet purchases; recent capture activity is included.";
     if (allExpired && walletBalance && walletBalance > 0) {
         agent_instruction = `User has ${typeof walletSection.currency === "string" ? walletSection.currency : ""}${walletBalance.toFixed(2)} in wallet (currency as shown in their dashboard) but ALL flow plans are expired. Suggest the user purchase a new plan at https://dashboard.novada.com to unlock proxy traffic again. Capture is funded separately.`;
+    }
+    else if (captureBalance !== undefined && captureBalance <= 0 && (walletBalance ?? 0) > 0) {
+        // THE G-12 incident shape: Wallet is funded but Capture (the ledger that
+        // funds search/scrape/render) is $0 — do not let this read as generic
+        // "you're fine" just because Wallet has money.
+        agent_instruction = `Capture balance is 0.00 — novada_search, novada_scrape (+ every platform scraper), novada_verify, novada_ai_monitor, and the JS-render/Browser escalation inside novada_extract/crawl/research/site_copy/monitor will fail with insufficient funds even though Wallet has ${typeof walletSection.currency === "string" ? walletSection.currency : ""}${walletBalance.toFixed(2)}. Wallet and Capture are DIFFERENT ledgers — top up Capture specifically at https://dashboard.novada.com; Wallet funds do not cover it.`;
     }
     else if (!wallet.ok || !plans.ok || !capture.ok) {
         agent_instruction = "Partial fetch — some sections errored. See sections.*.error for details. Call the individual tools directly to retry just the failing sections.";

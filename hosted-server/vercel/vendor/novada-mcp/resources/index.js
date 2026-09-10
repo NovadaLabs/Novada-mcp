@@ -302,7 +302,7 @@ You need to know what URLs exist on a site?
 You need content from multiple pages and don't have the URLs yet?
   → novada_crawl (with select_paths regex to target relevant sections)
 
-You need structured data from a known platform (Amazon, Reddit, TikTok…)?
+You need structured data from a known platform (Amazon, Walmart, TikTok…)?
   → novada_scrape
   → Call novada_discover({platform: "<domain>"}) first to find the exact operation ID and required params — it's a tool call, so it works in every MCP client
   → Bonus: the novada://scraper-platforms resource has the same catalog, for clients that support MCP resources

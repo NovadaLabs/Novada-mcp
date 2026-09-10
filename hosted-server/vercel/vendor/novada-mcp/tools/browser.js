@@ -1,6 +1,7 @@
 import { resolveBrowserWs } from "../utils/credentials.js";
 import { getSession, storeSession, closeSession, listSessions, sanitizeBrowserError } from "../utils/browser.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 /**
  * Interactive browser automation via Novada Browser API (CDP WebSocket).
  * Chain multiple actions in a single call: navigate → click → type → screenshot.
@@ -91,6 +92,8 @@ export async function novadaBrowser(params, apiKey) {
     }
     const results = [];
     const startTime = Date.now();
+    // G-2: shared across every action in this call — see executeAction's doc comment.
+    const pageCtx = {};
     // Try to reuse existing session page
     const existingPage = sessionId ? getSession(sessionId) : null;
     if (existingPage) {
@@ -104,7 +107,7 @@ export async function novadaBrowser(params, apiKey) {
                     break;
                 }
                 try {
-                    const result = await executeAction(existingPage, action);
+                    const result = await executeAction(existingPage, action, pageCtx);
                     results.push(result);
                 }
                 catch (err) {
@@ -162,7 +165,7 @@ export async function novadaBrowser(params, apiKey) {
                     break;
                 }
                 try {
-                    const result = await executeAction(newPage, action);
+                    const result = await executeAction(newPage, action, pageCtx);
                     results.push(result);
                 }
                 catch (err) {
@@ -268,7 +271,19 @@ export async function novadaBrowser(params, apiKey) {
     }
     return lines.join("\n");
 }
-async function executeAction(page, action) {
+/**
+ * G-2: the source label for wrapUntrusted on page-derived actions
+ * (snapshot/aria_snapshot/evaluate). Deliberately NOT `page.url()` — Playwright's
+ * Page.url() is a real method on the live CDP page, but several existing test
+ * mock objects (browser.test.ts's createMockPage()) stub only the methods
+ * novadaBrowser called before G-2 and don't implement `.url()`, so calling it
+ * unconditionally threw "page.url is not a function" through those pre-existing
+ * tests. Tracked from the actions THIS call already saw instead — set on a
+ * successful `navigate`, carried forward across subsequent actions in the same
+ * call. Falls back to a generic label when no navigate has occurred yet (e.g. a
+ * session-reuse call that goes straight to snapshot).
+ */
+async function executeAction(page, action, ctx) {
     switch (action.action) {
         case "navigate": {
             await page.goto(action.url, {
@@ -276,6 +291,7 @@ async function executeAction(page, action) {
                 timeout: 30000,
             });
             const title = await page.title();
+            ctx.lastUrl = action.url;
             return { action: "navigate", status: "ok", data: `Navigated to: ${title}` };
         }
         case "click": {
@@ -295,21 +311,30 @@ async function executeAction(page, action) {
         case "snapshot": {
             const html = await page.content();
             const truncated = html.length > 30000 ? html.slice(0, 30000) + "\n<!-- truncated -->" : html;
-            return { action: "snapshot", status: "ok", data: `${truncated}\n\n<!-- Tip: Use aria_snapshot for a semantic accessibility tree (~70% smaller, easier to parse) -->` };
+            // G-2: wrap the page HTML; our own "Tip:" line stays outside the untrusted block.
+            return {
+                action: "snapshot",
+                status: "ok",
+                data: `${wrapUntrusted(truncated, ctx.lastUrl ?? "current browser page")}\n\n<!-- Tip: Use aria_snapshot for a semantic accessibility tree (~70% smaller, easier to parse) -->`,
+            };
         }
         case "aria_snapshot": {
             // Use Playwright's ariaSnapshot() — returns YAML accessibility tree (v1.46+)
             // Semantic stable refs by role+name, ~70% smaller than raw HTML
             const yaml = await page.ariaSnapshot();
             if (!yaml) {
+                // Our own placeholder — nothing fetched to wrap.
                 return { action: "aria_snapshot", status: "ok", data: "(no accessible content found on this page)" };
             }
-            return { action: "aria_snapshot", status: "ok", data: yaml };
+            // G-2: the accessibility tree is derived directly from page content.
+            return { action: "aria_snapshot", status: "ok", data: wrapUntrusted(yaml, ctx.lastUrl ?? "current browser page") };
         }
         case "evaluate": {
             const result = await page.evaluate(action.script);
             const serialized = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-            return { action: "evaluate", status: "ok", data: serialized };
+            // G-2: evaluate() runs the caller's script IN the page and returns whatever the
+            // page's DOM/JS state yields — page-derived, wrap it.
+            return { action: "evaluate", status: "ok", data: wrapUntrusted(serialized, ctx.lastUrl ?? "current browser page") };
         }
         case "wait": {
             const waitMs = action.ms ?? action.timeout ?? 5000;

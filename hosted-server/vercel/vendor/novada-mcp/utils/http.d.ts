@@ -1,5 +1,10 @@
 import { AxiosRequestConfig, AxiosResponse } from "axios";
 /**
+ * Build the x-mcp-* header set for a given calling tool. client/session are
+ * process-stable; only the tool varies per call.
+ */
+export declare function telemetryHeaders(tool: string | undefined): Record<string, string>;
+/**
  * Internal extension of AxiosRequestConfig carrying the MCP-specific options that
  * the fetch helpers consume but axios must never see (`tool` for telemetry/logging;
  * `__noLog` to suppress duplicate request-log lines when a public helper delegates

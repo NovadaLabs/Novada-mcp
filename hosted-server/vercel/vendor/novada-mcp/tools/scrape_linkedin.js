@@ -51,7 +51,7 @@ export const LINKEDIN_SCRAPER_CONFIG = {
         "jobs_search, { listing_url: \"https://www.linkedin.com/jobs/search?...\" } for jobs_by_search_url, " +
         "{ position_url: \"https://www.linkedin.com/jobs/view/...\" } for job_by_url, { url: \"https://www.linkedin.com/company/...\" } for company_by_url.",
     description: {
-        core: "Extract structured LinkedIn data — job listings (by location/filters, by a jobs search-results URL, or a single job posting URL) and company profile info by URL — through a LinkedIn-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"linkedin.com\".",
+        core: "Extract structured LinkedIn data — job listings (by location/filters, jobs search-results URL, or a single job posting URL) and company profile info by URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"linkedin.com\").",
         useWhen: [
             "find LinkedIn job listings in <location> matching <keyword/level/remote/etc.>",
             "get all the job listings from this LinkedIn jobs search URL",
@@ -59,13 +59,13 @@ export const LINKEDIN_SCRAPER_CONFIG = {
             "get company info for this LinkedIn company URL",
         ],
         notFor: [
-            { when: "A single LinkedIn URL you just want read as plain text", useInstead: "novada_extract" },
+            { when: "A single LinkedIn URL to read as plain text", useInstead: "novada_extract" },
             { when: "A general web search not scoped to LinkedIn", useInstead: "novada_search" },
             { when: "A LinkedIn personal PROFILE (not a company or job) — no catalog operation exists for this today", useInstead: "novada_extract on the profile URL, or novada_search" },
-            { when: "A different platform's structured data (GitHub, Amazon, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+            { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
         ],
-        returns: "Structured job-listing/company records (title, location, level, company name, follower count, etc.) in the chosen format (markdown/json/csv/excel/html/toon) — same rendering as novada_scrape.",
-        operationsNote: "4 verified-working LinkedIn operations spanning job search (by location, with optional keyword/level/remote/company filters), job listings from a search-results URL, a single job posting by URL, and company info by URL (see the `operation` param's description for the exact `params` keys each needs). `jobs_search` requires `params.location` — the catalog's actual required key for this op, despite its upstream name reading \"By Keywords\" (keyword itself is optional there). Every linkedin.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+        returns: "Structured job-listing/company records (title, location, level, company name, follower count, etc.) in the chosen output format — same rendering as novada_scrape.",
+        operationsNote: "4 verified-working LinkedIn operations spanning job search (by location, with optional keyword/level/remote/company filters), job listings from a search-results URL, a single job posting by URL, and company info by URL. `jobs_search` requires `params.location` — the catalog's actual required key for this op, despite its upstream name reading \"By Keywords\" (keyword itself is optional there). Every linkedin.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
     },
 };
 /** The materialized LinkedIn platform-scraper tool (definition + registry entry + handler). */

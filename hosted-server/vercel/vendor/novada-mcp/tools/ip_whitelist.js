@@ -2,10 +2,22 @@
 //   POST /v1/white_list/add    — add IP to whitelist (WRITE)
 //   POST /v1/white_list/list   — list whitelisted IPs (read-only)
 //   POST /v1/white_list/del    — delete whitelisted IPs (WRITE)
-//   POST /v1/white_list/remark — update remark on a whitelist entry (read-only-ish)
+//   POST /v1/white_list/remark — update remark on a whitelist entry (WRITE)
 //
 // Combined into a single tool with `action` discriminator per INC-111.
-// "add" and "del" are WRITE actions — gated by `confirm: z.literal(true)`.
+// "add", "del", AND "remark" are WRITE actions — gated by the shared
+// APPROVAL-TOKEN flow (F2-2/G-7 fix, 2026-09): first call (no
+// `approval_token`) returns a preview + a signed, expiring, payload-bound
+// token; only a second call carrying that exact token AND the exact same
+// parameters executes. `confirm: true` alone is a deprecated no-op — see
+// ../utils/approval.ts.
+//
+// SEC-consistency fix (2026-09-03 ledger-closure audit, finding #4): "remark"
+// is a real devApiPost WRITE (it mutates a whitelist entry server-side) and
+// was shipped WITHOUT the approval gate applied to add/del — a class-miss in
+// the original A1 pass. Gated identically to add/del below so "every write
+// is two-step" (as README/registry.ts document) is actually true for all
+// three, not two of three.
 //
 // Product codes for whitelist: 1=Residential, 4=Unlimited, 5=Static ISP
 // (subset of the full proxy product codes).
@@ -13,6 +25,7 @@
 // Request body is multipart/form-data per the API contract — handled by devApiPost.
 import { z } from "zod";
 import { devApiPost } from "../_core/developer_api.js";
+import { evaluateApprovalGate } from "../utils/approval.js";
 // ─── Whitelist-specific product codes ────────────────────────────────────────
 const WL_PRODUCT_CODES = ["1", "4", "5"];
 const WL_PRODUCT_LABELS = {
@@ -38,7 +51,7 @@ export const IpWhitelistParamsSchema = z
     .object({
     action: z
         .enum(["add", "list", "del", "remark"])
-        .describe('Action to perform. "add": add IP to whitelist (WRITE — requires confirm). "list": list whitelisted IPs. "del": delete whitelisted IPs (WRITE — requires confirm). "remark": update remark on a whitelist entry.'),
+        .describe('Action to perform. "add": add IP to whitelist (WRITE — requires approval_token). "list": list whitelisted IPs. "del": delete whitelisted IPs (WRITE — requires approval_token). "remark": update remark on a whitelist entry (WRITE — requires approval_token).'),
     product: z
         .enum(WL_PRODUCT_CODES)
         .describe("REQUIRED. Product type code as string: 1=Residential, 4=Unlimited, 5=Static ISP."),
@@ -82,11 +95,16 @@ export const IpWhitelistParamsSchema = z
         .string()
         .optional()
         .describe('Whitelist entry ID (required for action="remark").'),
-    // ── WRITE gate ──
+    // ── WRITE gate (deprecated flag; see approval_token below) ──
     confirm: z
         .literal(true)
         .optional()
-        .describe('REQUIRED for WRITE actions ("add" and "del"). Pass `true` ONLY after the human user has approved. If omitted on a write action, the tool returns a dry-run preview instead of calling the API.'),
+        .describe('DEPRECATED — ignored. Setting this alone no longer authorizes WRITE actions ("add"/"del"/"remark") (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.'),
+    approval_token: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Two-step approval token, required to execute "add"/"del"/"remark". Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value — an invented or stale token is rejected.'),
 })
     .strict();
 export function validateIpWhitelistParams(args) {
@@ -114,7 +132,8 @@ async function handleAdd(params, apiKey) {
             agent_instruction: "Re-call with the ip parameter set to the IP address to whitelist.",
         }, null, 2);
     }
-    if (params.confirm !== true) {
+    const addGate = evaluateApprovalGate(params, "ip_whitelist_add");
+    if (!addGate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",
             action: "ip_whitelist_add",
@@ -124,7 +143,10 @@ async function handleAdd(params, apiKey) {
                 ip: params.ip,
                 remark: params.remark ?? null,
             },
-            agent_instruction: "This is a WRITE action that adds an IP to the user's proxy whitelist. Show the preview to the human user. Only re-call with the same parameters PLUS `confirm: true` after explicit approval.",
+            approval_token: addGate.approvalToken,
+            expires_at: new Date(addGate.expiresAt).toISOString(),
+            expires_in_seconds: addGate.expiresInSeconds,
+            agent_instruction: "This is a WRITE action that adds an IP to the user's proxy whitelist. Show the preview to the human user. To execute, call again with the EXACT SAME parameters plus `approval_token` set to the value above (valid 10 minutes). `confirm: true` alone does nothing — it is deprecated and ignored.",
         }, null, 2);
     }
     const body = {
@@ -164,7 +186,8 @@ async function handleDel(params, apiKey) {
             agent_instruction: 'Re-call with the ips parameter set to a comma-separated list of IPs to remove (e.g. "1.2.3.4,5.6.7.8").',
         }, null, 2);
     }
-    if (params.confirm !== true) {
+    const delGate = evaluateApprovalGate(params, "ip_whitelist_del");
+    if (!delGate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",
             action: "ip_whitelist_del",
@@ -173,7 +196,10 @@ async function handleDel(params, apiKey) {
                 product_label: WL_PRODUCT_LABELS[params.product],
                 ips: params.ips,
             },
-            agent_instruction: "This is a WRITE action that removes IPs from the user's proxy whitelist. Show the preview to the human user. Only re-call with the same parameters PLUS `confirm: true` after explicit approval.",
+            approval_token: delGate.approvalToken,
+            expires_at: new Date(delGate.expiresAt).toISOString(),
+            expires_in_seconds: delGate.expiresInSeconds,
+            agent_instruction: "This is a WRITE action that removes IPs from the user's proxy whitelist. Show the preview to the human user. To execute, call again with the EXACT SAME parameters plus `approval_token` set to the value above (valid 10 minutes). `confirm: true` alone does nothing — it is deprecated and ignored.",
         }, null, 2);
     }
     const body = {
@@ -194,6 +220,23 @@ async function handleRemark(params, apiKey) {
             status: "error",
             error: 'Missing required parameter "id" for action="remark".',
             agent_instruction: 'Re-call with the id parameter set to the whitelist entry ID. Use action="list" first to find entry IDs.',
+        }, null, 2);
+    }
+    const remarkGate = evaluateApprovalGate(params, "ip_whitelist_remark");
+    if (!remarkGate.authorized) {
+        return JSON.stringify({
+            status: "confirmation_required",
+            action: "ip_whitelist_remark",
+            preview: {
+                product: params.product,
+                product_label: WL_PRODUCT_LABELS[params.product],
+                id: params.id,
+                remark: params.remark ?? null,
+            },
+            approval_token: remarkGate.approvalToken,
+            expires_at: new Date(remarkGate.expiresAt).toISOString(),
+            expires_in_seconds: remarkGate.expiresInSeconds,
+            agent_instruction: "This is a WRITE action that updates the remark on a whitelist entry. Show the preview to the human user. To execute, call again with the EXACT SAME parameters plus `approval_token` set to the value above (valid 10 minutes). `confirm: true` alone does nothing — it is deprecated and ignored.",
         }, null, 2);
     }
     const body = {

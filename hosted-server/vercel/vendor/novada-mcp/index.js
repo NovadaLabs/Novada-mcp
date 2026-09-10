@@ -6,21 +6,42 @@
 // — which wraps a vendored copy of this package's build and dispatches through the
 // same core.ts. Full cross-artifact map: root ARCHITECTURE.md. Module map for this
 // package: npm-package/ARCHITECTURE.md.
+// A-11: FIRST import, before the SDK or anything else — fails loud with a
+// one-line stderr message + exit(1) on Node <20 instead of continuing into
+// whatever confusing runtime error an old Node happens to hit first.
+import "./utils/assert-node.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
-import { novadaSetup, validateSetupParams, novadaSessionStats, validateSessionStatsParams, recordToolCall, novadaSearchFeedback, validateSearchFeedbackParams, } from "./tools/index.js";
-import { classifyError } from "./_core/errors.js";
+import { novadaSetup, validateSetupParams, novadaSessionStats, validateSessionStatsParams, recordToolCall, novadaSearchFeedback, validateSearchFeedbackParams, 
+// F2-3: pre-key-gate parameter validation (see PRE_KEY_VALIDATORS below)
+// reuses these SAME validator functions dispatch() (core.ts) calls
+// internally — one function per tool, imported here, not duplicated.
+validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateAccountParams, validateBrowserFlowParams, validateMonitorParams, validateProxyAccountCreateParams, validateProxyAccountListParams, validateIpWhitelistParams, validateCaptureApikeyParams, validateStaticIpMgmtParams, } from "./tools/index.js";
+// Not re-exported through the tools/index.js barrel — imported the same way
+// core.ts itself imports it.
+import { validateAiMonitorParams } from "./tools/types.js";
+import { classifyError, redactSecrets } from "./_core/errors.js";
 import { ZodError } from "zod";
-import { TOOLS, dispatch } from "./core.js";
+import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError } from "./core.js";
+// F12/F13/E2 (2026-09-10 audit): the key-gate decision layer — tool auth
+// classes, the unauthenticated-tier context saveOutput() consults to skip
+// ~/Downloads writes, and the tier disclosure block.
+import { decideKeyGate, runUnauthenticatedTier, UNAUTH_TIER_DISCLOSURE, } from "./_core/gate.js";
 import { PLATFORM_SCRAPER_TOOLS } from "./tools/platform_scrapers.js";
+// F-2/F-12/F2-3/P-4: the ONE shared parameter-validation formatter + unknown-key
+// warning + missing-required-param mechanisms, reused at every ZodError/success
+// site in this file instead of the four independent hand-rolled variants (and
+// the auth-check-before-validation ordering) that existed before.
+import { formatZodError, computeUnknownKeyWarning, hasUnrecognizedKeysIssue, computeMissingRequiredParams, } from "./utils/validate.js";
 // ─── Configuration ───────────────────────────────────────────────────────────
 import { VERSION } from "./config.js";
 import { listPrompts, getPrompt } from "./prompts/index.js";
 import { listResources, readResource } from "./resources/index.js";
 import { checkProxyConfiguration } from "./utils/domains.js";
-import { resolveProxyCredentials } from "./utils/credentials.js";
+import { autoProvisionProxyCredentialsAtBoot } from "./utils/credentials.js";
 import { maybeGetFirstRunNotice } from "./utils/first-run-notice.js";
+import { logUsage, summarizeTarget } from "./utils/usage-log.js";
 const API_KEY = process.env.NOVADA_API_KEY?.trim();
 // ─── Tool & Group Filtering ──────────────────────────────────────────────────
 // NOVADA_TOOLS="extract,search,crawl"  → only these tools (comma-separated, short or full names)
@@ -100,6 +121,74 @@ function applyToolFilter(tools) {
     return filtered;
 }
 const ACTIVE_TOOLS = applyToolFilter(TOOLS);
+// ─── F2-3: pre-key-gate parameter validation ─────────────────────────────────
+// Full Zod validators for the tools where one is separately exported — every
+// hand-written visible tool EXCEPT novada_setup/novada_session_stats/
+// novada_search_feedback (already pre-gated before the API_KEY check exists
+// at all) and novada_discover (exempted from the key gate entirely below,
+// since its dispatch case never reads apiKey). Each entry is the SAME
+// function core.ts's dispatch() calls internally — reused, not duplicated,
+// so a schema change in tools/*.ts is picked up here with zero drift risk.
+//
+// The 15 novada_scrape_<platform> tools have no separately-exported
+// validator (their Zod schema lives inside a private closure in
+// tools/platform_scraper.ts's factory, out of this pass's file ownership) —
+// computeMissingRequiredParams() covers those instead, with a lighter,
+// schema-derived "are the required fields even present" check.
+const PRE_KEY_VALIDATORS = {
+    novada_search: validateSearchParams,
+    novada_extract: validateExtractParams,
+    novada_crawl: validateCrawlParams,
+    novada_research: validateResearchParams,
+    novada_map: validateMapParams,
+    novada_site_copy: validateSiteCopyParams,
+    novada_proxy: validateProxyParams,
+    novada_scrape: validateScrapeParams,
+    novada_verify: validateVerifyParams,
+    novada_browser: validateBrowserParams,
+    novada_account: validateAccountParams,
+    novada_browser_flow: validateBrowserFlowParams,
+    novada_ai_monitor: validateAiMonitorParams,
+    novada_monitor: validateMonitorParams,
+    novada_proxy_account_create: validateProxyAccountCreateParams,
+    novada_proxy_account_list: validateProxyAccountListParams,
+    novada_ip_whitelist: validateIpWhitelistParams,
+    novada_capture_apikey: validateCaptureApikeyParams,
+    novada_static_ip_mgmt: validateStaticIpMgmtParams,
+};
+// ─── Error formatting (F-4) ──────────────────────────────────────────────────
+// Matches a well-formed agent-facing message that a tool already pre-wrapped
+// itself (e.g. tools/setup.ts, tools/session_stats.ts catch their OWN
+// ZodError and rethrow a plain Error whose .message already ends in a
+// line-anchored `agent_instruction: ...` — the exact convention the rest of
+// this codebase parses for). `m` flag matches ECMA-262 line-terminator rules.
+const AGENT_INSTRUCTION_LINE_RE = /^\s*agent_instruction\s*:/im;
+/**
+ * The single "turn a caught error into agent-facing response text" chokepoint
+ * for this file's per-tool pre-gate catches (F-4: previously raw `String(e)`
+ * at the novada_setup / novada_session_stats / novada_search_feedback catch
+ * sites — index.ts:210-212, :223-225, :242-244 before this fix). Three cases:
+ *
+ *   1. `e` is a ZodError that slipped past a tool's own pre-wrap — format it
+ *      with the shared formatZodError() (F-12) instead of a raw String(e).
+ *   2. `e` is a plain Error a tool already pre-formatted into agent-facing
+ *      text (it already carries its own agent_instruction line) — pass it
+ *      through (redacted, defense in depth) rather than re-wrapping it in a
+ *      SECOND, more generic classifyError() envelope, which would squash the
+ *      original's newlines and bury its specific instruction under a vague
+ *      "an unexpected error occurred" one.
+ *   3. Anything else (a genuinely unclassified error) — classifyError().toAgentString(),
+ *      the same chokepoint the main dispatch catch already uses.
+ */
+function toAgentErrorText(error, toolName) {
+    if (error instanceof ZodError) {
+        return formatZodError(toolName, error);
+    }
+    if (error instanceof Error && AGENT_INSTRUCTION_LINE_RE.test(error.message)) {
+        return redactSecrets(error.message);
+    }
+    return classifyError(error).toAgentString();
+}
 // ─── MCP Server ──────────────────────────────────────────────────────────────
 class NovadaMCPServer {
     server;
@@ -114,8 +203,12 @@ class NovadaMCPServer {
     }
     setupErrorHandling() {
         this.server.onerror = (error) => {
+            // Not an MCP tool-call response (protocol-level transport error) — no
+            // agent_instruction envelope needed here, but still route through the
+            // same redaction chokepoint as every other error surface in this file
+            // so a raw upstream string can't leak a credential into stderr.
             const msg = error instanceof Error ? error.message : String(error);
-            console.error("[novada]", msg);
+            console.error("[novada]", redactSecrets(msg));
         };
         process.on("SIGINT", async () => {
             await this.server.close();
@@ -143,6 +236,34 @@ class NovadaMCPServer {
         });
         this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
             const { name, arguments: args } = request.params;
+            // F13 (2026-09-10 audit): resolve the tool NAME before EVERYTHING else —
+            // param validation, the API-key gate, the active-set filter. A name this
+            // server has never heard of gets the same unknown-tool error (with a
+            // close-name suggestion when one is cheap) in every key state; the old
+            // order answered keyless novada_ghost_tool with INVALID_API_KEY.
+            // Ordering contract: resolve name → validate params → key check → execute.
+            if (!KNOWN_TOOL_NAMES.has(name)) {
+                return {
+                    content: [{
+                            type: "text",
+                            text: classifyError(makeUnknownToolError(name)).toAgentString(),
+                        }],
+                    isError: true,
+                };
+            }
+            // F-2: derive an "unknown parameter(s) ignored" warning from the tool's
+            // OWN declared inputSchema (utils/validate.ts — class-driven, no
+            // per-tool key list). Computed once per call; success paths below
+            // append it as a separate content block, and the ZodError paths append
+            // it too UNLESS the schema already hard-REJECTED via .strict() (that
+            // case gets its own "Unrecognized key" issue text — appending "ignored,
+            // had no effect" alongside a hard rejection would contradict it).
+            const unknownKeyWarning = computeUnknownKeyWarning(name, args, TOOLS);
+            const withUnknownKeyWarning = (blocks) => {
+                if (unknownKeyWarning)
+                    blocks.push({ type: "text", text: unknownKeyWarning });
+                return blocks;
+            };
             // NOV-319: build a per-request progress reporter wired to notifications/progress.
             // Only active when the client supplied a progressToken in _meta; otherwise no-op so
             // long-running tools (novada_crawl per page, novada_research per phase) stay silent.
@@ -159,10 +280,13 @@ class NovadaMCPServer {
             if (name === "novada_setup") {
                 try {
                     const result = await novadaSetup(validateSetupParams(args));
-                    return { content: [{ type: "text", text: result }] };
+                    return { content: withUnknownKeyWarning([{ type: "text", text: result }]) };
                 }
                 catch (e) {
-                    return { content: [{ type: "text", text: String(e) }], isError: true };
+                    // F-4: was raw String(e) — toAgentErrorText() passes through
+                    // setup.ts's own pre-formatted agent_instruction text unchanged
+                    // (it already carries one), or classifies anything else.
+                    return { content: [{ type: "text", text: toAgentErrorText(e, name) }], isError: true };
                 }
             }
             // NOV-321 / NOV-323: session telemetry + search feedback are in-memory and
@@ -172,30 +296,79 @@ class NovadaMCPServer {
                 try {
                     recordToolCall(name);
                     const result = await novadaSessionStats(validateSessionStatsParams(args));
-                    return { content: [{ type: "text", text: result }] };
+                    return { content: withUnknownKeyWarning([{ type: "text", text: result }]) };
                 }
                 catch (e) {
-                    return { content: [{ type: "text", text: String(e) }], isError: true };
+                    return { content: [{ type: "text", text: toAgentErrorText(e, name) }], isError: true };
                 }
             }
             if (name === "novada_search_feedback") {
                 try {
                     recordToolCall(name);
                     const result = await novadaSearchFeedback(validateSearchFeedbackParams(args));
-                    return { content: [{ type: "text", text: result }] };
+                    return { content: withUnknownKeyWarning([{ type: "text", text: result }]) };
                 }
                 catch (e) {
                     if (e instanceof ZodError) {
-                        const issues = e.issues.map(i => `  ${i.path.join(".")}: ${i.message}`).join("\n");
+                        // F-4/F-12/P-4: was a bespoke formatter using the off-contract
+                        // the off-contract "Next step" token instead of `agent_instruction:` — now the
+                        // same shared formatZodError() every other ZodError site uses.
+                        const content = [
+                            { type: "text", text: formatZodError(name, e) },
+                        ];
+                        if (unknownKeyWarning && !hasUnrecognizedKeysIssue(e)) {
+                            content.push({ type: "text", text: unknownKeyWarning });
+                        }
+                        return { content, isError: true };
+                    }
+                    return { content: [{ type: "text", text: toAgentErrorText(e, name) }], isError: true };
+                }
+            }
+            // F2-3: run parameter validation BEFORE the API_KEY check (except
+            // novada_discover, exempted from the key gate entirely below — its
+            // dispatch case never reads apiKey) so a caller with a bad param AND
+            // no key learns about the param, not just "missing key". Validation is
+            // local and free — no network call happens for either code path below.
+            if (name !== "novada_discover") {
+                const argsRecord = args;
+                const preValidator = PRE_KEY_VALIDATORS[name];
+                if (preValidator) {
+                    try {
+                        preValidator(argsRecord);
+                    }
+                    catch (e) {
+                        if (e instanceof ZodError) {
+                            const content = [
+                                { type: "text", text: formatZodError(name, e) },
+                            ];
+                            if (unknownKeyWarning && !hasUnrecognizedKeysIssue(e)) {
+                                content.push({ type: "text", text: unknownKeyWarning });
+                            }
+                            return { content, isError: true };
+                        }
+                        // A non-Zod throw from a "validate" function would be
+                        // unexpected — don't swallow it here; fall through to the
+                        // normal API_KEY/dispatch flow below, which will hit the same
+                        // error again through the main catch's classifyError() path.
+                    }
+                }
+                else {
+                    // No standalone validator for this tool (the 15 novada_scrape_<platform>
+                    // tools) — fall back to a schema-derived "required fields present" check.
+                    const missingRequired = computeMissingRequiredParams(name, argsRecord, TOOLS);
+                    if (missingRequired && missingRequired.length > 0) {
                         return {
-                            content: [{
+                            content: withUnknownKeyWarning([{
                                     type: "text",
-                                    text: `Invalid parameters for ${name}:\n${issues}\nNext step: Check parameter names and values — see tool description for valid options.`,
-                                }],
+                                    text: [
+                                        `Invalid parameters for ${name}:`,
+                                        ...missingRequired.map((f) => `  ${f}: Invalid input: expected value, received undefined`),
+                                        `agent_instruction: ${missingRequired.map((f) => `Add the required parameter ${f}.`).join(" ")} Do NOT retry with identical params — at least one field must change.`,
+                                    ].join("\n"),
+                                }]),
                             isError: true,
                         };
                     }
-                    return { content: [{ type: "text", text: String(e) }], isError: true };
                 }
             }
             // KR-6 developer-api tools use NOVADA_DEVELOPER_API_KEY with NOVADA_API_KEY fallback.
@@ -219,7 +392,47 @@ class NovadaMCPServer {
             ]);
             const hasDeveloperKey = !!process.env.NOVADA_DEVELOPER_API_KEY?.trim();
             const isKr6Bypass = KR6_TOOLS.has(name) && hasDeveloperKey;
-            if (!API_KEY && !isKr6Bypass) {
+            // Enforce tool filter at execution time (not just at list time).
+            // F13 ordering: this is part of NAME resolution ("does this connection
+            // answer to this name?"), so it runs BEFORE the key gate — a keyless
+            // caller of a filtered-out tool learns about the filter, not the key.
+            if ((process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS) && !ACTIVE_TOOLS.find(t => t.name === name)) {
+                // F-4 gap #5: this already listed the available tools but carried no
+                // agent_instruction/failure_class fields — off-contract shape vs.
+                // every other error surface in this file.
+                return {
+                    content: [{
+                            type: "text",
+                            text: [
+                                `Error [INVALID_PARAMS]: Tool '${name}' is not in the active set.`,
+                                `failure_class: permanent`,
+                                `retry_recommended: false`,
+                                `NOVADA_TOOLS="${process.env.NOVADA_TOOLS ?? ""}" NOVADA_GROUPS="${process.env.NOVADA_GROUPS ?? ""}"`,
+                                `agent_instruction: "Call one of the tools already active this session instead: ${ACTIVE_TOOLS.map(t => t.name).join(", ")}. Do not retry '${name}' — it is filtered out by this server's NOVADA_TOOLS/NOVADA_GROUPS config, not by anything in your request."`,
+                            ].join("\n"),
+                        }],
+                    isError: true,
+                };
+            }
+            // F12 (2026-09-10 audit): the key gate is a per-tool-CLASS decision
+            // (_core/gate.ts) instead of the old blanket presence check with a
+            // novada_discover carve-out:
+            //   auth_free          → allow (discover/setup/session_stats/search_feedback)
+            //   unauth_basic_tier  → keyless basic extract runs as an EXPLICIT,
+            //                        DISCLOSED unauthenticated tier (no disk writes —
+            //                        saveOutput consults the gate context; escalation
+            //                        params still refuse locally)
+            //   key_required       → keyless refusal below, unchanged
+            // A present-but-INVALID key is locally indistinguishable from a valid one
+            // (presence is the only local signal); billed/escalation paths refuse
+            // upstream with the same Error [INVALID_API_KEY] / failure_class: auth
+            // contract this local refusal carries.
+            const gateDecision = decideKeyGate(name, {
+                hasApiKey: !!API_KEY,
+                kr6Bypass: isKr6Bypass,
+                args: args,
+            });
+            if (gateDecision.kind === "refuse_missing_key") {
                 return {
                     content: [{
                             type: "text",
@@ -233,16 +446,22 @@ class NovadaMCPServer {
                     isError: true,
                 };
             }
-            // Enforce tool filter at execution time (not just at list time)
-            if ((process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS) && !ACTIVE_TOOLS.find(t => t.name === name)) {
+            if (gateDecision.kind === "refuse_escalation_requires_key") {
                 return {
                     content: [{
                             type: "text",
-                            text: `Tool '${name}' is not in the active set. NOVADA_TOOLS="${process.env.NOVADA_TOOLS ?? ""}" NOVADA_GROUPS="${process.env.NOVADA_GROUPS ?? ""}". Available: ${ACTIVE_TOOLS.map(t => t.name).join(", ")}`,
+                            text: [
+                                `Error [INVALID_API_KEY]: render escalation requires a valid NOVADA_API_KEY — the keyless unauthenticated tier only covers the basic direct fetch (render="auto"/"static").`,
+                                "failure_class: auth",
+                                "retry_recommended: false",
+                                `agent_instruction: "Either retry without the render parameter for a basic keyless fetch, or call novada_setup to configure a valid NOVADA_API_KEY and unlock render/unblocker/browser escalation."`,
+                            ].join("\n"),
                         }],
                     isError: true,
                 };
             }
+            const unauthenticatedTier = gateDecision.kind === "allow_unauthenticated_tier";
+            const t0 = Date.now();
             try {
                 // NOV-321: record every dispatched tool call for novada_session_stats telemetry.
                 recordToolCall(name);
@@ -251,39 +470,46 @@ class NovadaMCPServer {
                 const visibleTools = (process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS)
                     ? new Set(ACTIVE_TOOLS.map(t => t.name))
                     : undefined;
-                const result = await dispatch(name, args, API_KEY, { onProgress, visibleTools });
+                // F12/E2: unauth-tier calls run inside the gate context so saveOutput()
+                // skips every ~/Downloads write for them, and their response carries the
+                // tier disclosure as a separate content block below.
+                const result = unauthenticatedTier
+                    ? await runUnauthenticatedTier(() => dispatch(name, args, API_KEY, { onProgress, visibleTools }))
+                    : await dispatch(name, args, API_KEY, { onProgress, visibleTools });
+                // Local usage log (user-facing audit trail). Fire-and-forget — never blocks or throws.
+                void logUsage({ tool: name, status: "success", ms: Date.now() - t0, target: summarizeTarget(args) });
                 // TOW2-242: one-time first-run notice. Appended as a SEPARATE content block
                 // (never concatenated into `result` — that would corrupt JSON-format outputs)
                 // and ONLY on a successful dispatch. All logic + copy lives in the module;
                 // this is the ~2-line glue. maybeGetFirstRunNotice() fails quiet → never throws.
-                const content = [{ type: "text", text: result }];
+                const content = withUnknownKeyWarning([{ type: "text", text: result }]);
+                if (unauthenticatedTier)
+                    content.push({ type: "text", text: UNAUTH_TIER_DISCLOSURE });
                 const notice = await maybeGetFirstRunNotice();
                 if (notice)
                     content.push({ type: "text", text: notice });
                 return { content };
             }
             catch (error) {
-                // Zod validation errors → clear, structured message for the agent including
-                // agent_instruction so the caller has a programmatic, parseable recovery signal.
+                // Local usage log for the failed call. Fire-and-forget — never throws.
+                // Redacted (defense in depth): this is a local audit-trail file, not a
+                // tool-call response, but an upstream error can still carry a credential.
+                void logUsage({ tool: name, status: "error", ms: Date.now() - t0, target: summarizeTarget(args), error: redactSecrets(String(error)) });
+                // Zod validation errors → the shared formatter (F-12/P-4): per-issue-class
+                // agent_instruction (missing/wrong-type/bad-enum/too-short/unknown-key/
+                // union-mismatch each get an instruction naming the actual fix), reused
+                // at every other ZodError site in this file instead of a private copy.
                 if (error instanceof ZodError) {
-                    const issues = error.issues.map(i => {
-                        let msg = `  ${i.path.join(".")}: ${i.message}`;
-                        if (i.code === "invalid_value" && "values" in i) {
-                            msg += ` (valid values: ${i.values.map(v => `'${v}'`).join(", ")})`;
-                        }
-                        return msg;
-                    }).join("\n");
-                    return {
-                        content: [{
-                                type: "text",
-                                text: [
-                                    `Invalid parameters for ${name}:`,
-                                    issues,
-                                    `agent_instruction: Fix the parameter(s) listed above and retry. Check the tool's inputSchema for required fields and valid values. Do NOT retry with identical params — at least one field must change.`,
-                                ].join("\n"),
-                            }],
-                        isError: true,
-                    };
+                    const content = [
+                        { type: "text", text: formatZodError(name, error) },
+                    ];
+                    // F-2: fold in the unknown-key warning UNLESS the schema already
+                    // hard-rejected via .strict() (that issue is already named above —
+                    // don't also say "ignored, had no effect", which would contradict it).
+                    if (unknownKeyWarning && !hasUnrecognizedKeysIssue(error)) {
+                        content.push({ type: "text", text: unknownKeyWarning });
+                    }
+                    return { content, isError: true };
                 }
                 // Classified API/network errors with agent_instruction guidance
                 const classified = classifyError(error);
@@ -300,23 +526,24 @@ class NovadaMCPServer {
     async run() {
         const transport = new StdioServerTransport();
         await this.server.connect(transport);
-        // Auto-provision proxy credentials: if NOVADA_PROXY_ENDPOINT is set but
-        // NOVADA_PROXY_USER/PASS are missing, fetch them from /v1/proxy_account/list
-        // using NOVADA_API_KEY as Bearer token, then inject into process.env so the
-        // synchronous getProxyCredentials() picks them up for all proxy tool calls.
-        if (process.env.NOVADA_PROXY_ENDPOINT &&
-            (!process.env.NOVADA_PROXY_USER || !process.env.NOVADA_PROXY_PASS)) {
-            try {
-                const autoCreds = await resolveProxyCredentials();
-                if (autoCreds) {
-                    process.env.NOVADA_PROXY_USER = autoCreds.user;
-                    process.env.NOVADA_PROXY_PASS = autoCreds.pass;
-                    console.error(`[novada] Auto-provisioned proxy credentials (account: ${autoCreds.user})`);
-                }
-            }
-            catch {
-                // Non-fatal: proxy tools will show a configuration error when invoked
-            }
+        // Auto-provision proxy credentials (INC-198): if NOVADA_PROXY_ENDPOINT is
+        // set but NOVADA_PROXY_USER/PASS are missing, fetch them from
+        // /v1/proxy_account/list using NOVADA_API_KEY as Bearer token and inject
+        // into process.env so the synchronous getProxyCredentials() picks them up
+        // for all proxy tool calls. The logic lives in credentials.ts next to the
+        // provenance marker it must set (MEDIUM-6: boot-injected creds are
+        // AUTO-FETCHED — recording who fetched them keeps the F11 fail-closed
+        // ledger gate applying instead of reclassifying them as user-supplied
+        // "direct"). Non-fatal on failure: proxy tools show a configuration error
+        // when invoked.
+        const autoCreds = await autoProvisionProxyCredentialsAtBoot();
+        if (autoCreds) {
+            // G-8: autoCreds.user is a Novada proxy sub-account username (Novada
+            // format `*-zone-*`, e.g. "customer-abc-zone-res") — the codebase's
+            // own redactSecrets() rule #4 (errors.ts) classifies that shape as a
+            // secret. Route it through the same choke-point every other error/log
+            // path uses instead of interpolating it raw into stderr.
+            console.error(`[novada] Auto-provisioned proxy credentials (account: ${redactSecrets(autoCreds.user)})`);
         }
         checkProxyConfiguration();
         const filterInfo = process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS
@@ -370,7 +597,7 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
   novada_browser             Interactive browser automation (navigate, click, type, screenshot)
   novada_browser_flow        Cloud browser automation via action sequence API
   novada_account             Account & billing dashboard (balance, plans, usage, traffic)
-  novada_proxy_account_create  Create a proxy sub-account (WRITE, confirm gate)
+  novada_proxy_account_create  Create a proxy sub-account (WRITE, approval-token gate)
   novada_proxy_account_list  List proxy sub-accounts
   novada_ip_whitelist        Manage IP whitelist for proxy products (add/list/del/remark)
   novada_capture_apikey      Get or reset the Capture API key
@@ -390,8 +617,11 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
 }
 const server = new NovadaMCPServer();
 server.run().catch((error) => {
+    // Not an MCP tool-call response (the server failed to even start — stdio
+    // transport connect failure, etc.) — redact for the same defense-in-depth
+    // reason as the other stderr sites in this file.
     const msg = error instanceof Error ? error.message : String(error);
-    console.error("Fatal error:", msg);
+    console.error("Fatal error:", redactSecrets(msg));
     process.exit(1);
 });
 //# sourceMappingURL=index.js.map

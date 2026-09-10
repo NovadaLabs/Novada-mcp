@@ -20,7 +20,7 @@ export declare const DUCKDUCKGO_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             web_search: "web_search";
         }>;
@@ -36,7 +36,7 @@ export declare const DUCKDUCKGO_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "web_search";
         params: Record<string, unknown>;
@@ -55,7 +55,7 @@ export declare const DUCKDUCKGO_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"web_search">;
 };
-export declare const ScrapeDuckduckgoParamsSchema: z.ZodObject<{
+export declare const ScrapeDuckduckgoParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         web_search: "web_search";
     }>;
@@ -71,7 +71,7 @@ export declare const ScrapeDuckduckgoParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeDuckduckgoParams = z.infer<typeof ScrapeDuckduckgoParamsSchema>;
 export declare function validateScrapeDuckduckgoParams(args: Record<string, unknown> | undefined): ScrapeDuckduckgoParams;
 /**

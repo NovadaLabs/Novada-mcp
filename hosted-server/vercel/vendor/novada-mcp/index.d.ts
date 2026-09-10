@@ -1,3 +1,3 @@
 #!/usr/bin/env node
-export {};
+import "./utils/assert-node.js";
 //# sourceMappingURL=index.d.ts.map

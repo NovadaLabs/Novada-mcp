@@ -21,7 +21,7 @@ export declare const SHEIN_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             product_by_url: "product_by_url";
             product_by_id: "product_by_id";
@@ -38,7 +38,7 @@ export declare const SHEIN_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "product_by_url" | "product_by_id";
         params: Record<string, unknown>;
@@ -57,7 +57,7 @@ export declare const SHEIN_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"product_by_url" | "product_by_id">;
 };
-export declare const ScrapeSheinParamsSchema: z.ZodObject<{
+export declare const ScrapeSheinParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         product_by_url: "product_by_url";
         product_by_id: "product_by_id";
@@ -74,7 +74,7 @@ export declare const ScrapeSheinParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeSheinParams = z.infer<typeof ScrapeSheinParamsSchema>;
 export declare function validateScrapeSheinParams(args: Record<string, unknown> | undefined): ScrapeSheinParams;
 /**

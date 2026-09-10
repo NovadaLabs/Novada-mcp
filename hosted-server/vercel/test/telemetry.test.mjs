@@ -908,13 +908,21 @@ test("resolveProduct: null tool -> null", () => {
 // fails if the mirror's classification for any code diverges, or if the two
 // tables don't cover exactly the same NovadaErrorCode set.
 
+/** Strip block + line comments so prose like `format="html"` inside a member's
+ *  doc-comment can never parse as a phantom enum member (F15's comment did
+ *  exactly that on 2026-09-10 — class fix here, not in the source's wording). */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
 function parseNovadaErrorCodesFromSource(src) {
   const enumMatch = src.match(/export enum NovadaErrorCode\s*\{([\s\S]*?)\}/);
   assert.ok(enumMatch, "must be able to parse the NovadaErrorCode enum from errors.ts");
   const codes = [];
   const re = /(\w+)\s*=\s*"(\w+)"/g;
   let m;
-  while ((m = re.exec(enumMatch[1]))) codes.push(m[2]);
+  const body = stripComments(enumMatch[1]);
+  while ((m = re.exec(body))) codes.push(m[2]);
   assert.ok(codes.length > 0, "must find at least one NovadaErrorCode member");
   return codes;
 }
@@ -925,7 +933,8 @@ function parseFailureClassTableFromSource(src) {
   const table = {};
   const re = /\[NovadaErrorCode\.(\w+)\]:\s*"(\w+)"/g;
   let m;
-  while ((m = re.exec(tableMatch[1]))) table[m[1]] = m[2];
+  const body = stripComments(tableMatch[1]); // same phantom-member hazard as the enum
+  while ((m = re.exec(body))) table[m[1]] = m[2];
   return table;
 }
 

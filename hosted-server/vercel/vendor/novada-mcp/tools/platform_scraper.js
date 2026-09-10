@@ -1,7 +1,29 @@
 import { z } from "zod";
 import { novadaScrape } from "./scrape.js";
-import { TASK_ID_REGEX, TASK_ID_REGEX_MSG } from "./types.js";
+import { TASK_ID_REGEX, TASK_ID_REGEX_MSG, withCamelCaseAliases } from "./types.js";
 import { zodToMcpSchema } from "../utils/mcp-schema.js";
+// ─── Title derivation (F-7, W-B1) ────────────────────────────────────────────
+// Brand names whose correct capitalization isn't plain Titlecase — mirrors
+// hosted-server/vercel/api/mcp.ts's own TITLE_BRAND_MAP so both surfaces render
+// the identical "Scrape <Brand>" title for every platform-scraper tool (that
+// file independently derives the SAME title from the tool name for hosted
+// display; this is the npm-package-side equivalent, keyed by the human-readable
+// platformLabel already declared on each platform's config, so a 16th platform
+// config only needs a ROW here if its brand needs non-Titlecase — no other
+// per-tool wiring). Keep in sync if either brand list changes.
+const PLATFORM_TITLE_BRAND_MAP = {
+    "X (Twitter)": "X",
+    "DuckDuckGo": "DuckDuckGo",
+    "YouTube": "YouTube",
+    "GitHub": "GitHub",
+    "LinkedIn": "LinkedIn",
+    "TikTok": "TikTok",
+    "SHEIN": "SHEIN",
+};
+/** e.g. "Amazon" -> "Scrape Amazon", "X (Twitter)" -> "Scrape X". */
+function derivePlatformTitle(platformLabel) {
+    return `Scrape ${PLATFORM_TITLE_BRAND_MAP[platformLabel] ?? platformLabel}`;
+}
 /** Render a PlatformScraperDescription into the tool's full MCP description string. */
 function renderDescription(d) {
     return [
@@ -10,7 +32,7 @@ function renderDescription(d) {
         `**Use when:** ${d.useWhen.map((s) => `"${s}"`).join(", ")}.`,
         `**Not for:** ${d.notFor.map((x) => `${x.when} — use ${x.useInstead}`).join(". ")}.`,
         `**Returns:** ${d.returns}`,
-        `**Operations:** ${d.operationsNote}`,
+        `**Ops:** ${d.operationsNote}`,
     ].join("\n");
 }
 /**
@@ -31,20 +53,26 @@ function renderDescription(d) {
 export function createPlatformScraperTool(config) {
     const opEntries = Object.entries(config.operations);
     const opNames = opEntries.map(([name]) => name);
-    const operationEnumDescription = `Which ${config.platformLabel} operation to run. Each requires specific keys in \`params\`:\n` +
+    const operationEnumDescription = `${config.platformLabel} operation to run (params keys per entry):\n` +
         opEntries.map(([name, opCfg]) => `- ${name}: ${opCfg.paramsDoc}`).join("\n");
-    const ParamsSchema = z.object({
+    // DE-1 / C-1 (P1, ledger-verified −0.18 duplicate charge): this is the ONE shared
+    // factory site for all 15 pinned platform-scraper tools (novada_scrape_<platform>) —
+    // wrapping it here with withCamelCaseAliases closes the taskId→task_id money-path hole
+    // across every one of them at once, mirroring the matching fix applied to
+    // ScrapeParamsSchema/ScrapeParamsFullSchema (types.ts) for the generic novada_scrape
+    // tool. Never hand-apply this per platform config — it belongs HERE.
+    const ParamsSchema = withCamelCaseAliases(z.object({
         operation: z.enum(opNames).describe(operationEnumDescription),
         params: z.record(z.string(), z.unknown()).default({}).describe(config.paramsFieldDoc),
         limit: z.number().int().min(1).max(100).default(20)
-            .describe("Max records to return. Default 20, max 100."),
+            .describe("Max records (default 20, max 100)."),
         format: z.enum(["json", "csv", "excel", "html", "markdown", "toon"]).default("markdown")
-            .describe("Output format. 'markdown' (default): structured table. 'json': structured records array. 'csv'/'excel'/'html': spreadsheet-ready. 'toon': token-optimized pipe-separated format."),
+            .describe("markdown (default table), json (records array), csv/excel/html (spreadsheet), toon (compact pipe-separated)."),
         task_id: z.string().regex(TASK_ID_REGEX, TASK_ID_REGEX_MSG).optional()
-            .describe("Optional. Resume a previous slow task by its task_id instead of submitting a new billable one — same semantics as novada_scrape's task_id."),
+            .describe("Resume a previous slow task instead of submitting a new billable one."),
         project: z.string().max(30).optional()
-            .describe("Optional project name to group related outputs in a subfolder. E.g. 'competitor-pricing'."),
-    });
+            .describe("Group outputs in a subfolder, e.g. 'competitor-pricing'."),
+    }), { taskId: "task_id" });
     function validateParams(args) {
         return ParamsSchema.parse(args ?? {});
     }
@@ -78,6 +106,11 @@ export function createPlatformScraperTool(config) {
         description: config.registryDescription,
         category: config.category,
         status: "active",
+        title: derivePlatformTitle(config.platformLabel),
+        // Every factory-generated platform-scraper tool belongs to the "scrapers"
+        // filtering group (F-1/F-7 audit) — a new platform config gets this for free,
+        // no per-tool edit needed (class-not-instance).
+        group: "scrapers",
     };
     return {
         toolDefinition,
@@ -101,6 +134,7 @@ export function toDispatchableScraperTool(tool) {
         toolDefinition: tool.toolDefinition,
         registryEntry: tool.registryEntry,
         dispatch: (args, apiKey) => tool.handler(tool.validateParams(args), apiKey),
+        validateParams: (args) => tool.validateParams(args),
         config: tool.config,
     };
 }

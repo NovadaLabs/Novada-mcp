@@ -4,6 +4,28 @@ export declare const ScraperStatusParamsSchema: z.ZodObject<{
 }, z.core.$strip>;
 export type ScraperStatusParams = z.infer<typeof ScraperStatusParamsSchema>;
 export declare function validateScraperStatusParams(args: Record<string, unknown> | undefined): ScraperStatusParams;
+export interface RawTaskStatusItem {
+    task_id?: string;
+    status?: string;
+    msg?: string;
+}
+export interface RawTaskStatusResp {
+    task_id?: string;
+    status?: string;
+    msg?: string;
+    list?: RawTaskStatusItem[];
+}
+/**
+ * Single source of truth for the POST /v1/scraper/task_status response shape.
+ * LIVE API returns { list: [{ task_id, status }] } (verified 2026-08-03:
+ * {"list":[{"status":"Running","task_id":"…"}]}); legacy callers assumed a flat
+ * { status }. Handle BOTH; prefer the list entry matching taskId. Every caller of
+ * this endpoint MUST parse via this helper — never read `.status` directly.
+ */
+export declare function extractRawTaskStatus(resp: RawTaskStatusResp | undefined, taskId?: string): {
+    status?: string;
+    msg?: string;
+};
 /**
  * Lightweight existence check for a task_id.
  * Uses the primary devApiPost path (POST /v1/scraper/task_status).

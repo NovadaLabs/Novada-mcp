@@ -1,4 +1,17 @@
 import { z } from "zod";
+/**
+ * Backwards-compat shim: snake_case is the canonical wire format for every tool
+ * param, but older callers (and the legacy SDK shape) sent camelCase keys
+ * (maxChars, waitFor, maxPages, …). This wraps a Zod object in a `z.preprocess`
+ * that maps the camelCase aliases to snake_case BEFORE validation, so those
+ * callers keep working without the camelCase keys ever appearing in the
+ * agent-facing JSON schema (`.toJSONSchema()` reflects only the inner object).
+ * Non-object / nullish input is passed through untouched so Zod reports the
+ * real type error.
+ *
+ * @param aliases map of camelCaseAlias → snake_case_canonical
+ */
+export declare function withCamelCaseAliases<T extends z.ZodTypeAny>(schema: T, aliases: Record<string, string>): z.ZodPipe<z.ZodTransform<unknown, unknown>, T>;
 export declare const SearchParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     query: z.ZodString;
     engine: z.ZodDefault<z.ZodEnum<{
@@ -213,6 +226,7 @@ export declare const ProxyParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknow
         env: "env";
         curl: "curl";
     }>>;
+    verify: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strip>>;
 export type ProxyParams = z.infer<typeof ProxyParamsSchema>;
 /** Backward-compat: old typed-proxy tool name → the `type` value to inject into novada_proxy.
@@ -223,7 +237,7 @@ export declare function validateProxyParams(args: Record<string, unknown> | unde
 export declare const TASK_ID_REGEX: RegExp;
 export declare const TASK_ID_REGEX_MSG = "task_id must be alphanumeric with underscores/hyphens/dots only";
 /** MCP tool schema — agent-optimized formats only */
-export declare const ScrapeParamsSchema: z.ZodObject<{
+export declare const ScrapeParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     format: z.ZodDefault<z.ZodEnum<{
         json: "json";
         html: "html";
@@ -238,9 +252,9 @@ export declare const ScrapeParamsSchema: z.ZodObject<{
     params: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     limit: z.ZodDefault<z.ZodNumber>;
     task_id: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 /** CLI/SDK schema — all output formats */
-export declare const ScrapeParamsFullSchema: z.ZodObject<{
+export declare const ScrapeParamsFullSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     format: z.ZodDefault<z.ZodEnum<{
         json: "json";
         html: "html";
@@ -255,7 +269,7 @@ export declare const ScrapeParamsFullSchema: z.ZodObject<{
     params: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     limit: z.ZodDefault<z.ZodNumber>;
     task_id: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 /** MCP-restricted type: only markdown/json/toon formats (matches ScrapeParamsSchema) */
 export type ScrapeParams = z.infer<typeof ScrapeParamsSchema>;
 /** Full type including CLI/SDK formats: csv/html/xlsx */

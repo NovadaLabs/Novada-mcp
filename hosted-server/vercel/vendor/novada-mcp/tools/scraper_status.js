@@ -34,6 +34,17 @@ function normalizeStatus(raw) {
     return "pending";
 }
 /**
+ * Single source of truth for the POST /v1/scraper/task_status response shape.
+ * LIVE API returns { list: [{ task_id, status }] } (verified 2026-08-03:
+ * {"list":[{"status":"Running","task_id":"…"}]}); legacy callers assumed a flat
+ * { status }. Handle BOTH; prefer the list entry matching taskId. Every caller of
+ * this endpoint MUST parse via this helper — never read `.status` directly.
+ */
+export function extractRawTaskStatus(resp, taskId) {
+    const item = taskId ? (resp?.list?.find((t) => t?.task_id === taskId) ?? resp?.list?.[0]) : resp?.list?.[0];
+    return { status: resp?.status ?? item?.status, msg: resp?.msg ?? item?.msg };
+}
+/**
  * Lightweight existence check for a task_id.
  * Uses the primary devApiPost path (POST /v1/scraper/task_status).
  *
@@ -49,7 +60,7 @@ function normalizeStatus(raw) {
 export async function checkTaskExists(task_id, apiKey) {
     try {
         const statusResp = await devApiPost("/v1/scraper/task_status", { task_ids: task_id }, { apiKey, timeoutMs: 10_000 });
-        const rawStatus = statusResp?.status;
+        const { status: rawStatus } = extractRawTaskStatus(statusResp, task_id);
         // Non-empty status = task exists.
         if (rawStatus)
             return "exists";
@@ -76,7 +87,7 @@ export async function novadaScraperStatus(params, apiKey) {
     // status values: "Pending" | "Running" | "Ready" | "Failed"
     try {
         const statusResp = await devApiPost("/v1/scraper/task_status", { task_ids: task_id }, { apiKey });
-        const rawStatus = statusResp?.status;
+        const { status: rawStatus, msg: rawMsg } = extractRawTaskStatus(statusResp, task_id);
         const normalized = normalizeStatus(rawStatus);
         // NOV-666: if the API returned successfully (code=0) but status is absent/null,
         // the task_id may not exist (some APIs return { code:0, data:{} } for unknown ids
@@ -101,7 +112,7 @@ export async function novadaScraperStatus(params, apiKey) {
                 return JSON.stringify({
                     status: "failed",
                     task_id,
-                    error: statusResp?.msg ?? "Task failed on the server side.",
+                    error: rawMsg ?? "Task failed on the server side.",
                     agent_instruction: `Task failed. Re-submit with novada_scraper_submit or try novada_extract as an alternative.`,
                 }, null, 2);
             case "running":

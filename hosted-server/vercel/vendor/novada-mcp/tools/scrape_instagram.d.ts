@@ -26,7 +26,7 @@ export declare const INSTAGRAM_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             comments_by_post_url: "comments_by_post_url";
             reels_by_profile_url: "reels_by_profile_url";
@@ -48,7 +48,7 @@ export declare const INSTAGRAM_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "comments_by_post_url" | "reels_by_profile_url" | "reel_by_url" | "posts_by_profile" | "post_by_url" | "profile_by_url" | "profile_by_username";
         params: Record<string, unknown>;
@@ -67,7 +67,7 @@ export declare const INSTAGRAM_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"comments_by_post_url" | "reels_by_profile_url" | "reel_by_url" | "posts_by_profile" | "post_by_url" | "profile_by_url" | "profile_by_username">;
 };
-export declare const ScrapeInstagramParamsSchema: z.ZodObject<{
+export declare const ScrapeInstagramParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         comments_by_post_url: "comments_by_post_url";
         reels_by_profile_url: "reels_by_profile_url";
@@ -89,7 +89,7 @@ export declare const ScrapeInstagramParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeInstagramParams = z.infer<typeof ScrapeInstagramParamsSchema>;
 export declare function validateScrapeInstagramParams(args: Record<string, unknown> | undefined): ScrapeInstagramParams;
 /**

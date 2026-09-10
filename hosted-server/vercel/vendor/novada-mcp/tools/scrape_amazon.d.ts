@@ -29,7 +29,7 @@ export declare const AMAZON_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             product_by_url: "product_by_url";
             product_by_asin: "product_by_asin";
@@ -54,7 +54,7 @@ export declare const AMAZON_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "product_by_url" | "product_by_asin" | "products_by_keywords" | "bestsellers" | "reviews_by_url" | "seller_by_url" | "listings_by_keyword" | "global_product_by_url" | "global_product_by_category_url" | "global_product_by_keyword_and_brand";
         params: Record<string, unknown>;
@@ -73,7 +73,7 @@ export declare const AMAZON_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"product_by_url" | "product_by_asin" | "products_by_keywords" | "bestsellers" | "reviews_by_url" | "seller_by_url" | "listings_by_keyword" | "global_product_by_url" | "global_product_by_category_url" | "global_product_by_keyword_and_brand">;
 };
-export declare const ScrapeAmazonParamsSchema: z.ZodObject<{
+export declare const ScrapeAmazonParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         product_by_url: "product_by_url";
         product_by_asin: "product_by_asin";
@@ -98,7 +98,7 @@ export declare const ScrapeAmazonParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeAmazonParams = z.infer<typeof ScrapeAmazonParamsSchema>;
 export declare function validateScrapeAmazonParams(args: Record<string, unknown> | undefined): ScrapeAmazonParams;
 /**

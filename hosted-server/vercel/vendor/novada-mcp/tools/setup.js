@@ -1,5 +1,6 @@
 import { z, ZodError } from "zod";
 import { novadaWalletBalance } from "./wallet_balance.js";
+import { novadaPlanBalanceAll } from "./plan_balance_all.js";
 import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { VERSION } from "../config.js";
 export const SetupParamsSchema = z.object({}).strict();
@@ -43,6 +44,45 @@ function identitySuffix(effectiveKey) {
         : ` · account: as of ${asOf}`;
 }
 /**
+ * G-12 fix (a): setup's balance line used to report the WALLET ledger only,
+ * which mislabels a wallet-$0/Capture-funded account (or the inverse) as
+ * "needs top up" — the exact 2026-07-30 incident shape (finding: "the exact
+ * wallet-$0-but-capture-funded shape... would still read as 'top up' in
+ * setup's summary line"). Fetch the Capture ledger too, scoped to just that
+ * one product via plan_balance_all({products:["capture"]}) — the same
+ * single-source-of-truth per-product lookup novada_account section="plans"
+ * already uses — and fold it into the SAME line so an agent sees BOTH
+ * balances from ONE novada_setup call, never just Wallet.
+ *
+ * This is enrichment of an ALREADY-successful wallet check, never a gate: any
+ * failure here (no dev-api key configured, network error, not provisioned)
+ * degrades to an honest "unavailable" note and must never throw or block the
+ * wallet-only line that used to be the whole story.
+ */
+async function fetchCaptureLine(effectiveKey) {
+    try {
+        const raw = await novadaPlanBalanceAll({ products: ["capture"] }, effectiveKey);
+        const parsed = JSON.parse(raw);
+        const entry = parsed?.per_product?.capture;
+        if (entry?.status === "ok" && entry.balance && typeof entry.balance === "object") {
+            const b = entry.balance.balance;
+            if (typeof b === "number") {
+                const line = b > 0
+                    ? ` · Capture balance: ${b.toFixed(2)} (separate ledger — funds novada_search/novada_scrape/render escalation; top up separately at ${URL_DASHBOARD} if this hits 0)`
+                    : ` · Capture balance: 0.00 — novada_search/novada_scrape/render calls will fail even though Wallet may still have funds; these are DIFFERENT ledgers. Top up Capture at ${URL_DASHBOARD}`;
+                return { line, balance: b };
+            }
+        }
+        if (entry?.unavailable) {
+            return { line: ` · Capture balance: not provisioned on this account`, balance: undefined };
+        }
+        return { line: ` · Capture balance: unavailable right now — call novada_account(section="plans") to check`, balance: undefined };
+    }
+    catch {
+        return { line: ` · Capture balance: unavailable right now — call novada_account(section="plans") to check`, balance: undefined };
+    }
+}
+/**
  * Cheap, authoritative key check: read the master wallet balance — the same
  * billing endpoint novada_account already uses. This is a
  * real "does the key work" probe (NOT a synthetic per-product probe), and it
@@ -61,10 +101,14 @@ async function validateKey(effectiveKey) {
         // print the bare number and note the dashboard shows the real currency.
         const currency = typeof parsed?.data?.currency === "string" ? parsed.data.currency : "";
         if (typeof balance === "number") {
+            // G-12 (a): always fetch + show the Capture ledger alongside Wallet — see
+            // fetchCaptureLine's doc comment. Never lets a Capture-fetch failure hide
+            // the (already successful) Wallet result.
+            const capture = await fetchCaptureLine(effectiveKey);
             const balanceLine = balance > 0
-                ? `Wallet balance: ${currency}${balance.toFixed(2)} (currency as shown in your dashboard) — enough to start testing.${identitySuffix(effectiveKey)}`
-                : `Wallet balance: ${currency}0.00 (currency as shown in your dashboard) — top up at ${URL_DASHBOARD} to run pay-per-use tools.${identitySuffix(effectiveKey)}`;
-            return { state: "ready", balanceLine };
+                ? `Wallet balance: ${currency}${balance.toFixed(2)} (currency as shown in your dashboard) — enough to start testing.${capture.line}${identitySuffix(effectiveKey)}`
+                : `Wallet balance: ${currency}0.00 (currency as shown in your dashboard) — top up at ${URL_DASHBOARD} to run pay-per-use tools.${capture.line}${identitySuffix(effectiveKey)}`;
+            return { state: "ready", balanceLine, walletBalance: balance, captureBalance: capture.balance };
         }
         // Key was accepted (no auth error) but balance shape was unexpected — still
         // "ready" (the credential works); just can't show a number.
@@ -209,6 +253,16 @@ export async function novadaSetup(_params, callerApiKey) {
             : `No key yet. Tell the user to register at ${URL_SIGNUP} (API key + $10 free credits included), copy their API key from ${URL_API_KEY}, add it as NOVADA_API_KEY in their MCP client config, and restart. Do not treat this as an error — it is the normal first-run state.`;
     L.push("## Agent");
     L.push(`key_state: ${state}`);
+    // G-12: name both ledgers in the machine-readable block too — an agent parsing
+    // this section should never have to re-derive "which balance is which" from
+    // prose. Omitted (not printed as "undefined") when the state isn't "ready" or
+    // a given balance genuinely couldn't be read this call.
+    if (typeof validation.walletBalance === "number") {
+        L.push(`wallet_balance: ${validation.walletBalance.toFixed(2)}`);
+    }
+    if (typeof validation.captureBalance === "number") {
+        L.push(`capture_balance: ${validation.captureBalance.toFixed(2)}`);
+    }
     // NOVADA_SERVER_VERSION is set at module init by the hosted wrapper (mcp.ts) to its
     // computed HOSTED_VERSION string (e.g. "0.9.26-hosted"), which is the same string
     // serverInfo.version carries in the MCP initialize response. Falling back to VERSION

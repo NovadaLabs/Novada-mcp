@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { resolveProxyCredentials } from "../utils/credentials.js";
+import { assertFlowLedgerActive } from "./proxy_preflight.js";
 // ─── Schema ──────────────────────────────────────────────────────────────────
 export const ProxyResidentialParamsSchema = z.object({
     url: z.string().optional()
@@ -46,7 +47,9 @@ function buildResidentialUsername(user, params) {
  */
 export async function novadaProxyResidential(params) {
     // INC-197/198: Use resolveProxyCredentials (auto-fetches via account API on hosted)
-    // and return friendly text (not NovadaError) when not configured.
+    // and return friendly text (not NovadaError) when not configured. Resolved
+    // BEFORE the F11 gate (HIGH-1): the preflight must read the ledger of the
+    // account the creds BILL to, which only the resolver knows.
     const proxyCreds = await resolveProxyCredentials();
     if (!proxyCreds) {
         return [
@@ -63,6 +66,13 @@ export async function novadaProxyResidential(params) {
             `- For web extraction without managing proxies, use novada_extract or novada_crawl instead.`,
         ].join("\n");
     }
+    // F11: same table-driven flow-ledger preflight as novada_proxy — SDK direct
+    // callers must not receive credentials for a 0/expired plan either (class,
+    // not instance: every entry point that issues flow-plan credentials gates on
+    // the shared FLOW_BALANCE_ENDPOINTS table). Fail-closed only on a positive
+    // bad signal from the BILLING account's ledger; direct env/SDK creds are
+    // never judged on another account's ledger; indeterminate lookups fail open.
+    await assertFlowLedgerActive("residential", proxyCreds, "novada_proxy_residential");
     const { user, pass, endpoint } = proxyCreds;
     const username = buildResidentialUsername(user, params);
     const encodedUser = encodeURIComponent(username);

@@ -29,9 +29,9 @@ export const PROMPTS = [
     },
     {
         name: "scrape_platform_data",
-        description: "Scrape structured data from a specific platform (Amazon, Reddit, TikTok, LinkedIn, etc.) using the Novada Scraper API",
+        description: "Scrape structured data from a specific platform (Amazon, Walmart, TikTok, LinkedIn, etc.) using the Novada Scraper API",
         arguments: [
-            { name: "platform", description: "Platform name, e.g. 'amazon.com', 'reddit.com', 'tiktok.com'", required: true },
+            { name: "platform", description: "Platform name, e.g. 'amazon.com', 'walmart.com', 'tiktok.com'", required: true },
             { name: "data_type", description: "What data to get, e.g. 'product listings', 'user posts', 'job listings', 'reviews'", required: true },
             { name: "query", description: "Search keyword, username, URL, or other search term depending on data type", required: true },
         ],
@@ -193,7 +193,7 @@ export function getPrompt(name, args) {
                 `   → novada_map (sitemap-first, fast). Then novada_extract the ones you want.`,
                 `5. Need content from MANY pages on one domain (e.g. all /docs/*)?`,
                 `   → novada_crawl (BFS/DFS, up to ~20 pages). Use select_paths to restrict. For a single page use novada_extract instead.`,
-                `6. Target is a known PLATFORM (Amazon, Reddit, TikTok, LinkedIn, YouTube, etc.) and you want structured records?`,
+                `6. Target is a known PLATFORM (Amazon, Walmart, TikTok, LinkedIn, YouTube, etc.) and you want structured records?`,
                 `   → novada_scrape (typed fields). Read novada://scraper-platforms for the operation ID. See the scrape_platform_data prompt.`,
                 `7. novada_extract failed and you specifically need the raw rendered HTML for custom DOM parsing?`,
                 `   → novada_extract with render="render" (or render="browser" for tougher anti-bot) and format="html" — forces JS render, returns raw HTML instead of cleaned text.`,

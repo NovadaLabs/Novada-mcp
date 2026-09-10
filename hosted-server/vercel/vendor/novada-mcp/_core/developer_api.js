@@ -21,7 +21,7 @@
 // surfaced via NovadaError so agents get a uniform failure_class + agent_instruction.
 import axios, { AxiosError } from "axios";
 import FormData from "form-data";
-import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg } from "./errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg } from "./errors.js";
 export const DEVELOPER_API_BASE = "https://api-m.novada.com";
 const DEFAULT_TIMEOUT_MS = 30_000;
 /**
@@ -246,7 +246,7 @@ export async function devApiPost(path, body, opts = {}) {
         if (envelope.code === 11000 || envelope.code === 10002 || envelope.code === 401) {
             throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Developer-api auth failure (code=${envelope.code}): ${serverMsg}. Check NOVADA_DEVELOPER_API_KEY or rotate the key at https://developer-api.novada.com/zh.`);
         }
-        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `Developer-api rejected request (code=${envelope.code}): ${serverMsg}`);
+        throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `Developer-api rejected request (code=${envelope.code}): ${serverMsg}`, undefined, typeof envelope.code === "number" ? envelope.code : undefined);
     }
 }
 export async function devApiParallel(calls, opts = {}) {
@@ -258,7 +258,8 @@ export async function devApiParallel(calls, opts = {}) {
         }
         const reason = r.reason;
         const msg = reason instanceof Error ? reason.message : String(reason);
-        return { key: c.key, ok: false, error: msg };
+        const code = reason instanceof NovadaError ? reason.businessCode : undefined;
+        return { key: c.key, ok: false, error: msg, ...(code !== undefined ? { code } : {}) };
     });
 }
 //# sourceMappingURL=developer_api.js.map

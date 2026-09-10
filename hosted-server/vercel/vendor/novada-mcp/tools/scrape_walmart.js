@@ -48,7 +48,7 @@ export const WALMART_SCRAPER_CONFIG = {
         "product_by_keyword, { sku: \"433078517\" } for product_by_sku, { url: \"https://www.walmart.com/ip/...\" } for " +
         "product_by_url/product_by_url_and_zipcode.",
     description: {
-        core: "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — through a Walmart-only tool with a closed, typed `operation` enum. Same underlying engine as novada_scrape, pinned to platform=\"walmart.com\".",
+        core: "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"walmart.com\").",
         useWhen: [
             "search Walmart for <keyword> and give me prices/ratings",
             "get product listings from this Walmart category URL",
@@ -57,12 +57,12 @@ export const WALMART_SCRAPER_CONFIG = {
             "get product details for this Walmart product URL",
         ],
         notFor: [
-            { when: "A single Walmart URL you just want read as plain text", useInstead: "novada_extract" },
+            { when: "A single Walmart URL to read as plain text", useInstead: "novada_extract" },
             { when: "A general web search not scoped to Walmart", useInstead: "novada_search" },
-            { when: "A different platform's structured data (Amazon, SHEIN, etc.)", useInstead: "novada_scrape with that platform's domain, or its own novada_scrape_<platform> tool" },
+            { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
         ],
-        returns: "Structured product records (title, price, rating, availability, SKU, etc.) in the chosen format (markdown/json/csv/excel/html/toon) — same rendering as novada_scrape.",
-        operationsNote: "5 verified-working Walmart operations spanning keyword search, category-URL listings, SKU lookup, zip-code-specific pricing, and direct product URL (see the `operation` param's description for the exact `params` keys each needs). `product_by_keyword` requires BOTH `domain` AND `keyword` together; `product_by_category_url` requires ALL THREE of `category_url`, `all`, AND `page_limit` together; `product_by_url_and_zipcode` requires BOTH `url` AND `zipcode` together. Every walmart.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+        returns: "Structured product records (title, price, rating, availability, SKU, etc.) in the chosen output format — same rendering as novada_scrape.",
+        operationsNote: "5 verified-working Walmart operations spanning keyword search, category-URL listings, SKU lookup, zip-code-specific pricing, and direct product URL. `product_by_keyword` requires BOTH `domain` AND `keyword` together; `product_by_category_url` requires ALL THREE of `category_url`, `all`, AND `page_limit` together; `product_by_url_and_zipcode` requires BOTH `url` AND `zipcode` together. Every walmart.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
     },
 };
 /** The materialized Walmart platform-scraper tool (definition + registry entry + handler). */

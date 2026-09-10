@@ -23,24 +23,30 @@ export declare const _TOOL_DEFINITIONS: Array<{
     inputSchema: Record<string, unknown>;
     annotations: Record<string, boolean>;
 }>;
-/**
- * TOOLS — the MCP ListTools surface, DERIVED from the registry.
- *
- * Only entries whose `name` appears in REGISTERED_TOOL_NAMES are exported here.
- * Everything else in _TOOL_DEFINITIONS remains dispatchable (the switch handles
- * all names) but is hidden from agents' tool lists — no ListTools drift possible.
- *
- * To surface a new tool: add it to TOOL_REGISTRY in registry.ts AND add its
- * definition to _TOOL_DEFINITIONS above. To hide one: remove it from TOOL_REGISTRY.
- * Never edit this export directly.
- */
 export declare const TOOLS: {
+    title: string;
     name: string;
     description: string;
     inputSchema: Record<string, unknown>;
     annotations: Record<string, boolean>;
 }[];
 export declare const HIDDEN_ALIASES: ReadonlySet<string>;
+export declare const KNOWN_TOOL_NAMES: ReadonlySet<string>;
+/**
+ * Cheap close-name suggestion for an unknown tool name (F13).
+ * Repairs a missing "novada_" prefix exactly, otherwise picks the nearest
+ * known name within SUGGESTION_MAX_DISTANCE edits — visible tools are scanned
+ * before hidden aliases so ties prefer a name the caller can see in ListTools.
+ * Returns undefined when nothing is close (never guesses).
+ */
+export declare function suggestToolName(name: string): string | undefined;
+/**
+ * The ONE unknown-tool error builder — shared by dispatch()'s default case and
+ * the stdio transport's pre-auth name-resolution check (index.ts), so the two
+ * texts can never drift. The name echo is length-capped (untrusted input); the
+ * Available/alias lists stay DERIVED from the live registry (F-5).
+ */
+export declare function makeUnknownToolError(name: string): Error;
 export declare function dispatch(name: string, args: Record<string, unknown>, apiKey?: string, ctx?: {
     onProgress?: ProgressReporter;
     visibleTools?: ReadonlySet<string>;

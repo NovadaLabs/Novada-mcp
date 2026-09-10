@@ -1,5 +1,27 @@
 import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaScrape, novadaVerify } from "../tools/index.js";
 import { withCredentials } from "../utils/credentials.js";
+// G-2 (no marker leak into the SDK): the tool functions above wrap externally-fetched
+// text with wrapUntrusted/wrapUntrustedInline before returning it — correct for the
+// MCP path (an LLM reads that string directly and needs the "don't follow
+// instructions" marking). NovadaClient instead regex-parses that SAME string into
+// TYPED FIELDS for programmatic TS callers (SearchResult.snippet, ExtractResult.content,
+// ResearchResult.extracted[].content, CrawlPage.content) — those callers read a typed
+// string field, not an LLM prompt, so the marker is pure noise/corruption there
+// (e.g. `result.content.includes(expectedText)` breaks). Every field below that can
+// carry fetched text is run through unwrapUntrusted() so the SDK's public contract is
+// uniformly marker-free while the MCP response these methods call under the hood
+// stays wrapped.
+//
+// HIGH-1 (2026-09-03 adversarial integration pass): the ORIGINAL version of this
+// unwrap only covered 4 of the (then) 7 exposed methods — search/extract/crawl/
+// research — and this comment's "uniformly marker-free" claim was FALSE: scrape()'s
+// `formatted` field (markdown branch — scrape.ts wraps the whole table) and verify()'s
+// `raw` field (verify.ts's pushSourceList wraps every evidence snippet) both returned
+// the wrapped MCP string verbatim. Class-swept against every method NovadaClient
+// exposes (see marker-leak.test.ts's class-driven walker): search/extract/batchExtract/
+// crawl/research/map/scrape/verify/proxy. map() and proxy() never touch fetched text
+// (urls[] / locally-constructed proxy fields) — nothing to unwrap there.
+import { unwrapUntrusted } from "../utils/untrusted.js";
 /**
  * NovadaClient — TypeScript SDK for Novada web intelligence APIs.
  *
@@ -61,7 +83,9 @@ export class NovadaClient {
                 if (typeof url !== "string" || !url)
                     continue;
                 const title = typeof item.title === "string" ? item.title : "";
-                const snippet = typeof item.snippet === "string" ? item.snippet : "";
+                // G-2: search.ts wraps `snippet` (fetched SERP text) with wrapUntrusted for
+                // the MCP path — strip it here so the SDK's typed field is marker-free.
+                const snippet = typeof item.snippet === "string" ? unwrapUntrusted(item.snippet) : "";
                 const published = typeof item.published === "string" ? item.published : undefined;
                 results.push({ title, url, snippet, ...(published ? { published } : {}) });
             }
@@ -94,6 +118,9 @@ export class NovadaClient {
             if (lastSep !== -1) {
                 content = raw.slice(lastSep + 5, contentEnd).trim();
             }
+            // G-2: extract.ts wraps this body with wrapUntrusted for the MCP path — strip
+            // it so ExtractResult.content is the plain fetched text for typed TS callers.
+            content = unwrapUntrusted(content);
             const links = [];
             const linkSection = raw.split("## Same-Domain Links")[1];
             if (linkSection) {
@@ -136,7 +163,10 @@ export class NovadaClient {
                 const titleLine = lines.find(l => l.startsWith("title:"))?.replace("title:", "").trim() ?? "";
                 const depthMatch = block.match(/depth:(\d+)/);
                 const wordsMatch = block.match(/words:(\d+)/);
-                const content = lines.slice(3).join("\n").split("---")[0].trim();
+                // G-2: crawl.ts wraps each page's body with wrapUntrusted for the MCP path
+                // (crawl.ts has carried this since before the G-2 audit) — strip it so
+                // CrawlPage.content is uniformly marker-free like every other SDK field.
+                const content = unwrapUntrusted(lines.slice(3).join("\n").split("---")[0].trim());
                 if (pageUrl) {
                     pages.push({
                         url: pageUrl,
@@ -164,7 +194,9 @@ export class NovadaClient {
             for (const block of extractedSection.split(/\n### \[\d+\] /).slice(1)) {
                 const title = block.split("\n")[0]?.trim() ?? "";
                 const url = block.match(/url: (.+)/)?.[1]?.trim() ?? "";
-                const content = block.split("\n").slice(3).join("\n").split("---")[0].trim();
+                // G-2: research.ts wraps each cited excerpt with wrapUntrusted for the MCP
+                // path — strip it so ResearchResult.extracted[].content is marker-free.
+                const content = unwrapUntrusted(block.split("\n").slice(3).join("\n").split("---")[0].trim());
                 if (title && url)
                     extracted.push({ title, url, content });
             }
@@ -208,7 +240,13 @@ export class NovadaClient {
                 }
                 catch { /* keep empty */ }
             }
-            return { platform, operation, records, formatted };
+            // G-2 follow-up (HIGH-1, 2026-09 audit): scrape.ts's "markdown" format
+            // branch wraps its table with wrapUntrusted (json/csv/html/toon are
+            // deliberately NOT wrapped — machine-consumption contract, see
+            // scrape.ts's own comment); `formatted` is a documented public field
+            // (sdk/types.ts) callers read directly, same class as content/snippet
+            // below. unwrapUntrusted is a no-op for the non-markdown formats.
+            return { platform, operation, records, formatted: unwrapUntrusted(formatted) };
         });
     }
     /** Verify a factual claim against live web sources. Returns verdict + confidence. */
@@ -221,7 +259,13 @@ export class NovadaClient {
             // Parse confidence from output: "confidence: 73"
             const confidenceMatch = raw.match(/^confidence:\s*(\d+)/m);
             const confidence = parseInt(confidenceMatch?.[1] ?? "0", 10);
-            return { claim, verdict, confidence, raw };
+            // G-2 follow-up (HIGH-1, 2026-09 audit): verify.ts's pushSourceList wraps
+            // every evidence snippet it renders into the output with wrapUntrusted —
+            // `raw` is documented (sdk/types.ts) as "Full formatted output from
+            // novada_verify" and returned VERBATIM to typed TS callers, so it leaked
+            // the "<!-- BEGIN EXTERNAL CONTENT -->" marker uniformly with every other
+            // SDK field. Strip it here, same as every other unwrap in this file.
+            return { claim, verdict, confidence, raw: unwrapUntrusted(raw) };
         });
     }
     /** Get proxy configuration for use in HTTP clients. Throws if proxy not configured. */

@@ -9,5 +9,5 @@
  *   novadamap https://example.com --search "api"
  *   novadaresearch "How do AI agents use web scraping?"
  */
-export {};
+import "./utils/assert-node.js";
 //# sourceMappingURL=cli.d.ts.map

@@ -24,7 +24,7 @@ export declare const TIKTOK_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             posts_by_profile: "posts_by_profile";
             post_by_url: "post_by_url";
@@ -44,7 +44,7 @@ export declare const TIKTOK_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "posts_by_profile" | "post_by_url" | "profile_by_url" | "profiles_by_search_url" | "posts_by_list_url";
         params: Record<string, unknown>;
@@ -63,7 +63,7 @@ export declare const TIKTOK_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"posts_by_profile" | "post_by_url" | "profile_by_url" | "profiles_by_search_url" | "posts_by_list_url">;
 };
-export declare const ScrapeTiktokParamsSchema: z.ZodObject<{
+export declare const ScrapeTiktokParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         posts_by_profile: "posts_by_profile";
         post_by_url: "post_by_url";
@@ -83,7 +83,7 @@ export declare const ScrapeTiktokParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeTiktokParams = z.infer<typeof ScrapeTiktokParamsSchema>;
 export declare function validateScrapeTiktokParams(args: Record<string, unknown> | undefined): ScrapeTiktokParams;
 /**

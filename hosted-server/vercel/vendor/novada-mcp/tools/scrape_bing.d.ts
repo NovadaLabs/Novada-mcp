@@ -23,7 +23,7 @@ export declare const BING_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             news: "news";
             web_search: "web_search";
@@ -42,7 +42,7 @@ export declare const BING_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "news" | "web_search" | "videos" | "shopping";
         params: Record<string, unknown>;
@@ -61,7 +61,7 @@ export declare const BING_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"news" | "web_search" | "videos" | "shopping">;
 };
-export declare const ScrapeBingParamsSchema: z.ZodObject<{
+export declare const ScrapeBingParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         news: "news";
         web_search: "web_search";
@@ -80,7 +80,7 @@ export declare const ScrapeBingParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeBingParams = z.infer<typeof ScrapeBingParamsSchema>;
 export declare function validateScrapeBingParams(args: Record<string, unknown> | undefined): ScrapeBingParams;
 /**

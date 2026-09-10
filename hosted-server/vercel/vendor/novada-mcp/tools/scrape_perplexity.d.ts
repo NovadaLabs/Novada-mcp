@@ -21,7 +21,7 @@ export declare const PERPLEXITY_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             answer_by_url: "answer_by_url";
             answer_by_search_term: "answer_by_search_term";
@@ -38,7 +38,7 @@ export declare const PERPLEXITY_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "answer_by_url" | "answer_by_search_term";
         params: Record<string, unknown>;
@@ -57,7 +57,7 @@ export declare const PERPLEXITY_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"answer_by_url" | "answer_by_search_term">;
 };
-export declare const ScrapePerplexityParamsSchema: z.ZodObject<{
+export declare const ScrapePerplexityParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         answer_by_url: "answer_by_url";
         answer_by_search_term: "answer_by_search_term";
@@ -74,7 +74,7 @@ export declare const ScrapePerplexityParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapePerplexityParams = z.infer<typeof ScrapePerplexityParamsSchema>;
 export declare function validateScrapePerplexityParams(args: Record<string, unknown> | undefined): ScrapePerplexityParams;
 /**

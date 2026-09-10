@@ -32,7 +32,7 @@ export declare const YOUTUBE_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             transcript_by_video: "transcript_by_video";
             video_file_by_url: "video_file_by_url";
@@ -60,7 +60,7 @@ export declare const YOUTUBE_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "transcript_by_video" | "video_file_by_url" | "channel_by_url" | "channels_by_keyword" | "comments_by_video" | "audio_file_by_url" | "video_by_id" | "video_by_url" | "videos_by_keyword" | "videos_by_filters" | "videos_by_playlist_url" | "channel_videos_by_url" | "videos_by_label";
         params: Record<string, unknown>;
@@ -79,7 +79,7 @@ export declare const YOUTUBE_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"transcript_by_video" | "video_file_by_url" | "channel_by_url" | "channels_by_keyword" | "comments_by_video" | "audio_file_by_url" | "video_by_id" | "video_by_url" | "videos_by_keyword" | "videos_by_filters" | "videos_by_playlist_url" | "channel_videos_by_url" | "videos_by_label">;
 };
-export declare const ScrapeYoutubeParamsSchema: z.ZodObject<{
+export declare const ScrapeYoutubeParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         transcript_by_video: "transcript_by_video";
         video_file_by_url: "video_file_by_url";
@@ -107,7 +107,7 @@ export declare const ScrapeYoutubeParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeYoutubeParams = z.infer<typeof ScrapeYoutubeParamsSchema>;
 export declare function validateScrapeYoutubeParams(args: Record<string, unknown> | undefined): ScrapeYoutubeParams;
 /**

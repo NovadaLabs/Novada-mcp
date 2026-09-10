@@ -22,7 +22,7 @@ export declare const GITHUB_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             repository_by_url: "repository_by_url";
             repository_details_by_url: "repository_details_by_url";
@@ -40,7 +40,7 @@ export declare const GITHUB_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "repository_by_url" | "repository_details_by_url" | "repositories_by_search_url";
         params: Record<string, unknown>;
@@ -59,7 +59,7 @@ export declare const GITHUB_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"repository_by_url" | "repository_details_by_url" | "repositories_by_search_url">;
 };
-export declare const ScrapeGithubParamsSchema: z.ZodObject<{
+export declare const ScrapeGithubParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         repository_by_url: "repository_by_url";
         repository_details_by_url: "repository_details_by_url";
@@ -77,7 +77,7 @@ export declare const ScrapeGithubParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeGithubParams = z.infer<typeof ScrapeGithubParamsSchema>;
 export declare function validateScrapeGithubParams(args: Record<string, unknown> | undefined): ScrapeGithubParams;
 /**

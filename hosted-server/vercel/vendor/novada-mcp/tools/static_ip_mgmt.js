@@ -5,11 +5,17 @@
 //   POST /v1/static_house/list   — list static IPs with filters + pagination
 //
 // Combined into ONE tool with an `action` discriminator.
-// "open" and "renew" are WRITE actions — gated behind `confirm: true`.
+// "open" and "renew" are WRITE actions — gated behind the shared
+// APPROVAL-TOKEN flow (F2-2/G-7 fix, 2026-09): first call (no
+// `approval_token`) returns a preview + a signed, expiring, payload-bound
+// token; only a second call carrying that exact token AND the exact same
+// parameters executes. `confirm: true` alone is a deprecated no-op — see
+// ../utils/approval.ts.
 //
 // Field names match the API spec (docs/novada-api/static-isp-proxies.md).
 import { z } from "zod";
 import { devApiPost } from "../_core/developer_api.js";
+import { evaluateApprovalGate } from "../utils/approval.js";
 // ─── Constants ───────────────────────────────────────────────────────────────
 const ACTIONS = ["open", "renew", "export", "list"];
 const IP_TYPES = ["normal", "premium"];
@@ -27,7 +33,7 @@ export const StaticIpMgmtParamsSchema = z
     .object({
     action: z
         .enum(ACTIONS)
-        .describe('Action to perform. "open" = purchase new static IPs (WRITE, requires confirm). "renew" = renew existing IPs (WRITE, requires confirm). "export" = export filtered IP list. "list" = list static IPs with pagination.'),
+        .describe('Action to perform. "open" = purchase new static IPs (WRITE, requires approval_token). "renew" = renew existing IPs (WRITE, requires approval_token). "export" = export filtered IP list. "list" = list static IPs with pagination.'),
     // ── "open" action fields ──────────────────────────────────────────────
     ip_type: z
         .enum(IP_TYPES)
@@ -86,11 +92,16 @@ export const StaticIpMgmtParamsSchema = z
         .int()
         .optional()
         .describe('Auto-renew filter for "list"/"export". 1=Yes, -1=No.'),
-    // ── Confirm gate (open + renew) ───────────────────────────────────────
+    // ── Confirm gate (deprecated flag; see approval_token below) ──────────
     confirm: z
         .literal(true)
         .optional()
-        .describe('REQUIRED for "open" and "renew" execution. Pass `true` ONLY after the human user has approved. If omitted, returns a dry-run preview without hitting the API.'),
+        .describe('DEPRECATED — ignored. Setting this alone no longer authorizes "open"/"renew" execution (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview, including a PURCHASE — see F2-eval R9). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.'),
+    approval_token: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Two-step approval token, required to execute "open"/"renew". Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value — an invented or stale token is rejected.'),
 })
     .strict();
 export function validateStaticIpMgmtParams(args) {
@@ -110,9 +121,9 @@ function optionalField(key, value) {
 /**
  * Unified static ISP IP management tool.
  *
- * "open" and "renew" are WRITE actions gated behind `confirm: true`.
- * Without confirm, they return a preview payload and do NOT hit the API.
- * "list" and "export" are read-only.
+ * "open" and "renew" are WRITE actions gated behind a valid `approval_token`
+ * (see ../utils/approval.ts). Without one, they return a preview payload
+ * plus a fresh token and do NOT hit the API. "list" and "export" are read-only.
  */
 export async function novadaStaticIpMgmt(params, apiKey) {
     switch (params.action) {
@@ -132,7 +143,8 @@ async function handleOpen(params, apiKey) {
     const region = assertDefined(params.region, "region", "open");
     const duration = assertDefined(params.duration, "duration", "open");
     const num = assertDefined(params.num, "num", "open");
-    if (params.confirm !== true) {
+    const openGate = evaluateApprovalGate(params, "static_ip_open");
+    if (!openGate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",
             action: "static_ip_open",
@@ -144,7 +156,10 @@ async function handleOpen(params, apiKey) {
                 duration_label: DURATION_LABELS[duration],
                 num,
             },
-            agent_instruction: "This is a WRITE action that purchases static ISP IPs on the user's Novada account. Show the preview (IP type, region, duration, quantity) to the human user. Only re-call with the same parameters PLUS `confirm: true` after explicit approval.",
+            approval_token: openGate.approvalToken,
+            expires_at: new Date(openGate.expiresAt).toISOString(),
+            expires_in_seconds: openGate.expiresInSeconds,
+            agent_instruction: "This is a WRITE action that purchases static ISP IPs on the user's Novada account. Show the preview (IP type, region, duration, quantity) to the human user. To execute, call again with the EXACT SAME parameters plus `approval_token` set to the value above (valid 10 minutes). `confirm: true` alone does nothing — it is deprecated and ignored.",
         }, null, 2);
     }
     const body = { ip_type, region, duration, num };
@@ -159,7 +174,8 @@ async function handleOpen(params, apiKey) {
 async function handleRenew(params, apiKey) {
     const renew_ip_list = assertDefined(params.renew_ip_list, "renew_ip_list", "renew");
     const duration = assertDefined(params.duration, "duration", "renew");
-    if (params.confirm !== true) {
+    const renewGate = evaluateApprovalGate(params, "static_ip_renew");
+    if (!renewGate.authorized) {
         const ipCount = renew_ip_list.split(",").filter(Boolean).length;
         return JSON.stringify({
             status: "confirmation_required",
@@ -170,7 +186,10 @@ async function handleRenew(params, apiKey) {
                 duration,
                 duration_label: DURATION_LABELS[duration],
             },
-            agent_instruction: "This is a WRITE action that renews static ISP IPs on the user's Novada account. Show the preview (IP list, count, duration) to the human user. Only re-call with the same parameters PLUS `confirm: true` after explicit approval.",
+            approval_token: renewGate.approvalToken,
+            expires_at: new Date(renewGate.expiresAt).toISOString(),
+            expires_in_seconds: renewGate.expiresInSeconds,
+            agent_instruction: "This is a WRITE action that renews static ISP IPs on the user's Novada account. Show the preview (IP list, count, duration) to the human user. To execute, call again with the EXACT SAME parameters plus `approval_token` set to the value above (valid 10 minutes). `confirm: true` alone does nothing — it is deprecated and ignored.",
         }, null, 2);
     }
     const body = { renew_ip_list, duration };

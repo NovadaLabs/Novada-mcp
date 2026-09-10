@@ -19,6 +19,7 @@ export declare const IpWhitelistParamsSchema: z.ZodObject<{
     ips: z.ZodOptional<z.ZodString>;
     id: z.ZodOptional<z.ZodString>;
     confirm: z.ZodOptional<z.ZodLiteral<true>>;
+    approval_token: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 export type IpWhitelistParams = z.infer<typeof IpWhitelistParamsSchema>;
 export declare function validateIpWhitelistParams(args: Record<string, unknown> | undefined): IpWhitelistParams;

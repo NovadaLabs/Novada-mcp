@@ -4,8 +4,10 @@ import https from "https";
 import { rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js";
 import { saveOutput } from "../utils/output.js";
+import { telemetryHeaders } from "../utils/http.js";
 import { novadaExtract } from "./extract.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
+import { wrapUntrusted } from "../utils/untrusted.js";
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
 const QUERY_MAX_LENGTH = 500;
 /**
@@ -188,6 +190,7 @@ export async function submitSearchScrapeTask(apiKey, scraperName, scraperId, que
         headers: {
             "Authorization": `Bearer ${apiKey}`,
             "Content-Type": "application/x-www-form-urlencoded",
+            ...telemetryHeaders("search"), // NOV-321: mark MCP-originated so the backend can log it (live submit path — search + research)
         },
         timeout: 60000,
         httpsAgent: keepAliveAgent,
@@ -253,7 +256,7 @@ export async function pollSearchResult(apiKey, taskId) {
     // enter the backoff loop (100ms first interval). Removing the 300ms fixed pre-wait
     // saves ~300ms on the slow path and has zero cost on the fast path.
     while (Date.now() < deadline) {
-        const resp = await axios.get(url, { timeout: 30000, httpsAgent: keepAliveAgent });
+        const resp = await axios.get(url, { timeout: 30000, httpsAgent: keepAliveAgent, headers: telemetryHeaders("search") });
         const body = resp.data;
         // Pending: exponential backoff capped at 1000ms (was 2000ms).
         // Backend processing is typically 1–3s so a 1000ms cap gives good coverage
@@ -709,11 +712,17 @@ export async function novadaSearch(params, apiKey, options) {
             result_count: reranked.length,
             results: reranked.map((r, i) => {
                 const url = r.url || r.link;
+                // G-2: wrap the snippet (free-text body from the SERP) — not `title`, which
+                // is short markdown/JSON-anchor text with lower prose-injection surface and,
+                // in the markdown branch below, sits inside a `[title](url)` link where the
+                // multi-line delimiter would corrupt the link syntax. `rank`/`url`/`published`
+                // are our own or purely structural fields, never wrapped.
+                const rawSnippet = r.description || r.snippet || "";
                 const result = {
                     rank: i + 1,
                     title: r.title || "Untitled",
                     url: url ? decodeBingRedirect(url) : null,
-                    snippet: r.description || r.snippet || "",
+                    snippet: rawSnippet ? wrapUntrusted(rawSnippet, url || "search result") : "",
                 };
                 if (r.published || r.date)
                     result.published = r.published || r.date;
@@ -839,7 +848,9 @@ export async function novadaSearch(params, apiKey, options) {
         lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
         if (r.published || r.date)
             lines.push(`published: ${r.published || r.date}`);
-        lines.push(cleanSnippet);
+        // G-2: "No description" is OUR fallback (no fetched text exists) — leave it
+        // unwrapped. A genuine snippet is fetched-from-web free text.
+        lines.push(cleanSnippet === "No description" ? cleanSnippet : wrapUntrusted(cleanSnippet, url));
         // extracted_content is always a string here (markdown path): either raw text, raw JSON string,
         // or null. The cast reflects this — the object case only arises in the JSON output path above.
         const rExt = r;

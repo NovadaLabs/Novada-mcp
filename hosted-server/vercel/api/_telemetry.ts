@@ -165,6 +165,7 @@ const FAILURE_CLASS_MIRROR: Record<NovadaErrorCode, FailureClass> = {
   [NovadaErrorCode.API_DOWN]:            "transient",
   [NovadaErrorCode.WRONG_TARGET]:        "permanent",
   [NovadaErrorCode.INVALID_PARAMS]:      "permanent",
+  [NovadaErrorCode.PARSE_FAILED]:        "permanent",
   [NovadaErrorCode.PRODUCT_UNAVAILABLE]: "permanent",
   [NovadaErrorCode.TASK_NOT_FOUND]:      "permanent",
   [NovadaErrorCode.TASK_PENDING]:        "transient",

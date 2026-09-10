@@ -24,7 +24,7 @@ export declare const WALMART_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             product_by_keyword: "product_by_keyword";
             product_by_category_url: "product_by_category_url";
@@ -44,7 +44,7 @@ export declare const WALMART_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "product_by_keyword" | "product_by_category_url" | "product_by_url_and_zipcode" | "product_by_sku" | "product_by_url";
         params: Record<string, unknown>;
@@ -63,7 +63,7 @@ export declare const WALMART_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"product_by_keyword" | "product_by_category_url" | "product_by_url_and_zipcode" | "product_by_sku" | "product_by_url">;
 };
-export declare const ScrapeWalmartParamsSchema: z.ZodObject<{
+export declare const ScrapeWalmartParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         product_by_keyword: "product_by_keyword";
         product_by_category_url: "product_by_category_url";
@@ -83,7 +83,7 @@ export declare const ScrapeWalmartParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeWalmartParams = z.infer<typeof ScrapeWalmartParamsSchema>;
 export declare function validateScrapeWalmartParams(args: Record<string, unknown> | undefined): ScrapeWalmartParams;
 /**

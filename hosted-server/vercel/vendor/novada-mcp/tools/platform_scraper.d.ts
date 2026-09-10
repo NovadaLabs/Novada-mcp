@@ -80,7 +80,7 @@ export declare function createPlatformScraperTool<TOpName extends string>(config
         };
     };
     registryEntry: ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{ [k_1 in TOpName]: k_1; } extends infer T ? { [k in keyof T]: T[k]; } : never>;
         params: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
         limit: z.ZodDefault<z.ZodNumber>;
@@ -94,7 +94,7 @@ export declare function createPlatformScraperTool<TOpName extends string>(config
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: ({ [k_1 in TOpName]: k_1; } extends infer T_1 ? { [k in keyof T_1]: T_1[k]; } : never)[TOpName];
         params: Record<string, unknown>;
@@ -118,6 +118,13 @@ export interface DispatchableScraperTool {
     toolDefinition: PlatformScraperToolDefinition;
     registryEntry: ToolMeta;
     dispatch: (args: Record<string, unknown>, apiKey: string) => Promise<string>;
+    /** Schema-only validation (no network call, no handler invocation) — exposed
+     *  separately from `dispatch` so callers (tests, class-sweep guards) can assert
+     *  parsing/aliasing behavior (e.g. taskId→task_id, DE-1) on a platform's real
+     *  ParamsSchema without paying for a live scrape. Widened to
+     *  `Record<string, unknown>` for the same reason `dispatch` is widened below —
+     *  only the OUTER shape is uniform across differently-typed per-platform params. */
+    validateParams: (args: Record<string, unknown> | undefined) => Record<string, unknown>;
     /** Read-only accessor to the platform's declarative config (platform domain +
      *  friendly-operation-name -> scraperId map), widened to `PlatformScraperConfig`'s
      *  default `string` operation-name type here — only the OUTER shape is uniform,

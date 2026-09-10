@@ -25,7 +25,7 @@ export declare const FACEBOOK_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             comments_by_post_url: "comments_by_post_url";
             post_by_url: "post_by_url";
@@ -46,7 +46,7 @@ export declare const FACEBOOK_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "comments_by_post_url" | "post_by_url" | "profile_by_url" | "events_by_search_url" | "event_by_url" | "events_by_list_url";
         params: Record<string, unknown>;
@@ -65,7 +65,7 @@ export declare const FACEBOOK_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"comments_by_post_url" | "post_by_url" | "profile_by_url" | "events_by_search_url" | "event_by_url" | "events_by_list_url">;
 };
-export declare const ScrapeFacebookParamsSchema: z.ZodObject<{
+export declare const ScrapeFacebookParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         comments_by_post_url: "comments_by_post_url";
         post_by_url: "post_by_url";
@@ -86,7 +86,7 @@ export declare const ScrapeFacebookParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeFacebookParams = z.infer<typeof ScrapeFacebookParamsSchema>;
 export declare function validateScrapeFacebookParams(args: Record<string, unknown> | undefined): ScrapeFacebookParams;
 /**

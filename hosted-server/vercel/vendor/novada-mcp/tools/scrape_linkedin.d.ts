@@ -23,7 +23,7 @@ export declare const LINKEDIN_SCRAPER_TOOL: {
         };
     };
     registryEntry: import("./registry.js").ToolMeta;
-    ParamsSchema: z.ZodObject<{
+    ParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         operation: z.ZodEnum<{
             jobs_search: "jobs_search";
             jobs_by_search_url: "jobs_by_search_url";
@@ -42,7 +42,7 @@ export declare const LINKEDIN_SCRAPER_TOOL: {
         }>>;
         task_id: z.ZodOptional<z.ZodString>;
         project: z.ZodOptional<z.ZodString>;
-    }, z.core.$strip>;
+    }, z.core.$strip>>;
     validateParams: (args: Record<string, unknown> | undefined) => {
         operation: "jobs_search" | "jobs_by_search_url" | "job_by_url" | "company_by_url";
         params: Record<string, unknown>;
@@ -61,7 +61,7 @@ export declare const LINKEDIN_SCRAPER_TOOL: {
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<"jobs_search" | "jobs_by_search_url" | "job_by_url" | "company_by_url">;
 };
-export declare const ScrapeLinkedinParamsSchema: z.ZodObject<{
+export declare const ScrapeLinkedinParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
     operation: z.ZodEnum<{
         jobs_search: "jobs_search";
         jobs_by_search_url: "jobs_by_search_url";
@@ -80,7 +80,7 @@ export declare const ScrapeLinkedinParamsSchema: z.ZodObject<{
     }>>;
     task_id: z.ZodOptional<z.ZodString>;
     project: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
+}, z.core.$strip>>;
 export type ScrapeLinkedinParams = z.infer<typeof ScrapeLinkedinParamsSchema>;
 export declare function validateScrapeLinkedinParams(args: Record<string, unknown> | undefined): ScrapeLinkedinParams;
 /**

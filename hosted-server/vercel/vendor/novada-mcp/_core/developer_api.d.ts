@@ -38,6 +38,14 @@ export interface ParallelResult<T> {
     ok: boolean;
     data?: T;
     error?: string;
+    /**
+     * Upstream developer-api business `code` from the envelope, when the
+     * failure carries one (see NovadaError.businessCode). Lets callers (e.g.
+     * plan_balance_all's `isUnavailable` classifier) key off the STRUCTURED
+     * code — e.g. 11009 = "product not provisioned" for flow-balance endpoints —
+     * instead of pattern-matching `error`.
+     */
+    code?: number;
 }
 export declare function devApiParallel<T = unknown>(calls: Array<{
     key: string;
