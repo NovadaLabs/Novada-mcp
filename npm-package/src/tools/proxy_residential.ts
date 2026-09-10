@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { resolveProxyCredentials } from "../utils/credentials.js";
+import { assertFlowLedgerActive } from "./proxy_preflight.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,13 @@ function buildResidentialUsername(user: string, params: ProxyResidentialParams):
  * making them the best choice for anti-bot protected pages and geo-restricted content.
  */
 export async function novadaProxyResidential(params: ProxyResidentialParams): Promise<string> {
+  // F11: same table-driven flow-ledger preflight as novada_proxy — SDK direct
+  // callers must not receive credentials for a 0/expired plan either (class,
+  // not instance: every entry point that issues flow-plan credentials gates on
+  // the shared FLOW_BALANCE_ENDPOINTS table). Fail-closed only on a positive
+  // bad signal; indeterminate lookups fail open.
+  await assertFlowLedgerActive("residential", "novada_proxy_residential");
+
   // INC-197/198: Use resolveProxyCredentials (auto-fetches via account API on hosted)
   // and return friendly text (not NovadaError) when not configured.
   const proxyCreds = await resolveProxyCredentials();

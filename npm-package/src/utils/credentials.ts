@@ -239,12 +239,20 @@ const UNIVERSAL_PROXY_ENDPOINT = "proxy.novada.pro:7777";
  *    gateway proxy.novada.pro:7777. This is the hosted-server path: the caller supplies
  *    only an API key, we derive a working {user,pass,endpoint} entirely from it.
  *
+ * `source` tells the caller HOW the credentials were obtained — "direct"
+ * (env vars / SDK-scoped store, bypassing the mgmt API: the account ledger for
+ * them is unknowable from here) vs "auto_fetched" (derived from the API key,
+ * so they belong to the same account the flow-ledger preflight reads). F11's
+ * disclosure requirements hinge on this distinction.
+ *
  * @param apiKey - Caller's API key. Takes priority over the store-scoped key and NOVADA_API_KEY,
  *   so hosted-server requests are billed to the caller, not the server account.
  */
-export async function resolveProxyCredentials(apiKey?: string): Promise<{ user: string; pass: string; endpoint: string } | null> {
+export async function resolveProxyCredentials(
+  apiKey?: string,
+): Promise<{ user: string; pass: string; endpoint: string; source: "direct" | "auto_fetched" } | null> {
   const direct = getProxyCredentials();
-  if (direct) return direct;
+  if (direct) return { ...direct, source: "direct" };
 
   // Prefer the explicit arg, then the request-scoped store key (hosted pass-through),
   // then the server-level env var. Without the store fallback, hosted proxy calls would
@@ -259,7 +267,7 @@ export async function resolveProxyCredentials(apiKey?: string): Promise<{ user: 
   const fetched = await fetchProxySubAccountCredentials(effectiveApiKey);
   if (!fetched) return null;
 
-  return { user: fetched.account, pass: fetched.password, endpoint };
+  return { user: fetched.account, pass: fetched.password, endpoint, source: "auto_fetched" };
 }
 
 /**

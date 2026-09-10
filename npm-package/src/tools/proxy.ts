@@ -2,8 +2,21 @@ import type { ProxyParams } from "./types.js";
 import { resolveProxyCredentials } from "../utils/credentials.js";
 import { novadaProxyStatic } from "./proxy_static.js";
 import { novadaProxyDedicated } from "./proxy_dedicated.js";
-import { novadaPlanBalanceAll } from "./plan_balance_all.js";
-import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
+import {
+  assertFlowLedgerActive,
+  FLOW_LEDGER_PRODUCTS,
+  URL_PROXY_PLANS,
+  type LedgerPreflight,
+} from "./proxy_preflight.js";
+import {
+  verifyProxyExit,
+  isVerifySupportedRuntime,
+  pickProxyListEntry,
+  DEFAULT_ECHO_TIMEOUT_MS,
+  type ProxyVerifyResult,
+  type ProxyVerifyTarget,
+  type VerifyFailureClass,
+} from "./proxy_verify.js";
 
 /**
  * Build Novada proxy username with targeting options.
@@ -69,111 +82,136 @@ function appendCityWarningsAndCurlSnippet(
   return parts.join("");
 }
 
-// ─── C-11 fix: expired/unprovisioned-plan entitlement gate ─────────────────
-// Finding (C-reliability-live.md, C-11): "novada_proxy hands out ready-to-use
-// config for EXPIRED plans with zero warning. type=residential returned
-// rotating-proxy config while the same server's account tool shows Residential
-// EXPIRED 2026-07-08 / 0.0 MB. Agent wires a dead proxy, fails at connect time
-// with no clue." Fix (as recommended by the finding): a cheap entitlement
-// cross-check via plan_balance_all — ONE scoped call to the single product in
-// question — before handing out credentials that would silently fail at
-// connect time.
+// ─── F11 ledger + verification evidence (appended to every issued config) ────
 //
-// Scope: only the 4 flow-metered, auto-provisioned zone-based types
-// (residential/isp/mobile/datacenter) — these are the ones plan_balance_all
-// actually tracks (ALL_PRODUCT_KEYS) and the ones whose credentials come from
-// resolveProxyCredentials()'s account-API auto-fetch, which is exactly the
-// path the C-11 finding observed. static/dedicated use a DIFFERENT,
-// user-managed credential model (NOVADA_STATIC_PROXY_LIST /
-// NOVADA_DEDICATED_PROXY_LIST env vars — the user already owns those specific
-// IPs by having configured them), so there is no comparable "is this plan
-// still active" question to ask for them here.
-const FLOW_ENTITLEMENT_TYPES = new Set<ProxyParams["type"]>([
-  "residential", "isp", "mobile", "datacenter",
-]);
+// F11 CONFIRMED 2026-09-10: a key whose residential_flow ledger showed balance
+// 0 (plan expired 2026-07-08) received clean-looking credentials; the gateway
+// accepted auth then refused CONNECT with HTTP 402 — visible only as curl exit
+// 56. Two-part fix:
+//   1. PREFLIGHT (proxy_preflight.ts): before issuing, read the MATCHING
+//      product's flow-ledger row (balance + expire_time) via the shared
+//      FLOW_BALANCE_ENDPOINTS table and REFUSE (fail-closed, full evidence) on
+//      a positive 0/expired/not-provisioned signal. Indeterminate lookups fail
+//      open and are DISCLOSED below instead.
+//   2. VERIFY (proxy_verify.ts): after issuing, run exactly ONE IP-echo request
+//      through the issued proxy (5s timeout, never inside any retry loop) and
+//      put the evidence — exit_ip, org/ASN, country, latency — in the response;
+//      on failure still return the config plus a classified
+//      verification_failed note (402 payment / 407 auth / timeout / …).
 
-const PLAN_LABELS: Record<string, string> = {
-  residential: "Residential",
-  isp: "ISP",
-  mobile: "Mobile",
-  datacenter: "Datacenter",
+const FAILURE_HINTS: Record<VerifyFailureClass, string> = {
+  payment_required:
+    `an exhausted/expired plan is the usual cause — check novada_account(section="plans") ` +
+    `and top up/renew at ${URL_PROXY_PLANS}.`,
+  auth_failed:
+    `credentials were rejected — inspect/regenerate sub-accounts via novada_proxy_account_list, ` +
+    `or fix NOVADA_PROXY_USER/NOVADA_PROXY_PASS.`,
+  timeout:
+    `the gateway did not answer within 5s — could be transient; the config may still work. ` +
+    `Try it yourself (this tool probes exactly once, never retries).`,
+  network_error:
+    `the proxy gateway could not be reached from this machine — check NOVADA_PROXY_ENDPOINT ` +
+    `and local network egress.`,
+  bad_response:
+    `the gateway answered, but not with the echo payload — an intermediary may be interfering; ` +
+    `try the curl line manually.`,
 };
 
-const URL_PROXY_PLANS = "https://dashboard.novada.com/overview/products/";
-
 /**
- * Cap how long the entitlement pre-check is allowed to hold up an otherwise-
- * fast credential-formatting call. plan_balance_all's underlying devApiPost
- * uses a 30s default timeout — too slow to gate a normally-instant tool on. A
- * timeout here degrades to "unknown" (fail OPEN, never fail closed on a slow
- * network) rather than making every proxy call pay up to 30s of latency.
+ * Ledger disclosure line. When the preflight was indeterminate the config is
+ * still issued (fail-open), but the response must say WHY the ledger is
+ * unverified — env-supplied credentials bypass the mgmt API entirely (ledger
+ * unknown by construction), while auto-fetched credentials imply a reachable
+ * account whose ledger lookup happened to fail.
  */
-const ENTITLEMENT_CHECK_TIMEOUT_MS = 5000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      const t = setTimeout(() => reject(new Error(`entitlement check timed out after ${ms}ms`)), ms);
-      // Never keep the process alive just for this timer.
-      (t as unknown as { unref?: () => void }).unref?.();
-    }),
-  ]);
-}
-
-type EntitlementStatus = "active" | "expired" | "unavailable" | "unknown";
-
-/**
- * Check whether the flow-metered plan for `type` is active, using the SAME
- * per-product lookup novada_account section="plans" already exposes (single
- * source of truth — reuses plan_balance_all's expired/unavailable derivation
- * rather than re-implementing the expire_time math here).
- *
- * Fails OPEN by design (returns "unknown", never throws) on anything that
- * ISN'T an explicit expired/not-provisioned signal: no dev-api key configured,
- * network error, malformed response, or a timeout. A diagnostics failure must
- * never break a working credential formatter — this mirrors the codebase's own
- * G-11 precedent (auth fail-open on upstream verification outage).
- */
-async function checkPlanEntitlement(type: ProxyParams["type"]): Promise<EntitlementStatus> {
-  if (!FLOW_ENTITLEMENT_TYPES.has(type)) return "unknown";
-  try {
-    const raw = await withTimeout(
-      novadaPlanBalanceAll({ products: [type as "residential" | "isp" | "mobile" | "datacenter"] } as never),
-      ENTITLEMENT_CHECK_TIMEOUT_MS,
+function ledgerDisclosure(ledger: LedgerPreflight | null, credSource: "direct" | "auto_fetched"): string {
+  if (!ledger) return `unverified — no ledger information available`;
+  if (ledger.status === "active") {
+    return (
+      `${ledger.label} flow ledger (${ledger.ledger}): active — ` +
+      `balance ${ledger.balance_human ?? "n/a"}, expires ${ledger.expires_at ?? "n/a"}`
     );
-    const parsed = JSON.parse(raw) as {
-      per_product?: Record<string, { status?: string; expired?: boolean; unavailable?: boolean }>;
-    };
-    const entry = parsed?.per_product?.[type];
-    if (!entry) return "unknown";
-    if (entry.status === "ok" && entry.expired === true) return "expired";
-    if (entry.status === "error" && entry.unavailable === true) return "unavailable";
-    return "active";
-  } catch {
-    return "unknown";
   }
+  // status === "unknown" (expired/exhausted/unavailable never reach here — they throw)
+  if (credSource === "direct") {
+    return (
+      `unverified — credentials supplied via env, ledger unknown ` +
+      `(preflight needs NOVADA_API_KEY / NOVADA_DEVELOPER_API_KEY and a reachable developer API)`
+    );
+  }
+  return `unverified — ledger lookup failed (${ledger.detail ?? "no detail"})`;
 }
 
+const VERIFY_HEADER =
+  `## Verification (one live IP-echo through this proxy — ~1 KB metered traffic, ~1s; disable with verify=false)`;
+
 /**
- * Throws a structured NovadaError (→ isError:true at the MCP dispatch layer)
- * naming the specific plan + the renew URL + an agent_instruction, instead of
- * silently returning working-looking credentials for a dead plan (C-11).
+ * Build the "## Ledger" + "## Verification" evidence block appended to every
+ * issued config. Runs the echo probe at most ONCE (opt-out via verify=false;
+ * local-stdio runtimes only — hosted runtimes cannot open raw proxied sockets,
+ * so the skip is disclosed instead of risking a false negative).
  */
-function throwExpiredPlanError(type: ProxyParams["type"], entitlement: "expired" | "unavailable"): never {
-  const label = PLAN_LABELS[type] ?? type;
-  const reason = entitlement === "expired" ? "EXPIRED" : "not provisioned on this account";
-  throw new NovadaError({
-    code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
-    message: `Your ${label} proxy plan is ${reason} — Novada will not route traffic for it. Returning credentials would silently fail at connect time.`,
-    agent_instruction:
-      `Do NOT use novada_proxy(type="${type}") right now — the ${label} plan is ${reason.toLowerCase()}, ` +
-      `so any credentials returned would fail to connect with no further clue. Tell the user to renew/purchase ` +
-      `the ${label} plan at ${URL_PROXY_PLANS}, then retry novada_proxy. To confirm plan status across ALL ` +
-      `ledgers (Wallet + every product) before retrying, call novada_account(section="plans").`,
-    retryable: false,
-    detail: `plan=${label} type=${type} status=${entitlement}`,
-  });
+async function buildEvidenceBlock(opts: {
+  ledgerLine: string;
+  wantVerify: boolean;
+  target: ProxyVerifyTarget | null;
+  requestedCountry?: string;
+}): Promise<string> {
+  const lines: string[] = [`## Ledger (plan preflight)`, opts.ledgerLine, ``, VERIFY_HEADER];
+
+  if (!opts.wantVerify) {
+    lines.push(`verification: skipped (verify=false — no live check performed)`);
+  } else if (!isVerifySupportedRuntime()) {
+    lines.push(
+      `verification: skipped (hosted runtime — raw proxied connections are unavailable here; ` +
+        `run the curl line locally to verify)`,
+    );
+  } else if (!opts.target) {
+    lines.push(`verification: skipped (no verifiable credential entry resolved)`);
+  } else {
+    // Exactly ONE probe — never retried, never inside a loop.
+    let result: ProxyVerifyResult;
+    try {
+      result = await verifyProxyExit(opts.target, DEFAULT_ECHO_TIMEOUT_MS);
+    } catch (err) {
+      // verifyProxyExit resolves on every expected path; a throw is a prober
+      // bug — verification must never break issuing.
+      result = {
+        verified: false,
+        failure_class: "network_error",
+        detail: `prober failed unexpectedly: ${err instanceof Error ? err.message : String(err)}`,
+        latency_ms: 0,
+      };
+    }
+    if (result.verified) {
+      lines.push(`status: VERIFIED — the proxy routed a live request`, `exit_ip: ${result.exit_ip}`);
+      if (result.org || result.asn) {
+        lines.push(`org: ${[result.org, result.asn ? `(${result.asn})` : ""].filter(Boolean).join(" ")}`);
+      }
+      if (result.country) {
+        lines.push(`country: ${result.country}${result.country_code ? ` (${result.country_code})` : ""}`);
+      }
+      lines.push(`latency_ms: ${result.latency_ms}`);
+      if (
+        opts.requestedCountry &&
+        result.country_code &&
+        result.country_code.toLowerCase() !== opts.requestedCountry.toLowerCase()
+      ) {
+        lines.push(
+          `warning: exit country ${result.country_code} does not match requested country ` +
+            `${opts.requestedCountry} — geo-targeting may not have applied`,
+        );
+      }
+    } else {
+      lines.push(
+        `status: verification_failed (${result.failure_class})`,
+        `detail: ${result.detail}${result.http_status !== undefined ? ` [HTTP ${result.http_status}]` : ""}`,
+        `note: the configuration above is still returned — it may not work until the cause is fixed.`,
+        `hint: ${FAILURE_HINTS[result.failure_class]}`,
+      );
+    }
+  }
+  return lines.join("\n");
 }
 
 /**
@@ -183,17 +221,14 @@ function throwExpiredPlanError(type: ProxyParams["type"], entitlement: "expired"
  * bypass geo-restrictions, or maintain IP consistency across a session.
  */
 export async function novadaProxy(params: ProxyParams): Promise<string> {
-  // C-11 fix: refuse to hand out credentials for a plan we can positively
-  // confirm is expired or not provisioned. Runs BEFORE the static/dedicated
-  // branch checks below (those types are exempt — see FLOW_ENTITLEMENT_TYPES'
-  // doc comment) so it only ever gates the auto-provisioned zone-based path.
-  if (FLOW_ENTITLEMENT_TYPES.has(params.type)) {
-    const entitlement = await checkPlanEntitlement(params.type);
-    if (entitlement === "expired" || entitlement === "unavailable") {
-      throwExpiredPlanError(params.type, entitlement);
-    }
-    // "active" or "unknown" (couldn't verify) — proceed. "unknown" is a
-    // deliberate fail-open: we only ever BLOCK on a positive signal.
+  // F11: refuse to hand out credentials when the MATCHING product's flow
+  // ledger positively says the plan cannot route (balance 0 / expired / not
+  // provisioned). Table-driven: static/dedicated have no flow ledger row and
+  // are never looked up (per-IP, user-managed credential model). Indeterminate
+  // lookups fail OPEN — disclosed via ledgerDisclosure() below.
+  let ledger: LedgerPreflight | null = null;
+  if (FLOW_LEDGER_PRODUCTS.has(params.type)) {
+    ledger = await assertFlowLedgerActive(params.type); // throws with full evidence on a positive bad signal
   }
 
   // F1: On the hosted door (Vercel), when the caller did NOT explicitly pass a
@@ -207,6 +242,10 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
   // process.env.VERCEL || process.env.VERCEL_ENV here (review LOW-2 removed the
   // dead ternary that anchored this).
 
+  // Verification defaults ON; params.verify is optional in the schema so
+  // `undefined` (caller left it unset) means "verify".
+  const wantVerify = params.verify !== false;
+
   // F2: city is silently dropped for static and dedicated — warn the caller.
   const cityWarnings: string[] = [];
   if ((params.type === "static" || params.type === "dedicated") && params.city) {
@@ -217,13 +256,28 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
 
   // 0.9.4: static/dedicated are per-IP products with their own credential model —
   // delegate to their specialized handlers instead of the zone-based path.
-  if (params.type === "static") {
-    const result = await novadaProxyStatic({ country: params.country ?? "us", session_id: params.session_id ?? "default", format: effectiveFormat });
-    return appendCityWarningsAndCurlSnippet(result, cityWarnings, effectiveFormat);
-  }
-  if (params.type === "dedicated") {
-    const result = await novadaProxyDedicated({ session_id: params.session_id ?? "default", format: effectiveFormat });
-    return appendCityWarningsAndCurlSnippet(result, cityWarnings, effectiveFormat);
+  // Verification probes the SAME list entry the handler surfaces (the first
+  // valid line); when no entry resolves the handler returned a
+  // configuration_required message — nothing was issued, nothing to verify.
+  if (params.type === "static" || params.type === "dedicated") {
+    const result =
+      params.type === "static"
+        ? await novadaProxyStatic({ country: params.country ?? "us", session_id: params.session_id ?? "default", format: effectiveFormat })
+        : await novadaProxyDedicated({ session_id: params.session_id ?? "default", format: effectiveFormat });
+    const body = appendCityWarningsAndCurlSnippet(result, cityWarnings, effectiveFormat);
+    const entry = pickProxyListEntry(
+      params.type === "static" ? process.env.NOVADA_STATIC_PROXY_LIST : process.env.NOVADA_DEDICATED_PROXY_LIST,
+    );
+    if (!entry) return body;
+    const evidence = await buildEvidenceBlock({
+      ledgerLine:
+        `not applicable — type="${params.type}" is a per-IP product (user-managed credential list), ` +
+        `no flow ledger to preflight`,
+      wantVerify,
+      target: entry,
+      requestedCountry: params.type === "static" ? params.country : undefined,
+    });
+    return `${body}\n\n${evidence}`;
   }
   // INC-198: Use resolveProxyCredentials() which auto-fetches via account API
   // when only NOVADA_PROXY_ENDPOINT is set (no user/pass).
@@ -291,8 +345,24 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
   const proxyHost = endpointParts[0];
   const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
 
+  // VISIBILITY: probe the REAL issued config — the full username with
+  // zone/region/session suffix, against the configured endpoint — exactly once.
+  // Credentials go only into the probe's Proxy-Authorization header; the
+  // returned evidence contains no credential bytes.
+  const evidence = await buildEvidenceBlock({
+    ledgerLine: ledgerDisclosure(ledger, proxyCreds.source),
+    wantVerify,
+    target: {
+      host: proxyHost,
+      port: proxyPort,
+      username: buildProxyUsername(proxyUser, params),
+      password: proxyPass,
+    },
+    requestedCountry: appliedCountry,
+  });
+
   if (effectiveFormat === "env") {
-    return [
+    const formatted = [
       `## Proxy Configuration (Shell Environment)`,
       `type: ${typeLabel}`,
       targetingLine,
@@ -313,10 +383,11 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
       `## as curl:`,
       `curl --proxy "${proxyUrlShell}" https://example.com`,
     ].filter(l => l !== "").join("\n");
+    return `${formatted}\n\n${evidence}`;
   }
 
   if (effectiveFormat === "curl") {
-    return [
+    const formatted = [
       `## Proxy Configuration (curl)`,
       `type: ${typeLabel}`,
       `proxy_url: ${maskedUrl}`,
@@ -329,10 +400,11 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
       `- Add this flag to any curl command to route through the proxy.`,
       `- For multi-step workflows needing the same IP, add session_id param.`,
     ].join("\n");
+    return `${formatted}\n\n${evidence}`;
   }
 
   // Default: url format
-  return [
+  const formatted = [
     `## Proxy Configuration`,
     `type: ${typeLabel}`,
     targetingLine,
@@ -357,4 +429,5 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
     `- For consistent IP across a workflow, set session_id (e.g. "my-session-1").`,
     `- For web extraction tasks, novada_extract handles proxy routing automatically.`,
   ].filter(l => l !== "").join("\n");
+  return `${formatted}\n\n${evidence}`;
 }

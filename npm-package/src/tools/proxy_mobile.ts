@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { resolveProxyCredentials } from "../utils/credentials.js";
+import { assertFlowLedgerActive } from "./proxy_preflight.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,10 @@ function buildMobileUsername(user: string, params: ProxyMobileParams): string {
  * content to mobile vs. desktop users.
  */
 export async function novadaProxyMobile(params: ProxyMobileParams): Promise<string> {
+  // F11: same table-driven flow-ledger preflight as novada_proxy (see
+  // proxy_preflight.ts) — fail-closed on a positive 0/expired signal only.
+  await assertFlowLedgerActive("mobile", "novada_proxy_mobile");
+
   // INC-197/198: Use resolveProxyCredentials + friendly error format
   const proxyCreds = await resolveProxyCredentials();
 

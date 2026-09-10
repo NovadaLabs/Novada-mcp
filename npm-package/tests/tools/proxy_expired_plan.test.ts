@@ -22,9 +22,31 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../../src/tools/plan_balance_all.js", () => ({
-  novadaPlanBalanceAll: vi.fn(),
-}));
+// PARTIAL mock (F11): only the network entry point is mocked — the
+// FLOW_BALANCE_ENDPOINTS table and deriveBalanceEvidence stay real because the
+// preflight (proxy_preflight.ts) is driven by them.
+vi.mock("../../src/tools/plan_balance_all.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/tools/plan_balance_all.js")>();
+  return { ...actual, novadaPlanBalanceAll: vi.fn() };
+});
+
+// F11 visibility follow-up: novadaProxy now runs a one-shot IP-echo probe on
+// every issued config. Mock it so this file never opens a socket.
+vi.mock("../../src/tools/proxy_verify.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/tools/proxy_verify.js")>();
+  return {
+    ...actual,
+    verifyProxyExit: vi.fn(async () => ({
+      verified: true as const,
+      exit_ip: "203.0.113.7",
+      org: "ExampleNet",
+      asn: "AS64500 ExampleNet",
+      country: "United States",
+      country_code: "US",
+      latency_ms: 42,
+    })),
+  };
+});
 
 import { novadaPlanBalanceAll } from "../../src/tools/plan_balance_all.js";
 import { classifyError, NovadaError } from "../../src/_core/errors.js";

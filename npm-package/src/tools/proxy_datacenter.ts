@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { resolveProxyCredentials } from "../utils/credentials.js";
+import { assertFlowLedgerActive } from "./proxy_preflight.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,10 @@ function buildDatacenterUsername(user: string, params: ProxyDatacenterParams): s
  * (APIs, public data feeds, non-protected pages).
  */
 export async function novadaProxyDatacenter(params: ProxyDatacenterParams): Promise<string> {
+  // F11: same table-driven flow-ledger preflight as novada_proxy (see
+  // proxy_preflight.ts) — fail-closed on a positive 0/expired signal only.
+  await assertFlowLedgerActive("datacenter", "novada_proxy_datacenter");
+
   // INC-197/198: Use resolveProxyCredentials + friendly error format
   const proxyCreds = await resolveProxyCredentials();
 

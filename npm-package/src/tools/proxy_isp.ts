@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { resolveProxyCredentials } from "../utils/credentials.js";
+import { assertFlowLedgerActive } from "./proxy_preflight.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,10 @@ function buildIspUsername(user: string, params: ProxyIspParams): string {
  * that distinguishes real users from datacenter IPs.
  */
 export async function novadaProxyIsp(params: ProxyIspParams): Promise<string> {
+  // F11: same table-driven flow-ledger preflight as novada_proxy (see
+  // proxy_preflight.ts) — fail-closed on a positive 0/expired signal only.
+  await assertFlowLedgerActive("isp", "novada_proxy_isp");
+
   // INC-197/198: Use resolveProxyCredentials + friendly error format
   const proxyCreds = await resolveProxyCredentials();
 

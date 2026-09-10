@@ -417,6 +417,8 @@ export const ProxyParamsSchema = withCamelCaseAliases(z.object({
     .describe("Session ID for sticky routing — same session_id returns same IP across requests."),
   format: z.enum(["url", "env", "curl"]).default("url")
     .describe("Output SHAPE of the returned proxy config — not a data content format. 'url': proxy URL string (default). 'env': shell export commands. 'curl': curl --proxy flag."),
+  verify: z.boolean().optional()
+    .describe("Verify the issued config with ONE live IP-echo request routed through the proxy (default true). Appends evidence — exit IP, org/ASN, country, latency — to the response; failures are classified (402 payment / 407 auth / timeout) WITHOUT withholding the config. Costs ~1 KB of metered proxy traffic and ~1s of latency per call — set false to skip. Local/stdio runtimes only; skipped automatically (and disclosed) on hosted runtimes."),
 }), { sessionId: "session_id" });
 
 export type ProxyParams = z.infer<typeof ProxyParamsSchema>;

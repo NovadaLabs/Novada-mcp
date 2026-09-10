@@ -1,4 +1,24 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+
+// F11 visibility: novadaProxy now runs a one-shot IP-echo probe on every
+// issued config (verify defaults ON). Mock the prober so this file never
+// opens a socket; its behavior is covered by proxy_verify*.test.ts.
+vi.mock("../../src/tools/proxy_verify.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/tools/proxy_verify.js")>();
+  return {
+    ...actual,
+    verifyProxyExit: vi.fn(async () => ({
+      verified: true as const,
+      exit_ip: "203.0.113.7",
+      org: "ExampleNet",
+      asn: "AS64500 ExampleNet",
+      country: "United States",
+      country_code: "US",
+      latency_ms: 42,
+    })),
+  };
+});
+
 import { novadaProxy } from "../../src/tools/proxy.js";
 import { novadaProxyStatic } from "../../src/tools/proxy_static.js";
 import { novadaProxyDedicated } from "../../src/tools/proxy_dedicated.js";

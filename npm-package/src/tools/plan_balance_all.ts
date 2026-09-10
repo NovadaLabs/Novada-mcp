@@ -13,13 +13,21 @@ import { devApiParallel, devApiPost } from "../_core/developer_api.js";
 import { NovadaError } from "../_core/errors.js";
 
 // ─── Endpoint table ──────────────────────────────────────────────────────────
-
-const FLOW_BALANCE_ENDPOINTS = [
-  { key: "residential", path: "/v1/residential_flow/balance" },
-  { key: "isp",         path: "/v1/isp_flow/balance" },
-  { key: "mobile",      path: "/v1/mobile_flow/mobile_flow_balance" },
-  { key: "datacenter",  path: "/v1/dc_flow/balance" },
-  { key: "capture",     path: "/v1/capture/get_balance" },
+//
+// THE product → flow-ledger table — the single source of truth for every
+// callsite that needs "which ledger backs this product" (this file's balance
+// fan-out AND the F11 credential preflight in tools/proxy_preflight.ts).
+// CLASS-shaped on purpose: adding a new flow-metered product is a new ROW here
+// (key + path + label + proxy flag) — never a new branch anywhere else.
+//   label — human name used in refusal evidence ("Your Residential proxy plan…").
+//   proxy — true when novada_proxy(type=key) issues credentials billed against
+//           this ledger (capture is flow-metered but not a proxy product).
+export const FLOW_BALANCE_ENDPOINTS = [
+  { key: "residential", path: "/v1/residential_flow/balance",        label: "Residential", proxy: true },
+  { key: "isp",         path: "/v1/isp_flow/balance",                label: "ISP",         proxy: true },
+  { key: "mobile",      path: "/v1/mobile_flow/mobile_flow_balance", label: "Mobile",      proxy: true },
+  { key: "datacenter",  path: "/v1/dc_flow/balance",                 label: "Datacenter",  proxy: true },
+  { key: "capture",     path: "/v1/capture/get_balance",             label: "Capture",     proxy: false },
 ] as const;
 
 const ALL_PRODUCT_KEYS = ["residential", "isp", "mobile", "datacenter", "static", "capture"] as const;
@@ -54,6 +62,10 @@ interface PerProductOk {
   expired?: boolean;
   /** Human-readable expiry date (ISO YYYY-MM-DD) — derived from numeric expire_time. */
   expires_at_human?: string;
+  /** True when the plan has zero remaining balance (shape-aware — see deriveBalanceEvidence). */
+  exhausted?: boolean;
+  /** Human-readable remaining balance ("3.5 GB", "12/100 req", "132.91 credits"). */
+  balance_human?: string;
 }
 interface PerProductError {
   status: "error";
@@ -76,6 +88,35 @@ function enrichBalance(raw: unknown): { expired?: boolean; expires_at_human?: st
   const expired = exp < nowSec;
   const expires_at_human = new Date(exp * 1000).toISOString().slice(0, 10);
   return { expired, expires_at_human };
+}
+
+/**
+ * Shape-aware "how much is left" derivation — the F11 evidence source. The
+ * developer API returns three balance shapes (see account.ts's renderer for
+ * the live-confirmed catalog):
+ *   1. bare number                     — capture credits
+ *   2. { total, used, ... }            — mobile request-count plans
+ *   3. { balance: <bytes>, ... }       — residential/isp/datacenter bytes plans
+ * `exhausted` means "zero remaining" — the ledger state that makes the gateway
+ * accept auth and then refuse to route (HTTP 402, curl exit 56) while the
+ * credentials themselves still look perfectly valid.
+ */
+export function deriveBalanceEvidence(raw: unknown): { exhausted?: boolean; balance_human?: string } {
+  if (typeof raw === "number") {
+    return { exhausted: raw <= 0, balance_human: `${raw.toFixed(2)} credits` };
+  }
+  if (raw === null || typeof raw !== "object") return {};
+  const b = raw as Record<string, unknown>;
+  if (typeof b.total === "number" && typeof b.used === "number") {
+    // total=0 means unprovisioned/fresh — not exhausted; only flag when total>0 && used>=total
+    return { exhausted: b.total > 0 && b.used >= b.total, balance_human: `${b.used}/${b.total} req` };
+  }
+  if (typeof b.balance === "number") {
+    const mb = b.balance / (1024 * 1024);
+    const balance_human = mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`;
+    return { exhausted: b.balance <= 0, balance_human };
+  }
+  return {};
 }
 
 /**
@@ -178,7 +219,7 @@ export async function novadaPlanBalanceAll(
   for (const r of flowResults) {
     if (r.ok) {
       const enriched = enrichBalance(r.data);
-      summary[r.key] = { status: "ok", balance: r.data, ...enriched };
+      summary[r.key] = { status: "ok", balance: r.data, ...enriched, ...deriveBalanceEvidence(r.data) };
       if (enriched.expired) expired_products.push(r.key);
       else active_products.push(r.key);
     } else {

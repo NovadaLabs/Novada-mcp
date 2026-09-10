@@ -171,8 +171,11 @@ describe("resolveProxyCredentials — apiKey threading (L3 unified-key)", () => 
     process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
 
     // Should return env-based creds without making a network call.
+    // F11: `source` discloses HOW creds were obtained ("direct" = env/SDK —
+    // the flow-ledger for them is unknowable, so proxy.ts labels the ledger
+    // "unverified … supplied via env" when the preflight is indeterminate).
     const result = await resolveProxyCredentials(undefined);
-    expect(result).toEqual({ user: "user", pass: "pass", endpoint: "proxy.example.com:7777" });
+    expect(result).toEqual({ user: "user", pass: "pass", endpoint: "proxy.example.com:7777", source: "direct" });
   });
 
   it("returns null when NOVADA_PROXY_ENDPOINT is set but no apiKey is available for auto-fetch", async () => {
@@ -193,7 +196,7 @@ describe("resolveProxyCredentials — apiKey threading (L3 unified-key)", () => 
     } as Response);
 
     const result = await resolveProxyCredentials("caller-key");
-    expect(result).toEqual({ user: "auto-user", pass: "auto-pass", endpoint: "proxy.example.com:7777" });
+    expect(result).toEqual({ user: "auto-user", pass: "auto-pass", endpoint: "proxy.example.com:7777", source: "auto_fetched" });
 
     // Authorization header must use the CALLER key, NOT the server key.
     const callArgs = fetchSpy.mock.calls[0];
