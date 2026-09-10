@@ -1,6 +1,7 @@
 import { writeFile, mkdir } from "fs/promises";
 import { join, resolve, sep } from "path";
 import { homedir } from "os";
+import { isUnauthenticatedTierCall } from "../_core/gate.js";
 
 /** Absolute root every Novada output must live under. Hard SSRF/path-traversal boundary. */
 export const DOWNLOADS_ROOT = join(homedir(), "Downloads", "novada-mcp");
@@ -201,6 +202,20 @@ export async function saveOutput(options: OutputOptions): Promise<OutputResult> 
   if (process.env.VERCEL || process.env.VERCEL_ENV) {
     const recordCount = Array.isArray(data) ? data.length : undefined;
     const parts = ["(hosted mode — output not saved to disk)"];
+    if (recordCount !== undefined) parts.push(`${recordCount} records`);
+    if (cosUrl) parts.push(`Download: ${cosUrl}`);
+    return { filePath: "", cosUrl, recordCount, summary: parts.join(" | ") };
+  }
+
+  // E2 (2026-09-10 audit): unauthenticated-tier calls (keyless caller admitted
+  // by the F12 gate — see _core/gate.ts) must never write under ~/Downloads.
+  // Same no-write result shape as the hosted guard above; this is the CLASS-wide
+  // chokepoint, so every auto-saving tool (extract/search/research/scrape/...)
+  // is covered without per-tool branches. Callers already handle filePath:""
+  // (no `path:` header is emitted — see extract.ts's R1 fix).
+  if (isUnauthenticatedTierCall()) {
+    const recordCount = Array.isArray(data) ? data.length : undefined;
+    const parts = ["(unauthenticated tier — output not saved to disk; set a valid NOVADA_API_KEY to enable auto-save)"];
     if (recordCount !== undefined) parts.push(`${recordCount} records`);
     if (cosUrl) parts.push(`Download: ${cosUrl}`);
     return { filePath: "", cosUrl, recordCount, summary: parts.join(" | ") };

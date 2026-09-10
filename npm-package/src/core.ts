@@ -619,6 +619,89 @@ export const HIDDEN_ALIASES: ReadonlySet<string> = new Set([
   "novada_scraper_task_mgmt",
 ]);
 
+// ─── Tool-name resolution (F13) ─────────────────────────────────────────────
+// The COMPLETE set of tool names this server answers to, DERIVED (class-not-
+// instance) from the same two sources the rest of the file already trusts:
+//   - _TOOL_DEFINITIONS: every visible + dispatch-only definition, including
+//     the transport-level trio (setup / session_stats / search_feedback) that
+//     index.ts handles before dispatch(), and every factory-generated
+//     novada_scrape_<platform> sibling.
+//   - HIDDEN_ALIASES: dispatchable names with no definition entry
+//     (novada_unblock, novada_health, novada_wallet_balance, ...).
+// Transports use this to resolve the NAME before any auth/param gate — a name
+// absent here is an unknown tool in EVERY key state (audit F13: the auth gate
+// used to answer first, so keyless novada_ghost_tool got INVALID_API_KEY).
+export const KNOWN_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ..._TOOL_DEFINITIONS.map((t) => t.name),
+  ...HIDDEN_ALIASES,
+]);
+
+/** Longest candidate name plus slack — hostile long inputs skip the suggestion scan. */
+const SUGGESTION_MAX_INPUT_LENGTH = 64;
+/** Max Levenshtein distance for a "Did you mean" suggestion. */
+const SUGGESTION_MAX_DISTANCE = 2;
+
+/** Plain O(len(a)·len(b)) Levenshtein — inputs are capped, candidate list is ~60 names. */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const curr = [i];
+    for (let j = 1; j <= b.length; j++) {
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    prev = curr;
+  }
+  return prev[b.length];
+}
+
+/**
+ * Cheap close-name suggestion for an unknown tool name (F13).
+ * Repairs a missing "novada_" prefix exactly, otherwise picks the nearest
+ * known name within SUGGESTION_MAX_DISTANCE edits — visible tools are scanned
+ * before hidden aliases so ties prefer a name the caller can see in ListTools.
+ * Returns undefined when nothing is close (never guesses).
+ */
+export function suggestToolName(name: string): string | undefined {
+  const n = name.trim().toLowerCase();
+  if (n.length === 0 || n.length > SUGGESTION_MAX_INPUT_LENGTH) return undefined;
+  const withPrefix = n.startsWith("novada_") ? n : `novada_${n}`;
+  if (KNOWN_TOOL_NAMES.has(withPrefix)) return withPrefix;
+  let best: string | undefined;
+  let bestDistance = SUGGESTION_MAX_DISTANCE + 1;
+  for (const candidate of [...TOOLS.map((t) => t.name), ...HIDDEN_ALIASES]) {
+    const d = levenshtein(withPrefix, candidate);
+    if (d < bestDistance) {
+      bestDistance = d;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/**
+ * The ONE unknown-tool error builder — shared by dispatch()'s default case and
+ * the stdio transport's pre-auth name-resolution check (index.ts), so the two
+ * texts can never drift. The name echo is length-capped (untrusted input); the
+ * Available/alias lists stay DERIVED from the live registry (F-5).
+ */
+export function makeUnknownToolError(name: string): Error {
+  const shown = name.length > SUGGESTION_MAX_INPUT_LENGTH
+    ? `${name.slice(0, SUGGESTION_MAX_INPUT_LENGTH - 3)}...`
+    : name;
+  const suggestion = suggestToolName(name);
+  return new Error(
+    `Unknown tool: ${shown}.` +
+    (suggestion ? ` Did you mean: ${suggestion}?` : "") +
+    ` Available: ${TOOLS.map((t) => t.name).join(", ")}. ` +
+    `Backward-compat aliases (dispatch but unlisted): ${[...HIDDEN_ALIASES].join(", ")}.`
+  );
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────
 
 export async function dispatch(
@@ -760,9 +843,8 @@ export async function dispatch(
       // and presented 10 hidden aliases as if they were listed tools. TOOLS and
       // HIDDEN_ALIASES are the SAME single source of truth tools/list itself
       // uses, so this can never drift again; a 39th tool needs no edit here.
-      throw new Error(
-        `Unknown tool: ${name}. Available: ${TOOLS.map((t) => t.name).join(", ")}. ` +
-        `Backward-compat aliases (dispatch but unlisted): ${[...HIDDEN_ALIASES].join(", ")}.`
-      );
+      // F13: message construction (now with a close-name suggestion) lives in
+      // makeUnknownToolError above, shared with index.ts's pre-auth name check.
+      throw makeUnknownToolError(name);
   }
 }

@@ -59,7 +59,15 @@ import { validateAiMonitorParams } from "./tools/types.js";
 import type { ProgressReporter } from "./tools/crawl.js";
 import { classifyError, redactSecrets } from "./_core/errors.js";
 import { ZodError } from "zod";
-import { TOOLS, dispatch } from "./core.js";
+import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError } from "./core.js";
+// F12/F13/E2 (2026-09-10 audit): the key-gate decision layer — tool auth
+// classes, the unauthenticated-tier context saveOutput() consults to skip
+// ~/Downloads writes, and the tier disclosure block.
+import {
+  decideKeyGate,
+  runUnauthenticatedTier,
+  UNAUTH_TIER_DISCLOSURE,
+} from "./_core/gate.js";
 import { PLATFORM_SCRAPER_TOOLS } from "./tools/platform_scrapers.js";
 // F-2/F-12/F2-3/P-4: the ONE shared parameter-validation formatter + unknown-key
 // warning + missing-required-param mechanisms, reused at every ZodError/success
@@ -302,6 +310,22 @@ class NovadaMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const { name, arguments: args } = request.params;
 
+      // F13 (2026-09-10 audit): resolve the tool NAME before EVERYTHING else —
+      // param validation, the API-key gate, the active-set filter. A name this
+      // server has never heard of gets the same unknown-tool error (with a
+      // close-name suggestion when one is cheap) in every key state; the old
+      // order answered keyless novada_ghost_tool with INVALID_API_KEY.
+      // Ordering contract: resolve name → validate params → key check → execute.
+      if (!KNOWN_TOOL_NAMES.has(name)) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: classifyError(makeUnknownToolError(name)).toAgentString(),
+          }],
+          isError: true,
+        };
+      }
+
       // F-2: derive an "unknown parameter(s) ignored" warning from the tool's
       // OWN declared inputSchema (utils/validate.ts — class-driven, no
       // per-tool key list). Computed once per call; success paths below
@@ -446,27 +470,10 @@ class NovadaMCPServer {
       const hasDeveloperKey = !!process.env.NOVADA_DEVELOPER_API_KEY?.trim();
       const isKr6Bypass = KR6_TOOLS.has(name) && hasDeveloperKey;
 
-      // A-7/F2-3: novada_discover is pure catalog metadata — its dispatch case
-      // never reads apiKey — so it needs no key at all, same as novada_setup
-      // above (that one gets its own pre-gate branch; this one is a single
-      // exemption here since it otherwise flows through the normal
-      // tool-filter + dispatch path unchanged).
-      if (!API_KEY && !isKr6Bypass && name !== "novada_discover") {
-        return {
-          content: [{
-            type: "text" as const,
-            text: [
-              "Error [INVALID_API_KEY]: NOVADA_API_KEY is not set.",
-              "failure_class: auth",
-              "retry_recommended: false",
-              `agent_instruction: "Call novada_setup for step-by-step setup instructions and exact config snippets for your MCP client. Get a key at https://novada.com"`,
-            ].join("\n"),
-          }],
-          isError: true,
-        };
-      }
-
-      // Enforce tool filter at execution time (not just at list time)
+      // Enforce tool filter at execution time (not just at list time).
+      // F13 ordering: this is part of NAME resolution ("does this connection
+      // answer to this name?"), so it runs BEFORE the key gate — a keyless
+      // caller of a filtered-out tool learns about the filter, not the key.
       if ((process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS) && !ACTIVE_TOOLS.find(t => t.name === name)) {
         // F-4 gap #5: this already listed the available tools but carried no
         // agent_instruction/failure_class fields — off-contract shape vs.
@@ -486,6 +493,54 @@ class NovadaMCPServer {
         };
       }
 
+      // F12 (2026-09-10 audit): the key gate is a per-tool-CLASS decision
+      // (_core/gate.ts) instead of the old blanket presence check with a
+      // novada_discover carve-out:
+      //   auth_free          → allow (discover/setup/session_stats/search_feedback)
+      //   unauth_basic_tier  → keyless basic extract runs as an EXPLICIT,
+      //                        DISCLOSED unauthenticated tier (no disk writes —
+      //                        saveOutput consults the gate context; escalation
+      //                        params still refuse locally)
+      //   key_required       → keyless refusal below, unchanged
+      // A present-but-INVALID key is locally indistinguishable from a valid one
+      // (presence is the only local signal); billed/escalation paths refuse
+      // upstream with the same Error [INVALID_API_KEY] / failure_class: auth
+      // contract this local refusal carries.
+      const gateDecision = decideKeyGate(name, {
+        hasApiKey: !!API_KEY,
+        kr6Bypass: isKr6Bypass,
+        args: args as Record<string, unknown> | undefined,
+      });
+      if (gateDecision.kind === "refuse_missing_key") {
+        return {
+          content: [{
+            type: "text" as const,
+            text: [
+              "Error [INVALID_API_KEY]: NOVADA_API_KEY is not set.",
+              "failure_class: auth",
+              "retry_recommended: false",
+              `agent_instruction: "Call novada_setup for step-by-step setup instructions and exact config snippets for your MCP client. Get a key at https://novada.com"`,
+            ].join("\n"),
+          }],
+          isError: true,
+        };
+      }
+      if (gateDecision.kind === "refuse_escalation_requires_key") {
+        return {
+          content: [{
+            type: "text" as const,
+            text: [
+              `Error [INVALID_API_KEY]: render escalation requires a valid NOVADA_API_KEY — the keyless unauthenticated tier only covers the basic direct fetch (render="auto"/"static").`,
+              "failure_class: auth",
+              "retry_recommended: false",
+              `agent_instruction: "Either retry without the render parameter for a basic keyless fetch, or call novada_setup to configure a valid NOVADA_API_KEY and unlock render/unblocker/browser escalation."`,
+            ].join("\n"),
+          }],
+          isError: true,
+        };
+      }
+      const unauthenticatedTier = gateDecision.kind === "allow_unauthenticated_tier";
+
       const t0 = Date.now();
       try {
         // NOV-321: record every dispatched tool call for novada_session_stats telemetry.
@@ -496,7 +551,13 @@ class NovadaMCPServer {
         const visibleTools = (process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS)
           ? new Set(ACTIVE_TOOLS.map(t => t.name))
           : undefined;
-        const result = await dispatch(name, args as Record<string, unknown>, API_KEY, { onProgress, visibleTools });
+        // F12/E2: unauth-tier calls run inside the gate context so saveOutput()
+        // skips every ~/Downloads write for them, and their response carries the
+        // tier disclosure as a separate content block below.
+        const result = unauthenticatedTier
+          ? await runUnauthenticatedTier(() =>
+              dispatch(name, args as Record<string, unknown>, API_KEY, { onProgress, visibleTools }))
+          : await dispatch(name, args as Record<string, unknown>, API_KEY, { onProgress, visibleTools });
         // Local usage log (user-facing audit trail). Fire-and-forget — never blocks or throws.
         void logUsage({ tool: name, status: "success", ms: Date.now() - t0, target: summarizeTarget(args) });
         // TOW2-242: one-time first-run notice. Appended as a SEPARATE content block
@@ -504,6 +565,7 @@ class NovadaMCPServer {
         // and ONLY on a successful dispatch. All logic + copy lives in the module;
         // this is the ~2-line glue. maybeGetFirstRunNotice() fails quiet → never throws.
         const content = withUnknownKeyWarning([{ type: "text" as const, text: result }]);
+        if (unauthenticatedTier) content.push({ type: "text" as const, text: UNAUTH_TIER_DISCLOSURE });
         const notice = await maybeGetFirstRunNotice();
         if (notice) content.push({ type: "text" as const, text: notice });
         return { content };
