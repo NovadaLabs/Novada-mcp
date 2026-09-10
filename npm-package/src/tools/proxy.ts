@@ -11,6 +11,7 @@ import {
   verifyProxyExit,
   isVerifySupportedRuntime,
   pickProxyListEntry,
+  sanitizeEchoField,
   DEFAULT_ECHO_TIMEOUT_MS,
   type ProxyVerifyResult,
   type ProxyVerifyTarget,
@@ -192,11 +193,16 @@ async function buildEvidenceBlock(opts: {
       if (result.org || result.asn) {
         lines.push(`org: ${[result.org, result.asn ? `(${result.asn})` : ""].filter(Boolean).join(" ")}`);
       }
-      if (result.country || result.country_code) {
+      // LOW-5: `country` has no current producer (ipinfo maps to country_code
+      // only), so it arrives here OUTSIDE verifyProxyExit's sanitized-at-source
+      // pin — sanitize at render so a future producer setting it raw cannot
+      // bypass the injection hardening.
+      const country = sanitizeEchoField(result.country);
+      if (country || result.country_code) {
         // ipinfo.io-class echoes report only a 2-letter code (no full name) —
         // render whichever evidence exists.
-        const name = result.country ?? result.country_code;
-        const code = result.country && result.country_code ? ` (${result.country_code})` : "";
+        const name = country ?? result.country_code;
+        const code = country && result.country_code ? ` (${result.country_code})` : "";
         lines.push(`country: ${name}${code}`);
       }
       lines.push(`latency_ms: ${result.latency_ms}`);

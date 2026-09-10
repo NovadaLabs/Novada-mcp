@@ -86,7 +86,7 @@ import { VERSION } from "./config.js";
 import { listPrompts, getPrompt } from "./prompts/index.js";
 import { listResources, readResource } from "./resources/index.js";
 import { checkProxyConfiguration } from "./utils/domains.js";
-import { resolveProxyCredentials } from "./utils/credentials.js";
+import { autoProvisionProxyCredentialsAtBoot } from "./utils/credentials.js";
 import { maybeGetFirstRunNotice } from "./utils/first-run-notice.js";
 import { logUsage, summarizeTarget } from "./utils/usage-log.js";
 
@@ -608,29 +608,24 @@ class NovadaMCPServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
 
-    // Auto-provision proxy credentials: if NOVADA_PROXY_ENDPOINT is set but
-    // NOVADA_PROXY_USER/PASS are missing, fetch them from /v1/proxy_account/list
-    // using NOVADA_API_KEY as Bearer token, then inject into process.env so the
-    // synchronous getProxyCredentials() picks them up for all proxy tool calls.
-    if (
-      process.env.NOVADA_PROXY_ENDPOINT &&
-      (!process.env.NOVADA_PROXY_USER || !process.env.NOVADA_PROXY_PASS)
-    ) {
-      try {
-        const autoCreds = await resolveProxyCredentials();
-        if (autoCreds) {
-          process.env.NOVADA_PROXY_USER = autoCreds.user;
-          process.env.NOVADA_PROXY_PASS = autoCreds.pass;
-          // G-8: autoCreds.user is a Novada proxy sub-account username (Novada
-          // format `*-zone-*`, e.g. "customer-abc-zone-res") — the codebase's
-          // own redactSecrets() rule #4 (errors.ts) classifies that shape as a
-          // secret. Route it through the same choke-point every other error/log
-          // path uses instead of interpolating it raw into stderr.
-          console.error(`[novada] Auto-provisioned proxy credentials (account: ${redactSecrets(autoCreds.user)})`);
-        }
-      } catch {
-        // Non-fatal: proxy tools will show a configuration error when invoked
-      }
+    // Auto-provision proxy credentials (INC-198): if NOVADA_PROXY_ENDPOINT is
+    // set but NOVADA_PROXY_USER/PASS are missing, fetch them from
+    // /v1/proxy_account/list using NOVADA_API_KEY as Bearer token and inject
+    // into process.env so the synchronous getProxyCredentials() picks them up
+    // for all proxy tool calls. The logic lives in credentials.ts next to the
+    // provenance marker it must set (MEDIUM-6: boot-injected creds are
+    // AUTO-FETCHED — recording who fetched them keeps the F11 fail-closed
+    // ledger gate applying instead of reclassifying them as user-supplied
+    // "direct"). Non-fatal on failure: proxy tools show a configuration error
+    // when invoked.
+    const autoCreds = await autoProvisionProxyCredentialsAtBoot();
+    if (autoCreds) {
+      // G-8: autoCreds.user is a Novada proxy sub-account username (Novada
+      // format `*-zone-*`, e.g. "customer-abc-zone-res") — the codebase's
+      // own redactSecrets() rule #4 (errors.ts) classifies that shape as a
+      // secret. Route it through the same choke-point every other error/log
+      // path uses instead of interpolating it raw into stderr.
+      console.error(`[novada] Auto-provisioned proxy credentials (account: ${redactSecrets(autoCreds.user)})`);
     }
 
     checkProxyConfiguration();
