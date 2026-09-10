@@ -15,6 +15,11 @@ export enum NovadaErrorCode {
   TASK_PENDING           = "TASK_PENDING",
   SESSION_EXPIRED        = "SESSION_EXPIRED",
   PROXY_AUTH_FAILURE     = "PROXY_AUTH_FAILURE",
+  /** F15 (2026-09-10 audit): the fetch succeeded but OUR readability/Turndown parse
+   *  pass crashed on the page's markup (e.g. amazon.com/dp/B0CX23V2ZK → raw
+   *  "TypeError: … reading 'parentNode'"). Permanent for this page+parser — retrying
+   *  the same call re-runs the same crashing parser; format="html" bypasses it. */
+  PARSE_FAILED           = "PARSE_FAILED",
   UNKNOWN                = "UNKNOWN",
 }
 
@@ -35,6 +40,7 @@ const FAILURE_CLASS: Record<NovadaErrorCode, FailureClass> = {
   [NovadaErrorCode.TASK_PENDING]:        "transient",
   [NovadaErrorCode.SESSION_EXPIRED]:     "permanent",
   [NovadaErrorCode.PROXY_AUTH_FAILURE]:  "auth",
+  [NovadaErrorCode.PARSE_FAILED]:        "permanent",
   [NovadaErrorCode.UNKNOWN]:            "permanent",
 };
 
@@ -267,6 +273,13 @@ Action:
   1. Check NOVADA_PROXY_USER and NOVADA_PROXY_PASS are correctly set.
   2. Call novada_account section="summary" to confirm proxy credentials are loaded.
   3. Regenerate credentials at https://dashboard.novada.com/overview/proxy/ if expired.`,
+
+  [NovadaErrorCode.PARSE_FAILED]: `\
+The page was fetched successfully but its HTML crashed the content parser (readability/markdown pass).
+Do not retry the same call — the parser will crash on the same markup again. Changing render mode does not help: the failure is in parsing, not access.
+
+Action: Retry with format="html" to get the raw page HTML (bypasses the parser) and extract what you need from it directly.
+Alternative: For catalog platforms (amazon, github, tiktok, ...), use the matching novada_scrape operation for structured data.`,
 
   [NovadaErrorCode.UNKNOWN]: `\
 An unexpected error occurred.

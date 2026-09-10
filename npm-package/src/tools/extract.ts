@@ -25,6 +25,59 @@ export { detectJsHeavyContent } from "../utils/index.js";
 const MAX_CHARS_DEFAULT = 25000;
 
 /**
+ * F17 (2026-09-10 audit): extractMainContent has an INTERNAL default cap of 25000 chars.
+ * When extract.ts relied on it (clean=true path), the content arrived pre-capped and the
+ * flagged display-truncation check below (`displayContent.length > maxChars`) never
+ * fired — a silent ~25K truncation with the schema-promised `content_truncated:true` +
+ * `total_chars` flags never emitted (wikipedia row, eval F17). The PDF pre-slice was a
+ * second member of the same class. Fix: extract.ts call sites pass an effectively
+ * unbounded cap so the FLAGGED display truncation is the single truncation authority
+ * (matching extractFullPageContent, which has no internal cap at all) and `total_chars`
+ * reports the honest full length.
+ */
+const UNCAPPED_EXTRACT_CHARS = Number.MAX_SAFE_INTEGER;
+
+/**
+ * F15 (2026-09-10 audit): the readability/Turndown parse path can crash on hostile
+ * real-world markup (amazon.com/dp/B0CX23V2ZK → raw "TypeError: Cannot read properties
+ * of undefined (reading 'parentNode')" surfaced verbatim to the agent). Wrap the content
+ * extraction so a parser crash becomes a CLASSIFIED parse-failure (PARSE_FAILED) whose
+ * message getSuggestedFix recognizes — the fix bypasses the parser (format="html")
+ * instead of re-inviting the same crash or blaming access/rendering.
+ */
+function extractContentSafe(html: string, url: string, useFullPage: boolean): string {
+  try {
+    return useFullPage
+      ? extractFullPageContent(html, url)
+      : extractMainContent(html, url, UNCAPPED_EXTRACT_CHARS);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw makeNovadaError(
+      NovadaErrorCode.PARSE_FAILED,
+      `Content parse failed: the page's HTML crashed the readability/markdown parser (${detail}). ` +
+      `The fetch itself succeeded — this is a parser limitation on this page's markup, not an access or rendering problem.`,
+      `url:${url} parser crash in ${useFullPage ? "extractFullPageContent" : "extractMainContent"}`
+    );
+  }
+}
+
+/**
+ * F14 (2026-09-10 audit): the honest agent_instruction for a render escalation whose
+ * FETCH failed (401/5xx/thrown) — shared by the markdown path (via
+ * buildContextualAgentInstruction) and the JSON path so the two can never diverge.
+ * ASSERT_INVARIANT: never recommends render="render" — that mode just failed.
+ */
+function buildEscalationFailedInstruction(escalationError: string | null, browserConfigured: boolean): string {
+  const err = escalationError
+    ? ` (${redactSecrets(escalationError).replace(/\s+/g, " ").trim().slice(0, 200)})`
+    : "";
+  const alternatives = browserConfigured
+    ? `use render="browser" (Browser API via NOVADA_BROWSER_WS)`
+    : `set NOVADA_BROWSER_WS and use render="browser", verify the Web Unblocker is activated for this key (https://dashboard.novada.com/overview/web-unblocker/), or use format="html" to inspect the raw response`;
+  return `status:failed | auto-escalation to render FAILED${err} — the page needs JS rendering and the static content above is an empty shell, not the real page. render="render" was just attempted automatically and failed; do not send it again. Instead: ${alternatives}`;
+}
+
+/**
  * Cross-tool hint map: base domain → the best novada_scrape operation for structured data.
  * Used by both the JSON and markdown output paths, and by getSuggestedFix's error-path
  * hint, to suggest novada_scrape when extraction quality is poor (P2-3). Single source
@@ -205,7 +258,7 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
           .catch(err => {
             const rawMessage = err instanceof Error ? err.message : String(err);
             const message = redactSecrets(rawMessage);
-            const fix = getSuggestedFix(url, rawMessage);
+            const fix = getSuggestedFix(url, rawMessage, params.render);
             // FIX-B: PMC mirror hint — null (no-op) for every other host.
             const pmcHint = getPmcMirrorHint(url);
             const fullFix = pmcHint ? `${fix} | ${pmcHint}` : fix;
@@ -484,9 +537,15 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
   } catch (err) {
     const rawMessage = err instanceof Error ? err.message : String(err);
     const message = redactSecrets(rawMessage);
-    const suggestedFix = getSuggestedFix(urlList[0], rawMessage);
+    const suggestedFix = getSuggestedFix(urlList[0], rawMessage, params.render);
     // FIX-B: PMC mirror hint — null (no-op) for every other host.
     const pmcHint = getPmcMirrorHint(urlList[0]);
+    // F14 invariant: never advertise render="render" in the hints when the failed
+    // request already used the render tier (forced render/js, or a render-tier /
+    // render-bot-challenge error message) — that is the mode that just failed.
+    const renderAlreadyFailed =
+      params.render === "render" || params.render === "js" ||
+      /web unblocker error|web unblocker failed|render returned a bot challenge/i.test(rawMessage);
     return [
       `## Extract Failed`,
       `url: ${urlList[0]}`,
@@ -496,7 +555,9 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
       `## Agent Hints`,
       `- If the URL returns JSON or binary data, it cannot be extracted as HTML.`,
       `- If the URL is unreachable, check the domain and try novada_map first.`,
-      `- For JS-heavy pages returning empty content, try with render="render".`,
+      renderAlreadyFailed
+        ? `- render="render" was already attempted for this URL and failed — do not re-send it (see Agent Action below).`
+        : `- For JS-heavy pages returning empty content, try with render="render".`,
       ``,
       `## Agent Action`,
       `agent_instruction: status:failed | ${suggestedFix}${pmcHint ? ` | ${pmcHint}` : ""}`,
@@ -530,14 +591,51 @@ function buildContextualAgentInstruction(ctx: {
   totalChars: number;
   mainContent: string;
   params: ExtractParams & { url: string };
+  /** F14: the auto render escalation ran (regardless of outcome). */
+  escalationAttempted: boolean;
+  /** F14: escalation ran and quality is still low (no better content adopted). */
+  escalationFailed: boolean;
+  /** F14: the escalation fetch itself failed/was unverifiable (throw, 401, challenge). */
+  escalationError: string | null;
+  browserConfigured: boolean;
 }): string {
-  const { contentOk, qualityScore, contentPresent, shortButComplete, usedMode, renderMode, fieldResults, contentTruncated, maxChars, totalChars, mainContent, params } = ctx;
+  const { contentOk, qualityScore, contentPresent, shortButComplete, usedMode, renderMode, fieldResults, contentTruncated, maxChars, totalChars, mainContent, params, escalationAttempted, escalationFailed, escalationError, browserConfigured } = ctx;
+
+  // FIX-B (2026-07-30): pmc.ncbi.nlm.nih.gov hard-blocks automated extraction — surface
+  // the free official mirror on every no-content/blocked outcome below. Hint-only:
+  // getPmcMirrorHint returns null (no-op) for every other host. Hoisted above the rule
+  // chain so the F14 escalation-failed branch (which must run FIRST) can carry it too.
+  const pmcHint = getPmcMirrorHint(params.url);
+  const withPmcHint = (base: string): string => (pmcHint ? `${base} | ${pmcHint}` : base);
+
+  // 0. F14 (2026-09-10 audit): a render escalation that ran and left the content bad is
+  // the FIRST thing the agent must know — and no rule below may recommend the render
+  // mode that was just tried (ASSERT_INVARIANT). Two honest shapes:
+  //   - the escalation fetch itself FAILED (401/5xx/challenge/non-HTML) → status:failed,
+  //     failure front-and-center; the shell content must not read as a success.
+  //   - the escalation fetch succeeded but returned NO BETTER content → honest
+  //     no_content that does not re-recommend render.
+  // Gated on !contentOk so a genuinely short-but-complete page (render succeeded and
+  // confirmed the page really is just short) still falls through to the success rules.
+  if (escalationFailed && !contentOk) {
+    if (escalationError) {
+      return withPmcHint(buildEscalationFailedInstruction(escalationError, browserConfigured));
+    }
+    const alternatives = browserConfigured
+      ? `use render="browser" (Browser API via NOVADA_BROWSER_WS)`
+      : `set NOVADA_BROWSER_WS and use render="browser", or use format="html" to inspect the raw response`;
+    return withPmcHint(`status:no_content | auto-escalation to render was attempted and returned no better content — do not send render="render" again. Instead: ${alternatives}`);
+  }
 
   // 1. Fields requested with ≥ half null → JS-rendered values likely missing
   if (fieldResults && fieldResults.length > 0) {
     const unresolvedCount = fieldResults.filter(r => r.source === "unresolved").length;
     if (unresolvedCount >= fieldResults.length / 2) {
-      return `status:partial_fields | ${unresolvedCount}/${fieldResults.length} fields null — values may be JS-rendered; retry with render="render" to fetch dynamic content`;
+      // F14 invariant: never recommend a render retry when the escalation already ran.
+      const fieldsAdvice = escalationAttempted
+        ? `values may be JS-rendered but an automatic render="render" attempt did not resolve them`
+        : `values may be JS-rendered; retry with render="render" to fetch dynamic content`;
+      return `status:partial_fields | ${unresolvedCount}/${fieldResults.length} fields null — ${fieldsAdvice}`;
     }
   }
 
@@ -561,21 +659,20 @@ function buildContextualAgentInstruction(ctx: {
   // a low-quality verdict — emit an informational note, never a "retry render" fix.
   if (contentOk) {
     if (shortButComplete) {
-      return `status:success | note: short page (${mainContent.trim() ? mainContent.trim().split(/\s+/).length : 0} words) — complete but brief; retry render="render" only if you expected more`;
+      // F14 invariant: when the auto-escalation already ran (and merely confirmed the
+      // page is short), never suggest re-running the mode that was just tried.
+      const shortAdvice = escalationAttempted
+        ? `an automatic render="render" attempt did not add content — the page really is this short`
+        : `retry render="render" only if you expected more`;
+      return `status:success | note: short page (${mainContent.trim() ? mainContent.trim().split(/\s+/).length : 0} words) — complete but brief; ${shortAdvice}`;
     }
     return `status:success`;
   }
 
-  // FIX-B (2026-07-30): every remaining branch below is a genuine no-content/blocked
-  // outcome. pmc.ncbi.nlm.nih.gov hard-blocks automated extraction — surface the free
-  // official mirror (europepmc.org / NCBI efetch) instead of just "retry render",
-  // which PMC will block again. Hint-only: getPmcMirrorHint returns null (no-op) for
-  // every other host, and this point is never reached by rule 4's success return above.
-  const pmcHint = getPmcMirrorHint(params.url);
-  const withPmcHint = (base: string): string => (pmcHint ? `${base} | ${pmcHint}` : base);
-
   // 5. Content genuinely absent (empty / bot-challenge / JS-empty) → escalation helps.
-  // R4: only reached when content is NOT present, so "retry render" is honest here.
+  // R4: only reached when content is NOT present, so "retry render" is honest here
+  // (the F14 rule-0 branch above already intercepted every attempted-escalation case,
+  // so render has NOT been tried when these fire).
   if (!contentPresent && usedMode === "static" && renderMode === "auto") {
     return withPmcHint(`status:no_content | page returned no usable content — retry with render="render" for JS-heavy or bot-protected pages`);
   }
@@ -588,8 +685,25 @@ function buildContextualAgentInstruction(ctx: {
   return withPmcHint(`status:no_content quality:${qualityScore}/100`);
 }
 
-/** Derive a suggested_fix hint from a URL + error message */
-export function getSuggestedFix(url: string, errorMsg: string): string {
+/**
+ * Derive a suggested_fix hint from a URL + error message.
+ *
+ * F14 ASSERT_INVARIANT (2026-09-10 audit): the suggested fix must NEVER recommend the
+ * render mode that just failed. `attemptedRender` carries the caller's render param —
+ * when the failed request was itself render/js, ANY branch below that resolves to a
+ * positive render="render" recommendation is intercepted and replaced with an honest
+ * alternative. Enforced at the wrapper so no current or future branch can violate it.
+ */
+export function getSuggestedFix(url: string, errorMsg: string, attemptedRender?: string): string {
+  const fix = deriveSuggestedFix(url, errorMsg);
+  const renderWasAttempted = attemptedRender === "render" || attemptedRender === "js";
+  if (renderWasAttempted && /render="render"/i.test(fix) && !/do not/i.test(fix)) {
+    return `suggested_fix: render="render" is the mode that just failed — do not re-send it. Try render="static" (plain fetch), render="browser" with NOVADA_BROWSER_WS configured, or novada_extract(url="${url}", format="html") for raw HTML`;
+  }
+  return fix;
+}
+
+function deriveSuggestedFix(url: string, errorMsg: string): string {
   const lower = errorMsg.toLowerCase();
   // FIX-A (2026-07-30): the aggregate-fetch-failure marker text is emitted ONLY by
   // summarizeAggregateError's crafted message ("All N fetch strategies failed: ...").
@@ -605,6 +719,27 @@ export function getSuggestedFix(url: string, errorMsg: string): string {
   // render="render" — the very mode that just triggered the 5001.
   if (lower.includes("5001") || lower.includes("retrying will not help")) {
     return `suggested_fix: Web Unblocker not activated on this account. Activate at https://dashboard.novada.com/overview/web-unblocker/ or retry with render="static" (no unblocker needed)`;
+  }
+  // F15 (2026-09-10 audit): a classified parse crash (extractContentSafe above). The
+  // fetch succeeded — recommending a render retry re-runs the SAME crashing parser on
+  // the same markup and misdiagnoses the failure as an access problem. format="html"
+  // returns the raw DOM without the readability/Turndown pass (the failing component).
+  // Checked BEFORE the generic keyword branches so no substring of the underlying
+  // TypeError can route this to a misleading render/bot suggestion.
+  if (lower.includes("content parse failed")) {
+    let scrapePart = "";
+    try {
+      const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+      const scrapeHint = getScrapeHint(host);
+      if (scrapeHint) scrapePart = `, or use ${scrapeHint} for structured ${host} data`;
+    } catch { /* ignore */ }
+    return `suggested_fix: the page fetched fine but crashed the HTML-to-markdown parser. Use novada_extract(url="${url}", format="html") for the raw page HTML (bypasses the parser) and parse it yourself${scrapePart}. Do not repeat the same call — the parser will crash on the same markup again`;
+  }
+  // F14: the Web Unblocker (render tier) ITSELF failed — never re-recommend the mode
+  // that just failed. These message forms are emitted only by fetchWithRender
+  // (utils/http.ts): "Web Unblocker error (NNN): …" / "Web Unblocker failed after retries".
+  if (lower.includes("web unblocker error") || lower.includes("web unblocker failed")) {
+    return `suggested_fix: the Web Unblocker (render tier) itself failed — do not re-send render="render". Verify the key/entitlement (novada_account section="summary", or https://dashboard.novada.com/overview/web-unblocker/), then try render="static" for a plain fetch, render="browser" with NOVADA_BROWSER_WS configured, or novada_extract(url="${url}", format="html") for raw HTML`;
   }
   // P1: render mode itself returned a bot-challenge page — do NOT suggest render="render"
   // again (it was just tried and returned the challenge). Escalate to browser or unblock.
@@ -719,12 +854,22 @@ function pickBetterHtml(
   if (!candidate.html || candidate.html.trim().length === 0) {
     return { ...current, adopted: false };
   }
-  const extract = (h: string) =>
-    useFullPage ? extractFullPageContent(h, url) : extractMainContent(h, url);
-  const currentMain = extract(current.html);
-  const candidateMain = extract(candidate.html);
-  const currentScore = scoreExtraction(current.html, currentMain, current.mode, false).score;
-  const candidateScore = scoreExtraction(candidate.html, candidateMain, candidate.mode, false).score;
+  // F15: score crash-safely. A candidate whose DOM crashes the readability/Turndown
+  // parser must never crash the whole request out of an escalation comparison — it
+  // scores -1 (can never win). Symmetrically, if the CURRENT html is the one that
+  // crashes, a parseable candidate wins the comparison and rescues the request.
+  const scoreOf = (h: string, mode: "static" | "render" | "browser" | "render-failed"): number => {
+    try {
+      const main = useFullPage
+        ? extractFullPageContent(h, url)
+        : extractMainContent(h, url, UNCAPPED_EXTRACT_CHARS);
+      return scoreExtraction(h, main, mode, false).score;
+    } catch {
+      return -1;
+    }
+  };
+  const currentScore = scoreOf(current.html, current.mode);
+  const candidateScore = scoreOf(candidate.html, candidate.mode);
   // Strictly-greater: ties keep the cheaper/earlier attempt (mode bonus already favors static).
   if (candidateScore > currentScore) {
     return { html: candidate.html, mode: candidate.mode, adopted: true };
@@ -1425,13 +1570,19 @@ async function extractSingleInner(
   // NOV-GB1: when the GitBook .md fallback fired, use the raw markdown directly —
   // the standard HTML extractors would strip most content from the synthetic wrapper.
   // useFullPage is hoisted to the fetch section above (shared with pickBetterHtml).
+  // F17: no pre-slice for PDFs and no internal extractMainContent cap here — the
+  // flagged display truncation below is the single truncation authority, so
+  // content_truncated:true + total_chars are emitted whenever content is cut
+  // (the old html.slice(0, MAX_CHARS_DEFAULT) / internal-25000-cap paths truncated
+  // SILENTLY below the flag check — eval F17).
+  // F15: extractContentSafe converts a readability/Turndown crash into a classified
+  // PARSE_FAILED error (honest "Content parse failed" + parser-bypass suggested_fix)
+  // instead of a raw TypeError bubbling to the agent.
   let mainContent = gitbookMdContent !== null
     ? gitbookMdContent
     : pdfPages !== null
-      ? html.slice(0, MAX_CHARS_DEFAULT)
-      : useFullPage
-        ? extractFullPageContent(html, params.url)
-        : extractMainContent(html, params.url);
+      ? html
+      : extractContentSafe(html, params.url, useFullPage);
 
   let allLinks = $doc ? extractLinksFrom($doc, params.url) : [];
   let baseDomain: string;
@@ -1500,13 +1651,22 @@ async function extractSingleInner(
       // countryAppliedToServedContent must stay false; do not add country here as a side
       // effect of this fix.
       const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract" });
-      if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
+      if (typeof renderResponse.data !== "string") {
+        // F14: render responded but with a non-HTML body — the page could NOT be
+        // verified via render. Record it so the honest-failure framing below fires
+        // instead of the short-but-complete rescue green-lighting the static shell.
+        escalationError = "render escalation returned a non-HTML response";
+      } else if (detectBotChallenge(renderResponse.data)) {
+        // F14: render responded with a bot-challenge interstitial — same as above:
+        // the real page was NOT verified; do not let the static shell read as success.
+        escalationError = "render escalation returned a bot-challenge page";
+      } else {
         const renderHtml = renderResponse.data;
         // NOV-577: one parse of the re-fetched HTML, shared across the readers in this branch.
         const $render = cheerio.load(renderHtml);
-        const renderMain = useFullPage
-          ? extractFullPageContent(renderHtml, params.url)
-          : extractMainContent(renderHtml, params.url);
+        // F15: extractContentSafe throws a CLASSIFIED parse error on a parser crash —
+        // caught by this branch's catch below (escalationError), never a raw TypeError.
+        const renderMain = extractContentSafe(renderHtml, params.url, useFullPage);
         const renderSD = extractStructuredDataFrom($render);
         const renderQuality = scoreExtraction(renderHtml, renderMain, "render", renderSD !== null);
         if (renderQuality.score > quality.score) {
@@ -1546,9 +1706,9 @@ async function extractSingleInner(
         const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
         // NOV-577: one parse of the browser HTML, shared across the readers in this branch.
         const $browser = cheerio.load(browserHtml);
-        const browserMain = useFullPage
-          ? extractFullPageContent(browserHtml, params.url)
-          : extractMainContent(browserHtml, params.url);
+        // F15: classified throw on parser crash — caught by this branch's own catch
+        // (keep previous result), never a raw TypeError.
+        const browserMain = extractContentSafe(browserHtml, params.url, useFullPage);
         const browserSD = extractStructuredDataFrom($browser);
         const browserQuality = scoreExtraction(browserHtml, browserMain, "browser", browserSD !== null);
         if (browserQuality.score > quality.score) {
@@ -1593,9 +1753,9 @@ async function extractSingleInner(
       const wbResponse = await fetchViaProxy(archiveUrl, apiKey, { tool: "extract" });
       if (typeof wbResponse.data === "string" && wbResponse.data.length > 500) {
         const wbHtml = wbResponse.data;
-        const wbMain = useFullPage
-          ? extractFullPageContent(wbHtml, params.url)
-          : extractMainContent(wbHtml, params.url);
+        // F15: classified throw on parser crash — caught by the Wayback try/catch
+        // (keep original result), never a raw TypeError.
+        const wbMain = extractContentSafe(wbHtml, params.url, useFullPage);
         if (wbMain.length > mainContent.length) {
           // NOV-577: one parse of the Wayback HTML, shared across the readers in this branch.
           const $wb = cheerio.load(wbHtml);
@@ -1697,13 +1857,24 @@ async function extractSingleInner(
   // "complete but short" — it is an absence dressed as content. Exclude it so the
   // rescue below never green-lights "Checking your browser…" style stubs.
   const isChallengePage = detectedAntiBot !== null || (typeof html === "string" && detectBotChallenge(html));
+  // F14 (2026-09-10 audit): the render escalation's FETCH itself failed or returned an
+  // unverifiable body (thrown 401/5xx, bot-challenge interstitial, non-HTML). Distinct
+  // from "render succeeded but added nothing" (escalationError stays null there): when
+  // the fetch failed we could NOT verify the page via render, so the static shell must
+  // never be rescued into a success — that is exactly the quotes.toscrape.com/js/ lie
+  // (empty JS shell graded content_ok:true while the 401 sat buried in a hints line).
+  const escalationFetchFailed = escalationFailed && escalationError !== null;
   // Short-but-complete: real prose returned on a successful, non-challenge fetch,
   // just under the "substantive" bar. Word floor (12) + length floor (80) keep
   // genuinely thin/challenge stubs (e.g. a 7-word "checking your browser" page) OUT,
   // while a complete brief page like example.com (~29 words) is correctly rescued.
+  // F14: a shell whose escalation fetch FAILED is an absence dressed as chrome — the
+  // rescue is blocked; a shell whose escalation succeeded-but-added-nothing has been
+  // VERIFIED via render as genuinely short and may still be rescued (R4 preserved).
   const isShortButComplete =
     fetchSucceeded &&
     !isChallengePage &&
+    !escalationFetchFailed &&
     !quality.content_present &&
     wordCount >= 12 &&
     mainContent.trim().length >= 80;
@@ -1733,6 +1904,13 @@ async function extractSingleInner(
       extractionQuality = matched < total / 2 ? "low" : "partial";
     }
   }
+
+  // F14: the honest escalation-failed instruction, shared verbatim by the JSON path and
+  // (via buildContextualAgentInstruction rule 0) the markdown path. Null unless the
+  // escalation fetch genuinely failed.
+  const escalationInstruction = escalationFetchFailed
+    ? buildEscalationFailedInstruction(escalationError, isBrowserConfigured())
+    : null;
 
   const qLabel = qualityLabel(quality.score);
   // R4: label used in agent-facing "remember" lines — reflects display-level presence
@@ -1796,7 +1974,9 @@ async function extractSingleInner(
       hints: [] as string[],
       ...(pdfPages !== null ? { pdf: { pages: pdfPages, title: pdfTitle ?? null } } : {}),
       ...(autoEscalated ? { auto_escalated: true, ...(autoEscalatedTo ? { escalated_to: autoEscalatedTo } : {}) } : {}),
-      ...(escalationFailed ? { escalation_attempted: true, escalation_failed: true, ...(escalationError ? { escalation_error: escalationError } : {}) } : {}),
+      // F14: when the escalation FETCH failed, the failure is front-and-center — a
+      // top-level agent_instruction (status:failed), not only the buried hints entry.
+      ...(escalationFailed ? { escalation_attempted: true, escalation_failed: true, ...(escalationError ? { escalation_error: escalationError } : {}), ...(escalationInstruction ? { agent_instruction: escalationInstruction } : {}) } : {}),
       ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
       ...(gitbookMdContent !== null ? { gitbook_md_fallback: true } : {}),
       ...(waybackFallback ? { wayback_fallback: true } : {}),
@@ -1804,7 +1984,10 @@ async function extractSingleInner(
       // supplied it AND it was genuinely dropped (see countryNotApplied above).
       ...(countryNotApplied ? {
         country_warning: `country="${params.country}" accepted but not applied — resolved via mode="${usedMode}", not "render" (country only takes effect on render/js fetches; do not rely on it here)`,
-        agent_instruction: `country="${params.country}" was accepted but NOT applied to this extraction (resolved mode: "${usedMode}") — do not rely on it for geo-restricted content. Retry with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`,
+        // F14 invariant: never recommend a render retry when the render escalation just
+        // failed on this very URL — point at the failure instead. When both disclosures
+        // apply, carry both (this spread would otherwise override the escalation one).
+        agent_instruction: `${escalationInstruction ? `${escalationInstruction} | ` : ""}country="${params.country}" was accepted but NOT applied to this extraction (resolved mode: "${usedMode}") — do not rely on it for geo-restricted content.${escalationFetchFailed ? ` A render fetch just failed on this URL (see escalation_error) — resolve that before retrying with country.` : ` Retry with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`}`,
       } : {}),
       // NOV-668: Kufer availability data
       ...(kuferResult ? {
@@ -1824,12 +2007,17 @@ async function extractSingleInner(
     if (redditUrl) hints.push("Reddit URL rewritten to old.reddit.com — new reddit.com blocks all scrapers.");
     if (gitbookMdContent !== null) hints.push("Content retrieved via GitBook .md fallback — the live page is JS-rendered; the raw markdown endpoint returned richer content.");
     if (waybackFallback) hints.push("Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.");
-    if (countryNotApplied) hints.push(`country="${params.country}" accepted but not applied on this fetch (mode="${usedMode}") — retry with render="render" to have it honored.`);
+    // F14 invariant: no render-retry advice when the render escalation just failed here.
+    if (countryNotApplied) hints.push(`country="${params.country}" accepted but not applied on this fetch (mode="${usedMode}")${escalationFetchFailed ? " — the render fetch that would honor it just failed (see escalation_error)." : ` — retry with render="render" to have it honored.`}`);
     try {
       const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
       if (extractedHost === "trends24.in") hints.push("[THIRD-PARTY DATA] trends24.in is an independent aggregator, not an official X/Twitter source.");
     } catch { /* ignore */ }
-    if (stillJsHeavy) hints.push("Page is JavaScript-rendered. Content may be incomplete. Try render='js' or render='browser'.");
+    // F14 invariant: when render already ran and failed (JS-heavy path's render-failed,
+    // or a failed quality escalation), never re-recommend render='js' here.
+    if (stillJsHeavy) hints.push(usedMode === "render-failed" || escalationFailed
+      ? "Page is JavaScript-rendered and the render escalation already failed — do NOT re-send render='js'/render='render'. Use render='browser' (NOVADA_BROWSER_WS) or format='html' instead."
+      : "Page is JavaScript-rendered. Content may be incomplete. Try render='js' or render='browser'.");
     // INC-199: Surface escalation failure so agents know quality:0 is not silent
     if (escalationFailed) {
       hints.push(`Auto-escalation attempted (render${isBrowserConfigured() ? "+browser" : ""}) but quality remained low (${quality.score}/100). ${escalationError ? `Render error: ${escalationError}` : "The page may require a specialized approach."}`);
@@ -1898,6 +2086,9 @@ async function extractSingleInner(
     `## Extracted Content`,
     `url: ${params.url}`,
     `mode: ${usedMode} | source: ${gitbookMdContent !== null ? "gitbook-md-fallback" : waybackFallback ? "wayback" : "live"} | ${qualityFraming}`,
+    // F14: a failed escalation fetch is FRONT-AND-CENTER — a header line, not only a
+    // buried Agent Hints entry (the eval's exact complaint on quotes.toscrape.com/js/).
+    ...(escalationFetchFailed ? [`escalation_failed: true — auto-escalation to render failed: ${headerLine(redactSecrets(escalationError ?? ""))}`] : []),
     ...(qualityDetailLine ? [qualityDetailLine] : []),
     `fetched_at: ${fetchedAt}`,
     // #22: omit extraction_quality when no fields were requested (n/a is noise).
@@ -1930,7 +2121,12 @@ async function extractSingleInner(
       lines.push(`Fields [${fieldResults.map(r => r.field).join(', ')}] could not be resolved from JSON-LD, tables, microdata, or page patterns.`);
       lines.push(`The data may be present in the page content above — read the markdown body directly.`);
       const firstInstruction = fieldResults.find(r => r.agent_instruction)?.agent_instruction;
-      lines.push(`agent_instruction: ${firstInstruction ?? `For Wikipedia/wiki pages, parse the content body. For finance/e-commerce pages, retry with render="render" to fetch JS-rendered values.`}`);
+      // F14 invariant: the fallback advice must not re-recommend render when the
+      // auto-escalation already ran on this URL.
+      const fieldsFallback = escalationAttempted
+        ? `For Wikipedia/wiki pages, parse the content body. A render="render" attempt already ran automatically and did not resolve these fields.`
+        : `For Wikipedia/wiki pages, parse the content body. For finance/e-commerce pages, retry with render="render" to fetch JS-rendered values.`;
+      lines.push(`agent_instruction: ${firstInstruction ?? fieldsFallback}`);
     } else {
       lines.push(`## Requested Fields`);
       for (const r of fieldResults) {
@@ -2035,6 +2231,9 @@ async function extractSingleInner(
   // INC-199: Surface escalation failure in markdown output
   if (escalationFailed) {
     lines.push(`- [ESCALATION FAILED] Auto-escalation attempted (render${isBrowserConfigured() ? "+browser" : ""}) but quality remained low (${quality.score}/100).${escalationError ? ` Render error: ${escalationError}` : ""}`);
+    // F14 invariant: the render tier was just tried on this URL — say so explicitly so
+    // no other hint's render suggestion is followed.
+    lines.push(`- Do NOT re-attempt render="render" — the auto-escalation already sent it and it did not produce usable content.`);
     if (!isBrowserConfigured()) {
       lines.push(`- Set NOVADA_BROWSER_WS to enable Browser API as final fallback for JS-heavy pages.`);
     }
@@ -2086,7 +2285,9 @@ async function extractSingleInner(
   }
   // R4: only suggest a render retry when content is genuinely ABSENT, not merely
   // short. A complete-but-brief page (example.com) must not trigger a slow render retry.
-  if (!contentPresentDisplay && usedMode === "static" && renderMode === "auto") {
+  // F14 invariant: and never when the render escalation was already attempted on this
+  // URL (failed or added nothing) — recommending the mode that just ran is circular.
+  if (!contentPresentDisplay && usedMode === "static" && renderMode === "auto" && !escalationFailed) {
     lines.push(`- No usable content on static mode — try render="render" for JS-heavy or anti-bot protected pages.`);
   }
   if (isTruncated) {
@@ -2115,13 +2316,19 @@ async function extractSingleInner(
     totalChars,
     mainContent,
     params,
+    escalationAttempted,
+    escalationFailed,
+    escalationError,
+    browserConfigured: isBrowserConfigured(),
   });
   lines.push(``);
   lines.push(`## Agent Action`);
   // PARAM-HONESTY: appended only when country was supplied AND genuinely not applied
   // (see countryNotApplied above) — never fires when country was honored via render/js.
+  // F14 invariant: when the render escalation just failed here, do not append a
+  // "retry with render" recommendation — point at the failure instead.
   const countryInstruction = countryNotApplied
-    ? ` country="${params.country}" was accepted but NOT applied (resolved mode: "${usedMode}") — do not rely on it for geo-restricted content. Retry with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`
+    ? ` country="${params.country}" was accepted but NOT applied (resolved mode: "${usedMode}") — do not rely on it for geo-restricted content.${escalationFetchFailed ? ` A render fetch just failed on this URL (see escalation_failed above) — resolve that before retrying with country.` : ` Retry with render="render" (or render="js") and country="${params.country}" to have it actually honored; the default auto/static path drops it.`}`
     : "";
   lines.push(`agent_instruction: ${agentInstruction}${countryInstruction}`);
   const mdOutput = lines.join("\n");
