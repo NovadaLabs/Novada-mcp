@@ -46,11 +46,9 @@ function buildIspUsername(user: string, params: ProxyIspParams): string {
  * that distinguishes real users from datacenter IPs.
  */
 export async function novadaProxyIsp(params: ProxyIspParams): Promise<string> {
-  // F11: same table-driven flow-ledger preflight as novada_proxy (see
-  // proxy_preflight.ts) — fail-closed on a positive 0/expired signal only.
-  await assertFlowLedgerActive("isp", "novada_proxy_isp");
-
-  // INC-197/198: Use resolveProxyCredentials + friendly error format
+  // INC-197/198: Use resolveProxyCredentials + friendly error format.
+  // Resolved BEFORE the F11 gate (HIGH-1): the preflight must read the ledger
+  // of the account the creds BILL to, which only the resolver knows.
   const proxyCreds = await resolveProxyCredentials();
 
   if (!proxyCreds) {
@@ -68,6 +66,12 @@ export async function novadaProxyIsp(params: ProxyIspParams): Promise<string> {
       `- For web extraction without managing proxies, use novada_extract or novada_crawl instead.`,
     ].join("\n");
   }
+
+  // F11: same table-driven flow-ledger preflight as novada_proxy (see
+  // proxy_preflight.ts) — fail-closed on a positive 0/expired signal from the
+  // BILLING account's ledger only; direct env/SDK creds are never judged on
+  // another account's ledger.
+  await assertFlowLedgerActive("isp", proxyCreds, "novada_proxy_isp");
 
   const { user, pass, endpoint } = proxyCreds;
   const username = buildIspUsername(user, params);

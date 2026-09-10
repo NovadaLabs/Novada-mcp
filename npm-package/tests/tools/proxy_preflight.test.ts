@@ -11,19 +11,24 @@
  *      product is a new ROW in that table, never a new branch. A table-driven
  *      test iterates every proxy row to prove no product is skipped.
  *  (2) Fail-CLOSED on a positive bad ledger signal (balance 0 / expired /
- *      not provisioned): the refusal is a structured NovadaError carrying the
- *      FULL evidence — which ledger (endpoint path), balance, expiry, and the
- *      top-up path — never a generic error.
- *  (3) Fail-open on an INDETERMINATE preflight (no dev-api key, network error,
- *      timeout) — pinned by the pre-existing proxy_expired_plan.test.ts — but
- *      now with a disclosure line: env-supplied credentials whose ledger could
- *      not be read are labeled "unverified … ledger unknown".
+ *      not provisioned) from the BILLING account's ledger: the refusal is a
+ *      structured NovadaError carrying the FULL evidence — which ledger
+ *      (endpoint path), balance, expiry, and the top-up path — never a
+ *      generic error. (HIGH-1 review round: the gate applies to AUTO-FETCHED
+ *      credentials, whose billing key is known; the fixtures below therefore
+ *      route through the mgmt-API auto-fetch, with global fetch stubbed.)
+ *  (3) Fail-open on an INDETERMINATE preflight (lookup error/timeout) with a
+ *      disclosure line; DIRECT env/SDK credentials bill an unknowable account,
+ *      so no ledger is consulted at all and the response says "ledger unknown
+ *      for the billing account" (see proxy_billing_account.test.ts for the
+ *      full cross-account matrix).
  *  (4) The same gate covers the SDK sibling functions (novadaProxyResidential
  *      / novadaProxyIsp / …) — class, not instance: every entry point that
  *      issues flow-plan credentials preflights the same table.
  *
  * INVARIANT: no real credentials anywhere — plan_balance_all's network entry
- * point and the IP-echo prober are fully mocked; env values are fixtures.
+ * point, the mgmt-API auto-fetch (global fetch) and the IP-echo prober are
+ * fully mocked; env values are fixtures.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -61,14 +66,32 @@ const { novadaProxyResidential } = await import("../../src/tools/proxy_residenti
 const { novadaProxyIsp } = await import("../../src/tools/proxy_isp.js");
 const { preflightFlowLedger } = await import("../../src/tools/proxy_preflight.js");
 
+/** The account key the auto-fetched credentials BILL to (env, single-tenant). */
+const BILLING_KEY = "sk-test-fixture-billing-key";
+
 const originalEnv = { ...process.env };
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.NOVADA_PROXY_USER = "testuser";
-  process.env.NOVADA_PROXY_PASS = "testpass";
-  process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+  // HIGH-1: the gate judges the BILLING account's ledger, which is known only
+  // for AUTO-FETCHED credentials — so the fixture is API-key-only (no direct
+  // env user/pass) with the mgmt-API auto-fetch stubbed.
+  delete process.env.NOVADA_PROXY_USER;
+  delete process.env.NOVADA_PROXY_PASS;
+  delete process.env.NOVADA_PROXY_ENDPOINT;
+  process.env.NOVADA_API_KEY = BILLING_KEY;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        code: 0,
+        data: { list: [{ account: "fixture-sub-user", password: "fixture-sub-pass" }] },
+      }),
+    })),
+  );
 });
 afterEach(() => {
+  vi.unstubAllGlobals();
   process.env = { ...originalEnv };
 });
 
@@ -112,8 +135,8 @@ describe("F11 preflight — refuses 0-balance / expired ledgers with FULL eviden
     expect(err.agent_instruction).toContain("https://dashboard.novada.com/overview/products/");
     expect(err.agent_instruction).toContain('novada_account(section="plans")');
     expect(err.retryable).toBe(false);
-    // scoped lookup: exactly the one matching product
-    expect(mockedPlanBalance).toHaveBeenCalledWith({ products: ["residential"] });
+    // scoped lookup: exactly the one matching product, read with the BILLING key
+    expect(mockedPlanBalance).toHaveBeenCalledWith({ products: ["residential"] }, BILLING_KEY);
   });
 
   it("datacenter EXPIRED plan: refusal evidence carries the expiry date", async () => {
@@ -185,7 +208,7 @@ describe("F11 preflight — table-driven class coverage (a new product is a new 
       const err = await catchError(novadaProxy({ type: row.key as never, format: "url" }));
       expect(err.message).toContain(row.label);
       expect(err.agent_instruction).toContain(row.path);
-      expect(mockedPlanBalance).toHaveBeenCalledWith({ products: [row.key] });
+      expect(mockedPlanBalance).toHaveBeenCalledWith({ products: [row.key] }, BILLING_KEY);
     });
   }
 
@@ -217,13 +240,32 @@ describe("F11 preflight — active ledger evidence and indeterminate disclosure 
     expect(result).toContain("2099-12-31");
   });
 
-  it("indeterminate preflight + env-supplied creds: issues creds but discloses 'credentials supplied via env, ledger unknown'", async () => {
+  it("indeterminate preflight + auto-fetched creds: issues creds but discloses the failed lookup", async () => {
     mockedPlanBalance.mockRejectedValue(new Error("Developer-api returned HTTP 503"));
 
     const result = await novadaProxy({ type: "residential", format: "url" });
     expect(result).toContain("proxy_url:");
     expect(result).toContain("unverified");
-    expect(result).toContain("credentials supplied via env, ledger unknown");
+    expect(result).toMatch(/ledger lookup failed/i);
+  });
+
+  it("DIRECT env creds: billing account unknowable → ledger never consulted, disclosed as unknown (HIGH-1)", async () => {
+    process.env.NOVADA_PROXY_USER = "env-user";
+    process.env.NOVADA_PROXY_PASS = "env-pass";
+    process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+    // Even a positively-bad env-key ledger must not refuse (wrong account).
+    mockedPlanBalance.mockResolvedValue(ledgerPayload("residential", {
+      status: "ok",
+      balance: { balance: 0, expire_time: 4102444800 },
+      expired: false,
+      exhausted: true,
+      balance_human: "0.0 MB",
+    }));
+
+    const result = await novadaProxy({ type: "residential", format: "url" });
+    expect(result).toContain("proxy_url:");
+    expect(result).toContain("ledger unknown for the billing account");
+    expect(mockedPlanBalance).not.toHaveBeenCalled();
   });
 });
 

@@ -13,16 +13,30 @@
 // product → endpoint table, in plan_balance_all.ts). A new proxy product is a
 // new ROW there — this module never grows a new branch for it.
 //
+// BILLING-ACCOUNT INVARIANT (HIGH-1, review round 2026-09-10): the ledger
+// consulted MUST be the ledger of the account the issued credentials BILL to.
+//   - auto-fetched creds: resolveProxyCredentials() derived them from an
+//     effective key (arg > request-scoped store > env) and returns that exact
+//     key as `billingApiKey` — the preflight reads the ledger WITH it. Reading
+//     the server env key's ledger for caller-billed creds refused healthy
+//     paying callers (server exhausted) and issued dead creds with wrong
+//     evidence (caller exhausted) — the 2026-07-30 wrong-ledger-denial P0
+//     class, cross-account.
+//   - direct creds (env/SDK user+pass): the account they bill is unknowable
+//     from here, so the preflight consults NOTHING — it returns status
+//     "unknown" and the caller DISCLOSES "ledger unknown for the billing
+//     account". Never judge (or display) another account's ledger.
+//
 // Failure semantics (deliberate, pinned by tests):
-//   fail-CLOSED on a POSITIVE bad signal — expired / exhausted (balance 0) /
-//     not provisioned ⇒ throw a structured NovadaError naming the ledger, the
-//     balance, the expiry and the top-up path. Issuing credentials for such a
-//     ledger is worse than refusing: they authenticate, then die at CONNECT
-//     time with no clue.
-//   fail-OPEN on an INDETERMINATE preflight — no dev-api key configured (e.g.
-//     credentials supplied via env vars only), network error, timeout,
-//     malformed response ⇒ status "unknown", credentials are still issued and
-//     the caller (proxy.ts) DISCLOSES the unverified ledger in the response.
+//   fail-CLOSED on a POSITIVE bad signal from the BILLING account's ledger —
+//     expired / exhausted (balance 0) / not provisioned ⇒ throw a structured
+//     NovadaError naming the ledger, the balance, the expiry and the top-up
+//     path. Issuing credentials for such a ledger is worse than refusing:
+//     they authenticate, then die at CONNECT time with no clue.
+//   fail-OPEN on an INDETERMINATE preflight — direct creds (billing account
+//     unknowable, nothing consulted), network error, timeout, malformed
+//     response ⇒ status "unknown", credentials are still issued and the
+//     caller (proxy.ts) DISCLOSES the unverified ledger in the response.
 //     A diagnostics outage must never break a working credential formatter
 //     (same G-11 precedent the original C-11 gate followed).
 
@@ -91,14 +105,22 @@ interface LedgerEntry {
  * truth for expired/unavailable/exhausted derivation). Returns null for
  * products with no flow ledger (static/dedicated — per-IP, user-managed
  * credential lists; there is no plan row to consult). Never throws.
+ *
+ * @param billingApiKey the key the issued credentials BILL to (HIGH-1) —
+ *   threaded into the ledger lookup so the ledger consulted is the billing
+ *   account's, never the server env account's. Undefined only on legacy
+ *   single-tenant paths where devApi's own env fallback IS the billing key.
  */
-export async function preflightFlowLedger(product: string): Promise<LedgerPreflight | null> {
+export async function preflightFlowLedger(
+  product: string,
+  billingApiKey?: string,
+): Promise<LedgerPreflight | null> {
   const row = FLOW_LEDGER_ROWS.find((r) => r.key === product);
   if (!row) return null;
   const base = { product: row.key, label: row.label, ledger: row.path };
   try {
     const raw = await withTimeout(
-      novadaPlanBalanceAll({ products: [row.key] } as never),
+      novadaPlanBalanceAll({ products: [row.key] } as never, billingApiKey),
       PREFLIGHT_TIMEOUT_MS,
     );
     const parsed = JSON.parse(raw) as { per_product?: Record<string, LedgerEntry> };
@@ -131,21 +153,55 @@ const REFUSAL_REASON: Record<Exclude<LedgerStatus, "active" | "unknown">, string
   unavailable: "not provisioned on this account",
 };
 
+/** How the issued credentials were obtained — mirrors resolveProxyCredentials(). */
+export interface BillingCredContext {
+  source: "direct" | "auto_fetched";
+  /** The key auto-fetched creds bill to (absent for "direct"). Never printed. */
+  billingApiKey?: string;
+}
+
 /**
- * Preflight `product`'s ledger and FAIL CLOSED (throw a structured NovadaError
- * carrying the full evidence: which ledger, balance, expiry, top-up path) on a
- * positive expired/exhausted/not-provisioned signal. Returns the preflight
- * (status "active" or "unknown") otherwise, and null for products with no flow
- * ledger — callers use the return value to DISCLOSE ledger state in responses.
+ * Preflight `product`'s ledger — the BILLING account's ledger (HIGH-1) — and
+ * FAIL CLOSED (throw a structured NovadaError carrying the full evidence:
+ * which ledger, balance, expiry, top-up path) on a positive
+ * expired/exhausted/not-provisioned signal. Returns the preflight (status
+ * "active" or "unknown") otherwise, and null for products with no flow ledger
+ * — callers use the return value to DISCLOSE ledger state in responses.
  *
+ * Callers resolve credentials FIRST and pass the result here, because the
+ * gate's very shape depends on how the creds were obtained:
+ *   - source "auto_fetched": the ledger is read WITH `billingApiKey` (the key
+ *     the creds bill to). Fail-closed applies.
+ *   - source "direct" (env/SDK user+pass): the billing account is unknowable —
+ *     NO ledger is consulted, status "unknown" is returned and the caller
+ *     discloses "ledger unknown for the billing account". Judging a
+ *     possibly-unrelated account's ledger caused both wrong-account denial and
+ *     wrong-account evidence (review HIGH-1 / MEDIUM-5).
+ *
+ * @param creds how the credentials about to be issued were obtained.
  * @param toolHint how the refusal names the calling tool in agent_instruction,
  *   e.g. `novada_proxy(type="residential")` or `novada_proxy_residential`.
  */
 export async function assertFlowLedgerActive(
   product: string,
+  creds: BillingCredContext,
   toolHint: string = `novada_proxy(type="${product}")`,
 ): Promise<LedgerPreflight | null> {
-  const pf = await preflightFlowLedger(product);
+  const row = FLOW_LEDGER_ROWS.find((r) => r.key === product);
+  if (!row) return null;
+  if (creds.source === "direct") {
+    // Billing account unknowable — consult nothing, never judge (or display)
+    // another account's ledger. Fail open; caller discloses.
+    return {
+      product: row.key,
+      label: row.label,
+      ledger: row.path,
+      status: "unknown",
+      detail:
+        "billing account unknown — credentials were supplied directly (env/SDK), ledger not consulted",
+    };
+  }
+  const pf = await preflightFlowLedger(product, creds.billingApiKey);
   if (!pf) return null;
   if (pf.status === "expired" || pf.status === "exhausted" || pf.status === "unavailable") {
     const reason = REFUSAL_REASON[pf.status];

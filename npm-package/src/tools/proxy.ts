@@ -4,7 +4,6 @@ import { novadaProxyStatic } from "./proxy_static.js";
 import { novadaProxyDedicated } from "./proxy_dedicated.js";
 import {
   assertFlowLedgerActive,
-  FLOW_LEDGER_PRODUCTS,
   URL_PROXY_PLANS,
   type LedgerPreflight,
 } from "./proxy_preflight.js";
@@ -90,9 +89,12 @@ function appendCityWarningsAndCurlSnippet(
 // 56. Two-part fix:
 //   1. PREFLIGHT (proxy_preflight.ts): before issuing, read the MATCHING
 //      product's flow-ledger row (balance + expire_time) via the shared
-//      FLOW_BALANCE_ENDPOINTS table and REFUSE (fail-closed, full evidence) on
-//      a positive 0/expired/not-provisioned signal. Indeterminate lookups fail
-//      open and are DISCLOSED below instead.
+//      FLOW_BALANCE_ENDPOINTS table — read with the BILLING account's key
+//      (HIGH-1: auto-fetched creds carry `billingApiKey`; direct env/SDK creds
+//      bill an unknowable account, so nothing is consulted and the response
+//      discloses "ledger unknown for the billing account") — and REFUSE
+//      (fail-closed, full evidence) on a positive 0/expired/not-provisioned
+//      signal. Indeterminate lookups fail open and are DISCLOSED below.
 //   2. VERIFY (proxy_verify.ts): after issuing, run exactly ONE IP-echo request
 //      through the issued proxy (5s timeout, never inside any retry loop) and
 //      put the evidence — exit_ip, org/ASN, country, latency — in the response;
@@ -120,9 +122,11 @@ const FAILURE_HINTS: Record<VerifyFailureClass, string> = {
 /**
  * Ledger disclosure line. When the preflight was indeterminate the config is
  * still issued (fail-open), but the response must say WHY the ledger is
- * unverified — env-supplied credentials bypass the mgmt API entirely (ledger
- * unknown by construction), while auto-fetched credentials imply a reachable
- * account whose ledger lookup happened to fail.
+ * unverified — directly-supplied credentials (env/SDK) bill an account this
+ * server cannot identify, so NO ledger is consulted for them (HIGH-1: judging
+ * another account's ledger produced wrong-account denials and wrong-account
+ * evidence), while auto-fetched credentials imply a known billing key whose
+ * ledger lookup happened to fail.
  */
 function ledgerDisclosure(ledger: LedgerPreflight | null, credSource: "direct" | "auto_fetched"): string {
   if (!ledger) return `unverified — no ledger information available`;
@@ -135,8 +139,8 @@ function ledgerDisclosure(ledger: LedgerPreflight | null, credSource: "direct" |
   // status === "unknown" (expired/exhausted/unavailable never reach here — they throw)
   if (credSource === "direct") {
     return (
-      `unverified — credentials supplied via env, ledger unknown ` +
-      `(preflight needs NOVADA_API_KEY / NOVADA_DEVELOPER_API_KEY and a reachable developer API)`
+      `unverified — ledger unknown for the billing account (credentials were supplied via ` +
+      `env/SDK, so the account they bill cannot be read from here; no ledger was consulted)`
     );
   }
   return `unverified — ledger lookup failed (${ledger.detail ?? "no detail"})`;
@@ -188,8 +192,12 @@ async function buildEvidenceBlock(opts: {
       if (result.org || result.asn) {
         lines.push(`org: ${[result.org, result.asn ? `(${result.asn})` : ""].filter(Boolean).join(" ")}`);
       }
-      if (result.country) {
-        lines.push(`country: ${result.country}${result.country_code ? ` (${result.country_code})` : ""}`);
+      if (result.country || result.country_code) {
+        // ipinfo.io-class echoes report only a 2-letter code (no full name) —
+        // render whichever evidence exists.
+        const name = result.country ?? result.country_code;
+        const code = result.country && result.country_code ? ` (${result.country_code})` : "";
+        lines.push(`country: ${name}${code}`);
       }
       lines.push(`latency_ms: ${result.latency_ms}`);
       if (
@@ -221,16 +229,6 @@ async function buildEvidenceBlock(opts: {
  * bypass geo-restrictions, or maintain IP consistency across a session.
  */
 export async function novadaProxy(params: ProxyParams): Promise<string> {
-  // F11: refuse to hand out credentials when the MATCHING product's flow
-  // ledger positively says the plan cannot route (balance 0 / expired / not
-  // provisioned). Table-driven: static/dedicated have no flow ledger row and
-  // are never looked up (per-IP, user-managed credential model). Indeterminate
-  // lookups fail OPEN — disclosed via ledgerDisclosure() below.
-  let ledger: LedgerPreflight | null = null;
-  if (FLOW_LEDGER_PRODUCTS.has(params.type)) {
-    ledger = await assertFlowLedgerActive(params.type); // throws with full evidence on a positive bad signal
-  }
-
   // F1: On the hosted door (Vercel), when the caller did NOT explicitly pass a
   // format, default to "url" (a single pasteable proxy URL string) rather than
   // whatever the schema default is. Local/stdio callers are unaffected.
@@ -281,6 +279,12 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
   }
   // INC-198: Use resolveProxyCredentials() which auto-fetches via account API
   // when only NOVADA_PROXY_ENDPOINT is set (no user/pass).
+  //
+  // Credentials are resolved BEFORE the F11 ledger preflight (HIGH-1): the
+  // gate must consult the ledger of the account the issued credentials BILL
+  // to, and only resolveProxyCredentials() knows that — `billingApiKey` for
+  // auto-fetched creds, unknowable for direct env/SDK creds (which therefore
+  // fail open with a disclosure instead of being judged on the wrong account).
   const proxyCreds = await resolveProxyCredentials();
   const proxyUser = proxyCreds?.user;
   const proxyPass = proxyCreds?.pass;
@@ -312,6 +316,14 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
       `- For web extraction without managing proxies, use novada_extract or novada_crawl instead.`,
     ].join("\n");
   }
+
+  // F11: refuse to hand out credentials when the BILLING account's flow ledger
+  // positively says the plan cannot route (balance 0 / expired / not
+  // provisioned). Table-driven: static/dedicated never reach here (delegated
+  // above; no flow ledger row). Direct env/SDK creds bill an unknowable
+  // account, so no ledger is consulted and the disclosure below says so;
+  // indeterminate lookups fail OPEN — disclosed via ledgerDisclosure().
+  const ledger: LedgerPreflight | null = await assertFlowLedgerActive(params.type, proxyCreds); // throws with full evidence on a positive bad signal
 
   // M7: never derive the masked username from the REAL value. Novada usernames
   // are structured (baseUser-zone-…) so even a 4-char prefix can reveal the

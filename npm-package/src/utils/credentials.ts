@@ -241,16 +241,29 @@ const UNIVERSAL_PROXY_ENDPOINT = "proxy.novada.pro:7777";
  *
  * `source` tells the caller HOW the credentials were obtained — "direct"
  * (env vars / SDK-scoped store, bypassing the mgmt API: the account ledger for
- * them is unknowable from here) vs "auto_fetched" (derived from the API key,
- * so they belong to the same account the flow-ledger preflight reads). F11's
- * disclosure requirements hinge on this distinction.
+ * them is unknowable from here) vs "auto_fetched" (derived from the API key).
+ * F11's disclosure requirements hinge on this distinction.
+ *
+ * `billingApiKey` (auto_fetched only) is the EXACT key the fetched sub-account
+ * bills to — the effective-key chain below (arg > store > env). HIGH-1: the F11
+ * flow-ledger preflight must read THIS key's ledger; reading the server env
+ * key's ledger for caller-billed creds refused healthy paying callers when the
+ * server was exhausted (the 2026-07-30 wrong-ledger-denial P0 class,
+ * cross-account) and issued dead creds when the caller was exhausted. The key
+ * is for in-process threading only — never print or log it.
  *
  * @param apiKey - Caller's API key. Takes priority over the store-scoped key and NOVADA_API_KEY,
  *   so hosted-server requests are billed to the caller, not the server account.
  */
 export async function resolveProxyCredentials(
   apiKey?: string,
-): Promise<{ user: string; pass: string; endpoint: string; source: "direct" | "auto_fetched" } | null> {
+): Promise<{
+  user: string;
+  pass: string;
+  endpoint: string;
+  source: "direct" | "auto_fetched";
+  billingApiKey?: string;
+} | null> {
   const direct = getProxyCredentials();
   if (direct) return { ...direct, source: "direct" };
 
@@ -267,7 +280,13 @@ export async function resolveProxyCredentials(
   const fetched = await fetchProxySubAccountCredentials(effectiveApiKey);
   if (!fetched) return null;
 
-  return { user: fetched.account, pass: fetched.password, endpoint, source: "auto_fetched" };
+  return {
+    user: fetched.account,
+    pass: fetched.password,
+    endpoint,
+    source: "auto_fetched",
+    billingApiKey: effectiveApiKey,
+  };
 }
 
 /**

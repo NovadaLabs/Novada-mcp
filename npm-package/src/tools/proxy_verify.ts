@@ -7,7 +7,7 @@
 // classified failure (402 payment / 407 auth / timeout / network error).
 //
 // Mechanics — absolute-form GET, deliberately NOT a CONNECT tunnel:
-//   GET http://ip-api.com/json/… sent to the proxy host:port with
+//   GET http://<echo-host>/… sent to the proxy host:port with
 //   Proxy-Authorization. Plain-HTTP forward proxying works on any HTTP proxy
 //   gateway, needs no TLS, and surfaces the gateway's own status line (402/407)
 //   directly as a response status — the exact signals the F11 evaluation saw
@@ -20,9 +20,13 @@
 //   - 5s timeout, classified as "timeout" (distinct from connection errors);
 //   - local/stdio runtimes only — hosted/Edge runtimes may not allow raw
 //     proxied sockets, so verify is skipped there and disclosed;
-//   - credentials never appear in the result object.
+//   - credentials never appear in the result object;
+//   - every echoed string is UNTRUSTED (third-party service THROUGH an
+//     untrusted gateway) and is charset-allowlisted + length-capped before it
+//     can enter agent-facing evidence (see sanitizeEchoField).
 
 import http from "node:http";
+import { isHostedEnvironment } from "../config.js";
 
 export interface ProxyVerifyTarget {
   host: string;
@@ -60,30 +64,69 @@ export type ProxyVerifyResult = ProxyVerifySuccess | ProxyVerifyFailure;
 
 export const DEFAULT_ECHO_TIMEOUT_MS = 5000;
 
-// HTTP (not HTTPS) echo endpoint on purpose — see module header. `fields`
-// trims the reply to exactly the evidence we surface.
-const ECHO_HOST = "ip-api.com";
-export const ECHO_URL = `http://${ECHO_HOST}/json/?fields=status,query,country,countryCode,org,as`;
+// THE echo endpoint — one named constant, HTTP (not HTTPS) on purpose (see
+// module header: absolute-form forward-proxy GET, no CONNECT tunnel).
+// ipinfo.io replaces ip-api.com (review MEDIUM-4: ip-api.com's free tier is
+// licensed for NON-commercial use only; ipinfo.io's terms permit commercial
+// use and it answers plain-HTTP requests).
+// TODO(owner): replace with a Novada-owned echo endpoint (e.g. a JSON mode of
+// ipinfo.novada.pro, already used in proxy_static/dedicated curl examples) so
+// the probe stays first-party end-to-end.
+const ECHO_HOST = "ipinfo.io";
+export const ECHO_URL = `http://${ECHO_HOST}/json`;
 
 /** Cap the echo body read — the expected reply is ~0.3 KB. */
 const MAX_ECHO_BODY_BYTES = 64 * 1024;
 
 /**
- * Verify is local-stdio-only: hosted/Edge runtimes (Vercel serverless/edge)
- * may not permit raw proxied sockets, and a false negative there would smear a
- * working proxy. Callers skip the probe and disclose the skip instead.
+ * Verify is local-stdio-only: hosted runtimes (Vercel serverless, AWS Lambda)
+ * and the Edge runtime may not permit raw proxied sockets, and a false
+ * negative there would smear a working proxy. Callers skip the probe and
+ * disclose the skip instead.
+ *
+ * Class-not-instance (review MEDIUM-3): hosted detection reuses the ONE
+ * canonical predicate (config.ts isHostedEnvironment — VERCEL / VERCEL_ENV /
+ * AWS_LAMBDA_FUNCTION_NAME) instead of a parallel hand-rolled list; the Edge
+ * runtime is the only verify-specific member.
  */
 export function isVerifySupportedRuntime(): boolean {
-  return !(process.env.VERCEL || process.env.VERCEL_ENV || process.env.NEXT_RUNTIME === "edge");
+  return !(isHostedEnvironment() || process.env.NEXT_RUNTIME === "edge");
 }
 
+// ─── Echo-field sanitization (agent-context injection surface) ───────────────
+//
+// Echoed strings come from a third party THROUGH an untrusted gateway; a
+// hostile/compromised exit can splice instruction-shaped text into them. Every
+// field is allowlist-filtered and length-capped BEFORE it can reach the
+// agent-facing evidence block. CLASS-shaped: fields are address-shaped or
+// text-shaped — a new echoed field picks a ROW here, never a new ad-hoc regex.
+const ECHO_FIELD_RULES = {
+  /** IPv4/IPv6 literal — hex digits, dots, colons; 45 = max IPv6 length. */
+  ip: { strip: /[^0-9a-fA-F.:]/g, maxLen: 45 },
+  /** Human text (org/ASN/country) — printable ASCII subset; no newlines,
+   *  backticks, angle brackets, quotes or control chars survive. */
+  text: { strip: /[^A-Za-z0-9 ._:,'()/&+-]/g, maxLen: 128 },
+} as const;
+
+/**
+ * Reduce an untrusted echoed value to its allowlisted charset and cap its
+ * length. Returns undefined for non-strings and values with no legal chars.
+ */
+export function sanitizeEchoField(
+  value: unknown,
+  kind: keyof typeof ECHO_FIELD_RULES = "text",
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const rule = ECHO_FIELD_RULES[kind];
+  const cleaned = value.replace(rule.strip, "").trim().slice(0, rule.maxLen);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/** ipinfo.io reply shape: ip, country (2-letter code), org ("AS#### Name"). */
 interface EchoPayload {
-  status?: string;
-  query?: string;
+  ip?: string;
   country?: string;
-  countryCode?: string;
   org?: string;
-  as?: string;
 }
 
 /**
@@ -176,17 +219,26 @@ export function verifyProxyExit(
             fail("bad_response", "echo returned a non-JSON body (the proxy may be intercepting traffic)");
             return;
           }
-          if (payload.status === "fail" || typeof payload.query !== "string" || payload.query.length === 0) {
+          // UNTRUSTED external content: sanitize every echoed field before it
+          // can enter agent-facing evidence (see ECHO_FIELD_RULES).
+          const exitIp = sanitizeEchoField(payload.ip, "ip");
+          if (!exitIp) {
             fail("bad_response", "echo service did not report an exit IP");
             return;
           }
+          // ipinfo.io's `org` combines ASN + name ("AS22773 Cox Communications
+          // Inc.") — split so the evidence block keeps its org/(asn) layout.
+          const rawOrg = sanitizeEchoField(payload.org, "text");
+          const orgMatch = rawOrg?.match(/^(AS\d+)\s+(.+)$/);
+          const asn = orgMatch?.[1];
+          const org = orgMatch?.[2] ?? rawOrg;
+          const countryCode = sanitizeEchoField(payload.country, "text");
           settle({
             verified: true,
-            exit_ip: payload.query,
-            ...(payload.org ? { org: payload.org } : {}),
-            ...(payload.as ? { asn: payload.as } : {}),
-            ...(payload.country ? { country: payload.country } : {}),
-            ...(payload.countryCode ? { country_code: payload.countryCode } : {}),
+            exit_ip: exitIp,
+            ...(org ? { org } : {}),
+            ...(asn ? { asn } : {}),
+            ...(countryCode ? { country_code: countryCode } : {}),
             latency_ms: Date.now() - started,
           });
         });

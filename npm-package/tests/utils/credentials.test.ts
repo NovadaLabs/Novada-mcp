@@ -196,7 +196,16 @@ describe("resolveProxyCredentials — apiKey threading (L3 unified-key)", () => 
     } as Response);
 
     const result = await resolveProxyCredentials("caller-key");
-    expect(result).toEqual({ user: "auto-user", pass: "auto-pass", endpoint: "proxy.example.com:7777", source: "auto_fetched" });
+    // HIGH-1: `billingApiKey` exposes the EXACT key the fetched sub-account
+    // bills to, so the F11 ledger preflight can read that account's ledger
+    // (never the server env account's).
+    expect(result).toEqual({
+      user: "auto-user",
+      pass: "auto-pass",
+      endpoint: "proxy.example.com:7777",
+      source: "auto_fetched",
+      billingApiKey: "caller-key",
+    });
 
     // Authorization header must use the CALLER key, NOT the server key.
     const callArgs = fetchSpy.mock.calls[0];

@@ -13,12 +13,18 @@
  * isError:true — simulated here via classifyError().toAgentString(), the exact
  * mechanism index.ts uses, without needing to import/boot index.ts itself);
  * (2) an active plan is unaffected; (3) an entitlement-CHECK failure (network
- * down, no dev-api key, timeout) fails OPEN — never blocks a working proxy
+ * down, timeout, malformed reply) fails OPEN — never blocks a working proxy
  * formatter over a diagnostics failure; (4) static/dedicated are exempt
  * entirely (different, user-managed credential model — no plan_balance_all
  * call is made for them at all).
  *
- * No live network call is made — plan_balance_all.js is fully mocked.
+ * HIGH-1 review round: the gate judges the BILLING account's ledger, known
+ * only for AUTO-FETCHED credentials — so this file's fixtures route through
+ * the mgmt-API auto-fetch (API key + stubbed global fetch, no direct env
+ * user/pass). Direct-cred semantics live in proxy_billing_account.test.ts.
+ *
+ * No live network call is made — plan_balance_all.js and global fetch are
+ * fully mocked.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -54,14 +60,29 @@ const mockedPlanBalance = vi.mocked(novadaPlanBalanceAll);
 
 const { novadaProxy } = await import("../../src/tools/proxy.js");
 
+/** The account key the auto-fetched credentials BILL to (env, single-tenant). */
+const BILLING_KEY = "sk-test-fixture-billing-key";
+
 const originalEnv = { ...process.env };
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.NOVADA_PROXY_USER = "testuser";
-  process.env.NOVADA_PROXY_PASS = "testpass";
-  process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+  delete process.env.NOVADA_PROXY_USER;
+  delete process.env.NOVADA_PROXY_PASS;
+  delete process.env.NOVADA_PROXY_ENDPOINT;
+  process.env.NOVADA_API_KEY = BILLING_KEY;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        code: 0,
+        data: { list: [{ account: "fixture-sub-user", password: "fixture-sub-pass" }] },
+      }),
+    })),
+  );
 });
 afterEach(() => {
+  vi.unstubAllGlobals();
   process.env = { ...originalEnv };
 });
 
@@ -168,9 +189,9 @@ describe("novadaProxy — static/dedicated are exempt from the entitlement check
 });
 
 describe("novadaProxy — entitlement check is scoped to only the requested product", () => {
-  it("requests only the one product matching `type`, not all 6", async () => {
+  it("requests only the one product matching `type`, not all 6 — read with the billing key", async () => {
     mockedPlanBalance.mockResolvedValue(planPayload("ok", { expired: false }));
     await novadaProxy({ type: "residential", format: "url" });
-    expect(mockedPlanBalance).toHaveBeenCalledWith({ products: ["residential"] });
+    expect(mockedPlanBalance).toHaveBeenCalledWith({ products: ["residential"] }, BILLING_KEY);
   });
 });
