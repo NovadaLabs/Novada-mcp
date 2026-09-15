@@ -6,6 +6,9 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+### Added
+- **Official MCP Registry publishing via GitHub Actions OIDC.** A manually triggered, secretless workflow validates and publishes `server.json` under the repository-owned `io.github.NovadaLabs/*` namespace with only `contents: read` and `id-token: write` permissions.
+
 ---
 
 ## [0.9.37] — 2026-08-26
