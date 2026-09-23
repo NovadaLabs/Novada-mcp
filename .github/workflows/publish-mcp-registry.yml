@@ -1,0 +1,40 @@
+name: Publish MCP Registry
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-mcp-registry
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'NovadaLabs/novada-mcp'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: npm-package
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install MCP publisher
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar --extract --gzip mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Validate Registry manifest
+        run: ./mcp-publisher validate
+
+      - name: Authenticate with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish Registry manifest
+        run: ./mcp-publisher publish
