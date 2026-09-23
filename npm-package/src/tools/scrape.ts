@@ -4,7 +4,7 @@ import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHost
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
-import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
+import { NovadaError, NovadaErrorCode, classifyBusinessCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
 import { devApiPost } from "../_core/developer_api.js";
@@ -230,6 +230,23 @@ export async function submitScrapeTask(
       11000: "Invalid API key.",
     };
     const msg = errorMessages[body.code] ?? body.msg ?? "Unknown scraper error";
+    // B1 (2026-09-21): classify the envelope code through the ONE shared
+    // BUSINESS_CODE_MAP (errors.ts) before falling back to a plain Error.
+    // 11004 ("Insufficient balance") previously fell through here to
+    // classifyError → UNKNOWN/"contact support" — now it throws the typed
+    // INSUFFICIENT_BALANCE (permanent, no-retry, top-up instruction), matching
+    // the proxy preflight's reference shape. Unmapped codes keep the existing
+    // plain-Error path unchanged so the dispatch layer's classifyError prose
+    // pass still applies to them.
+    const mapped = classifyBusinessCode(body.code, body.msg);
+    if (mapped !== NovadaErrorCode.UNKNOWN) {
+      throw makeNovadaError(
+        mapped,
+        `Scraper error (code ${body.code}): ${sanitizeServerMsg(msg)}`,
+        `code ${body.code}`,
+        body.code,
+      );
+    }
     throw new Error(`Scraper error (code ${body.code}): ${sanitizeServerMsg(msg)}`);
   }
 
@@ -427,6 +444,32 @@ async function pollForResult(
           `Scraper backend returned an HTML page instead of structured data for this operation — the target platform likely served a challenge/consent/interstitial page rather than the requested content. Retry once; if it persists, this is a Novada-side extraction gap for this platform — not your request or parameters.`,
           "download_html_page",
         );
+      }
+      // B1 (2026-09-21): the download endpoint can also surface account-level
+      // envelope codes (e.g. 11004 "Insufficient balance"). Classify through
+      // the SAME shared BUSINESS_CODE_MAP as the submit fallback so a balance
+      // error is permanent/no-retry with a top-up instruction no matter which
+      // leg of the scrape pipeline surfaced it. Unmapped codes keep the
+      // existing plain-Error path unchanged. Endpoint-specific download codes
+      // (27202/10000/10001/10002/10003/27203) are all handled ABOVE and never
+      // reach this table.
+      //
+      // Review cheap-win #3: `errCode` is `bErr.code as number | undefined` off
+      // RAW upstream JSON — the cast is not a runtime guarantee, so coerce
+      // before classifying: a string "11004" must land in the same class.
+      // Number(undefined)=NaN and Number(garbage)=NaN both fail isFinite and
+      // fall through to the unchanged plain-Error path.
+      const numericErrCode = Number(errCode);
+      if (Number.isFinite(numericErrCode)) {
+        const mappedDownload = classifyBusinessCode(numericErrCode, errMsg);
+        if (mappedDownload !== NovadaErrorCode.UNKNOWN) {
+          throw makeNovadaError(
+            mappedDownload,
+            `Scraper download error (code ${numericErrCode}): ${sanitizeServerMsg(errMsg || "no upstream message")}`,
+            `download_code:${numericErrCode}`,
+            numericErrCode,
+          );
+        }
       }
       throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${sanitizeServerMsg(errMsg || JSON.stringify(bErr).slice(0, 150))}`);
     }

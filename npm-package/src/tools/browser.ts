@@ -4,6 +4,38 @@ import { resolveBrowserWs } from "../utils/credentials.js";
 import { getSession, storeSession, closeSession, listSessions, sanitizeBrowserError } from "../utils/browser.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
+import { isHostedEnvironment } from "../config.js";
+
+/**
+ * Fix C (2026-09-21): novada_browser variant of utils/runtime.ts's
+ * getBrowserUnavailableError(). The shared template is phrased around a
+ * `render=`/`method=` param (`${fieldName}="browser" requires…`, "Use
+ * ${fieldName}='render'…") which reads wrong for this tool — novada_browser has
+ * no render param, and telling the agent to pass one would trigger a schema
+ * reject. Same heading ("## Browser Mode Unavailable" — a member of runtime.ts's
+ * EXTRACTION_FAILURE_SENTINELS set) and same machine status token
+ * (status:browser_unavailable_on_runtime) so downstream consumers see one
+ * consistent shape; only the prose is tool-appropriate.
+ */
+function browserUnavailableOnRuntimeMessage(): string {
+  return [
+    `## Browser Mode Unavailable`,
+    ``,
+    `novada_browser requires a persistent CDP WebSocket transport that this serverless runtime (Vercel/Lambda) cannot provide — the connection was not attempted.`,
+    ``,
+    `## Why This Happens`,
+    `- Serverless functions terminate after each request; CDP needs a long-lived WebSocket.`,
+    `- Attempting the connection anyway fails with a raw "AuthorizationError: Account or Password verification failed" — a transport failure masquerading as a credentials problem. This guard exists so you never see that misleading error.`,
+    ``,
+    `## Agent Action`,
+    `agent_instruction: status:browser_unavailable_on_runtime | ` +
+      `Do NOT retry novada_browser on this endpoint. ` +
+      `For JS-rendered pages use novada_extract with render="render" (Web Unblocker). ` +
+      `For full interactive browser automation, run the MCP server locally: npx -y novada-mcp@latest ` +
+      `with NOVADA_BROWSER_WS configured. ` +
+      `Docs: https://docs.novada.com/mcp/local-setup`,
+  ].join("\n");
+}
 
 interface ActionResult {
   action: string;
@@ -63,6 +95,26 @@ export async function novadaBrowser(params: BrowserParams, apiKey?: string): Pro
         `- Pass session_id across multiple browser calls to maintain login state (cookies, localStorage).`,
       ].join("\n");
     }
+  }
+
+  // Fix C (2026-09-21): runtime guard BEFORE resolveBrowserWs/connectOverCDP,
+  // mirroring extract.ts's render="browser" pre-check. On a serverless runtime,
+  // connectOverCDP cannot hold the long-lived WebSocket and dies with a
+  // misleading "AuthorizationError: Account or Password verification failed" —
+  // fail fast with a structured, honest message instead of attempting the
+  // doomed connection.
+  //
+  // Pure TRANSPORT predicate (review HIGH, 2026-09-21): hosted runtime that has
+  // NOT opted into persistent WS via DEPLOYMENT_SUPPORTS_WS=true. Deliberately
+  // NOT isBrowserAvailableOnRuntime() — that helper conflates transport
+  // capability with credential PRESENCE (it checks getBrowserWs(), env/store
+  // only), so it fires on an opted-in runtime with no env WS even though
+  // resolveBrowserWs(apiKey) below would auto-provision credentials the helper
+  // cannot see (that config worked before this guard and must keep working —
+  // same reasoning for capable LOCAL runtimes, which never enter this branch).
+  // Credential absence stays the job of the richer resolveBrowserWs flow below.
+  if (isHostedEnvironment() && process.env.DEPLOYMENT_SUPPORTS_WS !== "true") {
+    return browserUnavailableOnRuntimeMessage();
   }
 
   // resolveBrowserWs prefers: store.browserWs > NOVADA_BROWSER_WS > auto-fetch via apiKey.

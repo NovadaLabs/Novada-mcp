@@ -113,9 +113,12 @@ interface WalletSection {
 }
 
 /** Per-product entry, flattened. Error products carry a pointer flag, not the
- *  full error string — the string lives once in the aggregate `errors[]` (R6). */
+ *  full error string — the string lives once in the aggregate `errors[]` (R6).
+ *  `balance_unverified` (capture zero-balance guard, plan_balance_all.ts) is
+ *  propagated verbatim: downstream renderers must never show an unverified
+ *  entry as exhausted. */
 type FlatProduct =
-  | { status: "ok"; balance: unknown; expired?: boolean; expires_at?: string }
+  | { status: "ok"; balance: unknown; expired?: boolean; expires_at?: string; balance_unverified?: boolean }
   | { status: "error"; unavailable?: boolean; see_errors: true };
 
 interface PlansSection {
@@ -181,6 +184,9 @@ function unwrapPlans(section: Section<PlanPayload>): PlansSection {
           balance: stripEpoch(v.balance),
           ...(typeof v.expired === "boolean" ? { expired: v.expired } : {}),
           ...(typeof v.expires_at_human === "string" ? { expires_at: v.expires_at_human } : {}),
+          // Capture zero-balance guard flag — must survive flattening or the
+          // summary renderer falls back to deriving "exhausted" from the raw 0.
+          ...(v.balance_unverified === true ? { balance_unverified: true } : {}),
         };
       }
     }

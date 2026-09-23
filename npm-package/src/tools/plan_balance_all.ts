@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { devApiParallel, devApiPost } from "../_core/developer_api.js";
 import { NovadaError } from "../_core/errors.js";
+import { novadaCaptureLogs } from "./capture_logs.js";
 
 // ─── Endpoint table ──────────────────────────────────────────────────────────
 //
@@ -66,6 +67,15 @@ interface PerProductOk {
   exhausted?: boolean;
   /** Human-readable remaining balance ("3.5 GB", "12/100 req", "132.91 credits"). */
   balance_human?: string;
+  /**
+   * True when the capture ledger read 0 but a re-read stayed 0 AND recent
+   * capture activity contradicts it — the 0 is a SUSPECT read (known
+   * intermittent /v1/capture/get_balance glitch, live-verified 2026-09-22),
+   * NOT verified exhaustion. Mutually exclusive with `exhausted` — the guard
+   * (verifyCaptureZero) sets exactly one of the two. Consumers must never
+   * render an unverified entry as exhausted/dead or push a top-up.
+   */
+  balance_unverified?: boolean;
 }
 interface PerProductError {
   status: "error";
@@ -118,6 +128,111 @@ export function deriveBalanceEvidence(raw: unknown): { exhausted?: boolean; bala
   }
   return {};
 }
+
+// ─── Capture zero-balance guard (2026-09-22) ─────────────────────────────────
+//
+// /v1/capture/get_balance INTERMITTENTLY returns a bare `data: 0` for a FUNDED
+// account (live-verified: real balance ~68.76 credits while get_balance read 0
+// in the same session in which a live scrape succeeded and billed correctly).
+// Untreated, that 0 flows through deriveBalanceEvidence → {exhausted:true,
+// "0.00 credits"} and every consumer of this chokepoint (novada_account
+// plans/summary, novada_setup readiness + capture line) confidently tells a
+// paying customer "Capture exhausted / top up". Root cause is the backend
+// endpoint (out of scope here); this guard makes sure a suspect 0 never
+// produces a confident "exhausted":
+//   1. re-read get_balance ONCE after a short delay — a >0 re-read resolves a
+//      transient 0 and is used directly.
+//   2. still 0 → cross-signal: recent capture activity via novadaCaptureLogs
+//      (the SAME endpoint/window account_summary's capture_recent_count uses).
+//      Activity present contradicts the 0 → `balance_unverified:true`, never
+//      `exhausted:true`.
+//   3. reverse-safety: still 0 AND no recent activity → genuinely exhausted,
+//      byte-identical to pre-guard behavior. Never tell a truly-empty account
+//      it has money.
+// The guard runs ONLY when the capture read is bare-number 0 (the live-
+// verified glitch shape) — the normal >0 path makes zero extra calls.
+
+/** Delay before the single get_balance re-read (transient-glitch settle time). */
+const CAPTURE_ZERO_REREAD_DELAY_MS = 400;
+
+/**
+ * Lookback window for the "recent successful capture" cross-signal. Kept as a
+ * local const (mirrors account_summary.ts's CAPTURE_LOOKBACK_DAYS) rather than a
+ * shared export: several existing test files fully module-mock this module and
+ * capture_logs.js WITHOUT importOriginal, so a shared exported const would read
+ * as `undefined` under those mocks → NaN dates. Keep the two values in sync.
+ */
+const CAPTURE_ACTIVITY_LOOKBACK_DAYS = 7;
+
+/** YYYY-MM-DD for `daysAgo` days before now (UTC) — same shape account_summary uses. */
+function isoDateDaysAgo(daysAgo: number): string {
+  return new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** The live-verified glitch shape: capture credits arrive as a bare number, and the glitch reads exactly 0. */
+function isSuspectCaptureZero(raw: unknown): boolean {
+  return typeof raw === "number" && raw === 0;
+}
+
+type CaptureZeroVerdict =
+  | { kind: "recovered"; balance: number } // re-read returned a positive balance — transient 0 resolved
+  | { kind: "contradicted" }               // still 0, but recent activity contradicts it — UNVERIFIED
+  | { kind: "confirmed" };                 // still 0 and nothing contradicts it — genuinely exhausted
+
+/**
+ * Verify a suspect capture 0 (see the block comment above). Never throws:
+ * every failure of the extra calls degrades toward "confirmed" (today's
+ * behavior) — the guard can only SOFTEN a 0 when positive contrary evidence
+ * exists, never invent funds.
+ */
+async function verifyCaptureZero(apiKey?: string): Promise<CaptureZeroVerdict> {
+  const capturePath = FLOW_BALANCE_ENDPOINTS.find((e) => e.key === "capture")!.path;
+
+  // 1. Single re-read after a short delay — resolves the purely transient case.
+  try {
+    await sleep(CAPTURE_ZERO_REREAD_DELAY_MS);
+    const reread = await devApiPost<unknown>(capturePath, {}, { apiKey });
+    if (typeof reread === "number" && reread > 0) {
+      return { kind: "recovered", balance: reread };
+    }
+  } catch {
+    // Re-read failed — it cannot exonerate the 0; fall through to the cross-signal.
+  }
+
+  // 2. Cross-signal: recent SUCCESSFUL capture activity (status:"success" only).
+  // A *billed* capture proves funds existed; a failed/refused attempt proves
+  // nothing, so it must NOT count as contrary evidence (else a genuinely drained
+  // account that recently *tried* to scrape would read as "unverified" and its
+  // top-up nudge would be wrongly suppressed). A funded account that
+  // successfully scraped in the last 7 days directly contradicts a 0-credits read.
+  try {
+    const raw = await novadaCaptureLogs(
+      {
+        page: 1,
+        page_size: 5,
+        status: "success",
+        start_time: isoDateDaysAgo(CAPTURE_ACTIVITY_LOOKBACK_DAYS),
+        end_time: isoDateDaysAgo(0), // today
+      },
+      apiKey,
+    );
+    const parsed = JSON.parse(raw) as { data?: { list?: unknown[] | null } };
+    const recentCount = Array.isArray(parsed?.data?.list) ? parsed.data.list.length : 0;
+    if (recentCount > 0) return { kind: "contradicted" };
+  } catch {
+    // Activity check failed — nothing contradicts the 0; fall through to confirmed.
+  }
+
+  return { kind: "confirmed" };
+}
+
+/** Softened human line for an unverified capture 0 — explicitly NOT "exhausted". */
+const CAPTURE_UNVERIFIED_HUMAN =
+  "0.00 credits — UNVERIFIED (recent capture activity detected; likely a transient balance-read glitch — verify at dashboard.novada.com)";
 
 /**
  * THE CLASS ("not provisioned") — SINGLE SOURCE OF TRUTH for every callsite
@@ -210,6 +325,25 @@ export async function novadaPlanBalanceAll(
     wantStatic ? fetchStaticIpSummary(apiKey) : null,
   ]);
 
+  // ── Capture zero-balance guard (see verifyCaptureZero's block comment) ────
+  // Gated to the bare-number-0 case only — a >0 read (or any non-capture
+  // product) takes this branch never and makes zero extra calls.
+  const captureRead = flowResults.find((r) => r.key === "capture");
+  let captureBalanceUnverified = false;
+  if (captureRead?.ok && isSuspectCaptureZero(captureRead.data)) {
+    const verdict = await verifyCaptureZero(apiKey);
+    if (verdict.kind === "recovered") {
+      // Transient 0 resolved — use the good re-read exactly as if it had been
+      // the first read; the loop below derives evidence from it normally.
+      captureRead.data = verdict.balance;
+    } else if (verdict.kind === "contradicted") {
+      captureBalanceUnverified = true;
+    }
+    // "confirmed": leave the 0 as-is → deriveBalanceEvidence reports
+    // exhausted:true, byte-identical to pre-guard behavior (reverse-safety).
+    console.error(JSON.stringify({ evt: "capture_zero_guard", verdict: verdict.kind }));
+  }
+
   const summary: Record<string, PerProductResult> = {};
   const errors: Array<{ product: string; error: string }> = [];
   const expired_products: string[] = [];
@@ -219,7 +353,20 @@ export async function novadaPlanBalanceAll(
   for (const r of flowResults) {
     if (r.ok) {
       const enriched = enrichBalance(r.data);
-      summary[r.key] = { status: "ok", balance: r.data, ...enriched, ...deriveBalanceEvidence(r.data) };
+      if (r.key === "capture" && captureBalanceUnverified) {
+        // Suspect 0 contradicted by recent activity: report the raw 0 honestly,
+        // but with `balance_unverified` instead of `exhausted` and a softened
+        // human line — a consumer must never render this as "exhausted/top up".
+        summary[r.key] = {
+          status: "ok",
+          balance: r.data,
+          ...enriched,
+          balance_unverified: true,
+          balance_human: CAPTURE_UNVERIFIED_HUMAN,
+        };
+      } else {
+        summary[r.key] = { status: "ok", balance: r.data, ...enriched, ...deriveBalanceEvidence(r.data) };
+      }
       if (enriched.expired) expired_products.push(r.key);
       else active_products.push(r.key);
     } else {
@@ -287,9 +434,12 @@ export async function novadaPlanBalanceAll(
       per_product: summary,
       errors: errors.length ? errors : undefined,
       agent_instruction:
-        expired_products.length > 0
+        (expired_products.length > 0
           ? `Products ${expired_products.join(", ")} have EXPIRED plans (balance=0, expired=true). Master wallet currency still available — call novada_account(section="balance"). To restock, the user needs to purchase a new plan at https://dashboard.novada.com.`
-          : "Per-product balances. Each balance includes derived expired/expires_at_human fields. For master wallet (currency) use novada_account(section=\"balance\").",
+          : "Per-product balances. Each balance includes derived expired/expires_at_human fields. For master wallet (currency) use novada_account(section=\"balance\").") +
+        (captureBalanceUnverified
+          ? " NOTE: the Capture balance endpoint read 0 twice, but recent capture activity contradicts it (known intermittent backend glitch) — do NOT report Capture as exhausted or push a top-up; tell the user to verify the real balance at https://dashboard.novada.com."
+          : ""),
     },
     null,
     2,

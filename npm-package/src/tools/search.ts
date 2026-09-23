@@ -7,7 +7,7 @@ import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
+import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
@@ -266,6 +266,25 @@ export async function submitSearchScrapeTask(
   }
 
   if (body.code !== 0) {
+    // B1 (2026-09-21): classify the envelope code through the ONE shared
+    // BUSINESS_CODE_MAP (errors.ts). 11004 ("Insufficient balance") previously
+    // fell through here as a plain Error that downstream handling could
+    // mislabel transient/retryable — now it throws the typed
+    // INSUFFICIENT_BALANCE (permanent, no-retry, top-up instruction), which
+    // withSingleSerpRetry will never retry (it retries API_DOWN only) and
+    // novadaSearch's catch rethrows unchanged (instanceof NovadaError branch).
+    // Unmapped codes keep the existing plain-Error path so the entitlement
+    // regex in novadaSearch's catch still classifies upstream prose like
+    // "no permission" for them.
+    const mapped = classifyBusinessCode(body.code, body.msg);
+    if (mapped !== NovadaErrorCode.UNKNOWN) {
+      throw makeNovadaError(
+        mapped,
+        `Scraper search submit error (code ${body.code}): ${sanitizeServerMsg(body.msg ?? "unknown")}`,
+        `code ${body.code}`,
+        body.code,
+      );
+    }
     throw new Error(`Scraper search submit error (code ${body.code}): ${sanitizeServerMsg(body.msg ?? "unknown")}`);
   }
 
@@ -605,6 +624,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     // code / permission / quota / unauthorized / forbidden keyword.
     const status = err instanceof AxiosError ? err.response?.status : undefined;
     const msg = err instanceof Error ? err.message : "";
+    // B1 review must-fix #2 (2026-09-21): a typed INSUFFICIENT_BALANCE must
+    // rethrow BEFORE the prose-based entitlement check below — upstream balance
+    // messages can carry entitlement-looking words ("no permission to consume"),
+    // and demoting a balance error to SERP_UNAVAILABLE sends the agent to
+    // "activate the Scraper API" when the product IS active and the fix is a
+    // top-up. Structured classification outranks prose matching.
+    if (err instanceof NovadaError && err.code === NovadaErrorCode.INSUFFICIENT_BALANCE) {
+      throw err;
+    }
     const isEntitlement =
       status === 401 || status === 402 || status === 403 ||
       /code 40[0-9]|permission|quota|unauthorized|forbidden|no permission/i.test(msg);

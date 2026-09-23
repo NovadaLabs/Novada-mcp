@@ -11,6 +11,13 @@ export enum NovadaErrorCode {
   WRONG_TARGET           = "WRONG_TARGET",
   INVALID_PARAMS         = "INVALID_PARAMS",
   PRODUCT_UNAVAILABLE    = "PRODUCT_UNAVAILABLE",
+  /** B1 (2026-09-21): upstream business code 11004 ("Insufficient balance") —
+   *  the product IS active but its ledger has no funds. Distinct from
+   *  PRODUCT_UNAVAILABLE (not activated / not provisioned): the fix is a
+   *  top-up, not activation. Permanent + non-retryable: retrying cannot
+   *  succeed until the ledger is funded. Mirrors the proxy preflight's
+   *  reference shape (proxy_preflight.ts assertFlowLedgerActive). */
+  INSUFFICIENT_BALANCE   = "INSUFFICIENT_BALANCE",
   TASK_NOT_FOUND         = "TASK_NOT_FOUND",
   TASK_PENDING           = "TASK_PENDING",
   SESSION_EXPIRED        = "SESSION_EXPIRED",
@@ -36,6 +43,10 @@ const FAILURE_CLASS: Record<NovadaErrorCode, FailureClass> = {
   [NovadaErrorCode.WRONG_TARGET]:        "permanent",
   [NovadaErrorCode.INVALID_PARAMS]:      "permanent",
   [NovadaErrorCode.PRODUCT_UNAVAILABLE]: "permanent",
+  // "permanent" (not "quota") deliberately: matches the proxy preflight's
+  // PRODUCT_UNAVAILABLE reference shape so a balance failure classifies
+  // identically no matter which tool surfaced it (the B1 class invariant).
+  [NovadaErrorCode.INSUFFICIENT_BALANCE]: "permanent",
   [NovadaErrorCode.TASK_NOT_FOUND]:      "permanent",
   [NovadaErrorCode.TASK_PENDING]:        "transient",
   [NovadaErrorCode.SESSION_EXPIRED]:     "permanent",
@@ -247,6 +258,14 @@ Option 2 — Use an alternative tool:
 
 Option 3 — Contact support:
   Email: support@novada.com — include your API key prefix and this error code.`,
+
+  [NovadaErrorCode.INSUFFICIENT_BALANCE]: `\
+Your Novada balance for this product's ledger is insufficient — the upstream refused the request. Do NOT retry: this is a billing state, not a transient failure; retrying cannot succeed until the balance is topped up.
+
+Action:
+  1. Top up at https://dashboard.novada.com — note that Wallet and Capture are SEPARATE ledgers: novada_search / novada_scrape / render escalation bill the Capture ledger, so a funded Wallet alone does not unblock them.
+  2. Verify per-product balances with novada_account(section="plans").
+  3. Retry the original call only after the matching ledger shows a positive balance.`,
 
   [NovadaErrorCode.TASK_NOT_FOUND]: `\
 The requested task_id does not exist or has expired.
@@ -537,8 +556,25 @@ export function classifyError(error: unknown): NovadaError {
       });
     }
 
-    // Proxy auth failure
-    if (msg.includes("407") || msg.includes("proxy_auth") || msg.includes("proxy authentication")) {
+    // Proxy auth failure. "authorizationerror" / "account or password verification failed" (Fix C;
+    // phrase narrowed 2026-09-21 correctness gate — the bare "account or password" substring
+    // false-positived on benign page prose and MCP selector params, so it must be the full
+    // gateway phrase; the real CDP error still matches via BOTH this phrase and "authorizationerror".
+    // 2026-09-21): the Novada Browser API gateway rejects bad CDP credentials
+    // with "AuthorizationError: Account or Password verification failed" — on a
+    // CAPABLE runtime that is a genuine credential failure and must classify
+    // here (this block runs BEFORE the connectovercdp/API_DOWN block below, so
+    // the auth signal wins over the generic CDP-transport match). The
+    // serverless transport FALSE-positive that used to produce the same string
+    // never reaches classifyError anymore — browser.ts's runtime guard returns
+    // before attempting the connection.
+    if (
+      msg.includes("407") ||
+      msg.includes("proxy_auth") ||
+      msg.includes("proxy authentication") ||
+      msg.includes("authorizationerror") ||
+      msg.includes("account or password verification failed")
+    ) {
       return new NovadaError({
         code: NovadaErrorCode.PROXY_AUTH_FAILURE,
         message: "Proxy authentication failed.",
@@ -627,6 +663,74 @@ export function classifyError(error: unknown): NovadaError {
     agent_instruction: INSTRUCTIONS[NovadaErrorCode.UNKNOWN],
     retryable: false,
   });
+}
+
+// ─── Upstream business-code classification (B1, 2026-09-21) ──────────────────
+//
+// THE upstream-envelope `code` → taxonomy table — the single source of truth
+// for every tool whose generic fallback used to `throw new Error(...)` on a
+// non-zero envelope code (scrape.ts submit + download poll, search.ts submit,
+// browser_flow.ts). Before this table, `code 11004` ("Insufficient balance")
+// was classified THREE different ways: UNKNOWN/"contact support" (scrape),
+// transient/retryable (search), and a plain formatted string (browser_flow) —
+// while the proxy preflight correctly refused with PRODUCT_UNAVAILABLE +
+// ledger evidence + a top-up instruction (the reference shape).
+//
+// CLASS-shaped on purpose: a future upstream code is a new ROW here — never a
+// new branch in a tool file. Rows are ONLY codes whose meaning is verified
+// GLOBALLY consistent across endpoints (each row cites its evidence).
+//
+// Deliberately EXCLUDED (endpoint-ambiguous — the same number means different
+// things per endpoint, so a global row would misclassify somewhere):
+//   10000 — browser_flow: auth failure; scrape download poll: "result not yet
+//           available" (keep polling).
+//   10001 — search submit: invalid/missing API key; scrape submit: missing
+//           required params; scrape download poll: file-type limitation.
+//   11008 — scrape submit: unknown platform (scrape.ts handles it locally with
+//           a scrape-specific message BEFORE consulting this table).
+// Endpoint-specific codes stay handled at their call site, BEFORE the shared
+// fallback consults this table.
+export const BUSINESS_CODE_MAP: ReadonlyArray<{
+  code: number;
+  error: NovadaErrorCode;
+  /** Verified meaning + where it was confirmed. */
+  meaning: string;
+}> = [
+  // Live-confirmed 2026-09: scraper/search/browser_flow envelopes return
+  // {code:11004, msg:"Insufficient balance"} when the funding ledger is empty.
+  { code: 11004, error: NovadaErrorCode.INSUFFICIENT_BALANCE, meaning: "Insufficient balance on the product's funding ledger" },
+  // scrape.ts submit handler + classifyError's prose pattern both already
+  // treated 11006 as not-activated.
+  { code: 11006, error: NovadaErrorCode.PRODUCT_UNAVAILABLE, meaning: "Product not activated on this account" },
+  // plan_balance_all.ts isNotProvisioned(): 11009 = "Failed to obtain user
+  // information" — plan not provisioned (live-captured 2026-08).
+  { code: 11009, error: NovadaErrorCode.PRODUCT_UNAVAILABLE, meaning: "Product not provisioned for this account" },
+  // scrape.ts + browser_flow.ts errorMessages maps and developer_api.ts's
+  // non-retry auth set all agree: 11000 = invalid API key.
+  { code: 11000, error: NovadaErrorCode.INVALID_API_KEY, meaning: "Invalid API key" },
+  // scrape.ts + search.ts both map 5000x to auth errors returned as HTTP 200.
+  { code: 50001, error: NovadaErrorCode.INVALID_API_KEY, meaning: "Scraper API auth error" },
+  { code: 50002, error: NovadaErrorCode.INVALID_API_KEY, meaning: "Scraper API auth error" },
+  { code: 50003, error: NovadaErrorCode.INVALID_API_KEY, meaning: "Scraper API auth error" },
+  // scrape.ts + search.ts both map envelope code 500 to a transient server error.
+  { code: 500, error: NovadaErrorCode.API_DOWN, meaning: "Upstream server error" },
+];
+
+/**
+ * Classify a raw upstream envelope `code` (optionally with its `msg`) through
+ * BUSINESS_CODE_MAP. Structural code match wins; the ONLY prose fallback is the
+ * insufficient-balance signal (so a balance refusal surfaced under a new/renamed
+ * code still lands in the right class instead of UNKNOWN). Returns
+ * NovadaErrorCode.UNKNOWN for anything unmapped — callers keep their existing
+ * generic fallback for that case, so this function never squashes an
+ * endpoint-specific classification that classifyError's prose pass would have
+ * produced.
+ */
+export function classifyBusinessCode(code: number, msg?: string): NovadaErrorCode {
+  const row = BUSINESS_CODE_MAP.find((r) => r.code === code);
+  if (row) return row.error;
+  if (msg && /insufficient\s+balance/i.test(msg)) return NovadaErrorCode.INSUFFICIENT_BALANCE;
+  return NovadaErrorCode.UNKNOWN;
 }
 
 /**

@@ -1,6 +1,14 @@
 import axios, { AxiosError } from "axios";
 import { z } from "zod";
-import { classifyError, makeNovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
+import {
+  classifyBusinessCode,
+  classifyError,
+  makeNovadaError,
+  NovadaError,
+  NovadaErrorCode,
+  redactSecrets,
+  sanitizeServerMsg,
+} from "../_core/errors.js";
 import { isBlockedHost } from "../utils/ssrf.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
@@ -193,7 +201,6 @@ export async function novadaBrowserFlow(
   if (apiResponse.code !== 0) {
     const errorMessages: Record<number, string> = {
       10000: "Authentication failure — NOVADA_API_KEY is invalid or missing. Verify the key at https://dashboard.novada.com/overview/.",
-      10001: "Missing required parameters. Check that url and actions are provided.",
       11000: "Invalid API key.",
       11006:
         "Browser Flow API not activated on this account. Activate at https://dashboard.novada.com/overview/browser/ before retrying.",
@@ -206,12 +213,65 @@ export async function novadaBrowserFlow(
       return formatApiError(url, actions, errorMessages[apiResponse.code] ?? apiResponse.msg ?? "Authentication failure", session_id);
     }
 
+    // A2 (2026-09-21): 10001's meaning is ENDPOINT-SPECIFIC and unverified for
+    // browser_flow (search submit: invalid key; scrape submit: missing params;
+    // scrape download: file-type limit). The old local guess — "Missing
+    // required parameters. Check that url and actions are provided." — is
+    // proven wrong (url and actions are schema-required, so they are ALWAYS
+    // provided when this code arrives). Classify as a generic INVALID_PARAMS
+    // whose instruction points at activation + params WITHOUT asserting what
+    // is missing.
+    if (apiResponse.code === 10001) {
+      throw new NovadaError({
+        code: NovadaErrorCode.INVALID_PARAMS,
+        message: `Browser Flow API rejected the request (code 10001)${apiResponse.msg ? `: ${sanitizeServerMsg(apiResponse.msg)}` : ""}.`,
+        agent_instruction:
+          "Browser Flow returned code 10001 — its exact meaning is endpoint-specific and not documented. " +
+          "Check that the Browser Flow product is activated (https://dashboard.novada.com/overview/browser/) " +
+          "and that the call's parameters match the tool schema. " +
+          // No "retry" wording here: retryable is false, and a literal agent
+          // would obey contradictory prose (review cheap-win #4).
+          "Fallback: novada_browser (CDP) supports the same actions with richer error detail.",
+        retryable: false,
+        businessCode: 10001,
+      });
+    }
+
     const msg =
       errorMessages[apiResponse.code] ??
       apiResponse.msg ??
       `API returned code ${apiResponse.code}`;
 
-    return formatApiError(url, actions, msg, session_id);
+    // A2 (2026-09-21): route the remaining business codes through the ONE
+    // shared BUSINESS_CODE_MAP (errors.ts) and THROW a typed NovadaError
+    // instead of returning formatApiError's plain string — so 11004
+    // ("Insufficient balance") carries the permanent/no-retry/top-up envelope,
+    // and 11006/11000 carry their real taxonomy. formatApiError remains only
+    // for the deliberate non-throw 10000/401 branch above.
+    const mapped = classifyBusinessCode(apiResponse.code, apiResponse.msg);
+    if (mapped !== NovadaErrorCode.UNKNOWN) {
+      throw makeNovadaError(
+        mapped,
+        `Browser Flow API error (code ${apiResponse.code}): ${sanitizeServerMsg(msg)}`,
+        `code ${apiResponse.code}`,
+        apiResponse.code,
+      );
+    }
+
+    // Unmapped code — still a typed error (never a plain string), carrying the
+    // businessCode plus browser_flow-specific fallback guidance so the agent
+    // keeps an actionable next step.
+    throw new NovadaError({
+      code: NovadaErrorCode.UNKNOWN,
+      message: `Browser Flow API error (code ${apiResponse.code}): ${sanitizeServerMsg(msg)}`,
+      agent_instruction:
+        "The Browser Flow API returned an unrecognized error code. Verify the URL is publicly accessible " +
+        "(not behind auth or on a private network) and that the Browser Flow product is activated " +
+        "(https://dashboard.novada.com/overview/browser/). Fallback: use novada_browser with the same " +
+        "actions — it uses CDP and has higher reliability.",
+      retryable: false,
+      businessCode: apiResponse.code,
+    });
   }
 
   const resultData = apiResponse.data;
