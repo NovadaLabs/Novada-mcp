@@ -7,6 +7,13 @@ export declare enum NovadaErrorCode {
     WRONG_TARGET = "WRONG_TARGET",
     INVALID_PARAMS = "INVALID_PARAMS",
     PRODUCT_UNAVAILABLE = "PRODUCT_UNAVAILABLE",
+    /** B1 (2026-09-21): upstream business code 11004 ("Insufficient balance") —
+     *  the product IS active but its ledger has no funds. Distinct from
+     *  PRODUCT_UNAVAILABLE (not activated / not provisioned): the fix is a
+     *  top-up, not activation. Permanent + non-retryable: retrying cannot
+     *  succeed until the ledger is funded. Mirrors the proxy preflight's
+     *  reference shape (proxy_preflight.ts assertFlowLedgerActive). */
+    INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE",
     TASK_NOT_FOUND = "TASK_NOT_FOUND",
     TASK_PENDING = "TASK_PENDING",
     SESSION_EXPIRED = "SESSION_EXPIRED",
@@ -121,6 +128,23 @@ export declare function sanitizeServerMsg(msg: string): string;
  * error handling in the tools layer.
  */
 export declare function classifyError(error: unknown): NovadaError;
+export declare const BUSINESS_CODE_MAP: ReadonlyArray<{
+    code: number;
+    error: NovadaErrorCode;
+    /** Verified meaning + where it was confirmed. */
+    meaning: string;
+}>;
+/**
+ * Classify a raw upstream envelope `code` (optionally with its `msg`) through
+ * BUSINESS_CODE_MAP. Structural code match wins; the ONLY prose fallback is the
+ * insufficient-balance signal (so a balance refusal surfaced under a new/renamed
+ * code still lands in the right class instead of UNKNOWN). Returns
+ * NovadaErrorCode.UNKNOWN for anything unmapped — callers keep their existing
+ * generic fallback for that case, so this function never squashes an
+ * endpoint-specific classification that classifyError's prose pass would have
+ * produced.
+ */
+export declare function classifyBusinessCode(code: number, msg?: string): NovadaErrorCode;
 /**
  * Creates a NovadaError for a specific code with a custom message.
  * Convenience factory used by tools that detect error codes from API response bodies.

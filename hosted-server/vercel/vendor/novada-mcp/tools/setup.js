@@ -1,6 +1,6 @@
 import { z, ZodError } from "zod";
 import { novadaWalletBalance } from "./wallet_balance.js";
-import { novadaPlanBalanceAll } from "./plan_balance_all.js";
+import { novadaPlanBalanceAll, validatePlanBalanceAllParams } from "./plan_balance_all.js";
 import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { VERSION } from "../config.js";
 export const SetupParamsSchema = z.object({}).strict();
@@ -80,6 +80,85 @@ async function fetchCaptureLine(effectiveKey) {
     }
     catch {
         return { line: ` · Capture balance: unavailable right now — call novada_account(section="plans") to check`, balance: undefined };
+    }
+}
+const PRODUCT_STATUS_ICON = {
+    active: "✅",
+    expired: "⛔",
+    exhausted: "⛔",
+    unverified: "❓",
+    not_provisioned: "⚪",
+    error: "⚠️",
+};
+/**
+ * Derive the one-word status for a per_product entry. Checked WORST first
+ * (Worker Done-Def #3 — branch ordering): an expired plan must never be
+ * reported "active" because a looser check matched earlier.
+ */
+function deriveProductStatus(entry) {
+    if (entry.status === "ok") {
+        if (entry.expired)
+            return { status: "expired", detail: entry.expires_at_human ?? "" };
+        // Capture zero-balance guard: a 0 contradicted by recent activity is
+        // UNVERIFIED, never exhausted/dead — readiness must not tell an agent the
+        // scrapers are broke when the ledger read is the suspect part. Checked
+        // before `exhausted` so it shadows any stale exhaustion signal (plan_
+        // balance_all sets exactly one of the two, but order here is the backstop).
+        if (entry.balance_unverified) {
+            return { status: "unverified", detail: "balance read 0 but recent activity contradicts it — likely transient; verify at dashboard.novada.com" };
+        }
+        if (entry.exhausted)
+            return { status: "exhausted", detail: entry.balance_human ?? "" };
+        return { status: "active", detail: entry.balance_human ?? "" };
+    }
+    if (entry.unavailable)
+        return { status: "not_provisioned", detail: "" };
+    return { status: "error", detail: "" };
+}
+/**
+ * B2 (2026-09-21): setup used to consult ONE ledger (Capture, scoped) and
+ * declare "ready" while every proxy product could be expired/exhausted — an
+ * agent learned scrapers/proxy were dead only by burning a failing call. This
+ * fans out the SAME unfiltered per-product lookup novada_account
+ * (section="plans") uses and returns a compact per-product readiness view.
+ *
+ * The product set is whatever the response's per_product carries — plan_
+ * balance_all's FLOW_BALANCE_ENDPOINTS table (+ static) is the single source
+ * of truth, so a 7th product added there flows through here with zero change.
+ *
+ * Enrichment only, never a gate: any failure degrades to null and the caller
+ * renders an honest "unavailable" note — it must never throw or block the
+ * (already successful) key validation.
+ *
+ * NOTE: the Capture ledger is deliberately ALSO fetched by fetchCaptureLine's
+ * scoped call (one redundant upstream read per setup call) — that scoped call
+ * feeds the wallet-line ledger distinction pinned by
+ * tests/tools/setup_capture_ledger.test.ts and stays untouched here.
+ */
+async function fetchProductReadiness(effectiveKey) {
+    try {
+        // Properly typed empty params (review cheap-win #5): parse through the
+        // tool's own schema instead of `{} as never`, so a future required field
+        // on PlanBalanceAllParams fails loudly here rather than silently passing.
+        const raw = await novadaPlanBalanceAll(validatePlanBalanceAllParams({}), effectiveKey);
+        const parsed = JSON.parse(raw);
+        const per = parsed?.per_product;
+        if (!per || typeof per !== "object")
+            return null;
+        const statuses = {};
+        const parts = [];
+        for (const [key, entry] of Object.entries(per)) {
+            const { status, detail } = deriveProductStatus(entry ?? {});
+            statuses[key] = status;
+            const label = status === "not_provisioned" ? "not provisioned" : status;
+            parts.push(`${key} ${PRODUCT_STATUS_ICON[status]} ${label}${detail ? ` (${detail})` : ""}`);
+        }
+        if (parts.length === 0)
+            return null;
+        return { line: parts.join(" · "), statuses };
+    }
+    catch {
+        return null;
     }
 }
 /**
@@ -166,6 +245,11 @@ export async function novadaSetup(_params, callerApiKey) {
     const proxyConfigured = !!(proxyUser && proxyPass && proxyEndpoint);
     const validation = await validateKey(effectiveKey);
     const { state } = validation;
+    // B2: full-ledger per-product readiness — only once the key is known to
+    // authenticate (never a gratuitous network call on the not_set /
+    // present_but_invalid first-run states). "ready" keeps meaning "the key
+    // authenticates"; a dead product is surfaced ALONGSIDE it, never flips it.
+    const readiness = state === "ready" ? await fetchProductReadiness(effectiveKey) : null;
     const L = ["# Welcome to Novada", ""];
     // ─── (a) Status line ────────────────────────────────────────────────────
     const statusLabel = state === "ready" ? "✅ You're ready — your API key works."
@@ -174,6 +258,19 @@ export async function novadaSetup(_params, callerApiKey) {
     L.push(`**Status:** ${statusLabel}`);
     if (state === "ready" && validation.balanceLine)
         L.push(`> ${validation.balanceLine}`);
+    if (state === "ready") {
+        // B2: compact per-product readiness — surfaces expired/exhausted/
+        // not-provisioned products BEFORE the agent burns a call on them.
+        L.push(readiness
+            ? `> Products: ${readiness.line}`
+            : `> Products: status unavailable right now — call novada_account(section="plans") for per-product balances.`);
+        // Cheap env-presence check (no network): whether novada_browser has an
+        // explicit CDP endpoint configured. Never echoes the (credential-bearing)
+        // value itself.
+        L.push(browserWs
+            ? `> Browser WS (NOVADA_BROWSER_WS): configured — novada_browser connects via your endpoint.`
+            : `> Browser WS (NOVADA_BROWSER_WS): not set — novada_browser will auto-provision from your API key on a capable runtime.`);
+    }
     L.push("");
     // ─── (b) Next action for this state ───────────────────────────────────────
     if (state === "not_set") {
@@ -262,6 +359,16 @@ export async function novadaSetup(_params, callerApiKey) {
     }
     if (typeof validation.captureBalance === "number") {
         L.push(`capture_balance: ${validation.captureBalance.toFixed(2)}`);
+    }
+    // B2: enumerate per-product status machine-readably — an agent should learn
+    // BEFORE calling that scrapers/proxy are dead, not by parsing prose. Rendered
+    // in the ready state only (matching the fetch gate above); "unavailable"
+    // when the ledger fan-out itself failed this call.
+    if (state === "ready") {
+        L.push(readiness
+            ? `product_status: ${Object.entries(readiness.statuses).map(([k, s]) => `${k}=${s}`).join(" ")}`
+            : `product_status: unavailable — call novada_account(section="plans") for per-product balances`);
+        L.push(`browser_ws_configured: ${browserWs ? "true" : "false"}`);
     }
     // NOVADA_SERVER_VERSION is set at module init by the hosted wrapper (mcp.ts) to its
     // computed HOSTED_VERSION string (e.g. "0.9.26-hosted"), which is the same string

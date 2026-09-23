@@ -111,6 +111,9 @@ function unwrapPlans(section) {
                     balance: stripEpoch(v.balance),
                     ...(typeof v.expired === "boolean" ? { expired: v.expired } : {}),
                     ...(typeof v.expires_at_human === "string" ? { expires_at: v.expires_at_human } : {}),
+                    // Capture zero-balance guard flag — must survive flattening or the
+                    // summary renderer falls back to deriving "exhausted" from the raw 0.
+                    ...(v.balance_unverified === true ? { balance_unverified: true } : {}),
                 };
             }
         }

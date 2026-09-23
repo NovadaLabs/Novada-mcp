@@ -114,14 +114,19 @@ function buildAccountIdentity(callerApiKey, opts = {}) {
     return parts.join(" · ");
 }
 // ─── Card renderers ──────────────────────────────────────────────────────────
-/** Plan-status icon + label for a product row. */
-function planIcon(expired, unavailable, isError, exhausted) {
+/** Plan-status icon + label for a product row. `unverified` (capture zero-
+ *  balance guard) must shadow `exhausted`: the renderers re-derive exhaustion
+ *  from the raw 0 via extractBalanceInfo, so without this check an unverified
+ *  read would still print "⚠️ exhausted" to a funded customer. */
+function planIcon(expired, unavailable, isError, exhausted, unverified) {
     if (unavailable)
         return "⛔ not provisioned";
     if (isError)
         return "⛔ error";
     if (expired)
         return "⚠️ EXPIRED";
+    if (unverified)
+        return "❓ unverified (possible transient balance read)";
     if (exhausted)
         return "⚠️ exhausted";
     return "✅ active";
@@ -190,6 +195,29 @@ function extractBalanceInfo(balance) {
     return { display: "—", exhausted: false };
 }
 /**
+ * Shared plan-table row for BOTH renderSummaryCard and renderPlansCard — the
+ * two loops were byte-identical, so status/balance derivation lives once here
+ * and the capture zero-balance guard's `balance_unverified` handling can never
+ * drift between them. Unverified shadows the exhaustion re-derived from the
+ * raw 0 (see planIcon) and tags the balance cell instead of asserting "0.00".
+ */
+function planRow(label, v) {
+    const isErr = v.status === "error";
+    const isUnavailable = v.unavailable === true;
+    const isExpired = v.expired === true;
+    const isUnverified = v.balance_unverified === true;
+    const { display, exhausted } = typeof v.balance !== "undefined"
+        ? extractBalanceInfo(v.balance)
+        : { display: "—", exhausted: false };
+    const balanceStr = isUnverified ? `${display} (unverified)` : display;
+    const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted, isUnverified);
+    // API returns expires_at_human (e.g. "2026-07-08"); the summary flattener
+    // renames it to expires_at — accept both.
+    const expiresStr = typeof v.expires_at_human === "string" ? v.expires_at_human
+        : typeof v.expires_at === "string" ? v.expires_at : "—";
+    return `| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`;
+}
+/**
  * @deprecated Use extractBalanceInfo instead.
  * Kept for the flattenSummaryJson caller that needs a raw MB number.
  */
@@ -247,18 +275,7 @@ function renderSummaryCard(summaryData) {
         const label = PLAN_LABELS[key] ?? key;
         if (!val || typeof val !== "object")
             continue;
-        const v = val;
-        const isErr = v.status === "error";
-        const isUnavailable = v.unavailable === true;
-        const isExpired = v.expired === true;
-        const { display: balanceStr, exhausted } = typeof v.balance !== "undefined"
-            ? extractBalanceInfo(v.balance)
-            : { display: "—", exhausted: false };
-        const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
-        // API returns expires_at_human (e.g. "2026-07-08"); expires_at field is absent
-        const expiresStr = typeof v.expires_at_human === "string" ? v.expires_at_human
-            : typeof v.expires_at === "string" ? v.expires_at : "—";
-        lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
+        lines.push(planRow(label, val));
     }
     lines.push("");
     // ── Capture recent ──────────────────────────────────────────────────────
@@ -385,18 +402,7 @@ function renderPlansCard(raw) {
         const label = PLAN_LABELS[key] ?? key;
         if (!val || typeof val !== "object")
             continue;
-        const v = val;
-        const isErr = v.status === "error";
-        const isUnavailable = v.unavailable === true;
-        const isExpired = v.expired === true;
-        const { display: balanceStr, exhausted } = typeof v.balance !== "undefined"
-            ? extractBalanceInfo(v.balance)
-            : { display: "—", exhausted: false };
-        const icon = planIcon(isExpired, isUnavailable, isErr && !isUnavailable, !isExpired && !isErr && !isUnavailable && exhausted);
-        // API returns expires_at_human (e.g. "2026-07-08"); expires_at field is absent
-        const expiresStr = typeof v.expires_at_human === "string" ? v.expires_at_human
-            : typeof v.expires_at === "string" ? v.expires_at : "—";
-        lines.push(`| ${label} | ${icon} | ${balanceStr} | ${expiresStr} |`);
+        lines.push(planRow(label, val));
     }
     return lines.join("\n");
 }
@@ -448,6 +454,9 @@ function flattenSummaryJson(summaryData) {
         const isErr = v.status === "error";
         const isUnavailable = v.unavailable === true;
         const isExpired = v.expired === true;
+        // Capture zero-balance guard: an unverified 0 must never flatten to
+        // "exhausted" — it becomes its own status so agents can't misread it.
+        const isUnverified = v.balance_unverified === true;
         const { display: balanceHuman, exhausted } = typeof v.balance !== "undefined"
             ? extractBalanceInfo(v.balance)
             : { display: null, exhausted: false };
@@ -455,16 +464,20 @@ function flattenSummaryJson(summaryData) {
         const derivedStatus = isUnavailable ? "not_provisioned"
             : isErr ? "error"
                 : isExpired ? "expired"
-                    : exhausted ? "exhausted"
-                        : "active";
+                    : isUnverified ? "unverified"
+                        : exhausted ? "exhausted"
+                            : "active";
         flatPlans[key] = {
             name: PLAN_LABELS[key] ?? key,
             status: derivedStatus,
             balance_mb: balanceMb,
-            balance_human: balanceHuman ?? null,
+            balance_human: isUnverified && balanceHuman
+                ? `${balanceHuman} (unverified — possible transient balance read; verify at dashboard.novada.com)`
+                : balanceHuman ?? null,
             // API per-product entries carry expires_at_human; expires_at is absent
             expires_at: typeof v.expires_at_human === "string" ? v.expires_at_human
                 : typeof v.expires_at === "string" ? v.expires_at : null,
+            ...(isUnverified ? { balance_unverified: true } : {}),
         };
     }
     // Clean errors — omit "not provisioned" product 404s

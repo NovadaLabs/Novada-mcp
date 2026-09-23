@@ -1,1 +1,1 @@
-{"version":3,"file":"browser.d.ts","sourceRoot":"","sources":["../../src/tools/browser.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,aAAa,EAAiB,MAAM,YAAY,CAAC;AAa/D;;;;;;;;;;;GAWG;AACH,wBAAsB,aAAa,CAAC,MAAM,EAAE,aAAa,EAAE,MAAM,CAAC,EAAE,MAAM,GAAG,OAAO,CAAC,MAAM,CAAC,CAgR3F"}
+{"version":3,"file":"browser.d.ts","sourceRoot":"","sources":["../../src/tools/browser.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,aAAa,EAAiB,MAAM,YAAY,CAAC;AA6C/D;;;;;;;;;;;GAWG;AACH,wBAAsB,aAAa,CAAC,MAAM,EAAE,aAAa,EAAE,MAAM,CAAC,EAAE,MAAM,GAAG,OAAO,CAAC,MAAM,CAAC,CAoS3F"}
