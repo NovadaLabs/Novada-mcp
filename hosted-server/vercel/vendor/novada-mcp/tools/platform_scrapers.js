@@ -9,7 +9,7 @@
  * into `TOOL_REGISTRY`. Neither file needs to change again when a new platform config is
  * added here.
  */
-import { toDispatchableScraperTool } from "./platform_scraper.js";
+import { toDispatchableScraperTool, hasAnyWorkingOp } from "./platform_scraper.js";
 import { AMAZON_SCRAPER_TOOL } from "./scrape_amazon.js";
 import { GOOGLE_SCRAPER_TOOL } from "./scrape_google.js";
 import { BING_SCRAPER_TOOL } from "./scrape_bing.js";
@@ -25,8 +25,9 @@ import { SHEIN_SCRAPER_TOOL } from "./scrape_shein.js";
 import { LINKEDIN_SCRAPER_TOOL } from "./scrape_linkedin.js";
 import { GITHUB_SCRAPER_TOOL } from "./scrape_github.js";
 import { PERPLEXITY_SCRAPER_TOOL } from "./scrape_perplexity.js";
-/** One entry per platform-scraper tool. Order mirrors registration order elsewhere. */
-export const PLATFORM_SCRAPER_TOOLS = [
+/** Every factory-generated platform-scraper tool, BEFORE the empty-working-op-set
+ *  exclusion filter below. Order mirrors registration order elsewhere. */
+const ALL_PLATFORM_SCRAPER_TOOLS = [
     toDispatchableScraperTool(AMAZON_SCRAPER_TOOL),
     toDispatchableScraperTool(GOOGLE_SCRAPER_TOOL),
     toDispatchableScraperTool(BING_SCRAPER_TOOL),
@@ -43,6 +44,15 @@ export const PLATFORM_SCRAPER_TOOLS = [
     toDispatchableScraperTool(GITHUB_SCRAPER_TOOL),
     toDispatchableScraperTool(PERPLEXITY_SCRAPER_TOOL),
 ];
+/**
+ * One entry per platform-scraper tool whose working-op set is non-empty (class rule,
+ * Round 3 item 2 — see hasAnyWorkingOp's doc in platform_scraper.ts). A platform whose
+ * every catalog operation is "backend_broken" (currently: SHEIN, all 5 ops broken as of
+ * 2026-10-13) is filtered out here rather than special-cased by name — this list, and
+ * every count derived from it (TOOL_REGISTRY, _TOOL_DEFINITIONS, hosted tool totals),
+ * shrinks or grows automatically as scraper_catalog.ts's status fields change.
+ */
+export const PLATFORM_SCRAPER_TOOLS = ALL_PLATFORM_SCRAPER_TOOLS.filter((t) => hasAnyWorkingOp(t.config));
 /** Full MCP tool schemas — spread into src/core.ts's `_TOOL_DEFINITIONS`. */
 export const PLATFORM_SCRAPER_DEFS = PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition);
 /** Short catalog entries — spread into src/tools/registry.ts's `TOOL_REGISTRY`. */

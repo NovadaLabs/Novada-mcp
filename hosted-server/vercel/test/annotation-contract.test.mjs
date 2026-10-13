@@ -119,7 +119,7 @@ test("every hosted-visible NON-platform-scraper tool's actual readOnlyHint/destr
   assert.deepEqual(disagreements, [], `annotation disagreement(s):\n${disagreements.join("\n")}`);
 });
 
-// ─── Platform-scraper family — one class rule, not 15 rows ───────────────────
+// ─── Platform-scraper family — one class rule, not 14 rows ───────────────────
 // Every novada_scrape_<platform> tool shares one actual-behavior posture: read-only
 // data extraction from a third-party platform via the shared scrape.ts engine, never
 // a write. A single disagreeing tool here would mean the shared factory
@@ -127,7 +127,7 @@ test("every hosted-visible NON-platform-scraper tool's actual readOnlyHint/destr
 
 test("every hosted-visible platform-scraper tool (novada_scrape_<platform>) is readOnlyHint:true, destructiveHint:false", () => {
   const scrapers = hostedVisibleTools.filter((t) => PLATFORM_SCRAPER_RE.test(t.name));
-  assert.ok(scrapers.length >= 15, `expected >=15 hosted-visible platform-scraper tools, found ${scrapers.length}`);
+  assert.ok(scrapers.length >= 14, `expected >=14 hosted-visible platform-scraper tools, found ${scrapers.length}`);
   const disagreements = scrapers
     .filter((t) => t.annotations?.readOnlyHint !== true || t.annotations?.destructiveHint !== false)
     .map((t) => `${t.name}: got {readOnlyHint:${t.annotations?.readOnlyHint}, destructiveHint:${t.annotations?.destructiveHint}}`);

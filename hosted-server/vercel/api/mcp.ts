@@ -571,7 +571,7 @@ const HOSTED_ROUTABLE_ALIASES = new Set<string>([
   "novada_verify",
 ]);
 // NOTE: base this on the hosted-VISIBLE set (TOOLS minus HOSTED_HIDDEN), NOT raw
-// TOOLS. TOOLS is core's full 38-tool catalog (unfiltered) — a tool that is BOTH
+// TOOLS. TOOLS is core's full 37-tool catalog (unfiltered) — a tool that is BOTH
 // in HOSTED_ROUTABLE_ALIASES and a real core tool (novada_verify: routable +
 // HOSTED_HIDDEN) is still present in raw TOOLS, so filtering against raw TOOLS
 // would wrongly conclude it's "already visible" and drop it from this set —
@@ -610,7 +610,15 @@ const TOOL_GROUPS: Record<string, string[]> = {
   // allowed.size stays <=1 (just novada_setup), and the existing fallback below
   // grants the `core` group instead of a wholly non-functional endpoint.
   // ── BD-style platform-family groups (new — slim to one vertical's tools) ────
-  ecommerce: ["novada_scrape_amazon", "novada_scrape_walmart", "novada_scrape_shein"],
+  // The SHEIN scraper tool was REMOVED (S1-connector Round 3, 2026-10-13): SHEIN's
+  // 5/5 catalog ops are now backend_broken, so that tool is no longer
+  // registered (platform_scraper.ts's empty-working-op-set exclusion). Unlike H1's
+  // browser group, this was never a reachability trap on its own (ecommerce still
+  // had 2 OTHER real members, so the <=1 fallback guard never triggered) — but a
+  // TOOL_GROUPS entry naming a tool that doesn't exist is the same class of dead
+  // reference, caught by tool-catalog-derivation.test.mjs's "every TOOL_GROUPS
+  // member is a real CORE_TOOLS entry (no ghost name)" test.
+  ecommerce: ["novada_scrape_amazon", "novada_scrape_walmart"],
   // LinkedIn wasn't in the SOP's suggested split; grouped under `social` here (Bright
   // Data itself files LinkedIn under social-media datasets, not a separate bucket).
   social: ["novada_scrape_instagram", "novada_scrape_facebook", "novada_scrape_tiktok", "novada_scrape_x", "novada_scrape_youtube", "novada_scrape_linkedin"],

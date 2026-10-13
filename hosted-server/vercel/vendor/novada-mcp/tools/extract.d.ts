@@ -7,8 +7,8 @@ export { detectJsHeavyContent } from "../utils/index.js";
  * of truth so all three hint sites can never drift from each other.
  *
  * FIX-2 (2026-07-30): Only list ops that are NOT backend_broken in the catalog. When the
- * best op for a platform is broken, either point at the next working op (shein) or
- * suppress the hint entirely (chatgpt — all ops broken).
+ * best op for a platform is broken, either point at the next working op or suppress the
+ * hint entirely (chatgpt — all ops broken; shein likewise as of Round 3/2026-10-13 below).
  *
  * FIX-3 (2026-09-02, audit): FIX-2 validated STATUS but not EXISTENCE — isCatalogOpUsable
  * (below) used to be isCatalogOpBroken, which returned false (= "not broken, hint is
@@ -40,6 +40,14 @@ export { detectJsHeavyContent } from "../utils/index.js";
  * scrape.ts's own PLATFORM_ALIASES resolves platform:"twitter.com" → "x.com" at call time,
  * so the hint is genuinely actionable even though CATALOG_BY_DOMAIN has no "twitter.com"
  * key — isCatalogOpUsable applies the same alias before checking the catalog (HINT_DOMAIN_ALIASES).
+ *
+ * Round 3 (S1-connector, live-verified 2026-10-13): "shein.com" → "shein_product_url" REMOVED.
+ * shein_product_url (this entry's own "next working op" pick after shein_products_keyword
+ * broke) is now ALSO backend_broken, joining the other 4 shein.com ops — SHEIN has 0/5
+ * working ops today. Same treatment as chatgpt.com: suppress the hint entirely rather than
+ * point at a slug that will reject every call. This is exactly the class of drift
+ * tests/data/scraper-platforms-drift-guard.test.ts exists to catch (isCatalogOpUsable
+ * fails closed on a backend_broken op, same as any absent/typo'd one).
  */
 export declare const SCRAPER_PLATFORMS: Record<string, string>;
 /**

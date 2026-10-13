@@ -11,7 +11,7 @@ Client  ──HTTPS──▶  Vercel Edge Function (/mcp)  ──HTTPS──▶ 
 ```
 
 This is the **Vercel port** of the Cloudflare Worker at `../worker/`. Same
-behavior, same 29-tool surface, same auth/quota model. The CF Worker is kept as a
+behavior, same 28-tool surface, same auth/quota model. The CF Worker is kept as a
 fallback in case the Vercel deploy needs to be rolled back.
 
 **Why Vercel:** the CF Workers approach needs the root domain (`novada.com`)
@@ -21,8 +21,8 @@ CNAME — DNS stays on AWS, we just add `mcp.novada.com → cname.vercel-dns.com
 
 ## What you get
 
-- **One URL** for the hosted-visible **29-tool** surface — core-derived, not a
-  hand-curated list: it's the npm package's full 38-tool registry
+- **One URL** for the hosted-visible **28-tool** surface — core-derived, not a
+  hand-curated list: it's the npm package's full 37-tool registry
   (`npm-package/src/tools/registry.ts`) minus 9 tools that don't apply to a
   stateless serverless endpoint (`HOSTED_HIDDEN` in `api/mcp.ts` — write-gated
   account mutations, per-process debug state, and `novada_browser` /
@@ -161,7 +161,7 @@ curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-You should see the 29-tool catalog in the response.
+You should see the 28-tool catalog in the response.
 
 Try a tool call:
 
@@ -250,7 +250,7 @@ time:
 
 Both route to the normal `TOOL_NOT_ENABLED` refusal if called by name,
 pointing agents to the **local** MCP server (`npx novada-mcp`) for browser
-automation. All other 29 tools on the hosted surface (of the npm package's 38)
+automation. All other 28 tools on the hosted surface (of the npm package's 37)
 work normally.
 
 ## Local development

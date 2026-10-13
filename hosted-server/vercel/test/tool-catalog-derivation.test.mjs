@@ -70,15 +70,17 @@ test("mcp.ts: hosted TOOLS is built via CORE_TOOLS.map(...), not a hand-curated 
   assert.match(mcpSrc, /const TOOLS = CORE_TOOLS\.map\(/, "TOOLS must be derived from CORE_TOOLS");
 });
 
-// ─── (b) ListTools default surface includes all 15 platform-scraper tools ─────────
+// ─── (b) ListTools default surface includes all 14 platform-scraper tools ─────────
 
-test("core.js: platform-scraper family has exactly 15 tools (novada_scrape_<platform>)", () => {
-  // Bump this count when a 16th platform config is added (mirrors the eval harness's
+test("core.js: platform-scraper family has exactly 14 tools (novada_scrape_<platform>)", () => {
+  // Bump this count when a 15th platform config is added (mirrors the eval harness's
   // own exact-count fixtures, e.g. eval-tasks.json's tasks.length===25 assertion).
-  assert.equal(PLATFORM_SCRAPER_NAMES.length, 15, `expected 15 platform scrapers, found: ${PLATFORM_SCRAPER_NAMES.join(", ")}`);
+  // S1-connector Round 3 (2026-10-13): 15->14, novada_scrape_shein removed — all 5
+  // SHEIN catalog ops are backend_broken (empty working-op-set exclusion).
+  assert.equal(PLATFORM_SCRAPER_NAMES.length, 14, `expected 14 platform scrapers, found: ${PLATFORM_SCRAPER_NAMES.join(", ")}`);
 });
 
-test("hosted default surface: none of the 15 platform-scraper tools are in HOSTED_HIDDEN", () => {
+test("hosted default surface: none of the 14 platform-scraper tools are in HOSTED_HIDDEN", () => {
   const hiddenScrapers = PLATFORM_SCRAPER_NAMES.filter((n) => HOSTED_HIDDEN.has(n));
   assert.deepEqual(hiddenScrapers, [], "platform-scraper tools must be visible by default (not in HOSTED_HIDDEN)");
 });
@@ -89,13 +91,15 @@ test("hosted default surface: every platform-scraper tool is a real CORE_TOOLS e
   }
 });
 
-// ─── (c) ?groups=ecommerce returns exactly {amazon, walmart, shein} ───────────────
+// ─── (c) ?groups=ecommerce returns exactly {amazon, walmart} ──────────────────────
+// S1-connector Round 3 (2026-10-13): "shein" removed — novada_scrape_shein no longer
+// exists (all 5 SHEIN catalog ops are backend_broken, empty-working-op-set exclusion).
 
-test("TOOL_GROUPS.ecommerce is exactly {amazon, walmart, shein}", () => {
+test("TOOL_GROUPS.ecommerce is exactly {amazon, walmart}", () => {
   const ecommerce = groupNames("ecommerce");
   assert.deepEqual(
     [...ecommerce].sort(),
-    ["novada_scrape_amazon", "novada_scrape_shein", "novada_scrape_walmart"].sort(),
+    ["novada_scrape_amazon", "novada_scrape_walmart"].sort(),
   );
 });
 
@@ -302,16 +306,16 @@ test("FIX 4: deriveTitle produces a 'Scrape <Brand>' title for every real platfo
 
 const HOSTED_README = readFileSync(join(__dirname, "..", "README.md"), "utf8");
 
-test("core registry has exactly 38 tools (pinned — mirrors npm-package discover.test.ts's EXPECTED_CURATED_COUNT)", () => {
-  assert.equal(CORE_TOOL_NAMES.size, 38, `core registry size changed — update this pinned count, npm-package's discover.test.ts, and every README/SKILL count to ${CORE_TOOL_NAMES.size}`);
+test("core registry has exactly 37 tools (pinned — mirrors npm-package discover.test.ts's EXPECTED_CURATED_COUNT; S1-connector Round 3, 2026-10-13: 38->37, novada_scrape_shein removed — all 5 SHEIN catalog ops are backend_broken)", () => {
+  assert.equal(CORE_TOOL_NAMES.size, 37, `core registry size changed — update this pinned count, npm-package's discover.test.ts, and every README/SKILL count to ${CORE_TOOL_NAMES.size}`);
 });
 
 test("HOSTED_HIDDEN has exactly 9 entries (pinned — bumped from 8: novada_browser joined 2026-10, every real action unconditionally fails on this runtime)", () => {
   assert.equal(HOSTED_HIDDEN.size, 9, `HOSTED_HIDDEN size changed — update this pinned count and the hosted-visible-count derivation below to ${HOSTED_HIDDEN.size}`);
 });
 
-test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 29", () => {
-  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 29, "hosted-visible tool count drifted from 29 — update hosted-server/vercel/README.md's '29-tool' mentions to match");
+test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 28", () => {
+  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 28, "hosted-visible tool count drifted from 28 — update hosted-server/vercel/README.md's '28-tool' mentions to match");
 });
 
 test("hosted-server/vercel/README.md states the derived hosted-visible count (currently '29-tool'/'29 tools' — computed, not hardcoded)", () => {

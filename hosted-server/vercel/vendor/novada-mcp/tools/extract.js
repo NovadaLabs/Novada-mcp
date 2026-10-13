@@ -72,8 +72,8 @@ function buildEscalationFailedInstruction(escalationError, browserConfigured) {
  * of truth so all three hint sites can never drift from each other.
  *
  * FIX-2 (2026-07-30): Only list ops that are NOT backend_broken in the catalog. When the
- * best op for a platform is broken, either point at the next working op (shein) or
- * suppress the hint entirely (chatgpt — all ops broken).
+ * best op for a platform is broken, either point at the next working op or suppress the
+ * hint entirely (chatgpt — all ops broken; shein likewise as of Round 3/2026-10-13 below).
  *
  * FIX-3 (2026-09-02, audit): FIX-2 validated STATUS but not EXISTENCE — isCatalogOpUsable
  * (below) used to be isCatalogOpBroken, which returned false (= "not broken, hint is
@@ -105,6 +105,14 @@ function buildEscalationFailedInstruction(escalationError, browserConfigured) {
  * scrape.ts's own PLATFORM_ALIASES resolves platform:"twitter.com" → "x.com" at call time,
  * so the hint is genuinely actionable even though CATALOG_BY_DOMAIN has no "twitter.com"
  * key — isCatalogOpUsable applies the same alias before checking the catalog (HINT_DOMAIN_ALIASES).
+ *
+ * Round 3 (S1-connector, live-verified 2026-10-13): "shein.com" → "shein_product_url" REMOVED.
+ * shein_product_url (this entry's own "next working op" pick after shein_products_keyword
+ * broke) is now ALSO backend_broken, joining the other 4 shein.com ops — SHEIN has 0/5
+ * working ops today. Same treatment as chatgpt.com: suppress the hint entirely rather than
+ * point at a slug that will reject every call. This is exactly the class of drift
+ * tests/data/scraper-platforms-drift-guard.test.ts exists to catch (isCatalogOpUsable
+ * fails closed on a backend_broken op, same as any absent/typo'd one).
  */
 export const SCRAPER_PLATFORMS = {
     "amazon.com": "amazon_product_keywords",
@@ -112,8 +120,6 @@ export const SCRAPER_PLATFORMS = {
     "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
     "instagram.com": "ins_profiles_profileurl", "twitter.com": "twitter_profile_username",
     "x.com": "twitter_profile_username",
-    // shein_products_keyword is backend_broken; shein_product_url is alive — use that instead
-    "shein.com": "shein_product_url",
     // chatgpt.com: both chatgpt_answer_searchterm and chatgpt_answer_url are backend_broken — suppress
     // perplexity_answer_searchterm is ok
     "perplexity.ai": "perplexity_answer_searchterm",

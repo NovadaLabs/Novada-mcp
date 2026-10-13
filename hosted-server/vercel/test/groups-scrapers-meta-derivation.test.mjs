@@ -3,7 +3,8 @@
  *
  * W-B1 added two NEW, additive `TOOL_GROUPS` keys to hosted-server/vercel/api/mcp.ts:
  *   - "scrapers" — MUST resolve to exactly {novada_scrape} ∪ every
- *     novada_scrape_<platform> tool (16 total today) — DERIVED from
+ *     novada_scrape_<platform> tool (15 total as of S1-connector Round 3,
+ *     2026-10-13 — was 16 before novada_scrape_shein's removal) — DERIVED from
  *     PLATFORM_SCRAPER_TOOLS (the same aggregator src/tools/platform_scrapers.js
  *     exports and npm-package's own src/index.ts SCRAPE_GROUP already derives
  *     from — see npm-package/tests/tools/scrape-group-derivation.test.ts), never
@@ -66,8 +67,8 @@ function groupSourceAndNames(groupKey) {
 
 // ─── PLATFORM_SCRAPER_NAMES sanity (mirrors tool-catalog-derivation.test.mjs) ─────
 
-test("sanity: the vendored PLATFORM_SCRAPER_TOOLS has exactly 15 entries", () => {
-  assert.equal(PLATFORM_SCRAPER_NAMES.length, 15, `expected 15, found: ${PLATFORM_SCRAPER_NAMES.join(", ")}`);
+test("sanity: the vendored PLATFORM_SCRAPER_TOOLS has exactly 14 entries (S1-connector Round 3, 2026-10-13: 15->14, novada_scrape_shein removed)", () => {
+  assert.equal(PLATFORM_SCRAPER_NAMES.length, 14, `expected 14, found: ${PLATFORM_SCRAPER_NAMES.join(", ")}`);
 });
 
 // ─── TOOL_GROUPS.scrapers is DERIVED, never hand-listed ───────────────────────────
@@ -99,18 +100,19 @@ test("TOOL_GROUPS.scrapers still hand-lists the ONE non-platform-scraper member 
 // which is exactly the "derived, not hand-listed" property under test. Mirrors
 // scrape-group-derivation.test.ts's own "cross-check: the ACTUAL derived group" test,
 // which reconstructs index.ts's SCRAPE_GROUP expression the same way for the same reason.
-test("TOOL_GROUPS.scrapers's REAL resolved value (reconstructed the same way mcp.ts computes it) is EXACTLY {novada_scrape} ∪ every current PLATFORM_SCRAPER_TOOLS entry (16 total)", () => {
+test("TOOL_GROUPS.scrapers's REAL resolved value (reconstructed the same way mcp.ts computes it) is EXACTLY {novada_scrape} ∪ every current PLATFORM_SCRAPER_TOOLS entry (15 total — S1-connector Round 3, 2026-10-13: 16->15, novada_scrape_shein removed)", () => {
   const derivedScrapersGroup = ["novada_scrape", ...PLATFORM_SCRAPER_NAMES];
-  assert.equal(derivedScrapersGroup.length, 16, `expected 16 tools, found ${derivedScrapersGroup.length}`);
-  assert.equal(new Set(derivedScrapersGroup).size, 16, "no duplicates expected");
+  assert.equal(derivedScrapersGroup.length, 15, `expected 15 tools, found ${derivedScrapersGroup.length}`);
+  assert.equal(new Set(derivedScrapersGroup).size, 15, "no duplicates expected");
   assert.ok(derivedScrapersGroup.includes("novada_scrape"));
   for (const name of PLATFORM_SCRAPER_NAMES) {
     assert.ok(derivedScrapersGroup.includes(name), `derived TOOL_GROUPS.scrapers is missing ${name}`);
   }
+  assert.ok(!derivedScrapersGroup.includes("novada_scrape_shein"), "novada_scrape_shein must stay excluded (empty working-op-set)");
 });
 
 test("TOOL_GROUPS.scrapers grows automatically as PLATFORM_SCRAPER_TOOLS grows (every current platform tool, including the newest ones, is covered with zero hand-edits here)", () => {
-  for (const name of ["novada_scrape_walmart", "novada_scrape_shein", "novada_scrape_linkedin", "novada_scrape_github", "novada_scrape_perplexity"]) {
+  for (const name of ["novada_scrape_walmart", "novada_scrape_linkedin", "novada_scrape_github", "novada_scrape_perplexity"]) {
     assert.ok(PLATFORM_SCRAPER_NAMES.includes(name), `vendored PLATFORM_SCRAPER_TOOLS is missing ${name} — re-vendor from npm-package`);
   }
 });

@@ -113,6 +113,21 @@ export declare function createPlatformScraperTool<TOpName extends string>(config
     }, apiKey: string) => Promise<string>;
     config: PlatformScraperConfig<TOpName>;
 };
+/**
+ * Class rule (Round 3, item 2 — not a SHEIN special case): a platform-scraper tool
+ * must NOT be registered/listed when every one of its configured operations resolves
+ * to a catalog entry whose status is "backend_broken" (or is missing from the
+ * catalog entirely). Directory review requires every LISTED tool to be able to
+ * succeed for valid input; a tool whose entire working-op set is empty can never
+ * succeed for ANY input, regardless of what the caller passes.
+ *
+ * Deliberately keyed off the catalog's `status` field (the single source of truth
+ * already used by scrape.ts's broken-op warning and extract.ts's hint suppression)
+ * rather than a hardcoded platform list — adding a 16th fully-broken platform (or a
+ * backend fix that revives SHEIN) changes this function's answer with zero edits
+ * here.
+ */
+export declare function hasAnyWorkingOp(config: PlatformScraperConfig): boolean;
 /** A platform-scraper tool widened to one uniform, dispatch-ready shape. */
 export interface DispatchableScraperTool {
     toolDefinition: PlatformScraperToolDefinition;
