@@ -98,8 +98,8 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
   // curated registry size and require the human-authored README headline to
   // derive from it (state "22 curated tools"). NOT a semantic diff test — just a
   // count assertion so a bare wrong integer (38/33/25/11) can't silently return.
-  it("registry count is 38 and the README headline count matches it", () => {
-    const EXPECTED_CURATED_COUNT = 38;
+  it("registry count is 37 and the README headline count matches it", () => {
+    const EXPECTED_CURATED_COUNT = 37;
     expect(
       TOOL_REGISTRY.length,
       `registry size changed — update EXPECTED_CURATED_COUNT and every README/SKILL count to ${TOOL_REGISTRY.length}`
@@ -121,7 +121,7 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
   // This is exactly why the root count silently drifted to a stale "23 tools" while the
   // npm-package README was already correct: nothing asserted the root file at all.
   it("registry count matches the monorepo root README headline too", () => {
-    const EXPECTED_CURATED_COUNT = 38;
+    const EXPECTED_CURATED_COUNT = 37;
     const rootReadmePath = resolve(__dirname, "../../../README.md");
     const rootReadme = readFileSync(rootReadmePath, "utf8");
     expect(
@@ -142,7 +142,7 @@ describe("discover catalog ↔ registry ↔ wired TOOLS", () => {
   // see hosted-server/vercel/test/tool-catalog-derivation.test.mjs's hosted-visible-count
   // test, since deriving "30" requires HOSTED_HIDDEN, which lives in mcp.ts, not this package.
   it("registry count matches novada-agent SKILL.md's headline too", () => {
-    const EXPECTED_CURATED_COUNT = 38;
+    const EXPECTED_CURATED_COUNT = 37;
     const skillPath = resolve(__dirname, "../../skills/novada-agent/SKILL.md");
     const skill = readFileSync(skillPath, "utf8");
     expect(

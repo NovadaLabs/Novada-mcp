@@ -1302,7 +1302,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -1438,7 +1437,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -1625,7 +1623,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -1815,7 +1812,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -1966,7 +1962,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -2105,7 +2100,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -2238,7 +2232,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -2278,7 +2271,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -2317,7 +2309,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -2355,7 +2346,6 @@
         {
           "type": "string",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -2591,26 +2581,6 @@
       "param": "operation",
       "tools": [
         "novada_scrape",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape",
         "novada_scrape_linkedin"
       ],
       "shapes": [
@@ -2709,38 +2679,6 @@
       "param": "operation",
       "tools": [
         "novada_scrape_amazon",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "bestsellers",
-            "global_product_by_category_url",
-            "global_product_by_keyword_and_brand",
-            "global_product_by_url",
-            "listings_by_keyword",
-            "product_by_asin",
-            "product_by_url",
-            "products_by_keywords",
-            "reviews_by_url",
-            "seller_by_url"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_amazon",
         "novada_scrape_linkedin"
       ],
       "shapes": [
@@ -2878,41 +2816,6 @@
       "param": "operation",
       "tools": [
         "novada_scrape_google",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "ai_mode",
-            "hotels",
-            "jobs",
-            "maps_by_cid",
-            "maps_by_location",
-            "maps_by_place_id",
-            "maps_by_url",
-            "maps_reviews_by_url",
-            "search_by_url",
-            "shopping",
-            "videos",
-            "web_search",
-            "web_search_by_domain"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_google",
         "novada_scrape_linkedin"
       ],
       "shapes": [
@@ -3050,32 +2953,6 @@
       "param": "operation",
       "tools": [
         "novada_scrape_bing",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "news",
-            "shopping",
-            "videos",
-            "web_search"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_bing",
         "novada_scrape_linkedin"
       ],
       "shapes": [
@@ -3183,29 +3060,6 @@
       "param": "operation",
       "tools": [
         "novada_scrape_duckduckgo",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "web_search"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_duckduckgo",
         "novada_scrape_linkedin"
       ],
       "shapes": [
@@ -3304,29 +3158,6 @@
       "param": "operation",
       "tools": [
         "novada_scrape_yandex",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "web_search"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_yandex",
         "novada_scrape_linkedin"
       ],
       "shapes": [
@@ -3410,7 +3241,6 @@
             "channel_videos_by_url",
             "channels_by_keyword",
             "comments_by_video",
-            "transcript_by_video",
             "video_by_id",
             "video_by_url",
             "video_file_by_url",
@@ -3437,41 +3267,6 @@
       "param": "operation",
       "tools": [
         "novada_scrape_youtube",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "audio_file_by_url",
-            "channel_by_url",
-            "channel_videos_by_url",
-            "channels_by_keyword",
-            "comments_by_video",
-            "transcript_by_video",
-            "video_by_id",
-            "video_by_url",
-            "video_file_by_url",
-            "videos_by_filters",
-            "videos_by_keyword",
-            "videos_by_playlist_url",
-            "videos_by_label"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_youtube",
         "novada_scrape_linkedin"
       ],
       "shapes": [
@@ -3483,7 +3278,6 @@
             "channel_videos_by_url",
             "channels_by_keyword",
             "comments_by_video",
-            "transcript_by_video",
             "video_by_id",
             "video_by_url",
             "video_file_by_url",
@@ -3520,7 +3314,6 @@
             "channel_videos_by_url",
             "channels_by_keyword",
             "comments_by_video",
-            "transcript_by_video",
             "video_by_id",
             "video_by_url",
             "video_file_by_url",
@@ -3556,7 +3349,6 @@
             "channel_videos_by_url",
             "channels_by_keyword",
             "comments_by_video",
-            "transcript_by_video",
             "video_by_id",
             "video_by_url",
             "video_file_by_url",
@@ -3603,35 +3395,6 @@
             "product_by_sku",
             "product_by_url",
             "product_by_url_and_zipcode"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_instagram",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "comments_by_post_url",
-            "post_by_url",
-            "posts_by_profile",
-            "profile_by_url",
-            "profile_by_username",
-            "reel_by_url",
-            "reels_by_profile_url"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
           ]
         }
       ],
@@ -3753,34 +3516,6 @@
             "product_by_sku",
             "product_by_url",
             "product_by_url_and_zipcode"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_facebook",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "comments_by_post_url",
-            "event_by_url",
-            "events_by_list_url",
-            "events_by_search_url",
-            "post_by_url",
-            "profile_by_url"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
           ]
         }
       ],
@@ -3898,33 +3633,6 @@
             "product_by_sku",
             "product_by_url",
             "product_by_url_and_zipcode"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_tiktok",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "post_by_url",
-            "posts_by_list_url",
-            "posts_by_profile",
-            "profile_by_url",
-            "profiles_by_search_url"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
           ]
         }
       ],
@@ -4037,31 +3745,6 @@
             "product_by_sku",
             "product_by_url",
             "product_by_url_and_zipcode"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_x",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "post_by_url",
-            "profile_by_url",
-            "profile_by_username"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
           ]
         }
       ],
@@ -4149,33 +3832,6 @@
       "param": "operation",
       "tools": [
         "novada_scrape_walmart",
-        "novada_scrape_shein"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "product_by_category_url",
-            "product_by_keyword",
-            "product_by_sku",
-            "product_by_url",
-            "product_by_url_and_zipcode"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_walmart",
         "novada_scrape_linkedin"
       ],
       "shapes": [
@@ -4244,81 +3900,6 @@
             "product_by_sku",
             "product_by_url",
             "product_by_url_and_zipcode"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "answer_by_search_term",
-            "answer_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_shein",
-        "novada_scrape_linkedin"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "company_by_url",
-            "job_by_url",
-            "jobs_by_search_url",
-            "jobs_search"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_shein",
-        "novada_scrape_github"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ]
-        },
-        {
-          "type": "string",
-          "enum": [
-            "repositories_by_search_url",
-            "repository_by_url",
-            "repository_details_by_url"
-          ]
-        }
-      ],
-      "note": "Tools-v2 FINAL platform-scraper pass (novada_scrape_walmart/shein/linkedin/github/perplexity, 2026-07-20): same intentional narrowing pattern as the existing novada_scrape_amazon baseline entry above (see its note for the full rationale) - novada_scrape's 'operation' is a free-form regex-constrained string covering all 16 active platforms' ~88 operation IDs, while each new per-platform tool deliberately narrows 'operation' to its own closed, friendly-name enum for ONLY that platform's catalog operations (see the platform's scrape_<platform>.ts <PLATFORM>_OPERATIONS map). Every pairing among the now-sixteen operation-bearing platform tools (novada_scrape, novada_scrape_amazon, novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_youtube, novada_scrape_instagram, novada_scrape_facebook, novada_scrape_tiktok, novada_scrape_x, novada_scrape_walmart, novada_scrape_shein, novada_scrape_linkedin, novada_scrape_github, novada_scrape_perplexity) necessarily diverges on 'operation' shape, since each closed enum lists a different platform's own operation names - a benign, by-design shape-narrowing repeated per pair, not a genuine ambiguity to fix on any side."
-    },
-    {
-      "param": "operation",
-      "tools": [
-        "novada_scrape_shein",
-        "novada_scrape_perplexity"
-      ],
-      "shapes": [
-        {
-          "type": "string",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
           ]
         },
         {

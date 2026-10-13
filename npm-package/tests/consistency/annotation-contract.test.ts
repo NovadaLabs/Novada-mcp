@@ -9,7 +9,7 @@
  * of this one-line fix would pass every existing suite.
  *
  * This file is the npm-side equivalent, scoped to the FULL `TOOLS` export (the
- * 38-tool local/stdio ListTools surface — self-host `npx novada-mcp` exposes
+ * 37-tool local/stdio ListTools surface — self-host `npx novada-mcp` exposes
  * all of it, hosted or not), not just the hosted-visible subset. Same class-
  * table contract as the hosted file: every tool must have a reviewed row, and
  * a disagreement (or a new tool with no row) fails loudly.
@@ -93,14 +93,14 @@ describe("full-registry (npm/stdio TOOLS) annotation contract — class table, n
 
   it("every platform-scraper tool (novada_scrape_<platform>) is readOnlyHint:true, destructiveHint:false (one class rule, not 15 rows)", () => {
     const scrapers = TOOLS.filter((t) => PLATFORM_SCRAPER_RE.test(t.name));
-    expect(scrapers.length).toBeGreaterThanOrEqual(15);
+    expect(scrapers.length).toBeGreaterThanOrEqual(14);
     const disagreements = scrapers
       .filter((t) => (t.annotations as { readOnlyHint?: boolean }).readOnlyHint !== true || (t.annotations as { destructiveHint?: boolean }).destructiveHint !== false)
       .map((t) => t.name);
     expect(disagreements).toEqual([]);
   });
 
-  it("class sweep: TOOLS size matches what this table was authored against (38) — a silent registry-size change re-triggers full review", () => {
-    expect(TOOLS.length).toBe(38);
+  it("class sweep: TOOLS size matches what this table was authored against (37) — a silent registry-size change re-triggers full review", () => {
+    expect(TOOLS.length).toBe(37);
   });
 });

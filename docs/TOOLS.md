@@ -3,8 +3,8 @@
 Every tool Novada MCP exposes, grouped by category. The [README](../README.md) shows only the
 handful you reach for most; this is the full list.
 
-- **38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38.
-- The hosted default surface (`mcp.novada.com`) exposes **29** — the same registry minus 9 tools
+- **37 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 37.
+- The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools
   that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow`
   (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy`
   (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey`
@@ -46,13 +46,12 @@ All 16 scrape tools run on both local and hosted.
 | `novada_scrape_bing` | Bing-only raw SERP data (web search, videos, news, shopping) via a closed, typed `operation` enum — 4 verified-working operations; Bing is not a selectable `novada_search` engine | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_duckduckgo` | DuckDuckGo-only raw SERP data (web search) via a closed, typed `operation` enum — 1 verified-working operation | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_yandex` | Yandex-only raw SERP data (web search) via a closed, typed `operation` enum — 1 verified-working operation | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
-| `novada_scrape_youtube` | YouTube-only structured data (video/channel info, transcripts, comments, video/audio downloads) via a closed, typed `operation` enum — 13 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
+| `novada_scrape_youtube` | YouTube-only structured data (video/channel info, comments, video/audio downloads) via a closed, typed `operation` enum — 12 verified-working operations (1 known backend_broken op excluded: transcript_by_video) | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_instagram` | Instagram-only structured data (profiles, posts, reels, comments) via a closed, typed `operation` enum — 7 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_facebook` | Facebook-only structured data (profiles, posts, comments, events) via a closed, typed `operation` enum — 6 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_tiktok` | TikTok-only structured data (profiles, posts, hashtag/discover listings) via a closed, typed `operation` enum — 5 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_x` | X (Twitter)-only structured data (post details, profile lookup by username or URL) via a closed, typed `operation` enum — 3 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_walmart` | Walmart-only structured data (product details by keyword/category URL/SKU/zip code/URL) via a closed, typed `operation` enum — 5 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
-| `novada_scrape_shein` | SHEIN-only structured product data (by product ID or product URL) via a closed, typed `operation` enum — 2 verified-working operations (3 known backend_broken ops excluded) | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_linkedin` | LinkedIn-only structured data (job listings by filters/search URL/job URL, company info by URL) via a closed, typed `operation` enum — 4 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_github` | GitHub-only structured repository data (by repository URL or a search-results URL) via a closed, typed `operation` enum — 3 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_perplexity` | Perplexity AI's own generated answer for a query (by URL or search term) via a closed, typed `operation` enum — 2 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |

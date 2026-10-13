@@ -58,7 +58,7 @@
     },
     {
       "name": "novada_scrape_youtube",
-      "description": "Extract structured YouTube data — video/channel metadata, transcripts, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\")."
+      "description": "Extract structured YouTube data — video/channel metadata, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\")."
     },
     {
       "name": "novada_scrape_instagram",
@@ -79,10 +79,6 @@
     {
       "name": "novada_scrape_walmart",
       "description": "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"walmart.com\")."
-    },
-    {
-      "name": "novada_scrape_shein",
-      "description": "Extract structured SHEIN product data — product details by product ID or product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"shein.com\")."
     },
     {
       "name": "novada_scrape_linkedin",
@@ -197,7 +193,7 @@
     {
       "uri": "novada://guide",
       "name": "Agent Tool Selection Guide",
-      "description": "Decision tree and workflow patterns for choosing between all 38 novada tools: search, extract, crawl, map, research, site_copy, scrape (+15 per-platform scrapers), proxy, verify, browser, monitor, account, setup, discover"
+      "description": "Decision tree and workflow patterns for choosing between all 37 novada tools: search, extract, crawl, map, research, site_copy, scrape (+14 per-platform scrapers), proxy, verify, browser, monitor, account, setup, discover"
     },
     {
       "uri": "novada://scraper-platforms",
@@ -208,7 +204,7 @@
   "skills": [
     {
       "name": "novada-agent",
-      "description": "Tool selection guide for all 38 Novada MCP tools — decision tree, key parameters, common workflows, and when NOT to use each tool.",
+      "description": "Tool selection guide for all 37 Novada MCP tools — decision tree, key parameters, common workflows, and when NOT to use each tool.",
       "path": "skills/novada-agent/SKILL.md"
     }
   ],

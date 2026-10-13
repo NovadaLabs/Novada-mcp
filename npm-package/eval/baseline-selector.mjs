@@ -156,6 +156,24 @@ export function validateTaskSet(tasks, registryNames) {
  * full accounting. Raised 60%->68% (12/20->17/25) to match the honestly-regenerated
  * committed snapshot.
  *
+ * 2026-10-13 UPDATE 4 (S1-connector Round 3 — catalog reality change, NOT a tool
+ * removal/scaffold pass): shein_product_id/shein_product_url and
+ * youtube_transcript_id went backend_broken (live-verified), so novada_scrape_shein
+ * was removed entirely (empty working-op-set) and transcript_by_video was removed
+ * from novada_scrape_youtube's enum. T16 and T22's expected_tool changed from the
+ * now-unavailable dedicated tool to generic novada_scrape — a strictly HARDER target
+ * for the crude Tier-A bag-of-words argmax (a short, generic description competing
+ * against longer, more specific per-platform descriptions), so both now score
+ * correct:false (T16 is also a new forbidden hit: Tier A still picks
+ * novada_scrape_youtube — the "youtube"/"transcript" token match is too strong
+ * for the heuristic to abandon even though that operation no longer exists on
+ * it, which moved to unacceptable_tools, not a safe fallback). Lowered 68%->60%
+ * (17/25->15/25) to match the honestly-regenerated committed
+ * snapshot — see eval/baseline-tier-a.json's own dated comment for the full
+ * accounting. This is a real, expected regression on this crude sentinel, not a
+ * quality regression in the product (the model-in-the-loop Tier B runner is the
+ * real correctness signal for these two tasks, not gated by this file).
+ *
  * Kept for reporting/back-compat and as a human-readable summary of what
  * baseline-tier-a.json (below) records precisely, per-task. The actual gate
  * (FIX 2) no longer compares against this bare number — it compares against
@@ -163,7 +181,7 @@ export function validateTaskSet(tasks, registryNames) {
  * deterministic: no key, no network, no sampling) and catches per-task
  * identity regressions this scalar alone cannot (see evaluateRegressionGate).
  */
-export const BASELINE_FLOOR = 17 / 25;
+export const BASELINE_FLOOR = 15 / 25;
 
 const BASELINE_TIER_A_PATH = resolve(__dirname, "baseline-tier-a.json");
 
