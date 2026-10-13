@@ -169,7 +169,7 @@ export const _TOOL_DEFINITIONS = [
 **Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
 **Params:** url (optional), country (ISO 2-letter), city (optional, requires country), session_id (optional for sticky IP).
 **Formats:** "url", "env", "curl".
-**agent_instruction:** Best for geo-restricted content. Use country param for targeting. Strongest anti-bot bypass — escalate here from isp/datacenter when blocked.
+**Note:** the strongest anti-bot bypass of the proxy types; country targets geo-restricted content.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
         inputSchema: zodToMcpSchema(ProxyResidentialParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -182,7 +182,7 @@ export const _TOOL_DEFINITIONS = [
 **Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
 **Params:** url (optional), country (ISO 2-letter, optional), session_id (optional for sticky IP).
 **Formats:** "url", "env", "curl".
-**agent_instruction:** ISP proxies look like real home users. Best for social/ecommerce. Escalate to novada_proxy_residential for stronger anti-bot.
+**Note:** looks like a real home user; novada_proxy_residential is the stronger anti-bot alternative.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
         inputSchema: zodToMcpSchema(ProxyIspParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -195,7 +195,7 @@ export const _TOOL_DEFINITIONS = [
 **Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
 **Params:** url (optional), country (ISO 2-letter, optional), session_id (optional for sticky IP).
 **Formats:** "url", "env", "curl".
-**agent_instruction:** Fastest proxies. Best for high-volume, non-anti-bot targets. Escalate to isp → residential if blocked.
+**Note:** the fastest and cheapest proxy type; novada_proxy_isp and novada_proxy_residential are progressively stronger anti-bot alternatives.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
         inputSchema: zodToMcpSchema(ProxyDatacenterParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -208,7 +208,7 @@ export const _TOOL_DEFINITIONS = [
 **Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
 **Params:** url (optional), country (ISO 2-letter, optional), carrier (optional, e.g. 'verizon'), session_id (optional for sticky IP).
 **Formats:** "url", "env", "curl".
-**agent_instruction:** Mobile IPs. Best for mobile-targeted content and apps. Pair with mobile User-Agent for full simulation.
+**Note:** pairing with a mobile User-Agent gives the most realistic mobile simulation.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
         inputSchema: zodToMcpSchema(ProxyMobileParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -221,7 +221,7 @@ export const _TOOL_DEFINITIONS = [
 **Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
 **Params:** url (optional), country (ISO 2-letter, REQUIRED — each country has a distinct pool of dedicated IPs; omitting it errors), session_id (REQUIRED — determines which dedicated IP is assigned; omitting it errors. Same session_id always returns the same IP).
 **Formats:** "url", "env", "curl".
-**agent_instruction:** Same IP every request. Best for accounts requiring consistent identity. Keep the same session_id for the entire account lifecycle.
+**Note:** the same session_id always returns the same IP — keep it fixed for the lifetime of the account it's assigned to.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
         inputSchema: zodToMcpSchema(ProxyStaticParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -234,7 +234,7 @@ export const _TOOL_DEFINITIONS = [
 **Not for:** novada_extract or novada_crawl — they handle proxy routing internally. These credentials are for your own HTTP clients (curl, requests, axios).
 **Params:** url (optional), session_id (REQUIRED — determines your exclusive datacenter IP assignment; omitting it errors. Same session_id always returns the same dedicated IP).
 **Formats:** "url", "env", "curl".
-**agent_instruction:** Exclusive datacenter IP. Best for high-trust platforms. No other user shares this IP. For human-like IP appearance, use novada_proxy_residential instead.
+**Note:** exclusive — not shared with other users; novada_proxy_residential is the alternative when a human-like (ISP) IP appearance matters more than exclusivity.
 **Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
         inputSchema: zodToMcpSchema(ProxyDedicatedParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -263,18 +263,24 @@ export const _TOOL_DEFINITIONS = [
 **SPAs:** wait with domcontentloaded, never networkidle. \`country\` is accepted but not yet applied to the browser exit node — don't rely on it for geo-routing.
 **Constraint:** close_session/list_sessions must be the ONLY action in the call.`,
         inputSchema: zodToMcpSchema(BrowserParamsSchema),
-        annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
+        // destructiveHint:true (connector-review fix) — this tool clicks, types, submits
+        // forms, and runs arbitrary JS on third-party pages. Those actions can be
+        // irreversible from the caller's point of view (submit an order, delete a
+        // record, log out a session) even though the tool itself never deletes Novada's
+        // own data — readOnlyHint stays false (it's not a read) and destructiveHint
+        // reflects that real-world effect, matching Claude's auto-permission posture for
+        // every other write tool in this file.
+        annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: true },
     },
     {
         name: "novada_discover",
-        description: `List all available Novada tools — name, description, category, group, and status.
+        description: `Lists all available Novada tools — name, description, category, group, and status. Useful at the start of a task to find the right tool, or whenever another tool's description isn't enough to decide between two options.
 
-**agent_instruction:** call this first when starting a task to find the right tool.
 **Returns:** a markdown table grouped by category, plus a Tool Groups reference (core/scrapers/account/meta).
 **Filter:** category narrows the catalog (e.g. category="Proxy"); NOVADA_GROUPS/NOVADA_TOOLS (local) or ?groups=/?tools= (hosted) narrow the actual tool set exposed on this connection.
 **Status:** active = available now. Output includes server_version.
 
-**ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search/extract/research/crawl/scrape/unblock/proxy auto-provisioning — no separate keys needed. NOVADA_BROWSER_WS/NOVADA_PROXY_ENDPOINT unlock extras, no extra key. On tool failure, call novada_account (section="summary") for balance/plans/entitlements.`,
+**Auth:** a single NOVADA_API_KEY authenticates search/extract/research/crawl/scrape/unblock/proxy auto-provisioning — no separate keys needed. NOVADA_BROWSER_WS/NOVADA_PROXY_ENDPOINT unlock extras, no extra key. See novada_account (section="summary") for balance/plans/entitlements.`,
         inputSchema: zodToMcpSchema(DiscoverParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -337,7 +343,7 @@ export const _TOOL_DEFINITIONS = [
     },
     {
         name: "novada_setup",
-        description: `The onboarding concierge and first-run front door. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key.
+        description: `Onboarding and key-validation tool — useful at the start of a session, or whenever another tool reports a missing/invalid key.
 
 **What it does:**
 1. **Validates your key** — one cheap account read (wallet balance) confirms it works and shows your balance. No per-product probes, no credit cost.
@@ -378,7 +384,14 @@ export const _TOOL_DEFINITIONS = [
 **Wire format:** multipart/form-data.
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
         inputSchema: zodToMcpSchema(ProxyAccountCreateParamsSchema),
-        annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
+        // destructiveHint:true (connector-review fix) — creates a real, billable
+        // sub-account against the caller's master plan (an account-mutation action with
+        // financial consequence), gated by the same two-step approval_token confirmation
+        // as novada_ip_whitelist/novada_static_ip_mgmt/novada_capture_apikey below, all of
+        // which already carry destructiveHint:true. This tool was the one member of that
+        // same class left at false — same class, same hint, so Claude prompts for
+        // confirmation before running it instead of treating it as a safe no-prompt call.
+        annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
     },
     {
         name: "novada_proxy_account_list",
