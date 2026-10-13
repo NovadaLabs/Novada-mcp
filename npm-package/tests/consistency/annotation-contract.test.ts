@@ -41,7 +41,7 @@ const EXPECTED_HINTS: Readonly<Record<string, { readOnlyHint: boolean; destructi
   novada_discover:             { readOnlyHint: true,  destructiveHint: false, why: "static tool-catalog listing" },
   novada_browser_flow:         { readOnlyHint: false, destructiveHint: false, why: "simplified click/scroll/wait/type/screenshot sequence — additive automation actions, not itself destructive by default (matches its existing, unchanged annotation)" },
   novada_ai_monitor:           { readOnlyHint: true,  destructiveHint: false, why: "Google-scoped search over AI-company public pages" },
-  novada_monitor:              { readOnlyHint: true,  destructiveHint: false, why: "reads target; writes only Novada's OWN internal baseline store, never target/caller data" },
+  novada_monitor:              { readOnlyHint: true,  destructiveHint: false, why: "Round 4 (F4, independent judge 2026-10-13): reads target; the 'baseline' is a plain in-process Map (tools/monitor.ts's monitorStore) — never disk, KV, or any durable/external store, never target/caller data, and doesn't survive past this process's lifetime" },
   novada_setup:                { readOnlyHint: true,  destructiveHint: false, why: "one read-only wallet-balance probe to validate the key" },
   novada_account:              { readOnlyHint: true,  destructiveHint: false, why: "account/billing dashboard reads only" },
   novada_proxy_account_create: { readOnlyHint: false, destructiveHint: true,  why: "FIX (round 1): creates a real billable sub-account, approval_token-gated like 3 sibling WRITE tools that already had this hint" },

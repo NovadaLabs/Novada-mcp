@@ -74,7 +74,7 @@ const EXPECTED_HINTS = {
   novada_map:                    { readOnlyHint: true,  destructiveHint: false, why: "URL discovery via sitemap/BFS, no writes" },
   novada_scrape:                 { readOnlyHint: true,  destructiveHint: false, why: "structured data extraction from a platform, read-only" },
   novada_ai_monitor:             { readOnlyHint: true,  destructiveHint: false, why: "Google-scoped search over AI-company public pages" },
-  novada_monitor:                { readOnlyHint: true,  destructiveHint: false, why: "reads a target page; writes only Novada's OWN internal baseline store, never the target or caller data" },
+  novada_monitor:                { readOnlyHint: true,  destructiveHint: false, why: "Round 4 (F4, independent judge 2026-10-13): reads a target page; the 'baseline' is a plain in-process Map (npm-package's monitorStore) — never disk/KV/any durable store, never the target or caller data, and doesn't even survive past one serverless cold-start on this runtime" },
   novada_proxy:                  { readOnlyHint: true,  destructiveHint: false, why: "returns proxy credentials/config; makes no outbound call itself" },
   // novada_browser is NOT a row here — it moved to HOSTED_HIDDEN (2026-10):
   // every real browser action unconditionally fails on this runtime (see

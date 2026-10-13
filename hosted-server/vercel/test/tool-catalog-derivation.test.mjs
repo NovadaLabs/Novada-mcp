@@ -66,8 +66,27 @@ test("mcp.ts: TOOLS is imported from core as CORE_TOOLS (single source of truth)
   assert.match(mcpSrc, /TOOLS\s+as\s+CORE_TOOLS/, "mcp.ts must import core's TOOLS as CORE_TOOLS");
 });
 
-test("mcp.ts: hosted TOOLS is built via CORE_TOOLS.map(...), not a hand-curated literal", () => {
-  assert.match(mcpSrc, /const TOOLS = CORE_TOOLS\.map\(/, "TOOLS must be derived from CORE_TOOLS");
+test("mcp.ts: hosted TOOLS is built via CORE_TOOLS_FOR_HOSTED.map(...), not a hand-curated literal", () => {
+  // Round 4 (S1-connector, F1 — CLASS fix, independent judge 2026-10-13): TOOLS
+  // is no longer `CORE_TOOLS.map(...)` directly — it's now
+  // `CORE_TOOLS_FOR_HOSTED.map(...)`, where CORE_TOOLS_FOR_HOSTED is CORE_TOOLS
+  // re-rendered through buildToolsForSurface() against hosted's OWN visible-tool
+  // set (see surface-tool-name-tokens.test.mjs for the full rationale + the
+  // token-level consistency guard this enables). Still fully derived from
+  // CORE_TOOLS (transitively, via buildToolsForSurface(HOSTED_AVAILABLE_FOR_
+  // SIBLING_MENTIONS), which itself is built FROM CORE_TOOLS.map((t) => t.name))
+  // — never a hand-curated literal.
+  assert.match(mcpSrc, /const TOOLS = CORE_TOOLS_FOR_HOSTED\.map\(/, "TOOLS must be derived from CORE_TOOLS_FOR_HOSTED");
+  assert.match(
+    mcpSrc,
+    /const CORE_TOOLS_FOR_HOSTED = buildToolsForSurface\(HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS\);/,
+    "CORE_TOOLS_FOR_HOSTED must itself be derived from buildToolsForSurface(...), not a hand-curated literal",
+  );
+  assert.match(
+    mcpSrc,
+    /const HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS: ReadonlySet<string> = new Set\(\s*CORE_TOOLS\.map\(\(t\) => t\.name\)/,
+    "HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS must itself be derived from CORE_TOOLS",
+  );
 });
 
 // ─── (b) ListTools default surface includes all 14 platform-scraper tools ─────────
@@ -266,9 +285,17 @@ test("FIX 1: a direct CallTool('novada_verify') is NOT rejected by the tool-set/
 
 /** Extract and EXECUTE mcp.ts's real TITLE_BRAND_MAP + deriveTitle (not a reimplementation). */
 function extractDeriveTitle() {
+  // Round 4 (F1): end anchor moved from "const TOOLS = CORE_TOOLS.map(" (TOOLS no
+  // longer sits directly after deriveTitle — see the F1 restructuring above) to
+  // the "Hosted-hidden tools" section comment that now immediately follows
+  // deriveTitle's closing brace. This also keeps the extracted/executed slice to
+  // EXACTLY TITLE_BRAND_MAP + deriveTitle (as the function's own doc comment
+  // promises) — including the new HOSTED_HIDDEN/CORE_TOOLS_FOR_HOSTED block here
+  // would reference buildToolsForSurface/CORE_TOOLS, which aren't in scope inside
+  // this isolated `new Function` and would throw ReferenceError.
   const code = sliceBetween(
     "const TITLE_BRAND_MAP: Record<string, string> = {",
-    "\n\nconst TOOLS = CORE_TOOLS.map(",
+    "\n\n// ─── Hosted-hidden tools",
     "TITLE_BRAND_MAP / deriveTitle",
   )
     .replace(/:\s*Record<string,\s*string>/, "")

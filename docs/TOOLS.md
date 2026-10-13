@@ -107,7 +107,7 @@ action beyond the local-only `close_session`/`list_sessions` bookkeeping returns
 
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
-| `novada_account` | Balance, plan quotas, usage history, traffic, capture logs in one call | Unified dashboard, or one `section=` slice | ✅ |
+| `novada_account` | Balance, plan quotas, usage history, traffic, capture logs in one call. Back-compat aliases (dispatch-only, not listed tools): `novada_wallet_balance`, `novada_wallet_usage_record`, `novada_plan_balance_all`, `novada_traffic_daily`, `novada_capture_logs`, `novada_account_summary`, `novada_health`, `novada_health_all` all route here. | Unified dashboard, or one `section=` slice | ✅ |
 | `novada_proxy_account_create` | Provisioning a proxy sub-account | Created account details — **WRITE, requires `confirm:true`** | ❌ write-gated account op |
 | `novada_proxy_account_list` | Auditing existing proxy sub-accounts | Paginated list | ✅ |
 | `novada_ip_whitelist` | Managing the proxy IP whitelist (Residential, Unlimited, Static ISP) | Whitelist entries — add/del are **WRITE, require `confirm:true`** | ❌ write-gated account op |
