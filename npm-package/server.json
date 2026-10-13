@@ -110,7 +110,7 @@
     },
     {
       "name": "novada_discover",
-      "description": "List all available Novada tools — name, description, category, group, and status."
+      "description": "Lists all available Novada tools — name, description, category, group, and status. Useful at the start of a task to find the right tool, or whenever another tool's description isn't enough to decide between two options."
     },
     {
       "name": "novada_browser_flow",
@@ -126,7 +126,7 @@
     },
     {
       "name": "novada_setup",
-      "description": "The onboarding concierge and first-run front door. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key."
+      "description": "Onboarding and key-validation tool — useful at the start of a session, or whenever another tool reports a missing/invalid key."
     },
     {
       "name": "novada_account",
