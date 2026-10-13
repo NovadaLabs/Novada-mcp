@@ -521,11 +521,17 @@ describe("novadaScrape — error handling", () => {
   // (amazon.com) through the SAME code path.
   describe("Round 3 item 3 — code 10000 ('serp capture failed') per-platform classification", () => {
     it("yandex.com (via novada_scrape's generic dispatch) gets the yandex-specific regional-domain hint", async () => {
+      // Round 4 (F7): yandex_domain="yandex.com" is now preflight-rejected as a
+      // KNOWN-broken value (data/known_broken_param_values.ts), a separate, earlier
+      // check than this test's target (code-10000 classification for a live upstream
+      // response). Use "yandex.kz" — a valid, non-working-alternative TLD not in that
+      // table — so this test keeps exercising the GENERIC code-10000 classification
+      // path, independent of F7's specific rejection (covered by its own tests).
       mockApiError(10000, "serp capture failed");
       let thrown: unknown;
       try {
         await novadaScrape(
-          { platform: "yandex.com", operation: "yandex", params: { q: "test", yandex_domain: "yandex.com" }, format: "markdown", limit: 20 },
+          { platform: "yandex.com", operation: "yandex", params: { q: "test", yandex_domain: "yandex.kz" }, format: "markdown", limit: 20 },
           "test-key",
         );
       } catch (e) {
@@ -877,8 +883,12 @@ describe("novadaScrape — pre-flight (#6)", () => {
       expect(err).not.toBeNull();
       expect(err!.detail).toBe("preflight:missing_param");
       expect(err!.message).toContain("yandex_domain");
+      // Round 4 (F7): yandex_domain="yandex.com" is now a preflight-rejected
+      // known-broken value (data/known_broken_param_values.ts) — use "yandex.ru"
+      // so this assertion keeps proving the AND-required-param-pair-passes
+      // behavior, not F7's separate (and separately tested) rejection.
       expect(
-        preflightScrape("yandex.com", "yandex", { q: "moscow weather", yandex_domain: "yandex.com" }),
+        preflightScrape("yandex.com", "yandex", { q: "moscow weather", yandex_domain: "yandex.ru" }),
       ).toBeNull();
     });
 

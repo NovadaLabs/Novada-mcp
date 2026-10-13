@@ -33,11 +33,16 @@ const YANDEX_OPERATION_PARAMS_DOC: Record<YandexOperation, string> = {
   // missing yandex_domain locally, before the live 400/empty the backend used to
   // return for it.
   // Round 3 item 3b (S1-connector, 2026-10-13): example order deliberately leads
-  // with "yandex.ru" — a regional TLD variant live-verified reliably working —
-  // ahead of "yandex.com". Factual example ordering only (no outage claim in the
-  // description itself); the actual per-engine retry hint for a failed capture
-  // lives in _core/errors.ts's serpCaptureFailedHint, surfaced at error time.
-  web_search: "params.q (search query) and params.yandex_domain (Yandex TLD, e.g. \"yandex.ru\", \"yandex.com\"); optional params.lang, params.location, params.page, params.within (time range)",
+  // with "yandex.ru" — a regional TLD variant live-verified reliably working.
+  // Round 4 (F7, final-exam verifier, 2026-10-13): "yandex.com" REMOVED from the
+  // example entirely (not just reordered) — it is now a hard preflight-rejected
+  // known-broken value (data/known_broken_param_values.ts), so listing it as an
+  // example at all would mislead an agent into picking a guaranteed-rejected
+  // value. "yandex.com.tr" (the OTHER live-verified-working regional TLD) is
+  // the second example instead. The actual per-engine retry hint for a 10000
+  // ("serp capture failed") response lives in _core/errors.ts's
+  // serpCaptureFailedHint, surfaced at error time for any OTHER TLD that fails.
+  web_search: "params.q (search query) and params.yandex_domain (Yandex TLD, e.g. \"yandex.ru\", \"yandex.com.tr\" — NOT \"yandex.com\", which is rejected pre-flight as a known-broken value); optional params.lang, params.location, params.page, params.within (time range)",
 };
 
 const YANDEX_OPERATION_CONFIGS: Record<YandexOperation, PlatformOperationConfig> = Object.fromEntries(

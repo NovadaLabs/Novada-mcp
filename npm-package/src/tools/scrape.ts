@@ -7,6 +7,7 @@ import { telemetryHeaders } from "../utils/http.js";
 import { NovadaError, NovadaErrorCode, classifyBusinessCode, makeNovadaError, sanitizeServerMsg, serpCaptureFailedHint } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
+import { findKnownBrokenParamValue } from "../data/known_broken_param_values.js";
 import { devApiPost } from "../_core/developer_api.js";
 import { extractRawTaskStatus, type RawTaskStatusResp } from "./scraper_status.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
@@ -1571,6 +1572,31 @@ export function preflightScrape(
       retryable: false,
       detail: `preflight:unknown_operation`,
     });
+  }
+
+  // Round 4 (S1-connector, F7 — final-exam verifier, live-verified 2026-10-13):
+  // the operation itself is valid, but one SPECIFIC param VALUE can be a known,
+  // deterministic upstream failure (e.g. yandex_domain="yandex.com" — see
+  // data/known_broken_param_values.ts's header comment for the full evidence).
+  // ONE generic table lookup, checked for every param key present — no
+  // per-platform/per-param if-branch; a future broken value anywhere needs a
+  // new table row, never new logic here.
+  for (const [paramKey, paramValue] of Object.entries(params)) {
+    const broken = findKnownBrokenParamValue(platform, operation, paramKey, paramValue);
+    if (broken) {
+      const alternatives = broken.workingAlternatives.map((v) => `"${v}"`).join(", ");
+      return new NovadaError({
+        code: NovadaErrorCode.INVALID_PARAMS,
+        message:
+          `${broken.param}="${broken.value}" is a known-broken value for '${operation}' on '${platform}' ` +
+          `(verified ${broken.verifiedOn}): ${broken.evidence}`,
+        agent_instruction:
+          `Use ${broken.param}=${alternatives} instead — both are live-verified working for this operation. ` +
+          `This was rejected before any network call (no charge incurred); retrying with the same value will fail the same way every time.`,
+        retryable: false,
+        detail: `preflight:known_broken_param_value`,
+      });
+    }
   }
 
   // Required-param check. FIX 1: two distinct modes —

@@ -44,12 +44,16 @@ beforeEach(() => {
 });
 
 describe("novadaScrapeYandex — request format (wire-format proof)", () => {
+  // Round 4 (F7): "yandex.com" is now a preflight-rejected known-broken value
+  // (see the dedicated describe block below) — this wire-format proof uses
+  // "yandex.com.tr" (live-verified working) instead, so it keeps proving the
+  // real wire format rather than a value that can never reach the network.
   it("web_search sends scraper_name=yandex.com, scraper_id=yandex, and threads q + yandex_domain as FLAT form fields (Format A)", async () => {
     mockSuccess(MOCK_RECORDS);
     await novadaScrapeYandex(
       validateScrapeYandexParams({
         operation: "web_search",
-        params: { q: "wireless earbuds", yandex_domain: "yandex.com" },
+        params: { q: "wireless earbuds", yandex_domain: "yandex.com.tr" },
       }),
       "test-key",
     );
@@ -62,7 +66,7 @@ describe("novadaScrapeYandex — request format (wire-format proof)", () => {
     expect(form.get("scraper_name")).toBe("yandex.com");
     expect(form.get("scraper_id")).toBe("yandex");
     expect(form.get("q")).toBe("wireless earbuds");
-    expect(form.get("yandex_domain")).toBe("yandex.com");
+    expect(form.get("yandex_domain")).toBe("yandex.com.tr");
     expect(form.get("scraper_params")).toBeNull();
     expect(form.get("json")).toBe("1");
 
@@ -109,5 +113,55 @@ describe("novadaScrapeYandex — enum safety (only catalog-'ok' operations reach
     }
     const yandexPlatform = SCRAPER_CATALOG.find((p) => p.domain === "yandex.com");
     expect(yandexPlatform!.ops.every((op) => op.status === "ok"), "yandex.com catalog has a backend_broken op not reflected in this assertion").toBe(true);
+  });
+});
+
+// Round 4 (F7, final-exam verifier, live-verified 2026-10-13): yandex_domain=
+// "yandex.com" fails 4/4 live (upstream code 10000, "serp capture failed")
+// while the operation itself is healthy and the value is still structurally
+// ACCEPTED (reordering the example wasn't enough — Directory review requires
+// every tool to succeed for valid input). Fixed as DATA (known_broken_param_
+// values.ts), checked pre-flight inside preflightScrape (scrape.ts) — reached
+// through novadaScrapeYandex exactly the same way every other preflight
+// rejection is, so no new wiring is tested here beyond the value itself.
+describe("novadaScrapeYandex — known-broken param value (F7): yandex_domain='yandex.com' rejected pre-flight", () => {
+  it("rejects yandex_domain='yandex.com' BEFORE any network call, naming yandex.ru/yandex.com.tr as working alternatives", async () => {
+    mockSuccess(MOCK_RECORDS); // if this were reached, the mock would let it "succeed" — proves rejection happens first
+    let thrown: unknown;
+    try {
+      await novadaScrapeYandex(
+        validateScrapeYandexParams({ operation: "web_search", params: { q: "test", yandex_domain: "yandex.com" } }),
+        "test-key",
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+    expect(thrown).toBeDefined();
+    const message = (thrown as Error).message;
+    expect(message).toContain("yandex.com");
+    expect(message.toLowerCase()).toContain("known-broken");
+    const agentInstruction = (thrown as { agent_instruction?: string }).agent_instruction ?? "";
+    expect(agentInstruction).toContain("yandex.ru");
+    expect(agentInstruction).toContain("yandex.com.tr");
+  });
+
+  it("yandex_domain='yandex.ru' (a working alternative) still passes preflight and reaches the network call", async () => {
+    mockSuccess(MOCK_RECORDS);
+    await novadaScrapeYandex(
+      validateScrapeYandexParams({ operation: "web_search", params: { q: "test", yandex_domain: "yandex.ru" } }),
+      "test-key",
+    );
+    expect(mockedAxios.post).toHaveBeenCalled();
+  });
+
+  it("yandex_domain='yandex.com.tr' (the other working alternative) also passes preflight", async () => {
+    mockSuccess(MOCK_RECORDS);
+    await novadaScrapeYandex(
+      validateScrapeYandexParams({ operation: "web_search", params: { q: "test", yandex_domain: "yandex.com.tr" } }),
+      "test-key",
+    );
+    expect(mockedAxios.post).toHaveBeenCalled();
   });
 });
