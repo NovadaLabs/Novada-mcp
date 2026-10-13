@@ -19,7 +19,8 @@ import { TOOLS } from "../../src/core.js";
 import { SCRAPER_CATALOG } from "../../src/data/scraper_catalog.js";
 import { PLATFORM_SCRAPER_TOOLS } from "../../src/tools/platform_scrapers.js";
 import { validateDiscoverParams, novadaDiscover } from "../../src/tools/discover.js";
-import { readResource } from "../../src/resources/index.js";
+import { readResource, RESOURCES } from "../../src/resources/index.js";
+import { TOOL_REGISTRY } from "../../src/tools/registry.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -149,5 +150,189 @@ describe("hand-maintained docs (README x2, docs/TOOLS.md, novada-agent/SKILL.md)
     expect(Number(match![2])).toBe(expectedOpCount);
     const statedNames = new Set(match![3].split(",").map((s) => s.trim()).filter(Boolean));
     expect(statedNames).toEqual(expectedNames);
+  });
+});
+
+// ─── Round 4b (S1-connector, F-review "Round-4 review" FIX-FIRST, 2026-10-13) ──
+//
+// The reviewer found registry.ts's novada_scrape one-liner (rendered by
+// novada_discover on BOTH surfaces) still hand-stated "16 active platforms
+// (~87 operations) ... SHEIN, ChatGPT" — the exact false claim this whole file
+// exists to eliminate, just never applied to that ONE surface because the
+// suite above enumerates 7 known FILES, not the underlying CLASS of defect.
+//
+// Widened from "7 hand-picked surfaces" to the CLASS "every user/model-visible
+// string": every TOOLS[] description + serialized inputSchema (param
+// descriptions), every TOOL_REGISTRY description, every MCP resource's
+// rendered text, plus (unchanged) README x2/docs/TOOLS.md/SKILL.md and the
+// index.ts CLI banner. A single shared phrase-pattern ("N active platforms
+// (~M operations)") is scanned across ALL of them — so a FUTURE file that
+// reuses this exact phrasing with a stale number is caught automatically,
+// without needing to be named here, closing the actual gap the reviewer
+// found (a new surface silently not being on anyone's list).
+
+/** Every user/model-visible string this repo renders, collected by SOURCE
+ *  CLASS rather than by file name — adding a new resource/doc/registry entry
+ *  is automatically covered; nobody has to remember to add it to a list. */
+async function collectVisibleStrings(): Promise<{ label: string; text: string }[]> {
+  const sources: { label: string; text: string }[] = [];
+  for (const t of TOOLS) {
+    sources.push({ label: `TOOLS["${t.name}"].description`, text: t.description });
+    sources.push({ label: `TOOLS["${t.name}"].inputSchema (param descriptions, serialized)`, text: JSON.stringify(t.inputSchema) });
+  }
+  for (const t of TOOL_REGISTRY) {
+    sources.push({ label: `TOOL_REGISTRY["${t.name}"].description`, text: t.description });
+  }
+  for (const r of RESOURCES) {
+    const { contents } = readResource(r.uri);
+    for (const c of contents) {
+      const text = (c as { text?: unknown }).text;
+      if (typeof text === "string") sources.push({ label: `resource ${r.uri}`, text });
+    }
+  }
+  const discoverOut = await novadaDiscover(validateDiscoverParams({}));
+  sources.push({ label: "novadaDiscover() default output", text: discoverOut });
+  return sources;
+}
+
+/** Phrase SHAPES (not files) this codebase uses to state a platform/op/dedicated-
+ *  tool count — named capture groups so one validator handles every shape. A
+ *  shape used by a brand-new surface in the future is caught the moment that
+ *  surface reuses one of these phrasings with a stale number; a genuinely NEW
+ *  phrasing still needs a row here (same as adding a resource needs a line in
+ *  collectVisibleStrings) — this is the declarative "class" surface, kept small
+ *  and explicit rather than an unbounded NLP guess. */
+const PLATFORM_CLAIM_PATTERNS: { name: string; regex: RegExp }[] = [
+  { name: "'N active platforms (~M operations)'", regex: /(?<count>\d+)\s+active platforms\s*\(~(?<opCount>\d+)\s+operations\)/g },
+  { name: "'Supports N platforms (~M operations)'", regex: /Supports (?<count>\d+) platforms \(~(?<opCount>\d+) operations\)/g },
+  { name: "'N platforms with a working route today, ~M operations'", regex: /(?<count>\d+) platforms with a working route today, ~(?<opCount>\d+) operations/g },
+  { name: "'a supported platform (N platforms)'", regex: /a supported platform \((?<count>\d+) platforms\)/g },
+  { name: "'Structured records from N platforms'", regex: /Structured records from (?<count>\d+) platforms/g },
+  { name: "'N typed per-platform tools'", regex: /(?<dedicatedCount>\d+) typed per-platform tools/g },
+  { name: "'The N `novada_scrape_<platform>` tools'", regex: /The (?<dedicatedCount>\d+) `novada_scrape_<platform>` tools/g },
+  { name: "'N dedicated platform scrapers'", regex: /(?<dedicatedCount>\d+) dedicated platform scrapers/g },
+];
+
+describe("CLASS sweep (F-review widening): every user/model-visible string matching a known platform-count phrase states the TRUE count", () => {
+  const { names: expectedNames, opCount: expectedOpCount } = computeWorkingPlatforms();
+  const expectedDedicatedCount = PLATFORM_SCRAPER_TOOLS.length;
+
+  it("sanity: the sweep actually finds matches (not vacuously passing over zero occurrences)", async () => {
+    const sources = await collectVisibleStrings();
+    let totalMatches = 0;
+    for (const { text } of sources) {
+      for (const { regex } of PLATFORM_CLAIM_PATTERNS) {
+        totalMatches += [...text.matchAll(regex)].length;
+      }
+    }
+    expect(totalMatches).toBeGreaterThan(3);
+  });
+
+  it("every match of every known platform-count phrase, in every collected visible string, states the independently-computed count/opCount/dedicatedCount", async () => {
+    const sources = await collectVisibleStrings();
+    const failures: string[] = [];
+    for (const { label, text } of sources) {
+      for (const { name, regex } of PLATFORM_CLAIM_PATTERNS) {
+        for (const m of text.matchAll(regex)) {
+          const g = m.groups ?? {};
+          if (g.count !== undefined && Number(g.count) !== expectedNames.size) {
+            failures.push(`${label}: pattern ${name} stated count=${g.count}, expected ${expectedNames.size} (match: "${m[0]}")`);
+          }
+          if (g.opCount !== undefined && Number(g.opCount) !== expectedOpCount) {
+            failures.push(`${label}: pattern ${name} stated opCount=${g.opCount}, expected ${expectedOpCount} (match: "${m[0]}")`);
+          }
+          if (g.dedicatedCount !== undefined && Number(g.dedicatedCount) !== expectedDedicatedCount) {
+            failures.push(`${label}: pattern ${name} stated dedicatedCount=${g.dedicatedCount}, expected ${expectedDedicatedCount} (match: "${m[0]}")`);
+          }
+        }
+      }
+    }
+    expect(failures, failures.join("\n")).toEqual([]);
+  });
+
+  it("not-inert proof: a planted stale claim (count+1) IS caught by the same scan logic", async () => {
+    const stale = `Extract data from ${expectedNames.size + 1} active platforms (~${expectedOpCount} operations).`;
+    const hits: string[] = [];
+    for (const { name, regex } of PLATFORM_CLAIM_PATTERNS) {
+      for (const m of stale.matchAll(regex)) {
+        const g = m.groups ?? {};
+        if (g.count !== undefined && Number(g.count) !== expectedNames.size) hits.push(name);
+      }
+    }
+    expect(hits.length).toBeGreaterThan(0);
+  });
+});
+
+describe("TOOL_REGISTRY['novada_scrape'].description (registry.ts, F-review) — same invariant as core.ts's TOOLS description", () => {
+  it("states the independently-computed working-platform count and op count — what novada_discover renders on BOTH surfaces", () => {
+    const { names: expectedNames, opCount: expectedOpCount } = computeWorkingPlatforms();
+    const entry = TOOL_REGISTRY.find((t) => t.name === "novada_scrape")!;
+    const match = entry.description.match(/(\d+) active platforms \(~(\d+) operations\)/);
+    expect(match, "TOOL_REGISTRY novada_scrape description must state 'N active platforms (~M operations)'").not.toBeNull();
+    expect(Number(match![1])).toBe(expectedNames.size);
+    expect(Number(match![2])).toBe(expectedOpCount);
+    expect(entry.description).not.toMatch(/\bSHEIN\b/);
+    expect(entry.description).not.toMatch(/\bChatGPT\b/);
+  });
+});
+
+describe("index.ts --help CLI banner (F-review) — static source-text guard", () => {
+  // index.ts has top-level side effects gated behind `if (cliArgs.includes(...))`
+  // branches checked against the REAL process.argv at import time (binds stdio,
+  // can start the MCP server) — same reason hosted's test suite never imports
+  // mcp.ts directly (see tool-catalog-derivation.test.mjs's header). This guard
+  // is therefore STATIC (source text), not a runtime render of the banner: it
+  // proves the stale literals are gone and the derived-constant references are
+  // present, which is the exact regression class this round fixes.
+  const indexSrc = readFileSync(resolve(__dirname, "../../src/index.ts"), "utf8");
+
+  it("no longer hard-codes the stale '16 active platforms' / '~87 operations' / '15 dedicated platform scrapers' / SHEIN+ChatGPT example literals", () => {
+    expect(indexSrc).not.toMatch(/16 active platforms/);
+    expect(indexSrc).not.toMatch(/~87 operations/);
+    expect(indexSrc).not.toMatch(/15 dedicated platform scrapers/);
+    expect(indexSrc).not.toMatch(/SHEIN, ChatGPT/);
+  });
+
+  it("the --help banner's novada_scrape / novada_scrape_<platform> lines now interpolate the derived constants instead", () => {
+    expect(indexSrc).toMatch(/\$\{WORKING_PLATFORM_NAMES\.length\} active platforms \(~\$\{WORKING_OP_COUNT\} operations/);
+    expect(indexSrc).toMatch(/\$\{PLATFORM_SCRAPER_TOOLS\.length\} dedicated platform scrapers \(\$\{DEDICATED_PLATFORM_SLUGS\.join/);
+  });
+});
+
+// ─── {{sibling:}} markup leak guard (reviewer's own flagged error-path gap) ────
+//
+// "SIBLING_SPAN_RE requires a matching {{/sibling}} close tag to fire at all —
+// an unclosed/malformed span would leave raw {{sibling:...}} text completely
+// unstripped and visible to a client. No test in the diff guards against this."
+// Two checks: (1) every {{sibling: OPEN in the raw, pre-render SOURCE has a
+// matching {{/sibling}} CLOSE (so the markup is well-formed at the only place
+// it's hand-authored); (2) no RENDERED description on npm's own surface
+// contains a literal "{{" at all (the only way "{{" could survive rendering
+// is a malformed/unclosed span, or a brand-new markup convention nobody
+// taught renderDescriptionForSurface about — either way, a real leak).
+describe("{{sibling:}} markup leak guard (F-review error-path gap)", () => {
+  it("_TOOL_DEFINITIONS (raw, pre-render source): every '{{sibling:' open has a matching '{{/sibling}}' close", async () => {
+    const { _TOOL_DEFINITIONS } = await import("../../src/core.js");
+    for (const t of _TOOL_DEFINITIONS) {
+      const opens = [...t.description.matchAll(/\{\{sibling:/g)].length;
+      const closes = [...t.description.matchAll(/\{\{\/sibling\}\}/g)].length;
+      expect(opens, `${t.name}: ${opens} '{{sibling:' opens vs ${closes} '{{/sibling}}' closes`).toBe(closes);
+    }
+  });
+
+  it("no rendered TOOLS description (npm's own surface) contains a literal '{{' (proves no unclosed/malformed span survives rendering)", () => {
+    for (const t of TOOLS) {
+      expect(t.description, `${t.name} description contains a literal '{{' after rendering`).not.toContain("{{");
+    }
+  });
+
+  it("not-inert proof: a deliberately UNCLOSED span (missing {{/sibling}}) is left un-stripped and WOULD be caught by the above guard", async () => {
+    const { renderDescriptionForSurface } = await import("../../src/_core/description_surface.js");
+    const malformed = "Use {{sibling:novada_site_copy}}this other tool for whole-site jobs.";
+    const rendered = renderDescriptionForSurface(malformed, new Set<string>()); // tool NOT available
+    // No matching close tag means SIBLING_SPAN_RE never matches at all — the
+    // raw markup passes through completely unstripped, exactly the leak this
+    // guard exists to catch.
+    expect(rendered).toContain("{{");
   });
 });

@@ -152,7 +152,12 @@ import { zodToMcpSchema } from "./utils/mcp-schema.js";
 // derived from the ACTUAL registered PLATFORM_SCRAPER_TOOLS (post empty-working-
 // op-set exclusion), never hand-listed, so a tool disappearing (e.g.
 // novada_scrape_shein) can't leave a stale slug behind in this description.
-const DEDICATED_PLATFORM_SLUGS: string[] = PLATFORM_SCRAPER_TOOLS.map((t) =>
+// Round 4b: exported (was module-private) so index.ts's --help CLI banner can
+// reuse this SAME derivation for its "N dedicated platform scrapers (...)" line
+// instead of hand-listing slugs there too — the exact drift class (a stale
+// hand-typed list surviving a tool's removal, e.g. novada_scrape_shein) the
+// Round-4 review flagged in that file.
+export const DEDICATED_PLATFORM_SLUGS: string[] = PLATFORM_SCRAPER_TOOLS.map((t) =>
   t.toolDefinition.name.replace(/^novada_scrape_/, ""),
 );
 
