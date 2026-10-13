@@ -8,24 +8,13 @@
     "structural": "markdown"
   },
   "novada_ai_monitor": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Brand Presence on AI-Company Domains \u2014 novada",
-      "Agent Hints"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
-  },
-  "novada_browser": {
-    "length_band": "s",
-    "markers": [
-      "Browser Session Results",
-      "Action 1: navigate [ok]",
-      "Action 2: evaluate [ok]",
-      "Agent Hints"
-    ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_capture_logs": {
     "length_band": "s",
@@ -36,15 +25,13 @@
     "structural": "markdown"
   },
   "novada_crawl": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Crawl Results",
-      "Agent Hints",
-      "[1/1] https://example.com",
-      "Example Domain"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_discover": {
     "length_band": "l",
@@ -53,7 +40,6 @@
       "Content Retrieval",
       "Scraping & Verification",
       "Proxy",
-      "Browser & Rendering",
       "Account & Billing",
       "Health & Discovery",
       "Tool Groups",
@@ -64,14 +50,13 @@
     "structural": "markdown"
   },
   "novada_extract": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Extracted Content",
-      "Example Domain",
-      "Agent Hints"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_health": {
     "length_band": "s",
@@ -90,25 +75,25 @@
     "structural": "markdown"
   },
   "novada_map": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Site Map",
-      "Agent Hints"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_monitor": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Monitor: First Check",
-      "Agent Instruction"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_plan_balance_all": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
       "Plan Balances"
     ],
@@ -116,17 +101,13 @@
     "structural": "markdown"
   },
   "novada_proxy": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "as curl:",
-      "Agent Hints",
-      "Ledger (plan preflight)",
-      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_proxy_account_create": {
     "length_band": "xs",
@@ -135,126 +116,121 @@
     "structural": "other"
   },
   "novada_proxy_account_list": {
-    "length_band": "s",
-    "markers": [],
-    "status": "ok",
-    "structural": "other"
+    "length_band": "xs",
+    "markers": [
+      "code",
+      "message"
+    ],
+    "status": "err",
+    "structural": "json"
   },
   "novada_proxy_datacenter": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "as curl:",
-      "Agent Hints",
-      "Ledger (plan preflight)",
-      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_proxy_dedicated": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "as curl:"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_proxy_isp": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "as curl:",
-      "Agent Hints",
-      "Ledger (plan preflight)",
-      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_proxy_mobile": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "as curl:",
-      "Agent Hints",
-      "Ledger (plan preflight)",
-      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_proxy_residential": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Proxy Configuration",
-      "Usage Examples",
-      "as curl:",
-      "Agent Hints",
-      "Ledger (plan preflight)",
-      "Verification (one live IP-echo through this proxy \u2014 ~1 KB metered traffic, ~1s; disable with verify=false)"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_proxy_static": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "as curl:"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_research": {
-    "length_band": "m",
+    "length_band": "xs",
     "markers": [
-      "Research: what is anthropic",
-      "Researched source material for: what is anthropic",
-      "Key Findings",
-      "Sources",
-      "Agent Hints"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_scrape": {
     "length_band": "xs",
-    "markers": [],
+    "markers": [
+      "code",
+      "message"
+    ],
     "status": "err",
-    "structural": "other"
+    "structural": "json"
   },
   "novada_scraper_result": {
     "length_band": "xs",
-    "markers": [],
-    "status": "ok",
-    "structural": "other"
+    "markers": [
+      "code",
+      "message"
+    ],
+    "status": "err",
+    "structural": "json"
   },
   "novada_scraper_status": {
     "length_band": "xs",
-    "markers": [],
-    "status": "ok",
-    "structural": "other"
+    "markers": [
+      "code",
+      "message"
+    ],
+    "status": "err",
+    "structural": "json"
   },
   "novada_scraper_submit": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Scrape Results",
-      "Agent Hints"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_search": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Search Results",
-      "Next Steps"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_setup": {
     "length_band": "m",
@@ -276,24 +252,22 @@
     "structural": "markdown"
   },
   "novada_unblock": {
-    "length_band": "s",
+    "length_band": "xs",
     "markers": [
-      "Extract Failed",
-      "Agent Hints"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_verify": {
-    "length_band": "m",
+    "length_band": "xs",
     "markers": [
-      "Claim Verification",
-      "Sources matching the claim wording (<N> sources)",
-      "Sources matching a negation of the claim (<N> sources)",
-      "Agent Hints"
+      "code",
+      "message"
     ],
-    "status": "ok",
-    "structural": "markdown"
+    "status": "err",
+    "structural": "json"
   },
   "novada_wallet_balance": {
     "length_band": "xs",
@@ -304,7 +278,7 @@
     "structural": "markdown"
   },
   "novada_wallet_usage_record": {
-    "length_band": "xs",
+    "length_band": "s",
     "markers": [
       "Wallet Usage History"
     ],

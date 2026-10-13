@@ -1,13 +1,19 @@
 {
   "extract_bad_url": {
-    "error_markers": [],
-    "has_agent_instruction": true,
+    "error_markers": [
+      "code",
+      "message"
+    ],
+    "has_agent_instruction": false,
     "is_error": true,
     "length_band": "xs"
   },
   "search_missing_query": {
-    "error_markers": [],
-    "has_agent_instruction": true,
+    "error_markers": [
+      "code",
+      "message"
+    ],
+    "has_agent_instruction": false,
     "is_error": true,
     "length_band": "xs"
   }

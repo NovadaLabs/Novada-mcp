@@ -6,7 +6,6 @@
     "novada_setup"
   ],
   "browser": [
-    "novada_browser",
     "novada_setup"
   ],
   "content": [

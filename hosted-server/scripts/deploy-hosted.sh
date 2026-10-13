@@ -36,8 +36,27 @@
 #   export NOVADA_MCP_KEY=<your-key>   # optional — falls back to the test key
 #   ./scripts/deploy-hosted.sh
 #
+#   --vendor-only   Run phases 1-3 only (BUILD, VENDOR, GATES) and exit 0 — never
+#                    reaches DEPLOY/VERIFY, so it never calls `vercel deploy` and
+#                    never touches the live endpoint. No API key required for this
+#                    mode. Use this to re-vendor npm-package's build output into
+#                    vercel/vendor/ and confirm it type-checks cleanly against
+#                    vercel/api/ — e.g. after a src/core.ts description/annotation
+#                    change — WITHOUT deploying. (claude-directory-exam S1-connector,
+#                    SOP step 5/7 — added because the SOP assumed this flag already
+#                    existed; it did not, and running the script unflagged would
+#                    reach PHASE 4/DEPLOY, an actual `vercel deploy --prod`.)
+#
 # ROLLBACK:
 #   npx vercel promote <prev-deployment-url> --scope novadateam-mvps
+
+VENDOR_ONLY=false
+for arg in "$@"; do
+    case "$arg" in
+        --vendor-only) VENDOR_ONLY=true ;;
+        *) echo "[ERROR] Unknown argument: $arg (supported: --vendor-only)" >&2; exit 1 ;;
+    esac
+done
 
 set -euo pipefail
 
@@ -53,8 +72,10 @@ MCP_URL="https://mcp.novada.com/mcp"
 
 # ─── api key ──────────────────────────────────────────────────────────────────
 # Never hardcode a key in a committed script. Read from env only.
+# --vendor-only never reaches DEPLOY/VERIFY (the only phases that use this key),
+# so it is not required in that mode.
 NOVADA_MCP_KEY="${NOVADA_MCP_KEY:-${NOVADA_API_KEY:-}}"
-if [[ -z "$NOVADA_MCP_KEY" ]]; then
+if [[ -z "$NOVADA_MCP_KEY" && "$VENDOR_ONLY" != "true" ]]; then
     echo "[ERROR] Set NOVADA_MCP_KEY (or NOVADA_API_KEY) in your env before running — no key is baked into this script." >&2
     exit 1
 fi
@@ -154,6 +175,13 @@ if ! ./node_modules/.bin/tsc --noEmit; then
 fi
 
 echo "[GATES] ✓ all hosted gates passed"
+
+if $VENDOR_ONLY; then
+    banner "--vendor-only: stopping before DEPLOY (no vercel deploy, no live calls)"
+    echo "[VENDOR-ONLY] vendor/ is up to date with npm-package's current build; hosted-server tsc is clean against it."
+    echo "[VENDOR-ONLY] Nothing was deployed. Re-run without --vendor-only (with NOVADA_MCP_KEY set) to deploy for real."
+    exit 0
+fi
 
 # ─── PHASE 4: DEPLOY ──────────────────────────────────────────────────────────
 banner "phase: DEPLOY  (from repo root — avoids /vercel/vercel path bug)"

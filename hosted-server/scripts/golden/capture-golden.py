@@ -291,10 +291,12 @@ def capture(base_url: str, outdir: str):
         ("novada_map",              {"url": "https://example.com"}),
         ("novada_scrape",           {"platform": "amazon.com", "operation": "amazon_product_keywords",
                                      "params": {"keyword": "usb cable", "num": 2}}),
-        ("novada_browser",          {"actions": [
-                                         {"action": "navigate", "url": "https://example.com",
-                                          "wait_until": "domcontentloaded"},
-                                         {"action": "evaluate", "script": "document.title"}]}),
+        # novada_browser moved OUT of this visible-tool matrix 2026-10
+        # (claude-directory-exam S1-connector): every real browser action
+        # unconditionally fails on this runtime (see HOSTED_HIDDEN's docstring in
+        # api/mcp.ts), so it joined HOSTED_HIDDEN and is now probed in
+        # REFUSED_NAMES below instead, alongside its CDP-session sibling
+        # novada_browser_flow.
         ("novada_proxy",            {"type": "residential"}),
         ("novada_discover",         {}),
         ("novada_ai_monitor",       {"brand": "novada"}),
@@ -367,6 +369,7 @@ def capture(base_url: str, outdir: str):
     # If a refactor wrongly EXPOSES one, refused flips to false → breach caught by diff.
     print("[5b] refused-set (firewall guard) ...")
     REFUSED_NAMES = [
+        "novada_browser",
         "novada_site_copy",
         "novada_ip_whitelist",
         "novada_static_ip_mgmt",
