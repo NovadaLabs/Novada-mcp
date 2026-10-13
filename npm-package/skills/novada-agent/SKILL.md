@@ -203,7 +203,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ### `novada_scrape`
 
-**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
+**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 14 platforms (~76 operations): Google, LinkedIn, Amazon, YouTube, Walmart, DuckDuckGo, TikTok, Bing, Instagram, X (Twitter), Facebook, Perplexity AI, Yandex, GitHub — i.e. every catalog platform with at least one working (non-backend_broken) operation today; SHEIN (0/5 working ops) and ChatGPT (0/2 working ops) are catalog platforms but currently have no working route.
 
 **Key parameters:**
 - `platform` — domain, e.g. `amazon.com`, `tiktok.com`, `linkedin.com`

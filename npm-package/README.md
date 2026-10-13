@@ -201,7 +201,7 @@ These are the tools you reach for most:
 | `novada_search` | Find pages by query (google / duckduckgo / yandex; time, domain, geo filters). |
 | `novada_extract` | Read one known URL — or up to 10 in parallel — through anti-bot pages. |
 | `novada_research` | Answer a complex question — parallel multi-source search + extraction in one call. |
-| `novada_scrape` | Structured records from 16 platforms (Amazon, LinkedIn, TikTok, …). Plus **15 typed per-platform tools** — `novada_scrape_amazon`, `_google`, `_linkedin`, … — each a closed `operation` enum. |
+| `novada_scrape` | Structured records from 14 platforms (Amazon, LinkedIn, TikTok, …). Plus **14 typed per-platform tools** — `novada_scrape_amazon`, `_google`, `_linkedin`, … — each a closed `operation` enum. |
 | `novada_crawl` | Pull content from a bounded set of related pages (≤20) on one site. |
 | `novada_map` | Discover what URLs exist on a site before fetching. |
 | `novada_browser` | Interact with a page — click, type, screenshot, run JS. |

@@ -32,11 +32,12 @@ handful you reach for most; this is the full list.
 
 ## Scrape
 
-`novada_scrape` is the generic gateway (16 platforms, ~87 operations). The 15 `novada_scrape_<platform>`
-tools wrap the same backend behind a **closed, typed `operation` enum** scoped to one platform, so an
-agent can't call an invalid operation for the wrong platform. Every listed `operation` is
-verified-working — operations we can't currently deliver are excluded, not left in to fail on you.
-All 16 scrape tools run on both local and hosted.
+`novada_scrape` is the generic gateway (14 platforms with a working route today, ~76 operations — the
+catalog has 16 platforms/~87 operations total, but SHEIN and ChatGPT currently have zero working ops).
+The 14 `novada_scrape_<platform>` tools wrap the same backend behind a **closed, typed `operation`
+enum** scoped to one platform, so an agent can't call an invalid operation for the wrong platform.
+Every listed `operation` is verified-working — operations we can't currently deliver are excluded, not
+left in to fail on you. All 15 scrape tools (generic + 14 per-platform) run on both local and hosted.
 
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|

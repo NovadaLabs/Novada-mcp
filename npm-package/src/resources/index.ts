@@ -2,7 +2,7 @@
 // Read-only data agents can access before making tool decisions.
 // Reduces hallucination ("does novada support X?") and fixes LobeHub Resources criterion.
 
-import { SCRAPER_CATALOG, CATALOG_OP_COUNT } from "../data/scraper_catalog.js";
+import { SCRAPER_CATALOG, CATALOG_OP_COUNT, WORKING_PLATFORM_NAMES, WORKING_OP_COUNT } from "../data/scraper_catalog.js";
 // TOW2-307: single source of truth for the tool count quoted below (was a stale
 // hand-typed "23" in three spots — the registry has grown to 38 since). Importing
 // TOOL_REGISTRY.length instead of hardcoding a number means this can never drift
@@ -380,7 +380,7 @@ Which Novada products are active on your API key?
 | novada_map                | a domain, need URL list              | URL list only           | Low        |
 | novada_crawl              | a domain, need N pages               | Content of N pages      | High       |
 | novada_research           | a complex question                   | Cited report            | Medium     |
-| novada_scrape             | a supported platform (16 platforms)  | Structured records      | Medium     |
+| novada_scrape             | a supported platform (${WORKING_PLATFORM_NAMES.length} platforms)  | Structured records      | Medium     |
 | novada_proxy(type=...)    | residential/isp/static/datacenter/mobile/dedicated IP needed | Proxy config string | Minimal |
 | novada_verify             | a factual claim to check             | Verdict + evidence URLs | Medium     |
 | novada_extract render=render | a URL blocked by anti-bot         | JS-rendered content     | Medium-High|
@@ -499,7 +499,7 @@ Required: question. Optional: depth (quick/deep/comprehensive/auto), focus.
 Example: novada_research({question: "How do MCP servers work with Claude?", depth: "deep"})
 
 ## novada_scrape
-Best for: structured data from 16 active platforms (~87 operations) (Amazon, TikTok, LinkedIn, YouTube, ChatGPT, SHEIN, etc.).
+Best for: structured data from ${WORKING_PLATFORM_NAMES.length} active platforms (~${WORKING_OP_COUNT} operations) (${WORKING_PLATFORM_NAMES.slice(0, 4).join(", ")}, etc.).
 Not for: arbitrary sites not in the platform list (use novada_extract or novada_crawl).
 Required: platform, operation, params. Optional: format (markdown/json/toon), limit.
 Example: novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "iphone 16"}})

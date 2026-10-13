@@ -17,7 +17,8 @@
  * MCP schema for every dispatchable tool (visible + hidden).
  */
 import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateDiscoverParams, validateBrowserFlowParams, REGISTERED_TOOL_NAMES, TOOL_REGISTRY, } from "./tools/index.js";
-import { PLATFORM_SCRAPER_DEFS, PLATFORM_SCRAPER_HANDLERS } from "./tools/platform_scrapers.js";
+import { PLATFORM_SCRAPER_DEFS, PLATFORM_SCRAPER_HANDLERS, PLATFORM_SCRAPER_TOOLS } from "./tools/platform_scrapers.js";
+import { WORKING_PLATFORM_NAMES, WORKING_OP_COUNT } from "./data/scraper_catalog.js";
 import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, validateHealthParams, } from "./tools/types.js";
 import { _performRenderProbe, HEALTH_PROBE_DISCLAIMER, formatProbeSection, } from "./tools/health.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
@@ -38,6 +39,12 @@ import { zodToMcpSchema } from "./utils/mcp-schema.js";
 // text, so factory-generated entries below are just as visible to those guards as hand-written
 // ones). The public `TOOLS` below is still the real dispatch/ListTools contract — external code
 // and tools/index.ts consumers should keep using `TOOLS`/`dispatch()`, not this array.
+// Round 3b (S1-connector, 2026-10-13): the short platform slugs novada_scrape's
+// own description lists after "Prefer the dedicated tool when one exists:" —
+// derived from the ACTUAL registered PLATFORM_SCRAPER_TOOLS (post empty-working-
+// op-set exclusion), never hand-listed, so a tool disappearing (e.g.
+// novada_scrape_shein) can't leave a stale slug behind in this description.
+const DEDICATED_PLATFORM_SLUGS = PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name.replace(/^novada_scrape_/, ""));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const _TOOL_DEFINITIONS = [
     {
@@ -120,11 +127,11 @@ export const _TOOL_DEFINITIONS = [
     },
     {
         name: "novada_scrape",
-        description: `Use for structured data from a specific platform — clean tabular records, not raw HTML. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
+        description: `Use for structured data from a specific platform — clean tabular records, not raw HTML. Supports ${WORKING_PLATFORM_NAMES.length} platforms (~${WORKING_OP_COUNT} operations): ${WORKING_PLATFORM_NAMES.join(", ")}.
 
 **Best for:** e-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
 **Not for:** general web pages outside this platform list — use novada_extract instead.
-**Prefer the dedicated tool when one exists:** for amazon/google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/walmart/shein/linkedin/github/perplexity, call novada_scrape_<platform> instead — same engine, but its \`operation\` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling (e.g. ChatGPT) or when resuming by task_id.
+**Prefer the dedicated tool when one exists:** for ${DEDICATED_PLATFORM_SLUGS.join("/")}, call novada_scrape_<platform> instead — same engine, but its \`operation\` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling (e.g. ChatGPT) or when resuming by task_id.
 **Output formats:** markdown (default table), json (records array inside a fenced "## Scrape Results" block), toon (pipe-separated, 40-65% smaller — best for large result sets), csv, excel (base64), html.
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}.
 **Amazon price fields:** trust \`final_price\`/\`price\` (check \`_price_source\`) — \`initial_price\` and \`buybox_prices.final_price\` are often 0 by design, not a bug; \`buybox_prices.unit_price\` is raw per-unit data, never the listing price.
@@ -134,7 +141,7 @@ export const _TOOL_DEFINITIONS = [
         inputSchema: zodToMcpSchema(ScrapeParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
-    // novada_scrape_amazon (and, as they're added, its 15 per-platform siblings) is
+    // novada_scrape_amazon (and, as they're added/removed, its per-platform siblings) is
     // GENERATED by the platform-scraper factory (src/tools/platform_scraper.ts) from a
     // declarative config (src/tools/scrape_amazon.ts) — spread here rather than
     // hand-written so this definition can never drift from the generated tool, and so
