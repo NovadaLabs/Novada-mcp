@@ -597,7 +597,18 @@ const TOOL_GROUPS: Record<string, string[]> = {
   proxy: ["novada_proxy"],
   // 0.9.9: novada_account replaces the 7 folded billing tools in this group
   account: ["novada_account", "novada_proxy_account_list", "novada_proxy_account_create"],
-  browser: ["novada_browser", "novada_browser_flow"],
+  // "browser" REMOVED (S1-connector round 2 / H1, independent review): both of
+  // its members (novada_browser, novada_browser_flow) are HOSTED_HIDDEN, so the
+  // group was a live reachability trap — a client connecting with ?groups=browser
+  // got an endpoint where EVERY real tool call failed with TOOL_NOT_ENABLED
+  // (resolveAllowedTools built {novada_setup, novada_browser, novada_browser_flow},
+  // size 3, so the "matched nothing real -> fall back to core" guard below never
+  // triggered), with nothing in the response explaining the group itself was
+  // structurally dead. Deleting the key (rather than leaving an empty/dead entry)
+  // means ?groups=browser now takes the SAME "name an unknown group" path any
+  // other typo already takes: TOOL_GROUPS["browser"] ?? [] contributes nothing,
+  // allowed.size stays <=1 (just novada_setup), and the existing fallback below
+  // grants the `core` group instead of a wholly non-functional endpoint.
   // ── BD-style platform-family groups (new — slim to one vertical's tools) ────
   ecommerce: ["novada_scrape_amazon", "novada_scrape_walmart", "novada_scrape_shein"],
   // LinkedIn wasn't in the SOP's suggested split; grouped under `social` here (Bright
@@ -709,6 +720,37 @@ interface CachedTokenVerify {
   balance?: number;
 }
 
+/**
+ * Fail-open wrapper for a KV call on the live request path (quota/rate-limit
+ * gates). If `op` throws (Upstash/Vercel-KV network error, timeout, etc.), the
+ * failure is logged and `fallback` is returned instead of propagating — the
+ * SAME policy every other KV call in this file already follows
+ * (cacheTokenVerify below, validateToken's cached-verdict read, refundQuota,
+ * maybeGetFirstRunNoticeHosted): "a KV hiccup must never crash a tool call
+ * into a bare, non-compliant transport error." That bare error is exactly
+ * `{"code":-32603,"message":"fetch failed"}` — the MCP SDK's own
+ * handler-rejection path (no agent_instruction, no structured content),
+ * which is precisely what Anthropic's "generic errors... fail review" rule
+ * targets. decrementQuota/rateLimitExceeded/preAuthRateLimitExceeded's own
+ * `kv.incr`/`kv.expire` calls were the one class of KV call this guard was
+ * NOT applied to (S1-connector round 2 / C1 — traced by an independent
+ * review from the 2026-10 golden-baseline capture, which caught every
+ * billable tool returning that bare error when KV was unreachable in the
+ * capturing environment).
+ */
+async function kvFailOpen<T>(evt: string, fallback: T, op: () => Promise<T>): Promise<T> {
+  try {
+    return await op();
+  } catch (err) {
+    console.error(JSON.stringify({
+      evt,
+      msg: "KV call failed on the request path — failing open (never block a legitimate call on our own infra hiccup)",
+      error: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+    }));
+    return fallback;
+  }
+}
+
 /** Best-effort cache write — a KV hiccup here must never block the auth decision already made. */
 async function cacheTokenVerify(cacheKey: string, result: CachedTokenVerify): Promise<void> {
   try {
@@ -813,9 +855,13 @@ async function preAuthRateLimitExceeded(ip: string, env: Env): Promise<boolean> 
   const limit = parseInt(env.RATE_LIMIT_PER_MIN || "60", 10);
   const bucket = Math.floor(Date.now() / 60_000);
   const key = `pra:${ip}:${bucket}`;
-  const count = await kv.incr(key);
-  if (count === 1) await kv.expire(key, 120);
-  return count > limit;
+  // Fail-open (kvFailOpen, see its doc comment): a KV outage must never turn
+  // into every caller being falsely rate-limited (or worse, crashing — see C1).
+  return kvFailOpen("pre_auth_rate_limit_kv_failed", false, async () => {
+    const count = await kv.incr(key);
+    if (count === 1) await kv.expire(key, 120);
+    return count > limit;
+  });
 }
 
 /**
@@ -830,12 +876,16 @@ async function rateLimitExceeded(ip: string, env: Env): Promise<boolean> {
   const limit = parseInt(env.RATE_LIMIT_PER_MIN || "60", 10);
   const bucket = Math.floor(Date.now() / 60_000);
   const key = `rl:${ip}:${bucket}`;
-  // Atomic increment — read-modify-write would let concurrent requests in the
-  // same minute bucket each read a stale count and all slip past the limit.
-  const count = await kv.incr(key);
-  // Set the bucket TTL once, on the first hit (count === 1 means we just created it).
-  if (count === 1) await kv.expire(key, 120);
-  return count > limit;
+  // Fail-open (kvFailOpen, see its doc comment): a KV outage must never turn
+  // into every caller being falsely rate-limited (or worse, crashing — see C1).
+  return kvFailOpen("rate_limit_kv_failed", false, async () => {
+    // Atomic increment — read-modify-write would let concurrent requests in the
+    // same minute bucket each read a stale count and all slip past the limit.
+    const count = await kv.incr(key);
+    // Set the bucket TTL once, on the first hit (count === 1 means we just created it).
+    if (count === 1) await kv.expire(key, 120);
+    return count > limit;
+  });
 }
 
 /** Short stable identifier for a token, safe to log (SHA-256 first 12 hex chars). */
@@ -875,18 +925,30 @@ function monthKey(): string {
 async function decrementQuota(tokenHash: string, env: Env, plan: "free" | "pro"): Promise<number> {
   const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
   const key = `${tokenHash}:${monthKey()}`;
-  const used = await kv.incr(key);
-  // Set the 32-day TTL once, on the first hit — KV will GC the key after the
-  // month rolls over. (count === 1 means we just created it.)
-  if (used === 1) await kv.expire(key, 60 * 60 * 24 * 32);
-  if (plan === "free" && used > monthlyQuota) {
-    // Over cap — undo the speculative increment and reject. Guard the rollback: a failed kv.decr
-    // must not throw out of decrementQuota (that would skip the caller's refund path and leave a
-    // phantom over-cap charge). Best-effort, mirroring refundQuota. (NOV-573 review)
-    try { await kv.decr(key); } catch { /* best-effort rollback */ }
-    return -1;
-  }
-  return Math.max(0, monthlyQuota - used);
+  // Fail-open (kvFailOpen, see its doc comment): a KV outage must never crash
+  // a billable tool call into a bare transport error (C1 — an independent
+  // review of a KV-broken golden-baseline capture traced this exact call as
+  // the one unguarded site in this file, propagating all the way out of
+  // enforceGatewayCap/_plan.ts, which the whole rest of that module's own
+  // "never throws" contract otherwise honors via try/catch at every other
+  // dep call). Treat a KV failure as "nothing used yet this period" — we
+  // genuinely don't know the real count during the outage, and availability
+  // over perfect accounting is the same tradeoff this file makes everywhere
+  // else a KV call can fail.
+  return kvFailOpen(`decrement_quota_kv_failed:${plan}`, monthlyQuota, async () => {
+    const used = await kv.incr(key);
+    // Set the 32-day TTL once, on the first hit — KV will GC the key after the
+    // month rolls over. (count === 1 means we just created it.)
+    if (used === 1) await kv.expire(key, 60 * 60 * 24 * 32);
+    if (plan === "free" && used > monthlyQuota) {
+      // Over cap — undo the speculative increment and reject. Guard the rollback: a failed kv.decr
+      // must not throw out of decrementQuota (that would skip the caller's refund path and leave a
+      // phantom over-cap charge). Best-effort, mirroring refundQuota. (NOV-573 review)
+      try { await kv.decr(key); } catch { /* best-effort rollback */ }
+      return -1;
+    }
+    return Math.max(0, monthlyQuota - used);
+  });
 }
 
 /**

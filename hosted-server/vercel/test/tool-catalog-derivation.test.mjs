@@ -118,28 +118,32 @@ test("HOSTED_HIDDEN still hides novada_site_copy (never-ported: writes to read-o
   assert.ok(HOSTED_HIDDEN.has("novada_site_copy"), "novada_site_copy must stay in HOSTED_HIDDEN");
 });
 
-// Pre-existing (predates this refactor, not introduced by it): the `browser` group has
-// always listed novada_browser_flow alongside novada_browser, even though browser_flow is
-// hidden and structurally unreachable on hosted (HOSTED_HIDDEN filters it out of
-// visibleTools, and it isn't in HOSTED_ROUTABLE_ALIASES either, so a direct call is
-// refused with the generic TOOL_NOT_ENABLED message). Harmless — the group listing it
-// doesn't make it reachable — but tracked here explicitly so it isn't silently
-// rediscovered as "new" drift; not fixed by this diff since group CONTENTS for the
-// existing groups were intentionally left untouched (only new groups were added).
-// novada_browser joined novada_browser_flow here 2026-10 (claude-directory-exam
-// S1-connector): it moved into HOSTED_HIDDEN because every real browser action
-// unconditionally fails on this runtime (see HOSTED_HIDDEN's docstring in mcp.ts),
-// so the whole `browser` TOOL_GROUPS entry is now a documented no-op (both of its
-// members are hidden) — same harmless-but-tracked treatment as browser_flow was
-// already getting, not a new category of issue.
-const KNOWN_HOSTED_HIDDEN_IN_GROUP_EXCEPTIONS = new Set(["novada_browser_flow", "novada_browser"]);
+// RESOLVED (S1-connector round 2 / H1, independent review, 2026-10): the `browser`
+// TOOL_GROUPS entry (`["novada_browser", "novada_browser_flow"]`) used to be tolerated
+// here as "harmless" because listing a hidden tool in a group doesn't itself make it
+// reachable. An independent review traced the ACTUAL reachable effect: a client
+// connecting with `?groups=browser` got `allowedTools = {novada_setup, novada_browser,
+// novada_browser_flow}` (size 3, so the "matched nothing real -> fall back to core"
+// guard never triggered) — every real tool call on that connection then failed with
+// TOOL_NOT_ENABLED, with nothing explaining the group itself was structurally dead.
+// Fix: the `browser` key was deleted from TOOL_GROUPS entirely (mcp.ts), so
+// `?groups=browser` now takes the same "unknown group name" path any other typo
+// already took — falls back to `core` — instead of bricking the connection. No
+// TOOL_GROUPS entry should ever reference a HOSTED_HIDDEN tool; the exception set
+// below is now empty and kept only so a FUTURE regression (a hidden tool added back
+// into some group) fails this test immediately rather than needing a new one.
+const KNOWN_HOSTED_HIDDEN_IN_GROUP_EXCEPTIONS = new Set();
 
-test("no HOSTED_HIDDEN tool is reachable through any TOOL_GROUPS entry (except the documented pre-existing exception)", () => {
+test("no HOSTED_HIDDEN tool is reachable through any TOOL_GROUPS entry", () => {
   const allGroupNames = new Set(namesIn(toolGroupsSlice));
   const leaked = [...HOSTED_HIDDEN].filter(
     (n) => allGroupNames.has(n) && !KNOWN_HOSTED_HIDDEN_IN_GROUP_EXCEPTIONS.has(n),
   );
   assert.deepEqual(leaked, [], `HOSTED_HIDDEN tool(s) must not appear in any TOOL_GROUPS array: ${leaked.join(", ")}`);
+});
+
+test("TOOL_GROUPS has no 'browser' key at all (H1 fix — not just an emptied one)", () => {
+  assert.doesNotMatch(toolGroupsSlice, /\bbrowser:\s*\[/, "the browser key must be deleted, not left as an empty array");
 });
 
 test("the new BD-style groups (ecommerce/social/dev/ai) specifically contain zero HOSTED_HIDDEN tools", () => {

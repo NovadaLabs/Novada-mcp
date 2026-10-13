@@ -432,7 +432,21 @@ export async function enforceGatewayCap(opts: {
     return { allowed: true, charged: false, remaining: Number.MAX_SAFE_INTEGER, overCapAllowed: false };
   }
 
-  const remaining = await deps.decrementQuota("free");
+  // Defense in depth (S1-connector round 2 / C1): mcp.ts's decrementQuota now
+  // fails open on its own (a KV outage returns monthlyQuota instead of
+  // throwing), so this should never actually reject in practice — but this
+  // was the ONE dep call in this function with no try/catch, which silently
+  // broke the doc comment's own "Never throws" promise above (every other
+  // dep call here — resolvePlan, fetchBalance, the "pro" re-increment below —
+  // already has one). Falls back to monthlyQuota (allow, uncharged in
+  // practice) on the same "we don't know the real count during an outage,
+  // availability wins" basis as decrementQuota's own fallback.
+  let remaining: number;
+  try {
+    remaining = await deps.decrementQuota("free");
+  } catch {
+    remaining = monthlyQuota;
+  }
 
   if (remaining >= 0) {
     const used = monthlyQuota - remaining;

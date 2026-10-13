@@ -186,3 +186,29 @@ test("STATIC: no console.log/console.error call site in mcp.ts logs req.url, req
     .filter((body) => /\breq\.url\b|\brequest\.url\b|\burl\.search\b|\burl\.toString\(\)/.test(body));
   assert.deepEqual(offenders, [], `console call(s) that reference the raw request URL/query string: ${JSON.stringify(offenders)}`);
 });
+
+// ─── C2 (S1-connector round 2, independent review): vercel.json's own rewrite ──
+// must not synthesize a URL credential either. extractToken() ignoring `pathKey`
+// (above) only closes what the APPLICATION reads — Vercel's rewrite previously
+// still appended `?pathKey=<KEY>` onto the URL that reaches the function, so the
+// raw key was carried in cleartext through Vercel's own routing/edge layer and
+// whatever platform-level request logging it performs, outside this codebase's
+// control — exactly what the connector review's "URLs end up in server logs,
+// proxies, and browser history" rule targets. Fixed: the rewrite destination no
+// longer appends the key.
+
+test("STATIC: vercel.json's /:key/mcp rewrite destination no longer appends ?pathKey= (or any query string)", () => {
+  const vercelJsonPath = join(__dirname, "..", "vercel.json");
+  const vercelConfig = JSON.parse(readFileSync(vercelJsonPath, "utf8"));
+  const rewrite = vercelConfig.rewrites.find((r) => r.source === "/:key/mcp");
+  assert.ok(rewrite, "vercel.json must still have a /:key/mcp rewrite (routing — so a bookmarked URL gets a 401, not a 404)");
+  assert.equal(rewrite.destination, "/api/mcp", "the rewrite destination must not carry the key forward as a query string");
+  assert.doesNotMatch(rewrite.destination, /\?|pathKey/i, "rewrite destination must contain no query string and no pathKey reference");
+});
+
+test("STATIC: vercel.json has no OTHER rewrite that appends a credential-shaped query param", () => {
+  const vercelJsonPath = join(__dirname, "..", "vercel.json");
+  const vercelConfig = JSON.parse(readFileSync(vercelJsonPath, "utf8"));
+  const offenders = vercelConfig.rewrites.filter((r) => /\?.*(apikey|api_key|token|pathkey)=/i.test(r.destination));
+  assert.deepEqual(offenders, [], `rewrite(s) still synthesize a credential-shaped query param: ${JSON.stringify(offenders)}`);
+});
