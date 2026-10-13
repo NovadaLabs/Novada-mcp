@@ -100,7 +100,7 @@ export const YOUTUBE_SCRAPER_CONFIG: PlatformScraperConfig<YoutubeOperation> = {
     notFor: [
       { when: "A single YouTube URL to read as plain text", useInstead: "novada_extract" },
       { when: "A general web/video search not scoped to YouTube", useInstead: "novada_search" },
-      { when: "The transcript/subtitles of a YouTube video", useInstead: "this operation is currently backend_broken (live-verified 2026-10-13) and has been removed from this tool's enum — no working alternative exists today" },
+      { when: "The transcript/subtitles of a YouTube video", note: "this operation (transcript_by_video) is currently backend_broken (live-verified 2026-10-13) and has been removed from this tool's enum; no working alternative exists today" },
       { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
     ],
     returns:
