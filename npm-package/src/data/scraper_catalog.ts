@@ -582,7 +582,8 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
           { key: "selected_only", label: "Only selected formats", required: false, dflt: "value1", opts: ["false", "true"] },
           { key: "file_name", label: "Fetch file name", required: false, dflt: "" },
         ],
-        status: "ok",
+        status: "backend_broken",
+        broken_reason: "live-verified 2026-10-13: 2 different video_ids (LCAY3PGHZyw, dQw4w9WgXcQ) both -> API_DOWN 404 — \"subtitles_error: Unable to download API page\". Other youtube ops unaffected.",
         verified: "2026-07-13",
       },
       {
@@ -1331,7 +1332,8 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
           { key: "flow_retry_num", label: "Process retry count", required: false, dflt: "3" },
           { key: "country", label: "Country", required: false, opts: ["us", "uk", "de", "fr", "it", "es", "ca", "au", "mx", "jp"] },
         ],
-        status: "ok",
+        status: "backend_broken",
+        broken_reason: "live-verified 2026-10-13: ~60s then a scraper API error (description's own example ID) — same failure class as the other 3 SHEIN ops below. SHEIN now has 0 working ops.",
         verified: "2026-07-13",
       },
       {
@@ -1344,7 +1346,8 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
           { key: "flow_retry_num", label: "Process retry attempts", required: false, dflt: "3" },
           { key: "country", label: "Country", required: false, opts: ["us", "uk", "de", "fr", "it", "es", "ca", "au", "mx", "jp"] },
         ],
-        status: "ok",
+        status: "backend_broken",
+        broken_reason: "live-verified 2026-10-13: ~60s then a scraper API error (description's own example URL) — same failure class as the other 3 SHEIN ops below. SHEIN now has 0 working ops.",
         verified: "2026-07-13",
       },
       {

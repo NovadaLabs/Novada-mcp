@@ -3,6 +3,7 @@ import { novadaScrape } from "./scrape.js";
 import { TASK_ID_REGEX, TASK_ID_REGEX_MSG, withCamelCaseAliases } from "./types.js";
 import type { ToolCategory, ToolMeta } from "./registry.js";
 import { zodToMcpSchema } from "../utils/mcp-schema.js";
+import { CATALOG_BY_DOMAIN } from "../data/scraper_catalog.js";
 
 // ─── Title derivation (F-7, W-B1) ────────────────────────────────────────────
 // Brand names whose correct capitalization isn't plain Titlecase — mirrors
@@ -211,6 +212,27 @@ export function createPlatformScraperTool<TOpName extends string>(
     handler,
     config,
   };
+}
+
+/**
+ * Class rule (Round 3, item 2 — not a SHEIN special case): a platform-scraper tool
+ * must NOT be registered/listed when every one of its configured operations resolves
+ * to a catalog entry whose status is "backend_broken" (or is missing from the
+ * catalog entirely). Directory review requires every LISTED tool to be able to
+ * succeed for valid input; a tool whose entire working-op set is empty can never
+ * succeed for ANY input, regardless of what the caller passes.
+ *
+ * Deliberately keyed off the catalog's `status` field (the single source of truth
+ * already used by scrape.ts's broken-op warning and extract.ts's hint suppression)
+ * rather than a hardcoded platform list — adding a 16th fully-broken platform (or a
+ * backend fix that revives SHEIN) changes this function's answer with zero edits
+ * here.
+ */
+export function hasAnyWorkingOp(config: PlatformScraperConfig): boolean {
+  const domainOps = CATALOG_BY_DOMAIN.get(config.platform);
+  return Object.values(config.operations as Record<string, PlatformOperationConfig>).some(
+    (opCfg) => domainOps?.get(opCfg.scraperId)?.status === "ok",
+  );
 }
 
 /** A platform-scraper tool widened to one uniform, dispatch-ready shape. */

@@ -129,7 +129,15 @@ describe("Regression: the three originally-broken entries are fixed", () => {
   // good ones. This is what makes the drift guard non-inert — it demonstrably
   // distinguishes the known-bad shape from the known-good one, not just today's
   // already-clean map.
-  it("replaying the ORIGINAL pre-fix map finds exactly the 3 known-bad rows and no false positives", () => {
+  //
+  // Round 3 (S1-connector, live-verified 2026-10-13): "shein.com" -> "shein_product_url"
+  // is now a 4th failure here too — NOT a reopened instance of the original 2026-09-02
+  // bug class (the map entry was never a typo/phantom), but because the underlying
+  // catalog op it pointed at has since gone backend_broken (SHEIN is 0/5 working ops
+  // today). isCatalogOpUsable correctly flags it regardless of WHY it's unusable — this
+  // replay fixture's expected-failures list is updated to reflect today's catalog
+  // reality, same as scraper_catalog.ts/extract.ts's SCRAPER_PLATFORMS map itself.
+  it("replaying the ORIGINAL pre-fix map finds the 3 known-bad rows PLUS shein.com (now separately backend_broken) and no other false positives", () => {
     const ORIGINAL_PRE_FIX_MAP: Record<string, string> = {
       "amazon.com": "amazon_product_keywords",
       "reddit.com": "reddit_subreddit_posts",
@@ -152,6 +160,7 @@ describe("Regression: the three originally-broken entries are fixed", () => {
         "reddit.com -> reddit_subreddit_posts",
         "glassdoor.com -> glassdoor_company_reviews_url",
         "instagram.com -> instagram_profile_url",
+        "shein.com -> shein_product_url",
       ].sort()
     );
   });

@@ -4,11 +4,24 @@
  * Mirrors scrape_amazon.test.ts's proof pattern. Both shein.com catalog operations
  * exposed here are "params" format (Format B), so both thread params via scraper_params.
  *
- * SHEIN's catalog has 5 total operations, of which 3 are status:"backend_broken"
- * ("submit endpoint hangs 60s+ — connection timeout") — shein_products_keyword,
- * shein_products_category_id, shein_products_category_url. This is the same
- * enum-safety pattern as scrape_amazon.test.ts's 3-excluded-slugs proof: the 3
- * broken slugs must be unreachable through SHEIN_OPERATIONS at all.
+ * Round 3 (S1-connector, live-verified 2026-10-13): the remaining 2 ops
+ * (product_by_id, product_by_url — the description's own example ID/URL) ALSO
+ * reproduced a scraper API error after ~60s, joining the pre-existing 3
+ * backend_broken ops (shein_products_keyword, shein_products_category_id,
+ * shein_products_category_url, "submit endpoint hangs 60s+ — connection
+ * timeout"). SHEIN's catalog now has 5/5 operations status:"backend_broken" —
+ * a FULLY broken platform, not a partially-broken one with some ops still safe
+ * to expose. Unlike a partial break (where the broken ops are simply removed
+ * from the friendly-name enum, e.g. scrape_youtube.ts's transcript_by_video),
+ * removing ALL entries here would leave SHEIN_OPERATIONS empty — not a valid
+ * enum. The platform-tool factory's empty-working-op-set exclusion
+ * (hasAnyWorkingOp, platform_scraper.ts) is the actual safety net now: it
+ * removes novada_scrape_shein from PLATFORM_SCRAPER_TOOLS entirely (so the
+ * tool is never registered/listed/dispatchable), while SHEIN_OPERATIONS itself
+ * stays mechanically well-formed (non-empty) internally. The generic
+ * novada_scrape(platform="shein.com", ...) path still works and still warns
+ * via the pre-existing backend_broken warning mechanism (scrape.ts) — it was
+ * never gated on this tool's existence.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
@@ -118,26 +131,34 @@ describe("novadaScrapeShein — enum safety (backend_broken ops unreachable)", (
     expect(() => validateScrapeSheinParams({ operation: "totally_made_up", params: {} })).toThrow();
   });
 
-  it("every SHEIN_OPERATIONS slug exists in the live shein.com catalog with status 'ok'", async () => {
+  it("Round 3: every SHEIN_OPERATIONS slug is NOW backend_broken in the live catalog (SHEIN has 0 working ops — this is the expected, verified state, not a dangling reference)", async () => {
     const { CATALOG_BY_DOMAIN } = await import("../../src/data/scraper_catalog.js");
     const sheinCatalog = CATALOG_BY_DOMAIN.get("shein.com");
     expect(sheinCatalog, "shein.com missing from the live catalog").toBeDefined();
     for (const [friendlyName, slug] of Object.entries(SHEIN_OPERATIONS)) {
       const op = sheinCatalog!.get(slug);
       expect(op, `operation '${friendlyName}' maps to slug '${slug}', which is not in the live shein.com catalog`).toBeDefined();
-      expect(op!.status, `operation '${friendlyName}' (slug '${slug}') is backend_broken in the live catalog`).toBe("ok");
+      expect(op!.status, `operation '${friendlyName}' (slug '${slug}') unexpectedly recovered to 'ok' — if the backend fixed this, SHEIN_OPERATIONS/scraper_catalog.ts can be revisited`).toBe("backend_broken");
     }
   });
 
-  it("the live shein.com catalog still has exactly 3 backend_broken ops (sanity: this test suite's premise stays true)", async () => {
+  it("the live shein.com catalog now has all 5/5 ops backend_broken (sanity: this test suite's Round 3 premise stays true)", async () => {
     const { SCRAPER_CATALOG } = await import("../../src/data/scraper_catalog.js");
     const sheinPlatform = SCRAPER_CATALOG.find((p) => p.domain === "shein.com");
     expect(sheinPlatform, "shein.com missing from the live catalog").toBeDefined();
     const broken = sheinPlatform!.ops.filter((op) => op.status === "backend_broken");
     expect(broken.map((op) => op.slug).sort()).toEqual([
+      "shein_product_id",
+      "shein_product_url",
       "shein_products_category_id",
       "shein_products_category_url",
       "shein_products_keyword",
     ]);
+  });
+
+  it("Round 3 (item 2): novada_scrape_shein is excluded from PLATFORM_SCRAPER_TOOLS — the platform-tool factory's empty-working-op-set rule, not a shein special case", async () => {
+    const { PLATFORM_SCRAPER_TOOLS } = await import("../../src/tools/platform_scrapers.js");
+    const names = PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name);
+    expect(names).not.toContain("novada_scrape_shein");
   });
 });

@@ -57,9 +57,13 @@ describe("SCRAPER_CATALOG structure", () => {
     }
   });
 
-  it("has exactly 8 backend_broken ops", () => {
+  it("has exactly 11 backend_broken ops", () => {
+    // Round 3 (S1-connector, live-verified 2026-10-13): +3 since the prior count
+    // of 8 — youtube_transcript_id (API_DOWN 404 across 2 video_ids),
+    // shein_product_id, shein_product_url (both ~60s then a scraper API error —
+    // joining SHEIN's pre-existing 3 broken ops, so SHEIN is now 5/5 broken).
     const broken = SCRAPER_CATALOG.flatMap(p => p.ops).filter(op => op.status === "backend_broken");
-    expect(broken).toHaveLength(8);
+    expect(broken).toHaveLength(11);
   });
 
   it("no duplicate slugs within a platform", () => {

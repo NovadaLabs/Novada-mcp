@@ -121,8 +121,8 @@ describe("DE-1 / C-1 (P1) — camelCase taskId aliases to task_id on the schema 
     expect(parsed.task_id).toBe("correct-one");
   });
 
-  it("class sweep: EVERY one of the 15 pinned novada_scrape_<platform> tools maps taskId -> task_id (iterates PLATFORM_SCRAPER_TOOLS, never hardcodes a single platform)", () => {
-    expect(PLATFORM_SCRAPER_TOOLS.length).toBe(15);
+  it("class sweep: EVERY one of the 14 pinned novada_scrape_<platform> tools maps taskId -> task_id (iterates PLATFORM_SCRAPER_TOOLS, never hardcodes a single platform)", () => {
+    expect(PLATFORM_SCRAPER_TOOLS.length).toBe(14);
     const failures: string[] = [];
     for (const tool of PLATFORM_SCRAPER_TOOLS) {
       const [firstOperationName] = Object.keys(tool.config.operations);
