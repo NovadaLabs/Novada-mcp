@@ -4,7 +4,7 @@ import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHost
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
-import { NovadaError, NovadaErrorCode, classifyBusinessCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
+import { NovadaError, NovadaErrorCode, classifyBusinessCode, makeNovadaError, sanitizeServerMsg, serpCaptureFailedHint } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
 import { devApiPost } from "../_core/developer_api.js";
@@ -120,6 +120,69 @@ function resolveLocaleDefault(
 }
 
 /**
+ * Round 3 item 1 (S1-connector, live-verified 2026-10-13): classify an AxiosError
+ * raised by one of the two raw HTTP calls in this file (submit's axios.post,
+ * poll's axios.get) that carries NO HTTP response — a client-side timeout or a
+ * lower-level network failure (DNS, ECONNREFUSED, socket hang up). Before this
+ * fix, both catch blocks built `${status}`/`JSON.stringify(body)` directly from
+ * `error.response?.status`/`.data` with NO guard for this exact case — both are
+ * undefined when there is no response at all, producing the literal substring
+ * "undefined" in the agent-facing message ("Scraper API error (HTTP undefined):
+ * undefined") with no error code attached. ONE function, reused by both catch
+ * sites below (class fix, not two copies of the same classification logic for
+ * two instances of the same bug).
+ *
+ * Deliberately NOT called when `error.response` exists: a real HTTP status was
+ * never the undefined-interpolation bug (status is always well-defined once a
+ * response exists) — those sites keep throwing a plain, unclassified `Error` so
+ * `classifyError`'s downstream prose-based matching (429→RATE_LIMITED,
+ * 402→PRODUCT_UNAVAILABLE, etc. — see _core/errors.ts) still fires exactly as
+ * before. Wrapping an already-has-a-status error in a NovadaError here would
+ * short-circuit that matching (classifyError passes a NovadaError through
+ * unchanged on its very first check) and regress a more specific classification
+ * into a blanket API_DOWN — caught by tests/tools/scrape.test.ts's 429 case.
+ *
+ * - `phase` names which HTTP call failed, so the message is honest about WHICH
+ *   timeout fired and for how long: submit uses axios's fixed 60s `timeout`
+ *   (line ~193's `axios.post(..., { timeout: 60000 })`); poll uses
+ *   pollForResult's per-request 30s `timeout` (its `axios.get(url, { timeout:
+ *   30000 })`) — reaching the OVERALL poll ceiling is a separate, non-throwing
+ *   `{kind:"pending"}` outcome handled elsewhere, never an AxiosError.
+ * - `taskId`, when known, drives the resume guidance ("resume with this
+ *   task_id, no new charge") vs the submit-phase case (no task created yet, so
+ *   nothing was charged — safe to simply retry). The no-taskId wording
+ *   deliberately avoids the literal substring "task_id" (unlike the has-taskId
+ *   branch) so a submit-phase timeout is never mistaken for a successful
+ *   task_id round-trip by anything pattern-matching on that substring (e.g.
+ *   scripts/acceptance/classify.mjs's ACCEPT_PATTERNS).
+ */
+function classifyScraperTimeoutOrNetworkError(
+  error: AxiosError & { response?: undefined },
+  phase: "submit" | "poll",
+  taskId: string | undefined,
+): NovadaError {
+  const waitedS = phase === "submit" ? 60 : 30;
+  const verb = phase === "submit" ? "submit" : "poll";
+  const resumeNote = taskId
+    ? `Resume with task_id="${taskId}" instead of re-submitting — this does not incur a new charge.`
+    : `Nothing was created or charged yet — this is safe to retry immediately.`;
+
+  const isTimeout = error.code === "ECONNABORTED" || /timeout/i.test(error.message);
+  if (isTimeout) {
+    return makeNovadaError(
+      NovadaErrorCode.TIMEOUT,
+      `Scraper ${verb} request timed out after ${waitedS}s waiting for a response. ${resumeNote}`,
+      `${phase}_timeout`,
+    );
+  }
+  return makeNovadaError(
+    NovadaErrorCode.API_DOWN,
+    `Scraper ${verb} request failed — no response from the server (network error: ${sanitizeServerMsg(error.message)}). ${resumeNote}`,
+    `${phase}_network_error`,
+  );
+}
+
+/**
  * Submit a scraper task. Returns a discriminated SubmitOutcome:
  *   - inline records (skip poll), empty serp (graceful no-results), or a task_id to poll.
  * 0.9.5 (NOV-697): previously returned only a task_id and ALWAYS polled; that both
@@ -230,6 +293,22 @@ export async function submitScrapeTask(
       11000: "Invalid API key.",
     };
     const msg = errorMessages[body.code] ?? body.msg ?? "Unknown scraper error";
+    // Round 3 item 3 (S1-connector, live-verified 2026-10-13): code 10000 ("serp
+    // capture failed" for search engines; "result data not exist" for other
+    // platforms) is NOT in BUSINESS_CODE_MAP because its right agent_instruction
+    // is per-PLATFORM, not a single flat message — see serpCaptureFailedHint's
+    // doc comment (_core/errors.ts) for the class rule. Checked BEFORE the
+    // generic classifyBusinessCode fallback so this specific, more actionable
+    // message wins over the plain-Error fallback every unmapped code would
+    // otherwise get.
+    if (body.code === 10000) {
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
+        `Scraper error (code 10000): ${sanitizeServerMsg(msg)} — ${serpCaptureFailedHint(scraper_name)}.`,
+        "code 10000",
+        10000,
+      );
+    }
     // B1 (2026-09-21): classify the envelope code through the ONE shared
     // BUSINESS_CODE_MAP (errors.ts) before falling back to a plain Error.
     // 11004 ("Insufficient balance") previously fell through here to
@@ -1801,7 +1880,6 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     } catch (error) {
       if (error instanceof AxiosError) {
         const status = error.response?.status;
-        const body = error.response?.data;
         // M1: classify honestly. 401 is a real, permanent auth failure (bad/missing
         // key). 403 at a scraper edge is frequently transient — geo/WAF/rate
         // shielding — NOT proof the key is invalid; bundling the two made agents
@@ -1821,7 +1899,20 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
             "HTTP 403",
           );
         }
-        throw new Error(`Scraper API error (HTTP ${status}): ${JSON.stringify(body)}`);
+        if (!error.response) {
+          // Round 3 item 1 (live-verified 2026-10-13): no HTTP response at all —
+          // a client-side timeout or a bare network failure. This is the exact
+          // "undefined" bug site: `status`/`body` above are both undefined here.
+          // No task_id exists yet at submit-time (that's what this very call
+          // would have produced), so resume guidance is "just retry".
+          throw classifyScraperTimeoutOrNetworkError(error as AxiosError & { response?: undefined }, "submit", undefined);
+        }
+        // A real HTTP response WAS received (status is well-defined) but it's
+        // not 401/403 — keep this an UNCLASSIFIED plain Error (status/body are
+        // never undefined here) so classifyError's downstream prose-based
+        // matching (429→RATE_LIMITED, 402→PRODUCT_UNAVAILABLE, etc.) still
+        // applies exactly as before this fix.
+        throw new Error(`Scraper API error (HTTP ${status}): ${JSON.stringify(error.response.data)}`);
       }
       throw error;
     }
@@ -1855,6 +1946,23 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
       pollOutcome = await pollForResult(apiKey, submitOutcome.taskId, ceilingMs, htmlRequested);
     } catch (error) {
       if (error instanceof AxiosError) {
+        // Round 3 item 1: unlike submit-time, a task_id DOES already exist here
+        // (submitOutcome.kind === "task") — reaching the OVERALL ceilingMs is a
+        // separate, non-throwing {kind:"pending"} outcome (handled below, never an
+        // AxiosError); an AxiosError here means one individual poll GET request
+        // itself timed out (30s) or failed at the network level.
+        if (!error.response) {
+          throw classifyScraperTimeoutOrNetworkError(
+            error as AxiosError & { response?: undefined },
+            "poll",
+            submitOutcome.taskId,
+          );
+        }
+        // A real HTTP response WAS received (status is well-defined) — keep this
+        // an UNCLASSIFIED plain Error (status is never undefined here) so
+        // classifyError's downstream prose-based matching (429→RATE_LIMITED,
+        // etc.) still applies exactly as before this fix (see
+        // tests/tools/scrape.test.ts's dedicated 429-from-poll test).
         throw new Error(`Failed to retrieve scraper results: ${sanitizeServerMsg(error.message)}`);
       }
       throw error;

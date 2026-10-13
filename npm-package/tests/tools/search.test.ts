@@ -76,6 +76,51 @@ describe("novadaSearch", () => {
     expect(result).toContain("https://flat.com");
   });
 
+  // Round 3 (S1-connector, item 3, live-verified 2026-10-13): novada_search engine="yandex"
+  // with the default yandex_domain fails live with upstream code 10000 ("serp capture
+  // failed"). This must classify as a NovadaError (API_DOWN, retryable) carrying the
+  // per-engine hint (serpCaptureFailedHint, _core/errors.ts) — specifically naming a
+  // working regional TLD for yandex — not a plain, unclassified Error.
+  it("classifies upstream code 10000 ('serp capture failed') for engine=yandex with the yandex-specific regional-domain hint", async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 10000, msg: "serp capture failed" },
+    });
+
+    let thrown: unknown;
+    try {
+      await novadaSearch({ query: "test-10000-yandex", engine: "yandex", num: 10, country: "", language: "" }, API_KEY);
+    } catch (e) {
+      thrown = e;
+    }
+
+    expect(thrown).toMatchObject({ code: NovadaErrorCode.API_DOWN, retryable: true });
+    const message = (thrown as Error).message;
+    expect(message).toContain("serp capture failed");
+    expect(message).toContain("yandex.ru");
+  });
+
+  // Same upstream code, a DIFFERENT engine (google) — must get SOME actionable hint,
+  // not the yandex-specific one, proving this is a per-engine table lookup (class
+  // rule), not a yandex-only special case hardcoded into the classification branch.
+  it("classifies upstream code 10000 for engine=google with a generic (non-yandex) hint", async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 10000, msg: "serp capture failed" },
+    });
+
+    let thrown: unknown;
+    try {
+      await novadaSearch({ query: "test-10000-google", engine: "google", num: 10, country: "", language: "" }, API_KEY);
+    } catch (e) {
+      thrown = e;
+    }
+
+    expect(thrown).toMatchObject({ code: NovadaErrorCode.API_DOWN, retryable: true });
+    const message = (thrown as Error).message;
+    expect(message).toContain("serp capture failed");
+    expect(message).not.toContain("yandex_domain");
+    expect(message).toContain("country");
+  });
+
   it("classifies a transient 404 as retryable API_DOWN, not permanent SERP-unavailable (H3)", async () => {
     // H3: a 404/network blip is NOT an entitlement problem. It must surface as a
     // transient, retryable API_DOWN — never as "SERP not available for this API key"
