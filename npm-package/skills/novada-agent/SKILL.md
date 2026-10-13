@@ -9,7 +9,7 @@ description: >-
 
 # Novada Agent Skill
 
-You have access to Novada's **38** curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a core-derived **30**-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
+You have access to Novada's **38** curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a core-derived **29**-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
 
 Deep-dive companion skills: `novada-scrape` (platform scrapers + price fields), `novada-extract` (single/batch extraction), `novada-browser` (CDP automation), `novada-proxy` (proxy type selection + escalation), `novada-site-copy` (whole-site copying / RAG ingestion).
 
@@ -306,7 +306,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 **Supported actions:** `navigate`, `click`, `type`, `screenshot`, `aria_snapshot`, `evaluate`, `wait`, `scroll`, `hover`, `press_key`, `select`
 
-**Auth:** `NOVADA_API_KEY` auto-provisions Browser API credentials; `NOVADA_BROWSER_WS` is optional (overrides auto-provision). Runs on both local and hosted; only cross-call persistent sessions are local-only. The `country` param is accepted but not yet applied to the exit node — do not rely on it for geo-routing.
+**Auth:** `NOVADA_API_KEY` auto-provisions Browser API credentials; `NOVADA_BROWSER_WS` is optional (overrides auto-provision). **Local only** — the hosted endpoint (`mcp.novada.com`) excludes this tool entirely, because every real browser action needs a persistent CDP WebSocket a serverless isolate can't hold. The `country` param is accepted but not yet applied to the exit node — do not rely on it for geo-routing.
 
 **When NOT to use:** Simple page reading (use `novada_extract`). Structured data from a known platform (use `novada_scrape`). Raw HTML without interaction (use `novada_extract` with `format: "html"`).
 

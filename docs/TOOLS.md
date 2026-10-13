@@ -4,14 +4,13 @@ Every tool Novada MCP exposes, grouped by category. The [README](../README.md) s
 handful you reach for most; this is the full list.
 
 - **38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38.
-- The hosted default surface (`mcp.novada.com`) exposes **30** — the same registry minus 8 tools
-  that don't apply to a stateless serverless endpoint: `novada_browser_flow` (needs a persistent
-  browser session), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` /
-  `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats`
-  / `novada_search_feedback` (per-process in-memory state), and `novada_verify` (currently omitted
-  from the hosted `tools/list` listing). It's core-derived, not a hand-curated subset — every other
-  tool below (including `novada_browser`, which is NOT the same tool as `novada_browser_flow`) runs
-  on both surfaces.
+- The hosted default surface (`mcp.novada.com`) exposes **29** — the same registry minus 9 tools
+  that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow`
+  (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy`
+  (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey`
+  (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory
+  state), and `novada_verify` (currently omitted from the hosted `tools/list` listing). It's
+  core-derived, not a hand-curated subset — every other tool below runs on both surfaces.
 - Not sure what's on your connection? Call **`novada_discover`** — it returns this catalog live,
   with each tool's name, category, and status.
 - **Hosted?** column below: ✅ = available on `mcp.novada.com`, ❌ = local-only (`npx novada-mcp`).
@@ -75,12 +74,14 @@ All 16 scrape tools run on both local and hosted.
 ## Browser
 
 `novada_browser` (full interaction) and `novada_browser_flow` (simplified action-sequence API) are
-two DIFFERENT tools — only `novada_browser_flow` is hosted-excluded (it needs a persistent browser
-session a stateless serverless invocation can't hold); `novada_browser` itself runs on both surfaces.
+two DIFFERENT tools — both are hosted-excluded. Each needs a persistent CDP WebSocket session a
+stateless serverless invocation can't hold (confirmed for `novada_browser` 2026-10: every real
+action beyond the local-only `close_session`/`list_sessions` bookkeeping returns
+`## Browser Mode Unavailable` on the hosted endpoint).
 
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
-| `novada_browser` | Full interaction — navigate, click, type, screenshot, evaluate JS — up to 20 actions per call | Action results, screenshots, snapshots; session persists via `session_id` (local only — see note below) | ✅ |
+| `novada_browser` | Full interaction — navigate, click, type, screenshot, evaluate JS — up to 20 actions per call | Action results, screenshots, snapshots; session persists via `session_id` (local only — see note below) | ❌ needs a persistent CDP WebSocket session |
 | `novada_browser_flow` | Simpler click/scroll/wait/type/screenshot sequences | Action results per step | ❌ needs a persistent browser session |
 
 ## Research

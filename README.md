@@ -22,22 +22,22 @@
 
 Novada is **hosted-first** — there's nothing to install. Point your client at the hosted URL and you're done.
 
-> **Security note:** the hosted URL contains your API key in the `?apikey=` parameter — treat it like a password. Never share it, never post it publicly, and never configure it as a shared or organization-level connector. Header-capable clients: prefer `Authorization: Bearer <key>` instead — it keeps the key out of URLs and access logs.
+> **Security note:** the hosted endpoint never accepts your API key as a URL query parameter or path segment — only an `Authorization: Bearer <key>` header, or OAuth sign-in, is accepted. This keeps the key out of URLs, server logs, proxies, and browser history. Never share your key or paste it into a URL.
 
 ### claude.ai (web)
 
 1. Go to **Settings → Connectors → Add custom connector**.
 2. Name it `Novada`.
-3. Paste the URL (contains your key — see security note above):
+3. Paste the bare URL and sign in with your Novada account when prompted (OAuth):
    ```
-   https://mcp.novada.com/mcp?apikey=YOUR_KEY
+   https://mcp.novada.com/mcp
    ```
 4. Click **Add**.
 
 ### Claude Code
 
 ```bash
-claude mcp add --transport http novada "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
+claude mcp add --transport http novada https://mcp.novada.com/mcp --header "Authorization: Bearer YOUR_KEY"
 ```
 
 **Full per-client install (Cursor/Windsurf/VS Code + local self-host) → [npm-package/README.md](./npm-package/README.md).**
@@ -83,7 +83,7 @@ These are the tools you reach for most:
 
 📚 **[Full reference — all 38 tools →](docs/TOOLS.md)**
 
-**38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38. The hosted default surface (`mcp.novada.com`) exposes **30** — the same registry minus 8 tools that don't apply to a stateless serverless endpoint: `novada_browser_flow` (needs a persistent browser session), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
+**38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38. The hosted default surface (`mcp.novada.com`) exposes **29** — the same registry minus 9 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ### Where does it run?
 
@@ -105,7 +105,7 @@ These are the tools you reach for most:
 | `novada_monitor` | ✅ | ✅ |
 | `novada_verify` | ✅ | ❌ not on `novada_discover`'s hosted listing |
 | `novada_proxy` | ✅ | ✅ |
-| `novada_browser` | ✅ | ✅ |
+| `novada_browser` | ✅ | ❌ needs a persistent CDP WebSocket session |
 | `novada_browser_flow` | ✅ | ❌ needs a persistent browser session |
 | `novada_account` | ✅ | ✅ |
 | `novada_proxy_account_create` | ✅ | ❌ write-gated account op |
