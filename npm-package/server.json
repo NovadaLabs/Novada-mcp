@@ -30,11 +30,11 @@
     },
     {
       "name": "novada_site_copy",
-      "description": "Copy an entire docs site/section to disk as clean markdown — one .md file per page — returning a COMPACT manifest, not page bodies. Use for a whole knowledge base on disk (offline docs ingest, RAG corpus, full-site mirror)."
+      "description": "Copy an entire docs site/section to disk as clean markdown — one.md file per page — returning a COMPACT manifest, not page bodies. Use for a whole knowledge base on disk (offline docs ingest, RAG corpus, full-site mirror)."
     },
     {
       "name": "novada_scrape",
-      "description": "Use for structured data from a specific platform — clean tabular records, not raw HTML. Supports 14 platforms (~76 operations): Google, LinkedIn, Amazon, YouTube, Walmart, DuckDuckGo, TikTok, Bing, Instagram, X (Twitter), Facebook, Perplexity AI, Yandex, GitHub."
+      "description": "Use for structured data from a specific platform — clean tabular records, not raw HTML. Proxies the Novada Scraper API (scraper.novada.com; public docs: https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api)."
     },
     {
       "name": "novada_scrape_amazon",

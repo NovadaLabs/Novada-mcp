@@ -23,10 +23,33 @@ export declare const _TOOL_DEFINITIONS: Array<{
     inputSchema: Record<string, unknown>;
     annotations: Record<string, boolean>;
 }>;
-export declare const TOOLS: {
+/**
+ * Round 4 (S1-connector, F1 — CLASS fix): builds the ListTools-shaped array for
+ * ANY serving surface, given that surface's OWN real tool-name set
+ * (`availableForSiblingMentions`) — used to resolve every description's
+ * `{{sibling:toolName}}...{{/sibling}}` span (see _core/description_surface.ts)
+ * so a description never recommends a sibling tool the CALLING surface can't
+ * actually list/dispatch. The REGISTERED_TOOL_NAMES inclusion filter is NOT
+ * parameterized — every surface starts from the same base registry; only
+ * sibling-mention rendering differs per surface. One function, two real call
+ * sites today: `TOOLS` below (npm-package's own surface, rendered against its
+ * own REGISTERED_TOOL_NAMES — renders a no-op there, since npm hides nothing)
+ * and hosted-server/vercel/api/mcp.ts's own ListTools assembly (rendered
+ * against ITS hosted-visible name set). Never hand-edit a description per
+ * surface — add/adjust the `{{sibling:}}` markup once in _TOOL_DEFINITIONS
+ * above instead.
+ */
+export declare function buildToolsForSurface(availableForSiblingMentions: ReadonlySet<string>): {
+    description: string;
     title: string;
     name: string;
+    inputSchema: Record<string, unknown>;
+    annotations: Record<string, boolean>;
+}[];
+export declare const TOOLS: {
     description: string;
+    title: string;
+    name: string;
     inputSchema: Record<string, unknown>;
     annotations: Record<string, boolean>;
 }[];

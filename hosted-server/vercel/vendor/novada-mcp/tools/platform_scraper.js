@@ -31,7 +31,7 @@ function renderDescription(d) {
         d.core,
         "",
         `**Use when:** ${d.useWhen.map((s) => `"${s}"`).join(", ")}.`,
-        `**Not for:** ${d.notFor.map((x) => `${x.when} — use ${x.useInstead}`).join(". ")}.`,
+        `**Not for:** ${d.notFor.map((x) => `${x.when} — ${"useInstead" in x ? `use ${x.useInstead}` : x.note}`).join(". ")}.`,
         `**Returns:** ${d.returns}`,
         `**Ops:** ${d.operationsNote}`,
     ].join("\n");

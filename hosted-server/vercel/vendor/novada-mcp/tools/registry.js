@@ -372,7 +372,7 @@ export const TOOL_REGISTRY = [
     },
     {
         name: "novada_setup",
-        description: "Onboarding concierge + first-run front door: validates your API key against the account API, tells you exactly how to register / get a key (free credits) if you have none, and orients you on the core tools. Auth-free — never errors on a missing key.",
+        description: "Onboarding concierge + first-run front door: validates your API key against the account API, tells you exactly how to register / get a key if you have none, and orients you on the core tools. Auth-free — never errors on a missing key.",
         category: "Health & Discovery",
         status: "active",
         title: "Setup & Configuration",
