@@ -153,3 +153,22 @@ test("hosted's novada_scrape generic-tool example never names a platform with ze
   assert.ok(scrape, "novada_scrape must be listed on hosted");
   assert.doesNotMatch(scrape.description, /no dedicated sibling.*chatgpt/is);
 });
+
+// ─── Round 4b (F-review "Round-4 review" error-path gap): {{sibling:}} leak guard ──
+// Mirrors npm-package's scrape-description-platform-derivation.test.ts's own guard —
+// no rendered description on HOSTED's surface may contain a literal "{{" (the only
+// way that could happen is a malformed/unclosed {{sibling:...}} span surviving
+// buildToolsForSurface, or a new markup convention renderDescriptionForSurface
+// doesn't know about — either way, a real leak to a real client).
+
+test("no rendered description on hosted's surface contains a literal '{{' (unclosed/malformed {{sibling:}} markup would leak through otherwise)", () => {
+  for (const t of LISTED_ON_HOSTED) {
+    assert.ok(!t.description.includes("{{"), `${t.name} description contains a literal '{{' after hosted rendering:\n${t.description}`);
+  }
+});
+
+test("CORE_TOOLS_FOR_HOSTED (every tool buildToolsForSurface rendered FOR, including HOSTED_HIDDEN ones) also carries no literal '{{' — the render, not just the final listed subset, is clean", () => {
+  for (const t of CORE_TOOLS_FOR_HOSTED) {
+    assert.ok(!t.description.includes("{{"), `${t.name} description contains a literal '{{' in CORE_TOOLS_FOR_HOSTED:\n${t.description}`);
+  }
+});

@@ -1220,7 +1220,14 @@ function buildOpMapFromCatalog(domain) {
     }
     return Object.assign(Object.create(null), obj);
 }
-/** Derived from SCRAPER_CATALOG — 16 active platforms. */
+// Round 4b: was "16 active platforms" — misleading. CATALOG_BY_DOMAIN has 16
+// TOTAL catalog domains, but 2 (SHEIN, ChatGPT) are fully backend_broken (zero
+// status:"ok" ops) — "active" overstated that. They stay mapped here on purpose
+// (generic novada_scrape still forwards+warns per the backend_broken-op path),
+// just not "active" in any sense that implies a successful call.
+/** Derived from SCRAPER_CATALOG — all 16 catalog platforms (including any
+ *  fully backend_broken ones, which still get a forward+warn rather than no
+ *  route at all). See WORKING_PLATFORM_DOMAINS for the subset with >=1 working op. */
 export const PLATFORM_OPERATIONS = Object.assign(Object.create(null), Object.fromEntries(Array.from(CATALOG_BY_DOMAIN.keys()).map(domain => [domain, buildOpMapFromCatalog(domain)])));
 // x.com is the canonical platform; twitter.com is a common alias agents try.
 const PLATFORM_ALIASES = Object.assign(Object.create(null), { "twitter.com": "x.com" });
@@ -1236,8 +1243,11 @@ function resolvePlatform(platform) {
  * structured NovadaError (INVALID_PARAMS) whose agent_instruction lists the valid
  * operations — so the agent self-corrects without a 60s hang → 504. Returns null
  * when the platform is not in the active map (unknown/inactive platforms fall
- * through to the existing 11006/11008 backend handling — the map only covers the
- * 16 platforms that have live operations).
+ * through to the existing 11006/11008 backend handling — the map only covers
+ * SCRAPER_CATALOG's 16 platforms; 2 of those (SHEIN, ChatGPT) have zero
+ * status:"ok" operations today, so PLATFORM_OPERATIONS[domain] still resolves
+ * for them but every one of their ops routes to the backend_broken warn-and-
+ * forward path, not a genuine "live" success — see PLATFORM_OPERATIONS above).
  */
 export function preflightScrape(platform, operation, params) {
     const ops = Object.prototype.hasOwnProperty.call(PLATFORM_OPERATIONS, platform)

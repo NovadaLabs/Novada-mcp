@@ -64,7 +64,9 @@ interface RequiredKeys {
     readonly extraAll?: readonly string[];
 }
 type OpMap = Record<string, RequiredKeys>;
-/** Derived from SCRAPER_CATALOG — 16 active platforms. */
+/** Derived from SCRAPER_CATALOG — all 16 catalog platforms (including any
+ *  fully backend_broken ones, which still get a forward+warn rather than no
+ *  route at all). See WORKING_PLATFORM_DOMAINS for the subset with >=1 working op. */
 export declare const PLATFORM_OPERATIONS: Record<string, OpMap>;
 /**
  * #6 pre-flight: reject an unknown platform, an unknown operation for a known
@@ -72,8 +74,11 @@ export declare const PLATFORM_OPERATIONS: Record<string, OpMap>;
  * structured NovadaError (INVALID_PARAMS) whose agent_instruction lists the valid
  * operations — so the agent self-corrects without a 60s hang → 504. Returns null
  * when the platform is not in the active map (unknown/inactive platforms fall
- * through to the existing 11006/11008 backend handling — the map only covers the
- * 16 platforms that have live operations).
+ * through to the existing 11006/11008 backend handling — the map only covers
+ * SCRAPER_CATALOG's 16 platforms; 2 of those (SHEIN, ChatGPT) have zero
+ * status:"ok" operations today, so PLATFORM_OPERATIONS[domain] still resolves
+ * for them but every one of their ops routes to the backend_broken warn-and-
+ * forward path, not a genuine "live" success — see PLATFORM_OPERATIONS above).
  */
 export declare function preflightScrape(platform: string, operation: string, params: Record<string, unknown>): NovadaError | null;
 type ScrapeEngineParams = (ScrapeParams | ScrapeParamsFullType) & {
