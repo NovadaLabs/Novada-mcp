@@ -6,9 +6,17 @@
  * (fetch, Request, Response, crypto.subtle). KV is provided by
  * Vercel KV (Upstash Redis under the hood) via @vercel/kv.
  *
- * Auth (Tavily-style, both accepted):
- *   1. ?apikey=YOUR_NOVADA_API_KEY  (aliases: ?api_key=, legacy ?token= — all accepted, canonical is apikey)
- *   2. Authorization: Bearer YOUR_NOVADA_API_KEY
+ * Auth (Claude Directory connector review — URL credentials removed 2026-10):
+ *   1. Authorization: Bearer YOUR_NOVADA_API_KEY  (header only — the ONLY static-credential form)
+ *   2. OAuth 2.1 access token (nvo_at_*), also sent via the Authorization: Bearer header
+ *      and resolved to the caller's underlying Novada key below (see resolveAccessToken).
+ * No credential is ever read from the URL (path segment, ?apikey=, ?api_key=, ?token=
+ * were all accepted before this change and are now REJECTED — see extractToken below).
+ * Anthropic's connector auth rules prohibit URL-carried tokens: "Never accept it in the
+ * URL... URLs end up in server logs, proxies, and browser history." The `/:key/mcp`
+ * rewrite in vercel.json is left in place for ROUTING only (so a pre-existing bookmarked
+ * URL still reaches this handler) — the path segment is no longer read as a credential,
+ * so such a request falls through to the same MISSING_TOKEN 401 as a bare `/mcp` call.
  *
  * Quota: per-token monthly KV counter at <token>:<YYYY-MM>. Decrement
  * before each tool call. 429 when exhausted.
@@ -46,9 +54,26 @@ if (process.env.SENTRY_DSN) {
     dsn: process.env.SENTRY_DSN,
     tracesSampleRate: 0,  // errors only, no performance overhead
     environment: process.env.VERCEL_ENV ?? "development",
-    // Serverless: flush events synchronously before Vercel kills the function.
-    // Without this, buffered events are dropped when the instance terminates.
-    beforeSend: (event) => event,
+    // Explicit (connector-review hardening, 2026-10): never let Sentry's default
+    // instrumentation attach IP address / cookies / other PII-shaped request data
+    // beyond what sentryBeforeSend/sentryBeforeBreadcrumb below explicitly keep.
+    // This is belt-and-suspenders — those two callbacks are the real gate — but
+    // stating it explicitly means a future SDK default flip can't silently widen
+    // what leaves this process.
+    sendDefaultPii: false,
+    // sentryBeforeSend/sentryBeforeBreadcrumb (defined later in this file, hoisted —
+    // see their doc comments) are the ONLY place a captured error or breadcrumb is
+    // allowed to leave this process: every request field is either dropped
+    // (cookies, raw body, all headers but a tiny allowlist) or passed through
+    // redactHostedSecrets()/redactDeep(), the SAME scrubber the hosted error-response
+    // path already uses. Without this, @sentry/node's default http instrumentation
+    // can attach the raw request URL (and therefore a pre-connector-review client's
+    // `?apikey=`/`/:key/mcp` credential, still sent even though the server no longer
+    // authenticates with it) to a captured exception or breadcrumb — a URL credential
+    // leaving this process via Sentry (a third party) is exactly as bad as one
+    // reaching our own console logs, which the auth rewrite above already guards.
+    beforeSend: sentryBeforeSend,
+    beforeBreadcrumb: sentryBeforeBreadcrumb,
   });
 }
 
@@ -472,9 +497,23 @@ const TOOLS = CORE_TOOLS.map((t) => ({
 // either architecturally impossible on Vercel's serverless isolates, or WRITE /
 // destructive / meaningless-when-stateless and never ported to hosted:
 //   - novada_browser_flow  — keeps a persistent WS session across MULTIPLE tool
-//     calls, which a per-request serverless isolate cannot hold. (novada_browser
-//     itself IS enabled: one-shot CDP to Novada's remote cloud browser works —
-//     verified 2026-07-03.)
+//     calls, which a per-request serverless isolate cannot hold.
+//   - novada_browser — CORRECTION (connector-review live-verify, 2026-10):
+//     this comment previously claimed "novada_browser itself IS enabled: one-shot
+//     CDP to Novada's remote cloud browser works — verified 2026-07-03." That was
+//     true before the 2026-09-21 runtime-capability guard shipped (src/utils/
+//     runtime.ts's isBrowserAvailableOnRuntime() / src/tools/browser.ts:116's
+//     `if (isHostedEnvironment() && DEPLOYMENT_SUPPORTS_WS !== "true") return
+//     browserUnavailableOnRuntimeMessage();`). On THIS runtime (Vercel serverless,
+//     DEPLOYMENT_SUPPORTS_WS unset), every real browser action (anything but the
+//     two local bookkeeping actions close_session/list_sessions, which need no
+//     connection) now unconditionally returns "## Browser Mode Unavailable" —
+//     live-reconfirmed against mcp.novada.com. A tool that can never succeed with
+//     valid input fails Anthropic's connector review ("every tool must return a
+//     successful response when called with valid parameters"), so it moved here,
+//     alongside novada_browser_flow (its CDP-session sibling with the identical
+//     architectural limitation). Re-enabling either requires DEPLOYMENT_SUPPORTS_WS=
+//     true on a runtime that can actually hold the WS — not a code change here.
 //   - novada_site_copy     — writes files to disk; Vercel's function FS is read-only.
 //   - novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey — WRITE /
 //     destructive account-mutation actions (whitelist edits, IP purchases, API-key
@@ -495,6 +534,7 @@ const TOOLS = CORE_TOOLS.map((t) => ({
 // HOSTED_NEVER_ROUTABLE_NPM_ALIASES below instead.
 const HOSTED_HIDDEN = new Set([
   "novada_browser_flow",
+  "novada_browser",
   "novada_site_copy",
   "novada_ip_whitelist",
   "novada_static_ip_mgmt",
@@ -920,33 +960,35 @@ async function maybeGetFirstRunNoticeHosted(token: string): Promise<string | nul
 }
 
 /**
- * Extracts the caller's API key AND which auth branch matched — auth_method is
- * a security-relevant telemetry signal (path-auth = key-in-URL) per the
- * roundtable doc §2.3/§4: "path-auth=key-in-URL 的安全信号".
+ * Extracts the caller's API key — HEADER ONLY (Claude Directory connector review,
+ * 2026-10). Previously this also read a URL-carried credential via three distinct
+ * carriers: the `/:key/mcp` path segment, and the `?pathKey=`/`?apikey=`/`?api_key=`/
+ * `?token=` query parameters (all injected or read as aliases of the same class —
+ * "a credential embedded in the request URL"). Anthropic's connector auth rules
+ * explicitly prohibit this: "Never accept it in the URL... don't read tokens from
+ * query parameters... URLs end up in server logs, proxies, and browser history" —
+ * and the MCP authorization spec itself prohibits access tokens in the query string.
+ * A path segment has the identical exposure (it's still part of the URL a proxy,
+ * log line, or browser history entry records), so it is removed for the same
+ * reason, not just the query-string forms.
+ *
+ * The `/:key/mcp` ROUTE in vercel.json is intentionally left in place — removing it
+ * would 404 a pre-existing bookmarked URL instead of answering with a clear 401 that
+ * tells the caller how to authenticate correctly. Only the CREDENTIAL READ is gone:
+ * a request to `/anything/mcp` or `/mcp?apikey=...` with no Authorization header now
+ * falls through to the same `token === null` → MISSING_TOKEN 401 path as a bare
+ * `/mcp` call with nothing at all — the URL segment/query value is never inspected,
+ * never hashed, never logged, and never echoed back.
+ *
+ * Returns only the "bearer" auth method now (the AuthMethod type still carries the
+ * historical "path"/"query" members for telemetry-schema continuity with ALREADY
+ * STORED rows — see AuthMethod in _telemetry.ts — but this function can no longer
+ * produce them).
  */
 function extractToken(req: Request): { token: string; authMethod: AuthMethod } | null {
-  // Vercel Node.js Functions: req.url is path-only ("/mcp"). Vercel Edge: it's
-  // the absolute URL. Provide a base so URL parsing works in both runtimes.
-  const base = `https://${req.headers.get("host") || "localhost"}`;
-  const url = new URL(req.url, base);
-
-  // 1. Path-based auth (Firecrawl pattern): /:key/mcp
-  //    Vercel rewrite may inject ?pathKey=:key, OR Node runtime may show the original path.
-  const pathKey = url.searchParams.get("pathKey");
-  if (pathKey && pathKey.trim().length >= 16) return { token: pathKey.trim(), authMethod: "path" };
-  const pathAuthMatch = url.pathname.match(/^\/([a-zA-Z0-9_\-]{16,})\/mcp$/);
-  if (pathAuthMatch) return { token: pathAuthMatch[1], authMethod: "path" };
-
-  // 2. Query param: ?apikey= is canonical (matches the NOVADA_API_KEY brand and is
-  //    the only form shown in UI/docs). ?api_key= (novada-web parity) and the legacy
-  //    ?token= are accepted as silent aliases so pre-existing links keep working.
-  //    First non-empty wins.
-  const qp = url.searchParams.get("apikey")
-    || url.searchParams.get("api_key")
-    || url.searchParams.get("token");
-  if (qp) return { token: qp.trim(), authMethod: "query" };
-
-  // 3. Bearer header: Authorization: Bearer YOUR_API_KEY
+  // Bearer header: Authorization: Bearer YOUR_API_KEY. Also carries OAuth 2.1 access
+  // tokens (nvo_at_*) per the MCP spec's own header-only requirement — resolved to
+  // the underlying Novada key by resolveAccessToken() further down in fetchHandler.
   const auth = req.headers.get("authorization") || req.headers.get("Authorization");
   if (auth && /^Bearer\s+/i.test(auth)) return { token: auth.replace(/^Bearer\s+/i, "").trim(), authMethod: "bearer" };
   return null;
@@ -1134,15 +1176,26 @@ function buildStatusFooter(
 // evaluated. novada_setup is auth-free and always exempt — use the exempt footer.
 const SETUP_GATE = { charged: false, overCapAllowed: false, remaining: 0 };
 
-// ─── Credential / internal-host redaction for the hosted error path (#2-hosted) ──
-// A raw upstream error string (axios message, response body, stack) can carry the
-// customer's credential as URL userinfo (`https://user:pass@host`) or an INTERNAL
-// Novada host (e.g. the Browser API CDP host `upg-scbr2.novada.com`). BOTH the
-// NovadaError branch and the NON-NovadaError fallback below route their message
-// through this redactor — the currently vendored errors.js (0.8.2-dev) does NOT
-// self-redact in toAgentString(), so the hosted endpoint must defend itself here
-// regardless of which package version is vendored. This mirrors the source-of-truth
-// redactSecrets() in novada-mcp/_core/errors.ts.
+// ─── Credential / internal-host redaction — the ONE scrubber for anything that ──
+// could leave this process with a secret in it (#2-hosted, extended 2026-10 for
+// Sentry egress). A raw upstream error string (axios message, response body,
+// stack) can carry the customer's credential as URL userinfo
+// (`https://user:pass@host`) or an INTERNAL Novada host (e.g. the Browser API CDP
+// host `upg-scbr2.novada.com`). BOTH the NovadaError branch and the NON-NovadaError
+// fallback below route their message through this redactor — the currently
+// vendored errors.js (0.8.2-dev) does NOT self-redact in toAgentString(), so the
+// hosted endpoint must defend itself here regardless of which package version is
+// vendored. This mirrors the source-of-truth redactSecrets() in
+// novada-mcp/_core/errors.ts.
+//
+// Extended (not duplicated) for the Sentry scrubbers below (sentryBeforeSend /
+// sentryBeforeBreadcrumb): a pre-connector-review client can still send a
+// URL-carried credential (`?apikey=`/`?api_key=`/`?token=`/`?pathKey=`, or the
+// `/:key/mcp` path form) even though the server no longer authenticates with it —
+// the value still arrives in req.url, and @sentry/node's default http
+// instrumentation can attach that URL to a captured exception or breadcrumb. Rules
+// 4-6 below close that path by the SAME single scrubber everything else here
+// already goes through, rather than a second, Sentry-only copy.
 const PUBLIC_NOVADA_HOSTS = new Set([
   "novada.com",
   "www.novada.com",
@@ -1165,7 +1218,126 @@ function redactHostedSecrets(msg: string): string {
   out = out.replace(/\b(?:[a-z0-9-]+\.)+novada\.com\b/gi, (host) =>
     PUBLIC_NOVADA_HOSTS.has(host.toLowerCase()) ? host : "[novada-internal-host]"
   );
+  // 4. Removed-but-still-possibly-sent URL query-param credential carriers
+  //    (?apikey=, ?api_key=, ?token=, ?pathKey=) — redact the VALUE, keep the key
+  //    name visible (useful forensic signal: "a client is still trying the old
+  //    URL form", without ever carrying the actual key).
+  out = out.replace(/\b(apikey|api_key|token|pathKey)=[^&\s"'<>]+/gi, "$1=***");
+  // 5. The removed `/:key/mcp` path-credential form — redact the key segment itself.
+  out = out.replace(/\/[a-zA-Z0-9_-]{16,}\/mcp\b/g, "/[redacted]/mcp");
+  // 6. `Authorization: Bearer <token>` (or a bare "Bearer <token>" fragment inside a
+  //    longer string, e.g. a copied curl command in an error message) — redact the
+  //    token, keep the scheme visible.
+  out = out.replace(/\bBearer\s+[a-zA-Z0-9_-]{8,}/gi, "Bearer ***");
+  // 7. Free-text "key"/"token" mention immediately followed by a token-shaped value
+  //    with no `=`/URL/Bearer marker (e.g. an upstream error string like "invalid
+  //    key sk-eu-novada-..." or "for key <value>") — bounded to within ~3 words of
+  //    the keyword so this never redacts an unrelated long identifier (a hash, a
+  //    request ID) elsewhere in the message. Deliberately NOT "redact any 16+ char
+  //    token anywhere" — that is an unbounded ask or an unbounded precision loss;
+  //    this stays keyword-anchored, matching rule 4's already-covered `key=value`
+  //    shape for the free-text phrasing rule 4 doesn't reach.
+  out = out.replace(/\b(key|token)\b(\s+\S+){0,2}?\s+([a-zA-Z0-9_-]{16,})\b/gi, (m, kw, _mid, val) =>
+    m.slice(0, m.length - val.length) + "***"
+  );
   return out;
+}
+
+/**
+ * Header allowlist for anything Sentry is allowed to keep on a captured event's
+ * `request.headers` — everything else (Authorization, Cookie, X-Api-Key, any
+ * custom header) is dropped outright rather than redacted-in-place, because an
+ * allowlist can't miss a NEW secret-carrying header the way a denylist can.
+ */
+const SENTRY_HEADER_ALLOWLIST = new Set(["user-agent", "content-type", "accept"]);
+
+/**
+ * Recursively redact every string value in an arbitrary JSON-shaped structure
+ * (Sentry event/breadcrumb `data`/`extra`/`contexts` fields are untyped `object`)
+ * through redactHostedSecrets. Bounded depth/width so a hostile or pathological
+ * payload can't make this scrubber itself expensive — matches the MCP-params
+ * untrusted-input posture (any value that could reach an external sink needs a
+ * bound, not just a transform).
+ */
+function redactDeep(value: unknown, depth = 0): unknown {
+  if (depth > 6) return "[redaction-depth-limit]";
+  if (typeof value === "string") return redactHostedSecrets(value);
+  if (Array.isArray(value)) return value.slice(0, 50).map((v) => redactDeep(v, depth + 1));
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    let i = 0;
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (++i > 50) break;
+      out[k] = redactDeep(v, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Sentry `beforeSend` — the LAST line of defense before an error event leaves
+ * this process for Sentry's servers (a third party). Drops anything that could
+ * carry a caller credential outright (cookies, raw request body, all but a tiny
+ * header allowlist) and redacts every remaining string field (url, exception
+ * messages/values, extra/contexts) through the SAME redactHostedSecrets() every
+ * other egress path in this file already uses.
+ *
+ * What a Sentry event still contains after this runs (for the README disclosure):
+ * tool name (as a tag), NovadaError code/retryable, a REDACTED exception message/
+ * stack (secrets replaced with placeholders, structure and non-secret text kept),
+ * a REDACTED request URL (query string values and any path-segment credential
+ * replaced — key names like "apikey=" may remain visible as a forensic signal),
+ * and request headers limited to user-agent/content-type/accept. It does NOT
+ * contain: the caller's API key or OAuth token in any form, cookies, the raw
+ * request body, or any other request header (including Authorization).
+ */
+function sentryBeforeSend(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+  if (event.request) {
+    delete event.request.cookies;
+    delete event.request.data;
+    // Query string could itself carry a credential value even after URL redaction
+    // rewrites the combined `url` field below — drop it outright rather than
+    // redact-in-place; nothing downstream reads it off a Sentry event.
+    delete event.request.query_string;
+    if (event.request.url) event.request.url = redactHostedSecrets(event.request.url);
+    if (event.request.headers) {
+      const filtered: Record<string, string> = {};
+      for (const [k, v] of Object.entries(event.request.headers)) {
+        if (SENTRY_HEADER_ALLOWLIST.has(k.toLowerCase()) && typeof v === "string") filtered[k] = v;
+      }
+      event.request.headers = filtered;
+    }
+  }
+  if (event.message) event.message = redactHostedSecrets(event.message);
+  if (event.exception?.values) {
+    for (const ex of event.exception.values) {
+      if (ex.value) ex.value = redactHostedSecrets(ex.value);
+    }
+  }
+  if (event.extra) event.extra = redactDeep(event.extra) as typeof event.extra;
+  if (event.contexts) event.contexts = redactDeep(event.contexts) as typeof event.contexts;
+  return event;
+}
+
+/**
+ * Sentry `beforeBreadcrumb` — same contract as sentryBeforeSend but for
+ * breadcrumbs (e.g. the http/fetch breadcrumbs @sentry/node's default
+ * instrumentation records for every request, and the `tool-handled` breadcrumb
+ * this file adds itself below). Every breadcrumb's message and `data` object are
+ * redacted the same way; `data.headers`/`data.cookies`, if present, are dropped
+ * outright rather than redacted (same allowlist-not-denylist reasoning as
+ * sentryBeforeSend's header handling).
+ */
+function sentryBeforeBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb {
+  if (breadcrumb.message) breadcrumb.message = redactHostedSecrets(breadcrumb.message);
+  if (breadcrumb.data) {
+    const data = { ...breadcrumb.data } as Record<string, unknown>;
+    delete data.headers;
+    delete data.cookies;
+    breadcrumb.data = redactDeep(data) as Record<string, unknown>;
+  }
+  return breadcrumb;
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────
@@ -1997,8 +2169,8 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     // 401 responses into a shared helper breaks that contract test — update the
     // test first if you ever refactor this.
     return jsonError(401, "MISSING_TOKEN",
-      "Missing API key. Pass your own Novada API key as ?apikey=YOUR_KEY or Authorization: Bearer YOUR_KEY — the hosted endpoint bills each call to your own Novada balance.",
-      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the apikey in your MCP URL.",
+      "Missing API key. Pass your own Novada API key as an Authorization: Bearer YOUR_KEY header, or sign in via OAuth — the hosted endpoint bills each call to your own Novada balance. URL query parameters and path segments are never read as credentials.",
+      "Add an Authorization: Bearer YOUR_KEY header to the request (get a key with $10 free credits at https://novada.com), or complete the OAuth sign-in flow — discovery metadata is at /.well-known/oauth-authorization-server.",
       { "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 
@@ -2026,7 +2198,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     // accurate diagnosis instead of always being told "check the format".
     const message = info.verified
       ? "Your API key is not a valid or active Novada API key. It was rejected by the Novada account API — verify you copied the correct key from your OWN Novada account."
-      : "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the apikey.";
+      : "Invalid API key format. Use your own Novada API key (16+ chars, from your Novada account) as the Bearer token.";
     // pre_auth guard-site emit: token is present (even though rejected) — hash/
     // encrypt it so HQ can still resolve which account attempted the call.
     await emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
@@ -2061,8 +2233,8 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   const apiKey = token?.trim();
   if (!apiKey) {
     return jsonError(401, "MISSING_TOKEN",
-      "No Novada API key provided. Pass your own key as ?apikey=YOUR_KEY (or Authorization: Bearer YOUR_KEY) — the hosted endpoint bills each call to your own Novada balance and never to a shared account.",
-      "Get a Novada API key with $10 free credits at https://novada.com — then use it as the apikey in your MCP URL.",
+      "No Novada API key provided. Pass your own key as an Authorization: Bearer YOUR_KEY header — the hosted endpoint bills each call to your own Novada balance and never to a shared account.",
+      "Add an Authorization: Bearer YOUR_KEY header to the request. Get a Novada API key with $10 free credits at https://novada.com — then use it as the Bearer token.",
       { "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 

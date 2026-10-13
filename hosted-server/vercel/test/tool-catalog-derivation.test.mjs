@@ -126,7 +126,13 @@ test("HOSTED_HIDDEN still hides novada_site_copy (never-ported: writes to read-o
 // doesn't make it reachable — but tracked here explicitly so it isn't silently
 // rediscovered as "new" drift; not fixed by this diff since group CONTENTS for the
 // existing groups were intentionally left untouched (only new groups were added).
-const KNOWN_HOSTED_HIDDEN_IN_GROUP_EXCEPTIONS = new Set(["novada_browser_flow"]);
+// novada_browser joined novada_browser_flow here 2026-10 (claude-directory-exam
+// S1-connector): it moved into HOSTED_HIDDEN because every real browser action
+// unconditionally fails on this runtime (see HOSTED_HIDDEN's docstring in mcp.ts),
+// so the whole `browser` TOOL_GROUPS entry is now a documented no-op (both of its
+// members are hidden) — same harmless-but-tracked treatment as browser_flow was
+// already getting, not a new category of issue.
+const KNOWN_HOSTED_HIDDEN_IN_GROUP_EXCEPTIONS = new Set(["novada_browser_flow", "novada_browser"]);
 
 test("no HOSTED_HIDDEN tool is reachable through any TOOL_GROUPS entry (except the documented pre-existing exception)", () => {
   const allGroupNames = new Set(namesIn(toolGroupsSlice));
@@ -296,15 +302,15 @@ test("core registry has exactly 38 tools (pinned — mirrors npm-package discove
   assert.equal(CORE_TOOL_NAMES.size, 38, `core registry size changed — update this pinned count, npm-package's discover.test.ts, and every README/SKILL count to ${CORE_TOOL_NAMES.size}`);
 });
 
-test("HOSTED_HIDDEN has exactly 8 entries (pinned)", () => {
-  assert.equal(HOSTED_HIDDEN.size, 8, `HOSTED_HIDDEN size changed — update this pinned count and the hosted-visible-count derivation below to ${HOSTED_HIDDEN.size}`);
+test("HOSTED_HIDDEN has exactly 9 entries (pinned — bumped from 8: novada_browser joined 2026-10, every real action unconditionally fails on this runtime)", () => {
+  assert.equal(HOSTED_HIDDEN.size, 9, `HOSTED_HIDDEN size changed — update this pinned count and the hosted-visible-count derivation below to ${HOSTED_HIDDEN.size}`);
 });
 
-test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 30", () => {
-  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 30, "hosted-visible tool count drifted from 30 — update hosted-server/vercel/README.md's '30-tool' mentions to match");
+test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 29", () => {
+  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 29, "hosted-visible tool count drifted from 29 — update hosted-server/vercel/README.md's '29-tool' mentions to match");
 });
 
-test("hosted-server/vercel/README.md states the derived hosted-visible count ('30-tool'/'30 tools')", () => {
+test("hosted-server/vercel/README.md states the derived hosted-visible count (currently '29-tool'/'29 tools' — computed, not hardcoded)", () => {
   const expectedHostedCount = CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size;
   assert.match(
     HOSTED_README,
