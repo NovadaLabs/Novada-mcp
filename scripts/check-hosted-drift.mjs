@@ -138,12 +138,99 @@ const SURFACES_PATH = path.join(ROOT, "config", "surfaces.json");
 const REGISTRY_PATH = path.join(ROOT, "npm-package", "src", "tools", "registry.ts");
 const TOOLS_DIR = path.join(ROOT, "npm-package", "src", "tools");
 const MCP_TS_PATH = path.join(ROOT, "hosted-server", "vercel", "api", "mcp.ts");
+const SCRAPER_CATALOG_PATH = path.join(ROOT, "npm-package", "src", "data", "scraper_catalog.ts");
 
-// Anchor pair for the `const TOOLS = CORE_TOOLS.map((t) => ({ ... }));` construction —
-// used by the post-declaration mutation scan below to know where TOOLS's declaration
-// ENDS (i.e. where to start scanning for dynamic mutation of TOOLS/visibleTools).
-const MCP_TOOLS_DECL_START = "const TOOLS = CORE_TOOLS.map((t) => ({";
+// End anchor for the `const TOOLS = <...>.map((t) => ({ ... }));` construction, shared
+// by every accepted derivation form below — used by the post-declaration mutation scan
+// to know where TOOLS's declaration ENDS (i.e. where to start scanning for dynamic
+// mutation of TOOLS/visibleTools). The START anchor is form-specific — see
+// DERIVATION_FORMS / detectDerivationForm() below (PR #16 CI fix, 2026-10-14).
 const MCP_TOOLS_DECL_END = "\n}));";
+
+// ── ACCEPTED DERIVATION FORMS (table, not a single hardcoded pattern) ───────────────
+//
+// Round 4 (S1-connector, F1) introduced surface-aware description rendering
+// (npm-package's description_surface.ts): mcp.ts no longer builds TOOLS directly off
+// CORE_TOOLS — it re-renders CORE_TOOLS through buildToolsForSurface() against
+// hosted's OWN visible-tool set first. The literal `const TOOLS = CORE_TOOLS.map(`
+// the derivation gate used to hard-require is therefore gone on purpose, not a
+// regression — but the gate must NOT just learn to accept "TOOLS = anything.map(...)";
+// that would make it trivially satisfiable by a hand-curated array wearing a `.map(
+// (x) => x)` costume. Each table entry's `detect()` must independently PROVE genuine
+// derivation from `TOOLS as CORE_TOOLS` before returning a match:
+//
+//   "direct"           — const TOOLS = CORE_TOOLS.map(...)  (pre-Round-4 shape, still
+//                         legal if mcp.ts is ever simplified back to it).
+//   "surface-rendered"  — const TOOLS = <X>.map(...) where <X> = buildToolsForSurface(
+//                         <availability set built from CORE_TOOLS.map((t) => t.name)>),
+//                         AND buildToolsForSurface is imported from the SAME vendored-
+//                         core import statement as `TOOLS as CORE_TOOLS` (not merely
+//                         present somewhere else in the file). All three sub-checks
+//                         must hold — proving the specific variable TOOLS is declared
+//                         from really does chain back to CORE_TOOLS, not just that the
+//                         string "buildToolsForSurface" appears in the file.
+//
+// A hand-written literal (`const TOOLS = [ {name: "x", ...}, ... ];`) satisfies NEITHER
+// form — detect() for "direct" requires the literal substring "CORE_TOOLS.map(" right
+// after "const TOOLS = ", and detect() for "surface-rendered" requires a chain of 3
+// independent structural facts a literal array has none of. Verified manually (scratch
+// mutation: temp-copied mcp.ts, replaced the real TOOLS declaration with a hand literal,
+// ran this script — FAIL, same message shape as below; restored the real file).
+const VENDORED_CORE_IMPORT_RE =
+  /import\s*\{([^}]*)\}\s*from\s*["']\.\.\/vendor\/novada-mcp\/core\.js["']/s;
+
+const DERIVATION_FORMS = [
+  {
+    name: "direct",
+    detect(mcpSrc) {
+      if (!/const TOOLS = CORE_TOOLS\.map\(/.test(mcpSrc)) return null;
+      return { declStart: "const TOOLS = CORE_TOOLS.map((t) => ({" };
+    },
+  },
+  {
+    name: "surface-rendered",
+    detect(mcpSrc) {
+      // (1) buildToolsForSurface must come from the SAME vendored-core import
+      // statement as `TOOLS as CORE_TOOLS` — not just appear anywhere in the file.
+      const importMatch = mcpSrc.match(VENDORED_CORE_IMPORT_RE);
+      if (!importMatch) return null;
+      const importedNames = importMatch[1];
+      if (!/\bTOOLS\s+as\s+CORE_TOOLS\b/.test(importedNames)) return null;
+      if (!/\bbuildToolsForSurface\b/.test(importedNames)) return null;
+      // (2) the availability set TOOLS is rendered against must itself be built
+      // FROM CORE_TOOLS — proves it isn't a fabricated/hand-typed name set wearing
+      // a buildToolsForSurface() costume.
+      if (!/CORE_TOOLS\.map\(\s*\(\s*t\s*\)\s*=>\s*t\.name\s*\)/.test(mcpSrc)) return null;
+      // (3) find `const <X> = buildToolsForSurface(...)`, then require the EXACT
+      // captured name <X> to be what TOOLS.map(...) is built from. mcp.ts's own
+      // header comment quotes core.ts's npm-side usage verbatim — `` `export const
+      // TOOLS = buildToolsForSurface(REGISTERED_TOOL_NAMES)` `` — so this can't just
+      // take the FIRST regex match (that IS the comment, and "TOOLS" fails the next
+      // check harmlessly, but relying on match order is fragile/accidental, not a
+      // deliberate guard). Try every candidate; a real one proves itself by also
+      // appearing as `const TOOLS = <candidate>.map((t) => ({`.
+      for (const callMatch of mcpSrc.matchAll(/const\s+(\w+)\s*=\s*buildToolsForSurface\(/g)) {
+        const declStart = `const TOOLS = ${callMatch[1]}.map((t) => ({`;
+        if (mcpSrc.includes(declStart)) return { declStart };
+      }
+      return null;
+    },
+  },
+];
+
+/** Returns { name, declStart } for the FIRST accepted derivation form that matches
+ *  mcpSrc's actual content, or null if none do (hand-curated literal, or a malformed/
+ *  incomplete attempt at either accepted form). Single source of truth shared by both
+ *  the derivation gate (detectDerivationRegression) and the mutation-scan boundary
+ *  finder (findToolsDeclEnd) — they must never be allowed to disagree about which form
+ *  is in effect. */
+function detectDerivationForm(mcpSrc) {
+  for (const form of DERIVATION_FORMS) {
+    const result = form.detect(mcpSrc);
+    if (result) return { name: form.name, ...result };
+  }
+  return null;
+}
 
 // The runtime clause that actually EXCLUDES HOSTED_HIDDEN tools from the served
 // ListTools/discover output (applied to `visibleTools` in buildServer). The (a)/(b)/(c)
@@ -214,6 +301,39 @@ function getManifestSurfaceTools(manifest, surfaceName) {
 }
 
 /**
+ * Mirrors npm-package/src/tools/platform_scraper.ts's hasAnyWorkingOp(config) — a
+ * platform-scraper tool is NOT actually registered at runtime if its catalog domain
+ * has zero status:"ok" ops (Round 3, S1-connector, 2026-10-13: novada_scrape_shein
+ * is the first real case — the config file src/tools/scrape_shein.ts is DELIBERATELY
+ * kept on disk, not deleted, so SHEIN auto-re-registers the moment the backend fixes
+ * even one op, but the real TOOLS/REGISTERED_TOOL_NAMES no longer include it). This
+ * script globs every scrape_<platform>.ts file regardless of that runtime exclusion,
+ * so without this check it would wrongly treat novada_scrape_shein as "registered"
+ * forever, permanently disagreeing with config/surfaces.json's (correct) "hosted"
+ * manifest, which already excludes it. Domain-level (does the WHOLE catalog block
+ * for this domain have >=1 "ok" op), not op-level (does this tool's SPECIFIC
+ * configured operations map to an "ok" entry) — a narrower approximation than the
+ * real hasAnyWorkingOp, which checks only the tool's OWN configured op subset. True
+ * for every platform in the catalog today (no platform configures a strict subset
+ * that excludes its only working ops); if that ever changes, this check would need
+ * to parse each tool's `operations` map too — flagged here rather than silently
+ * assumed correct forever.
+ */
+function platformHasWorkingOp(catalogSrc, domain) {
+  const marker = `domain: "${domain}"`;
+  const start = catalogSrc.indexOf(marker);
+  if (start === -1) {
+    throw new Error(
+      `[check-hosted-drift] scraper_catalog.ts has no ${JSON.stringify(marker)} — ` +
+      `platform-scraper config references a domain missing from the catalog, or the catalog's shape changed`
+    );
+  }
+  const nextMarkerIdx = catalogSrc.indexOf('domain: "', start + marker.length);
+  const slice = catalogSrc.slice(start, nextMarkerIdx === -1 ? catalogSrc.length : nextMarkerIdx);
+  return /status:\s*"ok"/.test(slice);
+}
+
+/**
  * The 15 (and growing) platform-scraper tool names (novada_scrape_amazon and its
  * siblings) are NOT literal strings in registry.ts — that file spreads
  * `...PLATFORM_SCRAPER_REGISTRY_ENTRIES` (imported, factory-generated objects) into
@@ -224,7 +344,9 @@ function getManifestSurfaceTools(manifest, surfaceName) {
  * platform-scraper names by scanning every `scrape_<platform>.ts` file in the tools/
  * directory (glob, not a hand-typed list of 15 filenames) for that literal. Zero build
  * step, zero import/execution — consistent with why this whole script text-parses
- * instead of importing (see file header).
+ * instead of importing (see file header). A config whose domain has zero working ops
+ * (platformHasWorkingOp above) is excluded, mirroring hasAnyWorkingOp's real runtime
+ * filter — see that function's doc comment.
  */
 function loadPlatformScraperToolNames() {
   const files = readdirSync(TOOLS_DIR).filter((f) => /^scrape_[a-z0-9]+\.ts$/.test(f));
@@ -234,17 +356,27 @@ function loadPlatformScraperToolNames() {
       `${TOOLS_DIR} — parsing is broken, refusing to pass a vacuous check`
     );
   }
+  const catalogSrc = readFileSync(SCRAPER_CATALOG_PATH, "utf8");
   const names = [];
   for (const file of files) {
     const src = readFileSync(path.join(TOOLS_DIR, file), "utf8");
-    const m = src.match(/toolName:\s*"(novada_[a-zA-Z0-9_]+)"/);
-    if (!m) {
+    const toolNameMatch = src.match(/toolName:\s*"(novada_[a-zA-Z0-9_]+)"/);
+    if (!toolNameMatch) {
       throw new Error(
         `[check-hosted-drift] ${file} has no \`toolName: "novada_..."\` literal — the platform-scraper ` +
         `config shape changed; update this script's extraction to match`
       );
     }
-    names.push(m[1]);
+    const platformMatch = src.match(/platform:\s*"([a-zA-Z0-9.\-]+)"/);
+    if (!platformMatch) {
+      throw new Error(
+        `[check-hosted-drift] ${file} has no \`platform: "<domain>"\` literal — the platform-scraper ` +
+        `config shape changed; update this script's extraction to match`
+      );
+    }
+    if (platformHasWorkingOp(catalogSrc, platformMatch[1])) {
+      names.push(toolNameMatch[1]);
+    }
   }
   return names;
 }
@@ -295,11 +427,17 @@ function detectDerivationRegression(mcpSrc) {
       `import from "../vendor/novada-mcp/core.js" is missing.`
     );
   }
-  if (!/const TOOLS = CORE_TOOLS\.map\(/.test(mcpSrc)) {
+  const form = detectDerivationForm(mcpSrc);
+  if (!form) {
     issues.push(
-      `  mcp.ts's TOOLS is no longer built as "const TOOLS = CORE_TOOLS.map(...)" — it may ` +
-      `have reverted to a hand-curated literal array (the exact duplication the 2026-07-20 ` +
-      `core-derivation refactor eliminated).`
+      `  mcp.ts's TOOLS is no longer built via any accepted derivation form ` +
+      `(checked: ${DERIVATION_FORMS.map((f) => `"${f.name}"`).join(", ")}) — it may have ` +
+      `reverted to a hand-curated literal array (the exact duplication the 2026-07-20 ` +
+      `core-derivation refactor eliminated), or a "surface-rendered" attempt is malformed ` +
+      `(buildToolsForSurface not imported from the same vendored-core import statement as ` +
+      `"TOOLS as CORE_TOOLS", its availability set not built from CORE_TOOLS.map((t) => ` +
+      `t.name), or TOOLS not built from the exact variable buildToolsForSurface(...) was ` +
+      `assigned to).`
     );
   }
   return issues;
@@ -342,14 +480,27 @@ function detectRuntimeFilterMissing(mcpSrc) {
  * mutation gate silently scanning zero bytes and reporting a false "clean" result.
  */
 function findToolsDeclEnd(source) {
-  const startIdx = source.indexOf(MCP_TOOLS_DECL_START);
-  if (startIdx === -1) {
+  // Shares detectDerivationForm() with the derivation gate above by design — if the
+  // gate already confirmed a form matches (main() only reaches here after that check
+  // passes), this call is guaranteed non-null; if it somehow WERE null, failing loudly
+  // here is still correct (same "don't scan from an unverifiable boundary" philosophy
+  // as the original single-anchor version).
+  const form = detectDerivationForm(source);
+  if (!form) {
     throw new Error(
-      `[check-hosted-drift] mutation-scan: start anchor not found: ${JSON.stringify(MCP_TOOLS_DECL_START)} — ` +
-      `file structure changed; update this script's anchors to match`
+      `[check-hosted-drift] mutation-scan: no accepted derivation form matched — cannot ` +
+      `locate TOOLS's declaration boundary. This should already have been caught by the ` +
+      `derivation gate; if you're seeing this, the gate and this function have drifted apart.`
     );
   }
-  const endIdx = source.indexOf(MCP_TOOLS_DECL_END, startIdx + MCP_TOOLS_DECL_START.length);
+  const startIdx = source.indexOf(form.declStart);
+  if (startIdx === -1) {
+    throw new Error(
+      `[check-hosted-drift] mutation-scan: start anchor not found: ${JSON.stringify(form.declStart)} ` +
+      `(derivation form "${form.name}") — file structure changed; update this script's anchors to match`
+    );
+  }
+  const endIdx = source.indexOf(MCP_TOOLS_DECL_END, startIdx + form.declStart.length);
   if (endIdx === -1) {
     throw new Error(
       `[check-hosted-drift] mutation-scan: end anchor not found: ${JSON.stringify(MCP_TOOLS_DECL_END)} — ` +
@@ -532,16 +683,41 @@ function main() {
     );
   }
 
-  // (c) "hosted-15" ⊆ "hosted" — the pinned eval fixture must stay live on hosted.
+  // (c) "hosted-15" ⊆ "hosted" — the pinned eval fixture must stay live on hosted,
+  // with ONE documented, named exception (not a blanket loosening): novada_browser
+  // was deliberately moved into mcp.ts's HOSTED_HIDDEN by a 2026-10 connector-review
+  // pass (every real browser action unconditionally fails on this runtime — a tool
+  // that can never succeed with valid input fails Directory review, so it had to be
+  // delisted). "hosted-15" stays PINNED at its original 15 names (resizing a pinned
+  // regression fixture is an owner-gated decision, not this script's to make), so
+  // this is the one tool this gate is EXPECTED to find missing from "hosted" — any
+  // OTHER name missing is still a real, unexpected drift and still fails.
+  const HOSTED_15_LISTING_EXCEPTIONS = new Set(["novada_browser"]);
   const droppedFromHosted15 = [...manifestHosted15Set].filter((n) => !manifestHostedSet.has(n));
-  if (droppedFromHosted15.length > 0) {
+  const unexpectedlyDropped = droppedFromHosted15.filter((n) => !HOSTED_15_LISTING_EXCEPTIONS.has(n));
+  const expectedExceptionsSeen = droppedFromHosted15.filter((n) => HOSTED_15_LISTING_EXCEPTIONS.has(n));
+  // If a documented exception were EVER restored to "hosted" (e.g. a future runtime
+  // fix makes novada_browser work again), say so explicitly rather than silently
+  // keeping a now-unnecessary allowlist entry forever.
+  const staleExceptions = [...HOSTED_15_LISTING_EXCEPTIONS].filter((n) => manifestHostedSet.has(n));
+  if (unexpectedlyDropped.length > 0) {
     failed = true;
     console.error(
       `[check-hosted-drift] FAIL (c): config/surfaces.json "hosted-15" tool(s) are no longer in "hosted" ` +
-      `— the pinned eval fixture assumes these stay reachable on the live hosted surface: ${droppedFromHosted15.join(", ")}`
+      `and are NOT in the documented exception list — the pinned eval fixture assumes these stay reachable ` +
+      `on the live hosted surface: ${unexpectedlyDropped.join(", ")}`
+    );
+  } else if (staleExceptions.length > 0) {
+    failed = true;
+    console.error(
+      `[check-hosted-drift] FAIL (c): HOSTED_15_LISTING_EXCEPTIONS lists tool(s) that ARE visible on "hosted" ` +
+      `again — remove the now-stale exception entry: ${staleExceptions.join(", ")}`
     );
   } else {
-    console.log(`[check-hosted-drift] PASS (c): "hosted-15" (${manifestHosted15Set.size} tools) ⊆ "hosted" (${manifestHostedSet.size} tools)`);
+    console.log(
+      `[check-hosted-drift] PASS (c): "hosted-15" (${manifestHosted15Set.size} tools) ⊆ "hosted" ` +
+      `(${manifestHostedSet.size} tools), modulo the documented exception(s): ${expectedExceptionsSeen.join(", ") || "none"}`
+    );
   }
 
   if (failed) {
