@@ -173,12 +173,12 @@
       "id": "T16-youtube-transcript-vs-extract",
       "prompt": "Get me the full transcript for this YouTube video: https://www.youtube.com/watch?v=LCAY3PGHZyw",
       "category": "scrape-youtube-vs-extract",
-      "expected_tool": "novada_scrape_youtube",
-      "acceptable_tools": ["novada_scrape_youtube", "novada_scrape"],
-      "unacceptable_tools": ["novada_extract", "novada_search"],
-      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "expected_tool": "novada_scrape",
+      "acceptable_tools": ["novada_scrape"],
+      "unacceptable_tools": ["novada_extract", "novada_search", "novada_scrape_youtube"],
+      "sibling_watch": ["novada_extract", "novada_scrape_youtube"],
       "surfaces": ["default"],
-      "notes": "Tools-v2 SOCIAL/VIDEO platform-scraper pass (2026-07-20): 'transcript' for a specific YouTube video is a structured-data ask (the transcript_by_video operation), not a request to read the page as prose — the disambiguator novada_scrape_youtube's description calls out against novada_extract. novada_scrape remains an acceptable fallback (identical engine, platform='youtube.com'). NOT tagged 'hosted-15': novada_scrape_youtube is not in config/surfaces.json's hosted-15 tool list — same precedent as T11-T15."
+      "notes": "Round 3 (S1-connector, live-verified 2026-10-13): transcript_by_video (catalog slug youtube_transcript_id) is now backend_broken and REMOVED from novada_scrape_youtube's enum — that tool can no longer serve this request at all, so picking it is now a genuine mistake (moved from acceptable_tools to unacceptable_tools). expected_tool changed to generic novada_scrape(platform=\"youtube.com\", operation=\"youtube_transcript_id\") — the catalog slug still exists and is still forwarded-with-a-warning (backend may fix any day), it is just no longer reachable through the dedicated per-platform tool. Originally (Tools-v2 SOCIAL/VIDEO platform-scraper pass, 2026-07-20): 'transcript' for a specific YouTube video was a structured-data ask the dedicated tool's transcript_by_video operation served directly. NOT tagged 'hosted-15': novada_scrape_youtube is not in config/surfaces.json's hosted-15 tool list — same precedent as T11-T15."
     },
     {
       "id": "T17-instagram-profile-posts",
@@ -239,12 +239,12 @@
       "id": "T22-shein-product-by-id",
       "prompt": "Get SHEIN product details (price, images) for product ID Tween-Girls-Casual-Solid-Color-Criss-Cross-Racerback-Sports-Dress-Kids-p-423721658.",
       "category": "scrape-shein-vs-extract",
-      "expected_tool": "novada_scrape_shein",
-      "acceptable_tools": ["novada_scrape_shein", "novada_scrape"],
+      "expected_tool": "novada_scrape",
+      "acceptable_tools": ["novada_scrape"],
       "unacceptable_tools": ["novada_extract", "novada_search"],
-      "sibling_watch": ["novada_extract", "novada_scrape"],
+      "sibling_watch": ["novada_extract"],
       "surfaces": ["default"],
-      "notes": "Tools-v2 FINAL platform-scraper pass (2026-07-20): a named platform (SHEIN) plus a specific product ID is the product_by_id disambiguator over reading a page as prose. novada_scrape remains an acceptable fallback (identical engine, platform='shein.com'). SHEIN keyword/category list-search intentionally has no working route today (all 3 catalog ops are backend_broken) — that gap is documented on the tool itself, not exercised by this task. NOT tagged 'hosted-15': same precedent as T11-T21."
+      "notes": "Round 3 (S1-connector, live-verified 2026-10-13): the SAME product_by_id / product_by_url ops this task's expected answer relied on are now ALSO backend_broken (joining SHEIN's pre-existing 3 broken ops — SHEIN is 0/5 working ops today), so novada_scrape_shein was removed from the registry entirely (platform_scraper.ts's empty-working-op-set exclusion — no tool whose every operation is backend_broken is registered/listed). expected_tool changed to generic novada_scrape(platform=\"shein.com\", operation=\"shein_product_id\") — still forwarded-with-a-warning, the only remaining route. Originally (Tools-v2 FINAL platform-scraper pass, 2026-07-20): a named platform (SHEIN) plus a specific product ID was the product_by_id disambiguator over reading a page as prose. NOT tagged 'hosted-15': same precedent as T11-T21."
     },
     {
       "id": "T23-linkedin-jobs-by-location",

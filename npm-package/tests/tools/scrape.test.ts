@@ -511,6 +511,197 @@ describe("novadaScrape — error handling", () => {
     expect(agentText).toContain("retry_after_ms");
     expect(agentText.toLowerCase()).toContain("serialize");
   });
+
+  // Round 3 (S1-connector, item 3, live-verified 2026-10-13): upstream business code
+  // 10000 ("serp capture failed") must classify as an API_DOWN NovadaError carrying a
+  // per-platform hint (serpCaptureFailedHint, _core/errors.ts) — the yandex.com case
+  // specifically naming a working regional TLD, every other platform getting SOME
+  // actionable (if generic) hint. Class rule, not a yandex-only branch — verified
+  // against both a search-engine domain (yandex.com) and a non-search-engine one
+  // (amazon.com) through the SAME code path.
+  describe("Round 3 item 3 — code 10000 ('serp capture failed') per-platform classification", () => {
+    it("yandex.com (via novada_scrape's generic dispatch) gets the yandex-specific regional-domain hint", async () => {
+      // Round 4 (F7): yandex_domain="yandex.com" is now preflight-rejected as a
+      // KNOWN-broken value (data/known_broken_param_values.ts), a separate, earlier
+      // check than this test's target (code-10000 classification for a live upstream
+      // response). Use "yandex.kz" — a valid, non-working-alternative TLD not in that
+      // table — so this test keeps exercising the GENERIC code-10000 classification
+      // path, independent of F7's specific rejection (covered by its own tests).
+      mockApiError(10000, "serp capture failed");
+      let thrown: unknown;
+      try {
+        await novadaScrape(
+          { platform: "yandex.com", operation: "yandex", params: { q: "test", yandex_domain: "yandex.kz" }, format: "markdown", limit: 20 },
+          "test-key",
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(NovadaError);
+      const err = thrown as NovadaError;
+      expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+      expect(err.message).toContain("serp capture failed");
+      expect(err.message).toContain("yandex.ru");
+      expect(err.retryable).toBe(true);
+    });
+
+    it("a non-search-engine platform (amazon.com) gets a generic (non-yandex) hint for the same code", async () => {
+      mockApiError(10000, "result data not exist");
+      let thrown: unknown;
+      try {
+        await novadaScrape(
+          { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+          "test-key",
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(NovadaError);
+      const err = thrown as NovadaError;
+      expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+      expect(err.message).toContain("result data not exist");
+      expect(err.message).not.toContain("yandex_domain");
+    });
+  });
+
+  // Round 3 (S1-connector, item 1, live-verified 2026-10-13): reproduces the exact
+  // "undefined" bug — an AxiosError with NO `.response` at all (status/body both
+  // undefined) at submit-time used to interpolate directly into
+  // `Scraper API error (HTTP ${status}): ${JSON.stringify(body)}`, producing the
+  // literal substring "undefined" twice with no error code attached. These tests
+  // assert the fix: the message NEVER contains "undefined", and a NovadaErrorCode
+  // is always carried, for both submit-time and poll-time, timeout vs. plain
+  // network failure.
+  describe("Round 3 item 1 — no-response AxiosError classification (never 'undefined', always a code)", () => {
+    it("submit-time timeout (ECONNABORTED, no .response): TIMEOUT code, names 60s, no task_id to resume", async () => {
+      const errTimeout = new AxiosError("timeout of 60000ms exceeded", "ECONNABORTED");
+      errTimeout.message = "timeout of 60000ms exceeded";
+      // NOTE: deliberately do NOT set `.response` at all — this is the exact shape
+      // that reproduced the bug (both `error.response?.status` and `.data` undefined).
+      mockedAxios.post.mockRejectedValue(errTimeout);
+
+      let thrown: unknown;
+      try {
+        await novadaScrape(
+          { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+          "test-key"
+        );
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(thrown).toBeInstanceOf(NovadaError);
+      const err = thrown as NovadaError;
+      expect(err.code).toBe(NovadaErrorCode.TIMEOUT);
+      expect(err.message.toLowerCase()).not.toContain("undefined");
+      expect(err.message).toContain("60s");
+      expect(err.message.toLowerCase()).not.toContain("task_id"); // no task was created yet — never claim a resumable task_id
+      expect(err.retryable).toBe(true);
+    });
+
+    it("submit-time plain network failure (no .response, not a timeout): API_DOWN code, no 'undefined'", async () => {
+      const errNetwork = new AxiosError("getaddrinfo ENOTFOUND scraper.novada.com", "ENOTFOUND");
+      errNetwork.message = "getaddrinfo ENOTFOUND scraper.novada.com";
+      mockedAxios.post.mockRejectedValue(errNetwork);
+
+      let thrown: unknown;
+      try {
+        await novadaScrape(
+          { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+          "test-key"
+        );
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(thrown).toBeInstanceOf(NovadaError);
+      const err = thrown as NovadaError;
+      expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+      expect(err.message.toLowerCase()).not.toContain("undefined");
+      expect(err.message).toContain("ENOTFOUND");
+    });
+
+    it("poll-time timeout (ECONNABORTED, no .response): TIMEOUT code, names 30s, and tells the agent to resume with the KNOWN task_id", async () => {
+      mockedAxios.post.mockResolvedValue(SUBMIT_OK); // submit succeeds -> task_id = "test-task-123"
+      const errTimeout = new AxiosError("timeout of 30000ms exceeded", "ECONNABORTED");
+      errTimeout.message = "timeout of 30000ms exceeded";
+      mockedAxios.get.mockRejectedValue(errTimeout);
+
+      let thrown: unknown;
+      try {
+        await novadaScrape(
+          { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+          "test-key"
+        );
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(thrown).toBeInstanceOf(NovadaError);
+      const err = thrown as NovadaError;
+      expect(err.code).toBe(NovadaErrorCode.TIMEOUT);
+      expect(err.message.toLowerCase()).not.toContain("undefined");
+      expect(err.message).toContain("30s");
+      // Unlike the submit-time case, a task_id DOES already exist — the message
+      // must name it and say it's safe to resume (not re-submit).
+      expect(err.message).toContain("test-task-123");
+      expect(err.message.toLowerCase()).toContain("resume");
+      expect(err.retryable).toBe(true);
+    });
+
+    it("poll-time plain network failure (no .response, not a timeout): API_DOWN code, still names the resumable task_id, no 'undefined'", async () => {
+      mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+      const errNetwork = new AxiosError("socket hang up", "ECONNRESET");
+      errNetwork.message = "socket hang up";
+      mockedAxios.get.mockRejectedValue(errNetwork);
+
+      let thrown: unknown;
+      try {
+        await novadaScrape(
+          { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+          "test-key"
+        );
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(thrown).toBeInstanceOf(NovadaError);
+      const err = thrown as NovadaError;
+      expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+      expect(err.message.toLowerCase()).not.toContain("undefined");
+      expect(err.message).toContain("socket hang up");
+      expect(err.message).toContain("test-task-123");
+      expect(err.message.toLowerCase()).toContain("resume");
+    });
+
+    it("submit-time 500 WITH a real .response (status well-defined): stays a plain, unclassified Error so classifyError's prose matching still applies — not swallowed into a blanket NovadaError", async () => {
+      const err500 = new AxiosError("Request failed with status code 500", "ERR_BAD_RESPONSE");
+      err500.message = "Request failed with status code 500";
+      Object.defineProperty(err500, "response", { value: { status: 500, data: { msg: "internal error" } } });
+      mockedAxios.post.mockRejectedValue(err500);
+
+      let thrown: unknown;
+      try {
+        await novadaScrape(
+          { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+          "test-key"
+        );
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(thrown).toBeInstanceOf(Error);
+      expect(thrown).not.toBeInstanceOf(NovadaError);
+      expect((thrown as Error).message).toContain("500");
+      expect((thrown as Error).message.toLowerCase()).not.toContain("undefined");
+
+      // classifyError() must still get a chance to apply its own prose-based
+      // classification downstream (this is the whole point of NOT pre-wrapping
+      // a has-a-response error into a NovadaError here).
+      const classified = classifyError(thrown);
+      expect(classified).toBeInstanceOf(NovadaError);
+    });
+  });
 });
 
 // #6: pre-flight validation — reject a bad op id / missing required param BEFORE
@@ -692,8 +883,12 @@ describe("novadaScrape — pre-flight (#6)", () => {
       expect(err).not.toBeNull();
       expect(err!.detail).toBe("preflight:missing_param");
       expect(err!.message).toContain("yandex_domain");
+      // Round 4 (F7): yandex_domain="yandex.com" is now a preflight-rejected
+      // known-broken value (data/known_broken_param_values.ts) — use "yandex.ru"
+      // so this assertion keeps proving the AND-required-param-pair-passes
+      // behavior, not F7's separate (and separately tested) rejection.
       expect(
-        preflightScrape("yandex.com", "yandex", { q: "moscow weather", yandex_domain: "yandex.com" }),
+        preflightScrape("yandex.com", "yandex", { q: "moscow weather", yandex_domain: "yandex.ru" }),
       ).toBeNull();
     });
 

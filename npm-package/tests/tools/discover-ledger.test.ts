@@ -38,15 +38,15 @@ describe("parseToolRows self-check: correctly parses a row whose description con
   });
 });
 
-describe("novadaDiscover — Ledger column covers all 38 tools", () => {
+describe("novadaDiscover — Ledger column covers all 37 tools", () => {
   it("renders exactly one row per active registered tool, and none say 'unset'", async () => {
     const out = await novadaDiscover(validateDiscoverParams({}));
     const rows = parseToolRows(out);
     expect(rows.length).toBeGreaterThan(0);
 
     const activeNames = TOOL_REGISTRY.filter((t) => t.status === "active").map((t) => t.name).sort();
-    expect(TOOL_REGISTRY.length).toBe(38);
-    expect(activeNames.length).toBe(38); // every registered tool is active today
+    expect(TOOL_REGISTRY.length).toBe(37);
+    expect(activeNames.length).toBe(37); // every registered tool is active today
 
     const renderedNames = [...new Set(rows.map((r) => r.name))].sort();
     expect(renderedNames, "discover must render every active registered tool exactly once").toEqual(activeNames);

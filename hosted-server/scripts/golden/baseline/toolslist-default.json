@@ -6,7 +6,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements via the `section` param.\n\n**Best for:** \"what's my account status / balance\" one-shot checks.\n**section=\"summary\" (default):** wallet balance + plan quotas + recent capture logs + product entitlements.\n**section=\"balance\":** master wallet currency balance.\n**section=\"usage\":** paginated transaction history (start_time/end_time/page/page_size).\n**section=\"plans\":** per-product plan balances (residential/isp/mobile/datacenter/static/capture); filter with products[].\n**section=\"traffic\":** daily proxy traffic consumption; filter with start_time/end_time/products[].\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).\n**Aliases:** novada_wallet_balance, novada_wallet_usage_record, novada_plan_balance_all, novada_traffic_daily, novada_capture_logs, novada_account_summary, novada_health, novada_health_all all route here.",
+    "description": "Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements via the `section` param.\n\n**Best for:** \"what's my account status / balance\" one-shot checks.\n**section=\"summary\" (default):** wallet balance + plan quotas + recent capture logs + product entitlements.\n**section=\"balance\":** master wallet currency balance.\n**section=\"usage\":** paginated transaction history (start_time/end_time/page/page_size).\n**section=\"plans\":** per-product plan balances (residential/isp/mobile/datacenter/static/capture); filter with products[].\n**section=\"traffic\":** daily proxy traffic consumption; filter with start_time/end_time/products[].\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).",
     "inputSchema": {
       "properties": {
         "end_time": {
@@ -121,330 +121,9 @@
       "destructiveHint": false,
       "idempotentHint": false,
       "openWorldHint": true,
-      "readOnlyHint": false
-    },
-    "description": "Interact with a web page \u2014 click, fill forms, scroll, screenshot, or run JavaScript. Chain multiple actions in one call.\n\n**Best for:** login flows, paginated content, SPAs, form submission, visual verification, scraping behind interactions.\n**Not for:** simple page reads (novada_extract), structured data (novada_scrape), raw HTML (novada_extract format=\"html\").\n**Actions:** navigate, click, type, screenshot, snapshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select \u2014 up to 20/call. snapshot = full DOM text; aria_snapshot = smaller semantic tree (prefer it for extraction).\n**Sessions:** session_id reuses the same page (cookies, login) across calls \u2014 reliable only on the local/long-lived server; on hosted serverless, treat each call as one-shot. close_session releases early.\n**Auth:** NOVADA_API_KEY auto-provisions Browser API credentials; NOVADA_BROWSER_WS optionally overrides.\n**SPAs:** wait with domcontentloaded, never networkidle. `country` is accepted but not yet applied to the browser exit node \u2014 don't rely on it for geo-routing.\n**Constraint:** close_session/list_sessions must be the ONLY action in the call.",
-    "inputSchema": {
-      "properties": {
-        "actions": {
-          "description": "Array of browser actions to execute sequentially (max 20/call). Each action MUST use the discriminated union format {action: \"<type>\", ...fields}, e.g. {action:\"navigate\",url:\"https://example.com\"} | {action:\"click\",selector:\"#btn\"} | {action:\"wait\",ms:2000} | {action:\"screenshot\"}. Do NOT use a bare string (\"navigate\") or object-key format ({navigate:\"url\"}) \u2014 both are invalid.",
-          "items": {
-            "oneOf": [
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "navigate",
-                    "type": "string"
-                  },
-                  "url": {
-                    "format": "uri",
-                    "type": "string"
-                  },
-                  "wait_until": {
-                    "default": "domcontentloaded",
-                    "description": "Page load event. Default 'domcontentloaded' works for SPAs (X, TikTok). Avoid 'networkidle' for SPAs \u2014 they poll continuously and never idle, causing a 30s timeout.",
-                    "enum": [
-                      "load",
-                      "domcontentloaded",
-                      "networkidle"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action",
-                  "url",
-                  "wait_until"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "click",
-                    "type": "string"
-                  },
-                  "selector": {
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action",
-                  "selector"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "type",
-                    "type": "string"
-                  },
-                  "selector": {
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "text": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action",
-                  "selector",
-                  "text"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "screenshot",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "snapshot",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "aria_snapshot",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "evaluate",
-                    "type": "string"
-                  },
-                  "script": {
-                    "description": "JavaScript expression to evaluate in the page context. Max 2000 chars. ASCII only. Must not make network requests.",
-                    "maxLength": 2000,
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action",
-                  "script"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "wait",
-                    "type": "string"
-                  },
-                  "ms": {
-                    "description": "Milliseconds to wait (100\u201330000). Example: {action: \"wait\", ms: 2000}",
-                    "maximum": 30000,
-                    "minimum": 100,
-                    "type": "integer"
-                  },
-                  "selector": {
-                    "description": "CSS selector to wait for (e.g. '#results'). If omitted, waits for ms milliseconds.",
-                    "type": "string"
-                  },
-                  "timeout": {
-                    "description": "Alias for ms \u2014 prefer ms for clarity. Example: {action: \"wait\", timeout: 2000}",
-                    "maximum": 30000,
-                    "minimum": 100,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "action"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "scroll",
-                    "type": "string"
-                  },
-                  "direction": {
-                    "default": "down",
-                    "enum": [
-                      "down",
-                      "up",
-                      "bottom",
-                      "top"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action",
-                  "direction"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "hover",
-                    "type": "string"
-                  },
-                  "selector": {
-                    "description": "CSS selector to hover over.",
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action",
-                  "selector"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "press_key",
-                    "type": "string"
-                  },
-                  "key": {
-                    "description": "Key to press. E.g. 'Enter', 'Tab', 'Escape', 'ArrowDown', 'Space'. Follows Playwright key names.",
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "selector": {
-                    "description": "Optional CSS selector to focus before pressing the key.",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action",
-                  "key"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "select",
-                    "type": "string"
-                  },
-                  "selector": {
-                    "description": "CSS selector for the <select> element.",
-                    "minLength": 1,
-                    "type": "string"
-                  },
-                  "value": {
-                    "description": "The option value (or label text) to select.",
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action",
-                  "selector",
-                  "value"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "close_session",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "const": "list_sessions",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
-                ],
-                "type": "object"
-              }
-            ]
-          },
-          "maxItems": 20,
-          "minItems": 1,
-          "type": "array"
-        },
-        "country": {
-          "description": "ISO 2-letter country code (e.g. 'us', 'gb'). NOTE: accepted but NOT yet applied \u2014 the browser exit node is not geo-routed by this param today. Do not rely on it for geo-restricted platforms.",
-          "maxLength": 2,
-          "minLength": 2,
-          "type": "string"
-        },
-        "session_id": {
-          "description": "Optional session ID for persistent browser state across calls. Reuses the same browser page (cookies, localStorage, login state). Warm reuse is ~5x faster (~1.5s vs ~8s cold start). Sessions expire after 10 minutes of inactivity.",
-          "maxLength": 64,
-          "pattern": "^[a-zA-Z0-9_\\-]+$",
-          "type": "string"
-        },
-        "timeout": {
-          "default": 60000,
-          "description": "Total timeout for all actions in ms. Default 60000.",
-          "maximum": 120000,
-          "minimum": 5000,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "actions"
-      ],
-      "type": "object"
-    },
-    "name": "novada_browser"
-  },
-  {
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": false,
-      "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS/DFS, extracts each page inline. Use select_paths globs to target sections (e.g. \"/docs/api/**\").\n\n**Wrong tool for whole-site jobs:** for >20 pages or a full docs site on disk, use `novada_site_copy` instead (up to 1000 pages, streams to disk, returns a manifest). novada_crawl hard-caps at 20 pages and returns bodies inline.\n\n**Best for:** competitive content analysis, a handful of related pages inline (returns bodies directly).\n**Not for:** a single page (novada_extract), URL discovery only (novada_map \u2014 much faster), a whole site to disk (novada_site_copy).\n**Performance:** avoid max_pages > 10 on large sites \u2014 crawl time scales ~1.4s/page (max_pages=20 \u2248 28s minimum). Use select_paths to narrow scope before raising max_pages.\n**Rendering:** `render` defaults to \"auto\" (static first, escalates to JS on detection) \u2014 not static-only.",
+    "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS/DFS, extracts each page inline. Use select_paths globs to target sections (e.g. \"/docs/api/**\").\n\nnovada_crawl hard-caps at 20 pages and returns bodies inline.\n\n**Best for:** competitive content analysis, a handful of related pages inline (returns bodies directly).\n**Not for:** a single page (novada_extract), URL discovery only (novada_map \u2014 much faster).\n**Performance:** avoid max_pages > 10 on large sites \u2014 crawl time scales ~1.4s/page (max_pages=20 \u2248 28s minimum). Use select_paths to narrow scope before raising max_pages.\n**Rendering:** `render` defaults to \"auto\" (static first, escalates to JS on detection) \u2014 not static-only.",
     "inputSchema": {
       "properties": {
         "exclude_paths": {
@@ -524,7 +203,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "List all available Novada tools \u2014 name, description, category, group, and status.\n\n**agent_instruction:** call this first when starting a task to find the right tool.\n**Returns:** a markdown table grouped by category, plus a Tool Groups reference (core/scrapers/account/meta).\n**Filter:** category narrows the catalog (e.g. category=\"Proxy\"); NOVADA_GROUPS/NOVADA_TOOLS (local) or ?groups=/?tools= (hosted) narrow the actual tool set exposed on this connection.\n**Status:** active = available now. Output includes server_version.\n\n**ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search/extract/research/crawl/scrape/unblock/proxy auto-provisioning \u2014 no separate keys needed. NOVADA_BROWSER_WS/NOVADA_PROXY_ENDPOINT unlock extras, no extra key. On tool failure, call novada_account (section=\"summary\") for balance/plans/entitlements.",
+    "description": "Lists all available Novada tools \u2014 name, description, category, group, and status. Useful at the start of a task to find the right tool, or whenever another tool's description isn't enough to decide between two options.\n\n**Returns:** a markdown table grouped by category, plus a Tool Groups reference (core/scrapers/account/meta).\n**Filter:** category narrows the catalog (e.g. category=\"Proxy\"); NOVADA_GROUPS/NOVADA_TOOLS (local) or ?groups=/?tools= (hosted) narrow the actual tool set exposed on this connection.\n**Status:** active = available now. Output includes server_version.\n\n**Auth:** a single NOVADA_API_KEY authenticates search/extract/research/crawl/scrape/unblock/proxy auto-provisioning \u2014 no separate keys needed. NOVADA_BROWSER_WS/NOVADA_PROXY_ENDPOINT unlock extras, no extra key. See novada_account (section=\"summary\") for balance/plans/entitlements.",
     "inputSchema": {
       "properties": {
         "category": {
@@ -668,7 +347,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Discover URLs on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl. Returns URLs only \u2014 no content. Hard cap: 100 URLs.\n\n**Best for:** site structure discovery, finding the right subpage, pre-flight before novada_crawl/novada_extract.\n**Not for:** reading content (use novada_crawl/novada_extract) or copying a whole site to disk (novada_site_copy).\n**Note:** limited results on JS SPAs \u2014 flagged in the output.",
+    "description": "Discover URLs on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl. Returns URLs only \u2014 no content. Hard cap: 100 URLs.\n\n**Best for:** site structure discovery, finding the right subpage, pre-flight before novada_crawl/novada_extract.\n**Not for:** reading content (use novada_crawl/novada_extract).\n**Note:** limited results on JS SPAs \u2014 flagged in the output.",
     "inputSchema": {
       "properties": {
         "include_subdomains": {
@@ -710,7 +389,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Detect changes on a web page over time. Extracts content, computes a hash, and compares it with the previous check. Returns changed/unchanged plus field-level diffs.\n\n**Use for:** e-commerce price monitoring, stock tracking, content-change detection, competitive pricing alerts.\n**How:** the first call sets a baseline; later calls compare against it and report changes. Pass fields=[\"price\",\"availability\"] for field-level % diffs.\n**Not for:** one-time extraction (novada_extract) or a full crawl (novada_crawl).\n\n\u26a0\ufe0f **Hosted endpoint (mcp.novada.com) limitation:** baselines do NOT survive between calls on hosted's serverless runtime \u2014 every call is a cold function with no prior state, so change detection always returns baseline_recorded. Use the local server (`npx novada-mcp`) or diff externally for real change detection.",
+    "description": "Detect changes on a web page over time. Extracts content, computes a hash, and compares it with the previous check. Returns changed/unchanged plus field-level diffs.\n\n**Use for:** e-commerce price monitoring, stock tracking, content-change detection, competitive pricing alerts.\n**How:** the first call sets a baseline; later calls compare against it and report changes. Pass fields=[\"price\",\"availability\"] for field-level % diffs.\n**Not for:** one-time extraction (novada_extract) or a full crawl (novada_crawl).\n**Storage:** the \"baseline\" is an in-memory, process-local cache (keyed by URL) \u2014 never written to disk, a database, or any durable/external store, and never returned to or readable by any other caller. This is why readOnlyHint stays true despite the \"write a baseline\" language: nothing outside this process's own memory is touched.\n\n\u26a0\ufe0f **Hosted endpoint (mcp.novada.com) limitation:** that in-memory cache does NOT survive between calls on hosted's serverless runtime \u2014 every call is a cold function with no prior state, so change detection always returns baseline_recorded. Use the local server (`npx novada-mcp`) or diff externally for real change detection.",
     "inputSchema": {
       "properties": {
         "fields": {
@@ -806,7 +485,7 @@
   },
   {
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -940,7 +619,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "One call \u2192 3-10 parallel searches across Google/Bing/DuckDuckGo \u2192 dedup \u2192 extracts full content from top sources \u2192 returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative \u2014 you compose the final answer from the gathered passages.\n\n**Use for:** complex questions needing passages from \u22653 independent sources in one call \u2014 comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** a single fact or one URL (novada_search \u2014 faster/cheaper), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default \u2014 quick or deep by question length, never comprehensive).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.\n**Recency:** `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`/`end_date` (ISO YYYY-MM-DD) propagate to every internal search call.",
+    "description": "One call \u2192 3-10 parallel searches across Google/Bing/DuckDuckGo \u2192 dedup \u2192 extracts full content from top sources \u2192 returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative \u2014 you compose the final answer from the gathered passages.\n\n**Use for:** complex questions needing passages from \u22653 independent sources in one call \u2014 comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** a single fact or one URL (novada_search \u2014 faster/cheaper), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default \u2014 quick or deep by question length, never comprehensive).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.\n**Recency:** `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`/`end_date` (ISO YYYY-MM-DD) propagate to every internal search call.\n**Response size:** extracts full content from the top 5 sources only (even at depth=\"comprehensive\"); each source is capped at novada_extract's own default 25,000-char limit \u2014 bounded total, not unbounded \"every source in full.\"",
     "inputSchema": {
       "properties": {
         "depth": {
@@ -1003,7 +682,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Use for structured data from a specific platform \u2014 clean tabular records, not raw HTML. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.\n\n**Best for:** e-commerce product data, social posts/comments, job listings, reviews, real estate, market data.\n**Not for:** general web pages outside this platform list \u2014 use novada_extract instead.\n**Prefer the dedicated tool when one exists:** for amazon/google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/walmart/shein/linkedin/github/perplexity, call novada_scrape_<platform> instead \u2014 same engine, but its `operation` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling (e.g. ChatGPT) or when resuming by task_id.\n**Output formats:** markdown (default table), json (records array inside a fenced \"## Scrape Results\" block), toon (pipe-separated, 40-65% smaller \u2014 best for large result sets), csv, excel (base64), html.\n**Example:** platform=\"amazon.com\", operation=\"amazon_product_keywords\", params={keyword:\"iphone 16\", num:5}.\n**Amazon price fields:** trust `final_price`/`price` (check `_price_source`) \u2014 `initial_price` and `buybox_prices.final_price` are often 0 by design, not a bug; `buybox_prices.unit_price` is raw per-unit data, never the listing price.\n**Discover platforms:** read the `novada://scraper-platforms` resource for the full operation list.\n**Resume:** pass `task_id` from a prior status:processing call to fetch the result without a new billable task (platform/operation still required, display-only).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
+    "description": "Use for structured data from a specific platform \u2014 clean tabular records, not raw HTML. Proxies the Novada Scraper API (scraper.novada.com; public docs: https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api). Supports 14 platforms (~76 operations): Google, LinkedIn, Amazon, YouTube, Walmart, DuckDuckGo, TikTok, Bing, Instagram, X (Twitter), Facebook, Perplexity AI, Yandex, GitHub.\n\n**Best for:** e-commerce product data, social posts/comments, job listings, reviews, real estate, market data.\n**Not for:** general web pages outside this platform list \u2014 use novada_extract instead.\n**Prefer the dedicated tool when one exists:** for amazon/google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/walmart/linkedin/github/perplexity, call novada_scrape_<platform> instead \u2014 same engine, but its `operation` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling or when resuming by task_id.\n**Output formats:** markdown (default table), json (records array inside a fenced \"## Scrape Results\" block), toon (pipe-separated, 40-65% smaller \u2014 best for large result sets), csv, excel (base64), html.\n**Example:** platform=\"amazon.com\", operation=\"amazon_product_keywords\", params={keyword:\"iphone 16\", num:5}.\n**Amazon price fields:** trust `final_price`/`price` (check `_price_source`) \u2014 `initial_price` and `buybox_prices.final_price` are often 0 by design, not a bug; `buybox_prices.unit_price` is raw per-unit data, never the listing price.\n**Discover platforms:** read the `novada://scraper-platforms` resource for the full, always-current operation list (slugs + required params), or see the public reference at https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api.\n**Resume:** pass `task_id` from a prior status:processing call to fetch the result without a new billable task (platform/operation still required, display-only).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1075,7 +754,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured Amazon data \u2014 product details, reviews, seller info, bestseller lists, category/brand listings \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"amazon.com\").\n\n**Use when:** \"get the price/rating/title for Amazon ASIN B0...\", \"pull the reviews for this Amazon product URL\", \"search Amazon for <keyword> with price and rating\", \"who is this Amazon seller\", \"what's in this Amazon Best Sellers list\".\n**Not for:** Any other platform \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\"). A general Google/web search \u2014 use novada_search. Reading one arbitrary URL's raw content \u2014 use novada_extract.\n**Returns:** Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 10 verified-working Amazon operations. 3 known backend-broken ones are excluded from this enum (rejected client-side before any backend call) \u2014 unlike novada_scrape(platform=\"amazon.com\", ...), which still forwards them with a warning.",
+    "description": "Extract structured Amazon data \u2014 product details, reviews, seller info, bestseller lists, category/brand listings \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"amazon.com\").\n\n**Use when:** \"get the price/rating/title for Amazon ASIN B0...\", \"pull the reviews for this Amazon product URL\", \"search Amazon for <keyword> with price and rating\", \"who is this Amazon seller\", \"what's in this Amazon Best Sellers list\".\n**Not for:** Any other platform \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\"). A general Google/web search \u2014 use novada_search. Reading one arbitrary URL's raw content \u2014 use novada_extract.\n**Returns:** Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 10 verified-working Amazon operations. 3 known backend-broken ones are excluded from this enum (rejected client-side before any backend call) \u2014 unlike novada_scrape(platform=\"amazon.com\",...), which still forwards them with a warning.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1627,7 +1306,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract the actual AI-generated answer Perplexity returns for a query \u2014 by a Perplexity query URL or a raw search term \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"perplexity.ai\"). Scrapes Perplexity's own live-rendered answer page (the model's actual response text) \u2014 NOT a web search results list and NOT an indexed-page brand-mention scan.\n\n**Use when:** \"what does Perplexity AI answer for <query>\", \"get Perplexity's generated answer for this perplexity.ai URL\", \"get Perplexity's answer for the search term <term>\".\n**Not for:** A general web/multi-engine search for information (not Perplexity's own generated answer) \u2014 use novada_search. Checking whether a brand is mentioned on AI-company indexed public pages \u2014 use novada_ai_monitor \u2014 scans INDEXED PUBLIC PAGES for brand mentions across AI-company domains; does not fetch a live generated answer for an arbitrary query. A complex question needing cited, multi-source synthesis \u2014 use novada_research. Reading one already-known URL's raw page content \u2014 use novada_extract. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Perplexity's rendered answer content (the text of its generated response) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term. Every perplexity.ai catalog operation is currently status:\"ok\" \u2014 unlike its sibling chatgpt.com, whose only 2 catalog operations are BOTH backend_broken (verified 2026-07-13, \"submit hangs >120s\") \u2014 which is why no novada_scrape_chatgpt tool exists.",
+    "description": "Extract the actual AI-generated answer Perplexity returns for a query \u2014 by a Perplexity query URL or a raw search term \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"perplexity.ai\"). Scrapes Perplexity's own live-rendered answer page (the model's actual response text) \u2014 NOT a web search results list and NOT an indexed-page brand-mention scan.\n\n**Use when:** \"what does Perplexity AI answer for <query>\", \"get Perplexity's generated answer for this perplexity.ai URL\", \"get Perplexity's answer for the search term <term>\".\n**Not for:** A general web/multi-engine search for information (not Perplexity's own generated answer) \u2014 use novada_search. Checking whether a brand is mentioned on AI-company indexed public pages \u2014 use novada_ai_monitor \u2014 scans INDEXED PUBLIC PAGES for brand mentions across AI-company domains; does not fetch a live generated answer for an arbitrary query. A complex question needing cited, multi-source synthesis \u2014 use novada_research. Reading one already-known URL's raw page content \u2014 use novada_extract. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Perplexity's rendered answer content (the text of its generated response) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term. Every perplexity.ai catalog operation is currently status:\"ok\" \u2014 unlike its sibling chatgpt.com, whose only 2 catalog operations are BOTH backend_broken (verified 2026-07-13, \"submit hangs >120s\"), which is why no dedicated chatgpt.com scraper tool exists.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1684,71 +1363,6 @@
       "type": "object"
     },
     "name": "novada_scrape_perplexity"
-  },
-  {
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": false,
-      "openWorldHint": true,
-      "readOnlyHint": true
-    },
-    "description": "Extract structured SHEIN product data \u2014 product details by product ID or product URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"shein.com\").\n\n**Use when:** \"get SHEIN product details for this product ID\", \"get SHEIN product details for this product URL\".\n**Not for:** A single SHEIN URL to read as plain text \u2014 use novada_extract. A general web search not scoped to SHEIN \u2014 use novada_search. SHEIN keyword or category product-list search (no working operation exists for these today) \u2014 use novada_search, or novada_extract on a SHEIN category/search page URL \u2014 the 3 ops that would cover this are all backend_broken (60s+ submit hang) and deliberately excluded from this enum. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured product records (title, price, rating, images, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 2 verified-working SHEIN operations: product lookup by product ID or by product URL. 3 known backend_broken SHEIN operations \u2014 product-list by keyword, by category ID, and by category URL, all failing with a 60s+ submit-endpoint hang \u2014 are intentionally NOT in this enum; this tool rejects them before any backend call, unlike novada_scrape(platform=\"shein.com\", ...), which still forwards them with a warning.",
-    "inputSchema": {
-      "properties": {
-        "format": {
-          "default": "markdown",
-          "description": "markdown (default table), json (records array), csv/excel/html (spreadsheet), toon (compact pipe-separated).",
-          "enum": [
-            "json",
-            "csv",
-            "excel",
-            "html",
-            "markdown",
-            "toon"
-          ],
-          "type": "string"
-        },
-        "limit": {
-          "default": 20,
-          "description": "Max records (default 20, max 100).",
-          "maximum": 100,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "operation": {
-          "description": "SHEIN operation to run (params keys per entry):\n- product_by_id: params.ID (e.g. \"Tween-Girls-Casual-Solid-Color-Criss-Cross-Racerback-Sports-Dress-Kids-p-423721658\"); optional params.flow_retry_num, params.country\n- product_by_url: params.url (product page URL); optional params.flow_retry_num, params.country",
-          "enum": [
-            "product_by_id",
-            "product_by_url"
-          ],
-          "type": "string"
-        },
-        "params": {
-          "additionalProperties": {},
-          "default": {},
-          "description": "Operation-specific parameters for the selected `operation`. E.g. { ID: \"Tween-Girls-...-p-423721658\" } for product_by_id, { url: \"https://us.shein.com/...html\" } for product_by_url.",
-          "propertyNames": {
-            "type": "string"
-          },
-          "type": "object"
-        },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
-          "maxLength": 30,
-          "type": "string"
-        },
-        "task_id": {
-          "description": "Resume a previous slow task instead of submitting a new billable one.",
-          "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
-          "type": "string"
-        }
-      },
-      "required": [
-        "operation"
-      ],
-      "type": "object"
-    },
-    "name": "novada_scrape_shein"
   },
   {
     "annotations": {
@@ -1983,7 +1597,7 @@
           "type": "integer"
         },
         "operation": {
-          "description": "Yandex operation to run (params keys per entry):\n- web_search: params.q (search query) and params.yandex_domain (Yandex TLD, e.g. \"yandex.com\", \"yandex.ru\"); optional params.lang, params.location, params.page, params.within (time range)",
+          "description": "Yandex operation to run (params keys per entry):\n- web_search: params.q (search query) and params.yandex_domain (Yandex TLD, e.g. \"yandex.ru\", \"yandex.com.tr\" \u2014 NOT \"yandex.com\", which is rejected pre-flight as a known-broken value); optional params.lang, params.location, params.page, params.within (time range)",
           "enum": [
             "web_search"
           ],
@@ -1992,7 +1606,7 @@
         "params": {
           "additionalProperties": {},
           "default": {},
-          "description": "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\", yandex_domain: \"yandex.com\" } for web_search.",
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\", yandex_domain: \"yandex.ru\" } for web_search.",
           "propertyNames": {
             "type": "string"
           },
@@ -2023,7 +1637,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured YouTube data \u2014 video/channel metadata, transcripts, comments, downloadable video/audio files \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\").\n\n**Use when:** \"get the transcript/subtitles for this YouTube video\", \"pull the comments on this YouTube video\", \"get channel info for this YouTube channel URL\", \"search YouTube channels for <keyword>\", \"find YouTube videos matching <keyword>, filtered by duration/upload date/attributes\".\n**Not for:** A single YouTube URL to read as plain text \u2014 use novada_extract. A general web/video search not scoped to YouTube \u2014 use novada_search. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured video/channel/comment records (title, views, transcript text, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 13 verified-working YouTube operations spanning transcripts, video/audio downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel. Every youtube.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured YouTube data \u2014 video/channel metadata, comments, downloadable video/audio files \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\").\n\n**Use when:** \"pull the comments on this YouTube video\", \"get channel info for this YouTube channel URL\", \"search YouTube channels for <keyword>\", \"find YouTube videos matching <keyword>, filtered by duration/upload date/attributes\", \"download a YouTube video or its audio track\".\n**Not for:** A single YouTube URL to read as plain text \u2014 use novada_extract. A general web/video search not scoped to YouTube \u2014 use novada_search. The transcript/subtitles of a YouTube video \u2014 this operation (transcript_by_video) is currently backend_broken (live-verified 2026-10-13) and has been removed from this tool's enum; no working alternative exists today. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured video/channel/comment records (title, views, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 12 verified-working YouTube operations spanning video/audio downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel. 1 known backend_broken op (transcript_by_video, live-verified 2026-10-13: API_DOWN 404 \"subtitles_error: Unable to download API page\" across 2 different video_ids) is excluded from this enum.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -2047,9 +1661,8 @@
           "type": "integer"
         },
         "operation": {
-          "description": "YouTube operation to run (params keys per entry):\n- transcript_by_video: params.video_id (e.g. \"LCAY3PGHZyw\"); optional params.subtitles_language, params.subtitles_type (auto_generated|uploader_provided), params.selected_only, params.file_name\n- video_file_by_url: params.url (video URL); optional params.resolution, params.video_codec (avc1|vp9|av01), params.audio_format (opus|m4a), params.bitrate, params.subtitles_language, params.selected_only, params.file_name\n- channel_by_url: params.url (channel URL, e.g. \"https://www.youtube.com/@disneykids\"); optional params.file_name\n- channels_by_keyword: params.keyword; optional params.page_numbers, params.file_name\n- comments_by_video: params.video_id; optional params.replay_times, params.sorting_methods, params.num_of_comments, params.file_name\n- audio_file_by_url: params.url (video URL \u2014 downloads its audio track); optional params.bitrate, params.audio_format (opus|m4a), params.kHz, params.is_subtitles, params.selected_format, params.file_name\n- video_by_id: params.video_id; optional params.file_name\n- video_by_url: params.url (video URL); optional params.all_labels, params.file_name\n- videos_by_keyword: params.keyword; optional params.num_of_posts, params.file_name\n- videos_by_filters: params.keyword_search; optional params.attributes, params.type (Videos|Movies), params.duration, params.upload_date, params.num_of_posts, params.file_name\n- videos_by_playlist_url: params.url (playlist/podcast URL); optional params.num_of_posts, params.file_name\n- channel_videos_by_url: params.url (a channel's /videos URL); optional params.sorting_method (Latest|Popular|Oldest), params.start_index, params.num_of_posts, params.file_name\n- videos_by_label: params.search_label (topic tag, e.g. \"music\"); optional params.num_of_posts, params.file_name",
+          "description": "YouTube operation to run (params keys per entry):\n- video_file_by_url: params.url (video URL); optional params.resolution, params.video_codec (avc1|vp9|av01), params.audio_format (opus|m4a), params.bitrate, params.subtitles_language, params.selected_only, params.file_name\n- channel_by_url: params.url (channel URL, e.g. \"https://www.youtube.com/@disneykids\"); optional params.file_name\n- channels_by_keyword: params.keyword; optional params.page_numbers, params.file_name\n- comments_by_video: params.video_id; optional params.replay_times, params.sorting_methods, params.num_of_comments, params.file_name\n- audio_file_by_url: params.url (video URL \u2014 downloads its audio track); optional params.bitrate, params.audio_format (opus|m4a), params.kHz, params.is_subtitles, params.selected_format, params.file_name\n- video_by_id: params.video_id; optional params.file_name\n- video_by_url: params.url (video URL); optional params.all_labels, params.file_name\n- videos_by_keyword: params.keyword; optional params.num_of_posts, params.file_name\n- videos_by_filters: params.keyword_search; optional params.attributes, params.type (Videos|Movies), params.duration, params.upload_date, params.num_of_posts, params.file_name\n- videos_by_playlist_url: params.url (playlist/podcast URL); optional params.num_of_posts, params.file_name\n- channel_videos_by_url: params.url (a channel's /videos URL); optional params.sorting_method (Latest|Popular|Oldest), params.start_index, params.num_of_posts, params.file_name\n- videos_by_label: params.search_label (topic tag, e.g. \"music\"); optional params.num_of_posts, params.file_name",
           "enum": [
-            "transcript_by_video",
             "video_file_by_url",
             "channel_by_url",
             "channels_by_keyword",
@@ -2068,7 +1681,7 @@
         "params": {
           "additionalProperties": {},
           "default": {},
-          "description": "Operation-specific parameters for the selected `operation`. E.g. { video_id: \"LCAY3PGHZyw\" } for transcript_by_video/comments_by_video/video_by_id, { url: \"https://www.youtube.com/watch?v=...\" } for video_file_by_url/audio_file_by_url/video_by_url, { keyword: \"proxy\" } for channels_by_keyword/videos_by_keyword.",
+          "description": "Operation-specific parameters for the selected `operation`. E.g. { video_id: \"LCAY3PGHZyw\" } for comments_by_video/video_by_id, { url: \"https://www.youtube.com/watch?v=...\" } for video_file_by_url/audio_file_by_url/video_by_url, { keyword: \"proxy\" } for channels_by_keyword/videos_by_keyword.",
           "propertyNames": {
             "type": "string"
           },
@@ -2250,7 +1863,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "The onboarding concierge and first-run front door. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key.\n\n**What it does:**\n1. **Validates your key** \u2014 one cheap account read (wallet balance) confirms it works and shows your balance. No per-product probes, no credit cost.\n2. **Guides you if keyless** \u2014 register at the Novada dashboard (free credits included), copy your API key, get exact config snippets for Claude Code/Desktop/Cursor/VS Code/Windsurf.\n3. **Orients you** \u2014 a plain-language list of core capabilities (search, extract, scrape, browser, account) plus add-ons.\n\n**Reports one of 3 states:** valid key (ready) \u00b7 invalid key (fix it) \u00b7 no key (register). Output includes server_version.\n**Auth-free by design:** a missing key never errors here \u2014 it guides, with a machine-usable agent_instruction for what to tell the user next.\n**Unified key:** NOVADA_API_KEY covers search/extract/unblock/scraper/research/crawl/map/browser/proxy auto-provisioning. NOVADA_BROWSER_WS/NOVADA_PROXY_ENDPOINT are optional add-ons needing no separate key.",
+    "description": "Onboarding and key-validation tool \u2014 useful at the start of a session, or whenever another tool reports a missing/invalid key.\n\n**What it does:**\n1. **Validates your key** \u2014 one cheap account read (wallet balance) confirms it works and shows your balance. No per-product probes, no credit cost.\n2. **Guides you if keyless** \u2014 register at the Novada dashboard, copy your API key, get exact config snippets for Claude Code/Desktop/Cursor/VS Code/Windsurf.\n3. **Orients you** \u2014 a plain-language list of core capabilities (search, extract, scrape, browser, account) plus add-ons.\n\n**Reports one of 3 states:** valid key (ready) \u00b7 invalid key (fix it) \u00b7 no key (register). Output includes server_version.\n**Auth-free by design:** a missing key never errors here \u2014 it guides, with a machine-usable agent_instruction for what to tell the user next.\n**Unified key:** NOVADA_API_KEY covers search/extract/unblock/scraper/research/crawl/map/browser/proxy auto-provisioning. NOVADA_BROWSER_WS/NOVADA_PROXY_ENDPOINT are optional add-ons needing no separate key.",
     "inputSchema": {
       "properties": {},
       "type": "object"

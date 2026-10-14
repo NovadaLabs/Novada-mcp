@@ -23,7 +23,17 @@ const YANDEX_OPERATION_PARAMS_DOC = {
     // AND-requires yandex_domain alongside the query — preflight now rejects a call
     // missing yandex_domain locally, before the live 400/empty the backend used to
     // return for it.
-    web_search: "params.q (search query) and params.yandex_domain (Yandex TLD, e.g. \"yandex.com\", \"yandex.ru\"); optional params.lang, params.location, params.page, params.within (time range)",
+    // Round 3 item 3b (S1-connector, 2026-10-13): example order deliberately leads
+    // with "yandex.ru" — a regional TLD variant live-verified reliably working.
+    // Round 4 (F7, final-exam verifier, 2026-10-13): "yandex.com" REMOVED from the
+    // example entirely (not just reordered) — it is now a hard preflight-rejected
+    // known-broken value (data/known_broken_param_values.ts), so listing it as an
+    // example at all would mislead an agent into picking a guaranteed-rejected
+    // value. "yandex.com.tr" (the OTHER live-verified-working regional TLD) is
+    // the second example instead. The actual per-engine retry hint for a 10000
+    // ("serp capture failed") response lives in _core/errors.ts's
+    // serpCaptureFailedHint, surfaced at error time for any OTHER TLD that fails.
+    web_search: "params.q (search query) and params.yandex_domain (Yandex TLD, e.g. \"yandex.ru\", \"yandex.com.tr\" — NOT \"yandex.com\", which is rejected pre-flight as a known-broken value); optional params.lang, params.location, params.page, params.within (time range)",
 };
 const YANDEX_OPERATION_CONFIGS = Object.fromEntries(Object.keys(YANDEX_OPERATIONS).map((name) => [
     name,
@@ -37,7 +47,7 @@ export const YANDEX_SCRAPER_CONFIG = {
     category: "Scraping & Verification",
     registryDescription: "Extract structured Yandex web search SERP data via a closed, typed operation enum — 1 verified-working operation; same engine and output formats as novada_scrape, pinned to platform=yandex.com",
     operations: YANDEX_OPERATION_CONFIGS,
-    paramsFieldDoc: "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\", yandex_domain: \"yandex.com\" } for web_search.",
+    paramsFieldDoc: "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\", yandex_domain: \"yandex.ru\" } for web_search.",
     description: {
         core: "Extract structured Yandex web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"yandex.com\"). Returns the raw organic-results SERP, with TLD/language/time-range controls novada_search does not expose, not a generated answer.",
         useWhen: [

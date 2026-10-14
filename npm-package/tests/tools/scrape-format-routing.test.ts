@@ -79,14 +79,18 @@ describe("Format A — flat (search-engine ops)", () => {
     // B1 (2026-07-20): yandex is AND-required on yandex_domain in addition to the
     // query alias — live-verified to 400/empty without it. Include it here so this
     // fixture matches an actually-valid call.
+    // Round 4 (F7): yandex_domain="yandex.com" is now a preflight-rejected
+    // known-broken value (data/known_broken_param_values.ts) — use "yandex.ru"
+    // instead so this wire-format test keeps proving flat-field routing, not F7's
+    // separate rejection behavior (covered by its own tests in scrape_yandex.test.ts).
     await novadaScrape(
-      { platform: "yandex.com", operation: "yandex", params: { keyword: "yandex test", yandex_domain: "yandex.com" } },
+      { platform: "yandex.com", operation: "yandex", params: { keyword: "yandex test", yandex_domain: "yandex.ru" } },
       "test-key"
     );
     const body = getSubmitBody();
     expect(body).not.toBeNull();
     expect(body!.get("keyword")).toBe("yandex test");
-    expect(body!.get("yandex_domain")).toBe("yandex.com");
+    expect(body!.get("yandex_domain")).toBe("yandex.ru");
     expect(body!.get("scraper_params")).toBeNull();
   });
 });

@@ -6,12 +6,12 @@ Windsurf, VS Code, etc.) can connect via URL — no `npx`, no local install.
 
 ```
 Client  ──HTTPS──▶  Vercel Edge Function (/mcp)  ──HTTPS──▶  Novada API
-              ?token=sk-eu-novada-…
-              or Authorization: Bearer sk-eu-novada-…
+              Authorization: Bearer sk-eu-novada-…
+              or an OAuth 2.1 access token (same header)
 ```
 
 This is the **Vercel port** of the Cloudflare Worker at `../worker/`. Same
-behavior, same 30-tool surface, same auth/quota model. The CF Worker is kept as a
+behavior, same 28-tool surface, same auth/quota model. The CF Worker is kept as a
 fallback in case the Vercel deploy needs to be rolled back.
 
 **Why Vercel:** the CF Workers approach needs the root domain (`novada.com`)
@@ -21,17 +21,21 @@ CNAME — DNS stays on AWS, we just add `mcp.novada.com → cname.vercel-dns.com
 
 ## What you get
 
-- **One URL** for the hosted-visible **30-tool** surface — core-derived, not a
-  hand-curated list: it's the npm package's full 38-tool registry
-  (`npm-package/src/tools/registry.ts`) minus 8 tools that don't apply to a
+- **One URL** for the hosted-visible **28-tool** surface — core-derived, not a
+  hand-curated list: it's the npm package's full 37-tool registry
+  (`npm-package/src/tools/registry.ts`) minus 9 tools that don't apply to a
   stateless serverless endpoint (`HOSTED_HIDDEN` in `api/mcp.ts` — write-gated
-  account mutations, per-process debug state, and `novada_browser_flow`).
+  account mutations, per-process debug state, and `novada_browser` /
+  `novada_browser_flow`, both of which need a persistent CDP WebSocket session
+  a serverless isolate can't hold).
   Covers search, extract, crawl, research, map, site-copy-adjacent tools,
   the generic `novada_scrape` plus all 15 `novada_scrape_<platform>` tools,
-  browser, proxy, discover, ai_monitor, monitor, setup, account,
+  proxy, discover, ai_monitor, monitor, setup, account,
   proxy_account_list, proxy_account_create.
-- **Two auth modes** simultaneously: `?token=…` query param and
-  `Authorization: Bearer …` header.
+- **Credential sources:** an `Authorization: Bearer …` header, or an OAuth 2.1
+  access token (same header) obtained via sign-in. No URL query parameter or
+  path segment is accepted for credentials — Claude Directory review requires
+  this (tokens in a URL end up in server logs, proxies, and browser history).
 - **Per-token monthly quota** in Vercel KV (default 5000 calls/mo on free).
 - **Per-IP rate limit** in Vercel KV (default 60 req/min/IP).
 - **Stateless Edge runtime** — each request gets a fresh isolate; no session
@@ -129,7 +133,8 @@ You'll get back something like:
 ## 8. Smoke test (stub gate should be on)
 
 ```bash
-curl -X POST 'https://novada-mcpserver.vercel.app/mcp?token=sk-eu-novada-test123' \
+curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
@@ -150,17 +155,19 @@ vercel deploy --prod
 Smoke test again:
 
 ```bash
-curl -X POST 'https://novada-mcpserver.vercel.app/mcp?token=sk-eu-novada-test123' \
+curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-You should see the 30-tool catalog in the response.
+You should see the 28-tool catalog in the response.
 
 Try a tool call:
 
 ```bash
-curl -X POST 'https://novada-mcpserver.vercel.app/mcp?token=sk-eu-novada-test123' \
+curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{
     "jsonrpc": "2.0",
@@ -186,7 +193,8 @@ DNS stays on AWS Route 53 — Vercel only needs the CNAME.
 4. Vercel auto-issues an SSL cert via DNS-01 challenge (~1-5 minutes).
 5. Verify on the real domain:
    ```bash
-   curl -X POST 'https://mcp.novada.com/mcp?token=sk-eu-novada-test123' \
+   curl -X POST 'https://mcp.novada.com/mcp' \
+     -H "Authorization: Bearer YOUR_API_KEY" \
      -H 'Content-Type: application/json' \
      -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
    ```
@@ -194,18 +202,6 @@ DNS stays on AWS Route 53 — Vercel only needs the CNAME.
 ## Client configuration
 
 ### Claude Desktop / Cursor / Cline / Windsurf / VS Code
-
-```json
-{
-  "mcpServers": {
-    "novada": {
-      "url": "https://mcp.novada.com/mcp?token=sk-eu-novada-YOUR_TOKEN"
-    }
-  }
-}
-```
-
-Or with header auth (preferred for clients that support it):
 
 ```json
 {
@@ -231,21 +227,31 @@ Or with header auth (preferred for clients that support it):
 
 Search for `TODO(sub2api)` in `api/mcp.ts` to find the integration point.
 
-## Known limitations (Edge runtime)
+## Known limitations
 
-The following tools depend on Node-only modules and are wired up but return
-`501`-style structured errors on the hosted endpoint — they're marked
-`// TODO: port for Edge runtime` in `api/mcp.ts`:
+This endpoint runs on Vercel's **Node.js** serverless runtime (not Edge — see
+`api/mcp.ts`'s `export const config = { runtime: "nodejs" }`), so native
+modules like `playwright-core` load fine. The limitation is architectural, not
+a missing native binary: CDP (the Browser API) needs a **persistent WebSocket**
+held for the life of a multi-step browser session, and a per-request
+serverless isolate cannot hold one across calls (and, per a 2026-09-21 runtime
+guard, is treated as unable to hold one even within a single call — see
+`npm-package/src/utils/runtime.ts`'s `isBrowserAvailableOnRuntime()`).
 
-- `novada_browser` — uses `playwright-core` CDP; Edge runtime has no native
-  binaries.
-- `novada_browser_flow` — depends on a cloud browser WebSocket; the Edge
-  WebSocket surface needs verification against the upstream protocol.
+Two tools are therefore excluded from the hosted surface entirely
+(`HOSTED_HIDDEN` in `api/mcp.ts`) rather than listed and left to fail at call
+time:
 
-Both tools return a structured `NOT_AVAILABLE_ON_HOSTED` error telling
-agents to use the **local** MCP server (`npx novada-mcp`) for those two
-tools. All other 30 tools on the hosted surface (of the npm package's 38)
-work on the Edge runtime.
+- `novada_browser` — one-shot or multi-action CDP automation; every real
+  action (beyond the local-only `close_session`/`list_sessions` bookkeeping)
+  would otherwise return `## Browser Mode Unavailable`.
+- `novada_browser_flow` — keeps a persistent WS session across multiple tool
+  calls, which a per-request isolate cannot hold at all.
+
+Both route to the normal `TOOL_NOT_ENABLED` refusal if called by name,
+pointing agents to the **local** MCP server (`npx novada-mcp`) for browser
+automation. All other 28 tools on the hosted surface (of the npm package's 37)
+work normally.
 
 ## Local development
 

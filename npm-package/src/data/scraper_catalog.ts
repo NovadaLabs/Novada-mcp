@@ -582,7 +582,8 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
           { key: "selected_only", label: "Only selected formats", required: false, dflt: "value1", opts: ["false", "true"] },
           { key: "file_name", label: "Fetch file name", required: false, dflt: "" },
         ],
-        status: "ok",
+        status: "backend_broken",
+        broken_reason: "live-verified 2026-10-13: 2 different video_ids (LCAY3PGHZyw, dQw4w9WgXcQ) both -> API_DOWN 404 — \"subtitles_error: Unable to download API page\". Other youtube ops unaffected.",
         verified: "2026-07-13",
       },
       {
@@ -1331,7 +1332,8 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
           { key: "flow_retry_num", label: "Process retry count", required: false, dflt: "3" },
           { key: "country", label: "Country", required: false, opts: ["us", "uk", "de", "fr", "it", "es", "ca", "au", "mx", "jp"] },
         ],
-        status: "ok",
+        status: "backend_broken",
+        broken_reason: "live-verified 2026-10-13: ~60s then a scraper API error (description's own example ID) — same failure class as the other 3 SHEIN ops below. SHEIN now has 0 working ops.",
         verified: "2026-07-13",
       },
       {
@@ -1344,7 +1346,8 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
           { key: "flow_retry_num", label: "Process retry attempts", required: false, dflt: "3" },
           { key: "country", label: "Country", required: false, opts: ["us", "uk", "de", "fr", "it", "es", "ca", "au", "mx", "jp"] },
         ],
-        status: "ok",
+        status: "backend_broken",
+        broken_reason: "live-verified 2026-10-13: ~60s then a scraper API error (description's own example URL) — same failure class as the other 3 SHEIN ops below. SHEIN now has 0 working ops.",
         verified: "2026-07-13",
       },
       {
@@ -1489,3 +1492,37 @@ export const CATALOG_DOMAINS: string[] = SCRAPER_CATALOG.map(p => p.domain);
 
 /** Total operation count across all platforms (includes broken). */
 export const CATALOG_OP_COUNT: number = SCRAPER_CATALOG.reduce((sum, p) => sum + p.ops.length, 0);
+
+// ─── Round 3b (S1-connector, 2026-10-13): working-op derivation ─────────────
+// Class fix: every tool-facing description/doc that states a platform COUNT or
+// NAMES a platform LIST (e.g. novada_scrape's "Supports 16 platforms: Amazon,
+// ..., SHEIN, ..., ChatGPT, ...") must derive it from here, never hand-type it
+// again — SHEIN (0/5 ops) and ChatGPT (0/2 ops) going fully backend_broken is
+// exactly the drift this closes: a platform can silently stop being genuinely
+// "supported" (zero working ops) while a hand-written list still names it.
+//
+// "Working" = has at least one status:"ok" operation. A platform can still be
+// present in CATALOG_DOMAINS/SCRAPER_CATALOG (and reachable via generic
+// novada_scrape, which still forwards+warns per-op) while having ZERO working
+// ops — that platform must NOT appear in a "supported platforms" list/count.
+
+/** Domains with >=1 status:"ok" operation — i.e. genuinely usable through
+ *  novada_scrape today. Strict subset of CATALOG_DOMAINS (which includes every
+ *  catalog platform regardless of working-op status). */
+export const WORKING_PLATFORM_DOMAINS: string[] = SCRAPER_CATALOG
+  .filter((p) => p.ops.some((op) => op.status === "ok"))
+  .map((p) => p.domain);
+
+/** Human-readable platform names (catalog `.name`, e.g. "Amazon", "X (Twitter)")
+ *  for domains with >=1 working op, in catalog order — the single source of
+ *  truth for any tool/resource description that names "supported platforms". */
+export const WORKING_PLATFORM_NAMES: string[] = SCRAPER_CATALOG
+  .filter((p) => p.ops.some((op) => op.status === "ok"))
+  .map((p) => p.name);
+
+/** Total count of status:"ok" operations across the whole catalog — how many
+ *  distinct novada_scrape operations are genuinely callable today. Distinct
+ *  from CATALOG_OP_COUNT (includes backend_broken ops, which are still
+ *  reachable but documented/warned as broken, not genuinely "supported"). */
+export const WORKING_OP_COUNT: number = SCRAPER_CATALOG
+  .reduce((sum, p) => sum + p.ops.filter((op) => op.status === "ok").length, 0);

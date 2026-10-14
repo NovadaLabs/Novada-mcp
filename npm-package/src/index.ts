@@ -59,7 +59,16 @@ import { validateAiMonitorParams } from "./tools/types.js";
 import type { ProgressReporter } from "./tools/crawl.js";
 import { classifyError, redactSecrets } from "./_core/errors.js";
 import { ZodError } from "zod";
-import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError } from "./core.js";
+import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError, DEDICATED_PLATFORM_SLUGS } from "./core.js";
+// Round 4b (S1-connector, F-review "Round-4 review" FIX-FIRST, 2026-10-13): the
+// --help CLI banner below used to hand-type the platform/op/dedicated-scraper
+// counts and name SHEIN + ChatGPT as supported examples — stale since Round 3's
+// SHEIN/ChatGPT empty-working-op-set exclusion (both are now fully
+// backend_broken). Same single source of truth as core.ts's novada_scrape
+// description, registry.ts's discover one-liner, and every resource/doc in
+// scrape-description-platform-derivation.test.ts (that file's static guard
+// checks this file's source text does not regress to a hand-typed literal).
+import { WORKING_PLATFORM_NAMES, WORKING_OP_COUNT } from "./data/scraper_catalog.js";
 // F12/F13/E2 (2026-09-10 audit): the key-gate decision layer — tool auth
 // classes, the unauthenticated-tier context saveOutput() consults to skip
 // ~/Downloads writes, and the tier disclosure block.
@@ -674,9 +683,8 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
   novada_research            Multi-source research — returns cited source material to reason over
   novada_map                 Discover URLs on a website (up to 100)
   novada_site_copy           Copy an entire docs site to disk as markdown (one file per page)
-  novada_scrape              Structured data from 16 active platforms (~87 operations, e.g. Amazon, TikTok, SHEIN, ChatGPT)
-  novada_scrape_<platform>   15 dedicated platform scrapers (amazon, google, bing, duckduckgo, yandex, youtube,
-                             instagram, facebook, tiktok, x, walmart, shein, linkedin, github, perplexity) —
+  novada_scrape              Structured data from ${WORKING_PLATFORM_NAMES.length} active platforms (~${WORKING_OP_COUNT} operations, e.g. ${WORKING_PLATFORM_NAMES.slice(0, 3).join(", ")})
+  novada_scrape_<platform>   ${PLATFORM_SCRAPER_TOOLS.length} dedicated platform scrapers (${DEDICATED_PLATFORM_SLUGS.join(", ")}) —
                              each a closed, typed operation enum; run --list-tools for the full live set
   novada_ai_monitor          Search AI-company public domains for brand mentions (not live models)
   novada_monitor             Detect page changes between checks (session-scoped baseline)

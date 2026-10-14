@@ -113,7 +113,7 @@ const TOOL_BY_NAME = new Map(PLATFORM_SCRAPER_TOOLS.map((t) => [t.toolDefinition
 
 describe("F9 sweep — every platform tool × every operation classifies 0 records as empty_result (never plain ok)", () => {
   it("sweep is non-vacuous and enumerates the ENTIRE platform-scraper family (a future scraper config is swept automatically)", () => {
-    expect(PLATFORM_SCRAPER_TOOLS.length).toBeGreaterThanOrEqual(15);
+    expect(PLATFORM_SCRAPER_TOOLS.length).toBeGreaterThanOrEqual(14);
     const sweptTools = new Set(SWEEP_CASES.map((c) => c.toolName));
     expect([...sweptTools].sort()).toEqual(
       PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name).sort(),

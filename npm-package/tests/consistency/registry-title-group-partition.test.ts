@@ -129,7 +129,7 @@ describe("every TOOL_REGISTRY entry has a non-empty title (F-7)", () => {
     expect(drifted, `wired tool title disagrees with registry title: ${drifted.join(", ")}`).toEqual([]);
   });
 
-  it("sanity: covers all 38 registered tools (guards against an empty-import false pass)", () => {
+  it("sanity: covers all 37 registered tools (guards against an empty-import false pass)", () => {
     expect(TOOL_REGISTRY.length).toBeGreaterThan(20);
   });
 });
@@ -160,7 +160,7 @@ describe("TOOL_GROUPS (core|scrapers|account|meta) is a TRUE partition of the fu
     expect(offenders, `registry row .group disagrees with derived GROUP_TOOL_NAMES: ${offenders.join(", ")}`).toEqual([]);
   });
 
-  it("group sizes sum to the full registry length (38)", () => {
+  it("group sizes sum to the full registry length (37)", () => {
     const sum = TOOL_GROUPS.reduce((acc, g) => acc + GROUP_TOOL_NAMES[g].length, 0);
     expect(sum).toBe(TOOL_REGISTRY.length);
   });

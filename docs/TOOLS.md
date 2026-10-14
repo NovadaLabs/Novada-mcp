@@ -3,15 +3,14 @@
 Every tool Novada MCP exposes, grouped by category. The [README](../README.md) shows only the
 handful you reach for most; this is the full list.
 
-- **38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38.
-- The hosted default surface (`mcp.novada.com`) exposes **30** — the same registry minus 8 tools
-  that don't apply to a stateless serverless endpoint: `novada_browser_flow` (needs a persistent
-  browser session), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` /
-  `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats`
-  / `novada_search_feedback` (per-process in-memory state), and `novada_verify` (currently omitted
-  from the hosted `tools/list` listing). It's core-derived, not a hand-curated subset — every other
-  tool below (including `novada_browser`, which is NOT the same tool as `novada_browser_flow`) runs
-  on both surfaces.
+- **37 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 37.
+- The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools
+  that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow`
+  (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy`
+  (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey`
+  (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory
+  state), and `novada_verify` (currently omitted from the hosted `tools/list` listing). It's
+  core-derived, not a hand-curated subset — every other tool below runs on both surfaces.
 - Not sure what's on your connection? Call **`novada_discover`** — it returns this catalog live,
   with each tool's name, category, and status.
 - **Hosted?** column below: ✅ = available on `mcp.novada.com`, ❌ = local-only (`npx novada-mcp`).
@@ -33,11 +32,12 @@ handful you reach for most; this is the full list.
 
 ## Scrape
 
-`novada_scrape` is the generic gateway (16 platforms, ~87 operations). The 15 `novada_scrape_<platform>`
-tools wrap the same backend behind a **closed, typed `operation` enum** scoped to one platform, so an
-agent can't call an invalid operation for the wrong platform. Every listed `operation` is
-verified-working — operations we can't currently deliver are excluded, not left in to fail on you.
-All 16 scrape tools run on both local and hosted.
+`novada_scrape` is the generic gateway (14 platforms with a working route today, ~76 operations — the
+catalog has 16 platforms/~87 operations total, but SHEIN and ChatGPT currently have zero working ops).
+The 14 `novada_scrape_<platform>` tools wrap the same backend behind a **closed, typed `operation`
+enum** scoped to one platform, so an agent can't call an invalid operation for the wrong platform.
+Every listed `operation` is verified-working — operations we can't currently deliver are excluded, not
+left in to fail on you. All 15 scrape tools (generic + 14 per-platform) run on both local and hosted.
 
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
@@ -47,13 +47,12 @@ All 16 scrape tools run on both local and hosted.
 | `novada_scrape_bing` | Bing-only raw SERP data (web search, videos, news, shopping) via a closed, typed `operation` enum — 4 verified-working operations; Bing is not a selectable `novada_search` engine | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_duckduckgo` | DuckDuckGo-only raw SERP data (web search) via a closed, typed `operation` enum — 1 verified-working operation | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_yandex` | Yandex-only raw SERP data (web search) via a closed, typed `operation` enum — 1 verified-working operation | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
-| `novada_scrape_youtube` | YouTube-only structured data (video/channel info, transcripts, comments, video/audio downloads) via a closed, typed `operation` enum — 13 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
+| `novada_scrape_youtube` | YouTube-only structured data (video/channel info, comments, video/audio downloads) via a closed, typed `operation` enum — 12 verified-working operations (1 known backend_broken op excluded: transcript_by_video) | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_instagram` | Instagram-only structured data (profiles, posts, reels, comments) via a closed, typed `operation` enum — 7 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_facebook` | Facebook-only structured data (profiles, posts, comments, events) via a closed, typed `operation` enum — 6 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_tiktok` | TikTok-only structured data (profiles, posts, hashtag/discover listings) via a closed, typed `operation` enum — 5 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_x` | X (Twitter)-only structured data (post details, profile lookup by username or URL) via a closed, typed `operation` enum — 3 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_walmart` | Walmart-only structured data (product details by keyword/category URL/SKU/zip code/URL) via a closed, typed `operation` enum — 5 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
-| `novada_scrape_shein` | SHEIN-only structured product data (by product ID or product URL) via a closed, typed `operation` enum — 2 verified-working operations (3 known backend_broken ops excluded) | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_linkedin` | LinkedIn-only structured data (job listings by filters/search URL/job URL, company info by URL) via a closed, typed `operation` enum — 4 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_github` | GitHub-only structured repository data (by repository URL or a search-results URL) via a closed, typed `operation` enum — 3 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_perplexity` | Perplexity AI's own generated answer for a query (by URL or search term) via a closed, typed `operation` enum — 2 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
@@ -75,12 +74,14 @@ All 16 scrape tools run on both local and hosted.
 ## Browser
 
 `novada_browser` (full interaction) and `novada_browser_flow` (simplified action-sequence API) are
-two DIFFERENT tools — only `novada_browser_flow` is hosted-excluded (it needs a persistent browser
-session a stateless serverless invocation can't hold); `novada_browser` itself runs on both surfaces.
+two DIFFERENT tools — both are hosted-excluded. Each needs a persistent CDP WebSocket session a
+stateless serverless invocation can't hold (confirmed for `novada_browser` 2026-10: every real
+action beyond the local-only `close_session`/`list_sessions` bookkeeping returns
+`## Browser Mode Unavailable` on the hosted endpoint).
 
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
-| `novada_browser` | Full interaction — navigate, click, type, screenshot, evaluate JS — up to 20 actions per call | Action results, screenshots, snapshots; session persists via `session_id` (local only — see note below) | ✅ |
+| `novada_browser` | Full interaction — navigate, click, type, screenshot, evaluate JS — up to 20 actions per call | Action results, screenshots, snapshots; session persists via `session_id` (local only — see note below) | ❌ needs a persistent CDP WebSocket session |
 | `novada_browser_flow` | Simpler click/scroll/wait/type/screenshot sequences | Action results per step | ❌ needs a persistent browser session |
 
 ## Research
@@ -106,7 +107,7 @@ session a stateless serverless invocation can't hold); `novada_browser` itself r
 
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
-| `novada_account` | Balance, plan quotas, usage history, traffic, capture logs in one call | Unified dashboard, or one `section=` slice | ✅ |
+| `novada_account` | Balance, plan quotas, usage history, traffic, capture logs in one call. Back-compat aliases (dispatch-only, not listed tools): `novada_wallet_balance`, `novada_wallet_usage_record`, `novada_plan_balance_all`, `novada_traffic_daily`, `novada_capture_logs`, `novada_account_summary`, `novada_health`, `novada_health_all` all route here. | Unified dashboard, or one `section=` slice | ✅ |
 | `novada_proxy_account_create` | Provisioning a proxy sub-account | Created account details — **WRITE, requires `confirm:true`** | ❌ write-gated account op |
 | `novada_proxy_account_list` | Auditing existing proxy sub-accounts | Paginated list | ✅ |
 | `novada_ip_whitelist` | Managing the proxy IP whitelist (Residential, Unlimited, Static ISP) | Whitelist entries — add/del are **WRITE, require `confirm:true`** | ❌ write-gated account op |

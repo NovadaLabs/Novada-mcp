@@ -66,19 +66,40 @@ test("mcp.ts: TOOLS is imported from core as CORE_TOOLS (single source of truth)
   assert.match(mcpSrc, /TOOLS\s+as\s+CORE_TOOLS/, "mcp.ts must import core's TOOLS as CORE_TOOLS");
 });
 
-test("mcp.ts: hosted TOOLS is built via CORE_TOOLS.map(...), not a hand-curated literal", () => {
-  assert.match(mcpSrc, /const TOOLS = CORE_TOOLS\.map\(/, "TOOLS must be derived from CORE_TOOLS");
+test("mcp.ts: hosted TOOLS is built via CORE_TOOLS_FOR_HOSTED.map(...), not a hand-curated literal", () => {
+  // Round 4 (S1-connector, F1 — CLASS fix, independent judge 2026-10-13): TOOLS
+  // is no longer `CORE_TOOLS.map(...)` directly — it's now
+  // `CORE_TOOLS_FOR_HOSTED.map(...)`, where CORE_TOOLS_FOR_HOSTED is CORE_TOOLS
+  // re-rendered through buildToolsForSurface() against hosted's OWN visible-tool
+  // set (see surface-tool-name-tokens.test.mjs for the full rationale + the
+  // token-level consistency guard this enables). Still fully derived from
+  // CORE_TOOLS (transitively, via buildToolsForSurface(HOSTED_AVAILABLE_FOR_
+  // SIBLING_MENTIONS), which itself is built FROM CORE_TOOLS.map((t) => t.name))
+  // — never a hand-curated literal.
+  assert.match(mcpSrc, /const TOOLS = CORE_TOOLS_FOR_HOSTED\.map\(/, "TOOLS must be derived from CORE_TOOLS_FOR_HOSTED");
+  assert.match(
+    mcpSrc,
+    /const CORE_TOOLS_FOR_HOSTED = buildToolsForSurface\(HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS\);/,
+    "CORE_TOOLS_FOR_HOSTED must itself be derived from buildToolsForSurface(...), not a hand-curated literal",
+  );
+  assert.match(
+    mcpSrc,
+    /const HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS: ReadonlySet<string> = new Set\(\s*CORE_TOOLS\.map\(\(t\) => t\.name\)/,
+    "HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS must itself be derived from CORE_TOOLS",
+  );
 });
 
-// ─── (b) ListTools default surface includes all 15 platform-scraper tools ─────────
+// ─── (b) ListTools default surface includes all 14 platform-scraper tools ─────────
 
-test("core.js: platform-scraper family has exactly 15 tools (novada_scrape_<platform>)", () => {
-  // Bump this count when a 16th platform config is added (mirrors the eval harness's
+test("core.js: platform-scraper family has exactly 14 tools (novada_scrape_<platform>)", () => {
+  // Bump this count when a 15th platform config is added (mirrors the eval harness's
   // own exact-count fixtures, e.g. eval-tasks.json's tasks.length===25 assertion).
-  assert.equal(PLATFORM_SCRAPER_NAMES.length, 15, `expected 15 platform scrapers, found: ${PLATFORM_SCRAPER_NAMES.join(", ")}`);
+  // S1-connector Round 3 (2026-10-13): 15->14, novada_scrape_shein removed — all 5
+  // SHEIN catalog ops are backend_broken (empty working-op-set exclusion).
+  assert.equal(PLATFORM_SCRAPER_NAMES.length, 14, `expected 14 platform scrapers, found: ${PLATFORM_SCRAPER_NAMES.join(", ")}`);
 });
 
-test("hosted default surface: none of the 15 platform-scraper tools are in HOSTED_HIDDEN", () => {
+test("hosted default surface: none of the 14 platform-scraper tools are in HOSTED_HIDDEN", () => {
   const hiddenScrapers = PLATFORM_SCRAPER_NAMES.filter((n) => HOSTED_HIDDEN.has(n));
   assert.deepEqual(hiddenScrapers, [], "platform-scraper tools must be visible by default (not in HOSTED_HIDDEN)");
 });
@@ -89,13 +110,15 @@ test("hosted default surface: every platform-scraper tool is a real CORE_TOOLS e
   }
 });
 
-// ─── (c) ?groups=ecommerce returns exactly {amazon, walmart, shein} ───────────────
+// ─── (c) ?groups=ecommerce returns exactly {amazon, walmart} ──────────────────────
+// S1-connector Round 3 (2026-10-13): "shein" removed — novada_scrape_shein no longer
+// exists (all 5 SHEIN catalog ops are backend_broken, empty-working-op-set exclusion).
 
-test("TOOL_GROUPS.ecommerce is exactly {amazon, walmart, shein}", () => {
+test("TOOL_GROUPS.ecommerce is exactly {amazon, walmart}", () => {
   const ecommerce = groupNames("ecommerce");
   assert.deepEqual(
     [...ecommerce].sort(),
-    ["novada_scrape_amazon", "novada_scrape_shein", "novada_scrape_walmart"].sort(),
+    ["novada_scrape_amazon", "novada_scrape_walmart"].sort(),
   );
 });
 
@@ -118,22 +141,32 @@ test("HOSTED_HIDDEN still hides novada_site_copy (never-ported: writes to read-o
   assert.ok(HOSTED_HIDDEN.has("novada_site_copy"), "novada_site_copy must stay in HOSTED_HIDDEN");
 });
 
-// Pre-existing (predates this refactor, not introduced by it): the `browser` group has
-// always listed novada_browser_flow alongside novada_browser, even though browser_flow is
-// hidden and structurally unreachable on hosted (HOSTED_HIDDEN filters it out of
-// visibleTools, and it isn't in HOSTED_ROUTABLE_ALIASES either, so a direct call is
-// refused with the generic TOOL_NOT_ENABLED message). Harmless — the group listing it
-// doesn't make it reachable — but tracked here explicitly so it isn't silently
-// rediscovered as "new" drift; not fixed by this diff since group CONTENTS for the
-// existing groups were intentionally left untouched (only new groups were added).
-const KNOWN_HOSTED_HIDDEN_IN_GROUP_EXCEPTIONS = new Set(["novada_browser_flow"]);
+// RESOLVED (S1-connector round 2 / H1, independent review, 2026-10): the `browser`
+// TOOL_GROUPS entry (`["novada_browser", "novada_browser_flow"]`) used to be tolerated
+// here as "harmless" because listing a hidden tool in a group doesn't itself make it
+// reachable. An independent review traced the ACTUAL reachable effect: a client
+// connecting with `?groups=browser` got `allowedTools = {novada_setup, novada_browser,
+// novada_browser_flow}` (size 3, so the "matched nothing real -> fall back to core"
+// guard never triggered) — every real tool call on that connection then failed with
+// TOOL_NOT_ENABLED, with nothing explaining the group itself was structurally dead.
+// Fix: the `browser` key was deleted from TOOL_GROUPS entirely (mcp.ts), so
+// `?groups=browser` now takes the same "unknown group name" path any other typo
+// already took — falls back to `core` — instead of bricking the connection. No
+// TOOL_GROUPS entry should ever reference a HOSTED_HIDDEN tool; the exception set
+// below is now empty and kept only so a FUTURE regression (a hidden tool added back
+// into some group) fails this test immediately rather than needing a new one.
+const KNOWN_HOSTED_HIDDEN_IN_GROUP_EXCEPTIONS = new Set();
 
-test("no HOSTED_HIDDEN tool is reachable through any TOOL_GROUPS entry (except the documented pre-existing exception)", () => {
+test("no HOSTED_HIDDEN tool is reachable through any TOOL_GROUPS entry", () => {
   const allGroupNames = new Set(namesIn(toolGroupsSlice));
   const leaked = [...HOSTED_HIDDEN].filter(
     (n) => allGroupNames.has(n) && !KNOWN_HOSTED_HIDDEN_IN_GROUP_EXCEPTIONS.has(n),
   );
   assert.deepEqual(leaked, [], `HOSTED_HIDDEN tool(s) must not appear in any TOOL_GROUPS array: ${leaked.join(", ")}`);
+});
+
+test("TOOL_GROUPS has no 'browser' key at all (H1 fix — not just an emptied one)", () => {
+  assert.doesNotMatch(toolGroupsSlice, /\bbrowser:\s*\[/, "the browser key must be deleted, not left as an empty array");
 });
 
 test("the new BD-style groups (ecommerce/social/dev/ai) specifically contain zero HOSTED_HIDDEN tools", () => {
@@ -252,9 +285,17 @@ test("FIX 1: a direct CallTool('novada_verify') is NOT rejected by the tool-set/
 
 /** Extract and EXECUTE mcp.ts's real TITLE_BRAND_MAP + deriveTitle (not a reimplementation). */
 function extractDeriveTitle() {
+  // Round 4 (F1): end anchor moved from "const TOOLS = CORE_TOOLS.map(" (TOOLS no
+  // longer sits directly after deriveTitle — see the F1 restructuring above) to
+  // the "Hosted-hidden tools" section comment that now immediately follows
+  // deriveTitle's closing brace. This also keeps the extracted/executed slice to
+  // EXACTLY TITLE_BRAND_MAP + deriveTitle (as the function's own doc comment
+  // promises) — including the new HOSTED_HIDDEN/CORE_TOOLS_FOR_HOSTED block here
+  // would reference buildToolsForSurface/CORE_TOOLS, which aren't in scope inside
+  // this isolated `new Function` and would throw ReferenceError.
   const code = sliceBetween(
     "const TITLE_BRAND_MAP: Record<string, string> = {",
-    "\n\nconst TOOLS = CORE_TOOLS.map(",
+    "\n\n// ─── Hosted-hidden tools",
     "TITLE_BRAND_MAP / deriveTitle",
   )
     .replace(/:\s*Record<string,\s*string>/, "")
@@ -292,19 +333,19 @@ test("FIX 4: deriveTitle produces a 'Scrape <Brand>' title for every real platfo
 
 const HOSTED_README = readFileSync(join(__dirname, "..", "README.md"), "utf8");
 
-test("core registry has exactly 38 tools (pinned — mirrors npm-package discover.test.ts's EXPECTED_CURATED_COUNT)", () => {
-  assert.equal(CORE_TOOL_NAMES.size, 38, `core registry size changed — update this pinned count, npm-package's discover.test.ts, and every README/SKILL count to ${CORE_TOOL_NAMES.size}`);
+test("core registry has exactly 37 tools (pinned — mirrors npm-package discover.test.ts's EXPECTED_CURATED_COUNT; S1-connector Round 3, 2026-10-13: 38->37, novada_scrape_shein removed — all 5 SHEIN catalog ops are backend_broken)", () => {
+  assert.equal(CORE_TOOL_NAMES.size, 37, `core registry size changed — update this pinned count, npm-package's discover.test.ts, and every README/SKILL count to ${CORE_TOOL_NAMES.size}`);
 });
 
-test("HOSTED_HIDDEN has exactly 8 entries (pinned)", () => {
-  assert.equal(HOSTED_HIDDEN.size, 8, `HOSTED_HIDDEN size changed — update this pinned count and the hosted-visible-count derivation below to ${HOSTED_HIDDEN.size}`);
+test("HOSTED_HIDDEN has exactly 9 entries (pinned — bumped from 8: novada_browser joined 2026-10, every real action unconditionally fails on this runtime)", () => {
+  assert.equal(HOSTED_HIDDEN.size, 9, `HOSTED_HIDDEN size changed — update this pinned count and the hosted-visible-count derivation below to ${HOSTED_HIDDEN.size}`);
 });
 
-test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 30", () => {
-  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 30, "hosted-visible tool count drifted from 30 — update hosted-server/vercel/README.md's '30-tool' mentions to match");
+test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 28", () => {
+  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 28, "hosted-visible tool count drifted from 28 — update hosted-server/vercel/README.md's '28-tool' mentions to match");
 });
 
-test("hosted-server/vercel/README.md states the derived hosted-visible count ('30-tool'/'30 tools')", () => {
+test("hosted-server/vercel/README.md states the derived hosted-visible count (currently '29-tool'/'29 tools' — computed, not hardcoded)", () => {
   const expectedHostedCount = CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size;
   assert.match(
     HOSTED_README,

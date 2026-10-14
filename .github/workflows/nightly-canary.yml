@@ -48,6 +48,14 @@ jobs:
   canary:
     name: golden capture + diff + contract (FREE) vs mcp.novada.com
     runs-on: ubuntu-latest
+    # issues: write lets the alert steps below open/update/close ONE tracking
+    # issue. Why: from 2026-10-04 to 2026-10-13 this canary failed every night
+    # (prod returned HTTP 402 DEPLOYMENT_DISABLED) and nobody noticed — a red
+    # run in the Actions tab reaches no one. An issue reaches every repo
+    # watcher by email, needs no extra secret, and never duplicates.
+    permissions:
+      contents: read
+      issues: write
     # Job-level env so TELEMETRY_SUPABASE_URL/TELEMETRY_SUPABASE_SERVICE_KEY are
     # readable via the `env` context in the telemetry-canary step's `if:`
     # condition below — GitHub Actions FORBIDS the `secrets` context inside a
@@ -162,3 +170,31 @@ jobs:
           NOVADA_TEST_KEY: ${{ secrets.NOVADA_TEST_KEY }}
           MCP_URL: https://mcp.novada.com/mcp
         run: node hosted-server/scripts/telemetry-delivery-canary.mjs
+
+      # ── Alerting: one tracking issue, opened on failure, closed on recovery ──
+      - name: Alert — open or update the canary-failure issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create canary-failure --color B60205 --description "Nightly Canary is failing against production" 2>/dev/null || true
+          existing=$(gh issue list --label canary-failure --state open --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Still failing on $(date -u +%F). Run: $RUN_URL"
+          else
+            gh issue create --label canary-failure \
+              --title "Nightly Canary failing against production (mcp.novada.com)" \
+              --body "The nightly production canary failed on $(date -u +%F). Run: $RUN_URL. This issue is updated on every further failure and closed automatically when the canary passes again."
+          fi
+
+      - name: Alert — close the canary-failure issue on recovery
+        if: success() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing=$(gh issue list --label canary-failure --state open --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "Canary passed again on $(date -u +%F). Run: $RUN_URL"
+          fi

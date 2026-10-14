@@ -7,7 +7,7 @@ import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets } from "../_core/errors.js";
+import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets, serpCaptureFailedHint } from "../_core/errors.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
@@ -266,6 +266,21 @@ export async function submitSearchScrapeTask(
   }
 
   if (body.code !== 0) {
+    // Round 3 item 3 (S1-connector, live-verified 2026-10-13): code 10000 ("serp
+    // capture failed") reproduced 3/3 for engine="yandex" with yandex_domain=
+    // "yandex.com" while yandex.ru/yandex.com.tr succeed in ~3s on the same
+    // query. Same shared per-engine hint table as scrape.ts's submitScrapeTask
+    // (SAME upstream code, SAME class of fix) — see serpCaptureFailedHint's doc
+    // comment (_core/errors.ts). Checked before the generic classifyBusinessCode
+    // fallback for the same reason as scrape.ts.
+    if (body.code === 10000) {
+      throw makeNovadaError(
+        NovadaErrorCode.API_DOWN,
+        `Scraper search submit error (code 10000): ${sanitizeServerMsg(body.msg ?? "unknown")} — ${serpCaptureFailedHint(scraperName)}.`,
+        "code 10000",
+        10000,
+      );
+    }
     // B1 (2026-09-21): classify the envelope code through the ONE shared
     // BUSINESS_CODE_MAP (errors.ts). 11004 ("Insufficient balance") previously
     // fell through here as a plain Error that downstream handling could

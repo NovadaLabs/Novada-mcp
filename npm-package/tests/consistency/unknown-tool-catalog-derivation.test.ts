@@ -41,8 +41,8 @@ describe("dispatch() unknown-tool error — derived catalog", () => {
     }
   });
 
-  it("TOOLS has 38 entries and HIDDEN_ALIASES is non-empty (sanity — guards the test itself against a silently-empty registry)", () => {
-    expect(TOOLS.length).toBe(38);
+  it("TOOLS has 37 entries and HIDDEN_ALIASES is non-empty (sanity — guards the test itself against a silently-empty registry)", () => {
+    expect(TOOLS.length).toBe(37);
     expect(HIDDEN_ALIASES.size).toBeGreaterThan(0);
   });
 });

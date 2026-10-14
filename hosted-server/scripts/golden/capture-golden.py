@@ -291,10 +291,12 @@ def capture(base_url: str, outdir: str):
         ("novada_map",              {"url": "https://example.com"}),
         ("novada_scrape",           {"platform": "amazon.com", "operation": "amazon_product_keywords",
                                      "params": {"keyword": "usb cable", "num": 2}}),
-        ("novada_browser",          {"actions": [
-                                         {"action": "navigate", "url": "https://example.com",
-                                          "wait_until": "domcontentloaded"},
-                                         {"action": "evaluate", "script": "document.title"}]}),
+        # novada_browser moved OUT of this visible-tool matrix 2026-10
+        # (claude-directory-exam S1-connector): every real browser action
+        # unconditionally fails on this runtime (see HOSTED_HIDDEN's docstring in
+        # api/mcp.ts), so it joined HOSTED_HIDDEN and is now probed in
+        # REFUSED_NAMES below instead, alongside its CDP-session sibling
+        # novada_browser_flow.
         ("novada_proxy",            {"type": "residential"}),
         ("novada_discover",         {}),
         ("novada_ai_monitor",       {"brand": "novada"}),
@@ -359,6 +361,37 @@ def capture(base_url: str, outdir: str):
             flag = " [NOT_ENABLED!]" if rep.get("not_enabled") else ""
             print(f"    {n}: {rep['status']} {rep['structural']} {rep['length_band']}{flag}")
 
+    # ── KV-connectivity sentinel (claude-directory-exam S1-connector round 2, C1) ──
+    # Root cause of the 2026-10 poisoned-baseline incident: this script captured
+    # against a local-harness environment whose KV (@vercel/kv) was unreachable
+    # (the test/support/kv-stub.mjs local stub server was not running), which made
+    # EVERY non-cap-exempt tool call fail inside enforceGatewayCap/decrementQuota
+    # with the exact same bare, structureless signature — and nothing here noticed
+    # before the broken capture was committed as the new golden baseline. A real,
+    # diverse set of genuine per-tool failures (upstream outages, bad test args,
+    # etc.) would NOT all collapse onto one identical shape; this IS that exact
+    # shape across every single billable tool, which is the KV-outage signature,
+    # not coincidence. Gate BEFORE writing anything: if every one of a known
+    # billable (non-cap-exempt) subset failed with this identical signature, abort
+    # loudly instead of silently committing a poisoned baseline.
+    KV_OUTAGE_SENTINEL_TOOLS = ["novada_search", "novada_extract", "novada_map", "novada_proxy"]
+    def _is_kv_outage_shape(rep):
+        return (rep.get("status") == "err" and rep.get("structural") == "json"
+                and rep.get("length_band") == "xs" and rep.get("markers") == ["code", "message"])
+    sentinel_reps = [matrix[n] for n in KV_OUTAGE_SENTINEL_TOOLS if n in matrix]
+    if sentinel_reps and all(_is_kv_outage_shape(r) for r in sentinel_reps):
+        sys.exit(
+            "[ABORT] KV-connectivity sentinel tripped: every one of "
+            f"{KV_OUTAGE_SENTINEL_TOOLS} returned the bare "
+            '{"code":..,"message":..} shape (status=err, structural=json, '
+            "length_band=xs) — this is the signature of a KV outage in the "
+            "CAPTURING environment (enforceGatewayCap/decrementQuota throwing), "
+            "not real per-tool failures. Nothing was written. If capturing "
+            "locally, start the KV stub first: "
+            "`node hosted-server/vercel/test/support/kv-stub.mjs &` "
+            "(must be running BEFORE hosted-server/vercel/local-harness.mts)."
+        )
+
     (out / "dispatch-matrix.json").write_text(
         json.dumps(matrix, sort_keys=True, indent=2) + "\n")
 
@@ -367,6 +400,7 @@ def capture(base_url: str, outdir: str):
     # If a refactor wrongly EXPOSES one, refused flips to false → breach caught by diff.
     print("[5b] refused-set (firewall guard) ...")
     REFUSED_NAMES = [
+        "novada_browser",
         "novada_site_copy",
         "novada_ip_whitelist",
         "novada_static_ip_mgmt",

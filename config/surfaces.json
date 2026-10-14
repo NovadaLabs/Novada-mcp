@@ -1,5 +1,5 @@
 {
-  "$comment": "Surface manifest. 'default' = npm-package stdio (unfiltered). 'hosted-15' = the ORIGINAL, historical hosted default (pre-2026-07-20) — kept PINNED (do not resize) as a regression fixture for the eval harness (npm-package/eval/model-eval-runner.mjs --surface=hosted-15, npm-package/tests/eval/model-eval-runner.test.ts, .github/workflows/eval-harness.yml): it proves these 15 tools stay reachable on hosted regardless of how the live surface grows. 'hosted' = the REAL, LIVE mcp.novada.com default surface as of 2026-07-20, once hosted-server/vercel/api/mcp.ts's TOOLS array was changed from a hand-curated 15-tool literal to `CORE_TOOLS.map(...)` (derived from npm-package/src/core.ts's `TOOLS`, the single source of truth) filtered by mcp.ts's `HOSTED_HIDDEN` set. This 'hosted' list is a superset of 'hosted-15' (all 15 legacy tools plus the 15 platform-scraper tools, novada_scrape_amazon..novada_scrape_perplexity) minus HOSTED_HIDDEN's 8 exclusions (novada_browser_flow, novada_site_copy, novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey, novada_session_stats, novada_search_feedback, novada_verify — see mcp.ts's HOSTED_HIDDEN docstring for the rationale on each). scripts/check-hosted-drift.mjs verifies this list is (a) a subset of npm-package's REGISTERED_TOOL_NAMES, (b) an exact SET match against mcp.ts's live derived TOOLS output, (c) a superset of 'hosted-15', and (d) that mcp.ts's TOOLS is actually built via `CORE_TOOLS.map(...)` rather than a hand-curated literal (drift would otherwise be structurally impossible to reintroduce silently, per that script's docstring).",
+  "$comment": "Surface manifest. 'default' = npm-package stdio (unfiltered). 'hosted-15' = the ORIGINAL, historical hosted default (pre-2026-07-20) — kept PINNED (do not resize) as a regression fixture for the eval harness (npm-package/eval/model-eval-runner.mjs --surface=hosted-15, npm-package/tests/eval/model-eval-runner.test.ts, .github/workflows/eval-harness.yml): it names the 15 tools that MUST stay routable by name even if one later moves off the live 'hosted' LISTING (see novada_browser below — pinned here on purpose, not stale). 'hosted' = the REAL, LIVE mcp.novada.com default LISTING as of 2026-10-14 (2026-07-20 core-derivation refactor, then Round 3's SHEIN empty-working-op-set exclusion and a 2026-10 connector-review pass that moved novada_browser into HOSTED_HIDDEN — see below), once hosted-server/vercel/api/mcp.ts's TOOLS array was changed from a hand-curated 15-tool literal to a derivation off npm-package/src/core.ts's `TOOLS` (the single source of truth; Round 4 made that derivation surface-aware — see mcp.ts's buildToolsForSurface) filtered by mcp.ts's `HOSTED_HIDDEN` set. This 'hosted' list is npm-package's 37 registered tools (`novada_scrape_shein` was removed entirely, not just hidden — zero working ops) minus HOSTED_HIDDEN's 9 exclusions (novada_browser_flow, novada_browser, novada_site_copy, novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey, novada_session_stats, novada_search_feedback, novada_verify — see mcp.ts's HOSTED_HIDDEN docstring for the rationale on each, including novada_browser's 2026-10 connector-review addition: every real browser action unconditionally fails on this runtime, so Directory review requires it be delisted). 'hosted-15' therefore intentionally contains ONE tool (novada_browser) no longer in 'hosted' — scripts/check-hosted-drift.mjs's gate (c) carries a documented, named exception for exactly this tool rather than requiring 'hosted-15' ⊆ 'hosted' unconditionally; any OTHER divergence still fails. scripts/check-hosted-drift.mjs verifies this list is (a) a subset of npm-package's REGISTERED_TOOL_NAMES, (b) an exact SET match against mcp.ts's live derived TOOLS output, (c) 'hosted-15' minus that one named exception is still a subset of 'hosted', and (d) that mcp.ts's TOOLS is actually derived from CORE_TOOLS (directly, or via Round 4's surface-rendered form) rather than a hand-curated literal (drift would otherwise be structurally impossible to reintroduce silently, per that script's docstring).",
   "surfaces": {
     "default": {
       "tools": "*",
@@ -23,7 +23,7 @@
         "novada_proxy_account_list",
         "novada_proxy_account_create"
       ],
-      "description": "PINNED historical hosted default (do not resize — see $comment). Verbatim from mcp.novada.com's original hand-curated TOOLS array before the 2026-07-20 core-derivation refactor; still 100% valid today since every one of these 15 remains visible on the live 'hosted' surface below."
+      "description": "PINNED historical hosted default (do not resize — see $comment). Verbatim from mcp.novada.com's original hand-curated TOOLS array before the 2026-07-20 core-derivation refactor. 14 of these 15 remain visible on the live 'hosted' surface below; novada_browser is the one documented exception (moved into mcp.ts's HOSTED_HIDDEN by a 2026-10 connector-review pass — see $comment and check-hosted-drift.mjs's gate (c))."
     },
     "hosted": {
       "tools": [
@@ -44,12 +44,10 @@
         "novada_scrape_tiktok",
         "novada_scrape_x",
         "novada_scrape_walmart",
-        "novada_scrape_shein",
         "novada_scrape_linkedin",
         "novada_scrape_github",
         "novada_scrape_perplexity",
         "novada_proxy",
-        "novada_browser",
         "novada_discover",
         "novada_ai_monitor",
         "novada_monitor",
@@ -58,7 +56,7 @@
         "novada_proxy_account_create",
         "novada_proxy_account_list"
       ],
-      "description": "mcp.novada.com's REAL, LIVE default surface as of 2026-07-20 (2026-07-20 core-derivation refactor — see $comment). Core-derived: npm-package's core.ts TOOLS (38 registered tools) minus hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set (8 tools: novada_browser_flow, novada_site_copy, novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey, novada_session_stats, novada_search_feedback, novada_verify)."
+      "description": "mcp.novada.com's REAL, LIVE default surface as of 2026-10-14 (2026-07-20 core-derivation refactor, then Round 3's SHEIN removal and a 2026-10 connector-review pass — see $comment). Core-derived: npm-package's core.ts TOOLS (37 registered tools) minus hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set (9 tools: novada_browser_flow, novada_browser, novada_site_copy, novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey, novada_session_stats, novada_search_feedback, novada_verify). novada_browser moved into HOSTED_HIDDEN in the 2026-10 connector-review pass (every real browser action unconditionally fails on this runtime) — it remains in the PINNED 'hosted-15' fixture above by design; see $comment and check-hosted-drift.mjs's gate (c) exception."
     }
   }
 }

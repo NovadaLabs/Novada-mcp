@@ -617,11 +617,20 @@ describe("collision matrix — real npm-package tool registry (src/core.ts TOOLS
       // the live scan never even flags it as a collision (scanParamCollisions skips
       // shapeA === shapeB before the baseline check runs) — see each new entry's note for the
       // reviewed rationale.
+      // 2026-10-13 (S1-connector Round 3): 129->114. novada_scrape_shein was removed
+      // from the registry entirely (empty working-op-set, all 5 catalog ops
+      // backend_broken) — its 15 accepted collision-pair entries (1 with generic
+      // novada_scrape + 14 with every other platform tool) were removed, since
+      // they can no longer reproduce (the tool doesn't exist to collide). Every
+      // remaining novada_scrape_youtube-involving entry's recorded enum shape was
+      // also updated to drop "transcript_by_video" (removed from that tool's own
+      // enum, same round) — a shape EDIT, not a count change, so it doesn't move
+      // this number on its own.
       expect(
         baseline.acceptedDivergentCollisions.length,
         "collision-matrix.baseline.json's accepted-collision count changed — update this pinned count " +
           "and confirm each new/removed entry went through reviewer sign-off",
-      ).toBe(129);
+      ).toBe(114);
     });
 
     it("documents today's 18 reviewed shared-param shape variants (pinned so silent growth is visible)", () => {

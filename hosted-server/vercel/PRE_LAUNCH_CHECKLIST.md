@@ -91,16 +91,20 @@ vercel env add STUB_AUTH_WARNING_ACCEPTED production
 vercel deploy --prod
 
 # 6. Smoke test on the .vercel.app domain first
-curl -X POST "https://novada-mcpserver.vercel.app/mcp?token=sk-eu-novada-test" \
+# (URL credentials are no longer accepted — Claude Directory connector review,
+# 2026-10 — pass the key as an Authorization: Bearer header instead.)
+curl -X POST "https://novada-mcpserver.vercel.app/mcp" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
 # 7. Bind custom domain (Vercel dashboard → Domains → Add mcp.novada.com)
 #    Add CNAME mcp.novada.com → cname.vercel-dns.com in AWS Route 53
 
 # 8. Verify on the real domain
-curl -X POST "https://mcp.novada.com/mcp?token=sk-eu-novada-test" \
+curl -X POST "https://mcp.novada.com/mcp" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
 # 9. Tail logs to watch the first real traffic

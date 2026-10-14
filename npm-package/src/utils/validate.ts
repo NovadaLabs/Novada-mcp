@@ -256,7 +256,11 @@ const CAMELCASE_ALIASED_TOOLS: ReadonlySet<string> = new Set([
   "novada_scrape_instagram",
   "novada_scrape_linkedin",
   "novada_scrape_perplexity",
-  "novada_scrape_shein",
+  // "novada_scrape_shein" removed (Round 3, S1-connector, 2026-10-13): SHEIN's
+  // 5/5 catalog ops are now backend_broken, so this tool is no longer
+  // registered (platform_scraper.ts's empty-working-op-set exclusion) — keeping
+  // its name here would be a dangling reference to a tool that no longer
+  // exists in `tools`/TOOLS.
   "novada_scrape_tiktok",
   "novada_scrape_walmart",
   "novada_scrape_x",

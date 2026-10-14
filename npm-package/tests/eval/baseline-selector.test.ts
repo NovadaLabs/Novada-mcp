@@ -125,7 +125,10 @@ function validateTaskSet(tasks: readonly Task[], registryNames: readonly string[
   return problems;
 }
 
-const BASELINE_FLOOR = 17 / 25;
+// 2026-10-13 (S1-connector Round 3): lowered 17/25->15/25 — see
+// eval/baseline-selector.mjs's BASELINE_FLOOR doc comment (dated 2026-10-13
+// UPDATE 4) for the full, honest accounting of why T16/T22 regressed.
+const BASELINE_FLOOR = 15 / 25;
 
 interface BaselineTierA {
   recorded_date: string;

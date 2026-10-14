@@ -16,7 +16,7 @@
  * returns ACTIVE_TOOLS unconditionally, before any API-key gate.
  *
  * Usage:
- *   node scripts/measure-tools-list.mjs                 # full 38-tool default
+ *   node scripts/measure-tools-list.mjs                 # full 37-tool default
  *   node scripts/measure-tools-list.mjs --groups=core,account,meta
  *   node scripts/measure-tools-list.mjs --tools=novada_search,novada_extract
  *   node scripts/measure-tools-list.mjs --full           # print every tool, not just top 15

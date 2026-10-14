@@ -172,6 +172,16 @@ const FAILURE_CLASS_MIRROR: Record<NovadaErrorCode, FailureClass> = {
   [NovadaErrorCode.TASK_PENDING]:        "transient",
   [NovadaErrorCode.SESSION_EXPIRED]:     "permanent",
   [NovadaErrorCode.PROXY_AUTH_FAILURE]:  "auth",
+  // S1-connector Round 3 (2026-10-13): npm-package added NovadaErrorCode.TIMEOUT
+  // (a client-side timeout/no-response transport error, distinct from API_DOWN —
+  // an explicit error response WAS received — see npm-package/src/_core/errors.ts's
+  // doc comment on the enum member). Mirrors that file's FAILURE_CLASS entry
+  // exactly ("transient"). NOTE: this is UNRELATED to the pre-existing raw
+  // outcome string "TIMEOUT" used elsewhere in this file for extractSingle's own
+  // wall-clock ceiling — that case sets `outcome` but never `error_code` (which
+  // stays null), so it never reaches this lookup; only a genuine
+  // NovadaErrorCode.TIMEOUT value does.
+  [NovadaErrorCode.TIMEOUT]:             "transient",
   [NovadaErrorCode.UNKNOWN]:             "permanent",
 };
 

@@ -6,7 +6,35 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { summarizeAggregateError } from "../../src/_core/errors.js";
+import { summarizeAggregateError, serpCaptureFailedHint } from "../../src/_core/errors.js";
+
+/**
+ * Round 3 (S1-connector, item 3, live-verified 2026-10-13): table-driven unit test for
+ * the shared per-platform hint serpCaptureFailedHint() — consumed by BOTH scrape.ts's
+ * submitScrapeTask and search.ts's submitSearchScrapeTask for upstream business code
+ * 10000 ("serp capture failed"). Pure function, no mocking needed.
+ */
+describe("serpCaptureFailedHint — per-platform code-10000 hint table", () => {
+  it("yandex.com gets the specific, verified regional-TLD fix (yandex.ru / yandex.com.tr), not a generic retry", () => {
+    const hint = serpCaptureFailedHint("yandex.com");
+    expect(hint).toContain("yandex.ru");
+    expect(hint).toContain("yandex.com.tr");
+  });
+
+  it("every other mapped search-engine domain (google.com, bing.com, duckduckgo.com) gets SOME actionable hint, not the yandex-specific one", () => {
+    for (const domain of ["google.com", "bing.com", "duckduckgo.com"]) {
+      const hint = serpCaptureFailedHint(domain);
+      expect(hint.length).toBeGreaterThan(0);
+      expect(hint).not.toContain("yandex_domain");
+    }
+  });
+
+  it("an unmapped/arbitrary platform domain falls back to the default generic hint (never throws, never empty)", () => {
+    const hint = serpCaptureFailedHint("totally-unmapped-platform.example");
+    expect(hint.length).toBeGreaterThan(0);
+    expect(hint.toLowerCase()).toContain("retry");
+  });
+});
 
 describe("summarizeAggregateError", () => {
   it("lists distinct causes (3 causes) and never leaks the raw AggregateError message", () => {

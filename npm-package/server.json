@@ -30,11 +30,11 @@
     },
     {
       "name": "novada_site_copy",
-      "description": "Copy an entire docs site/section to disk as clean markdown — one .md file per page — returning a COMPACT manifest, not page bodies. Use for a whole knowledge base on disk (offline docs ingest, RAG corpus, full-site mirror)."
+      "description": "Copy an entire docs site/section to disk as clean markdown — one.md file per page — returning a COMPACT manifest, not page bodies. Use for a whole knowledge base on disk (offline docs ingest, RAG corpus, full-site mirror)."
     },
     {
       "name": "novada_scrape",
-      "description": "Use for structured data from a specific platform — clean tabular records, not raw HTML. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity."
+      "description": "Use for structured data from a specific platform — clean tabular records, not raw HTML. Proxies the Novada Scraper API (scraper.novada.com; public docs: https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api)."
     },
     {
       "name": "novada_scrape_amazon",
@@ -58,7 +58,7 @@
     },
     {
       "name": "novada_scrape_youtube",
-      "description": "Extract structured YouTube data — video/channel metadata, transcripts, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\")."
+      "description": "Extract structured YouTube data — video/channel metadata, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\")."
     },
     {
       "name": "novada_scrape_instagram",
@@ -79,10 +79,6 @@
     {
       "name": "novada_scrape_walmart",
       "description": "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"walmart.com\")."
-    },
-    {
-      "name": "novada_scrape_shein",
-      "description": "Extract structured SHEIN product data — product details by product ID or product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"shein.com\")."
     },
     {
       "name": "novada_scrape_linkedin",
@@ -110,7 +106,7 @@
     },
     {
       "name": "novada_discover",
-      "description": "List all available Novada tools — name, description, category, group, and status."
+      "description": "Lists all available Novada tools — name, description, category, group, and status. Useful at the start of a task to find the right tool, or whenever another tool's description isn't enough to decide between two options."
     },
     {
       "name": "novada_browser_flow",
@@ -126,7 +122,7 @@
     },
     {
       "name": "novada_setup",
-      "description": "The onboarding concierge and first-run front door. Call this FIRST when starting out, or whenever a tool reports a missing/invalid key."
+      "description": "Onboarding and key-validation tool — useful at the start of a session, or whenever another tool reports a missing/invalid key."
     },
     {
       "name": "novada_account",
@@ -197,7 +193,7 @@
     {
       "uri": "novada://guide",
       "name": "Agent Tool Selection Guide",
-      "description": "Decision tree and workflow patterns for choosing between all 38 novada tools: search, extract, crawl, map, research, site_copy, scrape (+15 per-platform scrapers), proxy, verify, browser, monitor, account, setup, discover"
+      "description": "Decision tree and workflow patterns for choosing between all 37 novada tools: search, extract, crawl, map, research, site_copy, scrape (+14 per-platform scrapers), proxy, verify, browser, monitor, account, setup, discover"
     },
     {
       "uri": "novada://scraper-platforms",
@@ -208,7 +204,7 @@
   "skills": [
     {
       "name": "novada-agent",
-      "description": "Tool selection guide for all 38 Novada MCP tools — decision tree, key parameters, common workflows, and when NOT to use each tool.",
+      "description": "Tool selection guide for all 37 Novada MCP tools — decision tree, key parameters, common workflows, and when NOT to use each tool.",
       "path": "skills/novada-agent/SKILL.md"
     }
   ],

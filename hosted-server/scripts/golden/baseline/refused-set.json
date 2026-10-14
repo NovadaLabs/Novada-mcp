@@ -1,4 +1,10 @@
 {
+  "novada_browser": {
+    "code": "TOOL_NOT_ENABLED",
+    "isError": true,
+    "name": "novada_browser",
+    "refused": true
+  },
   "novada_browser_flow": {
     "code": "TOOL_NOT_ENABLED",
     "isError": true,

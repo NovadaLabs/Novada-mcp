@@ -6,7 +6,15 @@
     "novada_setup"
   ],
   "browser": [
-    "novada_browser",
+    "novada_account",
+    "novada_crawl",
+    "novada_discover",
+    "novada_extract",
+    "novada_map",
+    "novada_monitor",
+    "novada_research",
+    "novada_scrape",
+    "novada_search",
     "novada_setup"
   ],
   "content": [

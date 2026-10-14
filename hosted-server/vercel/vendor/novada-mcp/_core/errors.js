@@ -26,6 +26,14 @@ export var NovadaErrorCode;
      *  "TypeError: … reading 'parentNode'"). Permanent for this page+parser — retrying
      *  the same call re-runs the same crashing parser; format="html" bypasses it. */
     NovadaErrorCode["PARSE_FAILED"] = "PARSE_FAILED";
+    /** Round 3 (S1-connector, 2026-10-13): a request that received NO HTTP response at
+     *  all before its own client-side deadline elapsed (axios ECONNABORTED / a message
+     *  matching /timeout/i) — distinct from API_DOWN (an explicit 5xx/error response WAS
+     *  received) and from a generic network failure (DNS/ECONNREFUSED — also API_DOWN).
+     *  Transient + retryable: the message names exactly how long the caller waited and,
+     *  when a task_id already exists, that resuming with it (not re-submitting) is safe
+     *  and does not incur a new charge. */
+    NovadaErrorCode["TIMEOUT"] = "TIMEOUT";
     NovadaErrorCode["UNKNOWN"] = "UNKNOWN";
 })(NovadaErrorCode || (NovadaErrorCode = {}));
 const FAILURE_CLASS = {
@@ -46,6 +54,7 @@ const FAILURE_CLASS = {
     [NovadaErrorCode.SESSION_EXPIRED]: "permanent",
     [NovadaErrorCode.PROXY_AUTH_FAILURE]: "auth",
     [NovadaErrorCode.PARSE_FAILED]: "permanent",
+    [NovadaErrorCode.TIMEOUT]: "transient",
     [NovadaErrorCode.UNKNOWN]: "permanent",
 };
 const RETRY_AFTER_MS = {
@@ -53,6 +62,7 @@ const RETRY_AFTER_MS = {
     [NovadaErrorCode.URL_UNREACHABLE]: 10000,
     [NovadaErrorCode.API_DOWN]: 30000,
     [NovadaErrorCode.TASK_PENDING]: 5000,
+    [NovadaErrorCode.TIMEOUT]: 10000,
 };
 // ─── Error Class ─────────────────────────────────────────────────────────────
 export class NovadaError extends Error {
@@ -267,6 +277,14 @@ Alternative: For catalog platforms (amazon, github, tiktok, ...), use the matchi
 An unexpected error occurred.
 
 Action: Check the error message above for clues. If it persists, contact support@novada.com with the full error text.`,
+    [NovadaErrorCode.TIMEOUT]: `\
+The request to the Novada backend did not receive a response before its own deadline elapsed — this is a
+client-side timeout, not an explicit error from the server. The message above states exactly how long the
+caller waited for which phase (submit vs poll).
+
+Action: If no task_id was returned (a submit-phase timeout), nothing was created or charged — simply retry
+the same call. If a task_id IS already known (a poll-phase timeout, or one from an earlier response), resume
+with that task_id instead of re-submitting — this skips a new billable task and is the faster path to a result.`,
 };
 // ─── Sanitization ────────────────────────────────────────────────────────────
 /**
@@ -640,6 +658,39 @@ export function classifyBusinessCode(code, msg) {
         return NovadaErrorCode.INSUFFICIENT_BALANCE;
     return NovadaErrorCode.UNKNOWN;
 }
+// ─── Business code 10000 ("serp capture failed" / "result data not exist") ──
+//
+// Round 3 (S1-connector, item 3, live-verified 2026-10-13): novada_scrape_yandex
+// with yandex_domain="yandex.com" fails 3/3 live with upstream code 10000 ("serp
+// capture failed"), while yandex.ru/yandex.com.tr succeed in ~3s on the SAME
+// query. Code 10000 is not yandex-specific (the catalog already uses the same
+// code for non-search platforms, e.g. "code=10000 result data not exist —
+// extractor broken") and is NOT in BUSINESS_CODE_MAP above because its right
+// agent_instruction differs by WHICH platform/engine hit it — a flat single
+// message would either be too vague (generic platforms) or omit the one
+// concrete, verified fix that exists for yandex (switch regional TLD).
+//
+// Class rule (not a yandex.com special case in BEHAVIOR): every scraper
+// platform that can submit a request gets *some* actionable hint for code
+// 10000 from this ONE table, keyed by the catalog platform domain
+// (submitScrapeTask's `scraper_name` / submitSearchScrapeTask's `scraperName`).
+// Only the yandex.com ROW happens to carry a more specific, verified fix —
+// adding a 17th platform needs a new row here (or falls through to the
+// default), never a new `if` branch at either call site.
+const SERP_CAPTURE_FAILED_HINTS = {
+    "yandex.com": "retry with a regional yandex_domain param (e.g. \"yandex.ru\" or \"yandex.com.tr\", both verified working) instead of \"yandex.com\", which is the variant most likely to fail SERP capture",
+    "google.com": "retry once; if it persists, try a different country param — this is usually a transient regional capture issue, not a bad query",
+    "bing.com": "retry once; if it persists, try a different country param",
+    "duckduckgo.com": "retry once; if it persists, try a different region (kl) param",
+};
+const DEFAULT_SERP_CAPTURE_FAILED_HINT = "retry once; if it persists, try a different country/region param for this platform, or try novada_extract as an alternative";
+/**
+ * Per-platform agent_instruction hint for upstream business code 10000. See the
+ * table's doc comment above for the class rule this implements.
+ */
+export function serpCaptureFailedHint(scraperDomain) {
+    return SERP_CAPTURE_FAILED_HINTS[scraperDomain] ?? DEFAULT_SERP_CAPTURE_FAILED_HINT;
+}
 /**
  * Creates a NovadaError for a specific code with a custom message.
  * Convenience factory used by tools that detect error codes from API response bodies.
@@ -656,6 +707,7 @@ export function makeNovadaError(code, message, detail, businessCode) {
             NovadaErrorCode.URL_UNREACHABLE,
             NovadaErrorCode.API_DOWN,
             NovadaErrorCode.TASK_PENDING,
+            NovadaErrorCode.TIMEOUT,
         ].includes(code),
         detail,
         businessCode,

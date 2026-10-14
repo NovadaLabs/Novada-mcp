@@ -10,7 +10,14 @@
  * added here.
  */
 import { type DispatchableScraperTool } from "./platform_scraper.js";
-/** One entry per platform-scraper tool. Order mirrors registration order elsewhere. */
+/**
+ * One entry per platform-scraper tool whose working-op set is non-empty (class rule,
+ * Round 3 item 2 — see hasAnyWorkingOp's doc in platform_scraper.ts). A platform whose
+ * every catalog operation is "backend_broken" (currently: SHEIN, all 5 ops broken as of
+ * 2026-10-13) is filtered out here rather than special-cased by name — this list, and
+ * every count derived from it (TOOL_REGISTRY, _TOOL_DEFINITIONS, hosted tool totals),
+ * shrinks or grows automatically as scraper_catalog.ts's status fields change.
+ */
 export declare const PLATFORM_SCRAPER_TOOLS: DispatchableScraperTool[];
 /** Full MCP tool schemas — spread into src/core.ts's `_TOOL_DEFINITIONS`. */
 export declare const PLATFORM_SCRAPER_DEFS: import("./platform_scraper.js").PlatformScraperToolDefinition[];

@@ -72,7 +72,7 @@ describe("SCRAPE_GROUP (NOVADA_GROUPS=\"scrape\"/\"scraper\") is derived from PL
     expect(src).toMatch(/import\s*\{\s*PLATFORM_SCRAPER_TOOLS\s*\}\s*from\s*"\.\/tools\/platform_scrapers\.js"/);
   });
 
-  it("cross-check: the ACTUAL derived group (reconstructed the same way index.ts computes it) contains the generic novada_scrape and every current platform-scraper tool, including the newest ones (walmart, shein, linkedin, github, perplexity)", () => {
+  it("cross-check: the ACTUAL derived group (reconstructed the same way index.ts computes it) contains the generic novada_scrape and every current platform-scraper tool, including the newest ones (walmart, linkedin, github, perplexity)", () => {
     // Mirrors index.ts's own SCRAPE_GROUP expression exactly — proves the derivation logic
     // itself (not just the source text) produces the right membership.
     const derivedGroup = [
@@ -88,7 +88,6 @@ describe("SCRAPE_GROUP (NOVADA_GROUPS=\"scrape\"/\"scraper\") is derived from PL
     expect(derivedGroup).toContain("novada_scraper_result");
     expect(derivedGroup).toContain("novada_scrape_amazon");
     expect(derivedGroup).toContain("novada_scrape_walmart");
-    expect(derivedGroup).toContain("novada_scrape_shein");
     expect(derivedGroup).toContain("novada_scrape_linkedin");
     expect(derivedGroup).toContain("novada_scrape_github");
     expect(derivedGroup).toContain("novada_scrape_perplexity");
@@ -100,5 +99,21 @@ describe("SCRAPE_GROUP (NOVADA_GROUPS=\"scrape\"/\"scraper\") is derived from PL
     // No duplicates — the 4 hand-listed names must not also appear inside
     // PLATFORM_SCRAPER_TOOLS (would double-count / signal a naming collision).
     expect(new Set(derivedGroup).size).toBe(derivedGroup.length);
+  });
+
+  // Round 3 (S1-connector, item 2, 2026-10-13): SHEIN's 5/5 catalog ops are now
+  // backend_broken, so novada_scrape_shein is excluded from PLATFORM_SCRAPER_TOOLS
+  // (the platform-tool factory's empty-working-op-set rule). This derived group
+  // is computed FROM PLATFORM_SCRAPER_TOOLS, so the exclusion propagates here
+  // automatically with zero edits to index.ts — this test proves it actually does.
+  it("derived SCRAPE_GROUP does NOT contain novada_scrape_shein (excluded upstream, not hand-removed here)", () => {
+    const derivedGroup = [
+      "novada_scrape",
+      ...PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name),
+      "novada_scraper_submit",
+      "novada_scraper_status",
+      "novada_scraper_result",
+    ];
+    expect(derivedGroup).not.toContain("novada_scrape_shein");
   });
 });

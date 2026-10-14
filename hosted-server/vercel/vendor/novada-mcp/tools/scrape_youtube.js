@@ -6,10 +6,10 @@ import { createPlatformScraperTool, } from "./platform_scraper.js";
 // novada_scrape_youtube, each mapped deterministically to the exact `slug`
 // (== scraper_id) in src/data/scraper_catalog.ts's youtube.com block.
 //
-// All 13 youtube.com catalog operations are status:"ok" as of the 2026-07-13 live
-// verification pass — none are excluded here. If a future catalog refresh marks
-// any of these backend_broken, tests/tools/platform-scraper-catalog.test.ts will
-// fail CI until it is removed from this map.
+// 12 of the 13 youtube.com catalog operations are status:"ok" as of the
+// 2026-07-13 live verification pass. If a future catalog refresh marks any of
+// these backend_broken, tests/tools/platform-scraper-catalog.test.ts will fail
+// CI until it is removed from this map.
 //
 // C2 fix (2026-07-20, synthesis.md): `videos_by_label` (catalog slug
 // youtube_video_search_label, api_id 45, "YouTube Video Post By Label") was
@@ -18,8 +18,17 @@ import { createPlatformScraperTool, } from "./platform_scraper.js";
 // coverage gap, not a deliberate exclusion. It has one required key
 // (search_label) and no backend_broken status, so it's added here rather than
 // just correcting the claim.
+//
+// Round 3 item 2 (S1-connector, live-verified 2026-10-13): `transcript_by_video`
+// (catalog slug youtube_transcript_id) REMOVED from this map — 2 different
+// video_ids (LCAY3PGHZyw, dQw4w9WgXcQ) both reproduced API_DOWN 404
+// ("subtitles_error: Unable to download API page") on the live backend. Same
+// enum-safety pattern as scrape_shein.ts's 3-excluded-slugs precedent: a
+// backend_broken slug must be unreachable through this tool's closed enum, not
+// merely warned about at call time. Every OTHER youtube.com op stays "ok" and
+// reachable — this tool's working-op set is still non-empty, so (unlike SHEIN)
+// the whole tool stays registered; only this one operation is gone.
 export const YOUTUBE_OPERATIONS = Object.freeze({
-    transcript_by_video: "youtube_transcript_id",
     video_file_by_url: "youtube_video-url",
     channel_by_url: "youtube_profiles_url",
     channels_by_keyword: "youtube_profiles_keyword",
@@ -35,7 +44,6 @@ export const YOUTUBE_OPERATIONS = Object.freeze({
 });
 /** Per-operation `params` doc — rendered as `- <name>: <doc>` in the enum description. */
 const YOUTUBE_OPERATION_PARAMS_DOC = {
-    transcript_by_video: "params.video_id (e.g. \"LCAY3PGHZyw\"); optional params.subtitles_language, params.subtitles_type (auto_generated|uploader_provided), params.selected_only, params.file_name",
     video_file_by_url: "params.url (video URL); optional params.resolution, params.video_codec (avc1|vp9|av01), params.audio_format (opus|m4a), params.bitrate, params.subtitles_language, params.selected_only, params.file_name",
     channel_by_url: "params.url (channel URL, e.g. \"https://www.youtube.com/@disneykids\"); optional params.file_name",
     channels_by_keyword: "params.keyword; optional params.page_numbers, params.file_name",
@@ -59,27 +67,28 @@ export const YOUTUBE_SCRAPER_CONFIG = {
     platformLabel: "YouTube",
     toolName: "novada_scrape_youtube",
     category: "Scraping & Verification",
-    registryDescription: "Extract structured YouTube data (video/channel info, transcripts, comments, video/audio downloads) via a closed, typed operation enum — 13 verified-working operations; same engine and output formats as novada_scrape, pinned to platform=youtube.com",
+    registryDescription: "Extract structured YouTube data (video/channel info, comments, video/audio downloads) via a closed, typed operation enum — 12 verified-working operations; same engine and output formats as novada_scrape, pinned to platform=youtube.com",
     operations: YOUTUBE_OPERATION_CONFIGS,
     paramsFieldDoc: "Operation-specific parameters for the selected `operation`. E.g. { video_id: \"LCAY3PGHZyw\" } for " +
-        "transcript_by_video/comments_by_video/video_by_id, { url: \"https://www.youtube.com/watch?v=...\" } for " +
+        "comments_by_video/video_by_id, { url: \"https://www.youtube.com/watch?v=...\" } for " +
         "video_file_by_url/audio_file_by_url/video_by_url, { keyword: \"proxy\" } for channels_by_keyword/videos_by_keyword.",
     description: {
-        core: "Extract structured YouTube data — video/channel metadata, transcripts, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\").",
+        core: "Extract structured YouTube data — video/channel metadata, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\").",
         useWhen: [
-            "get the transcript/subtitles for this YouTube video",
             "pull the comments on this YouTube video",
             "get channel info for this YouTube channel URL",
             "search YouTube channels for <keyword>",
             "find YouTube videos matching <keyword>, filtered by duration/upload date/attributes",
+            "download a YouTube video or its audio track",
         ],
         notFor: [
             { when: "A single YouTube URL to read as plain text", useInstead: "novada_extract" },
             { when: "A general web/video search not scoped to YouTube", useInstead: "novada_search" },
+            { when: "The transcript/subtitles of a YouTube video", note: "this operation (transcript_by_video) is currently backend_broken (live-verified 2026-10-13) and has been removed from this tool's enum; no working alternative exists today" },
             { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
         ],
-        returns: "Structured video/channel/comment records (title, views, transcript text, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format — same rendering as novada_scrape.",
-        operationsNote: "13 verified-working YouTube operations spanning transcripts, video/audio downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel. Every youtube.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+        returns: "Structured video/channel/comment records (title, views, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format — same rendering as novada_scrape.",
+        operationsNote: "12 verified-working YouTube operations spanning video/audio downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel. 1 known backend_broken op (transcript_by_video, live-verified 2026-10-13: API_DOWN 404 \"subtitles_error: Unable to download API page\" across 2 different video_ids) is excluded from this enum.",
     },
 };
 /** The materialized YouTube platform-scraper tool (definition + registry entry + handler). */

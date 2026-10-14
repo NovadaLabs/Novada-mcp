@@ -28,8 +28,6 @@
   "scripts": {
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js','755');require('fs').chmodSync('build/cli.js','755')\" && npm run gen:server-json",
     "gen:server-json": "node scripts/gen-server-json.mjs",
-    "gen:agent-corpus": "node scripts/generate-agent-corpus.mjs",
-    "corpus:check-links": "node scripts/check-corpus-links.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

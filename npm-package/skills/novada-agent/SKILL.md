@@ -9,7 +9,7 @@ description: >-
 
 # Novada Agent Skill
 
-You have access to Novada's **38** curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a core-derived **30**-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
+You have access to Novada's **37** curated MCP tools (the set `novada_discover` lists; the hosted endpoint exposes a core-derived **28**-tool subset). This skill tells you exactly which tool to use when and how to use it effectively. Older names like `novada_unblock`, `novada_verify`, and `novada_health` still work as back-compat aliases — the current tools are shown below.
 
 Deep-dive companion skills: `novada-scrape` (platform scrapers + price fields), `novada-extract` (single/batch extraction), `novada-browser` (CDP automation), `novada-proxy` (proxy type selection + escalation), `novada-site-copy` (whole-site copying / RAG ingestion).
 
@@ -203,7 +203,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ### `novada_scrape`
 
-**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 16 platforms (~87 operations): Amazon, Walmart, SHEIN, Google (incl. Shopping), Bing, DuckDuckGo, Yandex, X/Twitter, TikTok, Instagram, Facebook, YouTube, LinkedIn, GitHub, ChatGPT, Perplexity.
+**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 14 platforms (~76 operations): Google, LinkedIn, Amazon, YouTube, Walmart, DuckDuckGo, TikTok, Bing, Instagram, X (Twitter), Facebook, Perplexity AI, Yandex, GitHub — i.e. every catalog platform with at least one working (non-backend_broken) operation today; SHEIN (0/5 working ops) and ChatGPT (0/2 working ops) are catalog platforms but currently have no working route.
 
 **Key parameters:**
 - `platform` — domain, e.g. `amazon.com`, `tiktok.com`, `linkedin.com`
@@ -228,9 +228,9 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 ---
 
-### `novada_scrape_<platform>` — 15 dedicated per-platform scrapers
+### `novada_scrape_<platform>` — 14 dedicated per-platform scrapers
 
-**When:** The platform is one of the 15 below. Prefer the dedicated tool over generic `novada_scrape` for these — its `operation` parameter is a **closed, typed enum** scoped to that one platform, so an agent literally cannot pick an operation that belongs to a different platform or doesn't exist. That eliminates the two most common `novada_scrape` failure modes: error 11008 (invalid platform name) and operation-guessing against the wrong platform's op list. Same output rendering as `novada_scrape` (markdown/json/csv/excel/html/toon).
+**When:** The platform is one of the 14 below. Prefer the dedicated tool over generic `novada_scrape` for these — its `operation` parameter is a **closed, typed enum** scoped to that one platform, so an agent literally cannot pick an operation that belongs to a different platform or doesn't exist. That eliminates the two most common `novada_scrape` failure modes: error 11008 (invalid platform name) and operation-guessing against the wrong platform's op list. Same output rendering as `novada_scrape` (markdown/json/csv/excel/html/toon).
 
 | Tool | Platform | Ops |
 |------|----------|-----|
@@ -239,18 +239,17 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 | `novada_scrape_bing` | bing.com | 4 |
 | `novada_scrape_duckduckgo` | duckduckgo.com | 1 |
 | `novada_scrape_yandex` | yandex.com | 1 |
-| `novada_scrape_youtube` | youtube.com | 13 |
+| `novada_scrape_youtube` | youtube.com | 12 (1 known backend_broken op excluded: transcript_by_video) |
 | `novada_scrape_instagram` | instagram.com | 7 |
 | `novada_scrape_facebook` | facebook.com | 6 |
 | `novada_scrape_tiktok` | tiktok.com | 5 |
 | `novada_scrape_x` | x.com / twitter.com | 3 |
 | `novada_scrape_walmart` | walmart.com | 5 |
-| `novada_scrape_shein` | shein.com | 2 (3 known backend_broken ops excluded) |
 | `novada_scrape_linkedin` | linkedin.com | 4 |
 | `novada_scrape_github` | github.com | 3 |
 | `novada_scrape_perplexity` | perplexity.ai | 2 |
 
-**When NOT to use:** The platform isn't in this list (e.g. Walmart is covered, but a platform not among the 16 in the `novada_scrape` catalog is not — use `novada_extract`/`novada_crawl`). ChatGPT has no dedicated tool — its two catalog operations are backend-dead; use generic `novada_scrape` only if the backend is later fixed.
+**When NOT to use:** The platform isn't in this list (e.g. Walmart is covered, but a platform not among the 16 in the `novada_scrape` catalog is not — use `novada_extract`/`novada_crawl`). ChatGPT has no dedicated tool — its two catalog operations are backend-dead; use generic `novada_scrape` only if the backend is later fixed. SHEIN also has no dedicated tool as of 2026-10-13 — all 5 catalog operations are backend_broken (live-verified), so `novada_scrape_shein` is not registered; use generic `novada_scrape(platform="shein.com", ...)` if the backend is later fixed (it will still warn you it's broken until the catalog is updated back to "ok").
 
 **Example:**
 ```json
@@ -306,7 +305,7 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
 
 **Supported actions:** `navigate`, `click`, `type`, `screenshot`, `aria_snapshot`, `evaluate`, `wait`, `scroll`, `hover`, `press_key`, `select`
 
-**Auth:** `NOVADA_API_KEY` auto-provisions Browser API credentials; `NOVADA_BROWSER_WS` is optional (overrides auto-provision). Runs on both local and hosted; only cross-call persistent sessions are local-only. The `country` param is accepted but not yet applied to the exit node — do not rely on it for geo-routing.
+**Auth:** `NOVADA_API_KEY` auto-provisions Browser API credentials; `NOVADA_BROWSER_WS` is optional (overrides auto-provision). **Local only** — the hosted endpoint (`mcp.novada.com`) excludes this tool entirely, because every real browser action needs a persistent CDP WebSocket a serverless isolate can't hold. The `country` param is accepted but not yet applied to the exit node — do not rely on it for geo-routing.
 
 **When NOT to use:** Simple page reading (use `novada_extract`). Structured data from a known platform (use `novada_scrape`). Raw HTML without interaction (use `novada_extract` with `format: "html"`).
 

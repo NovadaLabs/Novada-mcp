@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TOOL_REGISTRY, TOOL_CATEGORIES, POPULATED_TOOL_CATEGORIES, TOOL_GROUPS, GROUP_TOOL_NAMES, TOOL_LEDGERS, LEDGER_TOOL_NAMES, LEDGER_EXPLAINER, } from "./registry.js";
 import { VERSION } from "../config.js";
-import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS } from "../data/scraper_catalog.js";
+import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, WORKING_PLATFORM_NAMES, WORKING_OP_COUNT } from "../data/scraper_catalog.js";
 // ─── Tool Catalog ─────────────────────────────────────────────────────────────
 // The catalog is DERIVED from the canonical registry (./registry.ts) — the single
 // source of truth — so it can never list a tool that isn't registered, nor omit a
@@ -217,7 +217,7 @@ export async function novadaDiscover(params, visibleTools) {
     lines.push("");
     lines.push("- **Start here:** Call `novada_account` to see your balance, plans, and entitlements.");
     lines.push("- **Search the web:** Use `novada_search` for queries, `novada_extract` for specific URLs.");
-    lines.push("- **Structured data:** Use `novada_scrape` for 16 active platforms (~87 operations) (Amazon, TikTok, LinkedIn, ChatGPT, SHEIN, etc.).");
+    lines.push(`- **Structured data:** Use \`novada_scrape\` for ${WORKING_PLATFORM_NAMES.length} active platforms (~${WORKING_OP_COUNT} operations) (${WORKING_PLATFORM_NAMES.slice(0, 3).join(", ")}, etc.).`);
     lines.push("- **Full research:** Use `novada_research` for multi-source synthesis.");
     if (visibleNames.has("novada_proxy")) {
         lines.push("- **Proxy access:** Use `novada_proxy` for geo-targeted IP rotation.");

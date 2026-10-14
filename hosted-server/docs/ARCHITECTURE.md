@@ -10,7 +10,7 @@
 AI client (Claude Desktop / Cursor / Cline / Windsurf / VS Code)
      │
      │  Streamable HTTP  (POST + GET on /mcp)
-     │  Auth: ?token=…  OR  Authorization: Bearer …
+     │  Auth: Authorization: Bearer …  OR  OAuth 2.1 access token (same header)
      ▼
 Vercel Function  (mcp.novada.com — Node.js serverless runtime, single region)
      │
@@ -39,14 +39,19 @@ We implement **Streamable HTTP** per the MCP spec (revision March 2025).
 
 ## 3. Authentication
 
-Dual-mode for parity with Tavily / BrightData hosted servers:
+Two credential sources, enforced by Anthropic's Claude Directory connector review
+rules (a URL query parameter or path segment must never carry a credential —
+it ends up in server logs, proxies, and browser history):
 
-1. **URL query** — `https://mcp.novada.com/mcp?token=sk-eu-novada-…`
-   Easiest copy-paste install for clients that don't expose a custom-header field.
-2. **Bearer header** — `Authorization: Bearer sk-eu-novada-…`
-   Preferred when the client supports it (no token in logs).
+1. **Bearer header** — `Authorization: Bearer sk-eu-novada-…`
+   The primary credential source for header-capable clients.
+2. **OAuth 2.1 access token** — same `Authorization: Bearer` header, minted by
+   this server's own OAuth AS (`/authorize`, `/token`) after the caller signs
+   in; resolved to the underlying Novada key before validation.
 
-Both modes resolve to the same internal `validateToken(token)` call.
+A request carrying a credential in the URL (any query parameter or path
+segment) is rejected with `401` — the server never reads one from there, by
+design. Both header forms resolve to the same internal `validateToken(token)` call.
 
 ### Token format
 

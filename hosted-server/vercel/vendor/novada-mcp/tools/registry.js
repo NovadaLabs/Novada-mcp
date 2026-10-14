@@ -15,6 +15,16 @@
  * hosted endpoint, and tests without booting the MCP server.
  */
 import { PLATFORM_SCRAPER_REGISTRY_ENTRIES } from "./platform_scrapers.js";
+// Round 4b (S1-connector, F-review "Round-4 review" FIX-FIRST, 2026-10-13): this
+// one-liner is what novada_discover shows for novada_scrape on BOTH surfaces
+// (hosted's novadaDiscover imports this same TOOL_REGISTRY unchanged) — Round 3b's
+// WORKING_PLATFORM_NAMES/WORKING_OP_COUNT derivation was built to eliminate a
+// stale hand-typed platform count/list everywhere, but was never applied here,
+// leaving a live false claim ("16 active platforms ... SHEIN, ChatGPT") reachable
+// through a prominently-recommended tool. Same single source of truth as
+// core.ts's novada_scrape description and every other surface in
+// scrape-description-platform-derivation.test.ts.
+import { WORKING_PLATFORM_NAMES, WORKING_OP_COUNT } from "../data/scraper_catalog.js";
 /** Category buckets, in the order they should render in `novada_discover`. */
 export const TOOL_CATEGORIES = [
     "Content Retrieval",
@@ -181,7 +191,7 @@ export const TOOL_REGISTRY = [
     // ─── Scraping & Verification ────────────────────────────────────────────
     {
         name: "novada_scrape",
-        description: "Extract structured data from 16 active platforms (~87 operations) (Amazon, TikTok, LinkedIn, YouTube, SHEIN, ChatGPT, Perplexity, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output",
+        description: `Extract structured data from ${WORKING_PLATFORM_NAMES.length} active platforms (~${WORKING_OP_COUNT} operations) (${WORKING_PLATFORM_NAMES.slice(0, 4).join(", ")}, etc.) in a single synchronous call; supports markdown/json/toon/csv/excel/html output`,
         category: "Scraping & Verification",
         status: "active",
         title: "Platform Scraper",
@@ -372,7 +382,7 @@ export const TOOL_REGISTRY = [
     },
     {
         name: "novada_setup",
-        description: "Onboarding concierge + first-run front door: validates your API key against the account API, tells you exactly how to register / get a key (free credits) if you have none, and orients you on the core tools. Auth-free — never errors on a missing key.",
+        description: "Onboarding concierge + first-run front door: validates your API key against the account API, tells you exactly how to register / get a key if you have none, and orients you on the core tools. Auth-free — never errors on a missing key.",
         category: "Health & Discovery",
         status: "active",
         title: "Setup & Configuration",

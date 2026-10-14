@@ -76,6 +76,25 @@ function makeMockKv() {
   };
 }
 
+/**
+ * Extract and EXECUTE the real kvFailOpen helper verbatim (S1-connector round 2 /
+ * C1: preAuthRateLimitExceeded/rateLimitExceeded/decrementQuota now route their
+ * KV calls through this one shared fail-open wrapper instead of calling kv.*
+ * directly, so extracting preAuthRateLimitExceeded's body alone is no longer
+ * enough — kvFailOpen must be in scope too). Strips only the TS-only generic/
+ * type annotations present in this exact signature.
+ */
+function extractKvFailOpen() {
+  const SIG = "async function kvFailOpen<T>(evt: string, fallback: T, op: () => Promise<T>): Promise<T> {";
+  const code = sliceBetween(SIG, "\n}\n", "kvFailOpen")
+    .replace(SIG, "async function kvFailOpen(evt, fallback, op) {");
+  // sliceBetween in THIS file stops just before the end anchor (the closing
+  // "\n}\n" itself is not included) — the caller appends it back, same
+  // convention extractPreAuthRateLimitExceeded below already relies on.
+  const fn = new Function(`${code}\n}\nreturn kvFailOpen;`);
+  return fn();
+}
+
 /** Extract and EXECUTE mcp.ts's real preAuthRateLimitExceeded body (not a reimplementation). */
 function extractPreAuthRateLimitExceeded(kv) {
   const SIG = "async function preAuthRateLimitExceeded(ip: string, env: Env): Promise<boolean> {";
@@ -86,8 +105,9 @@ function extractPreAuthRateLimitExceeded(kv) {
   // technique tool-catalog-derivation.test.mjs uses for `: ReadonlySet<string>`).
   const code = sliceBetween(SIG, "\n}\n", "preAuthRateLimitExceeded")
     .replace(SIG, "return async (ip, env) => {");
-  const fn = new Function("kv", `${code}\n};`);
-  return fn(kv);
+  const kvFailOpen = extractKvFailOpen();
+  const fn = new Function("kv", "kvFailOpen", `${code}\n};`);
+  return fn(kv, kvFailOpen);
 }
 
 test("G-5/V2-N4 BEHAVIORAL: preAuthRateLimitExceeded, wired before validateToken exactly as fetchHandler wires it, bounds validateToken to <=60 calls across 61 requests from one IP", async () => {

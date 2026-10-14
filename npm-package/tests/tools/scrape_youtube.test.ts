@@ -4,6 +4,13 @@
  * Mirrors scrape_amazon.test.ts's proof pattern. All 13 youtube.com catalog operations
  * are "params" format (Format B), so every op threads params via scraper_params (a JSON
  * array in a single form field), never as flat form fields (Format A).
+ *
+ * Round 3 (S1-connector, live-verified 2026-10-13): `transcript_by_video`
+ * (catalog slug youtube_transcript_id) is now status:"backend_broken" (API_DOWN
+ * 404 "subtitles_error: Unable to download API page" across 2 different
+ * video_ids) and has been REMOVED from YOUTUBE_OPERATIONS — same enum-safety
+ * pattern as scrape_shein.ts's pre-existing 3-excluded-slugs precedent. 12 of
+ * the 13 catalog operations remain "ok" and reachable.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
@@ -44,32 +51,6 @@ beforeEach(() => {
 });
 
 describe("novadaScrapeYoutube — request format (wire-format proof)", () => {
-  it("transcript_by_video sends scraper_name=youtube.com, scraper_id=youtube_transcript_id, and threads video_id via scraper_params (Format B)", async () => {
-    mockSuccess(MOCK_RECORDS);
-    await novadaScrapeYoutube(
-      validateScrapeYoutubeParams({ operation: "transcript_by_video", params: { video_id: "LCAY3PGHZyw" } }),
-      "test-key",
-    );
-
-    expect(mockedAxios.post).toHaveBeenCalled();
-    const [url, body, config] = mockedAxios.post.mock.calls[0];
-    expect(url).toContain("scraper.novada.com");
-
-    const form = body as URLSearchParams;
-    expect(form.get("scraper_name")).toBe("youtube.com");
-    expect(form.get("scraper_id")).toBe("youtube_transcript_id");
-
-    const scraperParamsRaw = form.get("scraper_params");
-    expect(scraperParamsRaw).not.toBeNull();
-    const scraperParams = JSON.parse(scraperParamsRaw!);
-    expect(scraperParams[0].video_id).toBe("LCAY3PGHZyw");
-
-    expect((config as Record<string, unknown>).headers).toMatchObject({
-      "Authorization": "Bearer test-key",
-      "Content-Type": "application/x-www-form-urlencoded",
-    });
-  });
-
   it("channel_by_url resolves to scraper_id=youtube_profiles_url and threads url", async () => {
     mockSuccess(MOCK_RECORDS);
     await novadaScrapeYoutube(
@@ -116,8 +97,10 @@ describe("novadaScrapeYoutube — request format (wire-format proof)", () => {
 });
 
 describe("novadaScrapeYoutube — enum safety (only catalog-'ok' operations reachable)", () => {
-  it("YOUTUBE_OPERATIONS has exactly 13 entries", () => {
-    expect(Object.values(YOUTUBE_OPERATIONS)).toHaveLength(13);
+  it("YOUTUBE_OPERATIONS has exactly 12 entries, not including the 1 known backend_broken catalog slug (youtube_transcript_id)", () => {
+    const mappedSlugs = Object.values(YOUTUBE_OPERATIONS);
+    expect(mappedSlugs).toHaveLength(12);
+    expect(mappedSlugs).not.toContain("youtube_transcript_id");
   });
 
   it("rejects an unknown/typo'd operation name", () => {
@@ -125,8 +108,13 @@ describe("novadaScrapeYoutube — enum safety (only catalog-'ok' operations reac
     expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
-  it("every YOUTUBE_OPERATIONS slug exists in the live youtube.com catalog with status 'ok' (no backend_broken youtube.com ops exist to exclude — verified against the whole platform block, not just the mapped slugs)", async () => {
-    const { CATALOG_BY_DOMAIN, SCRAPER_CATALOG } = await import("../../src/data/scraper_catalog.js");
+  it("rejects the backend_broken catalog slug's friendly name (transcript_by_video) — Zod enum rejects before any backend round-trip", () => {
+    expect(() => validateScrapeYoutubeParams({ operation: "transcript_by_video", params: {} })).toThrow();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
+  it("every YOUTUBE_OPERATIONS slug exists in the live youtube.com catalog with status 'ok'", async () => {
+    const { CATALOG_BY_DOMAIN } = await import("../../src/data/scraper_catalog.js");
     const youtubeCatalog = CATALOG_BY_DOMAIN.get("youtube.com");
     expect(youtubeCatalog, "youtube.com missing from the live catalog").toBeDefined();
     for (const [friendlyName, slug] of Object.entries(YOUTUBE_OPERATIONS)) {
@@ -134,8 +122,14 @@ describe("novadaScrapeYoutube — enum safety (only catalog-'ok' operations reac
       expect(op, `operation '${friendlyName}' maps to slug '${slug}', which is not in the live youtube.com catalog`).toBeDefined();
       expect(op!.status, `operation '${friendlyName}' (slug '${slug}') is backend_broken in the live catalog`).toBe("ok");
     }
+  });
+
+  it("the live youtube.com catalog has exactly 1 backend_broken op (sanity: this test suite's premise stays true)", async () => {
+    const { SCRAPER_CATALOG } = await import("../../src/data/scraper_catalog.js");
     const youtubePlatform = SCRAPER_CATALOG.find((p) => p.domain === "youtube.com");
-    expect(youtubePlatform!.ops.every((op) => op.status === "ok"), "youtube.com catalog has a backend_broken op not reflected in this assertion").toBe(true);
+    expect(youtubePlatform, "youtube.com missing from the live catalog").toBeDefined();
+    const broken = youtubePlatform!.ops.filter((op) => op.status === "backend_broken");
+    expect(broken.map((op) => op.slug)).toEqual(["youtube_transcript_id"]);
   });
 
   // C2 regression guard: the reverse-direction check the original gap slipped

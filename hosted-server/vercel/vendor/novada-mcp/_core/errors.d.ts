@@ -23,6 +23,14 @@ export declare enum NovadaErrorCode {
      *  "TypeError: … reading 'parentNode'"). Permanent for this page+parser — retrying
      *  the same call re-runs the same crashing parser; format="html" bypasses it. */
     PARSE_FAILED = "PARSE_FAILED",
+    /** Round 3 (S1-connector, 2026-10-13): a request that received NO HTTP response at
+     *  all before its own client-side deadline elapsed (axios ECONNABORTED / a message
+     *  matching /timeout/i) — distinct from API_DOWN (an explicit 5xx/error response WAS
+     *  received) and from a generic network failure (DNS/ECONNREFUSED — also API_DOWN).
+     *  Transient + retryable: the message names exactly how long the caller waited and,
+     *  when a task_id already exists, that resuming with it (not re-submitting) is safe
+     *  and does not incur a new charge. */
+    TIMEOUT = "TIMEOUT",
     UNKNOWN = "UNKNOWN"
 }
 export type FailureClass = "transient" | "permanent" | "auth" | "quota";
@@ -145,6 +153,11 @@ export declare const BUSINESS_CODE_MAP: ReadonlyArray<{
  * produced.
  */
 export declare function classifyBusinessCode(code: number, msg?: string): NovadaErrorCode;
+/**
+ * Per-platform agent_instruction hint for upstream business code 10000. See the
+ * table's doc comment above for the class rule this implements.
+ */
+export declare function serpCaptureFailedHint(scraperDomain: string): string;
 /**
  * Creates a NovadaError for a specific code with a custom message.
  * Convenience factory used by tools that detect error codes from API response bodies.

@@ -3,6 +3,7 @@ import { novadaScrape } from "./scrape.js";
 import { TASK_ID_REGEX, TASK_ID_REGEX_MSG, withCamelCaseAliases } from "./types.js";
 import type { ToolCategory, ToolMeta } from "./registry.js";
 import { zodToMcpSchema } from "../utils/mcp-schema.js";
+import { CATALOG_BY_DOMAIN } from "../data/scraper_catalog.js";
 
 // ─── Title derivation (F-7, W-B1) ────────────────────────────────────────────
 // Brand names whose correct capitalization isn't plain Titlecase — mirrors
@@ -62,8 +63,21 @@ export interface PlatformScraperDescription {
   core: string;
   /** Example asks that route to this tool, rendered as a quoted, comma-joined list. */
   useWhen: string[];
-  /** Each entry renders as "`${when} — use ${useInstead}`", joined with ". ". */
-  notFor: Array<{ when: string; useInstead: string }>;
+  /**
+   * Each entry is ONE of two shapes, joined with ". ":
+   *   - `{ when, useInstead }` renders as "`${when} — use ${useInstead}`" — the normal
+   *     case: `when` doesn't fit this tool, `useInstead` names what DOES (always phrased
+   *     as a thing to use, e.g. a tool name or param).
+   *   - `{ when, note }` renders as "`${when} — ${note}`" (no forced "use" prefix) — for
+   *     a STATEMENT rather than an action, e.g. documenting a removed/backend_broken
+   *     operation where there is no "use X instead" to offer. Round 4 (S1-connector, F5):
+   *     added because forcing a statement through the `useInstead` shape produced a
+   *     garbled "— use this operation is currently backend_broken…" sentence
+   *     (scrape_youtube.ts's transcript_by_video entry, judge-flagged 2026-10-13) — fixed
+   *     at THIS shared template, not per-tool, so the same mistake can't recur silently
+   *     for a future removed operation on any other platform tool.
+   */
+  notFor: Array<{ when: string; useInstead: string } | { when: string; note: string }>;
   /** What the tool returns, in what formats. */
   returns: string;
   /** Operation-count / enum-safety note (e.g. "10 verified-working ops... 3 excluded..."). */
@@ -97,7 +111,7 @@ function renderDescription(d: PlatformScraperDescription): string {
     d.core,
     "",
     `**Use when:** ${d.useWhen.map((s) => `"${s}"`).join(", ")}.`,
-    `**Not for:** ${d.notFor.map((x) => `${x.when} — use ${x.useInstead}`).join(". ")}.`,
+    `**Not for:** ${d.notFor.map((x) => `${x.when} — ${"useInstead" in x ? `use ${x.useInstead}` : x.note}`).join(". ")}.`,
     `**Returns:** ${d.returns}`,
     `**Ops:** ${d.operationsNote}`,
   ].join("\n");
@@ -211,6 +225,27 @@ export function createPlatformScraperTool<TOpName extends string>(
     handler,
     config,
   };
+}
+
+/**
+ * Class rule (Round 3, item 2 — not a SHEIN special case): a platform-scraper tool
+ * must NOT be registered/listed when every one of its configured operations resolves
+ * to a catalog entry whose status is "backend_broken" (or is missing from the
+ * catalog entirely). Directory review requires every LISTED tool to be able to
+ * succeed for valid input; a tool whose entire working-op set is empty can never
+ * succeed for ANY input, regardless of what the caller passes.
+ *
+ * Deliberately keyed off the catalog's `status` field (the single source of truth
+ * already used by scrape.ts's broken-op warning and extract.ts's hint suppression)
+ * rather than a hardcoded platform list — adding a 16th fully-broken platform (or a
+ * backend fix that revives SHEIN) changes this function's answer with zero edits
+ * here.
+ */
+export function hasAnyWorkingOp(config: PlatformScraperConfig): boolean {
+  const domainOps = CATALOG_BY_DOMAIN.get(config.platform);
+  return Object.values(config.operations as Record<string, PlatformOperationConfig>).some(
+    (opCfg) => domainOps?.get(opCfg.scraperId)?.status === "ok",
+  );
 }
 
 /** A platform-scraper tool widened to one uniform, dispatch-ready shape. */

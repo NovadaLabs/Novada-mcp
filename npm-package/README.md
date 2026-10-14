@@ -24,15 +24,15 @@
 
 Novada is **hosted-first** — there's nothing to install. Point your client at the hosted URL and you're done. Every client below also has a local self-host fallback (`npx novada-mcp`) if you'd rather run the server yourself.
 
-> **Security note:** the hosted URL contains your API key in the `?apikey=` parameter — treat it like a password. Never share it, never post it publicly, and never configure it as a shared or organization-level connector. Header-capable clients: prefer `Authorization: Bearer <key>` instead — it keeps the key out of URLs and access logs.
+> **Security note:** the hosted endpoint never accepts your API key as a URL query parameter or path segment — only an `Authorization: Bearer <key>` header, or OAuth sign-in, is accepted. This keeps the key out of URLs, server logs, proxies, and browser history. Never share your key or paste it into a URL.
 
 ### claude.ai (web)
 
 1. Go to **Settings → Connectors → Add custom connector**.
 2. Name it `Novada`.
-3. Paste the URL (contains your key — see security note above):
+3. Paste the bare URL and sign in with your Novada account when prompted (OAuth):
    ```
-   https://mcp.novada.com/mcp?apikey=YOUR_KEY
+   https://mcp.novada.com/mcp
    ```
 4. Click **Add**.
 
@@ -40,14 +40,15 @@ claude.ai runs entirely in the browser, so only the hosted endpoint applies here
 
 ### Claude Desktop
 
-Uses the same **Settings → Connectors → Add custom connector** flow as claude.ai above — paste the same hosted URL. Prefer a config file instead? Edit `claude_desktop_config.json`:
+Uses the same **Settings → Connectors → Add custom connector** flow as claude.ai above — paste the same hosted URL and sign in via OAuth. Prefer a config file instead? Edit `claude_desktop_config.json`:
 
 **Hosted:**
 ```json
 {
   "mcpServers": {
     "novada": {
-      "url": "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
+      "url": "https://mcp.novada.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_KEY" }
     }
   }
 }
@@ -70,7 +71,7 @@ Uses the same **Settings → Connectors → Add custom connector** flow as claud
 
 **Hosted:**
 ```bash
-claude mcp add --transport http novada "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
+claude mcp add --transport http novada https://mcp.novada.com/mcp --header "Authorization: Bearer YOUR_KEY"
 ```
 
 **Local (self-host):**
@@ -87,7 +88,8 @@ Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-scoped):
 {
   "mcpServers": {
     "novada": {
-      "url": "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
+      "url": "https://mcp.novada.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_KEY" }
     }
   }
 }
@@ -115,7 +117,8 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "novada": {
-      "serverUrl": "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
+      "serverUrl": "https://mcp.novada.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_KEY" }
     }
   }
 }
@@ -144,7 +147,8 @@ Edit `.vscode/mcp.json` (top-level key is `servers`, not `mcpServers`):
   "servers": {
     "novada": {
       "type": "http",
-      "url": "https://mcp.novada.com/mcp?apikey=YOUR_KEY"
+      "url": "https://mcp.novada.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_KEY" }
     }
   }
 }
@@ -197,7 +201,7 @@ These are the tools you reach for most:
 | `novada_search` | Find pages by query (google / duckduckgo / yandex; time, domain, geo filters). |
 | `novada_extract` | Read one known URL — or up to 10 in parallel — through anti-bot pages. |
 | `novada_research` | Answer a complex question — parallel multi-source search + extraction in one call. |
-| `novada_scrape` | Structured records from 16 platforms (Amazon, LinkedIn, TikTok, …). Plus **15 typed per-platform tools** — `novada_scrape_amazon`, `_google`, `_linkedin`, … — each a closed `operation` enum. |
+| `novada_scrape` | Structured records from 14 platforms (Amazon, LinkedIn, TikTok, …). Plus **14 typed per-platform tools** — `novada_scrape_amazon`, `_google`, `_linkedin`, … — each a closed `operation` enum. |
 | `novada_crawl` | Pull content from a bounded set of related pages (≤20) on one site. |
 | `novada_map` | Discover what URLs exist on a site before fetching. |
 | `novada_browser` | Interact with a page — click, type, screenshot, run JS. |
@@ -205,14 +209,14 @@ These are the tools you reach for most:
 
 **Not sure?** Call `novada_discover` and it returns the full catalog with each tool's status.
 
-📚 **[Full reference — all 38 tools →](https://github.com/NovadaLabs/novada-mcp/blob/main/docs/TOOLS.md)**
+📚 **[Full reference — all 37 tools →](https://github.com/NovadaLabs/novada-mcp/blob/main/docs/TOOLS.md)**
 
-**38 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 38. The hosted default surface (`mcp.novada.com`) exposes **30** — the same registry minus 8 tools that don't apply to a stateless serverless endpoint: `novada_browser_flow` (needs a persistent browser session), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
+**37 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 37. The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ### Where does it run?
 
 <details>
-<summary>Full local/hosted breakdown, all 38 tools</summary>
+<summary>Full local/hosted breakdown, all 37 tools</summary>
 
 | Tool | Local (`npx novada-mcp`) | Hosted (`mcp.novada.com`) |
 |------|:--:|:--:|
@@ -229,7 +233,7 @@ These are the tools you reach for most:
 | `novada_monitor` | ✅ | ✅ |
 | `novada_verify` | ✅ | ❌ not on `novada_discover`'s hosted listing |
 | `novada_proxy` | ✅ | ✅ |
-| `novada_browser` | ✅ | ✅ |
+| `novada_browser` | ✅ | ❌ needs a persistent CDP WebSocket session |
 | `novada_browser_flow` | ✅ | ❌ needs a persistent browser session |
 | `novada_account` | ✅ | ✅ |
 | `novada_proxy_account_create` | ✅ | ❌ write-gated account op |
@@ -249,7 +253,7 @@ Full per-tool reference (same column) → [docs/TOOLS.md](../docs/TOOLS.md).
 
 ## Configuration (self-host)
 
-Only relevant if you're running `npx novada-mcp` yourself — hosted users only need the `?apikey=` URL.
+Only relevant if you're running `npx novada-mcp` yourself — hosted users only need an `Authorization: Bearer` header (or OAuth sign-in).
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -267,7 +271,7 @@ Only relevant if you're running `npx novada-mcp` yourself — hosted users only 
 <summary>Tools not showing up in my client</summary>
 
 - Confirm the server registered: for Claude Code run `claude mcp list`; for other clients, check the connector/server status in settings.
-- If using the hosted URL, make sure it's exactly `https://mcp.novada.com/mcp?apikey=YOUR_KEY` with your real key substituted — a placeholder or malformed URL fails silently in some clients.
+- If using the hosted URL, make sure it's exactly `https://mcp.novada.com/mcp` with a real `Authorization: Bearer YOUR_KEY` header configured (or complete the OAuth sign-in) — the endpoint rejects a key placed in the URL with a 401, it is never read from there.
 - If self-hosting, always use `npx -y novada-mcp` (never a global install) — a stale globally-installed binary can silently shadow the package and run an old cached version with a different tool list.
 - Call `novada_discover` once connected. Hosted and self-host expose different catalogs, so a "missing" tool may simply not be on the surface you're connected to.
 

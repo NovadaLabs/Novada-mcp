@@ -119,8 +119,8 @@ describe("every TOOL_REGISTRY entry has a valid `ledger` (C-7/G-10/G-12)", () =>
     ).toEqual([]);
   });
 
-  it("covers all 38 registered tools (guards against an empty-import false pass)", () => {
-    expect(TOOL_REGISTRY.length).toBe(38);
+  it("covers all 37 registered tools (guards against an empty-import false pass)", () => {
+    expect(TOOL_REGISTRY.length).toBe(37);
   });
 
   it("ledger values sum to the full registry length (no double-counting, no gaps)", () => {
