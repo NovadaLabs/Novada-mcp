@@ -134,7 +134,7 @@ You'll get back something like:
 
 ```bash
 curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
-  -H 'Authorization: Bearer sk-eu-novada-test123' \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
@@ -156,7 +156,7 @@ Smoke test again:
 
 ```bash
 curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
-  -H 'Authorization: Bearer sk-eu-novada-test123' \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
@@ -167,7 +167,7 @@ Try a tool call:
 
 ```bash
 curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
-  -H 'Authorization: Bearer sk-eu-novada-test123' \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{
     "jsonrpc": "2.0",
@@ -194,7 +194,7 @@ DNS stays on AWS Route 53 — Vercel only needs the CNAME.
 5. Verify on the real domain:
    ```bash
    curl -X POST 'https://mcp.novada.com/mcp' \
-     -H 'Authorization: Bearer sk-eu-novada-test123' \
+     -H "Authorization: Bearer YOUR_API_KEY" \
      -H 'Content-Type: application/json' \
      -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
    ```

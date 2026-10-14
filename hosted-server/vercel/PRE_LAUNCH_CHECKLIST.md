@@ -95,7 +95,7 @@ vercel deploy --prod
 # 2026-10 — pass the key as an Authorization: Bearer header instead.)
 curl -X POST "https://novada-mcpserver.vercel.app/mcp" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-eu-novada-test" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
 # 7. Bind custom domain (Vercel dashboard → Domains → Add mcp.novada.com)
@@ -104,7 +104,7 @@ curl -X POST "https://novada-mcpserver.vercel.app/mcp" \
 # 8. Verify on the real domain
 curl -X POST "https://mcp.novada.com/mcp" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-eu-novada-test" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
 # 9. Tail logs to watch the first real traffic

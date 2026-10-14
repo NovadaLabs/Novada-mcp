@@ -68,7 +68,7 @@ function reqWithBearer(token) {
   return new Request("https://mcp.novada.com/mcp", { method: "POST", headers: { authorization: `Bearer ${token}` } });
 }
 
-const VALID_LOOKING_KEY = "abcdefghijklmnopqrstuvwx0123456789"; // 16+ alnum, format-valid shape
+const VALID_LOOKING_KEY = "abcdefghijklmnopqrstuvwx0123456789"; // 16+ alnum, format-valid shape — gitleaks:allow — synthetic test fixture, not a real key
 
 // ─── Class table: every removed URL carrier must now be IGNORED (not authenticated) ──
 

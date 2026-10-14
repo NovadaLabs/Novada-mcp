@@ -78,7 +78,7 @@ function extractScrubbers() {
 
 const { redactHostedSecrets, sentryBeforeSend, sentryBeforeBreadcrumb } = extractScrubbers();
 
-const REAL_LOOKING_KEY = "sk-eu-novada-abcdefghijklmnopqrstuvwx0123456789";
+const REAL_LOOKING_KEY = "sk-eu-novada-abcdefghijklmnopqrstuvwx0123456789"; // gitleaks:allow — synthetic test fixture, not a real key
 
 // ─── Class table: every URL-credential carrier must be gone after scrubbing ──
 
