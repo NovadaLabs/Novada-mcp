@@ -11,6 +11,30 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.41] — 2026-10-14
+
+Claude Directory readiness release. Every change below passed an independent code review, a calibrated directory-review examiner (95 rules from Anthropic's published criteria; final exam 0 blocking findings, LLM judge 198/198) and CI before release. The hosted server has run this code since 2026-10-13.
+
+### Changed (npm package)
+- **Tool count 38 → 37: `novada_scrape_shein` is no longer registered.** All of its operations are verified broken upstream (60s+ hang); a platform tool with zero working operations is now never listed (generic rule, not a special case). Generic `novada_scrape` still reaches SHEIN slugs with a warning. Restoring a fixed operation is a one-row catalog change.
+- **YouTube `transcript_by_video` removed from `novada_scrape_youtube`'s operations** (upstream subtitle extraction fails for every video); the other 12 operations are unchanged.
+- **`novada_scrape_yandex` rejects `yandex_domain="yandex.com"` before any network call** with an actionable error naming working regional domains (`yandex.ru`, `yandex.com.tr`) — that domain fails upstream every time. Data row in a known-broken-values table, dated 2026-10-13.
+- **Tool annotations corrected:** `novada_proxy_account_create` and `novada_browser` are now `destructiveHint: true` (they create billable resources / act on third-party pages).
+- **Tool descriptions:** removed text that directed the model's behavior or promoted the product; sibling-tool mentions are rendered per surface (a description never names a tool its server does not list); platform and operation counts are derived from the catalog's working operations; `novada_scrape` names its target API (Novada Scraper API) with a docs link; `novada_research` documents its response cap; alias name lists removed from descriptions (aliases still route).
+
+### Fixed (npm package)
+- **No error message can contain `undefined` any more.** Scraper timeouts and network failures without an HTTP response are classified (new `TIMEOUT` code, or `API_DOWN`), state how long the call waited and whether a `task_id` resume is possible. Previously surfaced as `Scraper API error (HTTP undefined): undefined`.
+- **SERP capture failures (upstream code 10000) carry per-engine retry guidance** instead of a bare message.
+
+### Changed (hosted server — `mcp.novada.com`, not part of the npm package)
+- **BREAKING for URL-key clients: credentials are no longer accepted in the URL** (`/<key>/mcp`, `?apikey=`, `?api_key=`, `?token=`, `?pathKey=`). Use `Authorization: Bearer <key>` or OAuth sign-in (live: `/.well-known/oauth-authorization-server`, dynamic client registration). URL-key requests get a 401 with migration guidance.
+- `novada_browser` hidden on hosted (it cannot hold a browser session on serverless and always failed there); hosted lists 28 tools.
+- Sentry error reports are scrubbed (no query string, body, cookies or headers beyond user-agent/content-type/accept; credentials redacted; `sendDefaultPii: false`).
+- KV calls on the request path fail open consistently (a KV outage no longer turns tool calls into bare JSON-RPC errors).
+- Nightly production canary opens one `canary-failure` issue on failure and closes it on recovery.
+
+---
+
 ## [0.9.37] — 2026-08-26
 
 Combined release candidate merging two independently code-reviewed branches: account error-classification/param fixes (`fix/account-not-provisioned`) and hosted-server telemetry delivery hardening (`fix/telemetry-100`). Zero file overlap between the two branches — merged clean, no conflicts.
