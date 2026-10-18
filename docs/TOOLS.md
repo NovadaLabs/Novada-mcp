@@ -33,7 +33,7 @@ handful you reach for most; this is the full list.
 ## Scrape
 
 `novada_scrape` is the generic gateway (14 platforms with a working route today, ~76 operations — the
-catalog has 16 platforms/~87 operations total, but SHEIN and ChatGPT currently have zero working ops).
+catalog has 16 platforms/~87 operations total, but SHEIN and ChatGPT currently have zero working ops). <!-- claims-ignore: "16" is the full catalog count including 0-op platforms (SHEIN, ChatGPT), a deliberately different metric from the "platforms" fact (14, working-route platforms only) — brief-H, 2026-10-15 -->
 The 14 `novada_scrape_<platform>` tools wrap the same backend behind a **closed, typed `operation`
 enum** scoped to one platform, so an agent can't call an invalid operation for the wrong platform.
 Every listed `operation` is verified-working — operations we can't currently deliver are excluded, not
@@ -41,7 +41,7 @@ left in to fail on you. All 15 scrape tools (generic + 14 per-platform) run on b
 
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
-| `novada_scrape` | Structured data from 16 supported platforms (~87 operations) — Amazon, Walmart, LinkedIn, TikTok, YouTube, Instagram, GitHub, X, ChatGPT, Perplexity, etc. — instead of parsing raw HTML | Clean records in markdown/json/csv/excel/html/toon | ✅ |
+| `novada_scrape` | Structured data from 16 supported platforms (~87 operations) — Amazon, Walmart, LinkedIn, TikTok, YouTube, Instagram, GitHub, X, ChatGPT, Perplexity, etc. — instead of parsing raw HTML <!-- claims-ignore: full catalog total incl. 0-op platforms (SHEIN, ChatGPT), same metric as line 36 above --> | Clean records in markdown/json/csv/excel/html/toon | ✅ |
 | `novada_scrape_amazon` | Amazon-only structured data (product, reviews, seller, bestsellers, category/brand listings) via a closed, typed `operation` enum — 10 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_google` | Google-only raw SERP data (web search, AI Mode, Maps details/reviews, Shopping, Jobs, Hotels, Videos) via a closed, typed `operation` enum — 13 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_bing` | Bing-only raw SERP data (web search, videos, news, shopping) via a closed, typed `operation` enum — 4 verified-working operations; Bing is not a selectable `novada_search` engine | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
@@ -108,7 +108,7 @@ action beyond the local-only `close_session`/`list_sessions` bookkeeping returns
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
 | `novada_account` | Balance, plan quotas, usage history, traffic, capture logs in one call. Back-compat aliases (dispatch-only, not listed tools): `novada_wallet_balance`, `novada_wallet_usage_record`, `novada_plan_balance_all`, `novada_traffic_daily`, `novada_capture_logs`, `novada_account_summary`, `novada_health`, `novada_health_all` all route here. | Unified dashboard, or one `section=` slice | ✅ |
-| `novada_proxy_account_create` | Provisioning a proxy sub-account | Created account details — **WRITE, requires `confirm:true`** | ❌ write-gated account op |
+| `novada_proxy_account_create` | Provisioning a proxy sub-account | Created account details — **WRITE, requires `confirm:true`** | ✅ |
 | `novada_proxy_account_list` | Auditing existing proxy sub-accounts | Paginated list | ✅ |
 | `novada_ip_whitelist` | Managing the proxy IP whitelist (Residential, Unlimited, Static ISP) | Whitelist entries — add/del are **WRITE, require `confirm:true`** | ❌ write-gated account op |
 | `novada_capture_apikey` | Getting or rotating the Capture API key | Current key, or new key on reset — reset is **WRITE, requires `confirm:true`** | ❌ write-gated account op |

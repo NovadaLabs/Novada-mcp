@@ -4,7 +4,7 @@
     "@type": "SoftwareApplication",
     "name": "Novada MCP",
     "alternateName": "Novada Hosted MCP Server",
-    "description": "Remote Streamable-HTTP MCP server with 25 web-data tools — search, SERP, scrape, extract, map, crawl, verify, discover, research, and 6 proxy types. One URL, zero install, works with Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf.",
+    "description": "Remote Streamable-HTTP MCP server with 28 web-data tools — search, SERP, scrape, extract, map, crawl, verify, discover, research, and 6 proxy types. One URL, zero install, works with Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf.",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any (MCP-compatible client required)",
     "url": "https://mcp.novada.com/",
@@ -18,12 +18,7 @@
       "verify",
       "discover",
       "research",
-      "novada_proxy_residential",
-      "novada_proxy_datacenter",
-      "novada_proxy_isp",
-      "novada_proxy_dedicated",
-      "novada_proxy_static",
-      "novada_proxy_universal"
+      "novada_proxy"
     ],
     "offers": {
       "@type": "Offer",

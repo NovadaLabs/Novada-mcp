@@ -40,7 +40,7 @@ isn't currently possible.
 | 4 | `check-hosted-drift` (`node scripts/check-hosted-drift.mjs`) | The hosted (mcp.novada.com) tool surface is still derived from core and hasn't silently drifted from `config/surfaces.json` | script exits 0 (no drift detected) |
 | 5 | eval Tier-A (`eval/baseline-selector.mjs`) | Deterministic, $0 tool-selection regression floor — no NEW description collision was introduced since the recorded baseline | `gate_pass: true` in its JSON output |
 | 6 | eval Tier-B (`eval/model-eval-runner.mjs`) | A REAL model's first-try tool selection still clears the accuracy floor and no sibling tool's routing regressed | `gate_pass: true` in its JSON output (SKIPPED without `ANTHROPIC_API_KEY`) |
-| 7 | live-smoke (`scripts/acceptance/live-smoke.mjs`) | The wire format for all 15 platform-scraper tools actually reaches the LIVE Novada Scraper API and is accepted — not just a mock | **zero `wire_fail`** (SKIPPED without `NOVADA_SCRAPER_KEY`). Target-side `flake`s do NOT block — see below |
+| 7 | live-smoke (`scripts/acceptance/live-smoke.mjs`) | The wire format for all 14 platform-scraper tools actually reaches the LIVE Novada Scraper API and is accepted — not just a mock | **zero `wire_fail`** (SKIPPED without `NOVADA_SCRAPER_KEY`). Target-side `flake`s do NOT block — see below |
 
 Notes:
 

@@ -1,6 +1,6 @@
 # Novada MCP
 
-> Web data API for AI agents. One MCP server, one API key, 22 curated tools (listed by novada_discover).
+> Web data API for AI agents. One MCP server, one API key, 37 tools (listed by `novada_discover`).
 
 ## Docs
 
@@ -8,7 +8,7 @@
 - [Quick Start](https://novada.com/docs/quickstart): Get running in 2 minutes -- API key, install command, first requests, environment variables
 - [MCP Server Configuration](https://novada.com/docs/mcp-server): Setup for Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, and npm global install
 - [Extract + Search](https://novada.com/docs/extract-search): Web extraction from any URL (batch up to 10), search across 4 engines, auto-extract on results
-- [Scrape + Crawl + Map](https://novada.com/docs/scrape-crawl-map): Structured scraping from 13 platforms (~78 operations), BFS/DFS crawl up to 20 pages, URL discovery via sitemap
+- [Scrape + Crawl + Map](https://novada.com/docs/scrape-crawl-map): Structured scraping from 14 working platforms (~76 operations), BFS/DFS crawl up to 20 pages, URL discovery via sitemap
 - [Research + Verify + Monitor](https://novada.com/docs/research-verify-monitor): Multi-source research reports, fact-checking claims, price and content change tracking
 - [Proxy + Browser](https://novada.com/docs/proxy-browser): 6 proxy types (residential, ISP, static, datacenter, mobile, dedicated) across 195 countries, cloud browser automation
 - [Account Management](https://novada.com/docs/account-advanced): Wallet balance, traffic logs, sub-accounts, capture logs, diagnostics
@@ -21,7 +21,7 @@
 
 ## API
 
-- [Tool Reference](https://novada.com/docs/api/tools): All 22 curated tools (listed by novada_discover) with parameters, examples, and best-for/not-for guidance
+- [Tool Reference](https://novada.com/docs/api/tools): All 37 tools (listed by `novada_discover`) with parameters, examples, and best-for/not-for guidance
 - [Error Codes](https://novada.com/docs/api/errors): 12 error codes with failure classification (auth, quota, transient, permanent) and agent instructions
 - [MCP Resources](https://novada.com/docs/api/resources): 5 read-only resources -- guide, scraper-platforms, engines, countries, llms-txt
 

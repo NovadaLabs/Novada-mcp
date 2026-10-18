@@ -15,7 +15,7 @@
 
 |  |  |
 |:--|:--|
-| **✅ Works with any MCP client** — Claude, Cursor, Windsurf, VS Code, or `npx` locally | **🎯 15 typed per-platform scrapers** — Amazon, Google, LinkedIn, TikTok, … each a closed `operation` enum, so an agent can't call an invalid op |
+| **✅ Works with any MCP client** — Claude, Cursor, Windsurf, VS Code, or `npx` locally | **🎯 14 typed per-platform scrapers** — Amazon, Google, LinkedIn, TikTok, … each a closed `operation` enum, so an agent can't call an invalid op |
 | **🎁 $10 free credits — no credit card needed** — up to 1,000 calls/month | **⚡ Hosted-first, zero install** — point at one URL, or self-host in one command |
 
 ---
@@ -228,7 +228,7 @@ These are the tools you reach for most:
 | `novada_site_copy` | ✅ | ❌ writes to local disk |
 | `novada_search_feedback` | ✅ | ❌ per-process in-memory state |
 | `novada_scrape` | ✅ | ✅ |
-| `novada_scrape_amazon` … `_perplexity` (15 platform tools) | ✅ | ✅ |
+| `novada_scrape_amazon` … `_perplexity` (14 platform tools) | ✅ | ✅ |
 | `novada_ai_monitor` | ✅ | ✅ |
 | `novada_monitor` | ✅ | ✅ |
 | `novada_verify` | ✅ | ❌ not on `novada_discover`'s hosted listing |
@@ -236,7 +236,7 @@ These are the tools you reach for most:
 | `novada_browser` | ✅ | ❌ needs a persistent CDP WebSocket session |
 | `novada_browser_flow` | ✅ | ❌ needs a persistent browser session |
 | `novada_account` | ✅ | ✅ |
-| `novada_proxy_account_create` | ✅ | ❌ write-gated account op |
+| `novada_proxy_account_create` | ✅ | ✅ |
 | `novada_proxy_account_list` | ✅ | ✅ |
 | `novada_ip_whitelist` | ✅ | ❌ write-gated account op |
 | `novada_capture_apikey` | ✅ | ❌ write-gated account op |

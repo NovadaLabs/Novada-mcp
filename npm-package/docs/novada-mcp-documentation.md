@@ -6,7 +6,7 @@
 
 # Introduction
 
-Novada is a web data API built for AI agents. One MCP server gives your agent the ability to search the web, extract content from any page, scrape structured data from 129 platforms, run multi-source research, crawl entire sites, automate browsers, and route requests through proxies in 195 countries. One API key. One `npx` command. No fragmented tooling.
+Novada is a web data API built for AI agents. One MCP server gives your agent the ability to search the web, extract content from any page, scrape structured data from 14 working platforms, run multi-source research, crawl entire sites, automate browsers, and route requests through proxies in 195 countries. One API key. One `npx` command. No fragmented tooling.
 
 ## What can Novada do?
 
@@ -15,11 +15,11 @@ Novada is a web data API built for AI agents. One MCP server gives your agent th
 | **Search** | `novada_search` | Web search across Google, Bing, DuckDuckGo, Yahoo, and Yandex |
 | **Extract** | `novada_extract` | Any URL to clean markdown or JSON. Batch up to 10 pages in parallel |
 | **Research** | `novada_research` | One call triggers parallel multi-engine searches, deduplicates results, extracts top sources, and returns a cited report |
-| **Scrape** | `novada_scrape` | Structured data from Amazon, LinkedIn, TikTok, GitHub, Zillow, and 124 more platforms |
+| **Scrape** | `novada_scrape` | Structured data from 14 working platforms — Amazon, LinkedIn, TikTok, GitHub, YouTube, and more |
 | **Crawl** | `novada_crawl` | BFS/DFS crawling up to 20 pages with regex path filtering |
 | **Monitor** | `novada_monitor` | Track price, content, and availability changes over time with field-level diffs |
 | **Browser** | `novada_browser` | Navigate, click, type, fill forms, and take screenshots in a cloud browser |
-| **Proxy** | `novada_proxy_*` | Residential, mobile, ISP, datacenter, static, and dedicated IPs across 195 countries |
+| **Proxy** | `novada_proxy` | Residential, mobile, ISP, datacenter, static, and dedicated IPs across 195 countries |
 | **Verify** | `novada_verify` | Fact-check any claim against live web sources |
 | **AI Monitor** | `novada_ai_monitor` | See how ChatGPT, Perplexity, Grok, Claude, and Gemini mention your brand |
 
@@ -38,18 +38,18 @@ npx -y novada-mcp@latest
 
 |  | Novada | Firecrawl | Tavily | Bright Data |
 |---|---|---|---|---|
-| MCP tools | 25 | 14 | 2 | 69 |
+| MCP tools | 37 | 14 | 2 | 69 |
 | Search engines | 5 | 1 | 1 | 3 |
 | Multi-source research | Yes | No | No | No |
 | Proxy as MCP tool | Yes | No | No | No |
 | Auto anti-bot bypass | Yes | No | N/A | No |
 | Change monitoring | Yes | No | No | No |
-| Platform scrapers | 129 | 0 | 0 | 437 |
+| Platform scrapers | 14 | 0 | 0 | 437 |
 | Browser automation | Yes | Yes | No | Yes |
 
 **Where Novada leads:** `novada_research` is unique -- no other MCP server turns one question into a cited, multi-source report with parallel searches across three engines. Auto-escalation (static fetch, JS render, full browser CDP) handles Cloudflare, DataDome, Kasada, and PerimeterX without any configuration. Agent-first responses include `agent_instruction` fields with structured next-step guidance.
 
-**Where others lead:** Bright Data has more platform scrapers (437 vs 129) and offers a hosted HTTP endpoint. Firecrawl has a browser interaction model and a free tier without an API key. Novada currently requires a terminal install.
+**Where others lead:** Bright Data has more platform scrapers (437 vs 14) and offers a hosted HTTP endpoint. Firecrawl has a browser interaction model and a free tier without an API key. Novada currently requires a terminal install.
 
 ## What you can build with it
 
@@ -257,9 +257,9 @@ Most users only need `NOVADA_API_KEY`. Add proxy and browser variables later whe
 
 ## What's Next
 
-- **Tool Reference** -- See the full list of 25+ tools and their parameters
+- **Tool Reference** -- See the full list of 37 tools and their parameters
 - **Use Cases** -- Common workflows: research pipelines, price monitoring, competitive intelligence, lead generation
-- **Platform Scraping** -- 129 supported platforms with structured data extraction
+- **Platform Scraping** -- 14 working platforms with structured data extraction
 - **Proxy Network** -- Route requests through 100M+ IPs across 195 countries
 
 ---
@@ -501,7 +501,7 @@ One API key covers all products. Additional variables unlock proxy and browser f
 
 ### Tool Filtering Examples
 
-Load only search-related tools (8 tools instead of 25+):
+Load only search-related tools (13 tools instead of 37): <!-- claims-ignore: worked example loading a smaller tool subset via NOVADA_GROUPS, not a claim about the total -->
 
 ```json
 {
@@ -539,14 +539,14 @@ Available groups:
 
 | Group | Tools Included |
 |-------|---------------|
-| `search` | search, extract, crawl, map, research, verify, ai_monitor, monitor |
-| `proxy` | proxy, proxy_residential, proxy_isp, proxy_datacenter, proxy_mobile, proxy_static, proxy_dedicated |
+| `search` | search, extract, crawl, map, site_copy, research, verify, ai_monitor, monitor, search_feedback |
+| `proxy` | proxy plus the hidden type-specific aliases proxy_residential, proxy_isp, proxy_datacenter, proxy_mobile, proxy_static, proxy_dedicated |
 | `browser` | browser, browser_flow |
-| `scraper` | scrape, scraper_submit, scraper_status, scraper_result |
-| `health` | health, health_all, discover, setup |
-| `account` | wallet_balance, wallet_usage_record, proxy_account_create, proxy_account_list, traffic_daily, plan_balance_all, capture_logs, account_summary |
+| `scraper` | scrape plus all 14 scrape_&lt;platform&gt; tools, plus the hidden aliases scraper_submit, scraper_status, scraper_result |
+| `health` | discover, setup, session_stats |
+| `account` | account, proxy_account_create, proxy_account_list, ip_whitelist, capture_apikey, scraper_task_mgmt, static_ip_mgmt |
 
-`novada_health` and `novada_setup` are always loaded regardless of filter settings, so agents can always diagnose issues.
+`novada_account`, `novada_setup`, `novada_session_stats`, and `novada_search_feedback` are always loaded regardless of filter settings, so agents can always diagnose issues.
 
 ---
 
@@ -937,13 +937,13 @@ Three tools for different scales of web data extraction: structured platform dat
 | Extract content from 5-20 pages of a docs site | `novada_crawl` | BFS/DFS multi-page extraction |
 | Find all URLs on a site before reading | `novada_map` | Fast URL discovery, no content download |
 | Read a single known URL | `novada_extract` | Use extract, not crawl or scrape |
-| Unknown domain not in the platform list | `novada_crawl` or `novada_extract` | Scrape only covers 13 platforms |
+| Unknown domain not in the platform list | `novada_crawl` or `novada_extract` | Scrape only covers 14 working platforms |
 
 ---
 
 ## novada_scrape
 
-Retrieve structured data from 13 supported platforms (~78 operations). Returns clean tabular records instead of raw HTML -- product listings, social posts, company profiles, search results.
+Retrieve structured data from 14 working platforms (~76 operations). Returns clean tabular records instead of raw HTML -- product listings, social posts, company profiles, search results.
 
 ### Supported Platforms
 
@@ -962,8 +962,9 @@ Retrieve structured data from 13 supported platforms (~78 operations). Returns c
 | Facebook | `facebook.com` | Social | Events, posts, comments, profiles |
 | LinkedIn | `linkedin.com` | Professional | Company info, job listings |
 | GitHub | `github.com` | Developer | Repository info, search |
+| Perplexity AI | `perplexity.ai` | AI Search | Generated answer by query URL or search term |
 
-> **Not available:** Reddit, Glassdoor, Zillow, Airbnb, eBay, Etsy, and ~94 other platforms have 0 active operations. Use `novada_extract` for those sites.
+> **Not available:** Reddit, Glassdoor, Zillow, Airbnb, eBay, Etsy, and other platforms outside the 14 working platforms above have 0 active operations (SHEIN and ChatGPT are in the broader scraper catalog but currently have 0 working operations too). Use `novada_extract` for those sites.
 
 ### Parameters
 
@@ -1969,7 +1970,7 @@ An exclusive datacenter IP not shared with any other user. Clean reputation, zer
 
 ## Output Formats
 
-All 6 proxy tools support 3 output formats:
+All 6 proxy types support 3 output formats:
 
 | Format | Returns | Use Case |
 |--------|---------|----------|
@@ -2223,14 +2224,14 @@ Available group bundles:
 
 | Group | Tools Included |
 |-------|---------------|
-| `search` | search, extract, crawl, map, research, verify, ai_monitor, monitor |
-| `proxy` | proxy, proxy_residential, proxy_isp, proxy_datacenter, proxy_mobile, proxy_static, proxy_dedicated |
+| `search` | search, extract, crawl, map, site_copy, research, verify, ai_monitor, monitor, search_feedback |
+| `proxy` | proxy plus the hidden type-specific aliases proxy_residential, proxy_isp, proxy_datacenter, proxy_mobile, proxy_static, proxy_dedicated |
 | `browser` | browser, browser_flow |
-| `scraper` | scrape, scraper_submit, scraper_status, scraper_result |
-| `health` | health, health_all, discover, setup |
-| `account` | wallet_balance, wallet_usage_record, proxy_account_create, proxy_account_list, traffic_daily, plan_balance_all, capture_logs, account_summary, ip_whitelist |
+| `scraper` | scrape plus all 14 scrape_&lt;platform&gt; tools, plus the hidden aliases scraper_submit, scraper_status, scraper_result |
+| `health` | discover, setup, session_stats |
+| `account` | account, proxy_account_create, proxy_account_list, ip_whitelist, capture_apikey, scraper_task_mgmt, static_ip_mgmt |
 
-`novada_health` and `novada_setup` are always included regardless of filter, so agents can diagnose issues.
+`novada_account`, `novada_setup`, `novada_session_stats`, and `novada_search_feedback` are always included regardless of filter, so agents can diagnose issues.
 
 ---
 
@@ -2361,7 +2362,7 @@ NOVADA_API_KEY=your_key npx -y novada-mcp@latest
 ```
 
 ```
-Novada MCP server v0.8.1 running on stdio — 39 tools loaded
+Novada MCP server v0.8.1 running on stdio — 37 tools loaded
 ```
 
 ### `novada-mcp --help`
@@ -2741,19 +2742,19 @@ These variables control which tools the MCP server exposes. Useful for reducing 
 
 | Group | Tools included |
 |-------|---------------|
-| `search` | `search`, `extract`, `crawl`, `map`, `research`, `verify`, `ai_monitor`, `monitor` |
-| `proxy` | `proxy`, `proxy_residential`, `proxy_isp`, `proxy_datacenter`, `proxy_mobile`, `proxy_static`, `proxy_dedicated` |
+| `search` | `search`, `extract`, `crawl`, `map`, `site_copy`, `research`, `verify`, `ai_monitor`, `monitor`, `search_feedback` |
+| `proxy` | `proxy` plus the hidden type-specific dispatch aliases `proxy_residential`, `proxy_isp`, `proxy_datacenter`, `proxy_mobile`, `proxy_static`, `proxy_dedicated` (equivalent to calling `proxy` with a `type` param) |
 | `browser` | `browser`, `browser_flow` |
-| `scraper` | `scrape`, `scraper_submit`, `scraper_status`, `scraper_result` |
-| `health` | `health`, `health_all`, `discover`, `setup` |
-| `account` | `wallet_balance`, `wallet_usage_record`, `proxy_account_create`, `proxy_account_list`, `traffic_daily`, `plan_balance_all`, `capture_logs`, `account_summary`, `ip_whitelist` |
+| `scraper` (alias: `scrape`) | `scrape` plus the 14 `scrape_<platform>` tools (`amazon`, `google`, `bing`, `duckduckgo`, `yandex`, `youtube`, `instagram`, `facebook`, `tiktok`, `x`, `walmart`, `linkedin`, `github`, `perplexity`), plus the hidden dispatch aliases `scraper_submit`, `scraper_status`, `scraper_result` |
+| `health` | `discover`, `setup`, `session_stats` |
+| `account` | `account`, `proxy_account_create`, `proxy_account_list`, `ip_whitelist`, `capture_apikey`, `scraper_task_mgmt`, `static_ip_mgmt` |
 
-> `health` and `setup` tools are always available regardless of filtering.
+> `account`, `setup`, `session_stats`, and `search_feedback` are always available regardless of filtering.
 
 **Examples:**
 
 ```bash
-# Only search and extraction tools (14 tools instead of 39)
+# Only search and extraction tools (a subset of the full registry)
 NOVADA_TOOLS="search,extract,crawl,map,research" npx -y novada-mcp@latest
 
 # Load by category
@@ -2814,7 +2815,7 @@ This page is your entry point to using Novada inside any AI agent, coding assist
 
 **One API key covers everything.** Search, extract, crawl, scrape, research, verify, monitor, browser automation, and proxies. No juggling multiple services, billing dashboards, or credential sets. One `NOVADA_API_KEY` and you're running.
 
-**40+ tools designed for agent consumption.** Each tool has a precise `description` in its MCP schema that tells the agent exactly when to use it, when NOT to use it, and what common mistakes to avoid. Agents pick the right tool on the first try.
+**37 tools designed for agent consumption.** Each tool has a precise `description` in its MCP schema that tells the agent exactly when to use it, when NOT to use it, and what common mistakes to avoid. Agents pick the right tool on the first try.
 
 **`agent_instruction` in every error response.** When something goes wrong, the error payload includes a structured next-step hint. No stack traces to parse, no docs to look up. The agent reads the instruction and self-corrects.
 
@@ -2971,7 +2972,7 @@ You should see a status table with latency for each active product.
 
 ### Scrape — `novada_scrape`
 
-**What it does:** Structured data extraction from 13 platforms (Amazon, LinkedIn, TikTok, YouTube, GitHub, Instagram, X/Twitter, Facebook, Google, Bing, Walmart, DuckDuckGo, Yandex) with ~78 operations.
+**What it does:** Structured data extraction from 14 working platforms (Amazon, LinkedIn, TikTok, YouTube, GitHub, Instagram, X/Twitter, Facebook, Google, Bing, Walmart, DuckDuckGo, Yandex, Perplexity AI) with ~76 operations.
 
 **When to use:** Product listings, social media profiles, company data, job listings -- any platform where you need tabular records, not raw HTML.
 
@@ -3325,7 +3326,7 @@ Frameworks with confirmed MCP support include: Claude Code, Claude Desktop, Curs
 
 ## Reducing Context Window Usage
 
-Loading all 40+ tools consumes context. Use `NOVADA_TOOLS` or `NOVADA_GROUPS` to load only what you need:
+Loading all 37 tools consumes context. Use `NOVADA_TOOLS` or `NOVADA_GROUPS` to load only what you need:
 
 ```json
 {
@@ -3338,16 +3339,16 @@ Loading all 40+ tools consumes context. Use `NOVADA_TOOLS` or `NOVADA_GROUPS` to
 
 | Group | Tools Loaded |
 |-------|-------------|
-| `search` | search, extract, crawl, map, research, verify, ai_monitor, monitor |
-| `scraper` | scrape, scraper_submit, scraper_status, scraper_result |
-| `proxy` | proxy, proxy_residential, proxy_isp, proxy_datacenter, proxy_mobile, proxy_static, proxy_dedicated |
+| `search` | search, extract, crawl, map, site_copy, research, verify, ai_monitor, monitor, search_feedback |
+| `scraper` | scrape plus all 14 scrape_&lt;platform&gt; tools, plus the hidden aliases scraper_submit, scraper_status, scraper_result |
+| `proxy` | proxy plus the hidden type-specific aliases proxy_residential, proxy_isp, proxy_datacenter, proxy_mobile, proxy_static, proxy_dedicated |
 | `browser` | browser, browser_flow |
-| `health` | health, health_all, discover, setup |
-| `account` | wallet_balance, wallet_usage_record, proxy_account_create, proxy_account_list, traffic_daily, plan_balance_all, capture_logs, account_summary |
+| `health` | discover, setup, session_stats |
+| `account` | account, proxy_account_create, proxy_account_list, ip_whitelist, capture_apikey, scraper_task_mgmt, static_ip_mgmt |
 
-For most AI agent use cases, `NOVADA_GROUPS="search"` provides the 8 most commonly used tools. Add `scraper` if you need platform-specific data, or `browser` for interactive automation.
+For most AI agent use cases, `NOVADA_GROUPS="search"` provides the 13 most commonly used tools. Add `scraper` if you need platform-specific data, or `browser` for interactive automation.
 
-`novada_health` and `novada_setup` are always available regardless of filter settings.
+`novada_account`, `novada_setup`, `novada_session_stats`, and `novada_search_feedback` are always available regardless of filter settings.
 
 ---
 
@@ -3355,13 +3356,13 @@ For most AI agent use cases, `NOVADA_GROUPS="search"` provides the 8 most common
 
 | Capability | Novada | Firecrawl | Tavily | Bright Data |
 |-----------|--------|-----------|--------|-------------|
-| MCP tools | 25+ | 14 | 2 | 69 |
+| MCP tools | 37 | 14 | 2 | 69 |
 | Search engines | 5 | 1 | 1 | 3 |
 | Multi-source research | Yes | No | No | No |
 | Proxy as MCP tool | Yes | No | No | No |
 | Auto anti-bot bypass | Yes | No | N/A | No |
 | Change monitoring | Yes | No | No | No |
-| Platform scrapers | 13 | 0 | 0 | 437 |
+| Platform scrapers | 14 | 0 | 0 | 437 |
 | Browser automation | Yes | Yes | No | Yes |
 | `agent_instruction` in errors | Yes | No | No | No |
 
@@ -4432,19 +4433,25 @@ For MCP clients that support remote/HTTP transport:
 
 ### Dockerfile
 
+This is the real `Dockerfile` shipped in the `novada-mcp` package (`npm-package/Dockerfile`) — it builds the
+server from source rather than installing from the npm registry. It does not bake your API key into the
+image; pass it at `docker run` time instead (see below).
+
 ```dockerfile
 FROM node:20-slim
-
-# Pin @latest so the image always installs the current release.
-# Rebuild the image periodically to pick up new versions.
-RUN npm install -g novada-mcp@latest
-
-ENV NOVADA_API_KEY=your_key
-
-ENTRYPOINT ["novada-mcp"]
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npm run build
+ENV NODE_ENV=production
+CMD ["node", "build/index.js"]
 ```
 
 ### Build and Run
+
+Run these from inside the `novada-mcp` package directory (where `Dockerfile` lives):
 
 ```bash
 docker build -t novada-mcp .
@@ -4654,7 +4661,7 @@ If all three pass and the tool still fails, the issue is with the specific reque
 | `Error [INVALID_API_KEY]: Invalid or missing API key` | `NOVADA_API_KEY` not set or contains invalid value | Set `NOVADA_API_KEY` in your MCP config. Get a key at dashboard.novada.com. Run `novada_setup()` for config snippets. |
 | `Error [PROXY_AUTH_FAILURE]: Proxy authentication failed` | Proxy credentials wrong or expired | Check `NOVADA_PROXY_USER`, `NOVADA_PROXY_PASS`, and `NOVADA_PROXY_ENDPOINT`. Regenerate at dashboard.novada.com/overview/proxy/. |
 | `Error [PRODUCT_UNAVAILABLE]: Product not activated` | The specific product (Scraper, Proxy, Browser) is not enabled on your plan | Visit dashboard.novada.com/overview/products/ to activate. Alternative: use a different tool (e.g., `novada_extract` instead of `novada_scrape`). |
-| Tools not appearing in MCP client | `NOVADA_TOOLS` or `NOVADA_GROUPS` filter is excluding them | Remove the filter env vars, or add the needed tool/group. `novada_health` and `novada_setup` are always loaded regardless of filters. |
+| Tools not appearing in MCP client | `NOVADA_TOOLS` or `NOVADA_GROUPS` filter is excluding them | Remove the filter env vars, or add the needed tool/group. `novada_account`, `novada_setup`, `novada_session_stats`, and `novada_search_feedback` are always loaded regardless of filters. |
 
 ### Content Extraction
 
@@ -4839,7 +4846,7 @@ The file follows the [llms.txt specification](https://llmstxt.org/) -- a lightwe
 
 ## Tool Discovery
 
-Call `novada_discover()` with no arguments to get a categorized list of all 40+ tools with descriptions and availability status.
+Call `novada_discover()` with no arguments to get a categorized list of all 37 tools with descriptions and availability status.
 
 ```
 novada_discover()
@@ -4858,7 +4865,7 @@ Novada exposes read-only MCP resources that agents can access before making tool
 | Resource URI | Description |
 |---|---|
 | `novada://guide` | Decision tree and workflow patterns for choosing between all tools. Includes failure recovery patterns, token efficiency tips, and common mistakes to avoid. |
-| `novada://scraper-platforms` | Full catalog of 13 active platforms and ~78 scraper operations with exact operation IDs and required parameters. Read this before calling `novada_scrape`. |
+| `novada://scraper-platforms` | Full catalog of 14 active platforms and ~76 scraper operations with exact operation IDs and required parameters. Read this before calling `novada_scrape`. <!-- claims-ignore: "76" is the operation count, not the scrapers/platforms fact --> |
 | `novada://engines` | Supported search engines with characteristics and recommended use cases. |
 | `novada://countries` | All 195 ISO 3166-1 alpha-2 country codes for geo-targeted search and proxy routing. |
 | `novada://llms-txt` | Concise LLM-friendly reference for all tools. One paragraph per tool with best-for, not-for, required params, and example. 60% shorter than the full guide. |
@@ -4942,7 +4949,7 @@ Call `novada_setup()` at the start of a session to see which environment variabl
 
 ### 2. Discover tools before guessing
 
-Call `novada_discover()` or read `novada://guide` to find the right tool. Do not guess tool names or parameters -- Novada has 40+ tools with specific use cases.
+Call `novada_discover()` or read `novada://guide` to find the right tool. Do not guess tool names or parameters -- Novada has 37 tools with specific use cases.
 
 ### 3. Read agent_instruction before retrying
 
@@ -4958,7 +4965,7 @@ When a tool call fails, read the `agent_instruction` field in the error response
 
 ### 6. Read novada://scraper-platforms before calling novada_scrape
 
-The scraper has 13 active platforms with ~78 operations. Each operation has a specific ID and required parameters. Reading the resource first prevents invalid operation ID errors.
+The scraper has 14 active platforms with ~76 operations. Each operation has a specific ID and required parameters. Reading the resource first prevents invalid operation ID errors.
 
 ### 7. Use novada_health_all for systematic debugging
 

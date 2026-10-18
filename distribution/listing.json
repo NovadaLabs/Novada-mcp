@@ -1,0 +1,41 @@
+{
+  "$comment": "Canonical cross-channel listing facts for novada-mcp. distribution/generate.mjs reads this file (never the reverse) and writes the fields each distribution/channels.json row declares as OWNED into that channel's manifest. The description below is deliberately WITHOUT a hardcoded tool/platform count — the whole point is that no channel manifest needs to be hand-updated every time a platform or tool is added or removed. Counts live in ONE place at runtime: novada_discover and README.md's generated tool table, not in distribution metadata.",
+  "name": "novada-mcp",
+  "description": "AI agents' single API key for web search, content extraction, site crawling and mapping, multi-source research, structured platform scraping, proxy routing, and browser automation.",
+  "homepage": "https://novada.com",
+  "repository": "https://github.com/NovadaLabs/novada-mcp",
+  "support": {
+    "email": "support@novada.com",
+    "issues": "https://github.com/NovadaLabs/novada-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "modelcontextprotocol",
+    "novada",
+    "web-scraping",
+    "web-search",
+    "search-api",
+    "ai-agents",
+    "ai-tools",
+    "web-crawling",
+    "web-extraction",
+    "research",
+    "claude",
+    "cursor",
+    "vscode",
+    "windsurf",
+    "llm-tools",
+    "rag",
+    "proxy",
+    "anti-bot",
+    "data-extraction",
+    "web-data",
+    "tavily-alternative",
+    "firecrawl-alternative",
+    "exa-alternative",
+    "brave-search-alternative"
+  ],
+  "hosted_endpoint": "https://mcp.novada.com/mcp"
+}

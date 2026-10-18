@@ -20,11 +20,19 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG_PATH = join(ROOT, "package.json");
 const SERVER_JSON_PATH = join(ROOT, "server.json");
 const CORE_JS_PATH = join(ROOT, "build", "core.js");
+const SCRAPER_CATALOG_JS_PATH = join(ROOT, "build", "data", "scraper_catalog.js");
 
 const pkg = JSON.parse(readFileSync(PKG_PATH, "utf8"));
 const serverJson = JSON.parse(readFileSync(SERVER_JSON_PATH, "utf8"));
 
 const { TOOLS } = await import(pathToFileURL(CORE_JS_PATH).href);
+// brief-F R7 (2026-10-15): the platform count below used to be a hand-typed "16" that drifted
+// from the registry (ground truth is 14 working platforms — see
+// npm-package/src/data/scraper_catalog.ts's WORKING_PLATFORM_NAMES, the same export the live
+// novada_scrape tool description itself is built from). Import it here too so this script's
+// description can never drift from the registry again — the only remaining literal is the fixed
+// prose shell, not the count.
+const { WORKING_PLATFORM_NAMES } = await import(pathToFileURL(SCRAPER_CATALOG_JS_PATH).href);
 
 // Abbreviations that end in a period but are NOT sentence boundaries — a naive
 // /[.!?]\s+/ split treats "Google (incl. Shopping)" as two sentences without
@@ -80,8 +88,13 @@ if (Array.isArray(serverJson.packages)) {
 // `npm run build` silently reintroduced a registry-blocking server.json). Update this
 // string only if you also re-run the ajv check — see
 // tests/consistency/server-json-descriptions.test.ts, which now asserts the length bound.
+//
+// The platform COUNT is derived from WORKING_PLATFORM_NAMES.length (brief-F R7, 2026-10-15) —
+// everything else in this sentence stays the fixed prose shell this round's invariant forbids
+// changing further. Same digit-width (2 digits) both before and after this fix, so the length
+// bound above is unaffected; re-verify with the ajv test above if that ever stops being true.
 serverJson.description =
-  "Search, extract, crawl, map, research, scrape 16 platforms, browser automation, proxy — one API key.";
+  `Search, extract, crawl, map, research, scrape ${WORKING_PLATFORM_NAMES.length} platforms, browser automation, proxy — one API key.`;
 serverJson.tools = TOOLS.map((t) => ({ name: t.name, description: shortDescription(t.description) }));
 
 writeFileSync(SERVER_JSON_PATH, JSON.stringify(serverJson, null, 2) + "\n");

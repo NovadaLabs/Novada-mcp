@@ -5,12 +5,22 @@ on:
     branches: [main]
     paths:
       - "npm-package/**"
+      - "distribution/**"
       - ".github/workflows/**"
+      # R2 (brief-F, 2026-10-15): gemini-extension.json is a distribution channel row
+      # (distribution/channels.json's "gemini-cli" row) that lives at the repo ROOT, outside
+      # every glob above — a PR touching ONLY this file previously never triggered CI at all,
+      # so distribution/check.mjs's drift gate could be failing with nobody ever seeing it.
+      # distribution/check.mjs's ci_paths_cover check now fails the build if any channel row's
+      # path stops being covered by this list (or any future one added here).
+      - "gemini-extension.json"
   pull_request:
     branches: [main]
     paths:
       - "npm-package/**"
+      - "distribution/**"
       - ".github/workflows/**"
+      - "gemini-extension.json"
   workflow_dispatch: {}
 
 defaults:
@@ -43,14 +53,87 @@ jobs:
       - name: Build
         run: npm run build
 
-      # test:coverage runs the exact same suite as `npm test` (vitest run) plus
-      # v8 coverage collection + the `thresholds` gate configured in
-      # vitest.config.ts. A coverage regression below the documented baseline
-      # (see that file's coverage.thresholds comment) now fails the build the
-      # same way a failing test does — vitest run --coverage exits non-zero on
-      # a threshold miss, verified locally before wiring this in.
+      # K3 (brief-K, 2026-10-15 CRITICAL): the distribution drift gate ("Distribution tests" +
+      # "Distribution gate") used to run as two STEPS in THIS job, ahead of the two steps below.
+      # brief-J's J2 fix had already split them into two independent STEPS (so one bash -e
+      # failure in one couldn't silently swallow the other) — but GitHub Actions still skips
+      # every REMAINING step in a job once any earlier step in that SAME job fails (no
+      # continue-on-error on "Distribution gate", by design — see its own comment in the
+      # `distribution` job below). Since "Distribution gate" is EXPECTED to fail today
+      # (hosted-server/landing/tools.html's claims_consistent mismatch is deliberately left red,
+      # see distribution/README.md), "Test (with coverage thresholds)"/"Lint" below NEVER ran, on
+      # every single CI run, with zero signal that the actual npm-package product suite had
+      # silently stopped executing. Moved into the separate `distribution` job below: a job
+      # failure never skips steps in ANOTHER job (jobs run independently, in parallel, by
+      # default — no `needs:` between them), so this job is restored to its exact PRE-brief-J
+      # step order/shape (checkout -> setup-node -> install -> build -> test -> lint), with no
+      # distribution step in it at all.
       - name: Test (with coverage thresholds)
         run: npm run test:coverage
 
       - name: Lint
         run: npm run lint
+
+  # K3 (brief-K, 2026-10-15 CRITICAL): see the `build` job's own "Test (with coverage thresholds)"
+  # step comment above for the full bug this job fixes. This job's gate failure (today, by
+  # design — see "Distribution gate" below) can never skip a step in `build`, because
+  # GitHub Actions jobs are independent unless one `needs:` the other (this one deliberately does
+  # not — running in parallel, not sequentially after `build`, keeps overall CI wall-clock time
+  # unchanged from before this fix).
+  distribution:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: npm-package/package-lock.json
+
+      # distribution/check.mjs's claims_consistent check (and this job's own "Distribution tests"
+      # step) read npm-package/build/core.js and npm-package/build/data/scraper_catalog.js, which
+      # only exist after `npm run build` — this job runs its own install+build rather than
+      # trying to share the `build` job's build/ output across jobs (GitHub Actions jobs do not
+      # share a filesystem; that would need a separate upload-artifact/download-artifact pair for
+      # no real benefit here, since `npm ci && npm run build` is already fast and this job needs
+      # a fresh checkout of its own regardless).
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # `distribution/test/*.test.mjs` (a shell glob, not a bare directory path) is used
+      # deliberately: `node --test distribution/test/` fails with MODULE_NOT_FOUND on Node
+      # 24.18.0 (verified locally 2026-10-15) — passing an explicit directory argument does
+      # NOT trigger this test runner's recursive-directory discovery the way `node --test`
+      # with no path argument does; only an explicit file list (which the shell glob expands
+      # to before Node ever sees it) is version-independently reliable. Runs FIRST within this
+      # job (brief-J J2's own ordering, preserved) so a gate failure never hides whether the
+      # 63+-test distribution suite itself is green.
+      - name: Distribution tests
+        working-directory: ${{ github.workspace }}
+        run: node --test distribution/test/*.test.mjs
+
+      # distribution/check.mjs is the channel-registry drift gate (brief-A,
+      # 2026-10-15-distribution-consistency): it fails on version/name/description drift
+      # across every distribution-channel manifest (MCP Registry's server.json, Claude Code's
+      # plugin.json/marketplace.json, Smithery, Glama), unclaimed manifest-pattern files
+      # anywhere in the repo, missing required files, whole-file tamper evidence and
+      # structural/format pins on every hand-authored manifest (brief-J tamper_evident,
+      # brief-K pinned_fields_template/pinned_fields_format), duplicate JSON keys invisible to
+      # JSON.parse (brief-K json_no_duplicate_keys), and hand-typed tool/platform counts across
+      # every tracked prose file minus an explicit, justified exclude list (brief-J
+      # claims_consistent). Lives at the REPO ROOT (not under npm-package/, this workflow's
+      # default working-directory), so this step overrides that default explicitly. Only
+      # hosted-server/landing/tools.html's claims_consistent mismatch is expected to fail this
+      # step today (see distribution/README.md) — that is this repo's own known, accepted state,
+      # not something this step should be weakened to pass. No `continue-on-error` here: this
+      # step MUST stay a real, job-failing check (K3's own invariant) — only its JOB changed, not
+      # whether it can fail the build.
+      - name: Distribution gate
+        working-directory: ${{ github.workspace }}
+        run: node distribution/check.mjs
