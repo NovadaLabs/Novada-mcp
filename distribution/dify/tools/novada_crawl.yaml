@@ -1,0 +1,137 @@
+identity:
+  name: novada_crawl
+  author: novadalabs
+  label:
+    en_US: Crawl a Site
+    zh_Hans: 多页面抓取
+description:
+  human:
+    en_US: Crawls up to 20 pages from a starting URL (breadth- or depth-first) and extracts each page.
+    zh_Hans: 从起始网址开始抓取最多 20 个页面(广度或深度优先),并提取每页内容。
+  llm: Crawls up to 20 pages from a starting URL (breadth- or depth-first) and extracts each page.
+parameters:
+  - name: url
+    type: string
+    required: true
+    label:
+      en_US: URL
+      zh_Hans: 网址
+    human_description:
+      en_US: The starting URL to crawl from.
+      zh_Hans: 开始抓取的起始网址。
+    llm_description: The starting URL to crawl from.
+    form: llm
+  - name: max_pages
+    type: number
+    required: false
+    label:
+      en_US: Max Pages
+      zh_Hans: 最大页数
+    human_description:
+      en_US: Maximum pages to crawl, 1-20. Default 5.
+      zh_Hans: 最大抓取页数,1-20,默认 5。
+    llm_description: Maximum pages to crawl, 1-20. Default 5.
+    form: llm
+  - name: strategy
+    type: select
+    required: false
+    default: bfs
+    label:
+      en_US: Crawl Strategy
+      zh_Hans: 抓取策略
+    human_description:
+      en_US: "Traversal order: breadth-first (bfs) or depth-first (dfs)."
+      zh_Hans: "遍历顺序:广度优先(bfs)或深度优先(dfs)。"
+    llm_description: "Traversal order: breadth-first (bfs) or depth-first (dfs)."
+    options:
+      - value: bfs
+        label:
+          en_US: bfs
+          zh_Hans: bfs
+      - value: dfs
+        label:
+          en_US: dfs
+          zh_Hans: dfs
+    form: llm
+  - name: render
+    type: select
+    required: false
+    default: auto
+    label:
+      en_US: Render Mode
+      zh_Hans: 渲染模式
+    human_description:
+      en_US: Fetch strategy per page. Default auto.
+      zh_Hans: 每页的抓取策略,默认 auto。
+    llm_description: Fetch strategy per page. Default auto.
+    options:
+      - value: auto
+        label:
+          en_US: auto
+          zh_Hans: auto
+      - value: static
+        label:
+          en_US: static
+          zh_Hans: static
+      - value: render
+        label:
+          en_US: render
+          zh_Hans: render
+    form: llm
+  - name: select_paths
+    type: string
+    required: false
+    label:
+      en_US: Select Paths (JSON)
+      zh_Hans: 限定路径（JSON）
+    human_description:
+      en_US: "JSON array of glob patterns to restrict crawled paths, e.g. [\"/docs/**\"]."
+      zh_Hans: "限定抓取路径的 glob 模式,JSON 数组字符串,例如 [\"/docs/**\"]。"
+    llm_description: "JSON array of glob patterns to restrict crawled paths, e.g. [\"/docs/**\"]."
+    form: llm
+  - name: exclude_paths
+    type: string
+    required: false
+    label:
+      en_US: Exclude Paths (JSON)
+      zh_Hans: 排除路径（JSON）
+    human_description:
+      en_US: "JSON array of glob patterns to skip, e.g. [\"/blog/**\"]."
+      zh_Hans: "需要跳过的路径 glob 模式,JSON 数组字符串,例如 [\"/blog/**\"]。"
+    llm_description: "JSON array of glob patterns to skip, e.g. [\"/blog/**\"]."
+    form: llm
+  - name: format
+    type: select
+    required: false
+    default: markdown
+    label:
+      en_US: Output Format
+      zh_Hans: 输出格式
+    human_description:
+      en_US: Response shape. Default markdown.
+      zh_Hans: 返回格式,默认 markdown。
+    llm_description: Response shape. Default markdown.
+    options:
+      - value: markdown
+        label:
+          en_US: markdown
+          zh_Hans: markdown
+      - value: json
+        label:
+          en_US: json
+          zh_Hans: json
+    form: llm
+  - name: instructions
+    type: string
+    required: false
+    label:
+      en_US: Instructions
+      zh_Hans: 说明提示
+    human_description:
+      en_US: Natural-language hint for which pages matter; echoed back, does not filter crawl scope by itself.
+      zh_Hans: 说明哪些页面重要的自然语言提示;会被原样返回,但本身不会过滤抓取范围。
+    llm_description: Natural-language hint for which pages matter; echoed back, does not filter crawl scope by itself.
+    form: llm
+extra:
+  python:
+    source: tools/novada_crawl.py

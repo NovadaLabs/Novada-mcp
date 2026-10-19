@@ -1,0 +1,165 @@
+identity:
+  name: novada_extract
+  author: novadalabs
+  label:
+    en_US: Extract a URL
+    zh_Hans: 网页内容提取
+description:
+  human:
+    en_US: Extracts readable content from one URL, or a JSON array of up to 10 URLs for batch mode.
+    zh_Hans: 提取单个网址的正文内容;也可传入最多 10 个网址的 JSON 数组进行批量提取。
+  llm: Extracts readable content from one URL, or a JSON array of up to 10 URLs for batch mode.
+parameters:
+  - name: url
+    type: string
+    required: true
+    label:
+      en_US: URL
+      zh_Hans: 网址
+    human_description:
+      en_US: "A single URL, or a JSON array of up to 10 URLs for batch mode, e.g. [\"https://a\",\"https://b\"]."
+      zh_Hans: "单个网址,或最多 10 个网址的 JSON 数组字符串,例如 [\"https://a\",\"https://b\"]。"
+    llm_description: "A single URL, or a JSON array of up to 10 URLs for batch mode, e.g. [\"https://a\",\"https://b\"]."
+    form: llm
+  - name: clean
+    type: boolean
+    required: false
+    label:
+      en_US: Main Content Only
+      zh_Hans: 仅提取正文
+    human_description:
+      en_US: If true, strips navigation/ads/footer and returns only the main content.
+      zh_Hans: 为 true 时去除导航栏、广告、页脚,仅返回正文内容。
+    llm_description: If true, strips navigation/ads/footer and returns only the main content.
+    form: llm
+  - name: format
+    type: select
+    required: false
+    default: markdown
+    label:
+      en_US: Output Format
+      zh_Hans: 输出格式
+    human_description:
+      en_US: Response shape. Default markdown.
+      zh_Hans: 返回格式,默认 markdown。
+    llm_description: Response shape. Default markdown.
+    options:
+      - value: text
+        label:
+          en_US: text
+          zh_Hans: text
+      - value: markdown
+        label:
+          en_US: markdown
+          zh_Hans: markdown
+      - value: html
+        label:
+          en_US: html
+          zh_Hans: html
+      - value: json
+        label:
+          en_US: json
+          zh_Hans: json
+    form: llm
+  - name: render
+    type: select
+    required: false
+    default: auto
+    label:
+      en_US: Render Mode
+      zh_Hans: 渲染模式
+    human_description:
+      en_US: "Fetch strategy: auto escalates from static fetch to JS rendering as needed."
+      zh_Hans: "抓取策略:auto 会按需从静态抓取升级到 JS 渲染。"
+    llm_description: "Fetch strategy: auto escalates from static fetch to JS rendering as needed."
+    options:
+      - value: auto
+        label:
+          en_US: auto
+          zh_Hans: auto
+      - value: static
+        label:
+          en_US: static
+          zh_Hans: static
+      - value: render
+        label:
+          en_US: render
+          zh_Hans: render
+      - value: js
+        label:
+          en_US: js
+          zh_Hans: js
+      - value: browser
+        label:
+          en_US: browser
+          zh_Hans: browser
+    form: llm
+  - name: max_chars
+    type: number
+    required: false
+    label:
+      en_US: Max Characters
+      zh_Hans: 最大字符数
+    human_description:
+      en_US: Maximum characters to return (1000-100000). Default 25000.
+      zh_Hans: 返回的最大字符数(1000-100000),默认 25000。
+    llm_description: Maximum characters to return (1000-100000). Default 25000.
+    form: llm
+  - name: fields
+    type: string
+    required: false
+    label:
+      en_US: Fields (JSON)
+      zh_Hans: 字段（JSON）
+    human_description:
+      en_US: "JSON array of specific fields to extract, e.g. [\"price\",\"author\"]."
+      zh_Hans: "需要提取的具体字段,JSON 数组字符串,例如 [\"price\",\"author\"]。"
+    llm_description: "JSON array of specific fields to extract, e.g. [\"price\",\"author\"]."
+    form: llm
+  - name: country
+    type: string
+    required: false
+    label:
+      en_US: Country Code
+      zh_Hans: 国家代码
+    human_description:
+      en_US: ISO 3166-1 alpha-2 country code to route the fetch through, e.g. de.
+      zh_Hans: 用于路由抓取请求的 ISO 两位国家代码,例如 de。
+    llm_description: ISO 3166-1 alpha-2 country code to route the fetch through, e.g. de.
+    form: llm
+  - name: query
+    type: string
+    required: false
+    label:
+      en_US: Query
+      zh_Hans: 查询词
+    human_description:
+      en_US: Optional relevance context to help focus the extracted content.
+      zh_Hans: 可选的相关性上下文,用于聚焦提取的内容。
+    llm_description: Optional relevance context to help focus the extracted content.
+    form: llm
+  - name: wait_for
+    type: string
+    required: false
+    label:
+      en_US: Wait For Selector
+      zh_Hans: 等待选择器
+    human_description:
+      en_US: CSS selector to wait for before capturing content (render modes only).
+      zh_Hans: 渲染模式下,等待该 CSS 选择器出现后再截取内容。
+    llm_description: CSS selector to wait for before capturing content (render modes only).
+    form: llm
+  - name: wait_ms
+    type: number
+    required: false
+    label:
+      en_US: Wait Milliseconds
+      zh_Hans: 等待毫秒数
+    human_description:
+      en_US: Fixed milliseconds to wait after load before capturing (render modes only).
+      zh_Hans: 渲染模式下,加载完成后固定等待的毫秒数。
+    llm_description: Fixed milliseconds to wait after load before capturing (render modes only).
+    form: llm
+extra:
+  python:
+    source: tools/novada_extract.py

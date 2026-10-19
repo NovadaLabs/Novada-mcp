@@ -1,0 +1,67 @@
+version: 0.1.0
+type: plugin
+author: novadalabs
+name: novada
+label:
+  en_US: Novada
+  zh_Hans: Novada 网页数据
+description:
+  en_US: >-
+    Search, extract, crawl, and scrape the live web — one API key, powered by
+    the Novada hosted MCP server (mcp.novada.com).
+  zh_Hans: >-
+    一个 API Key 即可搜索、抓取网页与结构化数据 —— 由 Novada 托管 MCP 服务驱动。
+created_at: "2026-10-18T18:38:34Z"
+# Bare filename, not "_assets/icon.svg" — confirmed by running the official
+# `dify plugin init` scaffold: it writes _assets/icon.svg to disk but
+# manifest.yaml/provider yaml both reference it as icon: icon.svg (Dify resolves
+# icon/icon_dark by basename inside _assets/, not by the manifest-relative path).
+icon: icon.svg
+
+resource:
+  memory: 268435456 # 256MB — network-bound tool calls, no local model/heavy compute
+  permission:
+    tool:
+      enabled: false
+    model:
+      enabled: false
+    endpoint:
+      enabled: false
+    app:
+      enabled: false
+    storage:
+      enabled: false
+      # Required even when disabled: the packaging CLI's Go struct validates this
+      # with a floor of 1024 bytes regardless of `enabled`; omitting it yields a
+      # zero-value that fails that minimum (found via `dify plugin package`, exit
+      # 1: "Permission.Storage.Size ... failed on the 'min' tag"). Value is the
+      # dify_plugin Python SDK's own documented default (1 MiB) for parity.
+      size: 1048576
+
+network:
+  domains:
+    - mcp.novada.com
+
+plugins:
+  tools:
+    - provider/novada.yaml
+
+meta:
+  version: 0.1.0
+  arch:
+    - amd64
+    - arm64
+  runner:
+    language: python
+    version: "3.12"
+    entrypoint: main
+
+tags:
+  - search
+  - utilities
+
+privacy: PRIVACY.md
+# Required by the Marketplace local validator (dify-marketplace-toolkit), not by the
+# base dify_plugin manifest schema — found via `validate-difypkg.py` run #1.
+repo: https://github.com/NovadaLabs/Novada-mcp/tree/main/distribution/dify
+contact: support@novada.com

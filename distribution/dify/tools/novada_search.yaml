@@ -1,0 +1,144 @@
+identity:
+  name: novada_search
+  author: novadalabs
+  label:
+    en_US: Search the Web
+    zh_Hans: 网页搜索
+description:
+  human:
+    en_US: Searches the web and returns ranked titles, URLs, and snippets.
+    zh_Hans: 搜索网页，返回按相关性排序的标题、链接与摘要。
+  llm: Searches the web and returns ranked titles, URLs, and snippets.
+parameters:
+  - name: query
+    type: string
+    required: true
+    label:
+      en_US: Query
+      zh_Hans: 查询词
+    human_description:
+      en_US: The search query text.
+      zh_Hans: 搜索关键词或问题。
+    llm_description: The search query text.
+    form: llm
+  - name: num
+    type: number
+    required: false
+    label:
+      en_US: Number of Results
+      zh_Hans: 结果数量
+    human_description:
+      en_US: Number of results to return, 1-20. Default 10.
+      zh_Hans: 返回结果数量，1-20，默认 10。
+    llm_description: Number of results to return, 1-20. Default 10.
+    form: llm
+  - name: engine
+    type: select
+    required: false
+    default: google
+    label:
+      en_US: Search Engine
+      zh_Hans: 搜索引擎
+    human_description:
+      en_US: Search engine to use. Default google.
+      zh_Hans: 使用的搜索引擎,默认 google。
+    llm_description: Search engine to use. Default google.
+    options:
+      - value: google
+        label:
+          en_US: google
+          zh_Hans: google
+      - value: duckduckgo
+        label:
+          en_US: duckduckgo
+          zh_Hans: duckduckgo
+      - value: yandex
+        label:
+          en_US: yandex
+          zh_Hans: yandex
+    form: llm
+  - name: country
+    type: string
+    required: false
+    label:
+      en_US: Country Code
+      zh_Hans: 国家代码
+    human_description:
+      en_US: ISO 3166-1 alpha-2 country code to geo-target results, e.g. us, de.
+      zh_Hans: ISO 3166-1 两位国家代码,用于本地化结果,例如 us、de。
+    llm_description: ISO 3166-1 alpha-2 country code to geo-target results, e.g. us, de.
+    form: llm
+  - name: time_range
+    type: select
+    required: false
+    label:
+      en_US: Time Range
+      zh_Hans: 时间范围
+    human_description:
+      en_US: Restrict results to a recency window.
+      zh_Hans: 限制结果的时间范围。
+    llm_description: Restrict results to a recency window.
+    options:
+      - value: day
+        label:
+          en_US: day
+          zh_Hans: day
+      - value: week
+        label:
+          en_US: week
+          zh_Hans: week
+      - value: month
+        label:
+          en_US: month
+          zh_Hans: month
+      - value: year
+        label:
+          en_US: year
+          zh_Hans: year
+    form: llm
+  - name: include_domains
+    type: string
+    required: false
+    label:
+      en_US: Include Domains (JSON)
+      zh_Hans: 限定域名（JSON）
+    human_description:
+      en_US: "JSON array of up to 10 domains to restrict results to, e.g. [\"github.com\"]."
+      zh_Hans: "仅返回这些域名的结果,JSON 数组字符串,最多 10 个,例如 [\"github.com\"]。"
+    llm_description: "JSON array of up to 10 domains to restrict results to, e.g. [\"github.com\"]."
+    form: llm
+  - name: exclude_domains
+    type: string
+    required: false
+    label:
+      en_US: Exclude Domains (JSON)
+      zh_Hans: 排除域名（JSON）
+    human_description:
+      en_US: "JSON array of up to 10 domains to exclude from results, e.g. [\"reddit.com\"]."
+      zh_Hans: "排除这些域名的结果,JSON 数组字符串,最多 10 个,例如 [\"reddit.com\"]。"
+    llm_description: "JSON array of up to 10 domains to exclude from results, e.g. [\"reddit.com\"]."
+    form: llm
+  - name: format
+    type: select
+    required: false
+    default: markdown
+    label:
+      en_US: Output Format
+      zh_Hans: 输出格式
+    human_description:
+      en_US: Response shape. Default markdown.
+      zh_Hans: 返回格式,默认 markdown。
+    llm_description: Response shape. Default markdown.
+    options:
+      - value: markdown
+        label:
+          en_US: markdown
+          zh_Hans: markdown
+      - value: json
+        label:
+          en_US: json
+          zh_Hans: json
+    form: llm
+extra:
+  python:
+    source: tools/novada_search.py

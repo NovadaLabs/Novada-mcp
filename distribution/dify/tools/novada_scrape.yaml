@@ -1,0 +1,107 @@
+identity:
+  name: novada_scrape
+  author: novadalabs
+  label:
+    en_US: Scrape a Platform
+    zh_Hans: 平台结构化抓取
+description:
+  human:
+    en_US: Returns structured records for a named platform and operation, instead of raw HTML.
+    zh_Hans: 按指定平台与操作返回结构化记录,而非原始 HTML。
+  llm: Returns structured records for a named platform and operation, instead of raw HTML.
+parameters:
+  - name: platform
+    type: string
+    required: true
+    label:
+      en_US: Platform
+      zh_Hans: 平台
+    human_description:
+      en_US: "Platform domain, e.g. \"amazon.com\", \"linkedin.com\", \"google.com\"."
+      zh_Hans: "平台域名,例如 \"amazon.com\"、\"linkedin.com\"、\"google.com\"。"
+    llm_description: "Platform domain, e.g. \"amazon.com\", \"linkedin.com\", \"google.com\"."
+    form: llm
+  - name: operation
+    type: string
+    required: true
+    label:
+      en_US: Operation ID
+      zh_Hans: 操作 ID
+    human_description:
+      en_US: "Operation ID for the platform, e.g. \"amazon_product_keywords\"."
+      zh_Hans: "该平台的操作 ID,例如 \"amazon_product_keywords\"。"
+    llm_description: "Operation ID for the platform, e.g. \"amazon_product_keywords\"."
+    form: llm
+  - name: params
+    type: string
+    required: false
+    label:
+      en_US: Parameters (JSON)
+      zh_Hans: 参数（JSON）
+    human_description:
+      en_US: "JSON object of operation-specific parameters, e.g. {\"keyword\":\"iphone 16\",\"num\":5}."
+      zh_Hans: "操作所需参数,JSON 对象字符串,例如 {\"keyword\":\"iphone 16\",\"num\":5}。"
+    llm_description: "JSON object of operation-specific parameters, e.g. {\"keyword\":\"iphone 16\",\"num\":5}."
+    form: llm
+  - name: limit
+    type: number
+    required: false
+    label:
+      en_US: Limit
+      zh_Hans: 数量上限
+    human_description:
+      en_US: Maximum records to return, up to 100. Default 20.
+      zh_Hans: 返回的最大记录数,最多 100,默认 20。
+    llm_description: Maximum records to return, up to 100. Default 20.
+    form: llm
+  - name: format
+    type: select
+    required: false
+    default: markdown
+    label:
+      en_US: Output Format
+      zh_Hans: 输出格式
+    human_description:
+      en_US: Response shape. Default markdown.
+      zh_Hans: 返回格式,默认 markdown。
+    llm_description: Response shape. Default markdown.
+    options:
+      - value: json
+        label:
+          en_US: json
+          zh_Hans: json
+      - value: csv
+        label:
+          en_US: csv
+          zh_Hans: csv
+      - value: excel
+        label:
+          en_US: excel
+          zh_Hans: excel
+      - value: html
+        label:
+          en_US: html
+          zh_Hans: html
+      - value: markdown
+        label:
+          en_US: markdown
+          zh_Hans: markdown
+      - value: toon
+        label:
+          en_US: toon
+          zh_Hans: toon
+    form: llm
+  - name: task_id
+    type: string
+    required: false
+    label:
+      en_US: Task ID
+      zh_Hans: 任务 ID
+    human_description:
+      en_US: Resume a previous slow task by ID instead of submitting a new one.
+      zh_Hans: 按 ID 续取先前未完成的任务结果,而非提交新任务。
+    llm_description: Resume a previous slow task by ID instead of submitting a new one.
+    form: llm
+extra:
+  python:
+    source: tools/novada_scrape.py
