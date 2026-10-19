@@ -1,0 +1,38 @@
+identity:
+  author: novadalabs
+  name: novada
+  label:
+    en_US: Novada
+    zh_Hans: Novada
+  description:
+    en_US: >-
+      Search, extract, crawl, and scrape the live web with one API key, powered by
+      the Novada hosted MCP server (mcp.novada.com).
+    zh_Hans: >-
+      一个 API Key 即可搜索、抓取网页与结构化数据 —— 由 Novada 托管 MCP 服务驱动。
+  icon: icon.svg  # bare filename — see manifest.yaml comment on icon resolution
+credentials_for_provider:
+  api_key:
+    type: secret-input
+    required: true
+    label:
+      en_US: Novada API Key
+      zh_Hans: Novada API Key
+    placeholder:
+      en_US: "<NOVADA_API_KEY>"
+      zh_Hans: "<NOVADA_API_KEY>"
+    help:
+      en_US: Get your API key from the Novada dashboard at https://www.novada.com.
+      zh_Hans: 请在 Novada 控制台 https://www.novada.com 获取 API Key。
+    url: https://www.novada.com
+tools:
+  - tools/novada_search.yaml
+  - tools/novada_extract.yaml
+  - tools/novada_crawl.yaml
+  - tools/novada_map.yaml
+  - tools/novada_research.yaml
+  - tools/novada_scrape.yaml
+  - tools/novada_account.yaml
+extra:
+  python:
+    source: provider/novada.py

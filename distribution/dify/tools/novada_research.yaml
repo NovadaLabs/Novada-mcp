@@ -1,0 +1,116 @@
+identity:
+  name: novada_research
+  author: novadalabs
+  label:
+    en_US: Deep Research
+    zh_Hans: 深度研究
+description:
+  human:
+    en_US: Runs several parallel web searches, dedupes, and extracts cited source passages for a question.
+    zh_Hans: 对一个问题并行执行多次网页搜索、去重并提取带引用的原始资料片段。
+  llm: Runs several parallel web searches, dedupes, and extracts cited source passages for a question.
+parameters:
+  - name: question
+    type: string
+    required: true
+    label:
+      en_US: Question
+      zh_Hans: 研究问题
+    human_description:
+      en_US: The research question or topic to investigate.
+      zh_Hans: 需要研究的问题或主题。
+    llm_description: The research question or topic to investigate.
+    form: llm
+  - name: depth
+    type: select
+    required: false
+    default: auto
+    label:
+      en_US: Research Depth
+      zh_Hans: 研究深度
+    human_description:
+      en_US: "How many parallel searches to run: quick (3), deep (6), comprehensive (8-9), or auto."
+      zh_Hans: "并行搜索次数档位:quick(3 次)、deep(6 次)、comprehensive(8-9 次)或 auto。"
+    llm_description: "How many parallel searches to run: quick (3), deep (6), comprehensive (8-9), or auto."
+    options:
+      - value: quick
+        label:
+          en_US: quick
+          zh_Hans: quick
+      - value: deep
+        label:
+          en_US: deep
+          zh_Hans: deep
+      - value: auto
+        label:
+          en_US: auto
+          zh_Hans: auto
+      - value: comprehensive
+        label:
+          en_US: comprehensive
+          zh_Hans: comprehensive
+    form: llm
+  - name: focus
+    type: string
+    required: false
+    label:
+      en_US: Focus Area
+      zh_Hans: 聚焦方向
+    human_description:
+      en_US: Optional focus area to guide sub-query generation.
+      zh_Hans: 可选的聚焦方向,用于指导子查询生成。
+    llm_description: Optional focus area to guide sub-query generation.
+    form: llm
+  - name: time_range
+    type: select
+    required: false
+    label:
+      en_US: Time Range
+      zh_Hans: 时间范围
+    human_description:
+      en_US: Restrict results to a recency window.
+      zh_Hans: 限制结果的时间范围。
+    llm_description: Restrict results to a recency window.
+    options:
+      - value: day
+        label:
+          en_US: day
+          zh_Hans: day
+      - value: week
+        label:
+          en_US: week
+          zh_Hans: week
+      - value: month
+        label:
+          en_US: month
+          zh_Hans: month
+      - value: year
+        label:
+          en_US: year
+          zh_Hans: year
+    form: llm
+  - name: start_date
+    type: string
+    required: false
+    label:
+      en_US: Start Date
+      zh_Hans: 起始日期
+    human_description:
+      en_US: ISO date (YYYY-MM-DD); only results on or after this date.
+      zh_Hans: ISO 日期(YYYY-MM-DD),仅返回该日期及之后的结果。
+    llm_description: ISO date (YYYY-MM-DD); only results on or after this date.
+    form: llm
+  - name: end_date
+    type: string
+    required: false
+    label:
+      en_US: End Date
+      zh_Hans: 结束日期
+    human_description:
+      en_US: ISO date (YYYY-MM-DD); only results on or before this date.
+      zh_Hans: ISO 日期(YYYY-MM-DD),仅返回该日期及之前的结果。
+    llm_description: ISO date (YYYY-MM-DD); only results on or before this date.
+    form: llm
+extra:
+  python:
+    source: tools/novada_research.py

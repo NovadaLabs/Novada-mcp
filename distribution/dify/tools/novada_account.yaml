@@ -1,0 +1,124 @@
+identity:
+  name: novada_account
+  author: novadalabs
+  label:
+    en_US: "Account & Billing"
+    zh_Hans: 账户与账单
+description:
+  human:
+    en_US: Reads wallet balance, plan quotas, usage history, or traffic for the authenticated account.
+    zh_Hans: 读取当前账户的钱包余额、套餐额度、用量历史或流量数据。
+  llm: Reads wallet balance, plan quotas, usage history, or traffic for the authenticated account.
+parameters:
+  - name: section
+    type: select
+    required: false
+    default: summary
+    label:
+      en_US: Section
+      zh_Hans: 数据分类
+    human_description:
+      en_US: Which account data to fetch. Default summary.
+      zh_Hans: 要查询的账户数据类型,默认 summary。
+    llm_description: Which account data to fetch. Default summary.
+    options:
+      - value: summary
+        label:
+          en_US: summary
+          zh_Hans: summary
+      - value: balance
+        label:
+          en_US: balance
+          zh_Hans: balance
+      - value: usage
+        label:
+          en_US: usage
+          zh_Hans: usage
+      - value: plans
+        label:
+          en_US: plans
+          zh_Hans: plans
+      - value: traffic
+        label:
+          en_US: traffic
+          zh_Hans: traffic
+    form: llm
+  - name: format
+    type: select
+    required: false
+    default: card
+    label:
+      en_US: Output Format
+      zh_Hans: 输出格式
+    human_description:
+      en_US: Response shape. Default card (human-readable).
+      zh_Hans: 返回格式,默认 card(易读格式)。
+    llm_description: Response shape. Default card (human-readable).
+    options:
+      - value: card
+        label:
+          en_US: card
+          zh_Hans: card
+      - value: json
+        label:
+          en_US: json
+          zh_Hans: json
+    form: llm
+  - name: start_time
+    type: string
+    required: false
+    label:
+      en_US: Start Time
+      zh_Hans: 起始时间
+    human_description:
+      en_US: Inclusive start date (YYYY-MM-DD); usage/traffic sections only.
+      zh_Hans: 起始日期(YYYY-MM-DD,含当天),仅用于 usage/traffic。
+    llm_description: Inclusive start date (YYYY-MM-DD); usage/traffic sections only.
+    form: llm
+  - name: end_time
+    type: string
+    required: false
+    label:
+      en_US: End Time
+      zh_Hans: 结束时间
+    human_description:
+      en_US: Inclusive end date (YYYY-MM-DD); usage/traffic sections only.
+      zh_Hans: 结束日期(YYYY-MM-DD,含当天),仅用于 usage/traffic。
+    llm_description: Inclusive end date (YYYY-MM-DD); usage/traffic sections only.
+    form: llm
+  - name: products
+    type: string
+    required: false
+    label:
+      en_US: Products (JSON)
+      zh_Hans: 产品（JSON）
+    human_description:
+      en_US: "JSON array of products to filter by; plans/traffic sections only, e.g. [\"residential\",\"static\"]."
+      zh_Hans: "按产品过滤,JSON 数组字符串,仅用于 plans/traffic,例如 [\"residential\",\"static\"]。"
+    llm_description: "JSON array of products to filter by; plans/traffic sections only, e.g. [\"residential\",\"static\"]."
+    form: llm
+  - name: page
+    type: number
+    required: false
+    label:
+      en_US: Page
+      zh_Hans: 页码
+    human_description:
+      en_US: 1-based page index; usage section only.
+      zh_Hans: 页码(从 1 开始),仅用于 usage。
+    llm_description: 1-based page index; usage section only.
+    form: llm
+  - name: page_size
+    type: number
+    required: false
+    label:
+      en_US: Page Size
+      zh_Hans: 每页大小
+    human_description:
+      en_US: Page size, up to 200; usage section only.
+      zh_Hans: 每页大小,最多 200,仅用于 usage。
+    llm_description: Page size, up to 200; usage section only.
+    form: llm
+extra:
+  python:
+    source: tools/novada_account.py
