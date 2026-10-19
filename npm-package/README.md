@@ -77,6 +77,8 @@ claude mcp add --transport http novada https://mcp.novada.com/mcp --header "Auth
 claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 ```
 
+> Prefer a packaged install? The Claude Code / Claude Desktop plugin for Novada MCP lives at [NovadaLabs/claude-plugins](https://github.com/NovadaLabs/claude-plugins).
+
 ### Cursor
 
 Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-scoped):
