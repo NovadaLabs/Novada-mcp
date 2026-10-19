@@ -3,6 +3,11 @@
 Search, extract, crawl, and scrape the live web from Dify Chatflow/Workflow/Agent apps
 with one Novada API key.
 
+This plugin wires 7 tools — a deliberate subset of novada-mcp's hosted tool set chosen
+for Dify's Chatflow/Workflow/Agent building blocks, not every hosted tool. See
+`utils/tools_table.py` for the single source of truth this table (and the plugin's
+actual registered tools) are both generated from.
+
 | Tool | What it does |
 |---|---|
 | `novada_search` | Searches the web and returns ranked titles, URLs, and snippets. |

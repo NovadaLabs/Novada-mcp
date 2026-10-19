@@ -93,8 +93,21 @@ if (Array.isArray(serverJson.packages)) {
 // everything else in this sentence stays the fixed prose shell this round's invariant forbids
 // changing further. Same digit-width (2 digits) both before and after this fix, so the length
 // bound above is unaffected; re-verify with the ajv test above if that ever stops being true.
+//
+// brief-N (2026-10-19, D1): this ONE server.json listing carries BOTH a local `packages[]`
+// entry (stdio, runs the full npm package — HAS browser automation) AND a hosted `remotes[]`
+// entry (streamable-http at mcp.novada.com — does NOT, see hosted-server/vercel/api/mcp.ts's
+// HOSTED_HIDDEN). The prior wording ("...browser automation, proxy...") was unconditionally
+// true only for the local package and silently overclaimed for the remote entry — an
+// independent review's HIGH finding. "browser via npm" scopes the claim to the ONE install
+// path that actually has it, so this single description stays true for both without needing
+// two separate server.json listings. distribution/check.mjs's surface_claims check enforces
+// the equivalent per-row rule for every OTHER channel's manifest (see distribution/
+// channels.json's row.surface); this script's own template is exempt from that check (it is
+// this field's sole owner, per description_derived_reason in that row) but is held to the
+// same truthfulness bar by hand, here.
 serverJson.description =
-  `Search, extract, crawl, map, research, scrape ${WORKING_PLATFORM_NAMES.length} platforms, browser automation, proxy — one API key.`;
+  `Search, extract, crawl, map, research, scrape ${WORKING_PLATFORM_NAMES.length} platforms, proxy, browser via npm — one API key.`;
 serverJson.tools = TOOLS.map((t) => ({ name: t.name, description: shortDescription(t.description) }));
 
 writeFileSync(SERVER_JSON_PATH, JSON.stringify(serverJson, null, 2) + "\n");

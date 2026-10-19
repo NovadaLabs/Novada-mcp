@@ -16,26 +16,16 @@
 - **Auth:** N/A at this layer — server.json only DESCRIBES the server's own runtime auth (Bearer header documented informationally); the server's actual auth is OAuth 2.1 at the hosted endpoint, same as every other row below.
 - **Publish / what the owner must still do:** `mcp-publisher publish` (reads server.json from CWD) — OWNER-GATED, see distribution/registry-publish.md. The file itself is regenerated on every `npm run build` by gen-server-json.mjs.
 
-### claude-code-plugin
+### claude-plugins-external
 
 ```
-/plugin marketplace add NovadaLabs/novada-mcp
-/plugin install novada-mcp
+/plugin marketplace add NovadaLabs/claude-plugins
+/plugin install novada-mcp@novada
 ```
 
 - **Audience:** to-B — a developer runs `/plugin install` in their own Claude Code.
-- **Auth:** OAuth 2.1 (hosted endpoint's Authorization Server, auto-triggered on first connect). Manual NOVADA_API_KEY header alternative documented in INSTALL.md for setups that cannot complete a browser OAuth flow.
-- **Publish / what the owner must still do:** git push to NovadaLabs/novada-mcp main — Claude Code reads plugin.json live from the repo; there is no separate publish step.
-
-### claude-code-marketplace
-
-```
-/plugin marketplace add NovadaLabs/novada-mcp
-```
-
-- **Audience:** to-B — same audience as claude-code-plugin; this row is the marketplace LISTING entry, not a second install path.
-- **Auth:** Same as claude-code-plugin — this row only lists the plugin, it does not change how the installed plugin authenticates.
-- **Publish / what the owner must still do:** git push to NovadaLabs/novada-mcp main.
+- **Auth:** OAuth 2.1 (hosted endpoint's Authorization Server, auto-triggered on first connect) — see plugins/novada-mcp/.mcp.json in that repo.
+- **Publish / what the owner must still do:** git push to NovadaLabs/claude-plugins main — a separate repo from this monorepo; engineering maintains it directly. This repo's CI never publishes to it and never needs to (external_repo_consistent is read-only, network-verify-only).
 
 ### smithery
 
@@ -112,3 +102,23 @@ cp -R distribution/plugins/openai/. ~/.codex/plugins/novada-mcp/
 - **Audience:** Same as openai-codex-plugin — this file ships inside the same plugin directory and is referenced by its plugin.json.
 - **Auth:** Same as openai-codex-plugin.
 - **Publish / what the owner must still do:** Same as openai-codex-plugin — ships inside the same plugin directory.
+
+### dify-plugin
+
+```
+# Install from the Dify Marketplace listing, or upload the built .difypkg directly (dify plugin package distribution/dify).
+```
+
+- **Audience:** to-B/to-C — Dify Chatflow/Workflow/Agent app builders.
+- **Auth:** Static API-key credential (secret-input `api_key`, sent as `Authorization: Bearer` to mcp.novada.com) — unlike every other row above, Dify has no OAuth/DCR support for tool plugins today, so this is the one channel where a key is still typed in directly (see provider/novada.yaml's credentials_for_provider).
+- **Publish / what the owner must still do:** .github/workflows/dify-plugin.yml (PR #21) lints + tests on every push/PR touching distribution/dify/**; publishing a new version to the Dify Marketplace is a separate, owner-approved submission (each version bump = a new Marketplace PR — see version_field_reason).
+
+### dify-provider
+
+```
+# Installed together with dify-plugin (same Dify Marketplace/.difypkg install, see that row) — provider/novada.yaml is not installed on its own.
+```
+
+- **Audience:** Same as dify-plugin.
+- **Auth:** Same as dify-plugin.
+- **Publish / what the owner must still do:** Same as dify-plugin — ships inside the same plugin package.

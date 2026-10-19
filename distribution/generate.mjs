@@ -246,12 +246,38 @@ function resolveName(row, listing) {
   return row.name_override?.value ?? listing.name;
 }
 
+// brief-N (2026-10-19, D1 HIGH — independent review of PR #20): listing.description was
+// interpolated verbatim into every row's description, which was ACCURATE for a row that runs the
+// full local npm package but OVERCLAIMED "browser automation" for a row that only ever talks to
+// the hosted endpoint (hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN excludes
+// novada_browser/novada_browser_flow there). Every row now declares `surface`: "local" | "hosted"
+// | "both" (see distribution/channels.json's own $comment for the full contract); this is the
+// ONE place that resolves which of listing.json's two description variants a row gets — both
+// ownedValuesFor (json-owned-fields/yaml-owned-fields rows) and resolveFullTemplatePlaceholder
+// (json-full rows' `{{description}}` token) call this, so there is no per-writer-kind branch.
+// "local"/"both"/unset all resolve to the one shared `description` (already worded to stay true
+// for a "both" row — see listing.json's own $comment_surfaces for why); only "hosted" switches to
+// `description_hosted`. Throws loudly (same posture as every other config-shape error in this
+// file) rather than silently falling back to the overclaiming string if a "hosted" row is ever
+// declared before listing.json actually carries a description_hosted field.
+export function resolveDescriptionForRow(row, listing) {
+  if (row.surface === "hosted") {
+    if (typeof listing.description_hosted !== "string") {
+      throw new Error(
+        `row ${row.id} declares surface:"hosted" but distribution/listing.json has no "description_hosted" string field`
+      );
+    }
+    return listing.description_hosted;
+  }
+  return listing.description;
+}
+
 export function ownedValuesFor(row, listing, version) {
   const owned = new Set(row.owned_fields ?? []);
   const values = {};
   if (row.version_field && owned.has(row.version_field)) values[row.version_field] = version;
   if (row.name_field && owned.has(row.name_field)) values[row.name_field] = resolveName(row, listing);
-  if (row.description_field && owned.has(row.description_field)) values[row.description_field] = listing.description;
+  if (row.description_field && owned.has(row.description_field)) values[row.description_field] = resolveDescriptionForRow(row, listing);
   // brief-F R1: a row's url_field (the channel's hosted MCP endpoint) is only WRITTEN here when
   // it is also declared owned — e.g. npm-package/server.json's row sets url_field but omits it
   // from owned_fields, so check.mjs's endpoint_equal still verifies it without this script ever
@@ -275,6 +301,11 @@ const FULL_TEMPLATE_PLACEHOLDER_RE = /^\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}$/;
 function resolveFullTemplatePlaceholder(token, { row, listing, version }) {
   if (token === "version") return version;
   if (token === "name") return resolveName(row, listing);
+  // brief-N (2026-10-19, D1): route through the SAME surface-aware resolver ownedValuesFor uses —
+  // see resolveDescriptionForRow's own comment. Checked before the generic listing[token]
+  // fallback below so a json-full row's {{description}} placeholder never reads listing.description
+  // directly and silently overclaims for a surface:"hosted" row.
+  if (token === "description") return resolveDescriptionForRow(row, listing);
   if (Object.prototype.hasOwnProperty.call(listing, token)) return listing[token];
   throw new Error(
     `row ${row.id}'s full_template placeholder {{${token}}} does not resolve — it is neither "version"/"name" nor a top-level distribution/listing.json field`

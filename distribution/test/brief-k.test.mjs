@@ -1,8 +1,9 @@
 // distribution/test/brief-k.test.mjs — brief-K (2026-10-15): red/green coverage for K1
-// (dynamic/format pins on marketplace.json's plugins[0].source.url/.sha + the reviewer-visible
-// pinned-hashes.json branch-diff summary), K2 (the raw-text JSON duplicate-key scanner), and K4
-// (the claim_excludes match-count summary). K3 (the ci.yml job-layout fix) has its own dedicated
-// file, distribution/test/ci-layout.test.mjs.
+// (dynamic/format pins — originally on marketplace.json's plugins[0].source.url/.sha, migrated
+// brief-N 2026-10-19 to server.json's remotes[0].url/packages[0].version, see K1's own section
+// comment below — + the reviewer-visible pinned-hashes.json branch-diff summary), K2 (the
+// raw-text JSON duplicate-key scanner), and K4 (the claim_excludes match-count summary). K3 (the
+// ci.yml job-layout fix) has its own dedicated file, distribution/test/ci-layout.test.mjs.
 //
 // Same fixture discipline as the rest of this suite: every mutation happens on a cloned temp
 // copy of the shared green fixture (or a hand-crafted in-memory string for findDuplicateJsonKeys'
@@ -10,13 +11,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, cpSync, mkdtempSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runChecks, findDuplicateJsonKeys, computePinnedHashesBranchSummary, collectClaimExcludeSummary } from "../check.mjs";
-import { readPinnedHashes, repinRow } from "../generate.mjs";
+import { readPinnedHashes, repinRow, generateAll } from "../generate.mjs";
 import { buildGreenFixture, cloneFixture, cleanupFixture, readJson, writeJson, writeText } from "./fixtures.mjs";
 
 const REAL_DISTRIBUTION_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -77,27 +79,42 @@ function runCheckMjsCli(root) {
 }
 
 // =========================================================================================
-// K1 — dynamic pins on marketplace.json's plugins[0].source.url (pinned_fields_template) and
-// plugins[0].source.sha (pinned_fields_format).
+// K1 — dynamic pins on server.json's remotes[0].url (pinned_fields_template) and
+// packages[0].version (pinned_fields_format).
+//
+// brief-N (2026-10-19, D2 — independent review of PR #20): this section originally exercised
+// npm-package/.claude-plugin/marketplace.json's plugins[0].source.url/.sha — that row
+// (claude-code-marketplace) was retired (replaced by the external, kind:"external"
+// claude-plugins-external row, which has no local file and no closed_shape to pin at all).
+// mcp-registry's server.json migrated the SAME two pin mechanisms onto its own
+// remotes[0].url/packages[0].version (see that row's pinned_fields_template/pinned_fields_format
+// in distribution/channels.json) specifically so this mechanism keeps a real, exercised
+// production row — every test below is the identical attack shape, repointed.
 // =========================================================================================
 
-test("K1 attack: marketplace.json source.url swapped to a fork — PREDICTED exactly 2 failures (closed_shape(pinned_template) + tamper_evident, since the whole-file hash also moves)", async () => {
+test("K1 attack: server.json repository.url swapped to a fork — PREDICTED exactly 2 failures (closed_shape(pinned_template) + tamper_evident, since the whole-file hash also moves)", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const mp = readJson(root, "npm-package/.claude-plugin/marketplace.json");
-    mp.plugins[0].source.url = "https://github.com/evil-fork/novada-mcp.git";
-    writeJson(root, "npm-package/.claude-plugin/marketplace.json", mp);
+    const sj = readJson(root, "npm-package/server.json");
+    sj.repository.url = "https://github.com/evil-fork/novada-mcp";
+    writeJson(root, "npm-package/server.json", sj);
 
     const results = await runChecks(root);
     const total = results.reduce((n, r) => n + r.failures.length, 0);
+    // repository.url is NOT this row's url_field (/remotes/0/url, the HOSTED endpoint — already
+    // separately covered by endpoint_equal + a static pinned_fields entry) — it is neither
+    // version_field/name_field/description_field/url_field, so it is NOT excluded from
+    // tamper_evident's hash the way those four are. PREDICTED exactly 2, the SAME shape the
+    // retired marketplace.json/source.url example (brief-K K1's original) demonstrated.
     assert.equal(total, 2, `predicted exactly 2 total failures, got:\n${JSON.stringify(results, null, 2)}`);
     const cs = findResult(results, "closed_shape");
     assert.equal(cs.failures.length, 1);
     assert.match(cs.failures[0], /pinned_template/);
-    assert.match(cs.failures[0], /source\/url/);
+    assert.match(cs.failures[0], /repository\/url/);
     const te = findResult(results, "tamper_evident");
     assert.equal(te.failures.length, 1);
-    assert.match(te.failures[0], /row=claude-code-marketplace/);
+    assert.match(te.failures[0], /row=mcp-registry/);
+    assert.equal(findResult(results, "endpoint_equal").failures.length, 0, "endpoint_equal only ever reads THIS row's url_field, /remotes/0/url — untouched by this mutation");
 
     // Mutation probe: with tamper_evident disabled, the template pin ALONE still catches this.
     const probed = await runChecks(root, { skip: new Set(["tamper_evident"]) });
@@ -108,19 +125,19 @@ test("K1 attack: marketplace.json source.url swapped to a fork — PREDICTED exa
   }
 });
 
-test("K1 attack (the concrete hole this finding names): a fork-swap URL survives --repin on tamper_evident, but closed_shape(pinned_template) still catches it — PREDICTED exactly 1 failure after repin", async () => {
+test("K1 attack (the concrete hole this finding names): a fork-swap repository.url survives --repin on tamper_evident, but closed_shape(pinned_template) still catches it — PREDICTED exactly 1 failure after repin", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const mp = readJson(root, "npm-package/.claude-plugin/marketplace.json");
-    mp.plugins[0].source.url = "https://github.com/evil-fork/novada-mcp.git";
-    writeJson(root, "npm-package/.claude-plugin/marketplace.json", mp);
+    const sj = readJson(root, "npm-package/server.json");
+    sj.repository.url = "https://github.com/evil-fork/novada-mcp";
+    writeJson(root, "npm-package/server.json", sj);
 
     // Before this round's fix, running --repin here would have made EVERY check pass, laundering
     // the tamper through the same command a legitimate maintainer would run.
     const channels = readJson(root, "distribution/channels.json");
-    const marketplaceRow = channels.rows.find((r) => r.id === "claude-code-marketplace");
+    const registryRow = channels.rows.find((r) => r.id === "mcp-registry");
     const pinned = readPinnedHashes(root);
-    repinRow(root, marketplaceRow, pinned);
+    repinRow(root, registryRow, pinned);
     writeJson(root, "distribution/pinned-hashes.json", pinned);
 
     const results = await runChecks(root);
@@ -136,22 +153,27 @@ test("K1 attack (the concrete hole this finding names): a fork-swap URL survives
   }
 });
 
-test("K1 attack: marketplace.json source.sha tampered to a non-hex / wrong-length string — PREDICTED exactly 2 failures (closed_shape(pinned_format) + tamper_evident)", async () => {
+test("K1 attack: server.json packages[0].version tampered to a non-semver string — PREDICTED exactly 2 failures (closed_shape(pinned_format) + tamper_evident)", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const mp = readJson(root, "npm-package/.claude-plugin/marketplace.json");
-    mp.plugins[0].source.sha = "not-a-real-commit-sha";
-    writeJson(root, "npm-package/.claude-plugin/marketplace.json", mp);
+    const sj = readJson(root, "npm-package/server.json");
+    // version_equal checks the TOP-LEVEL "/version" pointer only (a separate pointer from this
+    // one — see distribution/channels.json's mcp-registry row) — left untouched here, so this
+    // attack isolates packages[0].version's OWN pin, pinned_fields_format, same isolation
+    // reasoning as every other single-field attack in this suite.
+    sj.packages[0].version = "not-a-real-version";
+    writeJson(root, "npm-package/server.json", sj);
 
     const results = await runChecks(root);
-    const total = results.reduce((n, r) => n + r.failures.length, 0);
-    assert.equal(total, 2, `predicted exactly 2 total failures, got:\n${JSON.stringify(results, null, 2)}`);
     const cs = findResult(results, "closed_shape");
     assert.equal(cs.failures.length, 1);
     assert.match(cs.failures[0], /pinned_format/);
-    assert.match(cs.failures[0], /source\/sha/);
+    assert.match(cs.failures[0], /packages\/0\/version/);
     const te = findResult(results, "tamper_evident");
     assert.equal(te.failures.length, 1);
+    const total = results.reduce((n, r) => n + r.failures.length, 0);
+    assert.equal(total, 2, `predicted exactly 2 total failures, got:\n${JSON.stringify(results, null, 2)}`);
+    assert.equal(findResult(results, "version_equal").failures.length, 0, "version_equal checks a DIFFERENT pointer (top-level /version) and must stay green");
 
     const probed = await runChecks(root, { skip: new Set(["tamper_evident"]) });
     const probedTotal = probed.reduce((n, r) => n + r.failures.length, 0);
@@ -161,15 +183,15 @@ test("K1 attack: marketplace.json source.sha tampered to a non-hex / wrong-lengt
   }
 });
 
-test("K1 attack: marketplace.json source.sha tampered to UPPERCASE hex (same length, wrong case) is still caught by the lowercase-only format pin — PREDICTED exactly 2 failures", async () => {
+test("K1 attack: server.json packages[0].version tampered to a prerelease suffix (same prefix, still wrong format) is still caught by the pinned format — PREDICTED exactly 2 failures", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const mp = readJson(root, "npm-package/.claude-plugin/marketplace.json");
-    // The fixture's own sha is all zeros (no letters at all — .toUpperCase() on it would be a
-    // no-op), so this attack needs an EXPLICIT 40-char value containing real hex letters to
-    // meaningfully exercise case-sensitivity.
-    mp.plugins[0].source.sha = "3DA9207D66A050B680FE9074966B631767FCB28C";
-    writeJson(root, "npm-package/.claude-plugin/marketplace.json", mp);
+    const sj = readJson(root, "npm-package/server.json");
+    // Looks almost right (same major.minor.patch prefix as the fixture's real version) — this
+    // attack needs a value that is CLOSE to legitimate, not obviously wrong, to meaningfully
+    // exercise the format pin rather than something any check would catch by inspection alone.
+    sj.packages[0].version = `${sj.packages[0].version}-rc1`;
+    writeJson(root, "npm-package/server.json", sj);
 
     const results = await runChecks(root);
     const cs = findResult(results, "closed_shape");
@@ -178,23 +200,23 @@ test("K1 attack: marketplace.json source.sha tampered to UPPERCASE hex (same len
     const te = findResult(results, "tamper_evident");
     assert.equal(te.failures.length, 1);
     const total = results.reduce((n, r) => n + r.failures.length, 0);
-    assert.equal(total, 2);
+    assert.equal(total, 2, `predicted exactly 2 total failures, got:\n${JSON.stringify(results, null, 2)}`);
   } finally {
     cleanupFixture(root);
   }
 });
 
-test("K1 attack: re-repinning after an sha format tamper does not launder it either — PREDICTED exactly 1 failure after repin (closed_shape(pinned_format) alone)", async () => {
+test("K1 attack: re-repinning after a version-format tamper does not launder it either — PREDICTED exactly 1 failure after repin (closed_shape(pinned_format) alone)", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const mp = readJson(root, "npm-package/.claude-plugin/marketplace.json");
-    mp.plugins[0].source.sha = "deadbeef"; // valid lowercase hex characters, but the wrong LENGTH
-    writeJson(root, "npm-package/.claude-plugin/marketplace.json", mp);
+    const sj = readJson(root, "npm-package/server.json");
+    sj.packages[0].version = "1.2"; // valid-looking digits, but the wrong SHAPE (missing a segment)
+    writeJson(root, "npm-package/server.json", sj);
 
     const channels = readJson(root, "distribution/channels.json");
-    const marketplaceRow = channels.rows.find((r) => r.id === "claude-code-marketplace");
+    const registryRow = channels.rows.find((r) => r.id === "mcp-registry");
     const pinned = readPinnedHashes(root);
-    repinRow(root, marketplaceRow, pinned);
+    repinRow(root, registryRow, pinned);
     writeJson(root, "distribution/pinned-hashes.json", pinned);
 
     const results = await runChecks(root);
@@ -202,18 +224,23 @@ test("K1 attack: re-repinning after an sha format tamper does not launder it eit
     const cs = findResult(results, "closed_shape");
     assert.equal(cs.failures.length, 1);
     assert.match(cs.failures[0], /pinned_format/);
+    assert.equal(findResult(results, "version_equal").failures.length, 0, "version_equal checks a DIFFERENT pointer (top-level /version), unaffected by this repin");
   } finally {
     cleanupFixture(root);
   }
 });
 
-test("K1 control: the real repo's own marketplace.json source.url/.sha pass both new pins cleanly (green fixture already proves this, re-asserted directly against the real worktree's files for extra confidence)", () => {
+test("K1 control: the real repo's own server.json repository.url/packages[0].version pass both new pins cleanly (green fixture already proves this, re-asserted directly against the real worktree's files for extra confidence)", () => {
   const realChannels = JSON.parse(readFileSync(join(REAL_DISTRIBUTION_DIR, "channels.json"), "utf8"));
   const realListing = JSON.parse(readFileSync(join(REAL_DISTRIBUTION_DIR, "listing.json"), "utf8"));
-  const realMarketplace = JSON.parse(readFileSync(join(REAL_DISTRIBUTION_DIR, "..", "npm-package", ".claude-plugin", "marketplace.json"), "utf8"));
-  const row = realChannels.rows.find((r) => r.id === "claude-code-marketplace");
-  assert.equal(realMarketplace.plugins[0].source.url, `${realListing.repository}.git`, "the real marketplace.json's source.url must already equal listing.repository + \".git\"");
-  assert.match(realMarketplace.plugins[0].source.sha, new RegExp(row.pinned_fields_format["/plugins/0/source/sha"]), "the real marketplace.json's source.sha must already be 40 lowercase hex characters");
+  const realServerJson = JSON.parse(readFileSync(join(REAL_DISTRIBUTION_DIR, "..", "npm-package", "server.json"), "utf8"));
+  const row = realChannels.rows.find((r) => r.id === "mcp-registry");
+  assert.equal(realServerJson.repository.url, realListing.repository, "the real server.json's repository.url must already equal listing.repository");
+  assert.match(
+    realServerJson.packages[0].version,
+    new RegExp(row.pinned_fields_format["/packages/0/version"]),
+    "the real server.json's packages[0].version must already look like semver"
+  );
 });
 
 // =========================================================================================
@@ -249,8 +276,8 @@ test("K1 branch summary: a legitimate repinned edit shows up as 'changed in this
     assert.equal(result.status, 0, `expected exit 0 (a repinned legitimate edit should pass every check), got ${result.status}. stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
     assert.match(result.stdout, new RegExp(`tamper_evident\\(branch-summary\\): 1 hand-authored manifest\\(s\\) changed in this branch \\(merge-base ${baselineSha}\\):`));
     assert.match(result.stdout, new RegExp(`tamper_evident\\(branch-summary\\):\\s+smithery ${oldHash} -> ${newHash}`));
-    // The other 3 closed_shape rows were untouched — they must NOT appear in the changed list.
-    for (const otherRow of ["mcp-registry", "claude-code-marketplace", "glama"]) {
+    // The other closed_shape rows were untouched — they must NOT appear in the changed list.
+    for (const otherRow of ["mcp-registry", "glama", "dify-plugin", "dify-provider"]) {
       assert.doesNotMatch(result.stdout, new RegExp(`tamper_evident\\(branch-summary\\):\\s+${otherRow} `));
     }
   } finally {
@@ -353,10 +380,64 @@ test("json_no_duplicate_keys: a duplicate top-level key (identical value) in gla
   }
 });
 
-test("json_no_duplicate_keys: a duplicate top-level key (identical value) in marketplace.json (closed_shape AND generate.mjs-owned via json-owned-fields) — PREDICTED exactly 2 failures (json_no_duplicate_keys + generated_clean, since the owned-fields writer's text-rebuild byte-differs from the duplicated raw file even though the parsed VALUES are identical)", async () => {
-  const root = cloneFixture(GREEN_ROOT);
+// brief-N (2026-10-19, D2): the retired npm-package/.claude-plugin/marketplace.json row
+// (claude-code-marketplace) was this suite's ONLY "closed_shape AND generate.mjs-owned via
+// json-owned-fields" example — no remaining production row has that exact combination (every
+// remaining generate.mjs-owned JSON row is writer_kind "json-full", not "json-owned-fields";
+// "json-owned-fields" itself is still a live, generic WRITERS entry in generate.mjs, just
+// currently unused by any row). Rather than silently dropping coverage of this interaction, this
+// test builds a fully SYNTHETIC, minimal distribution tree (not distribution/test/fixtures.mjs's
+// shared green fixture, which always copies the REAL channels.json) with one hand-built row
+// carrying exactly that shape, proving the interaction itself (a json-owned-fields writer's
+// text-rebuild byte-differs from a duplicated-key raw file even though parsed VALUES match) is
+// still real and still caught, independent of which production row (if any) currently exercises
+// it.
+function buildSyntheticJsonOwnedFieldsRoot() {
+  const root = mkdtempSync(join(tmpdir(), "novada-dist-synthetic-"));
+  const channels = {
+    version_source: "npm-package/package.json#/version",
+    manifest_patterns: [],
+    known_orphans: [],
+    claim_surfaces: [],
+    claim_excludes: [],
+    claims: [],
+    rows: [
+      {
+        id: "synthetic-json-owned",
+        path: "thing.json",
+        location_rule: "thing.json must exist.",
+        writer_kind: "json-owned-fields",
+        owned_fields: ["/name"],
+        version_field: null,
+        name_field: "/name",
+        description_field: null,
+        generated_by: "distribution/generate.mjs",
+        closed_shape: { "": ["name", "other"] },
+        closed_shape_reason: "synthetic test row.",
+        install_snippet: "n/a",
+      },
+    ],
+  };
+  writeTextDeep(root, "distribution/channels.json", JSON.stringify(channels, null, 2) + "\n");
+  writeTextDeep(root, "distribution/listing.json", JSON.stringify({ name: "x", description: "y", hosted_endpoint: "https://example.com/mcp" }, null, 2) + "\n");
+  writeTextDeep(root, "npm-package/package.json", JSON.stringify({ name: "x", version: "1.0.0" }, null, 2) + "\n");
+  writeTextDeep(root, "thing.json", JSON.stringify({ name: "placeholder", other: 1 }, null, 2) + "\n");
+  writeTextDeep(root, ".github/workflows/ci.yml", "name: CI\non:\n  push:\n    branches: [main]\n");
+  // Establish a fully clean baseline (owned field written, distribution/INSTALL.md generated)
+  // through the REAL write path BEFORE the test's own mutation — same discipline as
+  // fixtures.mjs's buildGreenFixture, so this synthetic root starts from "green by construction",
+  // not a hand-guessed expected value.
+  generateAll(root, { checkOnly: false });
+  const pinned = {};
+  repinRow(root, channels.rows[0], pinned);
+  writeTextDeep(root, "distribution/pinned-hashes.json", JSON.stringify(pinned, null, 2) + "\n");
+  return root;
+}
+
+test("json_no_duplicate_keys (synthetic): a duplicate top-level key (identical value) in a json-owned-fields + closed_shape row — PREDICTED exactly 2 failures (json_no_duplicate_keys + generated_clean, since the owned-fields writer's text-rebuild byte-differs from the duplicated raw file even though the parsed VALUES are identical)", async () => {
+  const root = buildSyntheticJsonOwnedFieldsRoot();
   try {
-    const path = join(root, "npm-package", ".claude-plugin", "marketplace.json");
+    const path = join(root, "thing.json");
     writeFileSync(path, injectDuplicateJsonKeyLine(readFileSync(path, "utf8"), "name"));
 
     const results = await runChecks(root);
@@ -364,19 +445,21 @@ test("json_no_duplicate_keys: a duplicate top-level key (identical value) in mar
     assert.equal(total, 2, `predicted exactly 2 total failures, got:\n${JSON.stringify(results, null, 2)}`);
     const jd = findResult(results, "json_no_duplicate_keys");
     assert.equal(jd.failures.length, 1);
-    assert.match(jd.failures[0], /row=claude-code-marketplace/);
+    assert.match(jd.failures[0], /row=synthetic-json-owned/);
     assert.match(jd.failures[0], /key="name"/);
     assert.equal(findResult(results, "generated_clean").failures.length, 1, "the duplicated raw bytes differ from the canonical json-owned-fields rewrite, even though parsed values match — PREDICTED, not a surprise");
     assert.equal(findResult(results, "tamper_evident").failures.length, 0, "tamper_evident parses first, same identical-value blind spot as the server.json case");
   } finally {
-    cleanupFixture(root);
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("json_no_duplicate_keys: a duplicate key (identical value) in a json-full row (claude-code-plugin/plugin.json) — PREDICTED exactly 2 failures (json_no_duplicate_keys + generated_clean, since json-full's generated_clean is an exact-TEXT diff against the full rebuild, which the extra duplicated line always differs from byte-for-byte)", async () => {
+test("json_no_duplicate_keys: a duplicate key (identical value) in a json-full row (gemini-cli/gemini-extension.json) — PREDICTED exactly 2 failures (json_no_duplicate_keys + generated_clean, since json-full's generated_clean is an exact-TEXT diff against the full rebuild, which the extra duplicated line always differs from byte-for-byte)", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const path = join(root, "npm-package", ".claude-plugin", "plugin.json");
+    // brief-N (2026-10-19, D2): gemini-extension.json replaces the retired
+    // npm-package/.claude-plugin/plugin.json as this suite's generic json-full example.
+    const path = join(root, "gemini-extension.json");
     writeFileSync(path, injectDuplicateJsonKeyLine(readFileSync(path, "utf8"), "version"));
 
     const results = await runChecks(root);
@@ -384,7 +467,7 @@ test("json_no_duplicate_keys: a duplicate key (identical value) in a json-full r
     assert.equal(total, 2, `predicted exactly 2 total failures, got:\n${JSON.stringify(results, null, 2)}`);
     const jd = findResult(results, "json_no_duplicate_keys");
     assert.equal(jd.failures.length, 1);
-    assert.match(jd.failures[0], /row=claude-code-plugin/);
+    assert.match(jd.failures[0], /row=gemini-cli/);
     assert.match(jd.failures[0], /key="version"/);
     assert.equal(findResult(results, "generated_clean").failures.length, 1);
   } finally {

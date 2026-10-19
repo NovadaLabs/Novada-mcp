@@ -1,5 +1,5 @@
 name: novada-mcp
-description: "AI agents' single API key for web search, content extraction, site crawling and mapping, multi-source research, structured platform scraping, proxy routing, and browser automation."
+description: "AI agents' single API key for web search, content extraction, site crawling and mapping, multi-source research, structured platform scraping, proxy routing, and browser automation (local npm package)."
 startCommand:
   type: stdio
   configSchema:

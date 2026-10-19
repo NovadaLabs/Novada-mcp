@@ -157,14 +157,22 @@ test("J1 attack D: server.json packages[0].registryType tampered to a different 
   }
 });
 
-// Attack E: marketplace.json plugins[1] — the SAME array-length attack on the other
-// closed_shape row named in this finding. PREDICTED exactly 2 failures.
-test("J1 attack E: marketplace.json plugins[1] injected (array-length attack) — PREDICTED exactly 2 failures", async () => {
+// Attack E: server.json remotes[1] — the SAME array-length attack on the OTHER pinned array in
+// mcp-registry's own closed_shape row. PREDICTED exactly 2 failures.
+// brief-N (2026-10-19, D2): originally exercised npm-package/.claude-plugin/marketplace.json's
+// plugins[] array (retired — see that row's replacement, claude-plugins-external, which has no
+// local file and no closed_shape at all). Repointed to server.json's OWN SECOND pinned array
+// (remotes[], alongside Attack D's packages[0].registryType and the suite's other server.json
+// attacks above) rather than inventing a parallel fixture — mcp-registry already demonstrates
+// the identical mechanism (closed_shape + pinned_array_lengths + tamper_evident on a JSON row)
+// with the SAME predicted failure shape (generated_clean never touches this row at all,
+// generated_by != "distribution/generate.mjs", so the total stays 2, not 3).
+test("J1 attack E: server.json remotes[1] injected (array-length attack) — PREDICTED exactly 2 failures", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const mp = readJson(root, "npm-package/.claude-plugin/marketplace.json");
-    mp.plugins.push({ name: "evil-plugin", description: "x", source: { source: "url", url: "https://evil.example.com/x.git" }, homepage: "https://evil.example.com" });
-    writeJson(root, "npm-package/.claude-plugin/marketplace.json", mp);
+    const sj = readJson(root, "npm-package/server.json");
+    sj.remotes.push({ type: "streamable-http", url: "https://evil.example.com/mcp" });
+    writeJson(root, "npm-package/server.json", sj);
 
     const results = await runChecks(root);
     const total = results.reduce((n, r) => n + r.failures.length, 0);
@@ -172,10 +180,10 @@ test("J1 attack E: marketplace.json plugins[1] injected (array-length attack) �
     const cs = findResult(results, "closed_shape");
     assert.equal(cs.failures.length, 1);
     assert.match(cs.failures[0], /pinned_array_length/);
-    assert.match(cs.failures[0], /\/plugins/);
+    assert.match(cs.failures[0], /\/remotes/);
     const te = findResult(results, "tamper_evident");
     assert.equal(te.failures.length, 1);
-    assert.match(te.failures[0], /row=claude-code-marketplace/);
+    assert.match(te.failures[0], /row=mcp-registry/);
 
     const probed = await runChecks(root, { skip: new Set(["tamper_evident"]) });
     const probedTotal = probed.reduce((n, r) => n + r.failures.length, 0);

@@ -57,6 +57,10 @@ export function buildGreenFixture() {
         $schema: "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
         name: "io.github.NovadaLabs/novada-mcp",
         description: "Search, extract, crawl, map, research, scrape 16 platforms, browser automation, proxy — one API key.",
+        // brief-N (2026-10-19, D2): must equal listing.repository (copied verbatim from the real
+        // distribution/listing.json above) — mcp-registry's pinned_fields_template now pins
+        // /repository/url against it dynamically.
+        repository: { source: "github", url: listing.repository },
         version,
         tools: [{ name: "novada_search", description: "Search the web." }],
         // brief-I (2026-10-15, I1): closed_shape's pinned_fields now asserts
@@ -90,35 +94,68 @@ export function buildGreenFixture() {
   // glama row: no owned fields at all — just needs to exist and parse.
   writeFileDeep(root, "npm-package/glama.json", JSON.stringify({ $schema: "https://glama.ai/mcp/schemas/server.json", maintainers: ["Goldentrii"] }, null, 2) + "\n");
 
-  // claude-code-plugin row — seeded with WRONG owned-field placeholders on purpose; generateAll()
-  // below is what makes this fixture green, exercising the real write path instead of a
-  // hand-duplicated "expected" value.
-  writeFileDeep(
-    root,
-    "npm-package/.claude-plugin/plugin.json",
-    JSON.stringify({ name: "placeholder", description: "placeholder", version: "0.0.0" }, null, 2) + "\n"
-  );
+  // brief-N (2026-10-19, D2): claude-code-plugin/claude-code-marketplace (npm-package/
+  // .claude-plugin/) were retired — the real Claude Code channel is now the `kind: "external"`
+  // claude-plugins-external row, which has no local file to seed here at all (checkLocationRules/
+  // checkShapeDeclared/checkCiPathsCover skip it via isExternalRow; checkExternalRepoConsistent
+  // itself never touches the network for a fixture root, see that check's own ROOT-equality
+  // guard) — this fixture's real-channels.json copy picks the row up automatically with zero
+  // fixture-file maintenance needed.
 
-  // claude-code-marketplace row
+  // dify-plugin / dify-provider rows — entirely hand-authored (writer_kind: null, like glama),
+  // seeded already-correct (nothing for generateAll() below to touch). Deliberately a MINIMAL
+  // subset of the real files' keys (closed_shape enforces "no extra key", not "every key
+  // present") — just enough structure for location_rules/closed_shape/shape_declared/
+  // tamper_evident to exercise the real mechanism without copying the real file verbatim.
   writeFileDeep(
     root,
-    "npm-package/.claude-plugin/marketplace.json",
-    JSON.stringify(
-      {
-        name: listing.name,
-        owner: { name: "NovadaLabs", email: "support@novada.com" },
-        plugins: [
-          {
-            name: listing.name,
-            description: "placeholder",
-            source: { source: "url", url: "https://github.com/NovadaLabs/novada-mcp.git", sha: "0000000000000000000000000000000000000000" },
-            homepage: "https://github.com/NovadaLabs/novada-mcp",
-          },
-        ],
-      },
-      null,
-      2
-    ) + "\n"
+    "distribution/dify/manifest.yaml",
+    [
+      "version: 0.1.0",
+      "type: plugin",
+      "author: novadalabs",
+      "name: novada",
+      "label:",
+      "  en_US: Novada",
+      "description:",
+      "  en_US: fixture description, not scanned for claims (not a tracked prose file)",
+      "created_at: \"2026-10-18T18:38:34Z\"",
+      "icon: icon.svg",
+      "resource:",
+      "  memory: 268435456",
+      "network:",
+      "  domains:",
+      "    - mcp.novada.com",
+      "plugins:",
+      "  tools:",
+      "    - provider/novada.yaml",
+      "meta:",
+      "  version: 0.1.0",
+      "tags:",
+      "  - search",
+      "privacy: PRIVACY.md",
+      "repo: https://github.com/NovadaLabs/Novada-mcp/tree/main/distribution/dify",
+      "contact: support@novada.com",
+      "",
+    ].join("\n")
+  );
+  writeFileDeep(
+    root,
+    "distribution/dify/provider/novada.yaml",
+    [
+      "identity:",
+      "  author: novadalabs",
+      "  name: novada",
+      "credentials_for_provider:",
+      "  api_key:",
+      "    type: secret-input",
+      "tools:",
+      "  - tools/novada_search.yaml",
+      "extra:",
+      "  python:",
+      "    source: provider/novada.py",
+      "",
+    ].join("\n")
   );
 
   // smithery row — top-level unindented `name`/`description`, plus one NESTED (indented)

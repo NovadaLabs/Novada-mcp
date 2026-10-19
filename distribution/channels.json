@@ -51,6 +51,47 @@
     "  install_snippet  - one copy-pasteable install command/sequence for distribution/INSTALL.md.",
     "  publish_mechanism- how a change to this file actually reaches the channel (informational;",
     "                      not enforced by any check).",
+    "  surface          - (brief-N, 2026-10-19, D1) 'local' | 'hosted' | 'both' — which MCP",
+    "                      endpoint(s) this row's installed artifact actually connects to.",
+    "                      'local': runs the npm package directly (full tool set, incl. browser",
+    "                      automation). 'hosted': only ever talks to listing.hosted_endpoint",
+    "                      (browser automation NOT available — see hosted-server/vercel/api/",
+    "                      mcp.ts's HOSTED_HIDDEN). 'both': one listing spans both (e.g. mcp-",
+    "                      registry's server.json). Drives which of listing.json's two",
+    "                      description variants (description | description_hosted) generate.mjs's",
+    "                      resolveDescriptionForRow writes, and what check.mjs's surface_claims",
+    "                      check enforces. Omitted only for a row with no description_field at all",
+    "                      (nothing to classify). check.mjs's surface_derived_consistent check",
+    "                      (brief-N R2 fix, 2026-10-19, round 2 review) cross-checks this DECLARED",
+    "                      value against a DERIVED one read out of the row's own manifest content",
+    "                      (a url_field resolving to a real URL = hosted signal; a stdio",
+    "                      startCommand/packages[].transport = local signal) — closes the gap where",
+    "                      hand-relabeling ONLY this field (leaving the manifest's real endpoint",
+    "                      untouched) silently defeated surface_claims.",
+    "  surface_peers    - (brief-N R2 fix, 2026-10-19, round 2 review) optional array of other row",
+    "                      ids whose manifest content ALSO counts toward THIS row's derived surface",
+    "                      — for the few channels split across two files with disjoint schemas",
+    "                      (antigravity-plugin/antigravity-mcp-config, openai-codex-plugin/openai-",
+    "                      codex-mcp-config) where the description-bearing file itself (plugin.json)",
+    "                      carries no url/startCommand signal of its own; the real endpoint wiring",
+    "                      lives in the sibling file. Explicit and data-declared, never directory-",
+    "                      guessed — npm-package/ alone holds 3 unrelated channel manifests (mcp-",
+    "                      registry/glama/smithery) in one folder, so 'same directory' would wrongly",
+    "                      union their signals.",
+    "  kind             - (brief-N, 2026-10-19, D2) absent for every normal row (a manifest file",
+    "                      that lives IN this repo). 'external' marks a row whose real manifest",
+    "                      lives in a DIFFERENT repository — this repo never writes to it, only",
+    "                      verifies it over the network (see external_repo). check.mjs's",
+    "                      isExternalRow(row) exempts it from the three checks that assume a LOCAL",
+    "                      file exists at row.path: location_rules, shape_declared, ci_paths_cover.",
+    "  external_repo    - (brief-N, 2026-10-19, D2) required when kind:\"external\". {owner, repo,",
+    "                      ref, marketplace_path, plugin_path, mcp_config_path,",
+    "                      expected_plugin_name, mcp_url_field} — check.mjs's",
+    "                      external_repo_consistent check fetches",
+    "                      raw.githubusercontent.com/<owner>/<repo>/<ref>/<marketplace_path|",
+    "                      plugin_path|mcp_config_path> and asserts marketplace.json exists,",
+    "                      plugin.json's name equals expected_plugin_name, and mcp_config_path's",
+    "                      mcp_url_field (a JSON pointer) equals listing.hosted_endpoint.",
     "",
     "brief-I (2026-10-15, I1 CRITICAL): a manifest's content was previously a parsed-and-",
     "  round-tripped object (json-owned-fields/yaml-owned-fields writers only overwrite the",
@@ -147,7 +188,80 @@
     "  release (a git commit sha) but whose SHAPE never should (40 lowercase hex characters).",
     "  Neither mechanism can be defeated by re-running `--repin` the way tamper_evident's hash",
     "  alone could, because both are evaluated dynamically against the CURRENT listing.json/regex",
-    "  at check time, independent of whatever is recorded in pinned-hashes.json."
+    "  at check time, independent of whatever is recorded in pinned-hashes.json. NOTE (brief-N,",
+    "  2026-10-19): `claude-code-marketplace` (this bullet's original example row) was retired by",
+    "  D2 below — `mcp-registry`'s `/remotes/0/url`/`/packages/0/version` now carry these same two",
+    "  mechanisms instead (see that row), so the worked example moved but the mechanism itself is",
+    "  unchanged.",
+    "",
+    "brief-N (2026-10-19 — independent review of PR #20, 3 owner decisions, class-not-instance):",
+    "  D1 'surface' (HIGH): a shared description string was interpolated into every row alike,",
+    "  which was ACCURATE for a row that runs the full local npm package but OVERCLAIMED for a",
+    "  row that only ever talks to the hosted endpoint (hosted-server/vercel/api/mcp.ts's",
+    "  HOSTED_HIDDEN excludes novada_browser/novada_browser_flow there). Every row now declares",
+    "  `surface`: \"local\" (installs/runs the npm package directly — the full tool set, including",
+    "  browser automation), \"hosted\" (only ever connects to listing.hosted_endpoint — browser",
+    "  automation is NOT available), or \"both\" (one listing spans both paths, e.g. mcp-registry's",
+    "  single server.json carries a local packages[] AND a hosted remotes[] entry — its description",
+    "  must stay true for BOTH, not pick one). distribution/listing.json gained a second variant,",
+    "  `description_hosted` (no browser-automation clause) alongside the original `description`",
+    "  (kept true for \"local\"/\"both\" by scoping the clause to the local package, see that file's",
+    "  own $comment_surfaces); distribution/generate.mjs's `resolveDescriptionForRow` picks between",
+    "  them by `row.surface`, in both `ownedValuesFor` (json-owned-fields/yaml-owned-fields rows)",
+    "  and `resolveFullTemplatePlaceholder` (json-full rows' `{{description}}` token) — ONE",
+    "  resolution function, not a per-writer-kind branch. check.mjs's new `surface_claims` check",
+    "  is the generic backstop: it fails if a `surface:\"hosted\"` row's CURRENT generated",
+    "  description text mentions a HOSTED_HIDDEN tool's capability phrase, driven by parsing",
+    "  HOSTED_HIDDEN itself (never a hardcoded list) — adding a tool to HOSTED_HIDDEN with a known",
+    "  capability phrase extends coverage by a new table ROW in check.mjs, not a new branch. A",
+    "  `surface:\"local\"` row keeping the phrase is the documented mirror case (not a violation).",
+    "  gen-server-json.mjs's own server.json description template (verify-only, not generate.mjs-",
+    "  owned — see that row's `description_derived_reason`) was hand-reworded to the same",
+    "  truthfulness bar: 'browser via npm', scoping the claim instead of dropping or overclaiming it.",
+    "",
+    "  D2 'kind: external' (CRITICAL): `claude-code-plugin`/`claude-code-marketplace` (npm-package/",
+    "  .claude-plugin/) shipped NO MCP server wiring at all (no .mcp.json anywhere in that",
+    "  directory) and sat at a path (`npm-package/.claude-plugin/`) the `/plugin marketplace add",
+    "  <owner>/<repo>` CLI form can never read (the marketplace root must be the git repo ROOT).",
+    "  A separate, already-working, review-hardened repo (NovadaLabs/claude-plugins) is the real,",
+    "  canonical Claude Code distribution channel. Both rows are REMOVED (git history keeps the",
+    "  retired files; a fresh checkout of this commit no longer ships npm-package/.claude-plugin/",
+    "  at all) and replaced by ONE new row, `claude-plugins-external`, carrying `\"kind\":",
+    "  \"external\"` and an `external_repo` block ({owner, repo, ref, marketplace_path, plugin_path,",
+    "  mcp_config_path, expected_plugin_name, mcp_url_field}) — this repo never writes to that",
+    "  repo (no push/PR), it only VERIFIES it, over the network, via check.mjs's new",
+    "  `external_repo_consistent` check (raw.githubusercontent.com, 3 files: marketplace.json",
+    "  exists at the external repo's root; its plugin's name matches; its plugin's .mcp.json URL",
+    "  equals listing.hosted_endpoint). `kind:\"external\"` is a table-driven exemption, not a",
+    "  row.id branch: `isExternalRow(row)` short-circuits exactly the three per-row checks that",
+    "  assume a LOCAL file (`location_rules`, `shape_declared`, `ci_paths_cover`) — every other",
+    "  check already no-ops naturally for a row with no version_field/url_field/closed_shape/",
+    "  required_fields set, which this row deliberately leaves unset. The external check itself",
+    "  is network-scoped to the REAL repo root only (`ctx.root === ROOT`) so the shared test-suite",
+    "  fixture (a tmpdir, never the real root) never pays a network round-trip or timeout just to",
+    "  exercise an unrelated check; its pure assertion logic (`evaluateExternalRepoManifests`) is",
+    "  unit-tested directly against synthetic fetched-text, and MUST fail loudly (never silently",
+    "  pass) when the network is unreachable AND `process.env.CI` is set — it may only skip (with",
+    "  a printed reason) on an unreachable network locally.",
+    "",
+    "  D3 'dify-plugin'/'dify-provider': distribution/dify/ (PR #21) shipped with no channels.json",
+    "  row at all — manifest.yaml/provider/novada.yaml were invisible to no_orphans (not in",
+    "  manifest_patterns) and distribution/dify/README.md's tool table was invisible to",
+    "  claims_consistent (no claim_surfaces entry), the exact class of gap R10 closed for every",
+    "  OTHER channel. Two new rows (ONE ROW PER FILE — manifest.yaml and provider/novada.yaml have",
+    "  completely disjoint top-level key sets, the same `claude-code-plugin`/`claude-code-",
+    "  marketplace` precedent applied), both `version_field: null` (Dify version bumps are",
+    "  independent of this monorepo's package.json BY DESIGN — each bump is its own Marketplace",
+    "  PR, and this plugin is a thin client; see each row's `version_field_reason`), both carrying",
+    "  a `closed_shape` top-level allowlist (hand-authored YAML, same `writer_kind: null`/",
+    "  `generated_by: null` shape as the `glama` row). `manifest.yaml` and `provider/novada.yaml`",
+    "  are now in `manifest_patterns`, claimed by these two rows — `no_orphans` fails if either",
+    "  row is removed while the files remain (mirror test). `distribution/dify/README.md` is now a",
+    "  `claim_surfaces` entry with `fact_overrides: {tools: \"dify_tools\"}` — a NEW fact,",
+    "  `dify_tools`, counted from `distribution/dify/tools/*.yaml` (never hardcoded; mirrors",
+    "  `distribution/dify/utils/tools_table.py`'s own `TOOLS` tuple length and",
+    "  `provider/novada.yaml`'s `tools:` list, both independently 7 today) — a wrong count in that",
+    "  README now fails `claims_consistent` (mirror test)."
   ],
   "version_source": "npm-package/package.json#/version",
   "manifest_patterns": [
@@ -163,7 +277,9 @@
     ".mcp.json",
     ".cursor/mcp.json",
     ".vscode/mcp.json",
-    "mcp.json"
+    "mcp.json",
+    "distribution/dify/manifest.yaml",
+    "distribution/dify/provider/novada.yaml"
   ],
   "known_orphans": [
     {
@@ -270,53 +386,159 @@
   "claim_surfaces": [
     {
       "glob": "hosted-server/landing/**/*.html",
-      "fact_overrides": { "tools": "hosted_tools" },
+      "fact_overrides": {
+        "tools": "hosted_tools"
+      },
       "reason": "brief-H (2026-10-15): hosted-server/landing pages describe the HOSTED surface (tools minus HOSTED_HIDDEN), never the local-package total — owner decision, see brief-H-claims-scope.md."
     },
     {
       "glob": "hosted-server/landing/**/*.txt",
-      "fact_overrides": { "tools": "hosted_tools" },
+      "fact_overrides": {
+        "tools": "hosted_tools"
+      },
       "reason": "brief-H (2026-10-15): same HOSTED-surface scoping as the .html entry above (e.g. llms.txt)."
     },
     {
       "glob": "hosted-server/landing/**/*.md",
-      "fact_overrides": { "tools": "hosted_tools" },
+      "fact_overrides": {
+        "tools": "hosted_tools"
+      },
       "reason": "brief-H (2026-10-15): same HOSTED-surface scoping as the .html entry above."
+    },
+    {
+      "glob": "distribution/dify/README.md",
+      "fact_overrides": {
+        "tools": "dify_tools"
+      },
+      "reason": "brief-N (2026-10-19, D3): this page legitimately describes the Dify plugin's own 7-tool subset (search/extract/crawl/map/research/scrape/account) BY DESIGN, not the 28-tool hosted total or the 37-tool local-package total that the bare word \"tools\" means everywhere else — see the dify-provider row's notes for the three independent places that already pin this at 7. dify_tools is counted from distribution/dify/tools/*.yaml (never hardcoded)."
     }
   ],
   "claim_excludes": [
-    { "glob": "hosted-server/landing/tools.html", "reason": "TEMPORARY (owner decision 2026-10-18): page describes a fictional tool surface (unprefixed names, nonexistent scraper_submit/status/result, 6 per-type proxy tools); a count-only patch would be wrong. Full rewrite tracked in https://github.com/NovadaLabs/novada-mcp/issues/19 — remove this exclude when that issue closes." },
-    { "glob": "npm-package/CHANGELOG.md", "reason": "brief-J J3: historical changelog — each entry describes the count AT THAT PAST RELEASE, not today's build; rewriting a historical entry to match the current registry would make the changelog factually wrong." },
-    { "glob": "npm-package/docs/update-log.html", "reason": "brief-J J3: HTML-rendered twin of CHANGELOG.md — same historical, per-release entries, same reasoning." },
-    { "glob": "npm-package/docs/review/**", "reason": "brief-J J3: one-time audit/review-round reports dated 2026-04-29 describing the registry's state AT THAT REVIEW, not today's build — ledger-like reports, this finding's own named category." },
-    { "glob": "npm-package/docs/evaluation/**", "reason": "brief-J J3: dated evaluation-session reports (A/B test results, reflection logs, gap-action plans), including a literal API error code (\"11006 Scraper error\") that coincidentally matches the claim shape — ledger-like reports, not current prose." },
-    { "glob": "npm-package/docs/competitive/**", "reason": "brief-J J3: competitor research — most numbers here are a COMPETITOR's own tool/platform count (Bright Data, Spider, etc.), the rest are dated point-in-time snapshots of this project's own counts at research time." },
-    { "glob": "npm-package/docs/plans/**", "reason": "brief-J J3: dated planning/reviewer-brief documents describing a proposed or past state, not the current build." },
-    { "glob": "npm-package/docs/REFLECTION-*.md", "reason": "brief-J J3: dated session-reflection reports (the filename itself carries the date) describing that session's state, not today's build." },
-    { "glob": "npm-package/docs/test-log.md", "reason": "brief-J J3: raw manual test-session log, historical by nature — including a run against an account where the Scraper API was not yet activated." },
-    { "glob": "npm-package/docs/COMPETITIVE_INTELLIGENCE_v2.md", "reason": "brief-J J3: dated (2026-04-24) competitive-research snapshot — same reasoning as npm-package/docs/competitive/**, just not nested under that directory." },
-    { "glob": "npm-package/docs/novada-api/**", "reason": "brief-J J3: mirrored reference docs for the Scraper/Developer REST API (scraper.novada.com, api.novada.com) — a different product surface from novada-mcp's own tool registry; its platform-activation counts (e.g. \"13 platforms active\") describe that API's own scene_total metric, not this project's `platforms` fact." },
-    { "glob": "npm-package/docs/developer-api-requirements.html", "reason": "brief-J J3: internal requirements doc addressed to the backend team, inventorying novada.com's own public data-scrapers page at question-writing time — same different-product-surface reasoning as npm-package/docs/novada-api/**." },
-    { "glob": "npm-package/docs/novada-developer-api-full.md", "reason": "brief-J J3: same Scraper/Developer API mirror family as npm-package/docs/novada-api/** (kept alongside it for consistency)." },
-    { "glob": "npm-package/docs/novada-developer-api-reference.html", "reason": "brief-J J3: same Scraper/Developer API mirror family as npm-package/docs/novada-api/**." },
-    { "glob": "npm-package/MCP_TESTING_MANDATE.md", "reason": "brief-J J3: an evaluator PROMPT/spec commissioning a third party to compare novada-mcp against competitors — its numbers are mostly the COMPETITORS' own tool counts (Bright Data's 65 tools, etc.), plus this project's own count as of the mandate's writing date." },
-    { "glob": "npm-package/TEST_PLAYBOOK.md", "reason": "brief-J J3: same evaluator-mandate/competitor-comparison reasoning as MCP_TESTING_MANDATE.md." },
-    { "glob": "npm-package/BACKEND_ISSUES.md", "reason": "brief-J J3: internal backend bug/feature-request tracker — \"129 platform names\" describes the Scraper API's OWN hardcoded workaround list, a different metric from this project's `platforms` fact, same reasoning as the novada-api docs." },
-    { "glob": "npm-package/prompts/**", "reason": "brief-J J3: literal agent-session prompts and transcripts from past development rounds (orchestrator plans, fix prompts, test scripts) — operational artifacts, not shipped documentation, describing whatever state existed when that prompt was written." },
-    { "glob": "hosted-server/docs/**", "reason": "brief-J J3: internal engineering docs (deploy logs, meeting-blocker notes, design specs, PRD, org-page planning) — not a customer-facing claim surface; several are explicitly dated point-in-time snapshots." },
-    { "glob": "hosted-server/HANDOFF.md", "reason": "brief-J J3: internal handoff/status note for the next agent picking up this project — a dated status log, not a customer-facing claim surface." },
-    { "glob": "hosted-server/PROJECT_STATE.md", "reason": "brief-J J3: internal project-state tracker with a dated run-log section — same reasoning as HANDOFF.md." },
-    { "glob": "hosted-server/scripts/golden/**", "reason": "brief-J J3: golden-baseline TEST FIXTURES (this finding's own named exclude category) for the hosted-server acceptance suite, not prose about the product." },
-    { "glob": "monitoring/RUNBOOK.md", "reason": "brief-J J3: operate/triage runbook whose \"## Run log\" section is a dated series of past monitoring-run entries (e.g. the 2026-07-23 run's \"30/30 tools\" snapshot) — ledger-like, not a current claim." },
-    { "glob": "distribution/research/**", "reason": "brief-M M2 (2026-10-15): one-time distribution-channel contract research (channel-facts.md/channel-facts.json, brief B) auditing each manifest's state AT RESEARCH TIME — it quotes past, by-then-already-stale values verbatim (e.g. plugin.json's old \"scrape 13 platforms\", smithery.yaml's then-current \"16 platforms\") as evidence FOR the drift this whole registry exists to fix, not a claim about today's build. Same ledger-like-report reasoning as npm-package/docs/review/**, just scoped to this round's own research artifact." }
+    {
+      "glob": "hosted-server/landing/tools.html",
+      "reason": "TEMPORARY (owner decision 2026-10-18): page describes a fictional tool surface (unprefixed names, nonexistent scraper_submit/status/result, 6 per-type proxy tools); a count-only patch would be wrong. Full rewrite tracked in https://github.com/NovadaLabs/novada-mcp/issues/19 — remove this exclude when that issue closes."
+    },
+    {
+      "glob": "npm-package/CHANGELOG.md",
+      "reason": "brief-J J3: historical changelog — each entry describes the count AT THAT PAST RELEASE, not today's build; rewriting a historical entry to match the current registry would make the changelog factually wrong."
+    },
+    {
+      "glob": "npm-package/docs/update-log.html",
+      "reason": "brief-J J3: HTML-rendered twin of CHANGELOG.md — same historical, per-release entries, same reasoning."
+    },
+    {
+      "glob": "npm-package/docs/review/**",
+      "reason": "brief-J J3: one-time audit/review-round reports dated 2026-04-29 describing the registry's state AT THAT REVIEW, not today's build — ledger-like reports, this finding's own named category."
+    },
+    {
+      "glob": "npm-package/docs/evaluation/**",
+      "reason": "brief-J J3: dated evaluation-session reports (A/B test results, reflection logs, gap-action plans), including a literal API error code (\"11006 Scraper error\") that coincidentally matches the claim shape — ledger-like reports, not current prose."
+    },
+    {
+      "glob": "npm-package/docs/competitive/**",
+      "reason": "brief-J J3: competitor research — most numbers here are a COMPETITOR's own tool/platform count (Bright Data, Spider, etc.), the rest are dated point-in-time snapshots of this project's own counts at research time."
+    },
+    {
+      "glob": "npm-package/docs/plans/**",
+      "reason": "brief-J J3: dated planning/reviewer-brief documents describing a proposed or past state, not the current build."
+    },
+    {
+      "glob": "npm-package/docs/REFLECTION-*.md",
+      "reason": "brief-J J3: dated session-reflection reports (the filename itself carries the date) describing that session's state, not today's build."
+    },
+    {
+      "glob": "npm-package/docs/test-log.md",
+      "reason": "brief-J J3: raw manual test-session log, historical by nature — including a run against an account where the Scraper API was not yet activated."
+    },
+    {
+      "glob": "npm-package/docs/COMPETITIVE_INTELLIGENCE_v2.md",
+      "reason": "brief-J J3: dated (2026-04-24) competitive-research snapshot — same reasoning as npm-package/docs/competitive/**, just not nested under that directory."
+    },
+    {
+      "glob": "npm-package/docs/novada-api/**",
+      "reason": "brief-J J3: mirrored reference docs for the Scraper/Developer REST API (scraper.novada.com, api.novada.com) — a different product surface from novada-mcp's own tool registry; its platform-activation counts (e.g. \"13 platforms active\") describe that API's own scene_total metric, not this project's `platforms` fact."
+    },
+    {
+      "glob": "npm-package/docs/developer-api-requirements.html",
+      "reason": "brief-J J3: internal requirements doc addressed to the backend team, inventorying novada.com's own public data-scrapers page at question-writing time — same different-product-surface reasoning as npm-package/docs/novada-api/**."
+    },
+    {
+      "glob": "npm-package/docs/novada-developer-api-full.md",
+      "reason": "brief-J J3: same Scraper/Developer API mirror family as npm-package/docs/novada-api/** (kept alongside it for consistency)."
+    },
+    {
+      "glob": "npm-package/docs/novada-developer-api-reference.html",
+      "reason": "brief-J J3: same Scraper/Developer API mirror family as npm-package/docs/novada-api/**."
+    },
+    {
+      "glob": "npm-package/MCP_TESTING_MANDATE.md",
+      "reason": "brief-J J3: an evaluator PROMPT/spec commissioning a third party to compare novada-mcp against competitors — its numbers are mostly the COMPETITORS' own tool counts (Bright Data's 65 tools, etc.), plus this project's own count as of the mandate's writing date."
+    },
+    {
+      "glob": "npm-package/TEST_PLAYBOOK.md",
+      "reason": "brief-J J3: same evaluator-mandate/competitor-comparison reasoning as MCP_TESTING_MANDATE.md."
+    },
+    {
+      "glob": "npm-package/BACKEND_ISSUES.md",
+      "reason": "brief-J J3: internal backend bug/feature-request tracker — \"129 platform names\" describes the Scraper API's OWN hardcoded workaround list, a different metric from this project's `platforms` fact, same reasoning as the novada-api docs."
+    },
+    {
+      "glob": "npm-package/prompts/**",
+      "reason": "brief-J J3: literal agent-session prompts and transcripts from past development rounds (orchestrator plans, fix prompts, test scripts) — operational artifacts, not shipped documentation, describing whatever state existed when that prompt was written."
+    },
+    {
+      "glob": "hosted-server/docs/**",
+      "reason": "brief-J J3: internal engineering docs (deploy logs, meeting-blocker notes, design specs, PRD, org-page planning) — not a customer-facing claim surface; several are explicitly dated point-in-time snapshots."
+    },
+    {
+      "glob": "hosted-server/HANDOFF.md",
+      "reason": "brief-J J3: internal handoff/status note for the next agent picking up this project — a dated status log, not a customer-facing claim surface."
+    },
+    {
+      "glob": "hosted-server/PROJECT_STATE.md",
+      "reason": "brief-J J3: internal project-state tracker with a dated run-log section — same reasoning as HANDOFF.md."
+    },
+    {
+      "glob": "hosted-server/scripts/golden/**",
+      "reason": "brief-J J3: golden-baseline TEST FIXTURES (this finding's own named exclude category) for the hosted-server acceptance suite, not prose about the product."
+    },
+    {
+      "glob": "monitoring/RUNBOOK.md",
+      "reason": "brief-J J3: operate/triage runbook whose \"## Run log\" section is a dated series of past monitoring-run entries (e.g. the 2026-07-23 run's \"30/30 tools\" snapshot) — ledger-like, not a current claim."
+    },
+    {
+      "glob": "distribution/research/**",
+      "reason": "brief-M M2 (2026-10-15): one-time distribution-channel contract research (channel-facts.md/channel-facts.json, brief B) auditing each manifest's state AT RESEARCH TIME — it quotes past, by-then-already-stale values verbatim (e.g. plugin.json's old \"scrape 13 platforms\", smithery.yaml's then-current \"16 platforms\") as evidence FOR the drift this whole registry exists to fix, not a claim about today's build. Same ledger-like-report reasoning as npm-package/docs/review/**, just scoped to this round's own research artifact."
+    }
   ],
   "claims": [
-    { "noun_pattern": "tools?", "fact": "tools" },
-    { "noun_pattern": "platforms?", "fact": "platforms" },
-    { "noun_pattern": "(?:per-platform\\s+)?scrapers?", "fact": "scrapers" },
-    { "noun_pattern": "工具", "fact": "tools", "unit": "个" },
-    { "noun_pattern": "平台", "fact": "platforms", "unit": "个" },
-    { "noun_pattern": "爬虫", "fact": "scrapers", "unit": "个" }
+    {
+      "noun_pattern": "tools?",
+      "fact": "tools"
+    },
+    {
+      "noun_pattern": "platforms?",
+      "fact": "platforms"
+    },
+    {
+      "noun_pattern": "(?:per-platform\\s+)?scrapers?",
+      "fact": "scrapers"
+    },
+    {
+      "noun_pattern": "工具",
+      "fact": "tools",
+      "unit": "个"
+    },
+    {
+      "noun_pattern": "平台",
+      "fact": "platforms",
+      "unit": "个"
+    },
+    {
+      "noun_pattern": "爬虫",
+      "fact": "scrapers",
+      "unit": "个"
+    }
   ],
   "rows": [
     {
@@ -335,12 +557,38 @@
       "description_max_len": 100,
       "description_derived": true,
       "description_derived_reason": "Literal template inside npm-package/scripts/gen-server-json.mjs, with the platform COUNT now interpolated from the built scraper catalog (brief-F R7, 2026-10-15) rather than hand-typed — see that script's own comment. The MCP Registry's server.json schema caps description at 100 chars (ajv-verified against https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json per that script's own comment) — too short for listing.json's shared ~180-char description, and this round's invariant forbids changing gen-server-json.mjs's semantics beyond deriving that one count. The description is exempt from the no-hand-typed-counts legibility rule because that script, not distribution/generate.mjs, is this field's sole owner and sole place to fix it — but the COUNT itself is no longer hand-typed either, closing R7.",
+      "surface": "both",
+      "surface_reason": "brief-N (2026-10-19, D1): this ONE listing carries a local packages[] entry (stdio, full tool set) AND a hosted remotes[] entry (streamable-http, HOSTED_HIDDEN-filtered) — an independent review's HIGH finding was that the shared description's 'browser automation' clause was accurate for packages[] but overclaimed for remotes[]. gen-server-json.mjs's own template (verify-only here, not generate.mjs-owned) was hand-reworded to 'browser via npm', true for both; surface:\"both\" documents why this row is exempt from check.mjs's surface_claims check (that check only ever fails a surface:\"hosted\" row).",
       "url_field": "/remotes/0/url",
       "url_field_reason": "brief-F R1: the hosted MCP endpoint URL was previously hand-written here with no check ever comparing it to listing.json's hosted_endpoint (tampering passed every check). Deliberately VERIFY-ONLY — not in owned_fields — because server.json remains gen-server-json.mjs's sole writer (this round's invariant forbids generate.mjs writing into it); check.mjs's endpoint_equal still catches drift here, it just never auto-fixes it.",
       "closed_shape": {
-        "": ["$schema", "name", "description", "repository", "version", "tools", "prompts", "resources", "skills", "categories", "topics", "packages", "remotes"],
-        "/packages/*": ["registryType", "identifier", "version", "transport", "environmentVariables"],
-        "/remotes/*": ["type", "url", "headers"]
+        "": [
+          "$schema",
+          "name",
+          "description",
+          "repository",
+          "version",
+          "tools",
+          "prompts",
+          "resources",
+          "skills",
+          "categories",
+          "topics",
+          "packages",
+          "remotes"
+        ],
+        "/packages/*": [
+          "registryType",
+          "identifier",
+          "version",
+          "transport",
+          "environmentVariables"
+        ],
+        "/remotes/*": [
+          "type",
+          "url",
+          "headers"
+        ]
       },
       "closed_shape_reason": "brief-I I1: server.json is gen-server-json.mjs-generated but NOT json-full (this round's invariant forbids touching that script's own semantics, and it does not emit a byte-stable, fully-templated file the way generate.mjs's json-full rows do) — it is this finding's tier-(b) 'hand-authored-enough that a round-tripped extra key would previously survive every check' shape. The top-level allowlist catches an injected sibling key (e.g. a second tools/remotes/packages block, or a rogue top-level field); /packages/* and /remotes/* catch one injected into either array element.",
       "pinned_fields": {
@@ -350,8 +598,19 @@
         "/remotes/0/type": "streamable-http",
         "/remotes/0/url": "https://mcp.novada.com/mcp"
       },
-      "pinned_fields_reason": "brief-I I1: these are the EXECUTION-RELEVANT values a client actually acts on — which npm package to run, over which transport, at which remote URL. /remotes/0/url duplicates what endpoint_equal already verifies dynamically against listing.hosted_endpoint; kept here too per this finding's own explicit instruction to pin remotes[*].url, as a second, independent, static assertion (if listing.hosted_endpoint is ever deliberately changed, BOTH this literal and endpoint_equal's dynamic check need updating together — a known, accepted overlap, not a new mechanism). /packages/0/registryType added brief-J J1: closed_shape's own \"/packages/*\" allowlist already PERMITS this key but never pinned its VALUE — a red-team attack changed it (e.g. to a different registry) while staying inside the allowed key set; now a declared literal, same as the other three.",
-      "pinned_array_lengths": { "/packages": 1, "/remotes": 1 },
+      "pinned_fields_reason": "brief-I I1: these are the EXECUTION-RELEVANT values a client actually acts on — which npm package to run, over which transport, at which remote URL. /remotes/0/url duplicates what endpoint_equal already verifies dynamically against listing.hosted_endpoint; kept here too per this finding's own explicit instruction to pin remotes[*].url, as a second, independent, static assertion (if listing.hosted_endpoint is ever deliberately changed, BOTH this literal and endpoint_equal's dynamic check need updating together — a known, accepted overlap, not a new mechanism; this field is ALSO this row's own url_field, so it is excluded from tamper_evident's hash the same way version/name/description are — a tamper here is caught by endpoint_equal + this static pin, never by the whole-file hash). /packages/0/registryType added brief-J J1: closed_shape's own \"/packages/*\" allowlist already PERMITS this key but never pinned its VALUE — a red-team attack changed it (e.g. to a different registry) while staying inside the allowed key set; now a declared literal, same as the other three.",
+      "pinned_fields_template": {
+        "/repository/url": "{{repository}}"
+      },
+      "pinned_fields_template_reason": "brief-N (2026-10-19): server.json's top-level repository.url is hand-authored and, before this round, had no pin at all — closed_shape's top-level allowlist permits the \"repository\" key but never inspected its VALUE. Templated against listing.repository (this field's OWN git-host URL, unlike /remotes/0/url above which is the HOSTED MCP ENDPOINT and is already separately covered by endpoint_equal + the static pinned_fields entry above) so a future listing.repository rename updates this pin automatically with zero channels.json edit. Also the project's reference example of this mechanism (brief-K K1's original example, claude-code-marketplace's plugins[0].source.url, was retired by brief-N's D2) — repository.url is a cleaner home for it than /remotes/0/url would have been: repository.url is NOT any of this row's version_field/name_field/description_field/url_field, so (unlike /remotes/0/url) it is NOT excluded from tamper_evident's whole-file hash — a tamper here is caught by BOTH this template pin AND tamper_evident, the same two-mechanism overlap the retired marketplace.json example demonstrated.",
+      "pinned_fields_format": {
+        "/packages/0/version": "^\\d+\\.\\d+\\.\\d+$"
+      },
+      "pinned_fields_format_reason": "brief-N (2026-10-19): packages[0].version is ALREADY independently verified to equal package.json's version by version_equal (an exact string match) — this adds a SHAPE assertion underneath that (must look like semver: digits.digits.digits), the same 'value changes release-over-release, shape never should' category brief-K K1's marketplace.json source.sha format pin was the original example of (also retired by D2). A known, accepted overlap with version_equal, kept here specifically so pinned_fields_format keeps a real, exercised production row.",
+      "pinned_array_lengths": {
+        "/packages": 1,
+        "/remotes": 1
+      },
       "pinned_array_lengths_reason": "brief-J J1: closed_shape's \"/packages/*\"/\"/remotes/*\" paths iterate every element already present but never bounded HOW MANY may exist — an attacker-injected packages[1]/remotes[1] entry built from already-allowed keys previously passed closed_shape AND pinned_fields (which only pins index 0) with zero detection. Pinning each array's exact current length closes the array-length half of that attack; tamper_evident (this round's whole-file hash, see generate.mjs's canonicalFormForRow) is the generic backstop that also catches an injected element on any OTHER array in this file with no explicit length pin at all (e.g. tools[]).",
       "generated_by": "npm-package/scripts/gen-server-json.mjs",
       "install_snippet": "# Registered with the official MCP Registry (remotes-only entry) — see distribution/registry-publish.md for the one-time `mcp-publisher publish` step.",
@@ -361,56 +620,31 @@
       "notes": "VERIFY-ONLY this round: distribution/generate.mjs never writes this file (npm-package/scripts/gen-server-json.mjs remains the sole writer, per this round's invariant); distribution/check.mjs only verifies version/tools/description/location/legibility stay in lockstep with package.json + build/core.js."
     },
     {
-      "id": "claude-code-plugin",
-      "path": "npm-package/.claude-plugin/plugin.json",
-      "location_rule": "npm-package/.claude-plugin/plugin.json must exist — read by Claude Code when this repo is installed directly as a plugin (`/plugin install NovadaLabs/novada-mcp`) or referenced from a marketplace entry.",
-      "writer_kind": "json-full",
-      "full_template": {
-        "name": "{{name}}",
-        "description": "{{description}}",
-        "version": "{{version}}",
-        "author": { "name": "NovadaLabs", "url": "{{homepage}}" }
-      },
-      "version_field": "/version",
-      "name_field": "/name",
-      "description_field": "/description",
-      "description_max_len": 220,
-      "generated_by": "distribution/generate.mjs",
-      "install_snippet": "/plugin marketplace add NovadaLabs/novada-mcp\n/plugin install novada-mcp",
-      "publish_mechanism": "git push to NovadaLabs/novada-mcp main — Claude Code reads plugin.json live from the repo; there is no separate publish step.",
-      "audience": "to-B — a developer runs `/plugin install` in their own Claude Code.",
-      "auth_summary": "OAuth 2.1 (hosted endpoint's Authorization Server, auto-triggered on first connect). Manual NOVADA_API_KEY header alternative documented in INSTALL.md for setups that cannot complete a browser OAuth flow.",
-      "notes": "Before this round: version \"0.1.0\" (package.json was 0.9.41) and description hand-typed \"scrape 13 platforms\" (actual registry has 16). Both are owned fields now."
-    },
-    {
-      "id": "claude-code-marketplace",
-      "path": "npm-package/.claude-plugin/marketplace.json",
-      "location_rule": "npm-package/.claude-plugin/marketplace.json must exist alongside plugin.json — read by Claude Code's `/plugin marketplace add` command.",
-      "writer_kind": "json-owned-fields",
-      "owned_fields": [
-        "/plugins/0/description"
-      ],
+      "id": "claude-plugins-external",
+      "kind": "external",
+      "path": "external:github.com/NovadaLabs/claude-plugins",
+      "location_rule": "Canonical Claude Code distribution channel: a SEPARATE repo, NovadaLabs/claude-plugins — NOT a path inside this monorepo. Root `.claude-plugin/marketplace.json` lists `plugins/novada-mcp`, which carries its own `.claude-plugin/plugin.json` + a real `.mcp.json` wiring listing.hosted_endpoint over OAuth. check.mjs's external_repo_consistent verifies all three over the network (raw.githubusercontent.com); this repo never pushes to it.",
+      "writer_kind": null,
+      "generated_by": null,
       "version_field": null,
-      "version_field_reason": "marketplace.json carries no version field per plugin entry — only a pinned git `sha` (see notes), which this row does not own.",
-      "name_field": "/plugins/0/name",
-      "description_field": "/plugins/0/description",
-      "description_max_len": 220,
-      "closed_shape": {
-        "": ["name", "owner", "plugins"]
+      "version_field_reason": "brief-N (2026-10-19, D2): the plugin's version in NovadaLabs/claude-plugins (currently 0.9.28) is owner-set INDEPENDENTLY of this monorepo's package.json — a separate repo with its own release cadence, not a mirror of npm-package/package.json#/version. Not derived, not verified for equality here.",
+      "surface": "hosted",
+      "surface_reason": "plugins/novada-mcp/.mcp.json in that repo wires listing.hosted_endpoint over HTTP — same hosted-only shape as gemini-cli/antigravity-plugin/openai-codex-plugin. Its description (authored in that repo, not generated by this one) already states '28 MCP tools... Hosted at mcp.novada.com' with no browser-automation claim, so check.mjs's surface_claims check has nothing to enforce here (it only scans THIS repo's generate.mjs-produced text) — surface is recorded for documentation/consistency, not because a check reads it for this row.",
+      "external_repo": {
+        "owner": "NovadaLabs",
+        "repo": "claude-plugins",
+        "ref": "main",
+        "marketplace_path": ".claude-plugin/marketplace.json",
+        "plugin_path": "plugins/novada-mcp/.claude-plugin/plugin.json",
+        "mcp_config_path": "plugins/novada-mcp/.mcp.json",
+        "expected_plugin_name": "novada-mcp",
+        "mcp_url_field": "/mcpServers/novada/url"
       },
-      "closed_shape_reason": "brief-I I1: marketplace.json's description is generate.mjs-owned, but the rest of the file (owner, plugins[0].source, plugins[0].homepage) is hand-authored — a rogue top-level key previously round-tripped through generated_clean's partial field-write with no check ever noticing it.",
-      "pinned_array_lengths": { "/plugins": 1 },
-      "pinned_array_lengths_reason": "brief-J J1: closed_shape's top-level (\"\") allowlist bounds this file's own top-level keys but not how many entries plugins[] may contain — a red-team-injected plugins[1] previously passed every check (there is no \"/plugins/*\" closed_shape path at all today, so an injected element's own keys were equally unconstrained). Pinning the exact current length closes it; tamper_evident (this round's whole-file hash) is the generic backstop regardless.",
-      "pinned_fields_template": { "/plugins/0/source/url": "{{repository}}.git" },
-      "pinned_fields_template_reason": "brief-K K1 CRITICAL: plugins[0].source.url previously had NO pin at all — the top-level closed_shape allowlist and pinned_array_lengths bound this file's own key SET and plugins[] LENGTH, but the URL's VALUE was free to tamper with (e.g. pointing installers at a fork) while every check still passed, including tamper_evident after a `--repin` on the tampered content. Derived from listing.repository (+ \".git\", this file's own existing suffix convention) rather than a hand-duplicated literal, so a future repository rename in listing.json updates this pin automatically with zero channels.json edit.",
-      "pinned_fields_format": { "/plugins/0/source/sha": "^[0-9a-f]{40}$" },
-      "pinned_fields_format_reason": "brief-K K1 CRITICAL: plugins[0].source.sha pins a COMMIT — see this row's own notes below: regenerating its exact value would require knowing a future release's commit sha before that commit exists, so it correctly stays NOT an owned/exact-pinned field. A FORMAT pin (exactly 40 lowercase hex characters, the canonical git commit-sha shape) still catches a tamper that replaces it with a non-sha string (a URL, a branch name, an empty string, uppercase hex, a too-short/too-long value) while leaving the legitimate per-release VALUE free to change.",
-      "generated_by": "distribution/generate.mjs",
-      "install_snippet": "/plugin marketplace add NovadaLabs/novada-mcp",
-      "publish_mechanism": "git push to NovadaLabs/novada-mcp main.",
-      "audience": "to-B — same audience as claude-code-plugin; this row is the marketplace LISTING entry, not a second install path.",
-      "auth_summary": "Same as claude-code-plugin — this row only lists the plugin, it does not change how the installed plugin authenticates.",
-      "notes": "plugins[0].source.sha pins a specific commit and is intentionally NOT an owned field — regenerating it would require this script to know the commit SHA of a future release before that commit exists, which it cannot. Flagged as an owner-decision finding in report-A-build.md: either wire a release-time step that updates `sha` to HEAD, or keep it deliberately hand-pinned and document why. plugins[0].name and the top-level marketplace `name` both already equal listing.name and are left unowned (verified, not rewritten)."
+      "install_snippet": "/plugin marketplace add NovadaLabs/claude-plugins\n/plugin install novada-mcp@novada",
+      "publish_mechanism": "git push to NovadaLabs/claude-plugins main — a separate repo from this monorepo; engineering maintains it directly. This repo's CI never publishes to it and never needs to (external_repo_consistent is read-only, network-verify-only).",
+      "audience": "to-B — a developer runs `/plugin install` in their own Claude Code.",
+      "auth_summary": "OAuth 2.1 (hosted endpoint's Authorization Server, auto-triggered on first connect) — see plugins/novada-mcp/.mcp.json in that repo.",
+      "notes": "brief-N (2026-10-19, D2 CRITICAL — independent review of PR #20): replaces the retired npm-package/.claude-plugin/ rows (claude-code-plugin, claude-code-marketplace; files removed from this repo's working tree in this same commit, recoverable from git history), which shipped with NO MCP server wiring at all (no .mcp.json anywhere under npm-package/.claude-plugin/) and sat at npm-package/.claude-plugin/ — a path `/plugin marketplace add NovadaLabs/novada-mcp` (the owner/repo CLI shorthand, which always clones to the REPO ROOT and looks for `.claude-plugin/marketplace.json` there, with no path-override option for that invocation form) could never read. NovadaLabs/claude-plugins already has `.claude-plugin/marketplace.json` at its own repo root, a real `.mcp.json`, and 3 prior review rounds landed (tool-count fix, Sentry disclosure, novada_browser drop) — it is the working, review-hardened artifact; this repo now points at it instead of re-deriving a second, independently-drifting copy. INSTALL.md's install_snippet above is the corrected 2-step command."
     },
     {
       "id": "smithery",
@@ -425,9 +659,20 @@
       "name_field": "name",
       "description_field": "description",
       "description_max_len": 220,
+      "surface": "local",
+      "surface_reason": "brief-N (2026-10-19, D1): startCommand.type: stdio runs the full local npm package via `npx` — the real tool set, including browser automation. listing.description (not description_hosted) is correct here.",
       "closed_shape": {
-        "": ["name", "description", "startCommand", "tools"],
-        "startCommand": ["type", "configSchema", "commandFunction"]
+        "": [
+          "name",
+          "description",
+          "startCommand",
+          "tools"
+        ],
+        "startCommand": [
+          "type",
+          "configSchema",
+          "commandFunction"
+        ]
       },
       "closed_shape_reason": "brief-I I1: smithery.yaml's description is generate.mjs-owned, but startCommand (including commandFunction — the literal shell-command GENERATOR Smithery evaluates to launch the npm package on the end user's machine) and the tools array are hand-authored. A tampered commandFunction previously passed every check — this is the concrete attack this finding names.",
       "pinned_fields": {
@@ -451,8 +696,13 @@
       "version_field": null,
       "name_field": null,
       "description_field": null,
+      "surface": "local",
+      "surface_reason": "brief-N (2026-10-19, D1): installs via `npx novada-mcp`, the same local stdio package as the smithery row. No description_field on this row, so no check ever reads surface for it — recorded for documentation/consistency.",
       "closed_shape": {
-        "": ["$schema", "maintainers"]
+        "": [
+          "$schema",
+          "maintainers"
+        ]
       },
       "closed_shape_reason": "brief-I I1: glama.json has zero owned/verified fields of its own (notes below) — before this finding, a rogue top-level key here would pass every check with zero detection. The allowlist is this file's own exact current shape.",
       "generated_by": null,
@@ -471,12 +721,18 @@
         "name": "{{name}}",
         "version": "{{version}}",
         "description": "{{description}}",
-        "mcpServers": { "novada": { "httpUrl": "{{hosted_endpoint}}" } }
+        "mcpServers": {
+          "novada": {
+            "httpUrl": "{{hosted_endpoint}}"
+          }
+        }
       },
       "version_field": "/version",
       "name_field": "/name",
       "description_field": "/description",
       "description_max_len": 220,
+      "surface": "hosted",
+      "surface_reason": "brief-N (2026-10-19, D1 HIGH — independent review of PR #20): mcpServers.novada.httpUrl points ONLY at listing.hosted_endpoint; hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN excludes novada_browser/novada_browser_flow there. The prior shared description's 'browser automation' clause was never true for this row — generate.mjs now writes listing.description_hosted (no such clause) here instead of listing.description; check.mjs's surface_claims check fails if that ever regresses.",
       "url_field": "/mcpServers/novada/httpUrl",
       "url_field_reason": "brief-F R1: previously hand-written with no check verifying it against listing.json's hosted_endpoint — tampering with it passed every check (0 failures). Now both OWNED (generate.mjs rewrites it from listing.hosted_endpoint on every run) and verified by endpoint_equal.",
       "generated_by": "distribution/generate.mjs",
@@ -500,6 +756,12 @@
       "name_field": "/name",
       "description_field": "/description",
       "description_max_len": 220,
+      "surface": "hosted",
+      "surface_reason": "brief-N (2026-10-19, D1 HIGH): this plugin's sibling antigravity-mcp-config wires mcpServers.novada.serverUrl to listing.hosted_endpoint ONLY — same hosted-only shape as gemini-cli. generate.mjs now writes listing.description_hosted here instead of listing.description (which would have overclaimed browser automation); check.mjs's surface_claims check enforces it.",
+      "surface_peers": [
+        "antigravity-mcp-config"
+      ],
+      "surface_peers_reason": "brief-N R2 fix (2026-10-19, round 2 review): plugin.json's own content ({name, description}) carries no url/startCommand signal of any kind for check.mjs's deriveSurfaceForRow to read — its actual endpoint wiring lives entirely in the sibling antigravity-mcp-config row's mcp_config.json. Declared explicitly (not inferred from directory — npm-package/ alone holds 3 unrelated channel manifests in one folder) so surface_derived_consistent can still cross-check this row's declared surface against real structural evidence.",
       "generated_by": "distribution/generate.mjs",
       "install_snippet": "agy plugin install https://github.com/NovadaLabs/novada-mcp/tree/main/distribution/plugins/antigravity",
       "publish_mechanism": "No self-serve publish/listing API or PR path exists for the Antigravity MARKETPLACE — listing is gated behind a manual interest-form request (antigravity.google/docs/marketplace). DIRECT install via `agy plugin install <github-url>/tree/<ref>/<subpath>` (this row's install_snippet) bypasses the marketplace entirely and needs no registration step.",
@@ -513,16 +775,26 @@
       "location_rule": "mcp_config.json is OPTIONAL per Antigravity's own schema, but REQUIRED by this row's distribution choice — it must sit beside plugin.json at distribution/plugins/antigravity/mcp_config.json (same plugin-root directory, confirmed by antigravity.google/docs/plugins/'s file-layout table).",
       "writer_kind": "json-full",
       "full_template": {
-        "mcpServers": { "novada": { "serverUrl": "{{hosted_endpoint}}" } }
+        "mcpServers": {
+          "novada": {
+            "serverUrl": "{{hosted_endpoint}}"
+          }
+        }
       },
       "version_field": null,
       "name_field": null,
       "description_field": null,
+      "surface": "hosted",
+      "surface_reason": "brief-N (2026-10-19, D1): same hosted-only endpoint as the sibling antigravity-plugin row. No description_field on this row, so no check ever reads surface for it — recorded for documentation/consistency.",
       "url_field": "/mcpServers/novada/serverUrl",
       "url_field_reason": "brief-F R1: previously hand-written with no check verifying it against listing.json's hosted_endpoint — tampering with it passed every check (0 failures). Now both OWNED (generate.mjs rewrites it from listing.hosted_endpoint on every run) and verified by endpoint_equal.",
       "required_fields": {
-        "/mcpServers/novada/serverUrl": { "must": "exist" },
-        "/mcpServers/novada/url": { "must": "not_exist" }
+        "/mcpServers/novada/serverUrl": {
+          "must": "exist"
+        },
+        "/mcpServers/novada/url": {
+          "must": "not_exist"
+        }
       },
       "required_fields_reason": "brief-F R3: Antigravity's remote-MCP schema REQUIRES `serverUrl` and does not recognize `url`/`httpUrl` (see this row's own notes below, CONFIRMED antigravity.google/docs/mcp). Before this round, hand-editing this file from `serverUrl` to `url` produced ZERO check failures (documented gap in distribution/README.md's prior 'Known scope decisions' and this round's test suite) — a client silently ignoring the wrong key name would get no MCP server at all with no signal why. field_shape closes it generically (a row-data table entry, not a `row.id===\"antigravity-mcp-config\"` branch in check.mjs).",
       "generated_by": "distribution/generate.mjs",
@@ -544,7 +816,16 @@
         "homepage": "{{homepage}}",
         "repository": "{{repository}}",
         "license": "MIT",
-        "keywords": ["mcp", "mcp-server", "model-context-protocol", "web-scraping", "web-search", "ai-agents", "research", "proxy"],
+        "keywords": [
+          "mcp",
+          "mcp-server",
+          "model-context-protocol",
+          "web-scraping",
+          "web-search",
+          "ai-agents",
+          "research",
+          "proxy"
+        ],
         "mcpServers": "./.mcp.json"
       },
       "full_template_reason": "brief-I I1: homepage/repository resolve dynamically from listing.json (same mechanism as every other placeholder); license and keywords are LITERAL (channels.json's own previously-documented future-work note: these 4 fields 'are NOT owned/verified/regenerated by distribution/generate.mjs' under the old json-owned-fields writer — json-full now fully owns and verifies them, closing that gap as a side effect of I1's fix, not a separate finding).",
@@ -552,6 +833,12 @@
       "name_field": "/name",
       "description_field": "/description",
       "description_max_len": 220,
+      "surface": "hosted",
+      "surface_reason": "brief-N (2026-10-19, D1 HIGH): this plugin's `mcpServers` points (via the string-path shape, see notes below) at the sibling openai-codex-mcp-config row's .mcp.json, which wires listing.hosted_endpoint ONLY — the shared npm package is never installed by this plugin. generate.mjs now writes listing.description_hosted here instead of listing.description; check.mjs's surface_claims check enforces it.",
+      "surface_peers": [
+        "openai-codex-mcp-config"
+      ],
+      "surface_peers_reason": "brief-N R2 fix (2026-10-19, round 2 review): plugin.json's `mcpServers` is a bare STRING reference (\"./.mcp.json\", resolved by Codex relative to the plugin ROOT, not to plugin.json's own directory — see this row's notes for the confirmed resolution semantics) — check.mjs's deriveSurfaceForRow does not attempt to resolve that relative reference itself (that would hard-code Codex's own path-resolution convention into a supposedly format-generic extractor); the sibling openai-codex-mcp-config row's .mcp.json carries the real, directly-readable url_field signal instead. Declared explicitly for the same reason as antigravity-plugin's surface_peers (see that row).",
       "description_max_len_reason": "No exact OpenAI/Codex-enforced description length limit was found in the plugin-json-spec or manifest.rs (description is simply `Option<String>`) — 220 is this project's own existing conservative policy value (same number already used for claude-code-plugin/claude-code-marketplace/smithery), not a claim about what OpenAI enforces.",
       "generated_by": "distribution/generate.mjs",
       "install_snippet": "mkdir -p ~/.codex/plugins/novada-mcp\ncp -R distribution/plugins/openai/. ~/.codex/plugins/novada-mcp/\n# Restart Codex (or run `codex`) and enable \"novada-mcp\" via /plugins. This manual ~/.codex/plugins/<name>\n# copy is OpenAI's own documented personal-install shortcut (developers.openai.com/codex/plugins/build,\n# re-verified live 2026-10-15, brief-F R8) around authoring a .agents/plugins/marketplace.json entry.\n# For the shared ChatGPT+Codex directory listing (broader distribution, not local/dev): submit via\n# https://platform.openai.com/plugins (owner-gated manual review, see distribution/INSTALL.md).",
@@ -567,15 +854,25 @@
       "location_rule": "`.mcp.json` must exist as a SIBLING of `.codex-plugin/` at the plugin root (distribution/plugins/openai/.mcp.json, NOT inside `.codex-plugin/`) — CONFIRMED by every example in github.com/openai/plugins (plugins/linear/.mcp.json sits beside plugins/linear/.codex-plugin/, not inside it).",
       "writer_kind": "json-full",
       "full_template": {
-        "mcpServers": { "novada": { "type": "http", "url": "{{hosted_endpoint}}" } }
+        "mcpServers": {
+          "novada": {
+            "type": "http",
+            "url": "{{hosted_endpoint}}"
+          }
+        }
       },
       "version_field": null,
       "name_field": null,
       "description_field": null,
+      "surface": "hosted",
+      "surface_reason": "brief-N (2026-10-19, D1): same hosted-only endpoint as the sibling openai-codex-plugin row. No description_field on this row, so no check ever reads surface for it — recorded for documentation/consistency.",
       "url_field": "/mcpServers/novada/url",
       "url_field_reason": "brief-F R1: previously hand-written with no check verifying it against listing.json's hosted_endpoint — tampering with it passed every check (0 failures). Now both OWNED (generate.mjs rewrites it from listing.hosted_endpoint on every run) and verified by endpoint_equal.",
       "required_fields": {
-        "/mcpServers/novada/type": { "must": "equal", "value": "http" }
+        "/mcpServers/novada/type": {
+          "must": "equal",
+          "value": "http"
+        }
       },
       "required_fields_reason": "brief-F R3: 4 live OpenAI-maintained examples (see notes below) all use `type: \"http\"` for a Streamable-HTTP remote MCP server; field_shape now catches a hand-edit to a wrong/missing type value, which no prior check did.",
       "generated_by": "distribution/generate.mjs",
@@ -584,6 +881,68 @@
       "audience": "Same as openai-codex-plugin — this file ships inside the same plugin directory and is referenced by its plugin.json.",
       "auth_summary": "Same as openai-codex-plugin.",
       "notes": "No owned/verified NAME/DESCRIPTION fields — .mcp.json has neither (purely `{mcpServers: {...}}`); the endpoint URL and `type` fields ARE now owned/verified (url_field/required_fields above, brief-F R1/R3) — this row is no longer the same 'nothing owned or verified' shape as the glama row. `type: \"http\"` + `url` (CONFIRMED live 2026-10-15 from 4 real shipped OpenAI-maintained plugins' own .mcp.json files: plugins/linear, plugins/supabase, plugins/cloudflare, plugins/github in github.com/openai/plugins; RE-CONFIRMED again brief-F R6/R1, 2026-10-15, by independently re-fetching plugins/github/.mcp.json and plugins/cloudflare/.mcp.json via `gh api`) — a DIFFERENT field-name pair from both Gemini's `httpUrl` and Antigravity's `serverUrl`; do not conflate the three schemas. No `headers`/`oauth` block: 2 of the 4 real examples checked (supabase, cloudflare) ship with bare `{type,url}` and rely on OAuth-on-first-connect, matching novada-mcp's DCR-capable hosted OAuth 2.1 Authorization Server; the other 2 (linear, github) embed an `oauth_resource` URL or a registered OAuth client's public `client_id`/`client_secret` pair, which this round deliberately does NOT replicate (no pre-registered OAuth client exists for novada-mcp on OpenAI's side yet — DCR covers it without one)."
+    },
+    {
+      "id": "dify-plugin",
+      "path": "distribution/dify/manifest.yaml",
+      "location_rule": "distribution/dify/manifest.yaml must exist at the Dify plugin root — read by `dify plugin package`/the Dify Marketplace build (PR #21, .github/workflows/dify-plugin.yml). provider/novada.yaml sits beside it (see the dify-provider row) and is a SEPARATE row because the two files have completely disjoint top-level key sets (same claude-code-plugin/claude-code-marketplace precedent).",
+      "writer_kind": null,
+      "generated_by": null,
+      "version_field": null,
+      "version_field_reason": "brief-N (2026-10-19, D3): Dify plugin versioning is INDEPENDENT of npm-package/package.json BY DESIGN — each version bump is its own Dify Marketplace PR (a human-reviewed submission, not a build artifact), and this plugin is a thin client over the hosted MCP server, not a vendored copy of npm-package. manifest.yaml's `version`/`meta.version` (both currently 0.1.0) are hand-set by whoever cuts that Marketplace PR; not derived, not verified for equality against package.json here. (This is the exact version-drift bug class this registry exists to fix for every OTHER channel — Dify is the one channel where owner intent is for the two version numbers to be independent, not synced, so leaving it unverified here is a decision, not an oversight.)",
+      "surface": "hosted",
+      "surface_reason": "The plugin's Python tool handlers (utils/mcp_client.py) call mc.novada.com's hosted MCP endpoint directly — no local npm package involved. Its description (manifest.yaml's description.en_US/zh_Hans, hand-authored, not generate.mjs-owned — see version_field_reason) already carries no browser-automation claim, consistent with the 7 tools it exposes (see dify-provider's notes) — recorded for documentation/consistency, not because a check reads it for this row.",
+      "closed_shape": {
+        "": [
+          "version",
+          "type",
+          "author",
+          "name",
+          "label",
+          "description",
+          "created_at",
+          "icon",
+          "resource",
+          "network",
+          "plugins",
+          "meta",
+          "tags",
+          "privacy",
+          "repo",
+          "contact"
+        ]
+      },
+      "closed_shape_reason": "brief-N (2026-10-19, D3): manifest.yaml is entirely hand-authored (writer_kind: null, same shape as the glama row) — this is its own exact current top-level key set, closing the same 'rogue injected key round-trips untouched' gap brief-I I1 closed for every other hand-authored manifest.",
+      "install_snippet": "# Install from the Dify Marketplace listing, or upload the built .difypkg directly (dify plugin package distribution/dify).",
+      "publish_mechanism": ".github/workflows/dify-plugin.yml (PR #21) lints + tests on every push/PR touching distribution/dify/**; publishing a new version to the Dify Marketplace is a separate, owner-approved submission (each version bump = a new Marketplace PR — see version_field_reason).",
+      "audience": "to-B/to-C — Dify Chatflow/Workflow/Agent app builders.",
+      "auth_summary": "Static API-key credential (secret-input `api_key`, sent as `Authorization: Bearer` to mcp.novada.com) — unlike every other row above, Dify has no OAuth/DCR support for tool plugins today, so this is the one channel where a key is still typed in directly (see provider/novada.yaml's credentials_for_provider).",
+      "notes": "brief-N (2026-10-19, D3 — independent review of PR #20): distribution/dify/ (merged via PR #21, commit 7d529fd) shipped with NO channels.json row at all — manifest.yaml/provider/novada.yaml were invisible to no_orphans and distribution/dify/README.md's tool table was invisible to claims_consistent, reproducing the exact version/count-drift bug class this registry exists to fix (manifest.yaml's version/meta.version were ALREADY hand-typed 0.1.0, disconnected from package.json's 0.9.41, on day one — see version_field_reason). This row (+ dify-provider) closes the no_orphans gap; the dify_tools claims_consistent fact (see channels.json's claim_surfaces entry for distribution/dify/README.md) closes the count-drift gap."
+    },
+    {
+      "id": "dify-provider",
+      "path": "distribution/dify/provider/novada.yaml",
+      "location_rule": "distribution/dify/provider/novada.yaml must exist beside manifest.yaml — referenced by manifest.yaml's `plugins.tools: [provider/novada.yaml]` and read by the Dify plugin runtime for provider identity + credential schema + the tool list.",
+      "writer_kind": null,
+      "generated_by": null,
+      "version_field": null,
+      "version_field_reason": "provider/novada.yaml carries no version field of its own at all (Dify's provider-manifest schema has none) — see dify-plugin's version_field_reason for why this plugin's version is independent of package.json by design regardless.",
+      "surface": "hosted",
+      "surface_reason": "Same hosted-only shape as the sibling dify-plugin row — recorded for documentation/consistency; this row has no description_field for any check to read.",
+      "closed_shape": {
+        "": [
+          "identity",
+          "credentials_for_provider",
+          "tools",
+          "extra"
+        ]
+      },
+      "closed_shape_reason": "brief-N (2026-10-19, D3): provider/novada.yaml is entirely hand-authored (writer_kind: null) — this is its own exact current top-level key set, same shape-protection reasoning as the dify-plugin row and the glama row.",
+      "install_snippet": "# Installed together with dify-plugin (same Dify Marketplace/.difypkg install, see that row) — provider/novada.yaml is not installed on its own.",
+      "publish_mechanism": "Same as dify-plugin — ships inside the same plugin package.",
+      "audience": "Same as dify-plugin.",
+      "auth_summary": "Same as dify-plugin.",
+      "notes": "brief-N (2026-10-19, D3): `tools:` lists exactly 7 of novada-mcp's 28 hosted tools (search/extract/crawl/map/research/scrape/account) BY DESIGN, not an oversight — distribution/dify/utils/tools_table.py's own `TOOLS` tuple (the plugin's single source of truth for which tools it exposes, per that module's own class-not-instance design-rule docstring) and distribution/dify/tests/test_tools_parity.py's `test_table_covers_exactly_the_seven_spec_tools` already both independently pin this at 7; distribution/check.mjs's claims_consistent now cross-checks distribution/dify/README.md's own stated count against a THIRD, independent derivation (counting distribution/dify/tools/*.yaml — never hardcoded), so all three can never silently disagree."
     }
   ]
 }

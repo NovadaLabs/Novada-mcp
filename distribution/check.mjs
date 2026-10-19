@@ -70,9 +70,25 @@ export const CHECK_NAMES = [
   "shape_declared",
   "tamper_evident",
   "ci_paths_cover",
+  "hosted_hidden_parseable",
   "claims_consistent",
   "json_no_duplicate_keys",
+  "surface_claims",
+  "surface_derived_consistent",
+  "external_repo_consistent",
 ];
+
+// brief-N (2026-10-19, D2 — independent review of PR #20): a row with `kind: "external"` has no
+// local file at all — its real manifest lives in a DIFFERENT repository (see
+// distribution/channels.json's own $comment for the full external_repo contract). Every check
+// below that assumes `existsSync(join(root, relPath))` already no-ops harmlessly for such a row
+// (its path never resolves to a real file, and it deliberately sets no version_field/url_field/
+// required_fields/closed_shape for any of those checks to act on) — EXCEPT the three guarded
+// explicitly here, which otherwise actively assume a local file must exist. Table-driven, not a
+// `row.id === "..."` branch: ANY future external row gets the same exemption automatically.
+export function isExternalRow(row) {
+  return row.kind === "external";
+}
 
 const COUNT_PATTERN = /\b\d+\+?\s*(tools|platforms|engines)\b/i;
 
@@ -424,6 +440,7 @@ export function checkShapeDeclared(ctx) {
   const { channels } = ctx;
   const failures = [];
   for (const row of channels.rows) {
+    if (isExternalRow(row)) continue; // brief-N D2: shape protection applies to a LOCAL file this registry owns; an external row's file is neither json-full-rebuilt nor closed-shape-checked here, by design
     const hasJsonFull = row.writer_kind === "json-full";
     const hasClosedShape = row.closed_shape && typeof row.closed_shape === "object" && Object.keys(row.closed_shape).length > 0;
     if (!hasJsonFull && !hasClosedShape) {
@@ -920,6 +937,7 @@ export function checkCiPathsCover(ctx) {
 
   const failures = [];
   for (const row of channels.rows) {
+    if (isExternalRow(row)) continue; // brief-N D2: not a path in THIS repo — no ci.yml paths: filter could ever cover it, nor should it need to
     for (const relPath of rowPaths(row)) {
       const uncoveredIn = pathsLists.filter((patterns) => !patterns.some((p) => ciPathMatches(p, relPath)));
       if (uncoveredIn.length > 0) {
@@ -939,6 +957,7 @@ export function checkLocationRules(ctx) {
   const { channels, root } = ctx;
   const failures = [];
   for (const row of channels.rows) {
+    if (isExternalRow(row)) continue; // brief-N D2: its file lives in a different repo — nothing local to restore
     for (const relPath of rowPaths(row)) {
       const abs = join(root, relPath);
       if (!existsSync(abs) || !statSync(abs).isFile()) {
@@ -1182,6 +1201,386 @@ export function checkLegibility(ctx) {
 }
 
 // ---------------------------------------------------------------------------------------
+// Surface derivation (brief-N R2 fix, 2026-10-19, round 2 review of PR #20 — real gap found by
+// the verifier's mutation probe #1)
+// ---------------------------------------------------------------------------------------
+// row.surface was pure hand-typed metadata with NOTHING cross-checking it against the row's own
+// actual install/endpoint mechanism — relabeling a surface:"hosted" row to "local" (one field, one
+// line in channels.json, no change to the row's actual manifest content) silently re-enabled the
+// exact "browser automation" overclaim surface_claims exists to catch, because surface_claims (like
+// the rest of this file) trusts row.surface at face value. deriveSurfaceForRow extracts a
+// STRUCTURAL local/hosted signal from the row's own parsed manifest content, through a table keyed
+// by manifest FORMAT (json/yaml — the only two formats this registry has) — never a per-channel/
+// row.id branch: a "hosted" signal is a url_field pointer that resolves to a non-empty string in
+// THIS row's own file; a "local" signal is a stdio launch mechanism (YAML startCommand.type, or a
+// JSON packages[].transport.type) in THIS row's own file.
+//
+// A handful of channels are intentionally split across TWO files with disjoint schemas (same
+// precedent as owned_fields/closed_shape's existing split-row handling, e.g. antigravity-plugin/
+// antigravity-mcp-config) — the file that carries the user-facing name/description (and is what
+// surface_claims actually inspects) sometimes carries NO structural signal of its own (plugin.json
+// is just {name, description}). For exactly those rows, channels.json declares `surface_peers`: an
+// explicit array of sibling row ids whose content ALSO counts toward THIS row's derived surface.
+// This is deliberately NOT directory-based heuristic grouping — npm-package/ alone holds THREE
+// independent, unrelated channel manifests (mcp-registry/glama/smithery) in one folder, so "same
+// directory" would wrongly union their signals. `surface_peers` is a small, explicit, auditable
+// data declaration: adding a new split channel means adding a channels.json array entry, never a
+// new code branch.
+//
+// deriveSurfaceForRow returns null when NEITHER a row NOR any declared peer carries ANY structural
+// signal at all (e.g. glama.json — genuinely nothing there to derive from: no url, no stdio
+// launcher, nothing). checkSurfaceDerivedConsistent below never asserts EQUALITY against a null
+// derivation — a surface this mechanism cannot derive is left to the declared value for a row
+// surface_claims never inspects in the first place (no description_field), the same "don't fail
+// on absence of signal" posture surface_claims itself uses. But round-2 review (brief-O,
+// pr20-round2-review-2026-10-19.md, HIGH) found that posture goes too far for a row surface_claims
+// DOES actively inspect (description_field set): there, a null derivation is itself the failure —
+// it means the row's claimed surface can no longer be proven at all, by either its own manifest or
+// its declared surface_peers, which is exactly the condition a relabel+delete-surface_peers attack
+// produces. See the `row.description_field` branch inside checkSurfaceDerivedConsistent below. An
+// EXTERNAL row's surface is derived separately, over the network, from its fetched .mcp.json — see
+// evaluateExternalRepoManifests' own surface assertion below.
+function extractSurfaceSignalsFromJson(raw, row) {
+  let obj;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    return { hosted: false, local: false };
+  }
+  let hosted = false;
+  if (row.url_field) {
+    const v = getJsonPointer(obj, row.url_field);
+    if (typeof v === "string" && v.length > 0) hosted = true;
+  }
+  const local = Array.isArray(obj.packages) && obj.packages.some((p) => p && p.transport && p.transport.type === "stdio");
+  return { hosted, local };
+}
+
+function extractSurfaceSignalsFromYaml(raw) {
+  const startCommandType = getYamlNestedScalar(raw, "startCommand", "type");
+  return { hosted: startCommandType === "http", local: startCommandType === "stdio" };
+}
+
+// The per-FORMAT table itself — exactly 2 entries, dispatched by file extension (isYamlPath,
+// already used throughout this file for the same purpose), applied identically to every row
+// regardless of channel identity. Extending to a future THIRD manifest format (this registry has
+// none today) means one new table entry, never a per-row/per-channel branch.
+const SURFACE_SIGNAL_EXTRACTORS = { json: extractSurfaceSignalsFromJson, yaml: extractSurfaceSignalsFromYaml };
+
+function collectOwnSurfaceSignals(root, row) {
+  let hosted = false;
+  let local = false;
+  for (const relPath of rowPaths(row)) {
+    const abs = join(root, relPath);
+    if (!existsSync(abs)) continue; // location_rules already reports a missing file
+    const raw = readFileSync(abs, "utf8");
+    const extract = SURFACE_SIGNAL_EXTRACTORS[isYamlPath(relPath) ? "yaml" : "json"];
+    const sig = extract(raw, row);
+    if (sig.hosted) hosted = true;
+    if (sig.local) local = true;
+  }
+  return { hosted, local };
+}
+
+/** Returns "local" | "hosted" | "both" | null (undeterminable). Never throws — a row whose file
+ *  is missing/unparseable simply contributes no signal (location_rules/legibility already report
+ *  that separately). */
+export function deriveSurfaceForRow(ctx, row) {
+  const { channels, root } = ctx;
+  if (isExternalRow(row)) return null; // derived over the network — see evaluateExternalRepoManifests
+  let { hosted, local } = collectOwnSurfaceSignals(root, row);
+  for (const peerId of row.surface_peers ?? []) {
+    const peer = channels.rows.find((r) => r.id === peerId);
+    if (!peer) continue; // a dangling surface_peers id is a channels.json authoring error, not this function's job to flag
+    const peerSig = collectOwnSurfaceSignals(root, peer);
+    hosted = hosted || peerSig.hosted;
+    local = local || peerSig.local;
+  }
+  if (!hosted && !local) return null;
+  if (hosted && local) return "both";
+  return hosted ? "hosted" : "local";
+}
+
+export function checkSurfaceDerivedConsistent(ctx) {
+  const { channels } = ctx;
+  const failures = [];
+  for (const row of channels.rows) {
+    if (isExternalRow(row)) continue; // handled by external_repo_consistent's own network-derived assertion
+    if (row.surface === undefined) continue; // a row with no description_field never declares one
+    const derived = deriveSurfaceForRow(ctx, row);
+    if (derived === null) {
+      // brief-O round-2 review (pr20-round2-review-2026-10-19.md, HIGH): "no structural signal
+      // anywhere" is NOT an unconditional free pass. A row whose generated description is
+      // actively inspected by surface_claims (row.description_field set — the same predicate
+      // hasHostedRowWithDescription already uses, a property of the row's own schema, not a
+      // per-row/per-channel branch) must be able to PROVE its surface somehow — from its own
+      // manifest content, or from a declared surface_peers pointing at a sibling that has real
+      // signal. If neither exists, that's not "nothing to contradict": it's a row where the D1
+      // overclaim this whole mechanism exists to prevent (antigravity-plugin/openai-codex-plugin
+      // today — the two rows whose own {name,description} schema can never carry a url/stdio
+      // signal) can be silently reintroduced by relabeling row.surface AND deleting
+      // surface_peers in the same edit, with every check staying green. A row with no
+      // description_field at all (e.g. glama.json) is unaffected — nothing there for
+      // surface_claims to have overclaimed in the first place, so it correctly stays exempt.
+      if (row.description_field) {
+        failures.push(
+          `distribution/channels.json: rule=surface_derived_consistent row=${row.id} ` +
+            `fix="row's own manifest (${rowPaths(row).join(", ")}) and any declared surface_peers carry no structural signal, ` +
+            `yet surface_claims inspects its description field (${row.description_field}) for an overclaim — add a url_field/stdio ` +
+            `signal to this row's own manifest, or declare surface_peers pointing at a sibling manifest with a real signal"`
+        );
+      }
+      continue;
+    }
+    if (derived !== row.surface) {
+      const peerNote = row.surface_peers?.length ? ` (+ peer ${row.surface_peers.join(", ")})` : "";
+      failures.push(
+        `distribution/channels.json: rule=surface_derived_consistent row=${row.id} field=surface got=${JSON.stringify(row.surface)} derived=${JSON.stringify(derived)} ` +
+          `fix="row.surface must match the structural signal in ${rowPaths(row).join(", ")}${peerNote} — a url_field pointer resolving to a real URL means hosted, a stdio startCommand/packages[].transport means local, both present means both; fix the declared row.surface in distribution/channels.json, or fix the manifest if the endpoint itself is wrong"`
+      );
+    }
+  }
+  return failures;
+}
+
+// ---------------------------------------------------------------------------------------
+// Check: surface_claims (brief-N, 2026-10-19, D1 HIGH — independent review of PR #20)
+// ---------------------------------------------------------------------------------------
+// legibility's description checks verify LENGTH and "no hand-typed count" — neither one notices
+// a description that is simply FALSE for the surface it ships on. The concrete finding: a shared
+// description string was written verbatim into every row claiming "...and browser automation",
+// which is true for a row that runs the full local npm package but FALSE for a row that only
+// ever connects to listing.hosted_endpoint (hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN
+// excludes novada_browser/novada_browser_flow from every hosted response). distribution/
+// generate.mjs's resolveDescriptionForRow is the WRITE-side fix (a surface:"hosted" row gets
+// listing.description_hosted, never listing.description); this is the READ-side backstop — it
+// re-derives the forbidden-phrase table from HOSTED_HIDDEN itself (via parseHostedHiddenNames,
+// the SAME parser claims_consistent's hosted_tools fact uses — one parser, not two) and fails if
+// a surface:"hosted" row's CURRENT on-disk description still mentions one of those tools'
+// capabilities, regardless of how it got there (a hand-edit, a future generator bug, a
+// mis-declared surface). A surface:"local"/"both" row keeping the phrase is the documented
+// mirror case, not a violation — this check only ever inspects surface:"hosted" rows.
+//
+// HOSTED_HIDDEN_CAPABILITY_PHRASES is deliberately scoped to tools whose capability is ever named
+// in listing.json's shared description text today (only novada_browser/novada_browser_flow →
+// "browser automation") — table-driven, not a blanket "any HOSTED_HIDDEN tool name must never
+// appear anywhere" scan (most HOSTED_HIDDEN entries, e.g. novada_session_stats, are never
+// mentioned by name in prose at all, so a blanket scan would check nothing extra while risking a
+// false positive on an unrelated sentence). Extending coverage for a NEW tool/phrase pair is a new
+// table ROW here, never a per-row branch in the function below.
+const HOSTED_HIDDEN_CAPABILITY_PHRASES = {
+  novada_browser: ["browser automation"],
+  novada_browser_flow: ["browser automation"],
+};
+
+// Shared gate: is there a row declaring surface:"hosted" with an actual description to check —
+// used by both checkSurfaceClaims (to skip entirely) and needsHostedHidden below (hoisted out so
+// hosted_hidden_parseable's own no-op condition stays in lockstep with this one, instead of a
+// second hand-duplicated copy of the same predicate silently drifting from it).
+function hasHostedRowWithDescription(channels) {
+  return channels.rows.some((row) => !isExternalRow(row) && row.surface === "hosted" && row.description_field);
+}
+
+export function checkSurfaceClaims(ctx) {
+  const { channels, root } = ctx;
+  const failures = [];
+
+  // No row declares surface:"hosted" with something to check -> never even attempt to parse
+  // HOSTED_HIDDEN. Keeps this check a true no-op (no hosted-server/vercel/api/mcp.ts dependency
+  // at all) for a channels.json that doesn't use the surface mechanism yet (e.g. a minimal
+  // synthetic test fixture exercising an unrelated check).
+  if (!hasHostedRowWithDescription(channels)) return failures;
+
+  // brief-N R3 fix (2026-10-19, LOW — round 2 review of PR #20): this used to have its own
+  // try/catch around parseHostedHiddenNames, reporting a surface_claims-named failure on a parse
+  // error — but it was DEAD CODE: CHECK_NAMES runs claims_consistent before surface_claims, and
+  // claims_consistent's own computeFacts() called parseHostedHiddenNames with NO try/catch of its
+  // own, so a real parse failure always threw straight out of runChecks' loop (no per-check
+  // try/catch there either) and aborted the WHOLE run via the CLI's outer catch — one `[check]
+  // FATAL` line, exit 1, zero per-check results — before this function's own catch block ever got
+  // a chance to run. The fix (see hosted_hidden_parseable's own header comment): the parse now
+  // happens through tryParseHostedHiddenNames, a shared helper that NEVER throws, and
+  // hosted_hidden_parseable (a dedicated CHECK_NAMES entry, ordered before claims_consistent) is
+  // the ONE place a parse failure is reported, by name, without aborting any other check. This
+  // function (and computeFacts' hosted_tools fact) now just degrade to "nothing to assert" on a
+  // parse failure instead of re-throwing or duplicating that already-reported failure under a
+  // second check name.
+  const { names: hiddenNames, error: hiddenNamesError } = tryParseHostedHiddenNames(root);
+  if (hiddenNamesError) return failures; // hosted_hidden_parseable already reports this, by name
+  const hiddenSet = new Set(hiddenNames);
+  const forbiddenPhrases = new Set();
+  for (const [toolName, phrases] of Object.entries(HOSTED_HIDDEN_CAPABILITY_PHRASES)) {
+    if (!hiddenSet.has(toolName)) continue; // only a tool ACTUALLY hidden today contributes a forbidden phrase
+    for (const phrase of phrases) forbiddenPhrases.add(phrase.toLowerCase());
+  }
+  if (forbiddenPhrases.size === 0) return failures; // defensive: every named tool un-hidden — nothing to forbid
+
+  for (const row of channels.rows) {
+    if (isExternalRow(row)) continue; // its description (if any) is authored in a DIFFERENT repo, not generated here
+    if (row.surface !== "hosted") continue; // "local"/"both"/unset rows are the documented mirror case
+    if (!row.description_field) continue; // nothing for this row to have claimed in the first place
+    for (const relPath of rowPaths(row)) {
+      if (!existsSync(join(root, relPath))) continue; // location_rules already reports a missing file
+      let desc;
+      try {
+        desc = readField(root, relPath, row.description_field);
+      } catch (err) {
+        failures.push(`${relPath}: rule=surface_claims row=${row.id} fix=${fixHintFor(row)} — could not read ${row.description_field}: ${err.message}`);
+        continue;
+      }
+      if (typeof desc !== "string") continue; // legibility(description) already reports this
+      const lower = desc.toLowerCase();
+      for (const phrase of forbiddenPhrases) {
+        if (lower.includes(phrase)) {
+          failures.push(
+            `${relPath}: rule=surface_claims row=${row.id} field=${row.description_field} phrase=${JSON.stringify(phrase)} fix="row.surface is \\"hosted\\" but its generated description mentions a HOSTED_HIDDEN tool's capability — use listing.description_hosted for this row (distribution/generate.mjs's resolveDescriptionForRow), or correct row.surface in distribution/channels.json if this row genuinely also runs the local package"`
+          );
+        }
+      }
+    }
+  }
+  return failures;
+}
+
+// ---------------------------------------------------------------------------------------
+// Check: external_repo_consistent (brief-N, 2026-10-19, D2 CRITICAL — independent review of PR #20)
+// ---------------------------------------------------------------------------------------
+// A `kind: "external"` row's real manifest lives in a DIFFERENT repository (see
+// distribution/channels.json's own $comment for the full external_repo contract) — this repo
+// never writes to it (no push/PR from here), it only VERIFIES it, over the network, against
+// raw.githubusercontent.com. Split into a thin network-fetch wrapper (this function) and a PURE
+// assertion function (evaluateExternalRepoManifests, below) so the interesting logic is
+// unit-testable with synthetic fetched-text, with no real HTTP call in the test suite.
+//
+// Deliberately scoped to the REAL repo root only (`root === ROOT`, never a test fixture's tmpdir
+// copy): distribution/test/*.test.mjs's many runChecks()-driven mutation probes call this on a
+// throwaway fixture dozens of times per run, and this check's job (does a DIFFERENT, real GitHub
+// repo currently look right) has nothing to do with whatever that fixture is exercising — without
+// this guard, every one of those unrelated tests would pay a real network round-trip (or an
+// offline timeout) just to run a check they aren't testing. This is why fixture-based tests never
+// see a network call from this function at all; `evaluateExternalRepoManifests`'s own unit tests
+// cover its actual assertion logic directly.
+//
+// Per this round's owner decision: if the network is unreachable, this check MUST fail loudly in
+// CI (process.env.CI set — GitHub Actions sets this for every job automatically) but MAY skip,
+// with a printed reason, on a local run with no network — never silently pass either way.
+export function buildExternalRepoRawUrls(externalRepo) {
+  const base = `https://raw.githubusercontent.com/${externalRepo.owner}/${externalRepo.repo}/${externalRepo.ref}/`;
+  return {
+    marketplace: base + externalRepo.marketplace_path,
+    plugin: base + externalRepo.plugin_path,
+    mcpConfig: base + externalRepo.mcp_config_path,
+  };
+}
+
+/** Pure assertion logic over already-fetched text content from the three external files — no
+ *  network I/O, directly unit-testable. Returns a (possibly empty) array of failure strings. */
+export function evaluateExternalRepoManifests(row, { marketplaceText, pluginText, mcpConfigText }, listing) {
+  const failures = [];
+  const externalRepo = row.external_repo;
+  const label = `NovadaLabs/${externalRepo.repo}`;
+
+  try {
+    JSON.parse(marketplaceText);
+  } catch (err) {
+    failures.push(`${row.id}: rule=external_repo_consistent fix="fix ${label}'s ${externalRepo.marketplace_path}" — marketplace.json does not exist or does not parse at the external repo's root: ${err.message}`);
+  }
+
+  let plugin;
+  try {
+    plugin = JSON.parse(pluginText);
+  } catch (err) {
+    failures.push(`${row.id}: rule=external_repo_consistent fix="fix ${label}'s ${externalRepo.plugin_path}" — plugin.json does not parse: ${err.message}`);
+    plugin = null;
+  }
+  if (plugin && plugin.name !== externalRepo.expected_plugin_name) {
+    failures.push(
+      `${row.id}: rule=external_repo_consistent field=name got=${JSON.stringify(plugin.name)} want=${JSON.stringify(externalRepo.expected_plugin_name)} fix="fix ${label}'s ${externalRepo.plugin_path}, or update expected_plugin_name in distribution/channels.json if the rename is intentional"`
+    );
+  }
+
+  let mcpConfig;
+  try {
+    mcpConfig = JSON.parse(mcpConfigText);
+  } catch (err) {
+    failures.push(`${row.id}: rule=external_repo_consistent fix="fix ${label}'s ${externalRepo.mcp_config_path}" — .mcp.json does not parse: ${err.message}`);
+    mcpConfig = null;
+  }
+  if (mcpConfig) {
+    const actualUrl = getJsonPointer(mcpConfig, externalRepo.mcp_url_field);
+    if (actualUrl !== listing.hosted_endpoint) {
+      failures.push(
+        `${row.id}: rule=external_repo_consistent field=${externalRepo.mcp_url_field} got=${JSON.stringify(actualUrl)} want=${JSON.stringify(listing.hosted_endpoint)} fix="fix ${label}'s ${externalRepo.mcp_config_path} to point at listing.hosted_endpoint"`
+      );
+    }
+    // brief-N R2 fix (2026-10-19, round 2 review of PR #20): an external row's surface is derived
+    // from the FETCHED external .mcp.json, not trusted from channels.json's own declared value —
+    // deriveSurfaceForRow (check.mjs's internal-row mechanism) has nothing to read for a `kind:
+    // "external"` row (its manifest lives in a different repo, never checked out here), so this is
+    // the external-row equivalent: a real, resolvable mcp_url_field means this channel genuinely
+    // wires a hosted MCP endpoint, and an external row has no local-npm-package install mechanism
+    // this repo could ever derive "local"/"both" from — so its declared surface must be "hosted"
+    // whenever the fetched endpoint resolves. Catches the same class of hand-relabel the internal
+    // surface_derived_consistent check catches, for the one row that check cannot reach at all.
+    if (typeof actualUrl === "string" && actualUrl.length > 0 && row.surface !== undefined && row.surface !== "hosted") {
+      failures.push(
+        `${row.id}: rule=surface_derived_consistent field=surface got=${JSON.stringify(row.surface)} derived="hosted" fix="${label}'s ${externalRepo.mcp_config_path} wires a real MCP endpoint (${externalRepo.mcp_url_field}=${JSON.stringify(actualUrl)}) — row.surface in distribution/channels.json must be \\"hosted\\" (an external row has no local-npm-package install mechanism this repo can derive \\"local\\"/\\"both\\" from)"`
+      );
+    }
+  }
+
+  return failures;
+}
+
+async function fetchTextWithTimeout(url, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function checkExternalRepoConsistent(ctx) {
+  const { channels, listing, root } = ctx;
+  const externalRows = channels.rows.filter((r) => isExternalRow(r) && r.external_repo);
+  if (externalRows.length === 0) return [];
+  // See this check's own header comment for why this guard exists — never remove it to "test the
+  // real thing" in distribution/test/*.test.mjs; use evaluateExternalRepoManifests directly there.
+  if (root !== ROOT) return [];
+
+  const failures = [];
+  const isCi = !!process.env.CI;
+  for (const row of externalRows) {
+    const urls = buildExternalRepoRawUrls(row.external_repo);
+    let marketplaceText, pluginText, mcpConfigText;
+    try {
+      [marketplaceText, pluginText, mcpConfigText] = await Promise.all([
+        fetchTextWithTimeout(urls.marketplace),
+        fetchTextWithTimeout(urls.plugin),
+        fetchTextWithTimeout(urls.mcpConfig),
+      ]);
+    } catch (err) {
+      if (isCi) {
+        failures.push(
+          `${row.id}: rule=external_repo_consistent fix="restore network access to raw.githubusercontent.com in CI, or fix the fetch failure" — could not fetch NovadaLabs/${row.external_repo.repo}'s manifests: ${err.message}`
+        );
+      } else {
+        console.warn(
+          `[check] external_repo_consistent: SKIPPED row=${row.id} — network unreachable locally (${err.message}). This check runs for real in CI (process.env.CI set). Never treat this local run's silence on row ${row.id} as proof it is currently consistent.`
+        );
+      }
+      continue;
+    }
+    failures.push(...evaluateExternalRepoManifests(row, { marketplaceText, pluginText, mcpConfigText }, listing));
+  }
+  return failures;
+}
+
+// ---------------------------------------------------------------------------------------
 // Check: claims_consistent (brief-F R10 — CLASS fix, 2026-10-15; brief-H per-surface fact
 // scope added 2026-10-15)
 // ---------------------------------------------------------------------------------------
@@ -1235,7 +1634,27 @@ async function computeFacts(root) {
   const tools = core.TOOLS.length;
   const platforms = catalog.WORKING_PLATFORM_NAMES.length;
   const scrapers = core.TOOLS.filter((t) => /^novada_scrape_[a-z0-9_]+$/.test(t.name)).length;
-  const hostedHiddenNames = parseHostedHiddenNames(root);
+  // brief-N R3 fix (2026-10-19, LOW — round 2 review of PR #20): previously called
+  // parseHostedHiddenNames(root) directly here, with NO try/catch — a parse failure (the literal
+  // HOSTED_HIDDEN shape not found) threw straight out of computeFacts(), out of checkClaimsConsistent,
+  // and out of runChecks' own loop (which has no try/catch around a single check's call either),
+  // landing only in the CLI's OUTER catch: one `[check] FATAL` line, exit 1, with NO other check's
+  // result ever printed — including checkSurfaceClaims, whose OWN try/catch around this exact same
+  // parse was therefore permanently dead code (claims_consistent's unguarded throw always fired
+  // first). tryParseHostedHiddenNames never throws; hosted_hidden_parseable (its own CHECK_NAMES
+  // entry, ordered before claims_consistent) is now the ONE shared, reachable, named place this
+  // failure is reported. This fact (hosted_tools) simply degrades to `undefined` on a parse
+  // failure — recordClaimMatch's existing `expected === undefined` guard already skips any claim
+  // resolved against an undefined fact, so a hosted-server/landing "N tools" claim just goes
+  // unchecked THIS run rather than re-throwing a second, duplicate complaint under a different
+  // check name. The GHOST-NAME cross-check below (brief-L L3) is a DIFFERENT failure mode — the
+  // literal parses fine but names a tool that doesn't exist in the built registry — and keeps its
+  // existing hard-throw behavior unchanged; only the "can't even locate the literal" failure mode
+  // is affected by this fix.
+  const { names: hostedHiddenNames, error: hostedHiddenError } = tryParseHostedHiddenNames(root);
+  if (hostedHiddenError) {
+    return { tools, hosted_tools: undefined, platforms, scrapers, dify_tools: countDifyTools(root) };
+  }
   // brief-L (2026-10-15, L3 MEDIUM): computeFacts previously trusted every HOSTED_HIDDEN name at
   // face value and subtracted the Set's raw SIZE from `tools` — a stale/typo'd/removed tool name
   // left in HOSTED_HIDDEN (e.g. after a tool is renamed or deleted from npm-package's registry,
@@ -1256,7 +1675,25 @@ async function computeFacts(root) {
       "fix hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set — remove the stale/typo'd tool name (or register/restore the missing tool in npm-package if it was meant to still exist), then re-run `npm run build` in npm-package/ and re-run distribution/check.mjs";
     throw err;
   }
-  return { tools, hosted_tools: tools - hostedHiddenNames.length, platforms, scrapers };
+  return { tools, hosted_tools: tools - hostedHiddenNames.length, platforms, scrapers, dify_tools: countDifyTools(root) };
+}
+
+/** brief-N (2026-10-19, D3): the Dify plugin's own tool-subset count — distinct from `tools`
+ *  (the 37-tool local-package total) and `hosted_tools` (the 28-tool hosted subset), because
+ *  distribution/dify/README.md legitimately documents a THIRD, deliberately narrower count (7
+ *  tools wired in distribution/dify/tools/*.yaml). Counted by listing that directory's .yaml
+ *  files — never hardcoded, and independent of distribution/dify/utils/tools_table.py's own
+ *  Python TOOLS tuple (a different language/toolchain this check never needs to execute) while
+ *  still agreeing with it in practice, since both are generated from the same 7 real tool
+ *  manifests. Tolerant of a missing directory (returns 0 rather than throwing) — unlike
+ *  parseHostedHiddenNames's hard FATAL, a missing distribution/dify/tools/ is not a config
+ *  contract violation of ITS OWN (no row requires this directory to exist the way every row's
+ *  path requires its own file); a real deletion is still caught loudly downstream, the moment
+ *  distribution/dify/README.md's "7 tools" claim no longer matches a now-0 fact. */
+function countDifyTools(root) {
+  const dir = join(root, "distribution", "dify", "tools");
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir).filter((name) => /\.ya?ml$/i.test(name)).length;
 }
 
 /** Textually parses `const HOSTED_HIDDEN = new Set([...quoted strings...]);` out of
@@ -1266,7 +1703,7 @@ async function computeFacts(root) {
  *  Throws loudly (with an agent_instruction) if that exact literal shape can't be found, rather
  *  than silently reporting zero hidden tools — a 0-length parse failure would make
  *  hosted_tools == tools and could mask a real future failure to read this fact. */
-function parseHostedHiddenNames(root) {
+export function parseHostedHiddenNames(root) {
   const relPath = "hosted-server/vercel/api/mcp.ts";
   const abs = join(root, relPath);
   if (!existsSync(abs)) {
@@ -1282,6 +1719,58 @@ function parseHostedHiddenNames(root) {
     throw err;
   }
   return (m[1].match(/"[^"]*"/g) ?? []).map((quoted) => quoted.slice(1, -1));
+}
+
+// ---------------------------------------------------------------------------------------
+// Check: hosted_hidden_parseable (brief-N R3 fix, 2026-10-19, LOW — round 2 review of PR #20)
+// ---------------------------------------------------------------------------------------
+// parseHostedHiddenNames's hard FATAL used to propagate straight out of computeFacts() — called
+// unconditionally by claims_consistent, which runs BEFORE surface_claims in CHECK_NAMES — with no
+// try/catch anywhere in runChecks' own per-check loop. A real parse failure (hosted-server/vercel/
+// api/mcp.ts missing, or its HOSTED_HIDDEN literal reshaped/renamed) therefore didn't fail just
+// claims_consistent or surface_claims: it aborted the ENTIRE run via the CLI's OUTER try/catch —
+// one `[check] FATAL ...` line, exit 1, and ZERO per-check results, not even for checks that would
+// have run before claims_consistent in CHECK_NAMES order. checkSurfaceClaims's own try/catch
+// around this exact same parse was therefore permanently dead code: it never ran, because
+// claims_consistent's unguarded throw always fired first (verified independently, round 2 review).
+//
+// tryParseHostedHiddenNames below NEVER throws — it is the ONE place this parse is actually
+// attempted (both computeFacts and checkSurfaceClaims now call it, never parseHostedHiddenNames
+// directly) — and this check is the ONE shared, reachable, named place a failure is reported:
+// fail CLOSED (a clear, attributable FAIL, never a silent pass) without taking down every other
+// check's result with it. computeFacts (hosted_tools) and checkSurfaceClaims both degrade to
+// "nothing to assert" on a parse failure rather than re-throwing or duplicating this same failure
+// under a second check name — this check's own result line is already the full, reachable signal.
+// Ordered in CHECK_NAMES immediately before claims_consistent so it is always evaluated (and its
+// own PASS/FAIL line always printed) regardless of what any HOSTED_HIDDEN-dependent check does.
+export function tryParseHostedHiddenNames(root) {
+  try {
+    return { names: parseHostedHiddenNames(root), error: null };
+  } catch (err) {
+    return { names: null, error: err };
+  }
+}
+
+// Same no-op gate every HOSTED_HIDDEN-dependent check already uses: computeFacts() (claims_consistent)
+// always parses it once `claims` is non-empty (regardless of whether any individual claim actually
+// resolves to the hosted_tools fact — computeFacts computes every fact unconditionally), and
+// checkSurfaceClaims parses it via its own hasHostedRowWithDescription gate above. A channels.json
+// with neither (e.g. a minimal synthetic test fixture exercising an unrelated check, with no
+// hosted-server/vercel/api/mcp.ts on disk at all) has nothing that would ever read this fact —
+// this check must stay a true no-op for it too, exactly like its two consumers, or it would newly
+// fail every such fixture for a dependency nothing in that config actually has.
+function needsHostedHidden(channels) {
+  return (channels.claims ?? []).length > 0 || hasHostedRowWithDescription(channels);
+}
+
+export function checkHostedHiddenParseable(ctx) {
+  const { channels, root } = ctx;
+  if (!needsHostedHidden(channels)) return [];
+  const { error } = tryParseHostedHiddenNames(root);
+  if (!error) return [];
+  return [
+    `hosted-server/vercel/api/mcp.ts: rule=hosted_hidden_parseable fix="${error.agent_instruction ?? "fix hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN literal"}" — could not parse HOSTED_HIDDEN: ${error.message}`,
+  ];
 }
 
 // Double-star-aware glob matcher for claim_surfaces, anchored to the repo root — distinct from
@@ -1443,11 +1932,38 @@ function stripInlineMarkup(line) {
 // configure.html ships literal "1 tool" / "0 tools" seed text for a per-CATEGORY, JS-updated
 // counter (e.g. the "Search" category's sidebar subtitle), and docs/TOOLS.md's "9 tools" legitimately
 // describes the HOSTED_HIDDEN delta (37 total minus 28 hosted = 9), not the whole-catalog count —
-// a different, also-currently-accurate metric this check has no fact for. Every real whole-catalog
-// fact here is >=14, so single-digit occurrences are structurally per-category/delta/UI counters,
-// not catalog-wide claims; below this threshold they are silently skipped rather than forcing every
-// such line to either match a fact it was never making a claim about or carry the opt-out marker.
-const MIN_CLAIM_VALUE = 10;
+// a different, also-currently-accurate metric this check has no fact for. Every real WHOLE-CATALOG
+// fact (tools/hosted_tools/platforms/scrapers) is >=14, so single-digit occurrences of THOSE facts
+// are structurally per-category/delta/UI counters, not catalog-wide claims; below this threshold
+// they are silently skipped rather than forcing every such line to either match a fact it was
+// never making a claim about or carry the opt-out marker.
+//
+// brief-N R1 fix (2026-10-19, HIGH — round 2 review of PR #20): this used to be ONE global
+// constant applied to the raw matched digits BEFORE a line's claim_surfaces fact_overrides was
+// even consulted — which made D3's dify_tools override permanently unreachable against the REAL
+// repo (distribution/dify/README.md's correct, permanent value is 7; 7 < 10 always, so the real
+// file's claim was skipped outright no matter what it said, and only a synthetic >=10-tool
+// fixture could ever exercise the check). "every real whole-catalog fact here is >=14" was true
+// for every fact that existed BEFORE dify_tools; it is false as a blanket rule now that a fact can
+// legitimately be used to check a small number — the floor is a property of WHICH FACT a claim
+// resolves to (after fact_overrides), not a property of the raw digits. FACT_CLAIM_FLOOR below
+// replaces the single constant with a per-fact table: every whole-catalog fact keeps its original
+// >=10 noise floor (data-table row, not a special case), and dify_tools — a fact whose correct
+// value is legitimately and permanently single-digit — gets its own row with floor 0, so it is
+// ALWAYS compared. A fact with NO row here (a future fact nobody has classified yet) defaults to
+// DEFAULT_CLAIM_FLOOR (10, the old global's value) — fails safe (silently skips small matches,
+// same as every pre-existing whole-catalog fact) rather than fails loud (a wall of new false
+// positives on some newly-added fact's own per-category/UI-counter text). A fact whose correct
+// value is legitimately small needs a new ROW here — data, never a one-off if-branch in
+// recordClaimMatch.
+const DEFAULT_CLAIM_FLOOR = 10;
+const FACT_CLAIM_FLOOR = {
+  tools: 10,
+  hosted_tools: 10,
+  platforms: 10,
+  scrapers: 10,
+  dify_tools: 0,
+};
 
 // brief-I (2026-10-15, I3): the original pattern required the noun DIRECTLY adjacent to the
 // number ("<N> <noun>", nothing between), which missed docs/TOOLS.md's real "16 supported
@@ -1628,10 +2144,14 @@ export async function checkClaimsConsistent(ctx) {
   );
 
   function recordClaimMatch(relPath, lineNo, line, overrides, nounMatched, n, failures) {
-    if (n < MIN_CLAIM_VALUE) return;
     const mapping = nounToFact.find((nf) => nf.re.test(nounMatched));
     if (!mapping) return; // defensive: shouldn't happen, both regexes are built from the same claims table
     const factKey = overrides[mapping.fact] ?? mapping.fact; // per-surface fact scope (brief-H), default = this noun's plain fact
+    // brief-N R1 fix: the noise floor is resolved AFTER factKey (i.e. AFTER fact_overrides) is
+    // known, never before — resolving it on the raw digits first (the old behavior) is exactly
+    // how dify_tools' override became unreachable (see FACT_CLAIM_FLOOR's own comment above).
+    const floor = factKey in FACT_CLAIM_FLOOR ? FACT_CLAIM_FLOOR[factKey] : DEFAULT_CLAIM_FLOOR;
+    if (n < floor) return;
     const expected = facts[factKey];
     if (expected === undefined) return; // defensive: a claims row (or a validated override above) references an unknown fact key
     if (n !== expected) {
@@ -1705,8 +2225,12 @@ const CHECK_FNS = {
   shape_declared: checkShapeDeclared,
   tamper_evident: checkTamperEvident,
   ci_paths_cover: checkCiPathsCover,
+  hosted_hidden_parseable: checkHostedHiddenParseable,
   claims_consistent: checkClaimsConsistent,
   json_no_duplicate_keys: checkJsonNoDuplicateKeys,
+  surface_claims: checkSurfaceClaims,
+  surface_derived_consistent: checkSurfaceDerivedConsistent,
+  external_repo_consistent: checkExternalRepoConsistent,
 };
 
 /**

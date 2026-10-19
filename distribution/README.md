@@ -185,11 +185,16 @@ nothing stops the *next* one. `claims_consistent` is the generic gate for that:
   changelog prose or a line whose number legitimately denotes a different metric that happens to
   share this project's noun. `check.mjs`'s CLI also prints every currently-valid marker's
   file:line and reason as a summary line, independent of pass/fail.
-- Matches below `MIN_CLAIM_VALUE` (10) are skipped outright: every real whole-catalog fact here is
-  `>=14`, and single-digit occurrences discovered in the real repo during this round are
-  structurally per-category/delta/UI-counter text (`hosted-server/landing/configure.html`'s
-  JS-updated "1 tool"/"0 tools" counter seed text; `docs/TOOLS.md`'s "9 tools" describing the
-  `HOSTED_HIDDEN` delta, 37 minus 28), not whole-catalog claims.
+- Matches below a per-fact noise floor (`FACT_CLAIM_FLOOR`, default 10) are skipped outright: every
+  real WHOLE-CATALOG fact (`tools`/`hosted_tools`/`platforms`/`scrapers`) is `>=14`, and
+  single-digit occurrences discovered in the real repo during this round are structurally
+  per-category/delta/UI-counter text (`hosted-server/landing/configure.html`'s JS-updated "1
+  tool"/"0 tools" counter seed text; `docs/TOOLS.md`'s "9 tools" describing the `HOSTED_HIDDEN`
+  delta, 37 minus 28), not whole-catalog claims. **NOT every fact has that property** (round 2,
+  2026-10-19): `dify_tools` (D3's `distribution/dify/README.md` override) is correctly,
+  permanently single-digit (7) — it carries its own floor of 0 in `FACT_CLAIM_FLOOR`, so it is
+  always compared, never silently skipped the way a single global constant used to skip it
+  regardless of which fact a line's claim actually resolved to.
 - **Per-surface fact scope (brief-H, 2026-10-15): `claim_surfaces` entries may override a fact
   per surface.** An entry may be a bare glob string (checked against every claims noun's plain
   fact, as before — every pre-brief-H entry still works verbatim) OR a `{glob, fact_overrides,

@@ -56,14 +56,16 @@ test("computeWrites: reports zero changes against an already-green fixture", () 
 test("computeWrites: reports exactly one changed write after mutating one owned field", () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const pj = readJson(root, "npm-package/.claude-plugin/plugin.json");
+    // brief-N (2026-10-19, D2): gemini-extension.json replaces the retired
+    // npm-package/.claude-plugin/plugin.json as this suite's generic json-full example.
+    const pj = readJson(root, "gemini-extension.json");
     pj.description = "drifted";
-    writeJson(root, "npm-package/.claude-plugin/plugin.json", pj);
+    writeJson(root, "gemini-extension.json", pj);
 
     const writes = computeWrites(root);
     const changed = writes.filter((w) => w.changed);
     assert.equal(changed.length, 1, `expected exactly 1 changed write, got: ${JSON.stringify(changed.map((w) => w.relPath))}`);
-    assert.equal(changed[0].relPath, "npm-package/.claude-plugin/plugin.json");
+    assert.equal(changed[0].relPath, "gemini-extension.json");
   } finally {
     cleanupFixture(root);
   }
