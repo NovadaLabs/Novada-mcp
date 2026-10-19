@@ -250,7 +250,7 @@ time:
 
 Both route to the normal `TOOL_NOT_ENABLED` refusal if called by name,
 pointing agents to the **local** MCP server (`npx novada-mcp`) for browser
-automation. All other 28 tools on the hosted surface (of the npm package's 37)
+automation. All other 28 tools on the hosted surface (of the npm package's 37) <!-- claims-ignore: 28 = hosted-subset count, 37 = local-package total, both on one line; hosted-server/landing's claim_surfaces override does not apply to this file -->
 work normally.
 
 ## Local development

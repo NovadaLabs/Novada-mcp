@@ -12,7 +12,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
 <link rel="canonical" href="https://mcp.novada.com/playground" />
 <link rel="icon" href="https://www.novada.com/favicon.ico" />
 <meta property="og:title" content="Novada MCP — API Console" />
-<meta property="og:description" content="Run all 26 Novada MCP tools live. Inspect the request, send it, read the response — your key, your quota." />
+<meta property="og:description" content="Run all 28 Novada MCP tools live. Inspect the request, send it, read the response — your key, your quota." />
 <meta property="og:url" content="https://mcp.novada.com/playground" />
 <meta property="og:image" content="https://mcp.novada.com/og-image.png" />
 <meta name="twitter:card" content="summary_large_image" />
@@ -324,7 +324,7 @@ https://www.brightdata.com/pricing</textarea></div>`,
     pgToolsEl.innerHTML = GROUPS.map(g =>
       `<div class="tool-group-label">${g.label}</div>` +
       g.tools.map(t => `<div class="tool-item${t===current?' active':''}" data-tool="${t}">${t.replace('novada_','')}</div>`).join('')
-    ).join('') + `<div class="tool-group-label">${isZh()?'更多':'More'}</div><a href="/tools" class="tool-item" style="color:#677489">${isZh()?'全部 26 个工具 →':'all 26 tools →'}</a>`;
+    ).join('') + `<div class="tool-group-label">${isZh()?'更多':'More'}</div><a href="/tools" class="tool-item" style="color:#677489">${isZh()?'全部 28 个工具 →':'all 28 tools →'}</a>`;
   }
   function renderArgs(){ pgArgsEl.innerHTML = PG_TOOLS[current]?.render() ?? ''; refreshReqCode(); }
 

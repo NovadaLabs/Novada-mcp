@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "novada": {
+      "serverUrl": "https://mcp.novada.com/mcp"
+    }
+  }
+}

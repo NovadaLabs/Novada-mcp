@@ -1,6 +1,6 @@
 # Novada MCP
 
-> Novada Hosted MCP is a remote Streamable-HTTP Model Context Protocol server at `https://mcp.novada.com/mcp` that exposes 25 web-data tools — web search, SERP, scrape, extract, site map, multi-page crawl, source verification, topic discovery, deep research, and 6 proxy variants — through a single authenticated URL. Designed for AI agents running in Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf, or any MCP-compatible client. Zero install required; paste the URL and go.
+> Novada Hosted MCP is a remote Streamable-HTTP Model Context Protocol server at `https://mcp.novada.com/mcp` that exposes 28 web-data tools — web search, SERP-style scraping, extract, site map, multi-page crawl, source verification, tool discovery, deep research, and 6 proxy types — through a single authenticated URL. Designed for AI agents running in Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf, or any MCP-compatible client. Zero install required; paste the URL and go.
 
 ## Endpoint
 
@@ -14,28 +14,22 @@
 
 ## Tools
 
-25 tools total. All callable on the hosted endpoint except `novada_browser` and `novada_browser_flow` (see Browser tools section).
+28 tools on the hosted endpoint (self-host via `npx novada-mcp` exposes all 37 — the same registry minus 9 tools that need a persistent session, local disk, or write-gated account ops; see Browser tools below for two of them).
 
-### First-class data tools (9)
+### First-class data tools (8)
 
-- `search`: web search across major search engines
-- `serp`: structured Google / Bing SERP result JSON
-- `scrape`: single-URL clean markdown content extraction
-- `extract`: schema-driven structured JSON extraction from a URL
-- `map`: discover all URLs on a site (sitemap)
-- `crawl`: multi-page crawl with configurable depth
-- `verify`: source credibility check with confidence scoring
-- `discover`: find related sources for a topic
-- `research`: deep multi-source research agent
+- `novada_search`: web search across major search engines
+- `novada_scrape`: single-URL clean markdown content extraction
+- `novada_extract`: schema-driven structured JSON extraction from a URL
+- `novada_map`: discover all URLs on a site (sitemap)
+- `novada_crawl`: multi-page crawl with configurable depth
+- `novada_verify`: source credibility check with confidence scoring — dispatchable on hosted, but not on `novada_discover`'s hosted listing
+- `novada_discover`: find the right tool for a task
+- `novada_research`: deep multi-source research agent
 
-### Proxy variants (6)
+### Proxy (1 tool, 6 IP types)
 
-- `novada_proxy_residential`: residential IP proxy
-- `novada_proxy_datacenter`: datacenter IP proxy
-- `novada_proxy_isp`: ISP proxy
-- `novada_proxy_dedicated`: dedicated proxy
-- `novada_proxy_static`: static IP proxy
-- `novada_proxy_universal`: universal proxy
+- `novada_proxy`: route your own HTTP client through a specific IP type (`residential`, `isp`, `datacenter`, `mobile`, `static`, `dedicated`), country, city, or sticky session
 
 ### Browser tools (2 — local only)
 
@@ -146,7 +140,7 @@ To use browser tools, run the local MCP instead:
 npx novada-mcp
 ```
 
-The same `YOUR_API_KEY` key works. All 25 tools including browser flows are available locally.
+The same `YOUR_API_KEY` key works. All 37 tools, including browser flows, are available locally. <!-- claims-ignore: local self-host total, not the hosted count -->
 
 ## Source / repo
 
@@ -160,5 +154,5 @@ Full FAQ at https://mcp.novada.com/#faq. Key points:
 
 - **Same key everywhere.** One Novada API key works for the hosted MCP, `npx novada-mcp` local, and the Novada REST API. Quota counts per token.
 - **No separate MCP key needed.** Use your existing Novada API key.
-- **Hosted vs local.** Hosted = zero install, always latest, no browser tools. Local (`npx novada-mcp`) = all 25 tools including Playwright flows, you manage updates.
+- **Hosted vs local.** Hosted = zero install, always latest, no browser tools. Local (`npx novada-mcp`) = all 37 tools including Playwright flows, you manage updates. <!-- claims-ignore: local self-host total, not the hosted count -->
 - **Key in URL vs header.** Both work identically. Prefer `Authorization: Bearer` header when storing configs in repos or sharing screens.

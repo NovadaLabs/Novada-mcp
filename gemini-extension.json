@@ -1,0 +1,10 @@
+{
+  "name": "novada-mcp",
+  "version": "0.9.41",
+  "description": "AI agents' single API key for web search, content extraction, site crawling and mapping, multi-source research, structured platform scraping, and proxy routing.",
+  "mcpServers": {
+    "novada": {
+      "httpUrl": "https://mcp.novada.com/mcp"
+    }
+  }
+}

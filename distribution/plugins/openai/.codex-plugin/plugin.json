@@ -1,0 +1,19 @@
+{
+  "name": "novada-mcp",
+  "version": "0.9.41",
+  "description": "AI agents' single API key for web search, content extraction, site crawling and mapping, multi-source research, structured platform scraping, and proxy routing.",
+  "homepage": "https://novada.com",
+  "repository": "https://github.com/NovadaLabs/novada-mcp",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "web-scraping",
+    "web-search",
+    "ai-agents",
+    "research",
+    "proxy"
+  ],
+  "mcpServers": "./.mcp.json"
+}
