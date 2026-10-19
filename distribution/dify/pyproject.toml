@@ -1,0 +1,17 @@
+[project]
+name = "novada"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "dify-plugin>=0.9.0,<1.0.0",
+    "requests>=2.31.0,<3.0.0",
+]
+
+# Round 1 fix (F1 / review-maintainer.md F2): `ruff check .`'s import-sort pass can
+# otherwise resolve first-party packages differently depending on whether a parent
+# monorepo root is in view. Declaring the three top-level packages this plugin
+# actually ships (provider/, tools/, utils/) as first-party makes `I001` results
+# identical whether this directory is linted from inside novada-mcp-dify or copied
+# out standalone (e.g. into a `dify-plugins` fork with no monorepo parent).
+[tool.ruff.lint.isort]
+known-first-party = ["provider", "tools", "utils"]

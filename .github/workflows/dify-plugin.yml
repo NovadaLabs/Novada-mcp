@@ -1,0 +1,86 @@
+name: Dify Plugin CI
+
+# Round 1 fix (F3): wires the guard that review-code.md / verify.md's "FIX-FIRST"
+# verdict was about — a passing local `ruff check`/`pytest` run on someone's machine
+# is not a gate. This workflow runs the exact same two commands from
+# `distribution/dify/` (ruff + pytest), both as a standalone check (what ships in
+# the `.difypkg`) and in full monorepo context (this workflow checks out the whole
+# repo, so every monorepo-context test — see distribution/dify/tests/monorepo_inputs.py
+# for the registry — exercises its real, non-skipped assertions here).
+#
+# Round 2 fix (review-round2.md FIX-FIRST): trigger `paths:` filters used to name
+# two specific files by hand and silently missed a third
+# (npm-package/src/config.ts) that the round-1 F4 fix had already made
+# load-bearing for distribution/dify/tests/test_timeout_coupling.py — so a PR that
+# only bumped that constant never re-ran this workflow. The rule from here on is
+# NOT "these specific files": every entry in
+# distribution/dify/tests/monorepo_inputs.MONOREPO_INPUTS, plus
+# distribution/dify/** itself, MUST be covered by a paths: glob below — enforced by
+# distribution/dify/tests/test_monorepo_coverage.py, which fails this repo's own
+# test suite if that ever drifts again. DIFY_PLUGIN_REQUIRE_MONOREPO=1 in the test
+# step below additionally turns every "monorepo input missing -> skip" into a hard
+# failure, so this job can never silently skip the very tests it exists to run for
+# real.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "distribution/dify/**"
+      - "hosted-server/scripts/golden/baseline/**"
+      - "npm-package/src/config.ts"
+      - ".github/workflows/dify-plugin.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "distribution/dify/**"
+      - "hosted-server/scripts/golden/baseline/**"
+      - "npm-package/src/config.ts"
+      - ".github/workflows/dify-plugin.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: distribution/dify
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pinned, not floated: matches the versions this plugin was actually built and
+      # verified against (see artifacts/BUILD.md). requirements.txt's own ranges
+      # (dify_plugin>=0.9.0,<1.0.0, requests>=2.31.0,<3.0.0) are resolved as-is —
+      # only the dev tools (pytest, ruff) are pinned exact.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest==9.1.1 ruff==0.17.1
+
+      # Must exit 0 standalone (not dependent on a parent monorepo pyproject.toml/
+      # ruff.toml being in view) — this is exactly what shipping distribution/dify/
+      # into a `dify-plugins` fork with no monorepo parent will look like.
+      - name: Lint (ruff)
+        run: ruff check .
+
+      # Running from distribution/dify with the full monorepo checked out means
+      # every monorepo-context test (see tests/monorepo_inputs.MONOREPO_INPUTS)
+      # exercises its real (non-skipped) assertions here, in addition to every
+      # standalone-safe test. DIFY_PLUGIN_REQUIRE_MONOREPO=1 turns a missing
+      # monorepo input into a hard failure instead of a silent skip — CI must never
+      # quietly skip these.
+      - name: Test (pytest, incl. monorepo-context tests)
+        env:
+          DIFY_PLUGIN_REQUIRE_MONOREPO: "1"
+        run: pytest -q -rs

@@ -1,0 +1,70 @@
+identity:
+  name: novada_map
+  author: novadalabs
+  label:
+    en_US: Map a Site
+    zh_Hans: 网站地图发现
+description:
+  human:
+    en_US: Discovers up to 100 URLs on a site (sitemap first, then crawl fallback) without fetching content.
+    zh_Hans: 发现网站上最多 100 个网址(优先读取 sitemap,否则回退爬取),不抓取正文内容。
+  llm: Discovers up to 100 URLs on a site (sitemap first, then crawl fallback) without fetching content.
+parameters:
+  - name: url
+    type: string
+    required: true
+    label:
+      en_US: URL
+      zh_Hans: 网址
+    human_description:
+      en_US: The site URL to discover links from.
+      zh_Hans: 用于发现链接的网站地址。
+    llm_description: The site URL to discover links from.
+    form: llm
+  - name: search
+    type: string
+    required: false
+    label:
+      en_US: Search Substring
+      zh_Hans: 搜索子串
+    human_description:
+      en_US: Substring to filter discovered URLs by.
+      zh_Hans: 用于筛选发现结果的子字符串。
+    llm_description: Substring to filter discovered URLs by.
+    form: llm
+  - name: limit
+    type: number
+    required: false
+    label:
+      en_US: Limit
+      zh_Hans: 数量上限
+    human_description:
+      en_US: Maximum URLs to return, 1-100. Default 50.
+      zh_Hans: 返回的最大网址数,1-100,默认 50。
+    llm_description: Maximum URLs to return, 1-100. Default 50.
+    form: llm
+  - name: max_depth
+    type: number
+    required: false
+    label:
+      en_US: Max Depth
+      zh_Hans: 最大深度
+    human_description:
+      en_US: Link-hops from the root to follow, 1-5. Default 2.
+      zh_Hans: 从根地址开始跟踪的链接跳数,1-5,默认 2。
+    llm_description: Link-hops from the root to follow, 1-5. Default 2.
+    form: llm
+  - name: include_subdomains
+    type: boolean
+    required: false
+    label:
+      en_US: Include Subdomains
+      zh_Hans: 包含子域名
+    human_description:
+      en_US: If true, also discover URLs on subdomains. Default false.
+      zh_Hans: 为 true 时同时发现子域名上的网址,默认 false。
+    llm_description: If true, also discover URLs on subdomains. Default false.
+    form: llm
+extra:
+  python:
+    source: tools/novada_map.py
