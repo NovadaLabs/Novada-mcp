@@ -2,12 +2,13 @@ import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
 import https from "https";
 import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect, type SearchIntent } from "../utils/index.js";
-import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS } from "../config.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS, toolCallDeadline } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets, serpCaptureFailedHint } from "../_core/errors.js";
+import { withSingleTransientRetry, submitRetryBudget } from "../_core/submit-retry.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
@@ -72,29 +73,17 @@ function scraperSleep(ms: number): Promise<void> {
 // retrying those just wastes a call on something that cannot self-heal.
 // Mirrors the retry idiom in src/_core/developer_api.ts (short fixed backoff,
 // bounded attempt count, no retry outside the one known-transient class).
-const SEARCH_SUBMIT_RETRY_DELAY_MS = 500;
-
 /**
- * Run `op` once; on a transient (`NovadaErrorCode.API_DOWN`) `NovadaError`,
- * wait `delayMs` and run it exactly one more time. Any other error (including
- * a non-NovadaError) propagates immediately without a retry. Exported so the
- * retry/no-retry behavior can be unit-tested directly against a mock `op`
- * without needing to fake the underlying axios/HTTP layer.
+ * Scrape-transient-2026-10-21: the canonical implementation moved to
+ * `_core/submit-retry.ts` (`withSingleTransientRetry`) so novada_scrape's submit path
+ * (scrape.ts's `submitScrapeTask`, shared by every `novada_scrape_<platform>`
+ * tool) can reuse the SAME policy instead of a second, parallel one — the
+ * exact "serp capture failed" / no-task_id / upstream-5xx failure modes this
+ * retry absorbs are not specific to search. `withSingleSerpRetry` is kept as
+ * a thin re-export so existing imports/tests (search-serp-retry.test.ts,
+ * business-code-classification.test.ts) and the exported name are unchanged.
  */
-export async function withSingleSerpRetry<T>(
-  op: () => Promise<T>,
-  delayMs: number = SEARCH_SUBMIT_RETRY_DELAY_MS,
-): Promise<T> {
-  try {
-    return await op();
-  } catch (err) {
-    if (err instanceof NovadaError && err.code === NovadaErrorCode.API_DOWN) {
-      await scraperSleep(delayMs);
-      return op();
-    }
-    throw err;
-  }
-}
+export const withSingleSerpRetry = withSingleTransientRetry;
 
 /** Parse Bing SERP HTML (returned in sync mode with is_auto_push=false) into search results. */
 function parseBingHtml(html: string): NovadaSearchResult[] {
@@ -222,7 +211,14 @@ export async function submitSearchScrapeTask(
   num: number,
   queryParam = "q",
   supportsNum = true,
-  filterParams: SearchFilterParams = {}
+  filterParams: SearchFilterParams = {},
+  // scrape-transient-2026-10-21: per-attempt axios timeout, overridable so the
+  // budget-aware retry (withSingleTransientRetry, _core/submit-retry.ts) can cap
+  // this call on hosted. Defaults to the ORIGINAL hardcoded value for the direct
+  // (non-retry-wrapped) callers of this function (verify.ts, research.ts,
+  // ai_monitor.ts, and the business-code-classification test) — their behavior
+  // is unchanged.
+  timeoutMs: number = TIMEOUTS.SUBMIT_TIMEOUT_LOCAL,
 ): Promise<SubmitSearchResult> {
   const form = new URLSearchParams();
   form.append("scraper_name", scraperName);
@@ -248,7 +244,7 @@ export async function submitSearchScrapeTask(
       "Content-Type": "application/x-www-form-urlencoded",
       ...telemetryHeaders("search"), // NOV-321: mark MCP-originated so the backend can log it (live submit path — search + research)
     },
-    timeout: 60000,
+    timeout: timeoutMs,
     httpsAgent: keepAliveAgent,
   });
 
@@ -354,9 +350,40 @@ export async function resolveSearchResults(
 }
 
 /** Poll the download endpoint until the search task completes or times out. */
-export async function pollSearchResult(apiKey: string, taskId: string): Promise<Record<string, unknown>> {
+/**
+ * @param ceilingMs How long THIS call may poll before giving up — defaults to
+ * `TIMEOUTS.SEARCH_TOTAL_CEILING` (unchanged behavior for `resolveSearchResults`,
+ * the one LIVE call site that omits it). `submitBingSearch` also omits it, but
+ * that function is dead code — never called from anywhere in `src/`;
+ * `novada_search`'s own `engine` enum only accepts google/duckduckgo/yandex,
+ * and bing is served entirely by the separate `novada_scrape_bing` →
+ * scrape.ts path — so it carries no live scope here (final-verify-2026-10-21
+ * LOW #3: this comment previously cited it as a real call site).
+ * `novadaSearch` instead passes `min(TIMEOUTS.SEARCH_TOTAL_CEILING,
+ * remaining-of-the-shared-callDeadline)` (scrape-transient-review2-2026-10-21
+ * MEDIUM #2) so the poll phase never gets a fresh allotment on top of
+ * whatever the submit(+retry) phase already consumed of the SAME deadline.
+ */
+export async function pollSearchResult(
+  apiKey: string,
+  taskId: string,
+  ceilingMs: number = TIMEOUTS.SEARCH_TOTAL_CEILING,
+): Promise<Record<string, unknown>> {
+  // review2 MEDIUM #2: `ceilingMs` can legitimately be 0 (or negative, clamped
+  // to 0 by the caller) when the shared deadline was already exhausted by
+  // submit — short-circuit before the first network round-trip rather than
+  // relying on the `while` loop's own same-millisecond `Date.now() < deadline`
+  // race. Throws the SAME structured, retryable NovadaError the natural
+  // timeout fallthrough below throws — never an uncaught throw, never a bare
+  // platform 504.
+  if (ceilingMs <= 0) {
+    throw makeNovadaError(
+      NovadaErrorCode.API_DOWN,
+      `Scraper search task ${taskId} ran out of time budget before polling could start (submit consumed the whole shared deadline).`,
+    );
+  }
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
-  const deadline = Date.now() + TIMEOUTS.SEARCH_TOTAL_CEILING;
+  const deadline = Date.now() + ceilingMs;
   let pollAttempt = 0;
 
   // No pre-wait: poll immediately. If the task is still pending we get 27202 and
@@ -421,7 +448,10 @@ export async function pollSearchResult(apiKey: string, taskId: string): Promise<
 
   throw makeNovadaError(
     NovadaErrorCode.API_DOWN,
-    `Scraper search task ${taskId} timed out after ${TIMEOUTS.SEARCH_TOTAL_CEILING / 1000}s.`,
+    // review2 MEDIUM #2: report the ceiling THIS call actually used (which may
+    // be less than TIMEOUTS.SEARCH_TOTAL_CEILING when novadaSearch clamped it
+    // to the remaining shared deadline), not the nominal constant.
+    `Scraper search task ${taskId} timed out after ${ceilingMs / 1000}s.`,
   );
 }
 
@@ -476,6 +506,12 @@ export interface NovadaSearchOptions {
 }
 
 export async function novadaSearch(params: SearchParams, apiKey: string, options?: NovadaSearchOptions): Promise<string> {
+  // scrape-transient-review2-2026-10-21 MEDIUM #2: ONE absolute deadline for
+  // the WHOLE call (submit + retry + poll), established exactly once, here,
+  // at tool entry — mirrors novadaScrape's identical fix (scrape.ts). Hosted:
+  // `now + HOSTED_SAFE_CEILING_MS`; local: `Infinity` (see toolCallDeadline()'s
+  // doc comment in config.ts).
+  const callDeadline = toolCallDeadline();
   // Trim BEFORE the required check so a whitespace-only query ('   ') is rejected
   // with the same validation error as empty — no live call, no quota burn. The
   // trimmed value is reused for the rest of the request so we never send padding
@@ -603,28 +639,51 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       const engineCfg = ENGINE_MAP[engine];
       // FIX B: absorb a single transient "upstream SERP failure" ourselves
       // instead of surfacing it on the first hit — see withSingleSerpRetry above.
-      const submitted = await withSingleSerpRetry(() => submitSearchScrapeTask(
-        apiKey,
-        engineCfg.scraper_name,
-        engineCfg.scraper_id,
-        effectiveQuery,
-        overFetchNum,
-        engineCfg.query_param,
-        engineCfg.supports_num,
-        {
-          time_range: params.time_range,
-          start_date: params.start_date,
-          end_date: params.end_date,
-          country: params.country || undefined,
-          language: params.language || undefined,
-        }
-      ));
+      //
+      // scrape-transient-2026-10-21 follow-up (MEDIUM): pass submitRetryBudget()
+      // so the retry is wall-clock aware on hosted and submitSearchScrapeTask's
+      // own axios timeout for THIS attempt is capped by what remains of that
+      // budget, never a flat 60s — see submit-retry.ts's doc comment.
+      // `undefined` keeps the default inter-attempt delay while still
+      // supplying the budget as the 3rd positional argument.
+      //
+      // review2 MEDIUM #2: pass `callDeadline` (established once at the top of
+      // this function) so the submit budget shares ONE wall-clock budget with
+      // the poll phase below, instead of each getting an independent
+      // HOSTED_SAFE_CEILING_MS allotment.
+      const submitted = await withSingleSerpRetry(
+        (timeoutMs) => submitSearchScrapeTask(
+          apiKey,
+          engineCfg.scraper_name,
+          engineCfg.scraper_id,
+          effectiveQuery,
+          overFetchNum,
+          engineCfg.query_param,
+          engineCfg.supports_num,
+          {
+            time_range: params.time_range,
+            start_date: params.start_date,
+            end_date: params.end_date,
+            country: params.country || undefined,
+            language: params.language || undefined,
+          },
+          timeoutMs,
+        ),
+        undefined,
+        submitRetryBudget(callDeadline),
+      );
       // Fast path: inline results from submit response (no download round-trip needed)
       if (submitted.inlineResults) {
         scraperResults = parseScraperSearchResults(submitted.inlineResults);
       } else if (submitted.taskId) {
-        // Slow path: poll download endpoint
-        const resultData = await pollSearchResult(apiKey, submitted.taskId);
+        // Slow path: poll download endpoint.
+        // review2 MEDIUM #2: clamp the poll ceiling to whatever remains of the
+        // SAME callDeadline the submit phase above just drew from — never a
+        // fresh TIMEOUTS.SEARCH_TOTAL_CEILING allotment on top. On local,
+        // callDeadline is Infinity so `remaining` is never binding and this is
+        // a no-op (byte-identical to the pre-fix unconditional default).
+        const pollCeilingMs = Math.min(TIMEOUTS.SEARCH_TOTAL_CEILING, Math.max(0, callDeadline - Date.now()));
+        const resultData = await pollSearchResult(apiKey, submitted.taskId, pollCeilingMs);
         scraperResults = parseScraperSearchResults(resultData);
       }
     }

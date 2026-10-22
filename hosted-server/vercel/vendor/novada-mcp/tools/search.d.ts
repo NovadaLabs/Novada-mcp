@@ -1,4 +1,5 @@
 import type { SearchParams, NovadaSearchResult } from "./types.js";
+import { withSingleTransientRetry } from "../_core/submit-retry.js";
 /**
  * NOV-682: Bound an over-long query by truncating at a word boundary instead of
  * rejecting it. Google only ranks on the first ~32 words, so cutting at 500 chars
@@ -13,13 +14,16 @@ export declare function boundQuery(query: string): {
     truncated: string | null;
 };
 /**
- * Run `op` once; on a transient (`NovadaErrorCode.API_DOWN`) `NovadaError`,
- * wait `delayMs` and run it exactly one more time. Any other error (including
- * a non-NovadaError) propagates immediately without a retry. Exported so the
- * retry/no-retry behavior can be unit-tested directly against a mock `op`
- * without needing to fake the underlying axios/HTTP layer.
+ * Scrape-transient-2026-10-21: the canonical implementation moved to
+ * `_core/submit-retry.ts` (`withSingleTransientRetry`) so novada_scrape's submit path
+ * (scrape.ts's `submitScrapeTask`, shared by every `novada_scrape_<platform>`
+ * tool) can reuse the SAME policy instead of a second, parallel one — the
+ * exact "serp capture failed" / no-task_id / upstream-5xx failure modes this
+ * retry absorbs are not specific to search. `withSingleSerpRetry` is kept as
+ * a thin re-export so existing imports/tests (search-serp-retry.test.ts,
+ * business-code-classification.test.ts) and the exported name are unchanged.
  */
-export declare function withSingleSerpRetry<T>(op: () => Promise<T>, delayMs?: number): Promise<T>;
+export declare const withSingleSerpRetry: typeof withSingleTransientRetry;
 interface SearchFilterParams {
     time_range?: string;
     start_date?: string;
@@ -40,7 +44,7 @@ interface SubmitSearchResult {
  * Falls back to returning a task_id for async download polling when inline results
  * are absent.
  */
-export declare function submitSearchScrapeTask(apiKey: string, scraperName: string, scraperId: string, query: string, num: number, queryParam?: string, supportsNum?: boolean, filterParams?: SearchFilterParams): Promise<SubmitSearchResult>;
+export declare function submitSearchScrapeTask(apiKey: string, scraperName: string, scraperId: string, query: string, num: number, queryParam?: string, supportsNum?: boolean, filterParams?: SearchFilterParams, timeoutMs?: number): Promise<SubmitSearchResult>;
 /**
  * Resolve a SubmitSearchResult to NovadaSearchResult[].
  * Uses inline results when available (fast path), falls back to polling the
@@ -48,7 +52,21 @@ export declare function submitSearchScrapeTask(apiKey: string, scraperName: stri
  */
 export declare function resolveSearchResults(apiKey: string, submitted: SubmitSearchResult): Promise<NovadaSearchResult[]>;
 /** Poll the download endpoint until the search task completes or times out. */
-export declare function pollSearchResult(apiKey: string, taskId: string): Promise<Record<string, unknown>>;
+/**
+ * @param ceilingMs How long THIS call may poll before giving up — defaults to
+ * `TIMEOUTS.SEARCH_TOTAL_CEILING` (unchanged behavior for `resolveSearchResults`,
+ * the one LIVE call site that omits it). `submitBingSearch` also omits it, but
+ * that function is dead code — never called from anywhere in `src/`;
+ * `novada_search`'s own `engine` enum only accepts google/duckduckgo/yandex,
+ * and bing is served entirely by the separate `novada_scrape_bing` →
+ * scrape.ts path — so it carries no live scope here (final-verify-2026-10-21
+ * LOW #3: this comment previously cited it as a real call site).
+ * `novadaSearch` instead passes `min(TIMEOUTS.SEARCH_TOTAL_CEILING,
+ * remaining-of-the-shared-callDeadline)` (scrape-transient-review2-2026-10-21
+ * MEDIUM #2) so the poll phase never gets a fresh allotment on top of
+ * whatever the submit(+retry) phase already consumed of the SAME deadline.
+ */
+export declare function pollSearchResult(apiKey: string, taskId: string, ceilingMs?: number): Promise<Record<string, unknown>>;
 /** Parse scraper API result data into NovadaSearchResult[]. */
 export declare function parseScraperSearchResults(data: Record<string, unknown>): NovadaSearchResult[];
 export interface NovadaSearchOptions {

@@ -107,6 +107,9 @@ if ! npx tsc --noEmit; then
     abort "npm tsc failed — fix type errors before deploying"
 fi
 
+echo "[BUILD] clean build/ (tsc never deletes outputs of renamed/removed sources; vendor rsync --delete mirrors build/ exactly)"
+rm -rf "$NPM/build"
+
 echo "[BUILD] npm run build..."
 if ! npm run build; then
     abort "npm run build failed"

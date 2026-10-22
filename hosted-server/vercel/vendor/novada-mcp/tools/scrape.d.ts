@@ -23,7 +23,25 @@ type SubmitOutcome = {
  * 0.9.5 (NOV-697): previously returned only a task_id and ALWAYS polled; that both
  * wasted a round-trip on inline-result platforms and threw isError on empty serps.
  */
-export declare function submitScrapeTask(apiKey: string, scraper_name: string, scraper_id: string, params: Record<string, unknown>): Promise<SubmitOutcome>;
+export declare function submitScrapeTask(apiKey: string, scraper_name: string, scraper_id: string, params: Record<string, unknown>, timeoutMs?: number): Promise<SubmitOutcome>;
+type PollOutcome = {
+    kind: "done";
+    items: DownloadResultItem[];
+} | {
+    kind: "pending";
+    taskId: string;
+};
+/**
+ * Poll the download endpoint until the task completes or `timeoutMs` elapses.
+ * TOW2-257 Phase 1: `timeoutMs` defaults to POLL_TIMEOUT_MS (unchanged local
+ * behavior) but callers pass `syncPollCeilingMs()` so hosted gets the short
+ * ~10s first-try ceiling instead of always riding the full 45s.
+ * Fix-round-2 (TOW2-382 HIGH#1): `htmlRequested` tells the TOW2-382 html-page
+ * guard below whether the caller explicitly asked for HTML — see
+ * isHtmlRequested(). Defaults to false so every other existing call site
+ * behavior (there is only one — novadaScrape) is unaffected unless it opts in.
+ */
+export declare function pollForResult(apiKey: string, taskId: string, timeoutMs?: number, htmlRequested?: boolean): Promise<PollOutcome>;
 /**
  * Escalating resume guidance keyed to how long ago the task was originally submitted.
  * Pure (no I/O, no wall-clock read) so tests can assert exact boundary behavior with a
