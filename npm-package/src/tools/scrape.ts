@@ -1,10 +1,11 @@
 import axios, { AxiosError } from "axios";
 import { createHash } from "node:crypto";
-import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHostedEnvironment } from "../config.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHostedEnvironment, TIMEOUTS, toolCallDeadline } from "../config.js";
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
 import { NovadaError, NovadaErrorCode, classifyBusinessCode, makeNovadaError, sanitizeServerMsg, serpCaptureFailedHint } from "../_core/errors.js";
+import { withSingleTransientRetry, submitRetryBudget } from "../_core/submit-retry.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
 import { findKnownBrokenParamValue } from "../data/known_broken_param_values.js";
@@ -193,7 +194,13 @@ export async function submitScrapeTask(
   apiKey: string,
   scraper_name: string,
   scraper_id: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  // scrape-transient-2026-10-21: per-attempt axios timeout, overridable so the
+  // budget-aware retry (withSingleTransientRetry, _core/submit-retry.ts) can cap
+  // this call on hosted. Defaults to the ORIGINAL hardcoded value for the two
+  // direct (non-retry-wrapped) callers of this function (scraper_submit.ts and
+  // the business-code-classification test) — their behavior is unchanged.
+  timeoutMs: number = TIMEOUTS.SUBMIT_TIMEOUT_LOCAL,
 ): Promise<SubmitOutcome> {
   const file_name = `novada_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const form = new URLSearchParams();
@@ -260,7 +267,7 @@ export async function submitScrapeTask(
       "Content-Type": "application/x-www-form-urlencoded",
       ...telemetryHeaders("scrape"), // NOV-321: mark this as MCP-originated so the backend can log it (covers local + hosted)
     },
-    timeout: 60000,
+    timeout: timeoutMs,
   });
 
   const body = resp.data as SubmitApiResponse;
@@ -409,12 +416,26 @@ function isHtmlRequested(opParams: Record<string, unknown> | undefined): boolean
  * isHtmlRequested(). Defaults to false so every other existing call site
  * behavior (there is only one — novadaScrape) is unaffected unless it opts in.
  */
-async function pollForResult(
+export async function pollForResult(
   apiKey: string,
   taskId: string,
   timeoutMs: number = POLL_TIMEOUT_MS,
   htmlRequested: boolean = false,
 ): Promise<PollOutcome> {
+  // scrape-transient-review2-2026-10-21 MEDIUM #2: `timeoutMs` is now
+  // `min(syncPollCeilingMs(), remaining-of-the-shared-toolCallDeadline)` (see
+  // novadaScrape's call site) and CAN legitimately be 0 or negative — a slow
+  // submit(+retry) consumed the whole shared budget before polling even
+  // started. Short-circuit BEFORE the first network round-trip in that case:
+  // the `while` loop below would already exit immediately (its own `Date.now()
+  // < deadline` check), but an explicit guard makes the zero-time-left case a
+  // deterministic, zero-network-call "pending" outcome rather than relying on
+  // a same-millisecond clock race — and it's the SAME clean non-error outcome
+  // (0.9.5: "a slow-but-valid task is not a failure") the loop's own
+  // natural-timeout fallthrough below already returns.
+  if (timeoutMs <= 0) {
+    return { kind: "pending", taskId };
+  }
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
   // H3: safe version of URL for error messages — strips the apikey value to prevent key exposure
   const safeUrl = url.replace(/apikey=[^&]+/, "apikey=***");
@@ -1792,6 +1813,16 @@ export function assertYouTubeIdentity(
 }
 
 export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): Promise<string> {
+  // scrape-transient-review2-2026-10-21 MEDIUM #2: ONE absolute deadline for
+  // the WHOLE call (submit + retry + poll), established exactly once, here,
+  // at tool entry — never recomputed mid-call. On hosted this is `now +
+  // HOSTED_SAFE_CEILING_MS`; on local it's `Infinity` (no serverless kill, so
+  // neither phase below is ever the binding constraint — see
+  // toolCallDeadline()'s doc comment in config.ts for the full invariant).
+  // Threaded into submitRetryBudget() below (submit phase) and into the poll
+  // ceiling further down (poll phase), so the two phases share one budget
+  // instead of each getting an independent HOSTED_SAFE_CEILING_MS allotment.
+  const callDeadline = toolCallDeadline();
   // C-6: `requestedLimit` is THIS call's own limit param (defaulted to 20 if omitted).
   // On a fresh submit it IS the effective limit. On a RESUME, the effective limit is
   // resolved later from TASK_META_STORE (the ORIGINAL submit's limit) — see
@@ -1905,7 +1936,34 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   } else {
     try {
       localeDefaulted = resolveLocaleDefault(platform, operation, (opParams ?? {}) as Record<string, unknown>) !== undefined;
-      submitOutcome = await submitScrapeTask(apiKey, platform, operation, opParams as Record<string, unknown>);
+      // scrape-transient-2026-10-21: absorb a single transient "serp capture
+      // failed" / no-task_id / upstream-5xx submit failure ourselves instead of
+      // surfacing it on the first hit — mirrors novada_search's FIX B
+      // (withSingleSerpRetry, search.ts) for the identical upstream failure
+      // shape on the SAME Scraper API /request endpoint. Shared via
+      // withSingleTransientRetry (_core/submit-retry.ts) rather than a second,
+      // parallel retry policy. Scoped to the submit call only (see that
+      // module's doc comment): no task_id exists yet here, so nothing has
+      // been created or billed — retrying is billing-safe.
+      //
+      // scrape-transient-2026-10-21 follow-up (MEDIUM): pass submitRetryBudget()
+      // so the retry is wall-clock aware on hosted (can skip the retry once the
+      // budget can't fit it) and so submitScrapeTask's own axios timeout for
+      // THIS attempt is capped by what remains of that budget, never a flat
+      // 60s — see submit-retry.ts's doc comment. `undefined` keeps the default
+      // inter-attempt delay (SINGLE_TRANSIENT_RETRY_DELAY_MS) while still
+      // supplying the budget as the 3rd positional argument.
+      //
+      // review2 MEDIUM #2: pass `callDeadline` (established once at the top of
+      // this function) so the submit budget's `totalMs` is derived from the
+      // SAME deadline the poll phase below will clamp its own ceiling
+      // against — one shared wall-clock budget for the whole call, not two
+      // independent HOSTED_SAFE_CEILING_MS allotments.
+      submitOutcome = await withSingleTransientRetry(
+        (timeoutMs) => submitScrapeTask(apiKey, platform, operation, opParams as Record<string, unknown>, timeoutMs),
+        undefined,
+        submitRetryBudget(callDeadline),
+      );
       // C-6 / C-12: capture the ORIGINAL submit's limit + timestamp the moment the
       // task_id first becomes known, so a later resume can honor this limit (C-6)
       // and report an accurate age_s (C-12) instead of defaulting to the resume
@@ -1970,7 +2028,16 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     // TOW2-257 Phase 1: use the short hosted first-try ceiling on hosted, the
     // unchanged 45s ceiling on local (syncPollCeilingMs()) — and capture the
     // actual value used so the pending-envelope's elapsed clause is honest.
-    const ceilingMs = syncPollCeilingMs();
+    //
+    // review2 MEDIUM #2: clamp that ceiling to whatever remains of the SAME
+    // `callDeadline` established at the top of this function — if submit (+
+    // its one retry) already consumed most of the shared budget, poll gets
+    // only what's left, never its own fresh allotment on top. On local,
+    // `callDeadline` is Infinity, so `remaining` is never the binding term and
+    // this is a no-op — `ceilingMs === syncPollCeilingMs()` always, byte-
+    // identical to before this fix.
+    const remaining = Math.max(0, callDeadline - Date.now());
+    const ceilingMs = Math.min(syncPollCeilingMs(), remaining);
     // Fix-round-2 (TOW2-382 HIGH#1): tell pollForResult whether THIS caller's
     // raw submit params asked for an HTML-inclusive response (json=2/3), so a
     // {filename,html} download body in that case is never misclassified as
