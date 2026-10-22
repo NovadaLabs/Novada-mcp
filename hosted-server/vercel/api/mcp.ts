@@ -145,6 +145,12 @@ import {
 } from "./_oauth.js";
 import type { OAuthDeps } from "./_oauth.js";
 
+// Public "well-known static text" domain-verification routes (OpenAI Apps
+// submission, etc.) — _wellknown.ts is import-free by design (unit-tested
+// side-effect-free in test/wellknown-domain-verification.test.mjs); mcp.ts is
+// the ONLY place that wires its real dependency (process.env) via getEnv.
+import { handleWellKnownStaticText } from "./_wellknown.js";
+
 // ─── Shared catalog + dispatch from vendored core (single source of truth) ────
 // core.ts is side-effect-free: no server construction, no stdio boot, no process.exit.
 // It exports HIDDEN_ALIASES (19 npm-alias names: 9 backward-compat account/unblock
@@ -2159,6 +2165,18 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     return new Response(JSON.stringify({ ok: true, service: "novada-mcp-hosted", endpoint: "/mcp" }), {
       headers: { "content-type": "application/json" },
     });
+  }
+
+  // Public "well-known static text" domain-verification routes (see
+  // ./_wellknown.ts — class, not instance: add a ROW there for the next
+  // domain-verification challenge, never a new branch here). Routed here,
+  // BEFORE the OAuth/mcp path checks, the STUB_AUTH gate, the KV check, and
+  // the pre-auth rate limiter below, so a verifier's GET/HEAD is never
+  // 401'd/429'd/503'd. Returns null (falls through to normal routing, and
+  // eventually the existing unmatched-path 404) when pathname matches no row.
+  const wellKnownResponse = handleWellKnownStaticText(pathname, request.method, (name) => process.env[name]);
+  if (wellKnownResponse) {
+    return wellKnownResponse;
   }
 
   // OAuth 2.1 endpoints (RFC 8414/9728/7591/6749/7636) — routed BEFORE the
