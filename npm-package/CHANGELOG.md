@@ -11,6 +11,16 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.42] — 2026-10-22
+
+### Fixed
+- **Transient upstream submit failures (code 500/10000) are now retried once, across every `novada_scrape*` tool and `novada_search`.** A single submit-phase retry closes a class of first-attempt-flake failures that previously surfaced directly to the caller. On hosted, submit and polling now share one per-call deadline (never a 0ms timeout from an unbounded first attempt eating the whole budget) so the combined submit+poll never silently exceeds the advertised call budget.
+
+### Added (hosted server — `mcp.novada.com`, not part of the npm package)
+- **`/.well-known/openai-apps-challenge`** for OpenAI Apps submission domain verification: serves the exact value of `OPENAI_APPS_CHALLENGE_TOKEN` as `text/plain` (trimmed, no JSON, `cache-control: no-store`) when the env var is set; 404 when unset; 405 for any method other than GET/HEAD. Reachable without auth, routed ahead of the auth gate and pre-auth rate limiter so OpenAI's verifier is never rejected.
+
+---
+
 ## [0.9.41] — 2026-10-14
 
 Claude Directory readiness release. Every change below passed an independent code review, a calibrated directory-review examiner (95 rules from Anthropic's published criteria; final exam 0 blocking findings, LLM judge 198/198) and CI before release. The hosted server has run this code since 2026-10-13.
