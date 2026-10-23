@@ -54,4 +54,9 @@ regexes = [
   # hosted-server/docs/2026-06-11-deploy-meeting-blockers.html — internal
   # deploy-runbook curl snippet instructing the reader to substitute their key.
   '''Authorization: Bearer sk-eu-novada-YOUR_KEY''',
+  # monitoring/dingtalk/send.test.mjs — synthetic DingTalk 加签 secret used as a
+  # fixed signing test vector (cross-checked against an independent Python
+  # implementation); not a real robot secret.
+  '''secret = "SECtestsecret1234567890"''',
+  '''secret: "SECtestsecret1234567890"''',
 ]
