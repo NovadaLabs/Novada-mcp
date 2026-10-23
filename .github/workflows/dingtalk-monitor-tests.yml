@@ -1,0 +1,48 @@
+name: DingTalk Monitor Tests
+
+# Runs the unit tests for monitoring/dingtalk/ on every change that could
+# break them. mcp-health-dingtalk.yml only RUNS the monitor on a schedule; it
+# never runs these tests, so without this workflow the tests (including the
+# drift guard that compares checks.mjs's HOSTED_FUNCTION_LIMIT_MS copy with
+# npm-package/src/config.ts) would never execute in CI.
+#
+# Path filters must cover every file the tests read: the monitor itself, the
+# scheduled workflow (workflow.test.mjs parses it), the golden tool-list
+# baseline the checks compare against, and npm-package/src/config.ts (drift
+# guard input).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "monitoring/dingtalk/**"
+      - ".github/workflows/mcp-health-dingtalk.yml"
+      - ".github/workflows/dingtalk-monitor-tests.yml"
+      - "hosted-server/scripts/golden/baseline/**"
+      - "npm-package/src/config.ts"
+  pull_request:
+    branches: [main]
+    paths:
+      - "monitoring/dingtalk/**"
+      - ".github/workflows/mcp-health-dingtalk.yml"
+      - ".github/workflows/dingtalk-monitor-tests.yml"
+      - "hosted-server/scripts/golden/baseline/**"
+      - "npm-package/src/config.ts"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Test (node --test monitoring/dingtalk)
+        run: node --test monitoring/dingtalk/*.test.mjs

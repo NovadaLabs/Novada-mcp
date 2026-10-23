@@ -26,7 +26,26 @@ import {
   CHECK_TABLE,
   API_KEY_ENV_VAR,
   requiredEnvVarsForCosts,
+  HOSTED_FUNCTION_LIMIT_MS,
+  BILLABLE_CHECK_TIMEOUT_MS,
 } from "./checks.mjs";
+
+/** A stub fetchFn that actually RESPECTS `opts.signal` the way real
+ * fetch/undici does — resolves with `body` after `delayMs`, but rejects
+ * early (with the signal's own abort reason, or a synthesized AbortError)
+ * the instant the AbortController/AbortSignal fires. Needed to test timeout
+ * behavior deterministically and fast: most of these tests use a tiny
+ * `timeoutMs` so the abort always wins the race against `delayMs`. */
+function slowFetch(delayMs, body) {
+  return (url, opts) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => resolve(body), delayMs);
+      opts?.signal?.addEventListener("abort", () => {
+        clearTimeout(timer);
+        reject(opts.signal.reason instanceof Error ? opts.signal.reason : Object.assign(new Error("aborted"), { name: "AbortError" }));
+      });
+    });
+}
 
 function jsonResponse(status, body, headers = {}) {
   return {
@@ -109,6 +128,110 @@ test("probeInitialize: succeeds normally once apiKey IS present (guard doesn't b
   const fetchFn = async () => jsonResponse(200, { result: { serverInfo: { version: "0.9.42" } } });
   const r = await probeInitialize({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
   assert.equal(r.ok, true);
+});
+
+// ── Probe-side timeout gets its OWN errorClass (2026-10-23 fix) ─────────────
+//
+// The first real daily run reported novada_scrape_bing as FAIL "timeout
+// after 10000ms" when the upstream call was merely slow (6-15s), not down —
+// a probe-side AbortController/AbortSignal firing must never be reported
+// with the SAME errorClass ("network") as a real DNS/connection failure, so
+// it can get a distinct "monitor timed out, server may still be working"
+// annotation (run.mjs's ERROR_CLASS_CLASSIFICATION) instead of "服务端/网络".
+
+test("probeInitialize: a probe-side timeout gets errorClass 'timeout' (distinct from a real network failure), latency is still reported", async () => {
+  const fetchFn = slowFetch(200, jsonResponse(200, { result: { serverInfo: { version: "0.9.42" } } }));
+  const r = await probeInitialize({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, timeoutMs: 20 });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorClass, "timeout");
+  assert.match(r.note, /timeout after 20ms/);
+  assert.ok(r.latencyMs >= 15 && r.latencyMs < 200, `latency should be ~20ms (abort), got ${r.latencyMs}ms`);
+});
+
+test("probeToolsList: a probe-side timeout gets errorClass 'timeout'", async () => {
+  const fetchFn = slowFetch(200, jsonResponse(200, { result: { tools: [] } }));
+  const r = await probeToolsList({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, timeoutMs: 20 });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorClass, "timeout");
+});
+
+test("probeOAuthDiscovery: a probe-side timeout gets errorClass 'timeout'", async () => {
+  const fetchFn = slowFetch(200, { status: 200, headers: { get: () => null }, text: async () => "{}" });
+  const r = await probeOAuthDiscovery({ mcpUrl: "https://mcp.novada.com/mcp", fetchFn, timeoutMs: 20 });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorClass, "timeout");
+});
+
+test("probeUnauthenticated401: a probe-side timeout gets errorClass 'timeout' (exercises the native AbortSignal.timeout() path, a different API than httpGet/rpcCall's manual AbortController)", async () => {
+  const fetchFn = slowFetch(200, { status: 401, headers: { get: () => null } });
+  const r = await probeUnauthenticated401({ mcpUrl: "https://mcp.novada.com/mcp", fetchFn, timeoutMs: 20 });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorClass, "timeout");
+});
+
+test("probeNovadaSearch (billable tool call via interpretToolCallResult): a probe-side timeout gets errorClass 'timeout', not 'network'", async () => {
+  const fetchFn = slowFetch(200, jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } }));
+  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, timeoutMs: 20 });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorClass, "timeout");
+});
+
+// ── Per-check timeout as a CHECK_TABLE column (2026-10-23 fix) ──────────────
+
+test("CHECK_TABLE: every billable check's timeoutMs is >= the hosted server's own HOSTED_FUNCTION_LIMIT_MS ceiling — the probe must never give up before the server itself would", () => {
+  for (const row of CHECK_TABLE.filter((r) => r.cost === "billable")) {
+    assert.ok(
+      row.timeoutMs >= HOSTED_FUNCTION_LIMIT_MS,
+      `${row.id}: timeoutMs ${row.timeoutMs} must be >= HOSTED_FUNCTION_LIMIT_MS ${HOSTED_FUNCTION_LIMIT_MS}`
+    );
+    assert.equal(row.timeoutMs, BILLABLE_CHECK_TIMEOUT_MS, `${row.id}: billable rows share ONE class-level timeout, never a per-tool instance value`);
+  }
+});
+
+test("CHECK_TABLE: free checks keep the original short timeout (metadata/discovery against the gateway itself is cheap — unchanged behavior)", () => {
+  for (const row of CHECK_TABLE.filter((r) => r.cost === "free")) {
+    assert.equal(row.timeoutMs, 10_000, `${row.id}: free-check timeout must stay 10s`);
+  }
+});
+
+test("CHECK_TABLE: every row declares a numeric slowThresholdMs strictly under its own timeoutMs, class-level by cost", () => {
+  for (const row of CHECK_TABLE) {
+    assert.equal(typeof row.slowThresholdMs, "number", `${row.id}: slowThresholdMs must be a number`);
+    assert.ok(row.slowThresholdMs > 0 && row.slowThresholdMs < row.timeoutMs, `${row.id}: slowThresholdMs must sit strictly between 0 and timeoutMs`);
+  }
+});
+
+test("runChecks: per-row CHECK_TABLE timeoutMs overrides a short/stale ctx.timeoutMs — the EXACT 2026-10-23 regression (a slow-but-real billable response must still succeed)", async () => {
+  // Every billable row's real latency (6-15s measured) would have been
+  // killed by the OLD flat ctx.timeoutMs=10000; here it's a 5ms ctx-level
+  // value (even more hostile) against a fetch that resolves in 50ms — this
+  // only passes if runChecks lets row.timeoutMs (65000) win over ctx.timeoutMs.
+  const fetchFn = slowFetch(50, jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } }));
+  const results = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, timeoutMs: 5 }, ["billable"]);
+  assert.equal(results.length, CHECK_TABLE.filter((r) => r.cost === "billable").length);
+  for (const r of results) {
+    assert.equal(r.ok, true, `${r.id} unexpectedly failed under the per-row timeout fix: ${r.note}`);
+  }
+});
+
+test("runChecks: lowering ONE row's CHECK_TABLE.timeoutMs changes only that check's effective budget — no cross-talk between rows sharing one batch", async () => {
+  const initializeRow = CHECK_TABLE.find((r) => r.id === "initialize");
+  const originalTimeout = initializeRow.timeoutMs;
+  initializeRow.timeoutMs = 20; // artificially tight, well under the real 10s default
+  try {
+    const fetchFn = slowFetch(200, jsonResponse(200, { result: { serverInfo: { version: "0.9.42" }, tools: [] } }));
+    const results = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn }, ["free"]);
+    const initializeResult = results.find((r) => r.id === "initialize");
+    const toolsListResult = results.find((r) => r.id === "tools_list");
+    assert.equal(initializeResult.ok, false);
+    assert.equal(initializeResult.errorClass, "timeout");
+    // tools_list keeps its OWN (unmutated) row.timeoutMs=10000, so the same
+    // 200ms-delayed fetchFn still succeeds for it — proves the timeout is
+    // genuinely per-row, not one shared mutable default.
+    assert.equal(toolsListResult.ok, true, `tools_list should be unaffected by initialize's row-level timeout override: ${toolsListResult.note}`);
+  } finally {
+    initializeRow.timeoutMs = originalTimeout;
+  }
 });
 
 // ── tools/list vs golden baseline ───────────────────────────────────────────
@@ -298,4 +421,19 @@ test("runChecks: a throwing probe is caught and reported as a failed row, not a 
   const results = await runChecks({ mcpUrl: "https://x/mcp", fetchFn }, ["free"]);
   assert.equal(results.length, CHECK_TABLE.filter((r) => r.cost === "free").length);
   assert.ok(results.every((r) => r.ok === false));
+});
+
+// Drift guard: checks.mjs carries a copy of HOSTED_FUNCTION_LIMIT_MS because it
+// can't import TypeScript. This test reads the source of truth and fails the
+// moment the two disagree, so the billable probe timeout can't silently fall
+// below the hosted server's own limit again.
+test("HOSTED_FUNCTION_LIMIT_MS mirrors npm-package/src/config.ts exactly", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const path = await import("node:path");
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const src = await readFile(path.join(here, "../../npm-package/src/config.ts"), "utf8");
+  const m = src.match(/export const HOSTED_FUNCTION_LIMIT_MS\s*=\s*([\d_]+)\s*;/);
+  assert.ok(m, "HOSTED_FUNCTION_LIMIT_MS not found in npm-package/src/config.ts — update this drift guard");
+  assert.equal(HOSTED_FUNCTION_LIMIT_MS, Number(m[1].replace(/_/g, "")));
 });
