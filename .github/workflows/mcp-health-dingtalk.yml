@@ -1,0 +1,123 @@
+name: MCP Health (DingTalk)
+
+# Phase 1 DingTalk (钉钉) health monitoring for https://mcp.novada.com.
+#   - design: ~/Projects/novada-mcp/reports/dingtalk-alerting-design-2026-10-22.md
+#     (local-only report, not part of this repo)
+#   - implementation: monitoring/dingtalk/{send,checks,state,run}.mjs
+#   - monitoring/dingtalk/README.md — secrets setup, manual runs, silencing
+#
+# Two independent cadences (design doc §7, Phase 1):
+#   - alert-check: FREE checks only (initialize / tools-list vs golden
+#     baseline / OAuth discovery / unauthenticated-401 sign-in entry /
+#     novada_setup), every 15 minutes. Dedupe: an "alert" fires only after 2
+#     CONSECUTIVE failing runs per check (tolerates one scheduling/network
+#     blip); a "recovery" message fires on the next pass after an alert,
+#     with outage duration; a "heartbeat" fires every 2h while an outage
+#     continues (so it never looks silently ignored). Dedupe state is
+#     committed to the `dingtalk-health-state` orphan branch — see
+#     monitoring/dingtalk/state.mjs's header comment for why a git branch
+#     (not actions/cache) is this project's state store, and why that
+#     needs `contents: write` scoped to ONLY this job.
+#   - daily-report: FREE + BILLABLE checks (adds novada_search/_extract/
+#     _scrape_google/_scrape_bing/_account on the shared NOVADA_TEST_KEY),
+#     once daily — one markdown digest, sent regardless of findings.
+#
+# THIS IS NOT A PR GATE — scheduled + manual only, same convention as
+# nightly-canary.yml/synthetic-monitor.yml. Never add a push/pull_request
+# trigger here.
+#
+# "Fail loudly" invariant: run.mjs itself exits 1 (with a clear message) if
+# DINGTALK_WEBHOOK_URL is unset — see run.mjs's module doc comment. This
+# workflow deliberately does NOT skip either job when that secret is
+# missing; a loud RED job (+ GitHub's own failed-scheduled-run email) is
+# the intended fallback signal for "the alerting pipe itself is broken",
+# which is exactly the failure mode (signal exists, nobody configured where
+# it goes) this whole project exists to prevent a repeat of.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Which mode to run"
+        type: choice
+        options: [alert, daily]
+        default: alert
+  schedule:
+    # alert-check: every 15 minutes, at :07/:22/:37/:52 — off-round minutes
+    # so this doesn't land in the top-of-hour/quarter-hour pile-up window
+    # every other scheduled workflow in this repo's cron comments warn about.
+    - cron: "7,22,37,52 * * * *"
+    # daily-report: 01:07 UTC = 09:07 Asia/Shanghai — after nightly-canary's
+    # 06:17 UTC run (same off-round :07 minute, same anti-pile-up reason).
+    - cron: "7 1 * * *"
+
+# alert-check pushes to the shared dingtalk-health-state branch every 15
+# minutes; two overlapping runs racing that push is the one thing worth
+# serializing against repo-wide. cancel-in-progress: false queues a second
+# trigger instead of killing a run mid-send — same reasoning
+# synthetic-monitor.yml's full-daily job already documents for its own
+# concurrency group (a half-sent alert batch is worse than a queued rerun).
+concurrency:
+  group: mcp-health-dingtalk
+  cancel-in-progress: false
+
+jobs:
+  alert-check:
+    name: "Alert check (free, every 15 min)"
+    # Self-guard: only run on the canonical repo (see synthetic-monitor.yml's
+    # identical comment — the post-commit mirror to test-novada-mcp-test has
+    # no DingTalk/test-key secrets, so this would otherwise fail there on
+    # every single scheduled tick, pure noise).
+    if: github.repository == 'NovadaLabs/Novada-mcp' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'alert') || github.event.schedule == '7,22,37,52 * * * *')
+    runs-on: ubuntu-latest
+    # contents: write is needed ONLY by state.mjs's `git push` of the
+    # dedupe-state commit onto the dingtalk-health-state orphan branch — see
+    # state.mjs's header comment. No other step in this job writes anything.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run alert check
+        env:
+          # CRITICAL (2026-10-23 review finding #1): initialize/tools_list/
+          # novada_setup are "free" (no billing) but still need an API key
+          # to authenticate — same secret daily-report already wires below.
+          # Omitting this made every alert-check run 401 like a real outage;
+          # checks.mjs's requireApiKey() guard now makes the missing-secret
+          # case impossible to mistake for one even if this line regresses
+          # (reports "monitor misconfigured", never an outage) — this line
+          # is still required so the checks actually probe the live server.
+          NOVADA_TEST_KEY: ${{ secrets.NOVADA_MONITOR_KEY }}
+          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+          DINGTALK_KEYWORD: ${{ secrets.DINGTALK_KEYWORD }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node monitoring/dingtalk/run.mjs --mode alert
+
+  daily-report:
+    name: "Daily report (free + billable, once/day)"
+    if: github.repository == 'NovadaLabs/Novada-mcp' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'daily') || github.event.schedule == '7 1 * * *')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run daily report
+        env:
+          NOVADA_TEST_KEY: ${{ secrets.NOVADA_MONITOR_KEY }}
+          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+          DINGTALK_KEYWORD: ${{ secrets.DINGTALK_KEYWORD }}
+        run: node monitoring/dingtalk/run.mjs --mode daily
