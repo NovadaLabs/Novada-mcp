@@ -1,0 +1,44 @@
+# /etc/systemd/system/novada-mcp.service — mcp.novada.com on EC2
+[Unit]
+Description=Novada MCP hosted server (mcp.novada.com)
+After=network-online.target
+Wants=network-online.target
+# A bad release makes the primary exit(1) after 3 early worker deaths (~1s);
+# with RestartSec=2 that is a ~3.2s cycle, which systemd's compiled-in default
+# (5 starts / 10s) would never catch. Stop after 5 starts in 60s → unit enters
+# 'failed' (alertable) instead of restarting quietly forever.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=novada
+Group=novada
+WorkingDirectory=/opt/novada-mcp/current
+EnvironmentFile=/etc/novada-mcp/env
+Environment=NODE_ENV=production PORT=3000 HOST=127.0.0.1 WEB_CONCURRENCY=2
+ExecStart=/usr/bin/node dist/server.mjs
+Restart=always
+RestartSec=2
+# server.mts drains in-flight requests (up to 300s tool budget) on SIGTERM
+TimeoutStopSec=330
+KillMode=mixed
+MemoryMax=6G
+
+# Hardening. ProtectSystem=strict makes the whole filesystem read-only for the
+# service: even if the hosted-mode switch ever failed, the local-mode code paths
+# that write extraction results / site copies to disk would fail instead of
+# silently filling the disk with customer data (migration plan risk R1).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
