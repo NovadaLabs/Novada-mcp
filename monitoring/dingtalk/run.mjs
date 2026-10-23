@@ -111,6 +111,13 @@ const ERROR_CLASS_CLASSIFICATION = {
   http: { annotation: "服务端/网络", accountIssue: false },
   rpc: { annotation: "服务端/网络", accountIssue: false },
   shape: { annotation: "服务端/网络", accountIssue: false },
+  // 2026-10-23 fix: a probe-side timeout (OUR AbortController/AbortSignal
+  // firing because a per-check `timeoutMs` elapsed) is distinct from a real
+  // network/server failure — the hosted server may well still be
+  // processing (the exact false-failure class behind the first real daily
+  // run's "timeout after 10000ms" on novada_scrape_bing). Never collapse
+  // this into the generic "服务端/网络" bucket.
+  timeout: { annotation: "监控探针超时（服务端可能仍在处理）", accountIssue: false },
 };
 const UNCLASSIFIED = { annotation: "未分类", accountIssue: false };
 
@@ -195,7 +202,15 @@ export function renderDailyReport({ results, dateStamp, now = new Date() }) {
 
   const tableHeader = "| check | status | latency | note |\n| --- | --- | --- | --- |";
   const tableRows = results.map((r) => {
-    const status = r.ok ? "✅ ok" : "❌ fail";
+    // "慢" (slow) marker (2026-10-23 fix): a successful check that still
+    // blows its CHECK_TABLE `slowThresholdMs` budget (class-level: free vs
+    // billable, same column that drives `timeoutMs`) is surfaced here so
+    // creeping latency is visible WITHOUT turning into a false failure —
+    // never computed from a hardcoded per-id number, looked up from the
+    // same table row this check's timeout comes from.
+    const row = checkRowById(r.id);
+    const isSlow = r.ok && typeof row?.slowThresholdMs === "number" && r.latencyMs > row.slowThresholdMs;
+    const status = r.ok ? (isSlow ? "✅ ok 🐢 慢" : "✅ ok") : "❌ fail";
     const note = (r.note || "-").replace(/\|/g, "/").slice(0, 160);
     return `| ${zhLabel(r.id)} | ${status} | ${r.latencyMs}ms | ${note} |`;
   });
@@ -372,7 +387,11 @@ async function main() {
   const ctx = {
     mcpUrl: MCP_URL,
     apiKey: apiKey || undefined,
-    timeoutMs: 10_000,
+    // No flat `timeoutMs` here (2026-10-23 fix) — a single ctx-level value
+    // reused for every check was exactly the bug (a 10s probe timeout
+    // applied uniformly to billable tool checks whose upstream legitimately
+    // takes 6-15s). Each CHECK_TABLE row now declares its own `timeoutMs`
+    // by cost class; runChecks() in checks.mjs splices the per-row value in.
     expectedToolCount: readExpectedToolCount(),
   };
 

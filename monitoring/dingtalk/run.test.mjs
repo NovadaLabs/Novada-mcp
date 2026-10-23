@@ -72,6 +72,43 @@ test("renderDailyReport: overall status is all-healthy when every row passes", (
   assert.match(text, /all healthy/);
 });
 
+// ── "慢" (slow) marker (2026-10-23 fix) ──────────────────────────────────────
+//
+// A successful check that still blows its CHECK_TABLE `slowThresholdMs`
+// budget must be flagged in the daily report — WITHOUT ever counting as a
+// failure (整体状态 stays healthy) — so creeping upstream latency is
+// visible before it becomes an actual timeout.
+
+test("renderDailyReport: a successful check whose latency exceeds its CHECK_TABLE slowThresholdMs gets a 慢 marker on ITS row only, and still counts as healthy (not a failure)", () => {
+  const bingThreshold = CHECK_TABLE.find((r) => r.id === "novada_scrape_bing").slowThresholdMs;
+  const results = [
+    row("initialize", true, { latencyMs: 50 }), // far under its free slowThresholdMs
+    row("novada_scrape_bing", true, { cost: "billable", latencyMs: bingThreshold + 1000 }),
+  ];
+  const { text } = renderDailyReport({ results, dateStamp: "2026-10-23" });
+  assert.match(text, /all healthy/, "a slow-but-successful check must never flip 整体状态");
+
+  const lines = text.split("\n").filter((l) => l.startsWith("|") && !l.startsWith("| ---"));
+  const slowLine = lines.find((l) => l.includes(realZhLabel("novada_scrape_bing")));
+  const fastLine = lines.find((l) => l.includes(realZhLabel("initialize")));
+  assert.match(slowLine, /慢/, "the row exceeding its latency budget must carry the slow marker");
+  assert.doesNotMatch(fastLine, /慢/, "a row well within its latency budget must NOT carry the slow marker");
+});
+
+test("renderDailyReport: a successful check within its slowThresholdMs budget never gets the 慢 marker", () => {
+  const results = [row("novada_account", true, { cost: "billable", latencyMs: 100 })];
+  const { text } = renderDailyReport({ results, dateStamp: "2026-10-23" });
+  assert.doesNotMatch(text, /慢/);
+});
+
+test("renderDailyReport: a FAILING check never gets the 慢 marker, even if its reported latencyMs exceeds slowThresholdMs (slow is an ok-but-flagged state, not an alternate failure label)", () => {
+  const bingThreshold = CHECK_TABLE.find((r) => r.id === "novada_scrape_bing").slowThresholdMs;
+  const results = [row("novada_scrape_bing", false, { cost: "billable", latencyMs: bingThreshold + 1000, errorClass: "timeout" })];
+  const { text } = renderDailyReport({ results, dateStamp: "2026-10-23" });
+  assert.doesNotMatch(text, /慢/);
+  assert.match(text, /❌ fail/);
+});
+
 // ── Error classification (HIGH finding, 2026-10-23 review): explicit
 // errorCode/errorClass -> annotation table, never a `r.id`/tool-name-prefix
 // guess. One test per table row, plus the cross-tool-same-label test the
@@ -107,6 +144,17 @@ test("classifyFailure: a totally unrecognized errorCode/errorClass -> 未分类,
   const cls = classifyFailure({ errorCode: "SOME_NEW_CODE_NOT_IN_THE_TABLE", errorClass: "tool" });
   assert.equal(cls.annotation, "未分类");
   assert.equal(cls.accountIssue, false);
+});
+
+// 2026-10-23 fix: a probe-side timeout (our own AbortController/AbortSignal
+// firing) must get its OWN distinct annotation — never the generic
+// "服务端/网络" bucket a real DNS/connection failure gets, and never an
+// account issue (the hosted server may well still be processing).
+test("classifyFailure: a 'timeout' errorClass -> distinct 监控探针超时 annotation, never the generic 服务端/网络 bucket, never an account issue", () => {
+  const cls = classifyFailure({ errorCode: null, errorClass: "timeout" });
+  assert.equal(cls.annotation, "监控探针超时（服务端可能仍在处理）");
+  assert.equal(cls.accountIssue, false);
+  assert.notEqual(cls.annotation, "服务端/网络");
 });
 
 test("renderDailyReport: novada_search and novada_scrape_google failing with the SAME errorCode get the EXACT SAME annotation — classification is by error class, never by tool-name prefix", () => {
