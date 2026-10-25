@@ -10,8 +10,8 @@
  *    state.test.mjs), exactly like send.mjs's `nextAvailableInMs`.
  *
  * 2. `loadState()`/`saveState()` — persistence for that state ACROSS
- *    scheduled workflow runs (a fresh `actions/checkout` every 15 minutes
- *    has no memory of its own). See the "Why a git branch, not
+ *    scheduled workflow runs (a fresh `actions/checkout` on every alert-
+ *    check run has no memory of its own). See the "Why a git branch, not
  *    actions/cache" note below for the reasoning this project was asked to
  *    justify.
  *
@@ -52,29 +52,37 @@ import { execFileSync } from "node:child_process";
 
 export const STATE_BRANCH = "dingtalk-health-state";
 export const STATE_FILE = "state.json";
-const HEARTBEAT_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours, per design doc §5.1(a)/(b)
 
 /**
- * Advance one check's dedupe/heartbeat/recovery state by one run's result.
+ * Advance one check's dedupe/reminder/recovery state by one run's result.
  * Pure — `now` (ms epoch) is a parameter, never read from the clock inside.
  *
  * Entry shape (`prevState.checks[id]`, created with defaults when absent):
- *   { consecutiveFailures: number, failingSince: number|null,
- *     lastAlertAt: number|null, lastHeartbeatAt: number|null, alerted: boolean }
+ *   { consecutiveFailures: number, failingSince: number|null, alerted: boolean }
+ *
+ * `resultOk` here is the CONFIRMED result for this run — alert-check's
+ * in-run re-probe (checks.mjs's `runChecksWithConfirmation`) has already
+ * happened by the time run.mjs calls this, so a transient single-probe
+ * blip never reaches this function as a failure at all. That confirmation
+ * step is what lets this state machine alert on the FIRST failing run
+ * instead of waiting for a 2nd one 15 minutes later (2026-10-25 cadence
+ * change: alert-check moved to 4x/day — waiting for a 2nd ~6h-apart run
+ * before alerting would delay a real outage notice by 6-12h; see
+ * checks.mjs's `REPROBE_DELAY_MS` comment for the full rationale).
  *
  * Rules (exactly what this task's test matrix specifies):
- *   - 1st consecutive failure: no alert (avoid single-blip false positives —
- *     matches design doc §5.1(a)'s "tolerate one scheduling/network blip").
- *   - 2nd consecutive failure: emit an "alert" action.
- *   - still failing after the alert: emit a "heartbeat" action every 2h
- *     (so an unresolved outage doesn't look "already read/handled").
+ *   - 1st confirmed-failing run: emit an "alert" action immediately.
+ *   - still failing on a LATER run, already alerted: emit a "heartbeat"
+ *     (still-failing reminder) action every time — at most once per run,
+ *     which at the current 4x/day cadence is at most 4/day; this replaced
+ *     the old fixed 2h timer, which doesn't fit a 6h-apart cadence.
  *   - a pass after `alerted`: emit a "recovery" action carrying the outage
  *     duration, then reset the entry to a clean baseline.
  *   - a pass with 0 prior consecutive failures: no action, no state change.
  *
  * @param {Record<string, object>} prevChecks prior `state.checks` map
  * @param {string} id check id
- * @param {boolean} resultOk this run's probe result for `id`
+ * @param {boolean} resultOk this run's CONFIRMED probe result for `id`
  * @param {number} now ms epoch
  * @param {string} severity this check's CHECK_TABLE severity, carried into "alert" actions
  * @returns {{nextEntry: object, actions: Array<object>}}
@@ -83,8 +91,6 @@ export function advanceCheckState(prevChecks, id, resultOk, now, severity) {
   const entry = prevChecks[id] || {
     consecutiveFailures: 0,
     failingSince: null,
-    lastAlertAt: null,
-    lastHeartbeatAt: null,
     alerted: false,
   };
   const actions = [];
@@ -100,32 +106,24 @@ export function advanceCheckState(prevChecks, id, resultOk, now, severity) {
       });
     }
     return {
-      nextEntry: { consecutiveFailures: 0, failingSince: null, lastAlertAt: null, lastHeartbeatAt: null, alerted: false },
+      nextEntry: { consecutiveFailures: 0, failingSince: null, alerted: false },
       actions,
     };
   }
 
   const consecutiveFailures = entry.consecutiveFailures + 1;
   const failingSince = entry.failingSince ?? now;
-  let lastAlertAt = entry.lastAlertAt;
-  let lastHeartbeatAt = entry.lastHeartbeatAt;
   let alerted = entry.alerted;
 
-  if (!alerted && consecutiveFailures >= 2) {
+  if (!alerted) {
     actions.push({ type: "alert", id, severity, failingSince, consecutiveFailures });
     alerted = true;
-    lastAlertAt = now;
-    lastHeartbeatAt = now;
-  } else if (alerted) {
-    const sinceLastHeartbeat = now - (lastHeartbeatAt ?? lastAlertAt ?? now);
-    if (sinceLastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
-      actions.push({ type: "heartbeat", id, severity, failingSince, outageMs: now - failingSince });
-      lastHeartbeatAt = now;
-    }
+  } else {
+    actions.push({ type: "heartbeat", id, severity, failingSince, outageMs: now - failingSince });
   }
 
   return {
-    nextEntry: { consecutiveFailures, failingSince, lastAlertAt, lastHeartbeatAt, alerted },
+    nextEntry: { consecutiveFailures, failingSince, alerted },
     actions,
   };
 }

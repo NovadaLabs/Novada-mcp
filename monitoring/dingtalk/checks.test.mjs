@@ -23,6 +23,8 @@ import {
   probeScrapeBing,
   probeNovadaAccount,
   runChecks,
+  runChecksWithConfirmation,
+  REPROBE_DELAY_MS,
   CHECK_TABLE,
   API_KEY_ENV_VAR,
   requiredEnvVarsForCosts,
@@ -421,6 +423,126 @@ test("runChecks: a throwing probe is caught and reported as a failed row, not a 
   const results = await runChecks({ mcpUrl: "https://x/mcp", fetchFn }, ["free"]);
   assert.equal(results.length, CHECK_TABLE.filter((r) => r.cost === "free").length);
   assert.ok(results.every((r) => r.ok === false));
+});
+
+test("runChecks({ids}): restricts to just the given ids, intersected with costs", async () => {
+  const fetchFn = async (url, opts) => {
+    if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
+    return jsonResponse(200, { result: { serverInfo: { version: "0.9.42" }, tools: [] } });
+  };
+  const results = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn }, ["free"], { ids: ["initialize", "oauth_discovery"] });
+  assert.deepEqual(results.map((r) => r.id).sort(), ["initialize", "oauth_discovery"]);
+
+  // A billable id is never run when costs=["free"], even if listed in ids.
+  const filtered = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn }, ["free"], { ids: ["novada_search"] });
+  assert.equal(filtered.length, 0);
+});
+
+// ── runChecksWithConfirmation (2026-10-25 cadence change) ───────────────────
+// alert-check moved from every-15-min to 4x/day; the old "2 consecutive
+// 15-min-apart runs" dedupe would delay a real outage alert by 6-12h at
+// that cadence. Replacement: ONE in-run re-probe, after REPROBE_DELAY_MS,
+// for any check that fails on the first pass (config-class/missing-secret
+// failures excepted — see checks.mjs's own comment on why those are never
+// worth re-probing).
+
+test("runChecksWithConfirmation: no failures -> returns the first pass unchanged, sleep never called (no wasted wait)", async () => {
+  let sleepCalled = false;
+  const fetchFn = async (url, opts) => {
+    if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
+    if (!opts.headers.authorization) return jsonResponse(401, {}, { "www-authenticate": 'Bearer resource_metadata="x"' });
+    const body = JSON.parse(opts.body);
+    if (body.method === "initialize") return jsonResponse(200, { result: { serverInfo: { version: "0.9.42" } } });
+    if (body.method === "tools/list") return jsonResponse(200, { result: { tools: [] } });
+    return jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } });
+  };
+  const results = await runChecksWithConfirmation(
+    { mcpUrl: "https://x/mcp", apiKey: "k", fetchFn },
+    ["free"],
+    { sleep: async () => { sleepCalled = true; } }
+  );
+  assert.ok(results.every((r) => r.ok), "every free check should pass with this fetchFn");
+  assert.equal(sleepCalled, false);
+});
+
+test("runChecksWithConfirmation: a transient failure that PASSES on re-probe -> final result is ok (one blip tolerated), re-probed exactly once", async () => {
+  let initializeCalls = 0;
+  const sleepCalls = [];
+  const fetchFn = async (url, opts) => {
+    if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
+    if (!opts.headers.authorization) return jsonResponse(401, {}, { "www-authenticate": 'Bearer resource_metadata="x"' });
+    const body = JSON.parse(opts.body);
+    if (body.method === "initialize") {
+      initializeCalls += 1;
+      return initializeCalls === 1 ? jsonResponse(500, { error: "boom" }) : jsonResponse(200, { result: { serverInfo: { version: "0.9.42" } } });
+    }
+    if (body.method === "tools/list") return jsonResponse(200, { result: { tools: [] } });
+    return jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } });
+  };
+  const results = await runChecksWithConfirmation(
+    { mcpUrl: "https://x/mcp", apiKey: "k", fetchFn },
+    ["free"],
+    { sleep: async (ms) => { sleepCalls.push(ms); } }
+  );
+  assert.deepEqual(sleepCalls, [REPROBE_DELAY_MS], "exactly one wait, for exactly REPROBE_DELAY_MS");
+  assert.equal(initializeCalls, 2, "initialize must be probed exactly twice: first pass + one re-probe");
+  const initRow = results.find((r) => r.id === "initialize");
+  assert.equal(initRow.ok, true, "re-probe passed -> no alert-worthy failure this run");
+});
+
+test("runChecksWithConfirmation: a failure CONFIRMED on re-probe stays failing (this is what should alert, same run)", async () => {
+  let initializeCalls = 0;
+  const fetchFn = async (url, opts) => {
+    if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
+    if (!opts.headers.authorization) return jsonResponse(401, {}, { "www-authenticate": 'Bearer resource_metadata="x"' });
+    const body = JSON.parse(opts.body);
+    if (body.method === "initialize") {
+      initializeCalls += 1;
+      return jsonResponse(500, { error: "boom" });
+    }
+    if (body.method === "tools/list") return jsonResponse(200, { result: { tools: [] } });
+    return jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } });
+  };
+  const results = await runChecksWithConfirmation(
+    { mcpUrl: "https://x/mcp", apiKey: "k", fetchFn },
+    ["free"],
+    { sleep: async () => {} }
+  );
+  assert.equal(initializeCalls, 2, "re-probed exactly once (not retried forever)");
+  const initRow = results.find((r) => r.id === "initialize");
+  assert.equal(initRow.ok, false, "confirmed failure stays failing");
+});
+
+test("runChecksWithConfirmation: config-class (missing-secret) failures are never re-probed; an unrelated real failure alongside them still is", async () => {
+  const getCallCounts = {};
+  const fetchFn = async (url, opts) => {
+    if (opts.method === "GET") {
+      getCallCounts[url] = (getCallCounts[url] || 0) + 1;
+      // The protected-resource doc fails on its first fetch, succeeds on
+      // its second (the re-probe) — everything else is always valid.
+      if (url.includes("oauth-protected-resource") && getCallCounts[url] === 1) return jsonResponse(500, {});
+      return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
+    }
+    // No ctx.apiKey below -> initialize/tools_list/novada_setup never reach
+    // here (requireApiKey() short-circuits first) — only
+    // unauthenticated_401's bare POST does.
+    return jsonResponse(401, {}, { "www-authenticate": 'Bearer resource_metadata="x"' });
+  };
+  let sleepCalls = 0;
+  const results = await runChecksWithConfirmation(
+    { mcpUrl: "https://x/mcp", fetchFn } /* no apiKey */,
+    ["free"],
+    { sleep: async () => { sleepCalls += 1; } }
+  );
+  assert.equal(sleepCalls, 1, "exactly one re-probe wait, for the one real (non-config) failure");
+
+  const byId = new Map(results.map((r) => [r.id, r]));
+  for (const id of ["initialize", "tools_list", "novada_setup"]) {
+    assert.equal(byId.get(id).ok, false);
+    assert.equal(byId.get(id).errorClass, "config", `${id} must stay a config-class failure, untouched by the re-probe`);
+  }
+  assert.equal(byId.get("oauth_discovery").ok, true, "the real failure recovered on re-probe -> no alert-worthy failure this run");
+  assert.equal(byId.get("unauthenticated_401").ok, true);
 });
 
 // Drift guard: checks.mjs carries a copy of HOSTED_FUNCTION_LIMIT_MS because it

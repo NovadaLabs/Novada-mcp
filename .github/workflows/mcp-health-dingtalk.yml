@@ -9,12 +9,20 @@ name: MCP Health (DingTalk)
 # Two independent cadences (design doc §7, Phase 1):
 #   - alert-check: FREE checks only (initialize / tools-list vs golden
 #     baseline / OAuth discovery / unauthenticated-401 sign-in entry /
-#     novada_setup), every 15 minutes. Dedupe: an "alert" fires only after 2
-#     CONSECUTIVE failing runs per check (tolerates one scheduling/network
-#     blip); a "recovery" message fires on the next pass after an alert,
-#     with outage duration; a "heartbeat" fires every 2h while an outage
-#     continues (so it never looks silently ignored). Dedupe state is
-#     committed to the `dingtalk-health-state` orphan branch — see
+#     novada_setup), 4x/day at off-peak minutes (2026-10-25 cadence change —
+#     every 15 minutes was too much; GitHub's own scheduler was only
+#     actually managing to run this every ~3-4h anyway). Confirmation: a
+#     failing check gets ONE re-probe inside the SAME run, after a short
+#     wait (monitoring/dingtalk/checks.mjs's REPROBE_DELAY_MS) — this
+#     tolerates one transient/scheduling blip exactly like the old
+#     "2 CONSECUTIVE 15-min-apart runs" dedupe did, just without needing a
+#     2nd run 6h later to find out (at this cadence, that would have
+#     delayed a real outage alert by 6-12h). An "alert" fires on the first
+#     CONFIRMED-failing run; a "recovery" message fires on the next pass
+#     after an alert, with outage duration; a "heartbeat" (still-failing
+#     reminder) fires once per run while the outage continues — at this
+#     cadence, at most 4/day — so it never looks silently ignored. Dedupe
+#     state is committed to the `dingtalk-health-state` orphan branch — see
 #     monitoring/dingtalk/state.mjs's header comment for why a git branch
 #     (not actions/cache) is this project's state store, and why that
 #     needs `contents: write` scoped to ONLY this job.
@@ -43,16 +51,20 @@ on:
         options: [alert, daily]
         default: alert
   schedule:
-    # alert-check: every 15 minutes, at :07/:22/:37/:52 — off-round minutes
-    # so this doesn't land in the top-of-hour/quarter-hour pile-up window
-    # every other scheduled workflow in this repo's cron comments warn about.
-    - cron: "7,22,37,52 * * * *"
+    # alert-check: 4x/day at :37 past 00/06/12/18 UTC (2026-10-25 cadence
+    # change, owner decision — every 15 minutes was too much; GitHub's own
+    # scheduler was only actually managing to run this every ~3-4h anyway).
+    # :37 is an off-round minute so this doesn't land in the top-of-hour
+    # pile-up window every other scheduled workflow in this repo's cron
+    # comments warn about.
+    - cron: "37 0,6,12,18 * * *"
     # daily-report: 01:07 UTC = 09:07 Asia/Shanghai — after nightly-canary's
     # 06:17 UTC run (same off-round :07 minute, same anti-pile-up reason).
+    # Unchanged — stays once/day even though GitHub may delay it.
     - cron: "7 1 * * *"
 
-# alert-check pushes to the shared dingtalk-health-state branch every 15
-# minutes; two overlapping runs racing that push is the one thing worth
+# alert-check pushes to the shared dingtalk-health-state branch on every
+# run; two overlapping runs racing that push is the one thing worth
 # serializing against repo-wide. cancel-in-progress: false queues a second
 # trigger instead of killing a run mid-send — same reasoning
 # synthetic-monitor.yml's full-daily job already documents for its own
@@ -63,12 +75,12 @@ concurrency:
 
 jobs:
   alert-check:
-    name: "Alert check (free, every 15 min)"
+    name: "Alert check (free, 4x/day)"
     # Self-guard: only run on the canonical repo (see synthetic-monitor.yml's
     # identical comment — the post-commit mirror to test-novada-mcp-test has
     # no DingTalk/test-key secrets, so this would otherwise fail there on
     # every single scheduled tick, pure noise).
-    if: github.repository == 'NovadaLabs/Novada-mcp' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'alert') || github.event.schedule == '7,22,37,52 * * * *')
+    if: github.repository == 'NovadaLabs/Novada-mcp' && ((github.event_name == 'workflow_dispatch' && inputs.mode == 'alert') || github.event.schedule == '37 0,6,12,18 * * *')
     runs-on: ubuntu-latest
     # contents: write is needed ONLY by state.mjs's `git push` of the
     # dedupe-state commit onto the dingtalk-health-state orphan branch — see

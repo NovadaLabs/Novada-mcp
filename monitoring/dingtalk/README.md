@@ -16,7 +16,7 @@ Two modes, both reading the same CHECK TABLE in
 [`checks.mjs`](./checks.mjs) (`CHECK_TABLE` — one row per check; adding a
 new probe is a new row there, not a new branch anywhere else):
 
-### `--mode alert` — every 15 minutes, FREE checks only
+### `--mode alert` — 4x/day (off-peak hours), FREE checks only
 
 | id | what | severity if failing | needs `NOVADA_TEST_KEY`? |
 |---|---|---|---|
@@ -43,13 +43,30 @@ derives, per mode, the full set of env vars its active rows need — see
 `workflow.test.mjs`, which asserts the workflow's own `env:` blocks actually
 provide them (class-level, not a hardcoded per-job check).
 
-Dedupe/escalation (implemented in [`state.mjs`](./state.mjs)'s
-`computeNextAlertState`/`advanceCheckState`, pure + unit-tested):
+**Cadence (2026-10-25 owner decision):** every-15-minutes alert checks were
+too much — GitHub's own scheduler was only actually managing to run this
+every ~3-4h anyway. `alert-check` now runs 4x/day at off-peak minutes
+(`.github/workflows/mcp-health-dingtalk.yml`'s cron: `37 0,6,12,18 * * *`
+UTC). The daily report is unchanged (still once/day at 01:07 UTC = 09:07
+Beijing, even though GitHub may delay it).
 
-- 1 consecutive failure → no alert (tolerates a single scheduling/network blip).
-- 2 consecutive failures → send ONE "🔴 alert" message.
-- still failing, already alerted → send a "🟡 heartbeat" every 2 hours
-  (so an unresolved outage never looks silently ignored/read).
+In-run confirmation + dedupe/escalation (implemented in
+[`checks.mjs`](./checks.mjs)'s `runChecksWithConfirmation` +
+[`state.mjs`](./state.mjs)'s `computeNextAlertState`/`advanceCheckState`,
+pure + unit-tested):
+
+- A failing free check gets ONE re-probe inside the SAME run, after waiting
+  `checks.mjs`'s `REPROBE_DELAY_MS` (60s) — this is what replaced the old
+  "2 consecutive 15-min-apart runs" dedupe: at a 4x/day (~6h-apart) cadence,
+  waiting for a 2nd scheduled run before alerting would delay a real outage
+  notice by 6-12h. A pass on the re-probe tolerates one transient/network
+  blip exactly like the old design did (no alert); a 2nd failure on the
+  re-probe is a CONFIRMED failure.
+- 1st confirmed-failing run → send ONE "🔴 alert" message immediately.
+- still failing on a later run, already alerted → send a "🟡 heartbeat"
+  (still-failing reminder) once per run (so an unresolved outage never
+  looks silently ignored/read) — at this cadence, at most 4/day; this
+  replaced the old fixed 2-hour timer, which doesn't fit a 6h-apart cadence.
 - a pass after an alert → send ONE "🟢 recovery" message with the outage duration, then reset.
 
 Dedupe state is committed to a dedicated orphan branch,

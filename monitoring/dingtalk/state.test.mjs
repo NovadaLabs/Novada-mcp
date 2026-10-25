@@ -1,9 +1,14 @@
 // monitoring/dingtalk/state.test.mjs
 //
 // node:test coverage for the PURE dedupe/heartbeat/recovery state machine
-// (computeNextAlertState / advanceCheckState) — exactly the scenario matrix
-// this task specifies: 1 failure -> no alert, 2 -> alert, pass -> recovery,
-// heartbeat at 2h. Plus a genuine (not stubbed) git-plumbing round trip for
+// (computeNextAlertState / advanceCheckState) — the scenario matrix this
+// task specifies (2026-10-25 cadence change, alert-check moved to 4x/day):
+// `resultOk` passed in is already the CONFIRMED result (checks.mjs's
+// runChecksWithConfirmation has already re-probed any failure once inside
+// the same run before this function ever sees it) — so a 1st confirmed
+// failure alerts immediately, a later failing run reminds (replacing the
+// old fixed 2h heartbeat timer, which doesn't fit a 6h-apart cadence), and
+// a pass recovers. Plus a genuine (not stubbed) git-plumbing round trip for
 // loadState/saveState against a local scratch bare repo, so the
 // persistence layer is proven correct too, not merely never exercised.
 
@@ -19,33 +24,25 @@ import { advanceCheckState, computeNextAlertState, loadState, saveState } from "
 const T0 = 1_700_000_000_000; // arbitrary fixed epoch ms
 const HOUR = 60 * 60 * 1000;
 
-test("advanceCheckState: 1st consecutive failure -> no alert", () => {
+test("advanceCheckState: 1st confirmed failure -> exactly one alert action, fired immediately (no 2nd-run wait)", () => {
   const { nextEntry, actions } = advanceCheckState({}, "initialize", false, T0, "P0");
-  assert.equal(actions.length, 0);
-  assert.equal(nextEntry.consecutiveFailures, 1);
-  assert.equal(nextEntry.alerted, false);
-});
-
-test("advanceCheckState: 2nd consecutive failure -> exactly one alert action", () => {
-  const prevChecks = { initialize: { consecutiveFailures: 1, failingSince: T0, lastAlertAt: null, lastHeartbeatAt: null, alerted: false } };
-  const { nextEntry, actions } = advanceCheckState(prevChecks, "initialize", false, T0 + 60_000, "P0");
   assert.equal(actions.length, 1);
   assert.equal(actions[0].type, "alert");
   assert.equal(actions[0].severity, "P0");
+  assert.equal(nextEntry.consecutiveFailures, 1);
   assert.equal(nextEntry.alerted, true);
-  assert.equal(nextEntry.consecutiveFailures, 2);
 });
 
 test("advanceCheckState: a pass after alerting -> exactly one recovery action, state resets", () => {
   const prevChecks = {
-    initialize: { consecutiveFailures: 2, failingSince: T0, lastAlertAt: T0 + 60_000, lastHeartbeatAt: T0 + 60_000, alerted: true },
+    initialize: { consecutiveFailures: 1, failingSince: T0, alerted: true },
   };
   const now = T0 + 5 * 60_000;
   const { nextEntry, actions } = advanceCheckState(prevChecks, "initialize", true, now, "P0");
   assert.equal(actions.length, 1);
   assert.equal(actions[0].type, "recovery");
   assert.equal(actions[0].outageMs, now - T0);
-  assert.deepEqual(nextEntry, { consecutiveFailures: 0, failingSince: null, lastAlertAt: null, lastHeartbeatAt: null, alerted: false });
+  assert.deepEqual(nextEntry, { consecutiveFailures: 0, failingSince: null, alerted: false });
 });
 
 test("advanceCheckState: a pass with zero prior failures -> no action, no-op", () => {
@@ -54,45 +51,36 @@ test("advanceCheckState: a pass with zero prior failures -> no action, no-op", (
   assert.equal(nextEntry.consecutiveFailures, 0);
 });
 
-test("advanceCheckState: still failing, already alerted, before 2h -> no new action", () => {
+test("advanceCheckState: still failing on a LATER run, already alerted -> one heartbeat (still-failing reminder) action", () => {
   const prevChecks = {
-    initialize: { consecutiveFailures: 5, failingSince: T0, lastAlertAt: T0 + 60_000, lastHeartbeatAt: T0 + 60_000, alerted: true },
+    initialize: { consecutiveFailures: 1, failingSince: T0, alerted: true },
   };
-  const now = T0 + 60_000 + 30 * 60_000; // 30 minutes after last heartbeat — well under 2h
-  const { actions } = advanceCheckState(prevChecks, "initialize", false, now, "P0");
-  assert.equal(actions.length, 0);
-});
-
-test("advanceCheckState: still failing, already alerted, >=2h since last heartbeat -> heartbeat action", () => {
-  const prevChecks = {
-    initialize: { consecutiveFailures: 5, failingSince: T0, lastAlertAt: T0 + 60_000, lastHeartbeatAt: T0 + 60_000, alerted: true },
-  };
-  const now = T0 + 60_000 + 2 * HOUR;
+  // At the current 4x/day (~6h-apart) cadence, "a later run" is the only
+  // signal — there is no 2h timer to wait out anymore.
+  const now = T0 + 6 * HOUR;
   const { nextEntry, actions } = advanceCheckState(prevChecks, "initialize", false, now, "P0");
   assert.equal(actions.length, 1);
   assert.equal(actions[0].type, "heartbeat");
-  assert.equal(nextEntry.lastHeartbeatAt, now);
+  assert.equal(actions[0].outageMs, now - T0);
+  assert.equal(nextEntry.consecutiveFailures, 2);
 });
 
-test("advanceCheckState: a second heartbeat only fires after another full 2h from the first heartbeat", () => {
+test("advanceCheckState: a heartbeat fires on EVERY subsequent failing run (bounded to at most 1/run -> at most 4/day at this cadence)", () => {
   let prevChecks = {
-    initialize: { consecutiveFailures: 5, failingSince: T0, lastAlertAt: T0 + 60_000, lastHeartbeatAt: T0 + 60_000, alerted: true },
+    initialize: { consecutiveFailures: 1, failingSince: T0, alerted: true },
   };
-  const firstHeartbeatAt = T0 + 60_000 + 2 * HOUR;
-  let step = advanceCheckState(prevChecks, "initialize", false, firstHeartbeatAt, "P0");
+  let now = T0 + 6 * HOUR;
+  let step = advanceCheckState(prevChecks, "initialize", false, now, "P0");
   assert.equal(step.actions.length, 1);
   assert.equal(step.actions[0].type, "heartbeat");
 
+  // The very next run, still failing -> another heartbeat (no timer gate).
   prevChecks = { initialize: step.nextEntry };
-  // Only 1h after the first heartbeat — too soon for a second one.
-  step = advanceCheckState(prevChecks, "initialize", false, firstHeartbeatAt + HOUR, "P0");
-  assert.equal(step.actions.length, 0);
-
-  prevChecks = { initialize: step.nextEntry };
-  // A further 1h later (2h total since the first heartbeat) -> second heartbeat.
-  step = advanceCheckState(prevChecks, "initialize", false, firstHeartbeatAt + 2 * HOUR, "P0");
+  now += 6 * HOUR;
+  step = advanceCheckState(prevChecks, "initialize", false, now, "P0");
   assert.equal(step.actions.length, 1);
   assert.equal(step.actions[0].type, "heartbeat");
+  assert.equal(step.nextEntry.consecutiveFailures, 3);
 });
 
 test("computeNextAlertState: drives multiple independent checks through one state object without cross-talk", () => {
@@ -101,27 +89,41 @@ test("computeNextAlertState: drives multiple independent checks through one stat
     { id: "tools_list", ok: true, severity: "P0" },
   ];
   const { nextState, actions } = computeNextAlertState({}, results, T0);
-  assert.equal(actions.length, 0); // 1st failure for initialize, tools_list passes cleanly
+  assert.equal(actions.length, 1, "1st confirmed failure for initialize alerts immediately; tools_list passes cleanly");
+  assert.equal(actions[0].id, "initialize");
+  assert.equal(actions[0].type, "alert");
   assert.equal(nextState.checks.initialize.consecutiveFailures, 1);
   assert.equal(nextState.checks.tools_list.consecutiveFailures, 0);
 });
 
-test("computeNextAlertState: end-to-end 1-fail / 2-fail / pass sequence across real calls", () => {
+test("computeNextAlertState: end-to-end alert / reminder / recovery sequence across real calls", () => {
   let state = {};
   const sev = "P1";
 
+  // 1st confirmed-failing run (checks.mjs's runChecksWithConfirmation has
+  // already re-probed and confirmed this before it ever reaches here).
   let step = computeNextAlertState(state, [{ id: "novada_setup", ok: false, severity: sev }], T0);
-  assert.equal(step.actions.length, 0, "1st failure: no alert");
-  state = step.nextState;
-
-  step = computeNextAlertState(state, [{ id: "novada_setup", ok: false, severity: sev }], T0 + 15 * 60_000);
-  assert.equal(step.actions.length, 1, "2nd failure: alert");
+  assert.equal(step.actions.length, 1, "1st confirmed failure: alert");
   assert.equal(step.actions[0].type, "alert");
   state = step.nextState;
 
-  step = computeNextAlertState(state, [{ id: "novada_setup", ok: true, severity: sev }], T0 + 30 * 60_000);
+  // Next scheduled run (~6h later at the current cadence), still failing.
+  step = computeNextAlertState(state, [{ id: "novada_setup", ok: false, severity: sev }], T0 + 6 * HOUR);
+  assert.equal(step.actions.length, 1, "still failing on a later run: heartbeat reminder");
+  assert.equal(step.actions[0].type, "heartbeat");
+  state = step.nextState;
+
+  step = computeNextAlertState(state, [{ id: "novada_setup", ok: true, severity: sev }], T0 + 12 * HOUR);
   assert.equal(step.actions.length, 1, "pass after alert: recovery");
   assert.equal(step.actions[0].type, "recovery");
+});
+
+test("advanceCheckState: first-ever run (empty prior state), confirmed-failing -> alert, with a fresh failingSince", () => {
+  const { nextEntry, actions } = advanceCheckState({}, "initialize", false, T0, "P0");
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].type, "alert");
+  assert.equal(actions[0].failingSince, T0);
+  assert.equal(nextEntry.failingSince, T0);
 });
 
 // ── Git-branch persistence: genuine round trip against a local bare repo ────
