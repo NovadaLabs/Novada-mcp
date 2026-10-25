@@ -248,7 +248,7 @@ test("readExpectedToolCount: returns null (not throw) for a missing file", () =>
 
 // ── Mode orchestration (stubbed I/O — no network, no git) ───────────────────
 
-test("runAlertMode: sends exactly one alert message on the 2nd consecutive failure, persists state", async () => {
+test("runAlertMode: sends exactly one alert message on the 1st CONFIRMED failure (in-run re-probe), persists state", async () => {
   const sent = [];
   let saved = null;
   const ctx = { mcpUrl: "https://x/mcp", apiKey: "test-key" };
@@ -257,11 +257,17 @@ test("runAlertMode: sends exactly one alert message on the 2nd consecutive failu
       sent.push(msg);
       return { ok: true };
     },
-    load: () => ({ checks: { initialize: { consecutiveFailures: 1, failingSince: 1000, lastAlertAt: null, lastHeartbeatAt: null, alerted: false } } }),
+    // Empty prior state — this is a FIRST-EVER run (2026-10-25 cadence
+    // change: alert-check moved to 4x/day; it no longer waits for a 2nd,
+    // ~6h-later run before alerting — runChecksWithConfirmation's in-run
+    // re-probe below confirms the failure within THIS run instead).
+    load: () => ({}),
     save: (state) => {
       saved = state;
     },
     rateLimiter: { acquire: async () => {} },
+    // No real 60s wait in a unit test.
+    sleep: async () => {},
   };
   // Stub runChecks indirectly isn't possible without monkeypatching the
   // import, so this test drives runAlertMode with a ctx whose mcpUrl points
@@ -274,7 +280,8 @@ test("runAlertMode: sends exactly one alert message on the 2nd consecutive failu
     }
     const body = JSON.parse(opts.body);
     if (body.method === "initialize") {
-      // Make "initialize" keep failing (2nd consecutive failure this run).
+      // Static stub -> "initialize" fails identically on the first probe
+      // AND the in-run re-probe -> a CONFIRMED failure, alerts this run.
       return { status: 402, headers: { get: () => null }, text: async () => JSON.stringify({ error: "DEPLOYMENT_DISABLED" }) };
     }
     if (body.method === "tools/list") {
@@ -295,6 +302,136 @@ test("runAlertMode: sends exactly one alert message on the 2nd consecutive failu
   assert.equal(saved.checks.initialize.alerted, true);
 });
 
+// ── 2026-10-25 review4 finding: the tests above use a STATIC fetch stub
+// that fails identically on the first probe and any would-be re-probe, so
+// they can't tell `runChecksWithConfirmation` apart from plain `runChecks`
+// at the runAlertMode() call site — reverting that call site silently
+// passes everything above. These three are call-counted / outcome-
+// discriminating: a mutation to the call site must fail at least one.
+
+/** Builds a fetchFn where "initialize" fails `failUntilCall` times then
+ * succeeds (or fails forever if `failUntilCall` is Infinity); every other
+ * free check always succeeds. Returns the fetchFn plus a live call counter
+ * for "initialize" so a test can assert exactly how many times it was
+ * actually probed. */
+function fetchFnWithControllableInitialize(failUntilCall) {
+  const calls = { initialize: 0 };
+  const fetchFn = async (url, opts) => {
+    if (!opts || opts.method === "GET") {
+      return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" }) };
+    }
+    // unauthenticated_401's own probe sends the SAME `method: "initialize"`
+    // body (checks.mjs's probeUnauthenticated401) but deliberately carries
+    // NO Authorization header — must be distinguished from the real
+    // `initialize` probe (which always sets one when ctx.apiKey is set,
+    // below) BEFORE looking at body.method, or both land in the same
+    // branch and double-count/misclassify.
+    if (!opts.headers?.authorization) {
+      return { status: 401, headers: { get: (k) => (k.toLowerCase() === "www-authenticate" ? 'Bearer resource_metadata="x"' : null) } };
+    }
+    const body = JSON.parse(opts.body);
+    if (body.method === "initialize") {
+      calls.initialize += 1;
+      if (calls.initialize <= failUntilCall) {
+        return { status: 500, headers: { get: () => null }, text: async () => JSON.stringify({ error: "boom" }) };
+      }
+      return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { serverInfo: { version: "0.9.42" } } }) };
+    }
+    if (body.method === "tools/list") return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { tools: [] } }) };
+    // novada_setup's tools/call — always carries Authorization here.
+    return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { content: [{ type: "text", text: "ok" }] } }) };
+  };
+  return { fetchFn, calls };
+}
+
+test("runAlertMode (a): fail-then-pass — the re-probe recovers inside the same run -> ZERO alerts sent, state not marked failing", async () => {
+  const sent = [];
+  let saved = null;
+  const { fetchFn, calls } = fetchFnWithControllableInitialize(1); // fails call #1 only, passes call #2 (the re-probe)
+  const io = {
+    send: async (msg) => { sent.push(msg); return { ok: true }; },
+    load: () => ({}),
+    save: (s) => { saved = s; },
+    rateLimiter: { acquire: async () => {} },
+    sleep: async () => {},
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchFn;
+  try {
+    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    assert.equal(exitCode, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  // The load-bearing assertions: if the call site were reverted to plain
+  // runChecks (no re-probe), "initialize" would be probed once, its single
+  // failure would stand, and a real alert WOULD be sent — both assertions
+  // below would fail.
+  assert.equal(calls.initialize, 2, "initialize must be probed twice: first pass + one in-run re-probe");
+  assert.equal(sent.length, 0, "a transient blip that recovers on re-probe must never alert");
+  assert.equal(saved.checks.initialize.alerted, false);
+  assert.equal(saved.checks.initialize.consecutiveFailures, 0);
+});
+
+test("runAlertMode (b): fail-then-fail — confirmed on re-probe -> exactly one alert, in the SAME run", async () => {
+  const sent = [];
+  let saved = null;
+  const { fetchFn, calls } = fetchFnWithControllableInitialize(Infinity); // never recovers
+  const io = {
+    send: async (msg) => { sent.push(msg); return { ok: true }; },
+    load: () => ({}),
+    save: (s) => { saved = s; },
+    rateLimiter: { acquire: async () => {} },
+    sleep: async () => {},
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchFn;
+  try {
+    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    assert.equal(exitCode, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  // Outcome alone (1 alert) can't distinguish this from a reverted call
+  // site — the call COUNT is what proves the re-probe actually happened.
+  assert.equal(calls.initialize, 2, "initialize must be probed twice: first pass + one in-run re-probe, even though both fail");
+  const alertMsgs = sent.filter((m) => /failing/i.test(m.title) && !/still failing/i.test(m.title));
+  assert.equal(alertMsgs.length, 1, "exactly one alert message, fired in this same run (not deferred to a 2nd run)");
+  assert.equal(saved.checks.initialize.alerted, true);
+  assert.equal(saved.checks.initialize.consecutiveFailures, 1, "this is the 1st confirmed-failing run, not the 2nd");
+});
+
+test("runAlertMode (c): old-format persisted state (pre-cadence-change shape, lastAlertAt/lastHeartbeatAt present) is read safely — first run under the new code produces no spurious alert or recovery", async () => {
+  const sent = [];
+  let saved = null;
+  const io = {
+    send: async (msg) => { sent.push(msg); return { ok: true }; },
+    // Old shape: a single tolerated blip under the PRE-cadence-change
+    // "2 consecutive failures" rule — never escalated (alerted: false),
+    // still carrying the now-deprecated lastAlertAt/lastHeartbeatAt keys
+    // from before this change. This is what a real `state.json` committed
+    // by the previous code looks like.
+    load: () => ({ checks: { initialize: { consecutiveFailures: 1, failingSince: 1000, lastAlertAt: null, lastHeartbeatAt: null, alerted: false } } }),
+    save: (s) => { saved = s; },
+    rateLimiter: { acquire: async () => {} },
+    sleep: async () => {},
+  };
+  const { fetchFn } = fetchFnWithControllableInitialize(0); // "initialize" healthy from the first probe
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchFn;
+  try {
+    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    assert.equal(exitCode, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(sent.length, 0, "a never-alerted old-format entry that's now passing must not produce ANY message (no spurious alert, no spurious recovery)");
+  assert.equal(saved.checks.initialize.alerted, false);
+  assert.equal(saved.checks.initialize.consecutiveFailures, 0);
+  assert.ok(!("lastAlertAt" in saved.checks.initialize), "the deprecated field must not be carried forward into newly-written state");
+  assert.ok(!("lastHeartbeatAt" in saved.checks.initialize));
+});
+
 test("runAlertMode: DRY_RUN never calls load()/save() (state untouched)", async () => {
   let loadCalled = false;
   let saveCalled = false;
@@ -308,6 +445,11 @@ test("runAlertMode: DRY_RUN never calls load()/save() (state untouched)", async 
       saveCalled = true;
     },
     rateLimiter: { acquire: async () => {} },
+    // This stub's fixed 200 response doesn't satisfy oauth_discovery's/
+    // unauthenticated_401's own shape checks, so they genuinely fail and
+    // runChecksWithConfirmation re-probes them — stub the wait so this
+    // DRY_RUN test doesn't actually block for REPROBE_DELAY_MS.
+    sleep: async () => {},
   };
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { serverInfo: { version: "0.9.42" }, tools: [] } }) });
@@ -365,7 +507,7 @@ test("runAlertMode: WITHOUT NOVADA_TEST_KEY, auth-requiring free checks report '
   assert.ok(sent.some((m) => /监控配置缺失/.test(m.title)), "expected a distinct misconfigured notice to be sent");
 });
 
-test("runAlertMode: a misconfigured notice for the same check is sent exactly ONCE across repeated runs (not every 15 minutes forever)", async () => {
+test("runAlertMode: a misconfigured notice for the same check is sent exactly ONCE across repeated runs (not every run forever)", async () => {
   const sent = [];
   let persisted = {};
   const io = {

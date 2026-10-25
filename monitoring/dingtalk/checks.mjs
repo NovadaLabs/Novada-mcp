@@ -74,6 +74,20 @@ export const BILLABLE_CHECK_TIMEOUT_MS = HOSTED_FUNCTION_LIMIT_MS + BILLABLE_PRO
 const FREE_SLOW_THRESHOLD_MS = 3_000;
 const BILLABLE_SLOW_THRESHOLD_MS = 20_000;
 
+/**
+ * In-run confirmation wait (2026-10-25 cadence change). alert-check moved
+ * from every-15-min to 4x/day (off-peak hours; see mcp-health-dingtalk.yml) —
+ * the old "alert only after 2 CONSECUTIVE 15-min-apart runs" dedupe would,
+ * at that cadence, delay a real outage alert by 6-12h. Replacement: a free
+ * check that fails gets ONE re-probe inside the SAME run, after waiting
+ * this long, before it counts as a confirmed failure (tolerates one
+ * transient/scheduling blip exactly like the old design did, just without
+ * spanning two 6h-apart runs to find out). See
+ * runChecksWithConfirmation() below and state.mjs's advanceCheckState(),
+ * which now alerts on the FIRST confirmed-failing run.
+ */
+export const REPROBE_DELAY_MS = 60_000;
+
 /** True when `err` is this process's OWN probe-side abort — either a manual
  * `AbortController.abort()` (names its error "AbortError", used by
  * httpGet/rpcCall below) or the native `AbortSignal.timeout()` convenience
@@ -473,12 +487,20 @@ export function requiredEnvVarsForCosts(costs) {
  * run.mjs's main() and reused unchanged for every check, free or billable);
  * fixed by making the per-check budget authoritative here instead.
  *
+ * `ids` (optional): restrict the run to ONLY these check ids (still
+ * intersected with `costs` — a row outside `costs` is never run even if
+ * listed in `ids`). Used by runChecksWithConfirmation() below to re-probe
+ * just the checks that failed on the first pass, without re-running
+ * everything else a second time.
+ *
  * @param {{mcpUrl: string, apiKey?: string, fetchFn?: typeof fetch, timeoutMs?: number, expectedToolCount?: number}} ctx
  * @param {Array<"free"|"billable">} costs
+ * @param {{ids?: Iterable<string>}} [opts]
  * @returns {Promise<Array<{id: string, label: string, severity: string, cost: string} & Awaited<ReturnType<typeof probeInitialize>>>>}
  */
-export async function runChecks(ctx, costs = ["free"]) {
-  const rows = CHECK_TABLE.filter((row) => costs.includes(row.cost));
+export async function runChecks(ctx, costs = ["free"], { ids } = {}) {
+  const idSet = ids ? new Set(ids) : null;
+  const rows = CHECK_TABLE.filter((row) => costs.includes(row.cost) && (!idSet || idSet.has(row.id)));
   const results = await Promise.all(
     rows.map(async (row) => {
       try {
@@ -502,4 +524,44 @@ export async function runChecks(ctx, costs = ["free"]) {
     })
   );
   return results;
+}
+
+function defaultSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * In-run confirmation wrapper around runChecks() (2026-10-25 cadence
+ * change — see REPROBE_DELAY_MS's own comment for why this replaced the
+ * old "2 consecutive 15-min-apart runs" dedupe).
+ *
+ * Runs `costs` once. Any check that (a) fails AND (b) isn't an
+ * `errorClass: "config"` failure (a missing-secret failure is
+ * deterministic — retrying it after a wait confirms nothing and just
+ * burns REPROBE_DELAY_MS for no reason; it's already routed to its own
+ * send-once "misconfigured" notice by run.mjs, never through the outage
+ * dedupe machine) gets re-probed ONCE, after waiting REPROBE_DELAY_MS.
+ * The retry's result REPLACES the first pass's result for that id — a
+ * pass on retry means "transient blip, no alert"; a second failure means
+ * "confirmed, alert now". Checks that passed (or config-failed) on the
+ * first pass are returned unchanged, and no wait happens at all if
+ * nothing needs confirming.
+ *
+ * @param {Parameters<typeof runChecks>[0]} ctx
+ * @param {Parameters<typeof runChecks>[1]} costs
+ * @param {{sleep?: (ms: number) => Promise<void>}} [opts]
+ * @returns {ReturnType<typeof runChecks>}
+ */
+export async function runChecksWithConfirmation(ctx, costs, { sleep = defaultSleep } = {}) {
+  const first = await runChecks(ctx, costs);
+  const toConfirm = first.filter((r) => !r.ok && r.errorClass !== "config");
+  if (toConfirm.length === 0) return first;
+
+  await sleep(REPROBE_DELAY_MS);
+
+  const retryIds = new Set(toConfirm.map((r) => r.id));
+  const retry = await runChecks(ctx, costs, { ids: retryIds });
+  const retryById = new Map(retry.map((r) => [r.id, r]));
+
+  return first.map((r) => (retryById.has(r.id) ? retryById.get(r.id) : r));
 }

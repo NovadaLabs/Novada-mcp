@@ -4,7 +4,7 @@
  *
  * Orchestrator for both DingTalk health-monitoring modes:
  *
- *   node monitoring/dingtalk/run.mjs --mode alert   # free checks, every 15 min
+ *   node monitoring/dingtalk/run.mjs --mode alert   # free checks, 4x/day (off-peak hours)
  *   node monitoring/dingtalk/run.mjs --mode daily    # free + billable, once/day
  *
  * Phase 1 only (see design doc §7) — P2 items (OAuth login-failure rate,
@@ -33,7 +33,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CHECK_TABLE, runChecks } from "./checks.mjs";
+import { CHECK_TABLE, runChecks, runChecksWithConfirmation } from "./checks.mjs";
 import { sendDingTalk, createRateLimiter } from "./send.mjs";
 import { computeNextAlertState, loadState, saveState } from "./state.mjs";
 
@@ -249,23 +249,31 @@ function checkRowById(id) {
 }
 
 /**
- * --mode alert: free checks only, dedupe/heartbeat/recovery via state.mjs,
- * state persisted on the orphan git branch (skipped entirely under
- * DRY_RUN).
+ * --mode alert: free checks only, with an in-run confirmation re-probe
+ * (checks.mjs's `runChecksWithConfirmation` — 2026-10-25 cadence change,
+ * see its own + REPROBE_DELAY_MS's comments) feeding a dedupe/heartbeat/
+ * recovery state machine in state.mjs, persisted on the orphan git branch
+ * (skipped entirely under DRY_RUN).
  *
+ * @param {object} [io]
+ * @param {(ms: number) => Promise<void>} [io.sleep] injected in place of
+ *   the real REPROBE_DELAY_MS wait — tests pass a no-op/instant stub so
+ *   confirming a failure doesn't actually block for 60s.
  * @returns {Promise<number>} process exit code
  */
 export async function runAlertMode({ ctx, dryRun, webhookUrl, secret, keyword, runUrl, now = Date.now(), io = {} } = {}) {
-  const { send = sendDingTalk, load = loadState, save = saveState, rateLimiter = createRateLimiter() } = io;
+  const { send = sendDingTalk, load = loadState, save = saveState, rateLimiter = createRateLimiter(), sleep } = io;
 
-  const results = await runChecks(ctx, ["free"]);
+  const results = await runChecksWithConfirmation(ctx, ["free"], { sleep });
 
   // CRITICAL finding (2026-10-23 review): "config"-class failures (this
   // job's env is missing a secret a check needs, e.g. NOVADA_TEST_KEY) must
   // NEVER enter the outage dedupe/heartbeat state machine below — that
   // machine can only ever see them as a never-recovering failure and fires
-  // a real P0 alert, then a 🟡 heartbeat every 2h forever. They're split out
-  // here and handled by their own send-ONCE "misconfigured" notice instead.
+  // a real P0 alert, then a 🟡 heartbeat every run forever. They're split
+  // out here and handled by their own send-ONCE "misconfigured" notice
+  // instead. (Also never re-probed by runChecksWithConfirmation — see its
+  // own comment — since a missing secret can't "recover" on a 60s retry.)
   const configResults = results.filter((r) => r.errorClass === "config");
   const outageResults = results.filter((r) => r.errorClass !== "config");
 
@@ -274,11 +282,10 @@ export async function runAlertMode({ ctx, dryRun, webhookUrl, secret, keyword, r
 
   // Misconfiguration bookkeeping lives in its own `state.misconfigured` map
   // (independent of `state.checks`, the outage dedupe map) — a check already
-  // notified as misconfigured doesn't notify again every 15 minutes (that
-  // would just be a different flavor of the alert-fatigue bug this whole
-  // project exists to prevent); a check that stops being config-failing
-  // (secret restored) clears its entry, so a FUTURE recurrence notifies
-  // again.
+  // notified as misconfigured doesn't notify again on every run (that would
+  // just be a different flavor of the alert-fatigue bug this whole project
+  // exists to prevent); a check that stops being config-failing (secret
+  // restored) clears its entry, so a FUTURE recurrence notifies again.
   const prevMisconfigured = prevState?.misconfigured || {};
   const nextMisconfigured = {};
   const misconfiguredToNotify = [];
