@@ -3,36 +3,26 @@
     "initialize": {
       "consecutiveFailures": 0,
       "failingSince": null,
-      "lastAlertAt": null,
-      "lastHeartbeatAt": null,
       "alerted": false
     },
     "tools_list": {
       "consecutiveFailures": 0,
       "failingSince": null,
-      "lastAlertAt": null,
-      "lastHeartbeatAt": null,
       "alerted": false
     },
     "oauth_discovery": {
       "consecutiveFailures": 0,
       "failingSince": null,
-      "lastAlertAt": null,
-      "lastHeartbeatAt": null,
       "alerted": false
     },
     "unauthenticated_401": {
       "consecutiveFailures": 0,
       "failingSince": null,
-      "lastAlertAt": null,
-      "lastHeartbeatAt": null,
       "alerted": false
     },
     "novada_setup": {
       "consecutiveFailures": 0,
       "failingSince": null,
-      "lastAlertAt": null,
-      "lastHeartbeatAt": null,
       "alerted": false
     }
   },
