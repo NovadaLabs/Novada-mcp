@@ -22,7 +22,7 @@ Web search, page extraction and structured platform data for AI agents, backed b
 | Use case | Ask your agent |
 |---|---|
 | Price research | "Compare the top 5 Amazon results for 'standing desk' by price and rating, then check the cheapest one on Walmart." |
-| Lead research | "List open Data Analyst jobs at LinkedIn for Germany posted this week, with company and link." |
+| Lead research | "List open Data Analyst jobs on LinkedIn in Germany posted this week, with company and link." |
 | Cited answer | "What changed in the EU battery regulation this year? Give me sources I can quote." |
 
 ## Quickstart
