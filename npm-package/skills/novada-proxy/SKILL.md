@@ -10,8 +10,8 @@ description: >-
 
 # novada-proxy — Proxy Type Selection Guide
 
-Proxy tools return configuration **for your own HTTP client** (curl, axios, requests, etc.).
-They do NOT perform any requests themselves.
+`novada_proxy` returns a masked configuration **for your own HTTP client** (curl, axios, requests, etc.).
+It does NOT perform any requests itself.
 
 > **Critical rule:** `novada_extract`, `novada_crawl`, `novada_scrape`, and `novada_research`
 > handle proxy routing internally. Call a proxy tool only when YOU need to make the HTTP
@@ -21,14 +21,14 @@ They do NOT perform any requests themselves.
 
 ## The 6 proxy types
 
-| Type | Tool | Best for | Key constraint |
+| Type | Call | Best for | Key constraint |
 |------|------|----------|----------------|
-| **residential** | `novada_proxy_residential` | Anti-bot pages, geo-restricted content | Strongest bypass; city requires country |
-| **isp** | `novada_proxy_isp` | Social media, ecommerce, long sessions | `country` param accepted but **silently ignored** (no country targeting on ISP zone) |
-| **mobile** | `novada_proxy_mobile` | Mobile-targeted APIs and app content | Pair with a mobile User-Agent for full simulation |
-| **datacenter** | `novada_proxy_datacenter` | High-volume, non-protected targets | Fastest and cheapest; blocked by most anti-bot |
-| **static** | `novada_proxy_static` | Account-bound workflows, same IP every call | Requires **both** `country` AND `session_id`; uses per-IP credentials from `NOVADA_STATIC_PROXY_LIST` |
-| **dedicated** | `novada_proxy_dedicated` | Clean exclusive IP, no contamination risk | Requires `session_id`; uses per-IP credentials from `NOVADA_DEDICATED_PROXY_LIST` |
+| **residential** | `novada_proxy` + `type="residential"` | Anti-bot pages, geo-restricted content | Strongest bypass; city requires country |
+| **isp** | `novada_proxy` + `type="isp"` | Social media, ecommerce, long sessions | `country` param accepted but **silently ignored** (no country targeting on ISP zone) |
+| **mobile** | `novada_proxy` + `type="mobile"` | Mobile-targeted APIs and app content | Pair with a mobile User-Agent for full simulation |
+| **datacenter** | `novada_proxy` + `type="datacenter"` | High-volume, non-protected targets | Fastest and cheapest; blocked by most anti-bot |
+| **static** | `novada_proxy` + `type="static"` | Account-bound workflows, same IP every call | Requires **both** `country` AND `session_id`; uses per-IP credentials from `NOVADA_STATIC_PROXY_LIST` |
+| **dedicated** | `novada_proxy` + `type="dedicated"` | Clean exclusive IP, no contamination risk | Requires `session_id`; uses per-IP credentials from `NOVADA_DEDICATED_PROXY_LIST` |
 
 ---
 
@@ -95,7 +95,7 @@ Mobile sits between isp and residential for mobile-targeted platforms.
 
 ## Format choice
 
-All proxy tools accept a `format` param:
+`novada_proxy` accepts a `format` param:
 
 | Format | Output | Best when |
 |--------|--------|-----------|
