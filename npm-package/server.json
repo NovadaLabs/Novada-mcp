@@ -1,7 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.NovadaLabs/novada-mcp",
-  "description": "Search, extract, crawl, map, research, scrape 14 platforms, proxy, browser via npm — one API key.",
+  "title": "Novada MCP",
+  "description": "One MCP server for all web data. Scrape, search, crawl, and AI research in one install.",
+  "websiteUrl": "https://www.novada.com/?utm_source=mcpregistry&utm_medium=listing&utm_campaign=mcp",
   "repository": {
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
