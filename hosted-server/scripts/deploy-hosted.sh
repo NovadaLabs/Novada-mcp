@@ -219,7 +219,7 @@ if [[ -n "$PREV_URL" && "$PREV_URL" == "$NEW_URL" ]]; then
 fi
 
 if ! echo "$DEPLOY_OUT" | grep -qi "ready\|production"; then
-    abort "Vercel deploy did not report 'ready' or 'production' — check output above. Rollback: npx vercel promote <prev-url> --scope novadateam-mvps"
+    abort "Vercel deploy did not report 'ready' or 'production' — check output above. Rollback: npx vercel promote ${PREV_URL:-<prev-deployment-url>} --scope novadateam-mvps"
 fi
 
 echo "[DEPLOY] ✓ deploy completed"
@@ -509,7 +509,7 @@ else
         echo "  npx vercel promote $PREV_URL --scope novadateam-mvps"
     else
         echo "  npx vercel promote <prev-deployment-url> --scope novadateam-mvps"
-        echo "  (prev URL not detected from deploy output — check: npx vercel ls)"
+        echo "  (could not read the pre-deploy production deployment via 'vercel inspect mcp.novada.com' — check: npx vercel ls)"
     fi
 
     # Cleanup temp golden dir
