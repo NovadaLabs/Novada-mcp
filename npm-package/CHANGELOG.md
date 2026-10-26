@@ -19,6 +19,7 @@ Documentation-truth and hygiene release after an end-to-end product evaluation. 
 - **Developer-API 401 errors point at `https://dashboard.novada.com/api-key/`** instead of an internal host that the redactor turned into `[novada-internal-host]`.
 - **The shipped `novada-proxy` skill** refers to `novada_proxy` with `type=…` instead of six tool names that no longer exist.
 - **Smaller tarball:** sourcemaps are no longer published (`!build/**/*.map`), 439 → 225 files. The dead `benchmark` npm script (no directory, `tsx` never a dependency) is removed.
+- Removed `scripts/verify-c1-live.mjs` (one-off probe with a hard-coded macOS path; tracked despite the repo's own `.gitignore` rule, unreferenced).
 
 ### Added
 - **Official MCP Registry publishing via GitHub Actions OIDC.** A manually triggered, secretless workflow validates and publishes `server.json` under the repository-owned `io.github.NovadaLabs/*` namespace with only `contents: read` and `id-token: write` permissions.

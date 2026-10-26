@@ -94,6 +94,7 @@
         <li><b>Developer-API 401 errors point at <code>https://dashboard.novada.com/api-key/</code></b> instead of an internal host that the redactor turned into <code>[novada-internal-host]</code>.</li>
         <li><b>The shipped <code>novada-proxy</code> skill</b> refers to <code>novada_proxy</code> with <code>type=…</code> instead of six tool names that no longer exist.</li>
         <li><b>Smaller tarball:</b> sourcemaps are no longer published (<code>!build/**/*.map</code>), 439 → 225 files. The dead <code>benchmark</code> npm script (no directory, <code>tsx</code> never a dependency) is removed.</li>
+        <li>Removed <code>scripts/verify-c1-live.mjs</code> (one-off probe with a hard-coded macOS path; tracked despite the repo's own <code>.gitignore</code> rule, unreferenced).</li>
       </ul>
       </div>
       <div class="sec sec-added">
