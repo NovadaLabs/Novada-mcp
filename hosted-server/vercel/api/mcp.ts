@@ -1647,7 +1647,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const setupGateFields = { charged: false, over_cap_allowed: false, quota_remaining: 0 };
       try {
         // Pass the caller's token so setup validates the CUSTOMER's key (not the server env fallback).
-        const result = await novadaSetup(validateSetupParams(argsObj), ctx.token);
+        const result = await novadaSetup(validateSetupParams(argsObj), ctx.token, visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
         // SETUP_GATE is the exempt sentinel — novada_setup exits before the real gate is evaluated.
         // monthlyQuota is declared below (after this early-return block) — inline it here.
