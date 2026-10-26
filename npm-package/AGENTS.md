@@ -34,8 +34,8 @@ public  npm + public git + hosted   ← customers
 
 ## Versioning
 
-- **npm versions are immutable.** `0.9.1` is already published — the next release is **`0.9.2`**
-  (not a re-publish of 0.9.1). Check `npm view novada-mcp version` before choosing a number.
+- **npm versions are immutable.** Check the current published version with `npm view novada-mcp version`;
+  never republish an existing version.
 - `package.json`, `server.json` (`.version` + `packages[].version`) must all match the release version.
   The promote script keeps them in sync; don't set them by hand across platforms.
 - **Client configs and docs must pin `novada-mcp@latest`; never document a bare `npx novada-mcp`
