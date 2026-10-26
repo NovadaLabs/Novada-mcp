@@ -556,7 +556,7 @@
       "description_field": "/description",
       "description_max_len": 100,
       "description_derived": true,
-      "description_derived_reason": "Literal template inside npm-package/scripts/gen-server-json.mjs, with the platform COUNT now interpolated from the built scraper catalog (brief-F R7, 2026-10-15) rather than hand-typed — see that script's own comment. The MCP Registry's server.json schema caps description at 100 chars (ajv-verified against https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json per that script's own comment) — too short for listing.json's shared ~180-char description, and this round's invariant forbids changing gen-server-json.mjs's semantics beyond deriving that one count. The description is exempt from the no-hand-typed-counts legibility rule because that script, not distribution/generate.mjs, is this field's sole owner and sole place to fix it — but the COUNT itself is no longer hand-typed either, closing R7.",
+      "description_derived_reason": "Literal template inside npm-package/scripts/gen-server-json.mjs (owner-approved registry listing copy, 2026-10-26; it replaced the earlier template that interpolated the platform count). The MCP Registry's server.json schema caps description at 100 chars — see that script's own comment and tests/consistency/server-json-descriptions.test.ts for the length bound.",
       "surface": "both",
       "surface_reason": "brief-N (2026-10-19, D1): this ONE listing carries a local packages[] entry (stdio, full tool set) AND a hosted remotes[] entry (streamable-http, HOSTED_HIDDEN-filtered) — an independent review's HIGH finding was that the shared description's 'browser automation' clause was accurate for packages[] but overclaimed for remotes[]. gen-server-json.mjs's own template (verify-only here, not generate.mjs-owned) was hand-reworded to 'browser via npm', true for both; surface:\"both\" documents why this row is exempt from check.mjs's surface_claims check (that check only ever fails a surface:\"hosted\" row).",
       "url_field": "/remotes/0/url",
@@ -566,6 +566,8 @@
           "$schema",
           "name",
           "description",
+          "title",
+          "websiteUrl",
           "repository",
           "version",
           "tools",
@@ -590,15 +592,17 @@
           "headers"
         ]
       },
-      "closed_shape_reason": "brief-I I1: server.json is gen-server-json.mjs-generated but NOT json-full (this round's invariant forbids touching that script's own semantics, and it does not emit a byte-stable, fully-templated file the way generate.mjs's json-full rows do) — it is this finding's tier-(b) 'hand-authored-enough that a round-tripped extra key would previously survive every check' shape. The top-level allowlist catches an injected sibling key (e.g. a second tools/remotes/packages block, or a rogue top-level field); /packages/* and /remotes/* catch one injected into either array element.",
+      "closed_shape_reason": "brief-I I1: server.json is gen-server-json.mjs-generated but NOT json-full (this round's invariant forbids touching that script's own semantics, and it does not emit a byte-stable, fully-templated file the way generate.mjs's json-full rows do) — it is this finding's tier-(b) 'hand-authored-enough that a round-tripped extra key would previously survive every check' shape. The top-level allowlist catches an injected sibling key (e.g. a second tools/remotes/packages block, or a rogue top-level field); /packages/* and /remotes/* catch one injected into either array element. 2026-10-26: added `title` and `websiteUrl` — both are official server.json fields (2025-12-11 schema, maxLength 100 / format uri) carrying the owner-approved registry listing copy; their values are pinned in pinned_fields.",
       "pinned_fields": {
         "/packages/0/identifier": "novada-mcp",
         "/packages/0/transport/type": "stdio",
         "/packages/0/registryType": "npm",
         "/remotes/0/type": "streamable-http",
-        "/remotes/0/url": "https://mcp.novada.com/mcp"
+        "/remotes/0/url": "https://mcp.novada.com/mcp",
+        "/title": "Novada MCP",
+        "/websiteUrl": "https://www.novada.com/?utm_source=mcpregistry&utm_medium=listing&utm_campaign=mcp"
       },
-      "pinned_fields_reason": "brief-I I1: these are the EXECUTION-RELEVANT values a client actually acts on — which npm package to run, over which transport, at which remote URL. /remotes/0/url duplicates what endpoint_equal already verifies dynamically against listing.hosted_endpoint; kept here too per this finding's own explicit instruction to pin remotes[*].url, as a second, independent, static assertion (if listing.hosted_endpoint is ever deliberately changed, BOTH this literal and endpoint_equal's dynamic check need updating together — a known, accepted overlap, not a new mechanism; this field is ALSO this row's own url_field, so it is excluded from tamper_evident's hash the same way version/name/description are — a tamper here is caught by endpoint_equal + this static pin, never by the whole-file hash). /packages/0/registryType added brief-J J1: closed_shape's own \"/packages/*\" allowlist already PERMITS this key but never pinned its VALUE — a red-team attack changed it (e.g. to a different registry) while staying inside the allowed key set; now a declared literal, same as the other three.",
+      "pinned_fields_reason": "brief-I I1: these are the EXECUTION-RELEVANT values a client actually acts on — which npm package to run, over which transport, at which remote URL. /remotes/0/url duplicates what endpoint_equal already verifies dynamically against listing.hosted_endpoint; kept here too per this finding's own explicit instruction to pin remotes[*].url, as a second, independent, static assertion (if listing.hosted_endpoint is ever deliberately changed, BOTH this literal and endpoint_equal's dynamic check need updating together — a known, accepted overlap, not a new mechanism; this field is ALSO this row's own url_field, so it is excluded from tamper_evident's hash the same way version/name/description are — a tamper here is caught by endpoint_equal + this static pin, never by the whole-file hash). /packages/0/registryType added brief-J J1: closed_shape's own \"/packages/*\" allowlist already PERMITS this key but never pinned its VALUE — a red-team attack changed it (e.g. to a different registry) while staying inside the allowed key set; now a declared literal, same as the other three. 2026-10-26: /title and /websiteUrl pinned — hand-authored, user-visible listing values (the website link is what registry users click), so any drift or tampering must fail the check.",
       "pinned_fields_template": {
         "/repository/url": "{{repository}}"
       },

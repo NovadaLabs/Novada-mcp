@@ -37,6 +37,10 @@ export function buildGreenFixture() {
   writeFileDeep(root, "distribution/channels.json", channelsRaw);
   writeFileDeep(root, "distribution/listing.json", listingRaw);
   const listing = JSON.parse(listingRaw);
+  // 2026-10-26: mcp-registry's pinned_fields pin /title and /websiteUrl to exact values — read
+  // them from the real channels.json so this green fixture can never drift from the pins.
+  const channelsParsed = JSON.parse(channelsRaw);
+  const registryPins = channelsParsed.rows.find((r) => r.id === "mcp-registry").pinned_fields;
 
   const version = "1.2.3"; // synthetic — decoupled from whatever the real repo's version is today
   writeFileDeep(
@@ -56,7 +60,9 @@ export function buildGreenFixture() {
       {
         $schema: "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
         name: "io.github.NovadaLabs/novada-mcp",
+        title: registryPins["/title"],
         description: "Search, extract, crawl, map, research, scrape 16 platforms, browser automation, proxy — one API key.",
+        websiteUrl: registryPins["/websiteUrl"],
         // brief-N (2026-10-19, D2): must equal listing.repository (copied verbatim from the real
         // distribution/listing.json above) — mcp-registry's pinned_fields_template now pins
         // /repository/url against it dynamically.
