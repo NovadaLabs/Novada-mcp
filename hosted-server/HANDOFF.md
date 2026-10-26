@@ -1,3 +1,5 @@
+> **HISTORICAL (June 2026) — superseded.** mcp.novada.com has been live since July 2026; current docs: hosted-server/README.md and hosted-server/docs/. Kept for history only.
+
 # HANDOFF — novada-mcpserver (Hosted MCP)
 
 **Last updated:** 2026-06-04 by Tong Wu's previous session
