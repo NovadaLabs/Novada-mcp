@@ -3,7 +3,7 @@
 Every tool Novada MCP exposes, grouped by category. The [README](../README.md) shows only the
 handful you reach for most; this is the full list.
 
-- **37 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 37.
+- **37 tools.** Self-host (`npx novada-mcp`) exposes all 37.
 - The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools
   that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow`
   (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy`
@@ -41,7 +41,7 @@ left in to fail on you. All 15 scrape tools (generic + 14 per-platform) run on b
 
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
-| `novada_scrape` | Structured data from 16 supported platforms (~87 operations) — Amazon, Walmart, LinkedIn, TikTok, YouTube, Instagram, GitHub, X, ChatGPT, Perplexity, etc. — instead of parsing raw HTML <!-- claims-ignore: full catalog total incl. 0-op platforms (SHEIN, ChatGPT), same metric as line 36 above --> | Clean records in markdown/json/csv/excel/html/toon | ✅ |
+| `novada_scrape` | Structured data from 14 platforms (~76 verified-working operations) — Amazon, Walmart, LinkedIn, TikTok, YouTube, Instagram, GitHub, X, Perplexity, etc. — instead of parsing raw HTML | Clean records in markdown/json/csv/excel/html/toon | ✅ |
 | `novada_scrape_amazon` | Amazon-only structured data (product, reviews, seller, bestsellers, category/brand listings) via a closed, typed `operation` enum — 10 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_google` | Google-only raw SERP data (web search, AI Mode, Maps details/reviews, Shopping, Jobs, Hotels, Videos) via a closed, typed `operation` enum — 13 verified-working operations | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
 | `novada_scrape_bing` | Bing-only raw SERP data (web search, videos, news, shopping) via a closed, typed `operation` enum — 4 verified-working operations; Bing is not a selectable `novada_search` engine | Clean records in markdown/json/csv/excel/html/toon (same rendering as `novada_scrape`) | ✅ |
@@ -108,11 +108,11 @@ action beyond the local-only `close_session`/`list_sessions` bookkeeping returns
 | Tool | Best for | Returns | Hosted? |
 |------|----------|---------|:--:|
 | `novada_account` | Balance, plan quotas, usage history, traffic, capture logs in one call. Back-compat aliases (dispatch-only, not listed tools): `novada_wallet_balance`, `novada_wallet_usage_record`, `novada_plan_balance_all`, `novada_traffic_daily`, `novada_capture_logs`, `novada_account_summary`, `novada_health`, `novada_health_all` all route here. | Unified dashboard, or one `section=` slice | ✅ |
-| `novada_proxy_account_create` | Provisioning a proxy sub-account | Created account details — **WRITE, requires `confirm:true`** | ✅ |
+| `novada_proxy_account_create` | Provisioning a proxy sub-account | Created account details — **WRITE — two-step approval: call once without `approval_token` for a preview + token, re-call with identical params plus the token (valid 10 min)** | ✅ |
 | `novada_proxy_account_list` | Auditing existing proxy sub-accounts | Paginated list | ✅ |
-| `novada_ip_whitelist` | Managing the proxy IP whitelist (Residential, Unlimited, Static ISP) | Whitelist entries — add/del are **WRITE, require `confirm:true`** | ❌ write-gated account op |
-| `novada_capture_apikey` | Getting or rotating the Capture API key | Current key, or new key on reset — reset is **WRITE, requires `confirm:true`** | ❌ write-gated account op |
-| `novada_static_ip_mgmt` | Managing static ISP IPs | IP list, or purchase/renewal confirmation — open/renew are **WRITE, require `confirm:true`** | ❌ write-gated account op |
+| `novada_ip_whitelist` | Managing the proxy IP whitelist (Residential, Unlimited, Static ISP) | Whitelist entries — add/del are **WRITE — two-step approval (preview + `approval_token`, re-call with identical params, valid 10 min)** | ❌ write-gated account op |
+| `novada_capture_apikey` | Getting or rotating the Capture API key | Current key, or new key on reset — reset is **WRITE — two-step approval: call once without `approval_token` for a preview + token, re-call with identical params plus the token (valid 10 min)** | ❌ write-gated account op |
+| `novada_static_ip_mgmt` | Managing static ISP IPs | IP list, or purchase/renewal confirmation — open/renew are **WRITE — two-step approval (preview + `approval_token`, re-call with identical params, valid 10 min)** | ❌ write-gated account op |
 
 ## Discover / Setup
 

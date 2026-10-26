@@ -24,9 +24,8 @@ AI client
                                            importable from either transport or tests)
                                                               │
                                                               ▼
-                                    npm-package/src/tools/*.ts (43 files: 40 per-tool
-                                    implementations + index.ts barrel + registry.ts +
-                                    types.ts)
+                                    npm-package/src/tools/*.ts (per-tool implementations
+                                    + index.ts barrel + registry.ts + types.ts)
                                                               │
                                                               ▼
                                     Novada upstream APIs (proxy network, scraper, SERP)
@@ -66,11 +65,13 @@ params, examples), edit `_TOOL_DEFINITIONS` in `core.ts`, not `index.ts` and not
 | Local stdio server | npm `novada-mcp` (`npx novada-mcp`) | stdio | n/a — runs on the user's machine |
 | Hosted HTTP server | `https://mcp.novada.com/mcp` | Streamable HTTP | Vercel (Node.js serverless Function, **not** Cloudflare Workers — see below) |
 
-Both ship the identical tool catalog and behavior; the hosted surface adds auth, a
-monthly quota, and rate-limiting on top (see `hosted-server/docs/ARCHITECTURE.md` for
-that layer's detail). Browser-automation tools (`novada_browser`, `novada_browser_flow`)
-require `NOVADA_BROWSER_WS` and work identically on both surfaces — this is a credential
-requirement, not a hosted-vs-local capability gap (see `npm-package/README.md`).
+Both run the same tool implementations, but the catalogs differ: local exposes all 37 tools,
+hosted exposes 28. Hosted hides `novada_browser` / `novada_browser_flow` (a persistent CDP
+session does not fit a stateless serverless function) and the other write/stateful tools
+listed in `docs/TOOLS.md`. The hosted surface also adds auth, a monthly quota, and
+rate-limiting on top (see `hosted-server/docs/ARCHITECTURE.md` for that layer's detail).
+On self-host the browser tools additionally require `NOVADA_BROWSER_WS` (see
+`npm-package/README.md`).
 
 **Live deploy target is Vercel, not Cloudflare Workers.** A dormant CF Workers port
 exists at `hosted-server/worker/` for reference only (not deployed); `hosted-server/vercel/`
