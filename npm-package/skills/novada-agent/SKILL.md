@@ -28,7 +28,7 @@ Need web data?
 └── Want ranked, cited source material to reason over? → novada_research
 
 Need structured platform data (Amazon, TikTok, LinkedIn…)? → novada_scrape_<platform> if one of the 15 dedicated platform tools exists for it, else generic novada_scrape
-Need proxy credentials for your own HTTP requests? → novada_proxy
+Need a proxy config template (endpoint + masked credentials) for your own HTTP requests? → novada_proxy
 Page blocked or JS-heavy, need raw HTML? → novada_extract (format:"html", render:"render")
 Need to click/fill/screenshot a page? → novada_browser
 Check account balance / plans / entitlements? → novada_account

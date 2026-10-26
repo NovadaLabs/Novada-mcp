@@ -280,12 +280,11 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
   ...PLATFORM_SCRAPER_DEFS,
   {
     name: "novada_proxy",
-    description: `Route your own HTTP requests through residential or mobile IPs — geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag.
+    description: `Route your own HTTP requests through residential or mobile IPs — geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag (format=url|env|curl).
 
 **Best for:** a specific country/city IP, sticky multi-step sessions, testing geo-restricted content.
 **Not for:** page extraction (novada_extract — proxy is automatic) or web search (novada_search).
-**Formats:** "url" (Node.js/Python), "env" (shell vars), "curl" (CLI).
-**Requires:** NOVADA_PROXY_ENDPOINT env var; NOVADA_PROXY_USER/PASS auto-fetch from your account via NOVADA_API_KEY if unset.
+**Returns a masked config:** username shown as \`<PROXY_USER>\`, password as \`***\` — credentials are never printed. Self-host: set NOVADA_PROXY_USER/PASS (or let them auto-fetch from NOVADA_API_KEY) and fill the password from your environment. Hosted: take user/pass from dashboard.novada.com and use the returned host/port/username pattern.
 
 **\`type\` guide:**
 - \`residential\` — strongest anti-bot bypass, real home ISP IPs; escalate here when blocked
