@@ -201,18 +201,29 @@ banner "phase: DEPLOY  (from repo root — avoids /vercel/vercel path bug)"
 
 cd "$SRV"   # MUST deploy from repo root, not vercel/
 
+# Record the deployment currently serving mcp.novada.com BEFORE the alias flips —
+# that is the rollback target. (The deploy output only contains the NEW deployment's
+# URL, so parsing it afterwards yields the new deployment, not the previous one.)
+DEPLOY_URL_RE='https://novada-mcpserver-[a-z0-9]+-novadateam-mvps\.vercel\.app'
+PREV_URL=$(npx vercel inspect mcp.novada.com --scope novadateam-mvps 2>&1 | grep -Eo "$DEPLOY_URL_RE" | head -1 || true)
+[[ -n "$PREV_URL" ]] || echo "[DEPLOY] WARNING: could not read the current production deployment — no rollback target recorded" >&2
+
 echo "[DEPLOY] running: npx vercel deploy --prod --yes ..."
 DEPLOY_OUT=$(npx vercel deploy --prod --yes 2>&1)
 echo "$DEPLOY_OUT"
 
-# Extract the previous deployment URL (shown as "Inspect:" line or use current alias before flip)
-PREV_URL=$(echo "$DEPLOY_OUT" | grep -Eo 'https://novada-mcpserver-[a-z0-9]+-novadateam-mvps\.vercel\.app' | head -1 || true)
+NEW_URL=$(echo "$DEPLOY_OUT" | grep -Eo "$DEPLOY_URL_RE" | head -1 || true)
+if [[ -n "$PREV_URL" && "$PREV_URL" == "$NEW_URL" ]]; then
+    echo "[DEPLOY] WARNING: previous and new deployment URLs are identical ($NEW_URL) — no distinct rollback target" >&2
+    PREV_URL=""
+fi
 
 if ! echo "$DEPLOY_OUT" | grep -qi "ready\|production"; then
-    abort "Vercel deploy did not report 'ready' or 'production' — check output above. Rollback: npx vercel promote <prev-url> --scope novadateam-mvps"
+    abort "Vercel deploy did not report 'ready' or 'production' — check output above. Rollback: npx vercel promote ${PREV_URL:-<prev-deployment-url>} --scope novadateam-mvps"
 fi
 
 echo "[DEPLOY] ✓ deploy completed"
+[[ -n "$NEW_URL" ]] && echo "[DEPLOY] New deployment URL: $NEW_URL"
 [[ -n "$PREV_URL" ]] && echo "[DEPLOY] Previous deployment URL (rollback target): $PREV_URL"
 
 # ─── PHASE 5: VERIFY ──────────────────────────────────────────────────────────
@@ -222,9 +233,12 @@ sleep 4   # give Vercel edge propagation a moment
 
 echo "[VERIFY] fetching live serverInfo.version..."
 INIT_PAYLOAD='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"deploy-gate","version":"1"}}}'
+# Streamable HTTP requires both media types in Accept; without it the endpoint
+# answers 406 and curl -f yields an empty body (live version printed as UNKNOWN).
 INIT_RESP=$(curl -sf \
     -X POST \
     -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
     -H "Authorization: Bearer $NOVADA_MCP_KEY" \
     "$MCP_URL?groups=all" \
     --data "$INIT_PAYLOAD" 2>&1) || true
@@ -232,7 +246,10 @@ INIT_RESP=$(curl -sf \
 LIVE_VERSION=$(echo "$INIT_RESP" | python3 -c "
 import json, sys
 try:
-    data = json.load(sys.stdin)
+    raw = sys.stdin.read()
+    # SSE framing: the JSON-RPC message is on the last 'data:' line.
+    data_lines = [l[5:].strip() for l in raw.splitlines() if l.startswith('data:')]
+    data = json.loads(data_lines[-1] if data_lines else raw)
     print(data['result']['serverInfo']['version'])
 except Exception as e:
     print('UNKNOWN (' + str(e) + ')')
@@ -492,7 +509,7 @@ else
         echo "  npx vercel promote $PREV_URL --scope novadateam-mvps"
     else
         echo "  npx vercel promote <prev-deployment-url> --scope novadateam-mvps"
-        echo "  (prev URL not detected from deploy output — check: npx vercel ls)"
+        echo "  (could not read the pre-deploy production deployment via 'vercel inspect mcp.novada.com' — check: npx vercel ls)"
     fi
 
     # Cleanup temp golden dir
