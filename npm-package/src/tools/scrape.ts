@@ -4,7 +4,7 @@ import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHost
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
-import { NovadaError, NovadaErrorCode, classifyBusinessCode, makeNovadaError, sanitizeServerMsg, serpCaptureFailedHint } from "../_core/errors.js";
+import { NovadaError, NovadaErrorCode, classifyBusinessCode, classifyError, makeNovadaError, sanitizeServerMsg, serpCaptureFailedHint } from "../_core/errors.js";
 import { withSingleTransientRetry, submitRetryBudget } from "../_core/submit-retry.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, type CatalogOp } from "../data/scraper_catalog.js";
@@ -134,15 +134,11 @@ function resolveLocaleDefault(
  * sites below (class fix, not two copies of the same classification logic for
  * two instances of the same bug).
  *
- * Deliberately NOT called when `error.response` exists: a real HTTP status was
- * never the undefined-interpolation bug (status is always well-defined once a
- * response exists) — those sites keep throwing a plain, unclassified `Error` so
- * `classifyError`'s downstream prose-based matching (429→RATE_LIMITED,
- * 402→PRODUCT_UNAVAILABLE, etc. — see _core/errors.ts) still fires exactly as
- * before. Wrapping an already-has-a-status error in a NovadaError here would
- * short-circuit that matching (classifyError passes a NovadaError through
- * unchanged on its very first check) and regress a more specific classification
- * into a blanket API_DOWN — caught by tests/tools/scrape.test.ts's 429 case.
+ * Only for the NO-response case. When an HTTP response exists, the status is
+ * well-defined and classifyScraperHttpError (below) classifies it instead — it
+ * delegates to classifyError() so the specific mapping (429→RATE_LIMITED,
+ * 402→PRODUCT_UNAVAILABLE, … — see _core/errors.ts) is kept rather than
+ * flattened into this function's blanket API_DOWN/TIMEOUT.
  *
  * - `phase` names which HTTP call failed, so the message is honest about WHICH
  *   timeout fired and for how long: submit uses axios's fixed 60s `timeout`
@@ -182,6 +178,81 @@ function classifyScraperTimeoutOrNetworkError(
     `Scraper ${verb} request failed — no response from the server (network error: ${sanitizeServerMsg(error.message)}). ${resumeNote}`,
     `${phase}_network_error`,
   );
+}
+
+/**
+ * Classify an AxiosError raised by one of the two raw HTTP calls in this file
+ * (submit's axios.post, poll's axios.get) that DOES carry a real HTTP response
+ * (status is well-defined) — the sibling of classifyScraperTimeoutOrNetworkError
+ * above, which handles the NO-response case. Delegates the actual classification
+ * to classifyError() (_core/errors.ts): its prose matching already turns 429 into
+ * RATE_LIMITED, 402/11006 into PRODUCT_UNAVAILABLE, 5xx into API_DOWN, etc. — this
+ * function's only job is to enrich the agent-facing message with the SAME
+ * resume-vs-retry guidance classifyScraperTimeoutOrNetworkError already gives for
+ * the no-response case, WITHOUT inventing a second classification scheme.
+ *
+ * 2026-10-26 fix (nightly canary INVARIANT_3[scrape] regression): this call site
+ * used to leave the AxiosError wrapped in a plain, unclassified `Error` on the
+ * (correct, still-verified-by-test) assumption that "classifyError's downstream
+ * prose-based matching... still applies" — true for the npm-package STDIO
+ * dispatch (index.ts's CallToolRequestSchema catch calls classifyError() on
+ * EVERY thrown error), but FALSE for the HOSTED gateway (hosted-server/vercel/
+ * api/mcp.ts), whose catch-all only special-cases `instanceof NovadaError` and
+ * otherwise degrades to a raw, truncated "Tool error: <message>" string with no
+ * code/agent_instruction/retry guidance — exactly what the nightly canary
+ * observed for a 429 from the result-retrieval (poll) step: "Tool error: Failed
+ * to retrieve scraper results: Request failed with status code 429", is_error=
+ * True, no obvious upstream signal. Classifying AT THE THROW SITE (same
+ * classifyError() function, just invoked earlier) makes the result deployment-
+ * surface-independent: both dispatch layers already have an `instanceof
+ * NovadaError` fast path that preserves the structured agent_instruction, so
+ * this is a no-op for stdio and the real fix for hosted.
+ *
+ * `taskId`, when known (poll phase only — submit has no task_id yet) AND the
+ * classification is retryable, appends the SAME resume note
+ * classifyScraperTimeoutOrNetworkError uses, so a RATE_LIMITED/API_DOWN/TIMEOUT
+ * response at poll-time never tells the agent to blindly "retry this tool
+ * call" (which would re-submit and incur a NEW billable task) when resuming
+ * with the existing task_id is free and correct. Gated on `retryable` so a
+ * PERMANENT classification (e.g. PRODUCT_UNAVAILABLE/INSUFFICIENT_BALANCE from
+ * a 402 at poll-time) never gets an appended note that could read as "retrying
+ * will help" — for those, classifyError()'s own agent_instruction (not
+ * "resume") is the correct and only action.
+ */
+function classifyScraperHttpError(error: AxiosError, taskId: string | undefined): NovadaError {
+  const status = error.response?.status;
+  // M1, shared by submit AND poll (2026-10-26: previously special-cased at the
+  // submit site only, so a poll-time 403 fell through to classifyError as a
+  // permanent UNKNOWN). 401 is a real, permanent auth failure (bad/missing key).
+  // 403 at a scraper edge is frequently transient — geo/WAF/rate shielding —
+  // NOT proof the key is invalid. classifyError() cannot tell these apart from
+  // axios's bare "Request failed with status code N" text, so decide here.
+  if (status === 401) {
+    return makeNovadaError(
+      NovadaErrorCode.INVALID_API_KEY,
+      "Invalid or missing NOVADA_API_KEY for platform scrapers.",
+      "HTTP 401",
+    );
+  }
+  const classified =
+    status === 403
+      ? makeNovadaError(
+          NovadaErrorCode.API_DOWN,
+          taskId
+            ? "Scraper result request was blocked (HTTP 403) — often a transient geo/WAF/rate block at the scraper edge rather than an invalid key. If it persists on every call, verify the key has scraper permission via novada_account(section=\"summary\")."
+            : "Scraper request was blocked (HTTP 403) — often a transient geo/WAF/rate block at the scraper edge rather than an invalid key. Retry once; if it persists on every call, verify the key has scraper permission via novada_account(section=\"summary\").",
+          "HTTP 403",
+        )
+      : classifyError(error);
+  if (!taskId || !classified.retryable) return classified;
+  return new NovadaError({
+    code: classified.code,
+    message: `${classified.message} Resume with task_id="${taskId}" instead of re-submitting — this does not incur a new charge.`,
+    agent_instruction: classified.agent_instruction,
+    retryable: classified.retryable,
+    detail: classified.detail,
+    businessCode: classified.businessCode,
+  });
 }
 
 /**
@@ -1973,26 +2044,6 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
       }
     } catch (error) {
       if (error instanceof AxiosError) {
-        const status = error.response?.status;
-        // M1: classify honestly. 401 is a real, permanent auth failure (bad/missing
-        // key). 403 at a scraper edge is frequently transient — geo/WAF/rate
-        // shielding — NOT proof the key is invalid; bundling the two made agents
-        // conclude a permanent auth problem when a retry might succeed. Emit typed
-        // NovadaErrors so downstream classifyError can tag retryability correctly.
-        if (status === 401) {
-          throw makeNovadaError(
-            NovadaErrorCode.INVALID_API_KEY,
-            "Invalid or missing NOVADA_API_KEY for platform scrapers.",
-            "HTTP 401",
-          );
-        }
-        if (status === 403) {
-          throw makeNovadaError(
-            NovadaErrorCode.API_DOWN,
-            "Scraper request was blocked (HTTP 403) — often a transient geo/WAF/rate block at the scraper edge rather than an invalid key. Retry once; if it persists on every call, verify the key has scraper permission via novada_account(section=\"summary\").",
-            "HTTP 403",
-          );
-        }
         if (!error.response) {
           // Round 3 item 1 (live-verified 2026-10-13): no HTTP response at all —
           // a client-side timeout or a bare network failure. This is the exact
@@ -2001,12 +2052,11 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
           // would have produced), so resume guidance is "just retry".
           throw classifyScraperTimeoutOrNetworkError(error as AxiosError & { response?: undefined }, "submit", undefined);
         }
-        // A real HTTP response WAS received (status is well-defined) but it's
-        // not 401/403 — keep this an UNCLASSIFIED plain Error (status/body are
-        // never undefined here) so classifyError's downstream prose-based
-        // matching (429→RATE_LIMITED, 402→PRODUCT_UNAVAILABLE, etc.) still
-        // applies exactly as before this fix.
-        throw new Error(`Scraper API error (HTTP ${status}): ${JSON.stringify(error.response.data)}`);
+        // A real HTTP response WAS received (status is well-defined) — classify
+        // it via classifyScraperHttpError (401/403 handling + the full 2026-10-26
+        // nightly-canary fix rationale live in its doc comment above). No task_id
+        // exists yet at submit-time, so there is nothing to resume.
+        throw classifyScraperHttpError(error, undefined);
       }
       throw error;
     }
@@ -2061,12 +2111,13 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
             submitOutcome.taskId,
           );
         }
-        // A real HTTP response WAS received (status is well-defined) — keep this
-        // an UNCLASSIFIED plain Error (status is never undefined here) so
-        // classifyError's downstream prose-based matching (429→RATE_LIMITED,
-        // etc.) still applies exactly as before this fix (see
-        // tests/tools/scrape.test.ts's dedicated 429-from-poll test).
-        throw new Error(`Failed to retrieve scraper results: ${sanitizeServerMsg(error.message)}`);
+        // A real HTTP response WAS received (status is well-defined) — classify
+        // via classifyScraperHttpError, which appends resume-with-task_id
+        // guidance (a task_id DOES already exist here — see its doc comment
+        // above for the full 2026-10-26 nightly-canary fix rationale: this is
+        // the exact line the canary's "Tool error: Failed to retrieve scraper
+        // results: Request failed with status code 429" reproduced).
+        throw classifyScraperHttpError(error, submitOutcome.taskId);
       }
       throw error;
     }

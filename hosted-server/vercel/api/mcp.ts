@@ -185,7 +185,7 @@ import {
   validateDiscoverParams,
 } from "../vendor/novada-mcp/tools/index.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
-import { NovadaError, NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.js";
+import { NovadaError, NovadaErrorCode, classifyError } from "../vendor/novada-mcp/_core/errors.js";
 // Real upstream key verification for validateToken — same wallet-balance probe
 // novada_setup already uses to confirm "does this key actually work".
 import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
@@ -1928,9 +1928,30 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       else if (rawMsg.includes("NOT_AVAILABLE_ON_HOSTED") || rawMsg.includes("Playwright")) {
         userMsg = `This tool requires a local MCP server. Install via: npx novada-mcp`;
       }
-      // Fallback: don't leak raw internals (stack traces, file paths, API response bodies)
+      // 2026-10-26 fix (nightly canary INVARIANT_3[scrape] regression): every OTHER
+      // branch above is a HOSTED-ONLY condition classifyError() cannot know about (an
+      // env var missing on THIS deployment) — those stay exactly as written. Anything
+      // else reaching this point is a genuinely classifiable product/upstream error
+      // (HTTP 429/5xx, auth, timeouts, ...) that ANY tool can throw as a plain Error,
+      // trusting a downstream dispatch layer to classify it. The npm-package STDIO
+      // dispatch (index.ts's CallToolRequestSchema catch) already calls classifyError()
+      // on every thrown error — this hosted gateway never did, degrading every such
+      // error on THIS surface only into the generic, unstructured "Tool error: <raw
+      // message, truncated>" below (no NovadaErrorCode, no failure_class, no retry
+      // guidance, no agent_instruction). Root cause of the 2026-10-26 nightly canary's
+      // "Tool error: Failed to retrieve scraper results: Request failed with status
+      // code 429" — is_error=True with no obvious upstream signal. classifyError()
+      // always succeeds (it has its own UNKNOWN fallback — never throws), and passes a
+      // NovadaError through unchanged on its first check, so this is a strict superset
+      // of the `instanceof NovadaError` branch above, applied to every OTHER error too.
+      // Early-return (bypassing the 500-char cap below) for the same reason that
+      // branch does: an already-structured agent_instruction should never be
+      // mid-sentence truncated.
       else {
-        userMsg = `Tool error: ${rawMsg.slice(0, 200)}`;
+        return {
+          content: [{ type: "text" as const, text: redactHostedSecrets(classifyError(error).toAgentString()) }],
+          isError: true,
+        };
       }
       // Defense in depth: redact again after assembly (the static templates are clean,
       // but a future edit that interpolates rawMsg shouldn't be able to leak).

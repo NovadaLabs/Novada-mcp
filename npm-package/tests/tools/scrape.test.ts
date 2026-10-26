@@ -1,9 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios, { AxiosError } from "axios";
-import { NovadaError, NovadaErrorCode, classifyError } from "../../src/_core/errors.js";
+import { NovadaError, NovadaErrorCode } from "../../src/_core/errors.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
+
+// 2026-10-26 fix (discovered writing the classifyScraperHttpError tests below):
+// vitest's automock of "axios" disconnects the mocked AxiosError class's
+// prototype chain from the real, global Error — `new AxiosError(...) instanceof
+// Error` is FALSE under this automock (verified empirically: the real axios
+// library DOES `class AxiosError extends Error`, so in PRODUCTION this is
+// always true; only the test double breaks it). Every PRE-EXISTING test in this
+// file that relies on `error instanceof AxiosError` (scrape.ts's own routing)
+// still works unaffected — this repair only restores the inherited-from-Error
+// relationship so a raw (mocked) AxiosError can ALSO satisfy classifyError()'s
+// `error instanceof Error` check, exactly like it does in production. Without
+// this, every classifyScraperHttpError test below would silently fall through
+// to classifyError()'s generic UNKNOWN fallback regardless of status code —
+// not a real product bug, but a test-double fidelity gap that would have
+// hidden one.
+Object.setPrototypeOf(AxiosError.prototype, Error.prototype);
 
 // Must come after mock setup
 const { novadaScrape } = await import("../../src/tools/scrape.js");
@@ -461,18 +477,26 @@ describe("novadaScrape — error handling", () => {
     ).rejects.toThrow("ECONNREFUSED network error");
   });
 
-  // TOW2-307 Task 2 verification: an audit claimed concurrent scrapes surface a raw
-  // "Failed to retrieve scraper results: Request failed with status code 429" that
-  // BYPASSES classifyError(). This reproduces the exact path (pollForResult's own
-  // axios.get, inside scrape.ts, throwing a 429 AxiosError) and proves the claim is
-  // wrong: novadaScrape does rewrap the AxiosError into a plain Error (by design —
-  // see the ECONNREFUSED test above), but the "429" substring survives that rewrap,
-  // and classifyError()'s generic-Error fallback (errors.ts ~line 341,
-  // `msg.includes("429")`) still classifies it as RATE_LIMITED with
-  // failure_class:quota + retry_after_ms + "reduce concurrency" guidance. Nothing
-  // reaches the agent as a raw, unclassified string — classifyError is applied to
-  // every thrown error at the index.ts dispatch boundary regardless of type.
-  it("classifies a raw 429 from the result-poll endpoint as RATE_LIMITED via classifyError", async () => {
+  // 2026-10-26 fix (nightly canary INVARIANT_3[scrape] regression — GitHub
+  // issue; CHANGELOG entry this date): a prior worker's TOW2-307 Task 2
+  // investigation on 2026-10-13 PROVED that scrape.ts's poll catch rewrapped
+  // this exact 429 into a plain Error (by design) and that classifyError(),
+  // called downstream, still recognized the "429" substring and classified it
+  // as RATE_LIMITED — true for the npm-package STDIO dispatch (index.ts's
+  // CallToolRequestSchema catch calls classifyError() on EVERY thrown error).
+  // What that investigation did NOT cover: the HOSTED gateway
+  // (hosted-server/vercel/api/mcp.ts) runs its OWN, separate catch-all, which
+  // only special-cases `instanceof NovadaError` and otherwise degrades to a
+  // raw, truncated "Tool error: <message>" string with NO code/
+  // agent_instruction/retry guidance — exactly what the 2026-10-26 nightly
+  // canary observed in production ("Tool error: Failed to retrieve scraper
+  // results: Request failed with status code 429", is_error=True, no obvious
+  // upstream signal). scrape.ts now classifies this error AT THE THROW SITE
+  // (classifyScraperHttpError, which delegates to classifyError() — the SAME
+  // function, just invoked earlier) so the result is deployment-surface-
+  // independent: `thrown` IS a NovadaError regardless of which dispatch layer
+  // eventually formats it for the agent.
+  it("classifies a raw 429 from the result-poll endpoint as RATE_LIMITED, with resume-by-task_id guidance", async () => {
     mockedAxios.post.mockResolvedValue(SUBMIT_OK);
     // NOTE: under vi.mock("axios") automock, AxiosError's constructor body is
     // replaced (message/name are NOT set by `new AxiosError(msg, code)` — verified
@@ -493,23 +517,25 @@ describe("novadaScrape — error handling", () => {
       thrown = e;
     }
 
-    // scrape.ts's poll catch deliberately rewraps the AxiosError into a plain Error
-    // (`Failed to retrieve scraper results: ...`) — it is NOT a NovadaError at this
-    // point, matching the documented "does not catch-and-stringify" contract.
-    expect(thrown).toBeInstanceOf(Error);
-    expect(thrown).not.toBeInstanceOf(NovadaError);
-    expect((thrown as Error).message).toContain("429");
+    // scrape.ts now classifies AT THE THROW SITE — `thrown` is already a
+    // structured NovadaError, not a plain Error waiting on a downstream catch.
+    expect(thrown).toBeInstanceOf(NovadaError);
+    const err = thrown as NovadaError;
+    expect(err.code).toBe(NovadaErrorCode.RATE_LIMITED);
+    expect(err.retryable).toBe(true);
+    // A task_id DOES already exist at poll-time — the message must name it and
+    // say it's safe to resume (not re-submit, which would incur a new charge).
+    expect(err.message).toContain("test-task-123");
+    expect(err.message.toLowerCase()).toContain("resume");
 
-    // classifyError() is the SAME function index.ts's dispatch() applies to every
-    // thrown error at the MCP boundary — it must still recognize the "429" text and
-    // classify it as RATE_LIMITED (quota), not UNKNOWN/generic.
-    const classified = classifyError(thrown);
-    expect(classified.code).toBe(NovadaErrorCode.RATE_LIMITED);
-    expect(classified.retryable).toBe(true);
-    const agentText = classified.toAgentString();
+    const agentText = err.toAgentString();
+    expect(agentText).toContain("Error [RATE_LIMITED]");
     expect(agentText).toContain("failure_class: quota");
     expect(agentText).toContain("retry_after_ms");
     expect(agentText.toLowerCase()).toContain("serialize");
+    // The exact unstructured string the nightly canary observed must never
+    // reach an agent again.
+    expect(agentText).not.toContain("Tool error:");
   });
 
   // Round 3 (S1-connector, item 3, live-verified 2026-10-13): upstream business code
@@ -674,7 +700,13 @@ describe("novadaScrape — error handling", () => {
       expect(err.message.toLowerCase()).toContain("resume");
     });
 
-    it("submit-time 500 WITH a real .response (status well-defined): stays a plain, unclassified Error so classifyError's prose matching still applies — not swallowed into a blanket NovadaError", async () => {
+    // 2026-10-26 fix: this used to assert the OPPOSITE — that a has-.response
+    // AxiosError stayed a plain, unclassified Error, relying on a LATER
+    // dispatch layer to call classifyError(). That assumption is false on the
+    // hosted gateway (see the poll-path 429 test above for the full
+    // rationale) — this submit-path sibling classifies at the throw site via
+    // classifyScraperHttpError for the identical reason.
+    it("submit-time 500 WITH a real .response (status well-defined): classifies as API_DOWN at the throw site, no task_id to resume yet", async () => {
       const err500 = new AxiosError("Request failed with status code 500", "ERR_BAD_RESPONSE");
       err500.message = "Request failed with status code 500";
       Object.defineProperty(err500, "response", { value: { status: 500, data: { msg: "internal error" } } });
@@ -690,17 +722,83 @@ describe("novadaScrape — error handling", () => {
         thrown = e;
       }
 
-      expect(thrown).toBeInstanceOf(Error);
-      expect(thrown).not.toBeInstanceOf(NovadaError);
-      expect((thrown as Error).message).toContain("500");
-      expect((thrown as Error).message.toLowerCase()).not.toContain("undefined");
-
-      // classifyError() must still get a chance to apply its own prose-based
-      // classification downstream (this is the whole point of NOT pre-wrapping
-      // a has-a-response error into a NovadaError here).
-      const classified = classifyError(thrown);
-      expect(classified).toBeInstanceOf(NovadaError);
+      expect(thrown).toBeInstanceOf(NovadaError);
+      const err = thrown as NovadaError;
+      expect(err.code).toBe(NovadaErrorCode.API_DOWN);
+      expect(err.retryable).toBe(true);
+      expect(err.message.toLowerCase()).not.toContain("undefined");
+      // No task_id exists at submit-time — never claim a resumable task_id.
+      expect(err.message.toLowerCase()).not.toContain("resume");
+      expect(err.toAgentString()).not.toContain("Tool error:");
     });
+  });
+
+  // 2026-10-26 fix (nightly canary INVARIANT_3[scrape] regression): class-table
+  // over the full set of classifyError()-recognized statuses, the 401/403 rows
+  // classifyScraperHttpError decides itself, PLUS two mirror rows that must NOT
+  // be mislabeled rate-limited/upstream (404/400) — run against BOTH call sites
+  // (submit and poll), so a status special-cased at one site and not the other
+  // fails here (that is how the poll-time 403 → UNKNOWN gap was found).
+  describe("2026-10-26 fix — classifyScraperHttpError status-class table (submit + poll)", () => {
+    const CLASSIFIED_STATUSES: Array<{
+      status: number;
+      expectedCode: NovadaErrorCode;
+      expectRetryable: boolean;
+    }> = [
+      { status: 429, expectedCode: NovadaErrorCode.RATE_LIMITED, expectRetryable: true },
+      { status: 500, expectedCode: NovadaErrorCode.API_DOWN, expectRetryable: true },
+      { status: 502, expectedCode: NovadaErrorCode.API_DOWN, expectRetryable: true },
+      { status: 503, expectedCode: NovadaErrorCode.API_DOWN, expectRetryable: true },
+      // 403 at the scraper edge is usually a transient geo/WAF/rate block, 401 a
+      // real auth failure — classifyError() cannot tell them apart from axios's
+      // bare message, so the helper decides both for every call site.
+      { status: 403, expectedCode: NovadaErrorCode.API_DOWN, expectRetryable: true },
+      { status: 401, expectedCode: NovadaErrorCode.INVALID_API_KEY, expectRetryable: false },
+      // Mirror rows (SOP step 5): neither 404 nor 400 carries any of
+      // classifyError()'s recognized prose signals — both must fall through to
+      // the generic UNKNOWN (permanent, non-retryable) classification, never
+      // get mislabeled RATE_LIMITED or API_DOWN.
+      { status: 404, expectedCode: NovadaErrorCode.UNKNOWN, expectRetryable: false },
+      { status: 400, expectedCode: NovadaErrorCode.UNKNOWN, expectRetryable: false },
+    ];
+    const PHASES = ["submit", "poll"] as const;
+
+    for (const phase of PHASES) {
+      for (const { status, expectedCode, expectRetryable } of CLASSIFIED_STATUSES) {
+        it(`${phase}-time HTTP ${status} -> ${expectedCode} (retryable=${expectRetryable})`, async () => {
+          const err = new AxiosError(`Request failed with status code ${status}`, "ERR_BAD_RESPONSE");
+          err.message = `Request failed with status code ${status}`;
+          Object.defineProperty(err, "response", { value: { status, data: { msg: "upstream error" } } });
+          if (phase === "submit") {
+            mockedAxios.post.mockRejectedValue(err);
+          } else {
+            mockedAxios.post.mockResolvedValue(SUBMIT_OK); // submit succeeds -> task_id = "test-task-123"
+            mockedAxios.get.mockRejectedValue(err);
+          }
+
+          let thrown: unknown;
+          try {
+            await novadaScrape(
+              { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+              "test-key"
+            );
+          } catch (e) {
+            thrown = e;
+          }
+
+          expect(thrown).toBeInstanceOf(NovadaError);
+          const classified = thrown as NovadaError;
+          expect(classified.code).toBe(expectedCode);
+          expect(classified.retryable).toBe(expectRetryable);
+          expect(classified.toAgentString()).not.toContain("Tool error:");
+          // Resume guidance only where a task_id exists AND retrying can help;
+          // never at submit-time (nothing to resume) and never on a permanent error.
+          const resumable = phase === "poll" && expectRetryable;
+          expect(classified.message.includes('task_id="test-task-123"')).toBe(resumable);
+          if (resumable) expect(classified.message).not.toContain("Retry once");
+        });
+      }
+    }
   });
 });
 

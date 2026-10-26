@@ -538,6 +538,13 @@ def _looks_like_upstream_error(text: str) -> bool:
     as a separate function (not a refactor of invariant_3) so this change stays
     additive-only and invariant_3's existing, already-verified behavior is
     untouched.
+
+    NOTE (2026-10-26): does NOT recognize 429/rate-limit — see
+    _invariant_3_is_upstream_signal's doc comment below for why that gap
+    matters for INVARIANT_3 specifically. Left unchanged here deliberately
+    (out of scope for this fix — flagged as a follow-up in the fix's report,
+    not touched, since invariants 9/10 were not regressing and widening their
+    recognized-signal list carries its own, separate review burden).
     """
     t = text.lower()
     return (
@@ -545,6 +552,46 @@ def _looks_like_upstream_error(text: str) -> bool:
         "503" in text or "504" in text or "502" in text or
         "not activated" in t or "11006" in text or
         "not enabled" in t or "not available" in t
+    )
+
+
+def _invariant_3_is_upstream_signal(text: str) -> bool:
+    """
+    NO_LYING_ZERO's (invariant 3) own upstream-vs-reporting-bug classifier —
+    extracted from invariant_3_no_lying_zero's former inline tuple (2026-10-26)
+    so it is importable/callable on its own (see --self-test scenarios (h)/(i))
+    instead of only reachable by running the live invariant end-to-end. Every
+    PREVIOUSLY-recognized phrase is unchanged.
+
+    2026-10-26 addition: "429" / "rate"+"limit" — HTTP 429 (Too Many Requests)
+    was MISSING from this list even though invariant_3_no_lying_zero's own
+    docstring already promises "Upstream flakiness (timeout, backend error,
+    rate-limit) -> SKIP with reason." A 429 from the scraper result-retrieval
+    step (nightly-canary failure, 2026-10-26: "Tool error: Failed to retrieve
+    scraper results: Request failed with status code 429") is an unambiguous
+    upstream rate-limit condition, not a reporting-layer bug — and
+    NovadaErrorCode.RATE_LIMITED is a long-standing, product-wide error code
+    (npm-package/src/_core/errors.ts, used by scrape/search/verify/research/
+    browser_flow/developer_api) whose own classifyError() prose match is
+    EXACTLY `msg.includes("429") || (msg.includes("rate") && msg.includes("limit"))`
+    — mirrored here verbatim so the canary and the product agree on what
+    "rate limited" means. This is additive-only: every phrase this function
+    recognized before 2026-10-26 still matches identically (see
+    --self-test scenario (i), the mirror proving the addition did not widen
+    this into swallowing a genuine, unrelated reporting-layer bug).
+    """
+    t = text.lower()
+    return (
+        "timeout" in t or
+        "upstream" in t or
+        "backend" in t or
+        "503" in text or
+        "504" in text or
+        "502" in text or
+        "not activated" in t or
+        "11006" in text or
+        "429" in text or
+        ("rate" in t and "limit" in t)
     )
 
 
@@ -1501,18 +1548,10 @@ def invariant_3_no_lying_zero(transport: Transport) -> list[str]:
     }, timeout=90)
 
     if is_err:
-        # Distinguish upstream vs configuration errors.
-        upstream_signals = (
-            "timeout" in text.lower() or
-            "upstream" in text.lower() or
-            "backend" in text.lower() or
-            "503" in text or
-            "504" in text or
-            "502" in text or
-            "not activated" in text.lower() or
-            "11006" in text
-        )
-        if upstream_signals:
+        # Distinguish upstream vs configuration errors — see
+        # _invariant_3_is_upstream_signal's doc comment for the exact,
+        # complete recognized-phrase list (2026-10-26: added 429/rate-limit).
+        if _invariant_3_is_upstream_signal(text):
             raise SkipInvariant(
                 f"novada_scrape returned upstream/backend error — SKIP (not a reporting-layer failure): "
                 f"{text[:200]!r}"
@@ -3045,6 +3084,75 @@ def _self_test_scenario_plan_not_swallowed() -> bool:
     return ok
 
 
+# ─── 2026-10-26 fix (nightly canary INVARIANT_3[scrape] regression) ───────────
+# Scenarios (h)/(i): prove _invariant_3_is_upstream_signal's 429/rate-limit
+# addition classifies the EXACT string the 2026-10-26 production failure
+# reproduced as upstream/SKIP, and that the addition did NOT widen the
+# recognized-signal list into swallowing an unrelated, genuine reporting-layer
+# bug (the mandated mirror test for every fix — see CLAUDE.md's Pendulum rule).
+def _self_test_scenario_429_upstream_classification() -> bool:
+    """(h) NO_LYING_ZERO (invariant 3) must classify the EXACT error string the
+    2026-10-26 nightly canary failure reproduced — a plain, unclassified 429
+    from the scraper result-retrieval step — as upstream/SKIP, not a hard FAIL.
+    Exercises the REAL invariant_3_no_lying_zero (not a reimplementation) via a
+    FakeTransport whose novada_scrape call returns is_error=True with that
+    literal text. CONTRACT_FULL is forced True for the duration (invariant_3 is
+    billable-gated) and restored after, same convention as scenario (a)."""
+    print("\n[self-test h] 429 from scrape result-retrieval -> SKIP (not FAIL)")
+
+    canary_text = (
+        "Tool error: Failed to retrieve scraper results: "
+        "Request failed with status code 429"
+    )
+
+    global CONTRACT_FULL
+    prev_full = CONTRACT_FULL
+    CONTRACT_FULL = True
+    try:
+        ft = _FakeTransport({"novada_scrape": (True, canary_text)})
+        try:
+            failures = invariant_3_no_lying_zero(ft)
+        except SkipInvariant as e:
+            print(f"  PASS: classified as upstream/SKIP — {e}")
+            return True
+        except Exception as e:
+            print(f"  FAIL: expected SkipInvariant, got unexpected {e!r}")
+            return False
+        print(f"  FAIL: expected SkipInvariant, invariant_3 returned normally with failures={failures}")
+        return False
+    finally:
+        CONTRACT_FULL = prev_full
+
+
+def _self_test_scenario_non_upstream_still_fails() -> bool:
+    """(i) mirror of scenario (h): an is_error=True scrape response with NO
+    upstream signal (timeout/backend/5xx/not-activated/11006/429/rate-limit)
+    must still hard-FAIL — proves the 2026-10-26 429/rate-limit addition to
+    _invariant_3_is_upstream_signal did not widen the recognized-signal list
+    into swallowing a genuine, unrelated reporting-layer bug."""
+    print("\n[self-test i] non-upstream is_error (bad param) -> FAIL (not swallowed)")
+
+    non_upstream_text = "Tool error: Invalid parameter 'asin' — must be a 10-character ASIN."
+
+    global CONTRACT_FULL
+    prev_full = CONTRACT_FULL
+    CONTRACT_FULL = True
+    try:
+        ft = _FakeTransport({"novada_scrape": (True, non_upstream_text)})
+        try:
+            failures = invariant_3_no_lying_zero(ft)
+        except SkipInvariant as e:
+            print(f"  FAIL: expected a hard failure, got SkipInvariant instead — {e}")
+            return False
+        if not failures:
+            print("  FAIL: expected at least one failure, got none")
+            return False
+        print(f"  PASS: non-upstream is_error still hard-fails ({len(failures)} failure(s)).")
+        return True
+    finally:
+        CONTRACT_FULL = prev_full
+
+
 def run_self_test() -> int:
     print("[contract-test] --self-test: exercising the real classifier functions "
           "with synthetic, in-process inputs (no network, no live key).")
@@ -3058,6 +3166,8 @@ def run_self_test() -> int:
         ("(e) known tool, different param -> FAIL (not XFAIL)", _self_test_scenario_known_tool_wrong_param),
         ("(f) expired-ledger PRODUCT_UNAVAILABLE -> XFAIL CANARY_ACCOUNT_PLAN", _self_test_scenario_plan_xfail),
         ("(g) non-ledger PRODUCT_UNAVAILABLE / other errors -> FAIL", _self_test_scenario_plan_not_swallowed),
+        ("(h) 429 from scrape result-retrieval -> SKIP", _self_test_scenario_429_upstream_classification),
+        ("(i) non-upstream is_error (mirror of h) -> FAIL (not swallowed)", _self_test_scenario_non_upstream_still_fails),
     ]
     results = []
     for name, fn in scenarios:
