@@ -8,7 +8,7 @@
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
   },
-  "version": "0.9.43",
+  "version": "0.9.44",
   "tools": [
     {
       "name": "novada_search",
@@ -232,7 +232,7 @@
     {
       "registryType": "npm",
       "identifier": "novada-mcp",
-      "version": "0.9.43",
+      "version": "0.9.44",
       "transport": {
         "type": "stdio"
       },

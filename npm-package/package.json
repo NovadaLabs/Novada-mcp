@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.9.43",
+  "version": "0.9.44",
   "description": "One MCP server for all web data. Scrape, search, crawl, and AI research in one install.",
   "mcpName": "io.github.NovadaLabs/novada-mcp",
   "type": "module",
