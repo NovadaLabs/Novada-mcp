@@ -22,6 +22,7 @@
   "files": [
     "build",
     "!build/corpus",
+    "!build/**/*.map",
     "server.json",
     "skills"
   ],
@@ -35,7 +36,6 @@
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "benchmark": "tsx benchmark/run.ts",
     "test:bing-live": "node tests/live/bing-reliability.mjs",
     "prepublishOnly": "if [ -f .env ]; then echo 'ERROR: .env file present — delete test credentials before publishing'; exit 1; fi && npm run build && npm test -- tests/tools/search.test.ts"
   },

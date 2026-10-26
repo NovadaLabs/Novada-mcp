@@ -1,8 +1,8 @@
 # CLAUDE.md — Novada MCP Monorepo
 
-This repo is a **monorepo** with two artifacts. Read the routing table before editing.
+This repo is a **monorepo** with two shipped artifacts (plus supporting dirs, see Layout). Read the routing table before editing.
 
-## The two artifacts (one-liners)
+## The two shipped artifacts (one-liners)
 
 - **`npm-package/` IS the `novada-mcp` npm package** users run locally via `npx novada-mcp` (a local **stdio** MCP server). Tool logic lives here.
 - **`hosted-server/` IS what runs at `https://mcp.novada.com`** — an **HTTP wrapper** (auth + rate-limit) around `npm-package`, deployed on **Vercel**.
@@ -29,5 +29,10 @@ This repo is a **monorepo** with two artifacts. Read the routing table before ed
 ```
 npm-package/     → npm `novada-mcp` (stdio)      [tool logic]
 hosted-server/   → mcp.novada.com (Vercel HTTP)  [auth + rate-limit + deploy]
-.github/         → CI for npm-package/
+distribution/    → Dify/Codex/Antigravity plugins + channel registry + claims gate (check.mjs)
+monitoring/      → DingTalk health alerts, canary, k6 load tests
+config/          → surfaces.json (shared surface/tool config)
+scripts/         → repo-level scripts (check-hosted-drift.mjs)
+docs/            → TOOLS.md + assets
+.github/         → CI
 ```
