@@ -688,7 +688,7 @@ Tools (${TOOLS.length} registered — run 'npx novada-mcp --list-tools' for the 
                              each a closed, typed operation enum; run --list-tools for the full live set
   novada_ai_monitor          Search AI-company public domains for brand mentions (not live models)
   novada_monitor             Detect page changes between checks (session-scoped baseline)
-  novada_proxy               Get proxy credentials (residential/isp/datacenter/mobile/static/dedicated)
+  novada_proxy               Get a proxy config template (endpoint + masked credentials) (residential/isp/datacenter/mobile/static/dedicated)
   novada_browser             Interactive browser automation (navigate, click, type, screenshot)
   novada_browser_flow        Cloud browser automation via action sequence API
   novada_account             Account & billing dashboard (balance, plans, usage, traffic)

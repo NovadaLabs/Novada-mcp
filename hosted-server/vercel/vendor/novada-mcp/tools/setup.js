@@ -231,7 +231,13 @@ const ADDON_TOOLS = "Also available: novada_research (multi-source cited report)
  * key is present+valid / present-but-invalid / not set, (2) tells you the exact
  * next action, and (3) orients you on what you can do.
  */
-export async function novadaSetup(_params, callerApiKey) {
+export async function novadaSetup(_params, callerApiKey, 
+// Tools this session can actually call (hosted passes its filtered set). Omitted = all
+// visible (local stdio). Orientation text must never name a tool the session can't call.
+visibleTools) {
+    const isVisible = (tool) => !visibleTools || visibleTools.has(tool);
+    const browserVisible = isVisible("novada_browser");
+    const coreTools = CORE_TOOLS.filter((t) => isVisible(t.tool));
     const apiKey = process.env.NOVADA_API_KEY?.trim();
     const devApiKey = process.env.NOVADA_DEVELOPER_API_KEY?.trim();
     const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
@@ -267,9 +273,10 @@ export async function novadaSetup(_params, callerApiKey) {
         // Cheap env-presence check (no network): whether novada_browser has an
         // explicit CDP endpoint configured. Never echoes the (credential-bearing)
         // value itself.
-        L.push(browserWs
-            ? `> Browser WS (NOVADA_BROWSER_WS): configured — novada_browser connects via your endpoint.`
-            : `> Browser WS (NOVADA_BROWSER_WS): not set — novada_browser will auto-provision from your API key on a capable runtime.`);
+        if (browserVisible)
+            L.push(browserWs
+                ? `> Browser WS (NOVADA_BROWSER_WS): configured — novada_browser connects via your endpoint.`
+                : `> Browser WS (NOVADA_BROWSER_WS): not set — novada_browser will auto-provision from your API key on a capable runtime.`);
     }
     L.push("");
     // ─── (b) Next action for this state ───────────────────────────────────────
@@ -315,7 +322,7 @@ export async function novadaSetup(_params, callerApiKey) {
     // ─── (c) "What you can do" orientation (always shown) ─────────────────────
     L.push("## What you can do");
     L.push("");
-    for (const { tool, line } of CORE_TOOLS) {
+    for (const { tool, line } of coreTools) {
         L.push(`- **${tool}** — ${line}`);
     }
     L.push("");
@@ -324,7 +331,7 @@ export async function novadaSetup(_params, callerApiKey) {
     // Optional capabilities (only nudge when ready — don't clutter the first run).
     if (state === "ready") {
         const optional = [];
-        if (!browserWs)
+        if (browserVisible && !browserWs)
             optional.push(`For faster **novada_browser** sessions you can set NOVADA_BROWSER_WS (optional — auto-provisioned from your key otherwise). Enable at ${URL_BROWSER}`);
         if (!proxyConfigured)
             optional.push(`For **novada_proxy** (set type=residential|isp|mobile|datacenter|static|dedicated) in your own HTTP clients, set NOVADA_PROXY_ENDPOINT (user/pass auto-fetched from your key). Details at ${URL_PROXY}`);
@@ -368,7 +375,8 @@ export async function novadaSetup(_params, callerApiKey) {
         L.push(readiness
             ? `product_status: ${Object.entries(readiness.statuses).map(([k, s]) => `${k}=${s}`).join(" ")}`
             : `product_status: unavailable — call novada_account(section="plans") for per-product balances`);
-        L.push(`browser_ws_configured: ${browserWs ? "true" : "false"}`);
+        if (browserVisible)
+            L.push(`browser_ws_configured: ${browserWs ? "true" : "false"}`);
     }
     // NOVADA_SERVER_VERSION is set at module init by the hosted wrapper (mcp.ts) to its
     // computed HOSTED_VERSION string (e.g. "0.9.26-hosted"), which is the same string
@@ -378,7 +386,7 @@ export async function novadaSetup(_params, callerApiKey) {
     L.push(`server_version: ${process.env.NOVADA_SERVER_VERSION ?? VERSION}`);
     L.push(`register_url: ${URL_SIGNUP}`);
     L.push(`api_key_url: ${URL_API_KEY}`);
-    L.push(`core_tools: ${CORE_TOOLS.map(t => t.tool).join(", ")}`);
+    L.push(`core_tools: ${coreTools.map(t => t.tool).join(", ")}`);
     L.push(`agent_instruction: ${agentInstruction}`);
     return L.join("\n");
 }

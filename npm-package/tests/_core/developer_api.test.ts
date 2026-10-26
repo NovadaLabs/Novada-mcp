@@ -98,3 +98,40 @@ describe("devApiPost — 40002 retry EXCLUDED for write-type endpoints", () => {
     expect(mockedAxios.post).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("devApiPost — 401 agent-facing text never leaks an internal host", () => {
+  it("points at the public dashboard, not [novada-internal-host]", async () => {
+    mockedAxios.post.mockResolvedValue(envelopeResp(11000, "invalid api key"));
+
+    // Error path: devApiPost envelope branch -> makeNovadaError(INVALID_API_KEY)
+    // -> NovadaError.toAgentString() -> redactSecrets (rewrites non-public *.novada.com hosts).
+    let caught: unknown;
+    try {
+      await devApiPost("/v1/wallet/balance", {}, { apiKey: "k" });
+    } catch (e) {
+      caught = e;
+    }
+    const { NovadaError } = await import("../../src/_core/errors.js");
+    expect(caught).toBeInstanceOf(NovadaError);
+    const text = (caught as InstanceType<typeof NovadaError>).toAgentString();
+    expect(text).toContain("dashboard.novada.com");
+    expect(text).not.toContain("[novada-internal-host]");
+    expect(text).not.toContain("developer-api.novada.com");
+  });
+
+  it("missing-key message also points at the public dashboard", async () => {
+    const saved = { d: process.env.NOVADA_DEVELOPER_API_KEY, a: process.env.NOVADA_API_KEY };
+    delete process.env.NOVADA_DEVELOPER_API_KEY;
+    delete process.env.NOVADA_API_KEY;
+    try {
+      const { getDeveloperApiKey } = await import("../../src/_core/developer_api.js");
+      let text = "";
+      try { getDeveloperApiKey(); } catch (e) { text = (e as { toAgentString(): string }).toAgentString(); }
+      expect(text).toContain("dashboard.novada.com");
+      expect(text).not.toContain("[novada-internal-host]");
+    } finally {
+      if (saved.d !== undefined) process.env.NOVADA_DEVELOPER_API_KEY = saved.d;
+      if (saved.a !== undefined) process.env.NOVADA_API_KEY = saved.a;
+    }
+  });
+});

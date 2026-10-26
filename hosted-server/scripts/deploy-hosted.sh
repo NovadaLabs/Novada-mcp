@@ -142,6 +142,16 @@ rsync -a --delete "$NPM/build/" "$VEN/"
 echo "[VENDOR] copying package.json..."
 cp "$NPM/package.json" "$VEN/package.json"
 
+# Keep the vendor/package.json SHIM (parent of $VEN) at the same version: the vendored
+# config.js require()s it at runtime for VERSION, so a stale shim = stale runtime version.
+echo "[VENDOR] syncing vendor/package.json shim version..."
+node -e '
+  const fs = require("fs"); const [shimPath, pkgPath] = process.argv.slice(1);
+  const shim = JSON.parse(fs.readFileSync(shimPath, "utf8"));
+  const v = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version;
+  if (shim.version !== v) { shim.version = v; fs.writeFileSync(shimPath, JSON.stringify(shim, null, 2) + "\n"); console.log("  shim version -> " + v); }
+' "$VEN/../package.json" "$NPM/package.json"
+
 echo "[VENDOR] ✓ vendor sync complete"
 
 # ─── PHASE 3: HOSTED GATES ────────────────────────────────────────────────────

@@ -204,6 +204,7 @@ import { listResources, readResource } from "../vendor/novada-mcp/resources/inde
 // primary, positive balance as OR-fallback). Plan resolution is LAZY — nothing is
 // looked up for keys under the cap.
 import { enforceGatewayCap, resolvePlan, fetchAggregateBalance } from "./_plan.js";
+import { appendGatewayFooter } from "./_footer.js";
 
 // Hosted server version = `<vendored npm version>.<server build tag>-hosted`.
 //   • The npm-version part is DERIVED from the vendored package — NEVER hardcoded.
@@ -1647,14 +1648,16 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const setupGateFields = { charged: false, over_cap_allowed: false, quota_remaining: 0 };
       try {
         // Pass the caller's token so setup validates the CUSTOMER's key (not the server env fallback).
-        const result = await novadaSetup(validateSetupParams(argsObj), ctx.token);
+        // 3rd arg = this surface's visible tool set, so setup never names a hidden tool
+        // (e.g. novada_browser on hosted) — same mechanism novada_discover uses.
+        const result = await novadaSetup(validateSetupParams(argsObj), ctx.token, visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
         // SETUP_GATE is the exempt sentinel — novada_setup exits before the real gate is evaluated.
         // monthlyQuota is declared below (after this early-return block) — inline it here.
         const setupMonthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
         const setupFooter = buildStatusFooter(SETUP_GATE, setupMonthlyQuota);
         await scheduleToolEvent({ outcome: "ok", gate: setupGateFields, plan: null });
-        return { content: [{ type: "text" as const, text: result + setupFooter }] };
+        return { content: appendGatewayFooter([{ type: "text" as const, text: result }], setupFooter) };
       } catch (e) {
         logUsage(env, ctx.token, name, false, Date.now() - started);
         await scheduleToolEvent({ outcome: "error", gate: setupGateFields, plan: null, error: e });
@@ -1785,7 +1788,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const sanitized = sanitizeHostedOutput(result);
         const discoverFooter = buildStatusFooter(gate, monthlyQuota);
         // TOW2-242: first-run notice on this successful path too (separate block).
-        const discoverContent = [{ type: "text" as const, text: sanitized + discoverFooter }];
+        const discoverContent = appendGatewayFooter([{ type: "text" as const, text: sanitized }], discoverFooter);
         const discoverNotice = await maybeGetFirstRunNoticeHosted(ctx.token);
         if (discoverNotice) discoverContent.push({ type: "text" as const, text: discoverNotice });
         await scheduleToolEvent({
@@ -1820,7 +1823,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // TOW2-242: one-time first-run notice — SEPARATE content block (never
       // concatenated into the result text, which would corrupt JSON outputs),
       // ONLY on this successful path. Fails quiet → never throws.
-      const content = [{ type: "text" as const, text: sanitized + statusFooter }];
+      const content = appendGatewayFooter([{ type: "text" as const, text: sanitized }], statusFooter);
       const notice = await maybeGetFirstRunNoticeHosted(ctx.token);
       if (notice) content.push({ type: "text" as const, text: notice });
       // Classify in-band ceiling timeout from extractSingle — returned as a string

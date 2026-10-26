@@ -1,164 +1,81 @@
 # Novada MCP
 
-**One MCP server for the entire live web.** Search, extract, scrape, crawl, proxy, browser automation, and AI-powered research — behind a single hosted connection, or one local install if you'd rather run it yourself.
+Web search, page extraction and structured platform data for AI agents, backed by Novada's own proxy network.
 
 [![npm version](https://img.shields.io/npm/v/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![CI](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](npm-package/LICENSE)
-
-[Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Why Novada](#why-novada) · [Repository layout](#repository-layout) · [Links](#links)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card needed](docs/assets/free-credits-banner.png)](https://www.novada.com)
 
-|  |  |
-|:--|:--|
-| **✅ Works with any MCP client** — Claude, Cursor, Windsurf, VS Code, or `npx` locally | **🎯 14 typed per-platform scrapers** — Amazon, Google, LinkedIn, TikTok, … each a closed `operation` enum, so an agent can't call an invalid op |
-| **🎁 $10 free credits — no credit card needed** — up to 1,000 calls/month | **⚡ Hosted-first, zero install** — point at one URL, or self-host in one command |
+**Free to start:** $10 in credits, up to 1,000 calls a month, no credit card.
 
----
+## What it is good at
+
+- **Structured data from 14 sources, no HTML parsing.** One typed tool per platform (Amazon, Google, LinkedIn, TikTok, YouTube, Instagram, Facebook, X, Walmart, GitHub and more). The `operation` is a closed list, so a wrong value is rejected before any call and the error lists the valid ones.
+- **Pages that block bots.** `novada_extract` escalates from a plain fetch to JS render to a real browser on its own, takes up to 10 URLs per call, and names the blocker when it cannot get through (for example `anti_bot:kasada`).
+- **Cited research in one call.** `novada_research` runs several searches, de-duplicates, and returns numbered source passages for your agent to write the answer from. It returns source material, not a generated summary.
+
+## Try these prompts
+
+| Use case | Ask your agent |
+|---|---|
+| Price research | "Compare the top 5 Amazon results for 'standing desk' by price and rating, then check the cheapest one on Walmart." |
+| Lead research | "List open Data Analyst jobs on LinkedIn in Germany posted this week, with company and link." |
+| Cited answer | "What changed in the EU battery regulation this year? Give me sources I can quote." |
 
 ## Quickstart
 
-Novada is **hosted-first** — there's nothing to install. Point your client at the hosted URL and you're done.
+Hosted, nothing to install. Sign up at [novada.com](https://www.novada.com) for a key; check your balance any time with `novada_setup`.
 
-> **Security note:** the hosted endpoint never accepts your API key as a URL query parameter or path segment — only an `Authorization: Bearer <key>` header, or OAuth sign-in, is accepted. This keeps the key out of URLs, server logs, proxies, and browser history. Never share your key or paste it into a URL.
+**claude.ai:** Settings → Connectors → Add custom connector, paste `https://mcp.novada.com/mcp`, sign in with your Novada account (OAuth).
 
-### claude.ai (web)
-
-1. Go to **Settings → Connectors → Add custom connector**.
-2. Name it `Novada`.
-3. Paste the bare URL and sign in with your Novada account when prompted (OAuth):
-   ```
-   https://mcp.novada.com/mcp
-   ```
-4. Click **Add**.
-
-### Claude Code
+**Claude Code:**
 
 ```bash
 claude mcp add --transport http novada https://mcp.novada.com/mcp --header "Authorization: Bearer YOUR_KEY"
 ```
 
-**Full per-client install (Cursor/Windsurf/VS Code + local self-host) → [npm-package/README.md](./npm-package/README.md).**
-
-### Try it
-
-```
-novada_setup()                                          — validates your key, shows balance
-novada_search({query: "Claude MCP tutorials"})          — web search
-novada_extract({url: "https://example.com"})            — read any URL
-novada_research({question: "how do MCP servers work?"}) — parallel multi-source research
-```
-
----
-
-## Get your key
-
-1. Sign up at [novada.com](https://www.novada.com) — no credit card required.
-2. Copy your API key from [novada.com](https://www.novada.com).
-3. You start with **$10 in free credits**, capped at **1,000 calls/month**. Check what's left any time with `novada_account({section: "balance"})` or `novada_setup()`.
-
----
+Cursor, Windsurf, VS Code and self-host (`npx -y novada-mcp`): see the [install guide](./npm-package/README.md). The hosted endpoint accepts the key only in an `Authorization: Bearer` header or via OAuth, never in a URL.
 
 ## How to choose a tool
 
 [![How to choose a Novada MCP tool — decision guide](docs/assets/tool-decision-map.png)](https://www.novada.com)
 
-These are the tools you reach for most:
-
 | Tool | Use it when |
 |------|-------------|
-| `novada_setup` | **First run** — validate your key and see your balance. Start here. |
 | `novada_search` | Find pages by query (google / duckduckgo / yandex; time, domain, geo filters). |
-| `novada_extract` | Read one known URL — or up to 10 in parallel — through anti-bot pages. |
-| `novada_research` | Answer a complex question — parallel multi-source search + extraction in one call. |
-| `novada_scrape` | Structured records from 14 platforms (Amazon, LinkedIn, TikTok, …). Plus **14 typed per-platform tools** — `novada_scrape_amazon`, `_google`, `_linkedin`, … — each a closed `operation` enum. |
-| `novada_crawl` | Pull content from a bounded set of related pages (≤20) on one site. |
+| `novada_extract` | Read one known URL, or up to 10 in parallel, through anti-bot pages. |
+| `novada_research` | Answer a complex question with passages from several sources in one call. |
+| `novada_scrape` | Structured records from 14 platforms, plus **14 typed per-platform tools** such as `novada_scrape_amazon` and `novada_scrape_linkedin`. |
+| `novada_crawl` | Pull content from a bounded set of related pages (up to 20) on one site. |
 | `novada_map` | Discover what URLs exist on a site before fetching. |
-| `novada_browser` | Interact with a page — click, type, screenshot, run JS. |
-| `novada_proxy` | Route your own HTTP client through a specific IP type / country / session. |
+| `novada_proxy` | Route your own HTTP client through a specific IP type, country or session. |
 
-**Not sure?** Call `novada_discover` and it returns the full catalog with each tool's status.
+Not sure? Call `novada_discover`. 37 tools self-hosted; the hosted endpoint exposes 28 of them (self-host adds browser automation and site copy). Full list and per-surface availability: [docs/TOOLS.md](docs/TOOLS.md).
 
-📚 **[Full reference — all 37 tools →](docs/TOOLS.md)**
+## How it compares
 
-**37 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 37. The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
+| | Typed platform scrapers | Search / extract / crawl / map | Own proxy network | Notes |
+|---|:--:|:--:|:--:|---|
+| **Novada** | Yes (14) | Yes, plus research | Yes | Proxy config from Novada's own network via `novada_proxy` |
+| Tavily | No | Yes | No | Search, extract, map, crawl |
+| Firecrawl | No | Yes | No | Scrape, crawl, search, extract and an agent tool |
+| Bright Data | Yes | Yes | Yes | Closest in scope |
 
-### Where does it run?
+Pick Tavily or Firecrawl if you only need search and page-to-markdown. Pick Novada or Bright Data if you also need records from specific platforms or control over proxy routing. Comparison reflects each project's public MCP README as of 2026-10-26; check theirs for current details.
 
-<details>
-<summary>Full local/hosted breakdown, all 37 tools</summary>
-
-| Tool | Local (`npx novada-mcp`) | Hosted (`mcp.novada.com`) |
-|------|:--:|:--:|
-| `novada_search` | ✅ | ✅ |
-| `novada_extract` | ✅ | ✅ |
-| `novada_crawl` | ✅ | ✅ |
-| `novada_research` | ✅ | ✅ |
-| `novada_map` | ✅ | ✅ |
-| `novada_site_copy` | ✅ | ❌ writes to local disk |
-| `novada_search_feedback` | ✅ | ❌ per-process in-memory state |
-| `novada_scrape` | ✅ | ✅ |
-| `novada_scrape_amazon` … `_perplexity` (14 platform tools) | ✅ | ✅ |
-| `novada_ai_monitor` | ✅ | ✅ |
-| `novada_monitor` | ✅ | ✅ |
-| `novada_verify` | ✅ | ❌ not on `novada_discover`'s hosted listing |
-| `novada_proxy` | ✅ | ✅ |
-| `novada_browser` | ✅ | ❌ needs a persistent CDP WebSocket session |
-| `novada_browser_flow` | ✅ | ❌ needs a persistent browser session |
-| `novada_account` | ✅ | ✅ |
-| `novada_proxy_account_create` | ✅ | ✅ |
-| `novada_proxy_account_list` | ✅ | ✅ |
-| `novada_ip_whitelist` | ✅ | ❌ write-gated account op |
-| `novada_capture_apikey` | ✅ | ❌ write-gated account op |
-| `novada_static_ip_mgmt` | ✅ | ❌ write-gated account op |
-| `novada_discover` | ✅ | ✅ |
-| `novada_setup` | ✅ | ✅ |
-| `novada_session_stats` | ✅ | ❌ per-process in-memory state |
-
-Full per-tool reference (same column) → [docs/TOOLS.md](docs/TOOLS.md).
-
-</details>
-
----
-
-## Why Novada
-
-- **14 dedicated per-platform scrapers.** `novada_scrape_amazon`, `_google`, `_bing`, `_duckduckgo`, `_yandex`, `_youtube`, `_instagram`, `_facebook`, `_tiktok`, `_x`, `_walmart`, `_linkedin`, `_github`, `_perplexity` — each exposes a closed, typed `operation` enum scoped to that platform instead of the generic `novada_scrape`'s open `platform`+`operation` string pair, so an agent can't guess an invalid operation for the wrong platform.
-- **Honest tool surface.** Every listed `operation` is verified-working — operations we can't currently deliver are marked and excluded, not left in to fail on you mid-task.
-- **Contract-tested self-report.** Tool descriptions are tested against actual behavior, not just written and forgotten — what a tool claims to return is checked against what it actually returns.
-- **Drift-guarded tool registry.** `npm-package/src/tools/registry.ts` is the single source of truth for the tool catalog; a test asserts the registered tools, the wired tools, and the `novada_discover` output can never diverge.
-- **`confirm:true` write-gate.** Every mutating tool (proxy sub-account creation, IP whitelist changes, static IP purchases, capture-key resets) requires an explicit two-step confirmation — no silent writes.
-- **Callable onboarding.** `novada_discover` and `novada_setup` are tools your agent can call itself to find the right tool or validate a key, without ever reading this README.
-
-**vs Firecrawl / Tavily (measured, not marketing):**
-- **4.9× more compact.** An identical 5-result search query returned 2,761 bytes from Novada vs 13,421 bytes from Firecrawl — less agent token cost per answer.
-- **Keyless to start.** `npx -y novada-mcp` cold-starts with no key; `novada_setup` walks you to one only when a tool needs it.
-- **Named anti-bot failures.** On an unresolvable target, Novada's response names the exact blocker (e.g. `anti_bot:kasada`) instead of a generic error, so an agent can branch on it.
-
----
+Built for agents: write operations (proxy sub-accounts, IP whitelist, static IPs, key capture) use a two-step approval token, and `novada_discover` and `novada_setup` let an agent find the right tool or check its key without reading this page. Basic `novada_extract` also works without a key (no render escalation).
 
 ## Repository layout
 
-This is a **monorepo** with two artifacts:
-
-- **`npm-package/`** — the `novada-mcp` npm package. Local stdio MCP server (`npx novada-mcp`); source of truth for all tool logic.
-- **`hosted-server/`** — what runs at `https://mcp.novada.com`. An HTTP wrapper (auth, quota, rate-limit) on Vercel around the npm package's built output.
-
-**Full architecture map (entrances, dispatch core, where-does-X-live) → [ARCHITECTURE.md](./ARCHITECTURE.md); contributor routing → [CONTRIBUTING](./npm-package/CONTRIBUTING.md).**
-
----
+`npm-package/` is the `novada-mcp` package and holds all tool logic. `hosted-server/` is the HTTP wrapper behind `mcp.novada.com`. `distribution/` holds plugin and registry packaging plus the release consistency check, `monitoring/` the smoke, stress and report tooling, `config/` the surface definitions, `scripts/` repo-level checks, and `docs/` the tool reference and assets. See [ARCHITECTURE.md](./ARCHITECTURE.md) and [CONTRIBUTING](./npm-package/CONTRIBUTING.md).
 
 ## Links
 
-- Website: [novada.com](https://www.novada.com)
-- Get an API key: [novada.com](https://www.novada.com)
-- Sign up (free): [novada.com](https://www.novada.com)
-- npm: [npmjs.com/package/novada-mcp](https://www.npmjs.com/package/novada-mcp)
-- GitHub: [github.com/NovadaLabs/novada-mcp](https://github.com/NovadaLabs/novada-mcp)
-- Issues: [github.com/NovadaLabs/novada-mcp/issues](https://github.com/NovadaLabs/novada-mcp/issues)
+[novada.com](https://www.novada.com) · [npm](https://www.npmjs.com/package/novada-mcp) · [GitHub](https://github.com/NovadaLabs/novada-mcp) · [Issues](https://github.com/NovadaLabs/novada-mcp/issues)
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE).

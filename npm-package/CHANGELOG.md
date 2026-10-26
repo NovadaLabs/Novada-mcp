@@ -6,8 +6,34 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+---
+
+## [0.9.43] — 2026-10-26
+
+Documentation-truth and hygiene release after an end-to-end product evaluation. Tool behaviour is unchanged except where a tool's own text or output framing was wrong.
+
+### Changed (npm package)
+- **`novada_proxy` says what it returns.** Its description, the `novada_discover` catalog line, the CLI help and the `novada-agent` skill now state that the tool returns a proxy config **template** — username shown as `<PROXY_USER>`, password as `***` — and never prints credentials. (The output was already masked; the text claimed otherwise.)
+- **`novada_setup` never names a tool the session cannot call.** On the hosted surface it no longer lists `novada_browser` or the Browser-WS add-on. `novadaSetup()` takes an optional visible-tool set as a third argument, the same mechanism `novada_discover` already used.
+- **`novada_discover` reports 9 hosted-hidden tools (including `novada_browser`)**, derived from one exported list (`HOSTED_HIDDEN_TOOLS`) that a test keeps equal to the hosted server's `HOSTED_HIDDEN` set.
+- **Developer-API 401 errors point at `https://dashboard.novada.com/api-key/`** instead of an internal host that the redactor turned into `[novada-internal-host]`.
+- **The shipped `novada-proxy` skill** refers to `novada_proxy` with `type=…` instead of six tool names that no longer exist.
+- **Smaller tarball:** sourcemaps are no longer published (`!build/**/*.map`), 439 → 225 files. The dead `benchmark` npm script (no directory, `tsx` never a dependency) is removed.
+- Removed `scripts/verify-c1-live.mjs` (one-off probe with a hard-coded macOS path; tracked despite the repo's own `.gitignore` rule, unreferenced).
+
 ### Added
 - **Official MCP Registry publishing via GitHub Actions OIDC.** A manually triggered, secretless workflow validates and publishes `server.json` under the repository-owned `io.github.NovadaLabs/*` namespace with only `contents: read` and `id-token: write` permissions.
+- Root `LICENSE` (MIT) so GitHub detects the license.
+- Tests: hosted-surface `novada_setup` visibility, hosted-hidden list parity, 401 message wording, `novada_extract format=json` output parses as JSON.
+
+### Fixed (hosted server — `mcp.novada.com`, not part of the npm package)
+- **JSON results are no longer corrupted by the `gateway:` footer.** When a tool result is JSON (`format=json`), the footer is returned as a second content block instead of being appended to the JSON text (`api/_footer.ts`, 7 tests).
+- **Nightly canary no longer reports the canary account's own expired plan as a production failure.** A truthful `PRODUCT_UNAVAILABLE` refusal with ledger evidence is classified `XFAIL: CANARY_ACCOUNT_PLAN` (issue #18) in `scripts/contract/contract-test.py`; every other error still fails.
+- **`vendor/package.json` version drift.** `deploy-hosted.sh` and `sync-to-hosted.mjs` now keep the vendor shim's version equal to the npm package (it had reported 0.9.3 since June; the vendored `config.js` reads it at runtime). Vendor re-synced in this release.
+
+### Docs
+- **README rewritten** (164 → 81 lines): outcome line, what the server is good at, example prompts, hosted quickstart, an honest comparison with Firecrawl, Tavily and Bright Data. Removed claims that did not match the code: the `confirm:true` write-gate (writes use a two-step approval token), "6 categories", "4.9× more compact", and browser automation on the hosted surface. `npm-package/README.md` links are absolute so they work on npmjs.com.
+- `docs/TOOLS.md` and `ARCHITECTURE.md` corrected (14 working platforms / ~76 operations, hosted browser exclusion, approval-token wording); `CLAUDE.md` lists the real top-level directories; `HANDOFF.md` / `PROJECT_STATE.md` marked historical; `CONTRIBUTING.md` carries the release checklist (the pre-monorepo `promote-to-public.sh` is no longer referenced).
 
 ---
 

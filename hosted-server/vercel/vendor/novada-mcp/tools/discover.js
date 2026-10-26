@@ -1,6 +1,22 @@
 import { z } from "zod";
 import { TOOL_REGISTRY, TOOL_CATEGORIES, POPULATED_TOOL_CATEGORIES, TOOL_GROUPS, GROUP_TOOL_NAMES, TOOL_LEDGERS, LEDGER_TOOL_NAMES, LEDGER_EXPLAINER, } from "./registry.js";
 import { VERSION } from "../config.js";
+/**
+ * Tools the hosted endpoint never lists. MIRRORS HOSTED_HIDDEN in
+ * hosted-server/vercel/api/mcp.ts (same 9 names) — keep the two in sync.
+ * Used only for the hosted-vs-local note in novada_discover's group listing.
+ */
+export const HOSTED_HIDDEN_TOOLS = [
+    "novada_browser_flow",
+    "novada_browser",
+    "novada_site_copy",
+    "novada_ip_whitelist",
+    "novada_static_ip_mgmt",
+    "novada_capture_apikey",
+    "novada_session_stats",
+    "novada_search_feedback",
+    "novada_verify",
+];
 import { CATALOG_BY_DOMAIN, CATALOG_DOMAINS, WORKING_PLATFORM_NAMES, WORKING_OP_COUNT } from "../data/scraper_catalog.js";
 // ─── Tool Catalog ─────────────────────────────────────────────────────────────
 // The catalog is DERIVED from the canonical registry (./registry.ts) — the single
@@ -176,8 +192,7 @@ export async function novadaDiscover(params, visibleTools) {
     lines.push("- **`meta`:** hosted's `?groups=meta` returns a NARROWER 2-tool subset (novada_discover, novada_setup) — " +
         "novada_session_stats/novada_search_feedback are permanently hidden on hosted (in-memory state that resets every serverless call).");
     lines.push("- **`core` / `account`:** hosted already has its OWN, differently-scoped `?groups=core` (10 tools) and `?groups=account` (3 tools) — " +
-        "these do NOT match the counts below. Hosted permanently hides 8 write/stateful tools total (novada_site_copy, novada_browser_flow, " +
-        "novada_ip_whitelist, novada_capture_apikey, novada_static_ip_mgmt, novada_session_stats, novada_search_feedback, novada_verify-from-listing). " +
+        `these do NOT match the counts below. Hosted permanently hides ${HOSTED_HIDDEN_TOOLS.length} write/stateful tools total (${HOSTED_HIDDEN_TOOLS.join(", ")}). ` +
         "Call `novada_discover` on your actual endpoint to see this session's real filtered set — don't assume the counts below.");
     lines.push("");
     for (const group of TOOL_GROUPS) {

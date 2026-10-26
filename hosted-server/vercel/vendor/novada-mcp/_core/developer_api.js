@@ -73,7 +73,7 @@ export function getDeveloperApiKey() {
     const fallback = process.env.NOVADA_API_KEY?.trim();
     if (fallback)
         return fallback;
-    throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "Neither NOVADA_DEVELOPER_API_KEY nor NOVADA_API_KEY is set. Account-management tools require a developer-api key from https://developer-api.novada.com/zh.");
+    throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "Neither NOVADA_DEVELOPER_API_KEY nor NOVADA_API_KEY is set. Account-management tools require a developer-api key from https://dashboard.novada.com/api-key/.");
 }
 /**
  * Some Novada developer-api endpoints accept a typo'd field `strat_time` (and
@@ -244,7 +244,7 @@ export async function devApiPost(path, body, opts = {}) {
         // body is wrong, even when the key works for sibling endpoints. Smoke-verified
         // 2026-06-03: same key works for wallet/* but returns 10001 on proxy_account/list.
         if (envelope.code === 11000 || envelope.code === 10002 || envelope.code === 401) {
-            throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Developer-api auth failure (code=${envelope.code}): ${serverMsg}. Check NOVADA_DEVELOPER_API_KEY or rotate the key at https://developer-api.novada.com/zh.`);
+            throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Developer-api auth failure (code=${envelope.code}): ${serverMsg}. Check NOVADA_DEVELOPER_API_KEY or rotate the key at https://dashboard.novada.com/api-key/.`);
         }
         throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, `Developer-api rejected request (code=${envelope.code}): ${serverMsg}`, undefined, typeof envelope.code === "number" ? envelope.code : undefined);
     }

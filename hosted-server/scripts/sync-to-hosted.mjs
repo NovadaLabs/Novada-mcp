@@ -20,7 +20,7 @@
 // secrets in code, hosted secrets redacted) — assessed acceptable and NOV-572 closed on that
 // merit. So we vendor FAITHFULLY (zero drift from the npm build) rather than hand-prune.
 
-import { rm, cp, mkdir, readFile } from "node:fs/promises";
+import { rm, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -50,6 +50,18 @@ async function main() {
   await cp(buildDir, VENDOR, { recursive: true });
   await cp(pkgFile, path.join(VENDOR, "package.json"));
   const pkg = JSON.parse(await readFile(path.join(VENDOR, "package.json"), "utf8"));
+
+  // 2b. keep the vendor/package.json SHIM (one level up) in step with the npm version.
+  //     vendor/novada-mcp/config.js does require("../package.json") at runtime, so the shim
+  //     is what the vendored tool code reports as VERSION — it drifted to 0.9.3 for months
+  //     because nothing wrote it. Only `version` is touched; name/type/description stay.
+  const shimFile = path.join(VENDOR, "..", "package.json");
+  const shim = JSON.parse(await readFile(shimFile, "utf8"));
+  if (shim.version !== pkg.version) {
+    shim.version = pkg.version;
+    await writeFile(shimFile, JSON.stringify(shim, null, 2) + "\n");
+    console.log(`  shim version -> ${pkg.version}`);
+  }
 
   // 3. barrel-load gate — a broken/stale/missing-dep copy fails HERE, not in prod. Deps resolve
   //    from vercel/node_modules (module resolution walks up from the vendored file path).

@@ -1,22 +1,20 @@
-> **This folder IS the npm package published as `novada-mcp`** — a local stdio MCP server (`npx novada-mcp`). It lives inside the [novada-mcp monorepo](../README.md); the hosted `mcp.novada.com` wrapper is in [`../hosted-server/`](../hosted-server/README.md).
+> **This folder IS the npm package published as `novada-mcp`** — a local stdio MCP server (`npx novada-mcp`). It lives inside the [novada-mcp monorepo](https://github.com/NovadaLabs/Novada-mcp/blob/main/README.md); the hosted `mcp.novada.com` wrapper is in [`hosted-server/`](https://github.com/NovadaLabs/Novada-mcp/blob/main/hosted-server/README.md).
 
 # Novada MCP
 
-**One MCP server for the entire live web.** Search, extract, scrape, crawl, proxy, browser automation, and AI-powered research — behind a single hosted connection, or one local install if you'd rather run it yourself.
+Web search, page extraction and structured platform data for AI agents, backed by Novada's own proxy network.
 
-[![npm version](https://img.shields.io/npm/v/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
-[![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
-[![CI](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-[Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Troubleshooting](#troubleshooting) · [Why Novada](#why-novada) · [Links](#links)
+[Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Troubleshooting](#troubleshooting) · [Built for agents](#built-for-agents) · [Links](#links)
 
 [![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card needed](https://raw.githubusercontent.com/NovadaLabs/Novada-mcp/main/docs/assets/free-credits-banner.png)](https://www.novada.com)
 
-|  |  |
-|:--|:--|
-| **✅ Works with any MCP client** — Claude, Cursor, Windsurf, VS Code, or `npx` locally | **🎯 14 typed per-platform scrapers** — Amazon, Google, LinkedIn, TikTok, … each a closed `operation` enum, so an agent can't call an invalid op |
-| **🎁 $10 free credits — no credit card needed** — up to 1,000 calls/month | **⚡ Hosted-first, zero install** — point at one URL, or self-host in one command |
+**Free to start:** $10 in credits, up to 1,000 calls a month, no credit card.
+
+**What it is good at**
+
+- **Structured data from 14 sources, no HTML parsing.** One typed tool per platform (Amazon, Google, LinkedIn, TikTok, YouTube and more) with a closed `operation` list, so a wrong value is rejected before any call.
+- **Pages that block bots.** `novada_extract` escalates from a plain fetch to JS render to a real browser, and names the blocker when it cannot get through (for example `anti_bot:kasada`).
+- **Cited research in one call.** `novada_research` returns numbered source passages from several searches, not a generated summary.
 
 ---
 
@@ -204,14 +202,14 @@ These are the tools you reach for most:
 | `novada_scrape` | Structured records from 14 platforms (Amazon, LinkedIn, TikTok, …). Plus **14 typed per-platform tools** — `novada_scrape_amazon`, `_google`, `_linkedin`, … — each a closed `operation` enum. |
 | `novada_crawl` | Pull content from a bounded set of related pages (≤20) on one site. |
 | `novada_map` | Discover what URLs exist on a site before fetching. |
-| `novada_browser` | Interact with a page — click, type, screenshot, run JS. |
+| `novada_browser` | **Self-host only.** Interact with a page — click, type, screenshot, run JS. |
 | `novada_proxy` | Route your own HTTP client through a specific IP type / country / session. |
 
 **Not sure?** Call `novada_discover` and it returns the full catalog with each tool's status.
 
-📚 **[Full reference — all 37 tools →](https://github.com/NovadaLabs/novada-mcp/blob/main/docs/TOOLS.md)**
+📚 **[Full reference — all 37 tools →](https://github.com/NovadaLabs/Novada-mcp/blob/main/docs/TOOLS.md)**
 
-**37 tools across 6 categories.** Self-host (`npx novada-mcp`) exposes all 37. The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
+**37 tools.** Self-host (`npx novada-mcp`) exposes all 37. The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ### Where does it run?
 
@@ -245,7 +243,7 @@ These are the tools you reach for most:
 | `novada_setup` | ✅ | ✅ |
 | `novada_session_stats` | ✅ | ❌ per-process in-memory state |
 
-Full per-tool reference (same column) → [docs/TOOLS.md](../docs/TOOLS.md).
+Full per-tool reference (same column) → [docs/TOOLS.md](https://github.com/NovadaLabs/Novada-mcp/blob/main/docs/TOOLS.md).
 
 </details>
 
@@ -314,18 +312,12 @@ Only relevant if you're running `npx novada-mcp` yourself — hosted users only 
 
 ---
 
-## Why Novada
+## Built for agents
 
-- **Honest tool surface.** Every listed `operation` is verified-working — operations we can't currently deliver are marked and excluded, not left in to fail on you mid-task.
-- **Contract-tested self-report.** Tool descriptions are tested against actual behavior, not just written and forgotten — what a tool claims to return is checked against what it actually returns.
-- **Drift-guarded tool registry.** `src/tools/registry.ts` is the single source of truth for the tool catalog; a test asserts the registered tools, the wired tools, and the `novada_discover` output can never diverge.
-- **`confirm:true` write-gate.** Every mutating tool (proxy sub-account creation, IP whitelist changes, static IP purchases, capture-key resets) requires an explicit two-step confirmation — no silent writes.
-- **Callable onboarding.** `novada_discover` and `novada_setup` are tools your agent can call itself to find the right tool or validate a key, without ever reading this README.
-
-**vs Firecrawl / Tavily (measured, not marketing):**
-- **4.9× more compact.** An identical 5-result search query returned 2,761 bytes from Novada vs 13,421 bytes from Firecrawl — less agent token cost per answer.
-- **Keyless to start.** `npx -y novada-mcp` cold-starts with no key; `novada_setup` walks you to one only when a tool needs it.
-- **Named anti-bot failures.** On an unresolvable target, Novada's response names the exact blocker (e.g. `anti_bot:kasada`) instead of a generic error, so an agent can branch on it.
+- **Callable onboarding.** `novada_discover` and `novada_setup` are tools your agent can call itself to find the right tool or validate a key, without reading this README.
+- **Two-step approval token for every write.** Mutating tools (proxy sub-account creation, IP whitelist changes, static IP purchases, capture-key resets) first return a preview and an approval token; the write only happens when you re-call with that token.
+- **Named anti-bot failures.** On an unresolvable target the response names the blocker (for example `anti_bot:kasada`) instead of a generic error, so an agent can branch on it.
+- **Keyless basic extract.** `novada_extract` works without a key for a basic fetch; render escalation and every other billed tool need `NOVADA_API_KEY`.
 
 ---
 

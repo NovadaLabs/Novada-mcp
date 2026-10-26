@@ -1,4 +1,10 @@
 import { z } from "zod";
+/**
+ * Tools the hosted endpoint never lists. MIRRORS HOSTED_HIDDEN in
+ * hosted-server/vercel/api/mcp.ts (same 9 names) — keep the two in sync.
+ * Used only for the hosted-vs-local note in novada_discover's group listing.
+ */
+export declare const HOSTED_HIDDEN_TOOLS: readonly string[];
 export declare const DiscoverParamsSchema: z.ZodObject<{
     category: z.ZodOptional<z.ZodEnum<{
         "Scraping & Verification": "Scraping & Verification";

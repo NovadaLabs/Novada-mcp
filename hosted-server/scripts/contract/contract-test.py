@@ -811,6 +811,43 @@ def _known_issue_ticket(invariant: str, tool: str, param: str) -> str | None:
     return None
 
 
+# ─── CANARY_ACCOUNT_PLAN classifier (issue #18, 2026-10-26) ─────────────────────
+# Class: the canary account's own paid plan (ISP, residential, ...) is
+# expired/exhausted/not provisioned, so the gateway TRUTHFULLY refuses with
+# `Error [PRODUCT_UNAVAILABLE]` + ledger evidence (npm-package/src/tools/
+# proxy_preflight.ts, assertFlowLedgerActive). That refusal is correct product
+# behavior and says nothing about production health or about the invariant under
+# test, so it is XFAIL (loud, ticketed, dated), never a hard failure. History:
+# the ISP plan expired 2026-10-08 and the nightly went red from 2026-10-15
+# (GitHub issue #18) on INVARIANT_9[novada_proxy] "is_error=True with no
+# provisioning/upstream signal".
+#
+# Deliberately narrow so a real regression is never swallowed: the text must carry
+# the PRODUCT_UNAVAILABLE code AND a "Ledger evidence: balance ... expiry ..."
+# clause AND a plan-state word. A bare PRODUCT_UNAVAILABLE (e.g. "Web Unblocker not
+# activated") or any other error keeps its existing classification.
+CANARY_PLAN_TICKET = "#18"
+CANARY_PLAN_RENEW_URL = "https://dashboard.novada.com/overview/products/"
+_PLAN_REFUSAL_CODE_RE = re.compile(r"Error \[PRODUCT_UNAVAILABLE\]")
+_PLAN_STATE_RE = re.compile(r"EXPIRED|EXHAUSTED|not provisioned|balance 0", re.IGNORECASE)
+_PLAN_EVIDENCE_RE = re.compile(r"Ledger evidence:\s*(balance [^\n]*?expiry\s+\S+?)\.(?:\s|$)")
+_PLAN_PRODUCT_RE = re.compile(r"Your (.+?) proxy plan is")
+
+
+def _canary_plan_refusal(text) -> dict | None:
+    """If `text` is a truthful expired/exhausted/not-provisioned plan refusal
+    (see block comment above), return {"product", "evidence"}; else None.
+    Any non-str input (malformed capture) returns None, i.e. the existing,
+    stricter classification applies."""
+    if not isinstance(text, str) or not _PLAN_REFUSAL_CODE_RE.search(text):
+        return None
+    ev = _PLAN_EVIDENCE_RE.search(text)
+    if not ev or not _PLAN_STATE_RE.search(text):
+        return None
+    prod = _PLAN_PRODUCT_RE.search(text)
+    return {"product": prod.group(1) if prod else "unknown", "evidence": ev.group(1)}
+
+
 # ─── REAL_SOURCE_URLS case table (invariant 10) ────────────────────────────────
 # Class: "every URL surfaced to the agent must be the direct, fetchable
 # destination — never a tracking redirector the agent then has to
@@ -1367,7 +1404,14 @@ def invariant_2_no_silent_noop(transport: Transport) -> list[str]:
         # warning at all; a cred-error before the warning block IS a real gap.
         print(f"  [2] novada_proxy ISP returned is_error=True: {isp_text[:200]!r}")
 
-    if _proxy_not_configured(isp_text):
+    if _canary_plan_refusal(isp_text):
+        isp_skipped = True
+        print(
+            f"  [2] XFAIL: CANARY_ACCOUNT_PLAN ({CANARY_PLAN_TICKET}) — isp+country: the "
+            f"canary account's plan is expired/exhausted; the refusal is truthful, not a "
+            f"silent-noop violation. Renew at {CANARY_PLAN_RENEW_URL} — NOT a production failure."
+        )
+    elif _proxy_not_configured(isp_text):
         isp_skipped = True
         print(
             "  [2] SKIP[isp+country]: proxy not provisioned for the contract "
@@ -1389,7 +1433,14 @@ def invariant_2_no_silent_noop(transport: Transport) -> list[str]:
         "country": "de",
         "format": "url",
     })
-    if _proxy_not_configured(res_text):
+    if _canary_plan_refusal(res_text):
+        res_skipped = True
+        print(
+            f"  [2] XFAIL: CANARY_ACCOUNT_PLAN ({CANARY_PLAN_TICKET}) — residential+country: "
+            f"the canary account's plan is expired/exhausted; the refusal is truthful, not a "
+            f"silent-noop violation. Renew at {CANARY_PLAN_RENEW_URL} — NOT a production failure."
+        )
+    elif _proxy_not_configured(res_text):
         res_skipped = True
         print(
             "  [2] SKIP[residential+country]: proxy not provisioned for the "
@@ -2235,6 +2286,7 @@ def invariant_9_param_honesty(transport: Transport) -> list[str]:
     passed_rows = []
     skipped_rows = []
     xfailed_rows = []
+    plan_xfailed_rows = []
 
     for case in PARAM_HONESTY_CASES:
         tool = case["tool"]
@@ -2263,6 +2315,17 @@ def invariant_9_param_honesty(transport: Transport) -> list[str]:
             print(
                 f"  [9] SKIP[{tool}]: not provisioned for the contract key/env — "
                 f"precondition not met, not a PARAM_HONESTY finding."
+            )
+            continue
+
+        plan = _canary_plan_refusal(text)
+        if plan:
+            plan_xfailed_rows.append(tool)
+            print(
+                f"  [9] XFAIL: CANARY_ACCOUNT_PLAN ({CANARY_PLAN_TICKET}) — {tool} "
+                f"{json.dumps(case['args'], sort_keys=True)}: the canary account's "
+                f"{plan['product']} plan is expired/exhausted ({plan['evidence']}). "
+                f"Renew at {CANARY_PLAN_RENEW_URL} — this is NOT a production failure."
             )
             continue
 
@@ -2333,7 +2396,8 @@ def invariant_9_param_honesty(transport: Transport) -> list[str]:
         print(
             f"  [9/PASS] PARAM_HONESTY: {len(passed_rows)} row(s) disclosed honestly "
             f"({passed_rows}); {len(skipped_rows)} row(s) skipped (not provisioned/"
-            f"upstream/429); {len(xfailed_rows)} row(s) XFAILed as KNOWN ({xfailed_rows})."
+            f"upstream/429); {len(xfailed_rows)} row(s) XFAILed as KNOWN ({xfailed_rows}); "
+            f"{len(plan_xfailed_rows)} row(s) XFAILed as CANARY_ACCOUNT_PLAN ({plan_xfailed_rows})."
         )
     else:
         print(f"  [9/FAIL] PARAM_HONESTY: {len(failures)} row(s) failed to disclose "
@@ -2908,6 +2972,79 @@ def _self_test_scenario_known_tool_wrong_param() -> bool:
     return True
 
 
+def _plan_text(product="ISP", state="EXPIRED", evidence="balance 0.0 MB, expiry 2026-10-08"):
+    return (f"Error [PRODUCT_UNAVAILABLE]: Your {product} proxy plan is {state} — Novada will not "
+            f"route traffic for it. Ledger evidence: {evidence}. Returning credentials would look "
+            f"valid but silently fail.\nfailure_class: permanent\nretry_recommended: false")
+
+
+def _run_inv9_with(responses: dict):
+    global CONTRACT_FULL
+    prev = CONTRACT_FULL
+    CONTRACT_FULL = True
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            failures = invariant_9_param_honesty(_FakeTransport(responses))
+        return failures, buf.getvalue()
+    finally:
+        CONTRACT_FULL = prev
+
+
+def _self_test_scenario_plan_xfail() -> bool:
+    """(f) the real 2026-10-15 failure: novada_proxy is_error=True with a truthful
+    expired-ledger PRODUCT_UNAVAILABLE -> XFAIL CANARY_ACCOUNT_PLAN, 0 failures."""
+    print("\n[self-test f] expired-ledger PRODUCT_UNAVAILABLE -> XFAIL CANARY_ACCOUNT_PLAN")
+    responses = {c["tool"]: (False, "ok — nothing disclosed") for c in PARAM_HONESTY_CASES}
+    responses["novada_proxy"] = (True, _plan_text())
+    failures, out = _run_inv9_with(responses)
+    print(out, end="")
+    line = [l for l in out.splitlines() if "XFAIL: CANARY_ACCOUNT_PLAN" in l and "novada_proxy" in l]
+    if failures or len(line) != 1:
+        print(f"  FAIL: expected 0 failures and one loud XFAIL line, got failures={failures} lines={line}")
+        return False
+    for needle in ("#18", "ISP plan", "expiry 2026-10-08", "NOT a production failure", CANARY_PLAN_RENEW_URL):
+        if needle not in line[0]:
+            print(f"  FAIL: XFAIL line missing {needle!r}")
+            return False
+    # generic across products / states
+    for product, state, ev in (("Residential", "EXHAUSTED (balance 0)", "balance 0.0 MB, expiry 2027-01-01"),
+                               ("Datacenter", "not provisioned on this account", "balance unknown, expiry unknown")):
+        if not _canary_plan_refusal(_plan_text(product, state, ev)):
+            print(f"  FAIL: {product}/{state} refusal not classified")
+            return False
+    print("  PASS: expired-plan refusal XFAILed (0 failures), generic over product/state.")
+    return True
+
+
+def _self_test_scenario_plan_not_swallowed() -> bool:
+    """(g) PRODUCT_UNAVAILABLE WITHOUT ledger evidence, evidence without the code,
+    or any other is_error -> still a hard FAIL; malformed input does not raise."""
+    print("\n[self-test g] non-ledger PRODUCT_UNAVAILABLE / other errors -> still FAIL")
+    bad = {
+        "bare PRODUCT_UNAVAILABLE": "Error [PRODUCT_UNAVAILABLE]: This product is unavailable for this key.",
+        "ledger text without error code": "Your ISP proxy plan is EXPIRED. Ledger evidence: balance 0.0 MB, expiry 2026-10-08.",
+        "code + evidence, no state word": "Error [PRODUCT_UNAVAILABLE]: odd. Ledger evidence: balance 5.0 MB, expiry 2027-01-01.",
+        "other error code": "Error [INVALID_PARAMS]: country is required.",
+    }
+    ok = True
+    for label, text in bad.items():
+        responses = {c["tool"]: (False, "ok — nothing disclosed") for c in PARAM_HONESTY_CASES}
+        responses["novada_browser"] = (True, text)   # novada_browser has no precondition markers
+        failures, out = _run_inv9_with(responses)
+        if not any("novada_browser" in f and "no provisioning/upstream" in f for f in failures) \
+                or "XFAIL: CANARY_ACCOUNT_PLAN" in out:
+            print(f"  FAIL: {label!r} was swallowed (failures={failures})")
+            ok = False
+    for junk in (None, 123, b"bytes", ""):
+        if _canary_plan_refusal(junk) is not None:
+            print(f"  FAIL: malformed input {junk!r} classified as a plan refusal")
+            ok = False
+    if ok:
+        print("  PASS: only a truthful ledger-evidenced refusal is XFAILed; everything else still FAILs.")
+    return ok
+
+
 def run_self_test() -> int:
     print("[contract-test] --self-test: exercising the real classifier functions "
           "with synthetic, in-process inputs (no network, no live key).")
@@ -2919,6 +3056,8 @@ def run_self_test() -> int:
         ("(c) owned-invariant regression -> FAIL", _self_test_scenario_owned_failure),
         ("(d) unknown is_error -> FAIL (not swallowed)", _self_test_scenario_unknown_failure),
         ("(e) known tool, different param -> FAIL (not XFAIL)", _self_test_scenario_known_tool_wrong_param),
+        ("(f) expired-ledger PRODUCT_UNAVAILABLE -> XFAIL CANARY_ACCOUNT_PLAN", _self_test_scenario_plan_xfail),
+        ("(g) non-ledger PRODUCT_UNAVAILABLE / other errors -> FAIL", _self_test_scenario_plan_not_swallowed),
     ]
     results = []
     for name, fn in scenarios:
