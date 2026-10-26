@@ -52,11 +52,16 @@ tool descriptions in `src/core.ts`'s `_TOOL_DEFINITIONS` (see root
 `CHANGELOG.md` is the **single source of truth** for the changelog — add your entry under
 `## [Unreleased]` (Keep-a-Changelog style). **Do not hand-edit `docs/update-log.html`** — it is
 auto-generated from `CHANGELOG.md` by `scripts/gen-update-log.mjs` (regenerated at release).
-Team progress + health goes to the Linear project *"MCP — Hosted + Tools + Optimization"*, not files.
 
-Releases ship via `scripts/promote-to-public.sh` (gated, dry-run by default) — one version to all
-platforms (npm + public git + hosted) at once; never hand-bump a single platform. npm versions are
-immutable, so the next release is a new number. Full rules for agents and teammates: **[AGENTS.md](./AGENTS.md)**.
+Release checklist (patch releases; `scripts/promote-to-public.sh` predates the monorepo and is not used):
+
+1. Move the `## [Unreleased]` entries under a new `## [X.Y.Z] — YYYY-MM-DD` heading in `CHANGELOG.md`.
+2. `cd npm-package && npm version X.Y.Z --no-git-tag-version` (package.json + lock), then `npm run build` (regenerates `server.json`).
+3. `node distribution/generate.mjs` (plugin manifests) and `node npm-package/scripts/gen-update-log.mjs`, then `node distribution/check.mjs` must pass.
+4. Open a PR, wait for CI, merge, tag `vX.Y.Z` on the merge commit, create the GitHub Release from the CHANGELOG section.
+5. `cd npm-package && npm publish` (owner only — **REDLINE: explicit owner approval**), then `hosted-server/scripts/deploy-hosted.sh` to ship the same build to `mcp.novada.com`.
+
+npm versions are immutable, so a mistake means a new number, never a republish. Full rules for agents and teammates: **[AGENTS.md](./AGENTS.md)**.
 
 ## Commit messages
 
