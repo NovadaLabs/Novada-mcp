@@ -734,12 +734,12 @@ describe("novadaScrape — error handling", () => {
   });
 
   // 2026-10-26 fix (nightly canary INVARIANT_3[scrape] regression): class-table
-  // over the full set of classifyError()-recognized statuses PLUS two mirror
-  // rows that must NOT be mislabeled rate-limited/upstream (404/400) — proves
-  // classifyScraperHttpError (both submit and poll call sites) delegates to
-  // classifyError() faithfully for every status, not just the one status
-  // (429) the canary happened to observe.
-  describe("2026-10-26 fix — classifyScraperHttpError status-class table (poll)", () => {
+  // over the full set of classifyError()-recognized statuses, the 401/403 rows
+  // classifyScraperHttpError decides itself, PLUS two mirror rows that must NOT
+  // be mislabeled rate-limited/upstream (404/400) — run against BOTH call sites
+  // (submit and poll), so a status special-cased at one site and not the other
+  // fails here (that is how the poll-time 403 → UNKNOWN gap was found).
+  describe("2026-10-26 fix — classifyScraperHttpError status-class table (submit + poll)", () => {
     const CLASSIFIED_STATUSES: Array<{
       status: number;
       expectedCode: NovadaErrorCode;
@@ -749,6 +749,11 @@ describe("novadaScrape — error handling", () => {
       { status: 500, expectedCode: NovadaErrorCode.API_DOWN, expectRetryable: true },
       { status: 502, expectedCode: NovadaErrorCode.API_DOWN, expectRetryable: true },
       { status: 503, expectedCode: NovadaErrorCode.API_DOWN, expectRetryable: true },
+      // 403 at the scraper edge is usually a transient geo/WAF/rate block, 401 a
+      // real auth failure — classifyError() cannot tell them apart from axios's
+      // bare message, so the helper decides both for every call site.
+      { status: 403, expectedCode: NovadaErrorCode.API_DOWN, expectRetryable: true },
+      { status: 401, expectedCode: NovadaErrorCode.INVALID_API_KEY, expectRetryable: false },
       // Mirror rows (SOP step 5): neither 404 nor 400 carries any of
       // classifyError()'s recognized prose signals — both must fall through to
       // the generic UNKNOWN (permanent, non-retryable) classification, never
@@ -756,31 +761,43 @@ describe("novadaScrape — error handling", () => {
       { status: 404, expectedCode: NovadaErrorCode.UNKNOWN, expectRetryable: false },
       { status: 400, expectedCode: NovadaErrorCode.UNKNOWN, expectRetryable: false },
     ];
+    const PHASES = ["submit", "poll"] as const;
 
-    for (const { status, expectedCode, expectRetryable } of CLASSIFIED_STATUSES) {
-      it(`poll-time HTTP ${status} -> ${expectedCode} (retryable=${expectRetryable})`, async () => {
-        mockedAxios.post.mockResolvedValue(SUBMIT_OK); // submit succeeds -> task_id = "test-task-123"
-        const err = new AxiosError(`Request failed with status code ${status}`, "ERR_BAD_RESPONSE");
-        err.message = `Request failed with status code ${status}`;
-        Object.defineProperty(err, "response", { value: { status, data: { msg: "upstream error" } } });
-        mockedAxios.get.mockRejectedValue(err);
+    for (const phase of PHASES) {
+      for (const { status, expectedCode, expectRetryable } of CLASSIFIED_STATUSES) {
+        it(`${phase}-time HTTP ${status} -> ${expectedCode} (retryable=${expectRetryable})`, async () => {
+          const err = new AxiosError(`Request failed with status code ${status}`, "ERR_BAD_RESPONSE");
+          err.message = `Request failed with status code ${status}`;
+          Object.defineProperty(err, "response", { value: { status, data: { msg: "upstream error" } } });
+          if (phase === "submit") {
+            mockedAxios.post.mockRejectedValue(err);
+          } else {
+            mockedAxios.post.mockResolvedValue(SUBMIT_OK); // submit succeeds -> task_id = "test-task-123"
+            mockedAxios.get.mockRejectedValue(err);
+          }
 
-        let thrown: unknown;
-        try {
-          await novadaScrape(
-            { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
-            "test-key"
-          );
-        } catch (e) {
-          thrown = e;
-        }
+          let thrown: unknown;
+          try {
+            await novadaScrape(
+              { platform: "amazon.com", operation: "amazon_product_by-keywords", params: { keyword: "iphone" }, format: "markdown", limit: 20 },
+              "test-key"
+            );
+          } catch (e) {
+            thrown = e;
+          }
 
-        expect(thrown).toBeInstanceOf(NovadaError);
-        const classified = thrown as NovadaError;
-        expect(classified.code).toBe(expectedCode);
-        expect(classified.retryable).toBe(expectRetryable);
-        expect(classified.toAgentString()).not.toContain("Tool error:");
-      });
+          expect(thrown).toBeInstanceOf(NovadaError);
+          const classified = thrown as NovadaError;
+          expect(classified.code).toBe(expectedCode);
+          expect(classified.retryable).toBe(expectRetryable);
+          expect(classified.toAgentString()).not.toContain("Tool error:");
+          // Resume guidance only where a task_id exists AND retrying can help;
+          // never at submit-time (nothing to resume) and never on a permanent error.
+          const resumable = phase === "poll" && expectRetryable;
+          expect(classified.message.includes('task_id="test-task-123"')).toBe(resumable);
+          if (resumable) expect(classified.message).not.toContain("Retry once");
+        });
+      }
     }
   });
 });
