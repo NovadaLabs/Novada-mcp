@@ -1648,11 +1648,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const setupGateFields = { charged: false, over_cap_allowed: false, quota_remaining: 0 };
       try {
         // Pass the caller's token so setup validates the CUSTOMER's key (not the server env fallback).
-        // 3rd arg (visible tool set) lands in npm-package's novadaSetup in 0.9.43; the vendored
-        // build only picks it up on the next re-vendor (release step), so type the call loosely
-        // until then. An older vendored build simply ignores the extra argument.
-        const result = await (novadaSetup as (p: ReturnType<typeof validateSetupParams>, k?: string, v?: ReadonlySet<string>) => Promise<string>)(
-          validateSetupParams(argsObj), ctx.token, visibleToolNames);
+        // 3rd arg = this surface's visible tool set, so setup never names a hidden tool
+        // (e.g. novada_browser on hosted) — same mechanism novada_discover uses.
+        const result = await novadaSetup(validateSetupParams(argsObj), ctx.token, visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
         // SETUP_GATE is the exempt sentinel — novada_setup exits before the real gate is evaluated.
         // monthlyQuota is declared below (after this early-return block) — inline it here.

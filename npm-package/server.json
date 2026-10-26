@@ -6,7 +6,7 @@
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
   },
-  "version": "0.9.42",
+  "version": "0.9.43",
   "tools": [
     {
       "name": "novada_search",
@@ -94,7 +94,7 @@
     },
     {
       "name": "novada_proxy",
-      "description": "Route your own HTTP requests through residential or mobile IPs — geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag."
+      "description": "Route your own HTTP requests through residential or mobile IPs — geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag (format=url|env|curl)."
     },
     {
       "name": "novada_verify",
@@ -230,7 +230,7 @@
     {
       "registryType": "npm",
       "identifier": "novada-mcp",
-      "version": "0.9.42",
+      "version": "0.9.43",
       "transport": {
         "type": "stdio"
       },

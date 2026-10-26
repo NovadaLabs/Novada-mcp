@@ -48,7 +48,7 @@ Cursor, Windsurf, VS Code and self-host (`npx -y novada-mcp`): see the [install 
 | `novada_search` | Find pages by query (google / duckduckgo / yandex; time, domain, geo filters). |
 | `novada_extract` | Read one known URL, or up to 10 in parallel, through anti-bot pages. |
 | `novada_research` | Answer a complex question with passages from several sources in one call. |
-| `novada_scrape` | Structured records from 14 platforms, plus 14 typed tools such as `novada_scrape_amazon` and `novada_scrape_linkedin`. |
+| `novada_scrape` | Structured records from 14 platforms, plus **14 typed per-platform tools** such as `novada_scrape_amazon` and `novada_scrape_linkedin`. |
 | `novada_crawl` | Pull content from a bounded set of related pages (up to 20) on one site. |
 | `novada_map` | Discover what URLs exist on a site before fetching. |
 | `novada_proxy` | Route your own HTTP client through a specific IP type, country or session. |

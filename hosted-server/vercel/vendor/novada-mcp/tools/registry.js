@@ -247,7 +247,7 @@ export const TOOL_REGISTRY = [
     // ─── Proxy ──────────────────────────────────────────────────────────────
     {
         name: "novada_proxy",
-        description: "Get proxy credentials for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Supports country/city/session_id targeting. Returns proxy URL, shell exports (format='env'), or curl flag (format='curl').",
+        description: "Get a proxy config template (endpoint + masked credentials) for your own HTTP clients. type=residential|isp|datacenter|mobile|static|dedicated (default residential). Supports country/city/session_id targeting. Returns proxy URL, shell exports (format='env'), or curl flag (format='curl').",
         category: "Proxy",
         status: "active",
         title: "Proxy Credentials",
