@@ -82,7 +82,7 @@ export function getDeveloperApiKey(): string {
   if (fallback) return fallback;
   throw makeNovadaError(
     NovadaErrorCode.INVALID_API_KEY,
-    "Neither NOVADA_DEVELOPER_API_KEY nor NOVADA_API_KEY is set. Account-management tools require a developer-api key from https://developer-api.novada.com/zh.",
+    "Neither NOVADA_DEVELOPER_API_KEY nor NOVADA_API_KEY is set. Account-management tools require a developer-api key from https://dashboard.novada.com/api-key/.",
   );
 }
 
@@ -292,7 +292,7 @@ export async function devApiPost<T = unknown>(
     if (envelope.code === 11000 || envelope.code === 10002 || envelope.code === 401) {
       throw makeNovadaError(
         NovadaErrorCode.INVALID_API_KEY,
-        `Developer-api auth failure (code=${envelope.code}): ${serverMsg}. Check NOVADA_DEVELOPER_API_KEY or rotate the key at https://developer-api.novada.com/zh.`,
+        `Developer-api auth failure (code=${envelope.code}): ${serverMsg}. Check NOVADA_DEVELOPER_API_KEY or rotate the key at https://dashboard.novada.com/api-key/.`,
       );
     }
     throw makeNovadaError(

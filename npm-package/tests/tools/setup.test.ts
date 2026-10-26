@@ -95,3 +95,23 @@ describe("novadaSetup — TOW2-252 wallet identity line", () => {
     expect(result).not.toContain("SECRETTAIL");
   });
 });
+
+// ─── hosted surface must never name novada_browser ────────────────────────────
+describe("novadaSetup — visible-tool filtering", () => {
+  const HOSTED_VISIBLE = new Set(["novada_search", "novada_extract", "novada_scrape", "novada_account", "novada_setup", "novada_proxy"]);
+
+  it("omits novada_browser everywhere when it is not in the visible set", async () => {
+    const out = await novadaSetup({} as never, "sk-test-ABCD1234", HOSTED_VISIBLE);
+    expect(out).toContain("What you can do");
+    expect(out).toContain("novada_search");
+    expect(out).not.toContain("novada_browser");
+    expect(out).not.toMatch(/Browser WS/);
+  });
+
+  it("keeps local (no visible set) output unchanged — novada_browser is listed", async () => {
+    const out = await novadaSetup({} as never, "sk-test-ABCD1234");
+    expect(out).toContain("**novada_browser**");
+    expect(out).toContain("Browser WS (NOVADA_BROWSER_WS)");
+    expect(out).toContain("core_tools: novada_search, novada_extract, novada_scrape, novada_browser, novada_account");
+  });
+});

@@ -284,7 +284,16 @@ const ADDON_TOOLS =
  * key is present+valid / present-but-invalid / not set, (2) tells you the exact
  * next action, and (3) orients you on what you can do.
  */
-export async function novadaSetup(_params: SetupParams, callerApiKey?: string): Promise<string> {
+export async function novadaSetup(
+  _params: SetupParams,
+  callerApiKey?: string,
+  // Tools this session can actually call (hosted passes its filtered set). Omitted = all
+  // visible (local stdio). Orientation text must never name a tool the session can't call.
+  visibleTools?: ReadonlySet<string>,
+): Promise<string> {
+  const isVisible = (tool: string): boolean => !visibleTools || visibleTools.has(tool);
+  const browserVisible = isVisible("novada_browser");
+  const coreTools = CORE_TOOLS.filter((t) => isVisible(t.tool));
   const apiKey = process.env.NOVADA_API_KEY?.trim();
   const devApiKey = process.env.NOVADA_DEVELOPER_API_KEY?.trim();
   const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
@@ -326,7 +335,7 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
     // Cheap env-presence check (no network): whether novada_browser has an
     // explicit CDP endpoint configured. Never echoes the (credential-bearing)
     // value itself.
-    L.push(
+    if (browserVisible) L.push(
       browserWs
         ? `> Browser WS (NOVADA_BROWSER_WS): configured — novada_browser connects via your endpoint.`
         : `> Browser WS (NOVADA_BROWSER_WS): not set — novada_browser will auto-provision from your API key on a capable runtime.`,
@@ -375,7 +384,7 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
   // ─── (c) "What you can do" orientation (always shown) ─────────────────────
   L.push("## What you can do");
   L.push("");
-  for (const { tool, line } of CORE_TOOLS) {
+  for (const { tool, line } of coreTools) {
     L.push(`- **${tool}** — ${line}`);
   }
   L.push("");
@@ -385,7 +394,7 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
   // Optional capabilities (only nudge when ready — don't clutter the first run).
   if (state === "ready") {
     const optional: string[] = [];
-    if (!browserWs) optional.push(`For faster **novada_browser** sessions you can set NOVADA_BROWSER_WS (optional — auto-provisioned from your key otherwise). Enable at ${URL_BROWSER}`);
+    if (browserVisible && !browserWs) optional.push(`For faster **novada_browser** sessions you can set NOVADA_BROWSER_WS (optional — auto-provisioned from your key otherwise). Enable at ${URL_BROWSER}`);
     if (!proxyConfigured) optional.push(`For **novada_proxy** (set type=residential|isp|mobile|datacenter|static|dedicated) in your own HTTP clients, set NOVADA_PROXY_ENDPOINT (user/pass auto-fetched from your key). Details at ${URL_PROXY}`);
     if (optional.length) {
       L.push("### Optional add-ons");
@@ -432,7 +441,7 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
         ? `product_status: ${Object.entries(readiness.statuses).map(([k, s]) => `${k}=${s}`).join(" ")}`
         : `product_status: unavailable — call novada_account(section="plans") for per-product balances`,
     );
-    L.push(`browser_ws_configured: ${browserWs ? "true" : "false"}`);
+    if (browserVisible) L.push(`browser_ws_configured: ${browserWs ? "true" : "false"}`);
   }
   // NOVADA_SERVER_VERSION is set at module init by the hosted wrapper (mcp.ts) to its
   // computed HOSTED_VERSION string (e.g. "0.9.26-hosted"), which is the same string
@@ -442,7 +451,7 @@ export async function novadaSetup(_params: SetupParams, callerApiKey?: string): 
   L.push(`server_version: ${process.env.NOVADA_SERVER_VERSION ?? VERSION}`);
   L.push(`register_url: ${URL_SIGNUP}`);
   L.push(`api_key_url: ${URL_API_KEY}`);
-  L.push(`core_tools: ${CORE_TOOLS.map(t => t.tool).join(", ")}`);
+  L.push(`core_tools: ${coreTools.map(t => t.tool).join(", ")}`);
   L.push(`agent_instruction: ${agentInstruction}`);
 
   return L.join("\n");
