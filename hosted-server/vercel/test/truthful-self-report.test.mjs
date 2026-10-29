@@ -19,51 +19,49 @@ const VENDOR_RESOURCES = join(__dirname, "..", "vendor", "novada-mcp", "resource
 
 // ─── ITEM 6: Truthful status footer ──────────────────────────────────────────
 
-test("mcp.ts: free-plan footer exact text present", () => {
+// OWNER DECISION (2026-10-29): the monthly free-call gateway cap was removed
+// entirely — "free-plan footer" (N/M free calls remaining) and "paid/uncapped
+// footer" (gateway: uncapped (paid account)) no longer exist; there are only
+// two footer variants now (billable / no-charge). See npm-package/CHANGELOG.md.
+
+test("mcp.ts: billable footer exact text present, and contains neither 'free' nor a digit/digit counter", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  const BILLABLE_LINE = "gateway: usage is billed to your Novada account — balance and charges at dashboard.novada.com";
+  assert.ok(src.includes(BILLABLE_LINE), "billable footer exact text must be in mcp.ts");
+  assert.doesNotMatch(BILLABLE_LINE, /free/i, "billable footer must never contain the word 'free'");
+  assert.doesNotMatch(BILLABLE_LINE, /\d+\s*\/\s*\d+/, "billable footer must never contain a N/M call counter");
+});
+
+test("mcp.ts: no-charge (cap-exempt) footer exact text present", () => {
   const src = readFileSync(MCP_TS, "utf8");
   assert.ok(
-    src.includes("free calls remaining this month · cost: unknown — see dashboard.novada.com"),
-    "free-plan footer must include 'N/M free calls remaining this month · cost: unknown — see dashboard.novada.com'",
+    src.includes("gateway: no charge for this call"),
+    "no-charge footer exact text must be in mcp.ts",
   );
 });
 
-test("mcp.ts: paid/uncapped footer exact text present", () => {
+test("mcp.ts: old cap-era footer variants are gone", () => {
   const src = readFileSync(MCP_TS, "utf8");
-  assert.ok(
-    src.includes("gateway: uncapped (paid account) · cost: unknown — see dashboard.novada.com"),
-    "paid/uncapped footer exact text must be in mcp.ts",
-  );
+  assert.ok(!src.includes("free calls remaining this month"), "the old 'N/M free calls remaining this month' footer must be gone");
+  assert.ok(!src.includes("uncapped (paid account)"), "the old 'uncapped (paid account)' footer must be gone");
+  assert.ok(!src.includes("free call — no quota consumed"), "the old exempt-footer wording ('free call — no quota consumed') must be gone");
+  assert.ok(!src.includes("Free Gateway Cap Reached"), "the cap-rejection message must be gone");
 });
 
-test("mcp.ts: exempt footer exact text present", () => {
+test("mcp.ts: novada_setup success path carries the no-charge footer via buildStatusFooter(name)", () => {
   const src = readFileSync(MCP_TS, "utf8");
-  assert.ok(
-    src.includes("gateway: free call — no quota consumed"),
-    "exempt footer exact text must be in mcp.ts",
-  );
-});
-
-
-test("mcp.ts: novada_setup success path carries the exempt footer", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  // The novada_setup block ends with a return before the gate logic.
-  // Extract just the novada_setup handler block (from the `if (name === "novada_setup")` comment
-  // to "Gateway cap gate").
-  const setupStart = src.indexOf("// novada_setup is auth-free and never charged");
-  const gateStart  = src.indexOf("Gateway cap gate");
+  // The novada_setup block ends where the next section begins (2026-10-29:
+  // the gateway cap gate that used to anchor this was removed entirely).
+  const setupStart = src.indexOf("// novada_setup is auth-free and never billed");
+  const nextSectionStart = src.indexOf("// Browser caller-key billing");
   assert.ok(setupStart !== -1, "novada_setup block comment marker not found");
-  assert.ok(gateStart  !== -1, "Gateway cap gate marker not found");
-  const setupBlock = src.slice(setupStart, gateStart);
-  // The setup block must wire the SETUP_GATE sentinel to buildStatusFooter so the
-  // exempt footer ("gateway: free call — no quota consumed") is produced at runtime.
-  // We check for SETUP_GATE usage (not the literal string, which lives in buildStatusFooter).
+  assert.ok(nextSectionStart !== -1, "post-setup section marker not found");
+  const setupBlock = src.slice(setupStart, nextSectionStart);
+  // novada_setup is in CAP_EXEMPT_TOOLS, so buildStatusFooter(name) — called
+  // with name === "novada_setup" — produces the no-charge line at runtime.
   assert.ok(
-    setupBlock.includes("SETUP_GATE"),
-    "novada_setup success path must use SETUP_GATE to produce the exempt footer via buildStatusFooter",
-  );
-  assert.ok(
-    setupBlock.includes("buildStatusFooter("),
-    "novada_setup success path must call buildStatusFooter",
+    setupBlock.includes("buildStatusFooter(name)"),
+    "novada_setup success path must call buildStatusFooter(name)",
   );
 });
 

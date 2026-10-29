@@ -78,10 +78,10 @@ function makeMockKv() {
 
 /**
  * Extract and EXECUTE the real kvFailOpen helper verbatim (S1-connector round 2 /
- * C1: preAuthRateLimitExceeded/rateLimitExceeded/decrementQuota now route their
- * KV calls through this one shared fail-open wrapper instead of calling kv.*
- * directly, so extracting preAuthRateLimitExceeded's body alone is no longer
- * enough — kvFailOpen must be in scope too). Strips only the TS-only generic/
+ * C1: preAuthRateLimitExceeded/rateLimitExceeded now route their KV calls
+ * through this one shared fail-open wrapper instead of calling kv.* directly,
+ * so extracting preAuthRateLimitExceeded's body alone is no longer enough —
+ * kvFailOpen must be in scope too). Strips only the TS-only generic/
  * type annotations present in this exact signature.
  */
 function extractKvFailOpen() {
