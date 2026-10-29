@@ -43,7 +43,7 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
     {
       "@type": "Question",
       "name": "Do I need a separate key for MCP?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No. The same Novada API key works for the hosted MCP, the local npx novada-mcp, and the REST API. Quota counters are per token." }
+      "acceptedAnswer": { "@type": "Answer", "text": "No. The same Novada API key works for the hosted MCP, the local npx novada-mcp, and the REST API. Billing is per token, drawn from the same account balance." }
     },
     {
       "@type": "Question",
@@ -72,8 +72,8 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
     },
     {
       "@type": "Question",
-      "name": "What happens when I hit the free quota?",
-      "acceptedAnswer": { "@type": "Answer", "text": "The server returns HTTP 429. Your quota resets monthly per token. To get a higher limit, visit the Novada dashboard." }
+      "name": "Is there a monthly free-call limit?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. There is no monthly cap — every call is billed to your Novada account balance (new accounts start with $10 free credits). The only limit is a 60 requests/minute per-IP rate limit, which returns HTTP 429 if exceeded; it resets every minute, not monthly." }
     },
     {
       "@type": "Question",
@@ -183,8 +183,8 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
           <span class="zh">MCP 需要单独的密钥吗?</span>
         </summary>
         <p class="text-sm text-ink-700/75 mt-3 leading-relaxed">
-          <span class="en">No. The same Novada API key works for the hosted MCP, the local <code class="mono">npx novada-mcp</code>, and the REST API. Quota counters are per token.</span>
-          <span class="zh">不需要。同一把 Novada API Key 同时适用于托管 MCP、本地 <code class="mono">npx novada-mcp</code> 与 REST API。额度按 Token 计算。</span>
+          <span class="en">No. The same Novada API key works for the hosted MCP, the local <code class="mono">npx novada-mcp</code>, and the REST API. Billing is per token, drawn from the same account balance.</span>
+          <span class="zh">不需要。同一把 Novada API Key 同时适用于托管 MCP、本地 <code class="mono">npx novada-mcp</code> 与 REST API。计费按 Token 计算,共用同一账户余额。</span>
         </p>
       </details>
 
@@ -248,15 +248,15 @@ function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-the
         </p>
       </details>
 
-      <!-- Q8: Quota exceeded -->
+      <!-- Q8: Monthly free-call limit -->
       <details class="faq bg-white border border-violet-100 rounded-xl p-5">
         <summary class="font-semibold text-ink">
-          <span class="en">What happens when I hit the free quota?</span>
-          <span class="zh">免费额度用完后会怎样?</span>
+          <span class="en">Is there a monthly free-call limit?</span>
+          <span class="zh">有每月免费调用上限吗?</span>
         </summary>
         <p class="text-sm text-ink-700/75 mt-3 leading-relaxed">
-          <span class="en">The server returns HTTP <code class="mono">429</code>. Your quota resets monthly per token. To get a higher limit, visit the <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="text-violet underline font-medium">Novada dashboard</a> and upgrade your plan.</span>
-          <span class="zh">服务器将返回 HTTP <code class="mono">429</code>。额度按 Token 每月重置。如需更高配额,请前往 <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="text-violet underline font-medium">Novada 控制台</a> 升级套餐。</span>
+          <span class="en">No. There is no monthly cap — every call is billed to your Novada account balance (new accounts start with $10 free credits). The only limit is a 60 requests/minute per-IP rate limit, which returns HTTP <code class="mono">429</code> if exceeded and resets every minute, not monthly. For higher rate limits, visit the <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="text-violet underline font-medium">Novada dashboard</a>.</span>
+          <span class="zh">没有。没有月度上限 — 每次调用都从你的 Novada 账户余额扣费(新账户赠送 $10 额度)。唯一的限制是每 IP 每分钟 60 次的速率限制,超出会返回 HTTP <code class="mono">429</code>,并按分钟而非按月重置。如需更高速率限制,请前往 <a href="https://dashboard.novada.com/overview/scraper/api-playground/" class="text-violet underline font-medium">Novada 控制台</a>。</span>
         </p>
       </details>
 

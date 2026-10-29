@@ -1,5 +1,7 @@
 # PRD — Paid-Tier Gateway Cap Exemption (P0)
 
+> **2026-10-29: the free gateway cap this PRD exempts customers FROM was removed entirely** (owner decision) — there is no monthly free-call allowance anymore, so this exemption mechanism (and the cap it exempted against) no longer exists. See `npm-package/CHANGELOG.md`. Kept below for historical record; do not treat as current behavior.
+
 **Date:** 2026-07-13 · **Owner:** tongwu · **Status:** Approved for local implementation (deploy gated on owner approval)
 **Incident:** Ethan Pan (paying customer, own API key, per-call billing active) hit the 1000/month Free Gateway Cap on mcp.novada.com. ALL tools failed identically — including `novada_discover`, which should be free. Remote connector fully non-functional for a paying customer.
 

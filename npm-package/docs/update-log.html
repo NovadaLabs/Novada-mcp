@@ -72,7 +72,16 @@
     </summary>
     <div class="body">
       
-
+      <div class="sec sec-changed">
+      <h4>Changed (hosted server — mcp.novada.com, not part of the npm package)</h4>
+      <ul>
+        <li><b>The monthly free-call gateway cap is removed entirely (owner decision, 2026-10-29).</b> <code>mcp.novada.com</code>'s "1,000 free calls per token per month" limit was a one-time new-user promotion that has ended, not a recurring allowance — every call is now billed to the caller's own Novada account, same as calling the REST API directly; new accounts still get $10 free credits. Removed: the per-token monthly KV quota counter (<code>decrementQuota</code>/<code>refundQuota</code>/<code>monthKey</code>), the paid-tier plan resolution and over-cap exemption (<code>enforceGatewayCap</code>, <code>resolvePlan</code>, <code>shouldAllowOverCap</code>, <code>classifyPlanFromUsageRecord</code>, <code>fetchAggregateBalance</code>/<code>parseBalanceValue</code>, the approval-gate preview-charge exemption), and the <code>FREE_PLAN_MONTHLY_QUOTA</code> env var (no longer read). <code>CAP_EXEMPT_TOOLS</code>/<code>ACCOUNT_TOOL_NAMES</code> survive unchanged and now drive only the gateway status footer. Auth, rate limiting (60 req/min/IP), OAuth, and token caching are unchanged.</li>
+        <li><b>Gateway status footer collapses from three variants to two.</b> The old <code>"⚠ gateway: N/M free calls remaining this month · cost: unknown…"</code> and <code>"gateway: uncapped (paid account) · cost: unknown…"</code> lines are gone. Billable tools now carry <code>"gateway: usage is billed to your Novada account — balance and charges at dashboard.novada.com"</code>; <code>CAP_EXEMPT_TOOLS</code> (<code>novada_setup</code>, <code>novada_discover</code>, <code>novada_account</code> + aliases) carry <code>"gateway: no charge for this call"</code>. The over-cap rejection message (<code>"## Free Gateway Cap Reached"</code>) and its <code>_meta.quota_remaining</code> success-path field are both gone.</li>
+        <li><b>Telemetry rows keep their schema (no DB migration)</b> — <code>charged</code>/<code>over_cap_allowed</code>/<code>quota_remaining</code>/<code>plan</code> are now always <code>null</code> ("no cap applies") instead of a free/pro classification; <code>validateToken</code> no longer returns a meaningless <code>quota_remaining</code>. The HQ push payload shape is unchanged (<code>buildHqPayload</code> already defaulted these to <code>0</code>/<code>""</code> for a <code>null</code> row).</li>
+        <li>Updated the gateway's nightly contract canary (<code>contract-test.py</code>): <code>COST_VISIBILITY</code> now checks the two-variant footer contract; <code>BILLING_TRUTH</code> (which guarded a funded key against the now-removed cap) is deleted.</li>
+        <li>Docs/landing pages that claimed a free monthly call count (<code>hosted-server/docs/*</code>, <code>hosted-server/landing/*</code>, <code>hosted-server/vercel/README.md</code>, <code>hosted-server/smithery.yaml</code>) now describe usage-based billing with a $10 new-account credit instead.</li>
+      </ul>
+      </div>
     </div>
   </details>
 

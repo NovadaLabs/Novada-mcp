@@ -2,7 +2,7 @@
 
 > **Status:** v0.1 — KR-5 (June 2026)
 > **Endpoint:** `https://mcp.novada.com/mcp`
-> **Free tier:** 5,000 calls / month / API key
+> **Billing:** usage-based, billed to your Novada account — no monthly call cap. $10 free credits for new accounts.
 
 ---
 
@@ -25,7 +25,7 @@ A remote Model Context Protocol server that gives AI agents and chat apps instan
 
 ```text
 URL:        https://mcp.novada.com/mcp?token=YOUR_API_KEY
-Get a key:  https://www.novada.com/signup    (5000 free calls/mo)
+Get a key:  https://www.novada.com/signup    ($10 free credits for new accounts)
 Then add to your AI client → see INSTALL.md
 ```
 

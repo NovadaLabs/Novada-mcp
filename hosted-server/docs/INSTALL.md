@@ -11,7 +11,7 @@
    ```
    sk-eu-novada-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
    ```
-3. **Free tier:** 5,000 calls / month. No credit card required.
+3. **Billing:** usage-based, billed to your Novada account balance — no monthly call cap. New accounts start with $10 free credits. No credit card required to sign up.
 
 Throughout this guide, replace `YOUR_KEY` with your real key.
 
@@ -164,7 +164,7 @@ For clients that only support **stdio** transport (e.g. older versions of variou
 | Symptom                                   | Likely cause                                    | Fix                                                                 |
 |-------------------------------------------|-------------------------------------------------|---------------------------------------------------------------------|
 | **401 Unauthorized**                      | Token missing, typo, or revoked                 | Re-copy key from dashboard. Ensure prefix `sk-eu-novada-`.          |
-| **429 Too Many Requests**                 | Free quota (5,000/mo) exhausted                 | Wait until 1st of next month, or upgrade plan.                      |
+| **429 Too Many Requests**                 | Per-IP rate limit (60 req/min) exceeded         | Slow down requests; retry after 60 seconds. Contact sales for a higher limit. |
 | **Connection refused / DNS error**        | URL typo, or firewall blocks `mcp.novada.com`   | Verify URL exactly. Try `curl https://mcp.novada.com/mcp` first.    |
 | **"Tool not found" / no tools listed**    | Client too old (MCP < 1.0)                      | Update client to latest version. MCP 1.0+ required.                 |
 | **Tool call hangs > 60s**                 | Heavy upstream (e.g. `research` on a big site)  | Increase client tool-call timeout. Or use lighter tool (`search`).  |
