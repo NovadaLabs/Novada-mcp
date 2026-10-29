@@ -18,8 +18,11 @@
  * URL still reaches this handler) — the path segment is no longer read as a credential,
  * so such a request falls through to the same MISSING_TOKEN 401 as a bare `/mcp` call.
  *
- * Quota: per-token monthly KV counter at <token>:<YYYY-MM>. Decrement
- * before each tool call. 429 when exhausted.
+ * Billing: no gateway-side quota. Every call is billed upstream to the
+ * caller's own Novada account (owner decision 2026-10-29 — the monthly
+ * free-call cap that used to live here was removed entirely; see
+ * npm-package/CHANGELOG.md). Per-IP rate limiting (429 on 60 req/min, see
+ * rateLimitExceeded below) is separate and unaffected by this change.
  */
 
 // 🔴 RUNTIME POLYFILLS — must be the VERY FIRST import (side-effect only).
@@ -199,11 +202,11 @@ import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
 // Same module the npm stdio server uses — pure functions, safe on serverless.
 // Resources consume ZERO quota: self-diagnosis/catalog data must never be gated.
 import { listResources, readResource } from "../vendor/novada-mcp/resources/index.js";
-// Paid-tier gateway cap exemption (P0, PRD 2026-07-13): meta tools never counted/
-// blocked; over-cap calls pass when the account has real payment history (orders
-// primary, positive balance as OR-fallback). Plan resolution is LAZY — nothing is
-// looked up for keys under the cap.
-import { enforceGatewayCap, resolvePlan, fetchAggregateBalance } from "./_plan.js";
+// Cap-exempt meta tool classification (OWNER DECISION 2026-10-29: the monthly
+// free-call gateway cap this module used to gate was removed entirely — see
+// ./_plan.ts's header comment). CAP_EXEMPT_TOOLS now drives only the gateway
+// status footer's "no charge" vs "billed" line — see buildStatusFooter below.
+import { CAP_EXEMPT_TOOLS } from "./_plan.js";
 import { appendGatewayFooter } from "./_footer.js";
 
 // Hosted server version = `<vendored npm version>.<server build tag>-hosted`.
@@ -320,13 +323,14 @@ function withWallClock<T>(toolName: string, p: Promise<T>): Promise<T> {
 //   KV_REST_API_TOKEN         ← auto-injected when KV store is linked
 //   STUB_AUTH_WARNING_ACCEPTED ← "true" to unlock the worker (stub gate)
 //   RATE_LIMIT_PER_MIN        ← per-IP rate limit (default 60)
-//   FREE_PLAN_MONTHLY_QUOTA   ← per-token monthly quota (default 1000)
 //   LOG_LEVEL                 ← "info" | "silent"
 //   NOVADA_API_BASE           ← https://api.novada.com (informational)
+// FREE_PLAN_MONTHLY_QUOTA is OBSOLETE (owner decision 2026-10-29: the monthly
+// free-call cap was removed entirely) — no longer read; safe to delete from
+// Vercel's env vars whenever convenient.
 interface Env {
   NOVADA_API_BASE: string;
   LOG_LEVEL: string;
-  FREE_PLAN_MONTHLY_QUOTA: string;
   STUB_AUTH_WARNING_ACCEPTED?: string;
   RATE_LIMIT_PER_MIN?: string;
   /** Base64 (std) 32-byte AES-256-GCM key for at-rest encryption of the caller's
@@ -338,7 +342,6 @@ function readEnv(): Env {
   return {
     NOVADA_API_BASE: process.env.NOVADA_API_BASE || "https://api.novada.com",
     LOG_LEVEL: process.env.LOG_LEVEL || "info",
-    FREE_PLAN_MONTHLY_QUOTA: process.env.FREE_PLAN_MONTHLY_QUOTA || "1000",
     STUB_AUTH_WARNING_ACCEPTED: process.env.STUB_AUTH_WARNING_ACCEPTED,
     RATE_LIMIT_PER_MIN: process.env.RATE_LIMIT_PER_MIN,
     OAUTH_ENC_KEY: process.env.OAUTH_ENC_KEY,
@@ -719,11 +722,9 @@ function resolveAllowedTools(url: URL): Set<string> | null {
   return allowed;
 }
 
-// ─── Token auth + quota ──────────────────────────────────────────────────────
+// ─── Token auth ───────────────────────────────────────────────────────────────
 interface TokenInfo {
   valid: boolean;
-  plan: "free" | "pro";
-  quota_remaining: number;
 }
 
 // Root-cause incident: a misconfigured connector carried a format-valid token
@@ -748,32 +749,26 @@ const TOKEN_VERIFY_CACHE_TTL_S = 90;
 interface CachedTokenVerify {
   valid: boolean;
   verified: boolean;
-  /**
-   * Wallet balance captured from the verification probe (P0 paid-tier fix):
-   * reused as the over-cap OR-fallback signal so the cap boundary doesn't pay
-   * a second /v1/wallet/balance round-trip. Optional — absent on the
-   * format-only fallback path and on older cache entries.
-   */
-  balance?: number;
 }
 
 /**
- * Fail-open wrapper for a KV call on the live request path (quota/rate-limit
+ * Fail-open wrapper for a KV call on the live request path (rate-limit
  * gates). If `op` throws (Upstash/Vercel-KV network error, timeout, etc.), the
  * failure is logged and `fallback` is returned instead of propagating — the
  * SAME policy every other KV call in this file already follows
- * (cacheTokenVerify below, validateToken's cached-verdict read, refundQuota,
+ * (cacheTokenVerify below, validateToken's cached-verdict read,
  * maybeGetFirstRunNoticeHosted): "a KV hiccup must never crash a tool call
  * into a bare, non-compliant transport error." That bare error is exactly
  * `{"code":-32603,"message":"fetch failed"}` — the MCP SDK's own
  * handler-rejection path (no agent_instruction, no structured content),
  * which is precisely what Anthropic's "generic errors... fail review" rule
- * targets. decrementQuota/rateLimitExceeded/preAuthRateLimitExceeded's own
- * `kv.incr`/`kv.expire` calls were the one class of KV call this guard was
- * NOT applied to (S1-connector round 2 / C1 — traced by an independent
- * review from the 2026-10 golden-baseline capture, which caught every
- * billable tool returning that bare error when KV was unreachable in the
- * capturing environment).
+ * targets. rateLimitExceeded/preAuthRateLimitExceeded's own `kv.incr`/
+ * `kv.expire` calls were the one class of KV call this guard was NOT applied
+ * to (S1-connector round 2 / C1 — traced by an independent review from the
+ * 2026-10 golden-baseline capture, which caught every billable tool
+ * returning that bare error when KV was unreachable in the capturing
+ * environment; the quota counter this historically also guarded,
+ * decrementQuota, was removed 2026-10-29 along with the monthly free-call cap).
  */
 async function kvFailOpen<T>(evt: string, fallback: T, op: () => Promise<T>): Promise<T> {
   try {
@@ -814,46 +809,40 @@ async function cacheTokenVerify(cacheKey: string, result: CachedTokenVerify): Pr
  *   apart from a clean pass in logs. This outcome is NEVER cached — it is a
  *   transient failure, not a real verification result, and caching it would
  *   suppress a real check for the full TTL if the flake clears a moment later.
- * TODO(sub2api): wire to sub2api for per-user plan/quota resolution.
+ * TODO(sub2api): wire to sub2api for real per-user subscription lookup.
  */
-async function validateToken(token: string, env: Env): Promise<TokenInfo & { verified: boolean; balance?: number }> {
+async function validateToken(token: string, env: Env): Promise<TokenInfo & { verified: boolean }> {
   // Accept any non-empty token that looks like a valid API key (alphanumeric, 16+ chars).
   if (!token || token.length < 16 || !/^[a-zA-Z0-9_\-]+$/.test(token)) {
-    return { valid: false, plan: "free", quota_remaining: 0, verified: false };
+    return { valid: false, verified: false };
   }
-  const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
 
-  // tokenKvHash (not the plaintext key) is the cache key — same rule as the quota
-  // counters: the plaintext API key must never be a KV key (see tokenKvHash).
+  // tokenKvHash (not the plaintext key) is the cache key — the plaintext API
+  // key must never be a KV key (see tokenKvHash).
   const cacheKey = `tokver:${await tokenKvHash(token)}`;
   try {
     const cached = await kv.get<CachedTokenVerify>(cacheKey);
     if (cached) {
-      return {
-        valid: cached.valid,
-        plan: "free",
-        quota_remaining: cached.valid ? monthlyQuota : 0,
-        verified: cached.verified,
-        balance: cached.balance,
-      };
+      return { valid: cached.valid, verified: cached.verified };
     }
   } catch {
     // KV read failure — fall through to a live upstream check; never block auth on cache.
   }
 
   try {
-    const data = await devApiPost("/v1/wallet/balance", {}, { apiKey: token, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS }) as { balance?: unknown };
-    // P0 paid-tier fix: keep the balance the probe already fetched — the over-cap
-    // gate reuses it as the OR-fallback signal instead of a second upstream call.
-    const balance = typeof data?.balance === "number" ? data.balance : undefined;
-    await cacheTokenVerify(cacheKey, { valid: true, verified: true, balance });
-    return { valid: true, plan: "free", quota_remaining: monthlyQuota, verified: true, balance };
+    // Real upstream key check — same cheap "does this key work" probe
+    // novada_setup already uses. The response's balance is not consulted:
+    // there is no cap-exemption/over-cap concept to feed it to anymore
+    // (removed 2026-10-29); every call bills the caller's account regardless.
+    await devApiPost("/v1/wallet/balance", {}, { apiKey: token, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS });
+    await cacheTokenVerify(cacheKey, { valid: true, verified: true });
+    return { valid: true, verified: true };
   } catch (e) {
     if (e instanceof NovadaError && e.code === NovadaErrorCode.INVALID_API_KEY) {
       // Explicit auth rejection from Novada — this key does not belong to any
       // account (or was disabled). Fail fast; do NOT fall through to dispatch.
       await cacheTokenVerify(cacheKey, { valid: false, verified: true });
-      return { valid: false, plan: "free", quota_remaining: 0, verified: true };
+      return { valid: false, verified: true };
     }
     // Timeout / network / transient upstream failure — NOT a rejection. Falling
     // back to format-only here (rather than failing the request) keeps the
@@ -865,7 +854,7 @@ async function validateToken(token: string, env: Env): Promise<TokenInfo & { ver
       evt: "token_verify_fallback",
       reason: e instanceof Error ? e.message.slice(0, 200) : String(e),
     }));
-    return { valid: true, plan: "free", quota_remaining: monthlyQuota, verified: false };
+    return { valid: true, verified: false };
   }
 }
 
@@ -945,75 +934,12 @@ async function tokenKvHash(token: string): Promise<string> {
   return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function monthKey(): string {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-/**
- * Returns the new remaining count, or -1 if the request must be rejected.
- * `tokenHash` is the SHA-256 hex of the API key — the plaintext key must never
- * be a KV key (see tokenKvHash). Uses an atomic increment instead of a
- * get-then-set so concurrent calls can't both read the same stale count and
- * over-spend the quota (TOCTOU). If the increment pushes a free-plan account
- * past its cap, the speculative increment is rolled back so an exhausted key's
- * counter can't drift upward unbounded under load.
- */
-async function decrementQuota(tokenHash: string, env: Env, plan: "free" | "pro"): Promise<number> {
-  const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
-  const key = `${tokenHash}:${monthKey()}`;
-  // Fail-open (kvFailOpen, see its doc comment): a KV outage must never crash
-  // a billable tool call into a bare transport error (C1 — an independent
-  // review of a KV-broken golden-baseline capture traced this exact call as
-  // the one unguarded site in this file, propagating all the way out of
-  // enforceGatewayCap/_plan.ts, which the whole rest of that module's own
-  // "never throws" contract otherwise honors via try/catch at every other
-  // dep call). Treat a KV failure as "nothing used yet this period" — we
-  // genuinely don't know the real count during the outage, and availability
-  // over perfect accounting is the same tradeoff this file makes everywhere
-  // else a KV call can fail.
-  return kvFailOpen(`decrement_quota_kv_failed:${plan}`, monthlyQuota, async () => {
-    const used = await kv.incr(key);
-    // Set the 32-day TTL once, on the first hit — KV will GC the key after the
-    // month rolls over. (count === 1 means we just created it.)
-    if (used === 1) await kv.expire(key, 60 * 60 * 24 * 32);
-    if (plan === "free" && used > monthlyQuota) {
-      // Over cap — undo the speculative increment and reject. Guard the rollback: a failed kv.decr
-      // must not throw out of decrementQuota (that would skip the caller's refund path and leave a
-      // phantom over-cap charge). Best-effort, mirroring refundQuota. (NOV-573 review)
-      try { await kv.decr(key); } catch { /* best-effort rollback */ }
-      return -1;
-    }
-    return Math.max(0, monthlyQuota - used);
-  });
-}
-
-/**
- * Reverse one decrementQuota when the tool call did NOT do useful work (NOV-578).
- * Quota is decremented BEFORE the tool runs (so an abusive loop can't burn free
- * credits faster than KV updates) — but upstream/transport/validation failures
- * must not charge the customer. Best-effort: floors at 0 and never throws, so a
- * refund hiccup can't mask the original tool error. Mirrors decrementQuota's
- * atomic increment + 32-day TTL. `tokenHash` is the SHA-256 hex of the API key
- * (the plaintext key is never a KV key — see tokenKvHash).
- */
-async function refundQuota(tokenHash: string, env: Env): Promise<void> {
-  try {
-    const key = `${tokenHash}:${monthKey()}`;
-    // Atomic decrement, mirroring decrementQuota's incr. Floor at 0: if a
-    // concurrent reset/GC already cleared the counter, undo the over-decrement.
-    const after = await kv.decr(key);
-    if (after < 0) await kv.set(key, "0", { ex: 60 * 60 * 24 * 32 });
-  } catch {
-    /* best-effort — never let a refund failure surface over the tool error */
-  }
-}
-
-// NOTE (P0 paid-tier fix): the old "account graceful-degradation quota refund"
-// block that lived here (charge-then-refund via degradation-marker sniffing) is
-// GONE — the whole novada_account family is CAP_EXEMPT now (see ./_plan.ts
-// CAP_EXEMPT_TOOLS / ACCOUNT_TOOL_NAMES), so those calls are never charged and
-// there is nothing to refund.
+// decrementQuota/refundQuota/monthKey were removed 2026-10-29 along with the
+// monthly free-call cap (owner decision) — there is no KV quota counter left
+// to decrement or refund. novada_account and its aliases (CAP_EXEMPT_TOOLS /
+// ACCOUNT_TOOL_NAMES in ./_plan.ts) and every other tool are simply never
+// charged against anything on this gateway; billing happens entirely
+// upstream, against the caller's own Novada account.
 
 // ─── First-run notice (TOW2-242) ─────────────────────────────────────────────
 // One-time onboarding notice, shown EXACTLY ONCE per token on the hosted endpoint.
@@ -1183,9 +1109,9 @@ async function emitGuardRejection(params: {
       args: null,
       outcome: params.outcome,
       latency_ms: 0,
-      charged: false,
-      over_cap_allowed: false,
-      quota_remaining: 0,
+      charged: null,
+      over_cap_allowed: null,
+      quota_remaining: null,
       server_version: process.env.NOVADA_SERVER_VERSION ?? null,
       region: process.env.VERCEL_REGION ?? null,
       rejection_stage: params.rejectionStage,
@@ -1241,39 +1167,32 @@ function sanitizeHostedOutput(text: string): string {
 }
 
 // ─── Truthful gateway status footer (ITEM 6 / Phase D) ──────────────────────
-// Every successful tool response carries exactly ONE of three status lines.
-// The lines encode the real access regime for this call — agents and users can
-// always see how quota was consumed (or not) without guessing.
+// Every successful tool response carries exactly ONE of two status lines.
 //
-// gate semantics from enforceGatewayCap:
-//   charged=true  overCapAllowed=false → real free-plan decrement (under cap)
-//   charged=false overCapAllowed=true  → paid account, no cap applies
-//   charged=false overCapAllowed=false → cap-exempt meta tool (never decremented)
+// OWNER DECISION (2026-10-29): the monthly free-call cap is REMOVED ENTIRELY.
+// There is no per-token quota counter, no plan/paid-tier distinction, and no
+// over-cap rejection anymore — every non-exempt call is billed to the
+// caller's own Novada account, same as calling the REST API directly. The
+// "1,000 free calls/month" line was a one-time new-user promotion that has
+// ended, not a recurring allowance — so the footer must never claim a free
+// call count for a billable tool, and must never invent a counter that no
+// longer exists.
+//
+//   CAP_EXEMPT_TOOLS (novada_setup, novada_discover, novada_account + aliases)
+//     → these never cost the caller anything upstream: "no charge" line.
+//   every other tool
+//     → billed to the caller's account: "billed" line.
 //
 // PRINCIPLE: "A confident wrong value is worse than no field."
 // Per-call cost cannot be computed truthfully (no per-call billing signal from
-// upstream — verified 2026-07-13). Report cost as explicitly unknown, NEVER
-// a number. The dashboard link gives users the authoritative view.
-function buildStatusFooter(
-  gate: { charged: boolean; overCapAllowed: boolean; remaining: number },
-  monthlyQuota: number,
-): string {
-  if (gate.charged && !gate.overCapAllowed) {
-    // Free-plan call that consumed one quota unit.
-    return `\n\n---\n⚠ gateway: ${gate.remaining}/${monthlyQuota} free calls remaining this month · cost: unknown — see dashboard.novada.com`;
+// upstream — verified 2026-07-13). Never fabricate a cost number or a
+// call-count; point to the dashboard for the authoritative view.
+function buildStatusFooter(toolName: string): string {
+  if (CAP_EXEMPT_TOOLS.has(toolName)) {
+    return `\n\n---\ngateway: no charge for this call`;
   }
-  if (gate.overCapAllowed) {
-    // Paid account: cap does not apply. No N/M counter — it would be meaningless.
-    return `\n\n---\ngateway: uncapped (paid account) · cost: unknown — see dashboard.novada.com`;
-  }
-  // Cap-exempt meta tool (novada_setup, novada_discover, novada_account family):
-  // the quota counter was never touched.
-  return `\n\n---\ngateway: free call — no quota consumed`;
+  return `\n\n---\ngateway: usage is billed to your Novada account — balance and charges at dashboard.novada.com`;
 }
-
-// Sentinel gate object for the novada_setup path, which exits BEFORE the gate is
-// evaluated. novada_setup is auth-free and always exempt — use the exempt footer.
-const SETUP_GATE = { charged: false, overCapAllowed: false, remaining: 0 };
 
 // ─── Credential / internal-host redaction — the ONE scrubber for anything that ──
 // could leave this process with a secret in it (#2-hosted, extended 2026-10 for
@@ -1440,7 +1359,7 @@ function sentryBeforeBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrum
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────
-function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; balance?: number; requestId: string; authMethod: AuthMethod | null; userAgent: string | null }): Server {
+function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; requestId: string; authMethod: AuthMethod | null; userAgent: string | null }): Server {
   const server = new Server(
     { name: "novada", version: HOSTED_VERSION },
     { capabilities: { tools: {}, prompts: {}, resources: {} } },
@@ -1535,8 +1454,6 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // function must be AT LEAST as fail-open as the code it replaced.
     const scheduleToolEvent = async (opts: {
       outcome: string;
-      gate: { charged: boolean; over_cap_allowed: boolean; quota_remaining: number };
-      plan: string | null;
       rejectionStage?: RejectionStage;
       isHostedLimitation?: boolean;
       gatewayCeilingHit?: boolean;
@@ -1551,7 +1468,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const row = buildToolCallEvent({
           request_id: ctx.requestId,
           token_hash: ctx.tokenHash,
-          plan: opts.plan,
+          // plan/charged/over_cap_allowed/quota_remaining are always null now
+          // (owner decision 2026-10-29: the monthly free-call cap and its
+          // plan/paid-tier distinction were removed entirely — "no cap
+          // applies" to every call, so there is nothing to report here).
+          plan: null,
           client_name: null,   // stateless: new server per request, getClientVersion() is not set for tool calls
           client_version: null,
           protocol_version: null,
@@ -1559,9 +1480,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
           args: argsObj,
           outcome: opts.outcome,
           latency_ms: Date.now() - started,
-          charged: opts.gate.charged,
-          over_cap_allowed: opts.gate.over_cap_allowed,
-          quota_remaining: opts.gate.quota_remaining,
+          charged: null,
+          over_cap_allowed: null,
+          quota_remaining: null,
           server_version: telSV,
           region: telRegion,
           error_code: errorCode,
@@ -1602,8 +1523,6 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     if (ctx.allowedTools && !ctx.allowedTools.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
       await scheduleToolEvent({
         outcome: "TOOL_NOT_ENABLED",
-        gate: { charged: false, over_cap_allowed: false, quota_remaining: 0 },
-        plan: null,
         rejectionStage: "tool_filtered",
         isHostedLimitation: false,
       });
@@ -1625,8 +1544,6 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     if (!visibleToolNames.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
       await scheduleToolEvent({
         outcome: "TOOL_NOT_ENABLED",
-        gate: { charged: false, over_cap_allowed: false, quota_remaining: 0 },
-        plan: null,
         rejectionStage: "tool_filtered",
         isHostedLimitation: true,
       });
@@ -1639,96 +1556,30 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       };
     }
 
-    // novada_setup is auth-free and never charged against quota.
+    // novada_setup is auth-free and never billed (CAP_EXEMPT_TOOLS).
     if (name === "novada_setup") {
-      // SETUP_GATE semantics: charged=false, over_cap_allowed=false, quota_remaining=0.
-      // plan=null (not resolved on the setup path). token_hash from ctx (always present
-      // — the auth guard at the top already validated the token; if somehow absent the
-      // emitEvent call is a no-op).
-      const setupGateFields = { charged: false, over_cap_allowed: false, quota_remaining: 0 };
       try {
         // Pass the caller's token so setup validates the CUSTOMER's key (not the server env fallback).
         // 3rd arg = this surface's visible tool set, so setup never names a hidden tool
         // (e.g. novada_browser on hosted) — same mechanism novada_discover uses.
         const result = await novadaSetup(validateSetupParams(argsObj), ctx.token, visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
-        // SETUP_GATE is the exempt sentinel — novada_setup exits before the real gate is evaluated.
-        // monthlyQuota is declared below (after this early-return block) — inline it here.
-        const setupMonthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
-        const setupFooter = buildStatusFooter(SETUP_GATE, setupMonthlyQuota);
-        await scheduleToolEvent({ outcome: "ok", gate: setupGateFields, plan: null });
+        const setupFooter = buildStatusFooter(name);
+        await scheduleToolEvent({ outcome: "ok" });
         return { content: appendGatewayFooter([{ type: "text" as const, text: result }], setupFooter) };
       } catch (e) {
         logUsage(env, ctx.token, name, false, Date.now() - started);
-        await scheduleToolEvent({ outcome: "error", gate: setupGateFields, plan: null, error: e });
+        await scheduleToolEvent({ outcome: "error", error: e });
         return { content: [{ type: "text" as const, text: String(e) }], isError: true };
       }
     }
 
-    // Gateway cap gate (P0 paid-tier fix, PRD 2026-07-13). Quota is still charged
-    // BEFORE the call so abusive loops can't burn free credits, but:
-    //   • CAP_EXEMPT_TOOLS (setup/discover/account family) are never counted and
-    //     never blocked — a cap-exhausted key can always self-diagnose.
-    //   • An approval-gate PREVIEW call (no approval_token on a gated tool/action —
-    //     see isApprovalGatePreviewCall in ./_plan.ts) is also never counted: it
-    //     does zero upstream work, only the matching EXECUTE call is charged.
-    //   • Over the cap, paid accounts pass: orders-derived plan is the primary
-    //     signal (lazily resolved, KV-cached), positive balance the OR-fallback
-    //     (reusing the balance validateToken already fetched when available).
-    //   • Keys under the cap incur ZERO plan lookups (lazy trigger; pre-warm
-    //     fires asynchronously past PREFETCH_THRESHOLD).
-    const monthlyQuota = parseInt(env.FREE_PLAN_MONTHLY_QUOTA || "1000", 10);
-    const gate = await enforceGatewayCap({
-      toolName: name,
-      monthlyQuota,
-      ctxBalance: ctx.balance,
-      // MEDIUM fix (2026-09 audit, ADVERSARIAL-INTEGRATION.md): argsObj lets
-      // enforceGatewayCap detect an approval-gate PREVIEW call (no
-      // approval_token on a gated tool/action) and skip charging it — see
-      // isApprovalGatePreviewCall in ./_plan.ts. Without this, one logical
-      // write (proxy_account_create etc.) cost 2 quota units and a caller
-      // with exactly 1 unit left could get an approved-but-unexecutable write.
-      args: argsObj,
-      deps: {
-        decrementQuota: (plan) => decrementQuota(ctx.tokenHash, env, plan),
-        resolvePlan: () => resolvePlan(apiKey, ctx.tokenHash),
-        // 2026-07-30 incident fix: the wallet ledger alone missed capture-funded
-        // paid accounts (Scraping Solutions: wallet=$0, capture balance ~$99,994.78).
-        // fetchAggregateBalance queries BOTH ledgers in parallel and never throws —
-        // see ./_plan.ts for the per-ledger degrade-to-0 + max() contract.
-        fetchBalance: () => fetchAggregateBalance({
-          fetchWalletBalance: () => devApiPost("/v1/wallet/balance", {}, { apiKey, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS }),
-          fetchCaptureBalance: () => devApiPost("/v1/capture/get_balance", {}, { apiKey, timeoutMs: TOKEN_VERIFY_TIMEOUT_MS }),
-        }),
-      },
-    });
-    if (!gate.allowed) {
-      await scheduleToolEvent({
-        outcome: "cap_blocked",
-        gate: { charged: false, over_cap_allowed: false, quota_remaining: -1 },
-        plan: "free",
-        rejectionStage: "cap_blocked",
-      });
-      return {
-        content: [{
-          type: "text" as const,
-          text: [
-            "## Free Gateway Cap Reached",
-            "",
-            `This hosted gateway allows ${monthlyQuota} free calls/month per API key. Your key has used them up — and has no payment history and no remaining balance, so the paid exemption does not apply.`,
-            "",
-            "**Options:**",
-            "1. The free-gateway cap resets at the start of next month — or run a local MCP server now (no monthly gateway cap): `npx novada-mcp@latest` with the same API key (calls still draw your Novada balance).",
-            "2. Top up at https://dashboard.novada.com/ — a positive balance takes effect on your NEXT call (balance is checked live when you're over the cap); purchase-history classification may take up to ~6 hours.",
-            "3. Need a higher gateway cap? Contact sales@novada.com.",
-            "",
-            "agent_instruction: free_gateway_cap_reached | retry_recommended: false (unless the user just topped up — then retry immediately; live balance check applies) | resets: start_of_next_month | alternatives: run local MCP via `npx novada-mcp@latest` (same key, no gateway cap) OR top up at https://dashboard.novada.com/ (positive balance exempts on the next call; purchase-history classification within ~6h) OR wait for monthly reset.",
-          ].join("\n"),
-        }],
-        isError: true,
-      };
-    }
-    const remaining = gate.remaining;
+    // Gateway cap REMOVED ENTIRELY (owner decision 2026-10-29) — there is no
+    // monthly free-call quota, no plan/paid-tier resolution, no over-cap
+    // rejection, and no refund path anymore. Every tool call below is simply
+    // dispatched and billed upstream to the caller's own Novada account;
+    // CAP_EXEMPT_TOOLS (checked via buildStatusFooter) is the only remaining
+    // distinction, and it only affects which footer line is shown.
 
     // Browser caller-key billing (TOW2-249 CHALLENGE): core.dispatch calls novadaBrowser
     // WITHOUT the apiKey arg, and resolveBrowserWs reads store.browserWs / NOVADA_BROWSER_WS
@@ -1755,16 +1606,15 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     return await withCredentials({ apiKey, browserWs }, async () => {
     try {
 
-      // ── Browser-flow explicit refusal (BEFORE dispatch — no quota burned for it) ──
+      // ── Browser-flow explicit refusal (BEFORE dispatch) ──
       // novada_browser_flow keeps a persistent WS session across multiple tool calls;
-      // Vercel serverless isolates cannot hold that state. Early-exit + refund (NOV-578).
+      // Vercel serverless isolates cannot hold that state. Early-exit (NOV-578;
+      // the refund this comment used to describe doesn't apply anymore — there
+      // is no quota to refund, see the gateway-cap-removal note above).
       if (name === "novada_browser_flow") {
         logUsage(env, ctx.token, name, false, Date.now() - started);
-        if (gate.charged) await refundQuota(ctx.tokenHash, env);
         await scheduleToolEvent({
           outcome: "NOT_AVAILABLE_ON_HOSTED",
-          gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
-          plan: gate.overCapAllowed ? "pro" : "free",
           rejectionStage: "tool_filtered",
           isHostedLimitation: true,
         });
@@ -1786,16 +1636,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const result = await novadaDiscover(validateDiscoverParams(argsObj), visibleToolNames);
         logUsage(env, ctx.token, name, true, Date.now() - started);
         const sanitized = sanitizeHostedOutput(result);
-        const discoverFooter = buildStatusFooter(gate, monthlyQuota);
+        const discoverFooter = buildStatusFooter(name);
         // TOW2-242: first-run notice on this successful path too (separate block).
         const discoverContent = appendGatewayFooter([{ type: "text" as const, text: sanitized }], discoverFooter);
         const discoverNotice = await maybeGetFirstRunNoticeHosted(ctx.token);
         if (discoverNotice) discoverContent.push({ type: "text" as const, text: discoverNotice });
-        await scheduleToolEvent({
-          outcome: "ok",
-          gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
-          plan: gate.overCapAllowed ? "pro" : "free",
-        });
+        await scheduleToolEvent({ outcome: "ok" });
         return { content: discoverContent };
       }
 
@@ -1814,12 +1660,11 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       logUsage(env, ctx.token, name, true, Date.now() - started);
       const sanitized = sanitizeHostedOutput(result);
       // Truthful status footer — every successful response carries exactly ONE line:
-      //   free-plan under cap → "⚠ gateway: N/M free calls remaining this month · cost: unknown…"
-      //   paid/uncapped        → "gateway: uncapped (paid account) · cost: unknown…"
-      //   cap-exempt meta tool → "gateway: free call — no quota consumed"
-      // The 20%-threshold suppression is gone: the footer is always present so agents
-      // and users always see their access regime (cost-visibility invariant, Phase D).
-      const statusFooter = buildStatusFooter(gate, monthlyQuota);
+      //   billable tool        → "gateway: usage is billed to your Novada account — balance and charges at dashboard.novada.com"
+      //   cap-exempt meta tool → "gateway: no charge for this call"
+      // The footer is always present so agents and users always see their
+      // access regime (cost-visibility invariant, Phase D).
+      const statusFooter = buildStatusFooter(name);
       // TOW2-242: one-time first-run notice — SEPARATE content block (never
       // concatenated into the result text, which would corrupt JSON outputs),
       // ONLY on this successful path. Fails quiet → never throws.
@@ -1830,23 +1675,13 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // starting with "## Extraction Error" (not thrown), so it reaches this success
       // path. Emitting "ok" for a timed-out request is misleading in telemetry.
       const isCeilingTimeout = typeof result === "string" && result.startsWith("## Extraction Error");
-      await scheduleToolEvent({
-        outcome: isCeilingTimeout ? "TIMEOUT" : "ok",
-        gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
-        plan: gate.overCapAllowed ? "pro" : "free",
-      });
-      return {
-        content,
-        // quota_remaining only for real free-plan charges: exempt tools were
-        // never charged, and an over-cap-exempted (paid) call would report a
-        // misleading 0 — paid accounts aren't bound by the cap.
-        ...(gate.charged && !gate.overCapAllowed ? { _meta: { quota_remaining: remaining } } : {}),
-      };
+      await scheduleToolEvent({ outcome: isCeilingTimeout ? "TIMEOUT" : "ok" });
+      return { content };
     } catch (error) {
       // Alert-gating (noise reduction): handled transient/user errors record a
       // breadcrumb for forensics; only likely-bug errors fire an actual alert.
-      // The customer response, redaction, 500-char cap, logUsage and refundQuota
-      // below are UNCHANGED — this gates the Sentry side-effect only.
+      // The customer response, redaction, 500-char cap, and logUsage below are
+      // UNCHANGED — this gates the Sentry side-effect only.
       if (shouldAlertSentry(error)) {
         Sentry.withScope(scope => {
           scope.setTag("tool", name);
@@ -1868,12 +1703,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         // no captureException, no alert — breadcrumb rides along on the next real event
       }
       logUsage(env, ctx.token, name, false, Date.now() - started);
-      // The tool failed (validation / upstream / transport) → no useful work done, so
-      // refund the quota decremented before the call. Failed calls must not burn customer
-      // credits (NOV-578). refundQuota is best-effort and swallows its own errors.
-      // Guarded by gate.charged: cap-exempt tools were never charged — an
-      // unconditional refund here would walk their counter DOWN and mint free calls.
-      if (gate.charged) await refundQuota(ctx.tokenHash, env);
+      // The tool failed (validation / upstream / transport) → no useful work done.
+      // There is no quota to refund anymore (NOV-578's refund path was removed
+      // along with the gateway cap, 2026-10-29) — a failed call simply isn't
+      // billed any differently than a successful one would have been; billing
+      // for the actual upstream work (if any happened) is entirely Novada's
+      // own backend's concern, not this gateway's.
       // Telemetry: error outcome with the NovadaError code, or generic "error".
       // gatewayCeilingHit distinguishes withWallClock's OWN timeout from a genuine
       // upstream TASK_PENDING — both share the same NovadaErrorCode (see the
@@ -1881,8 +1716,6 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const gatewayCeilingHit = error instanceof NovadaError && GATEWAY_CEILING_ERRORS.has(error);
       await scheduleToolEvent({
         outcome: error instanceof NovadaError ? error.code : (error instanceof ZodError ? "INVALID_PARAMS" : "error"),
-        gate: { charged: gate.charged, over_cap_allowed: gate.overCapAllowed, quota_remaining: gate.remaining },
-        plan: gate.overCapAllowed ? "pro" : "free",
         gatewayCeilingHit,
         error,
       });
@@ -2375,16 +2208,14 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // Optional tool-set filter from ?tools= / ?groups= (BrightData-style slim endpoint).
   const allowedTools = resolveAllowedTools(url);
 
-  // SHA-256 of the API key — used as the KV quota key so the plaintext key is
-  // never written to KV (see tokenKvHash). Computed once per request.
+  // SHA-256 of the API key — used as a KV cache/rate-limit key so the plaintext
+  // key is never written to KV (see tokenKvHash). Computed once per request.
   const tokenHash = await tokenKvHash(token);
 
   // Build a fresh server + transport per request (stateless mode). Edge
   // functions are per-request isolates with no shared memory — same pattern
   // as the CF Worker port.
-  // `balance` rides along from the validateToken probe (90s-TTL cached) so the
-  // over-cap OR-fallback usually needs no extra upstream round-trip.
-  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, balance: info.balance, requestId, authMethod, userAgent });
+  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, requestId, authMethod, userAgent });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,

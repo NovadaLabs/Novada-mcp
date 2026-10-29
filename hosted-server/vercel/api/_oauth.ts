@@ -10,7 +10,8 @@
  *              code record (RFC 8414 defines no AS-metadata flag for it).
  *
  * ZERO module dependencies by design (not even @vercel/kv): every side effect
- * is injected through OAuthDeps (mirrors ./_plan.ts PlanDeps) so the whole
+ * is injected through OAuthDeps (same dependency-injection convention this
+ * file dir uses throughout, e.g. _telemetry.ts) so the whole
  * module is unit-testable side-effect-free under `node --test` — see
  * test/oauth.test.mjs. WebCrypto (globalThis.crypto), atob/btoa, URL and
  * Request/Response are all globals on Node ≥18 and the Vercel Node runtime.
