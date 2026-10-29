@@ -40,6 +40,10 @@ install -d /etc/systemd/journald.conf.d
 printf '[Journal]\nSystemMaxUse=1G\nMaxRetentionSec=30day\n' > /etc/systemd/journald.conf.d/novada.conf
 systemctl restart systemd-journald
 
+# access log: JSON, no query strings (keys can arrive as ?apikey=), 30 days
+install -m 644 "$(dirname "$0")/nginx-novada-mcp-log.conf" /etc/nginx/conf.d/novada-mcp-log.conf 2>/dev/null || echo "WARN: copy nginx-novada-mcp-log.conf next to this script"
+install -m 644 "$(dirname "$0")/logrotate-novada-mcp" /etc/logrotate.d/novada-mcp 2>/dev/null || echo "WARN: copy logrotate-novada-mcp next to this script"
+
 # no default nginx site answering on :80 with the welcome page
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
