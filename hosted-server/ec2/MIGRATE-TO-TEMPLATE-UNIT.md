@@ -18,12 +18,23 @@ operator user used for existing ops tasks (sudo as needed, same as
 
 ## Preconditions
 
-- The current release at `/opt/novada-mcp/current` already contains
-  `dist/server.mjs` built from a worktree that includes this incident fix
-  (the `server.mts` with `createDrainTracker`/`drainServer`,
-  `NOVADA_KEEP_ALIVE_TIMEOUT_MS` support) — if not, run `deploy-ec2.sh`
-  first against the OLD single-unit setup (it still works unmodified) to get
-  a current release with the fix, THEN do this migration.
+- The NEW code (with the incident fix: `createDrainTracker`/`drainServer`)
+  must be BUILT on the box before step 2 — but **do NOT get it there by
+  running the old single-unit `deploy-ec2.sh`**: that restarts the old unit,
+  whose drain is exactly the 2026-10-29 outage. Instead (as done live on
+  2026-10-29): upload + build a release dir WITHOUT restarting (same
+  extract → `npm ci` → `build:server` → `npm prune` → `RELEASE` marker steps
+  deploy-ec2.sh uses), then repoint `/opt/novada-mcp/current` to it. The
+  running old processes are unaffected — their cwd is pinned to the release
+  dir they started in (`readlink /proc/<pid>/cwd`). Pass variables into a
+  remote shell as `ssh host "bash -s" <<EOF` (or `ssh host REL=x bash -s`);
+  `ssh host REL=x 'cmd1; cmd2'` does NOT set REL for cmd2 — that slip pointed
+  `current` at `releases/` itself for ~1 minute during the live migration.
+- When stopping the OLD unit (step 4), use `systemctl stop --no-block` and
+  then `systemctl reload nginx`: the old code's drain waits on nginx's idle
+  keep-alive sockets; reloading nginx recycles them. Wait on
+  `systemctl show -p ActiveState` == inactive, not `is-active` (which is
+  already false while "deactivating").
 - `hosted-server/ec2/novada-mcp@.service`, `deploy-ec2.sh`, and
   `restart-rolling.sh` from this worktree are available on the box (scp them
   over). `nginx-novada-mcp.conf` / `nginx-snippet-novada-mcp-proxy.conf` are
