@@ -102,15 +102,10 @@ CONTRACT_FULL is refused outright for stdio, see StdioTransport):
                                attempted:true; probe result agrees with entitlement
                                [CONTRACT_FULL part — billed, http only in practice since
                                CONTRACT_FULL never runs against stdio]
-    8. BILLING_TRUTH         — permanent regression guard for the 2026-07-30 incident
-                               (TOW2-349): a key with purchasable balance on ANY ledger
-                               (wallet OR capture) is never denied service by the
-                               free-gateway cap. Probes both ledgers directly; a key
-                               unfunded on both is SKIPPED (test-infra state, not a
-                               product lie); a funded key that still gets the cap
-                               rejection ("## Free Gateway Cap Reached") FAILS.
-                               [billed, http only in practice since CONTRACT_FULL
-                               never runs against stdio]
+    (8. BILLING_TRUTH was removed 2026-10-29: it guarded against a funded key
+        being denied by the free-gateway cap — the cap itself was removed the
+        same day, owner decision, so there is nothing left to guard. See
+        npm-package/CHANGELOG.md.)
     9. PARAM_HONESTY         — class-level generalization of NO_SILENT_NOOP
                                (2026-07-30, TOW2-349 postmortem round 2: a correct
                                principle fixed for ONE param pair instead of the
@@ -168,7 +163,8 @@ import threading
 import time
 import urllib.error
 import urllib.request
-import uuid
+# uuid was removed 2026-10-29 — its only caller, _build_multipart_body (the
+# BILLING_TRUTH ledger-probe helper), was deleted with the gateway cap.
 
 KEY = os.environ.get("NOVADA_MCP_KEY") or os.environ.get("NOVADA_API_KEY")
 
@@ -398,10 +394,11 @@ def extract_server_version(tool_text: str) -> str | None:
 
 
 # ─── Regex for status footer lines ────────────────────────────────────────────
-# Matches any of the three footer variants from buildStatusFooter() in mcp.ts:
-#   "⚠ gateway: N/M free calls remaining this month · cost: unknown — see dashboard.novada.com"
-#   "gateway: uncapped (paid account) · cost: unknown — see dashboard.novada.com"
-#   "gateway: free call — no quota consumed"
+# Matches either of the two footer variants from buildStatusFooter() in mcp.ts
+# (2026-10-29: the monthly free-call cap was removed entirely — owner
+# decision — collapsing the old THREE variants down to these two):
+#   "gateway: usage is billed to your Novada account — balance and charges at dashboard.novada.com"
+#   "gateway: no charge for this call"
 # NOTE: this wrapper is HOSTED-ONLY (hosted-server/vercel/api/mcp.ts). It never
 # runs over stdio — see invariant_5_cost_visibility's transport gate below.
 _STATUS_LINE_RE = re.compile(r'(?m)^(?:⚠ )?gateway:.*$')
@@ -412,122 +409,12 @@ def count_status_lines(text: str) -> list[str]:
     return _STATUS_LINE_RE.findall(text)
 
 
-# ─── ledger probe helpers (BILLING_TRUTH) ──────────────────────────────────────
-# Bare developer-api host — NOT the MCP endpoint under test (mcp.novada.com or a
-# local hosted-server dev instance). Same two ledgers fetchAggregateBalance()
-# (hosted-server/vercel/api/_plan.ts, the 2026-07-30 fix) reads to decide the
-# free-gateway-cap paid exemption.
-WALLET_BALANCE_URL = "https://api-m.novada.com/v1/wallet/balance"
-CAPTURE_BALANCE_URL = "https://api-m.novada.com/v1/capture/get_balance"
-
-# Cap-rejection signature — verified against hosted-server/vercel/api/mcp.ts's
-# enforceGatewayCap block: a single text content item joined with "\n" whose
-# first line is exactly "## Free Gateway Cap Reached" and whose last line
-# starts with "agent_instruction: free_gateway_cap_reached".
-_CAP_TEXT_MARKER = "## Free Gateway Cap Reached"
-_CAP_INSTRUCTION_MARKER = "agent_instruction: free_gateway_cap_reached"
-
-
-def _build_multipart_body(fields: dict) -> tuple[bytes, str]:
-    """
-    Build a minimal `multipart/form-data` request body, stdlib only (no
-    `requests`, no `form-data` — matches this script's "stdlib only"
-    constraint; npm-package's equivalent, `toMultipart()` in
-    _core/developer_api.ts, has the `form-data` npm dep available, this
-    script does not). Returns (body_bytes, content_type_header_value).
-
-    One `Content-Disposition: form-data; name="..."` part per field, values
-    coerced to str() — sufficient for the scalar-only ledger probes below;
-    no file parts needed.
-
-    NOT a general-purpose/hardened multipart encoder: `name`/`value` are
-    interpolated verbatim with no escaping, so a value containing CRLF, a
-    literal `"`, or the boundary string itself would corrupt the encoding.
-    Only safe for known-safe scalar test fixtures (today's only call site is
-    the hardcoded `{"d": ""}` in `_probe_ledger_balance` below) — do not widen
-    this to untrusted/caller-supplied input without adding escaping first.
-    """
-    boundary = uuid.uuid4().hex
-    lines = []
-    for name, value in fields.items():
-        lines.append(f"--{boundary}\r\n")
-        lines.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n')
-        lines.append(f"{value}\r\n")
-    lines.append(f"--{boundary}--\r\n")
-    body = "".join(lines).encode("utf-8")
-    content_type = f"multipart/form-data; boundary={boundary}"
-    return body, content_type
-
-
-def _probe_ledger_balance(url: str, key: str, extract_balance) -> float:
-    """
-    POST a `multipart/form-data` body (NOT JSON) with Bearer auth to a ledger
-    balance endpoint (free read — not billed) and return the balance as a
-    float via `extract_balance(parsed_json)`.
-
-    2026-07-30 fix: this probe previously sent `Content-Type: application/json`
-    with a `{}` body, which api-m.novada.com does not accept the same way as
-    multipart — every OTHER caller of api-m.novada.com in this repo already
-    uses multipart/form-data (see developer_api.ts's header comment: an
-    earlier "JSON body" assumption there was the confirmed root cause of
-    historical `code:10001 Invalid parameter` responses from
-    /v1/proxy_account/*). A direct multipart probe against the same two
-    endpoints was reported live-verified on 2026-07-30 with a working key:
-      POST /v1/capture/get_balance  -F "d="  -> {"code":0,"data":<n>,"msg":"success"}
-      POST /v1/wallet/balance       -F "d="  -> {"code":0,"data":{"balance":<n>},"msg":"success"}
-    so the probe sends the same single empty-valued "d" field.
-
-    RETRACTED (same day, verified after the fact): an earlier revision of this
-    comment claimed the contract key hits a permanent `401 authentication
-    failure:10000` against api-m.novada.com and that "BILLING_TRUTH will SKIP
-    rather than PASS until a developer-api-authenticated key is provisioned."
-    That is FALSE and was based on a transient 401 seen during a burst of
-    verification traffic (most likely upstream rate limiting). Re-running this
-    exact function afterwards with the same key returns capture=99993.99, and a
-    full CONTRACT_FULL run reports `[8/PASS] BILLING_TRUTH: funded on
-    capture=99993.98942`. The multipart fix works; the invariant ARMS.
-    The retraction is kept rather than deleted because the false claim was the
-    dangerous part: a plausible external attribution ("their auth is broken")
-    permanently disarms a guard by convincing the next reader not to look. If
-    this probe ever returns 0.0 for a key you believe is funded, re-probe by
-    hand before concluding anything about the account.
-
-    ANY failure — network error, non-200, malformed JSON, unexpected response
-    shape, extractor raising — returns 0.0 rather than propagating. A probe
-    failure means "treat this ledger as unfunded", never a crashed invariant
-    runner — mirrors how invariant_3 isolates upstream flakiness from
-    reporting-layer failures. This isolation is per-ledger: one ledger's
-    probe raising has no effect on the other ledger's probe or its returned
-    value — see invariant_8_billing_truth's max(wallet_balance,
-    capture_balance) aggregation, which is unchanged by this fix.
-    """
-    body, content_type = _build_multipart_body({"d": ""})
-
-    def _do():
-        req = urllib.request.Request(
-            url,
-            data=body,
-            headers={
-                "Content-Type": content_type,
-                "Authorization": "Bearer " + key,
-            },
-            method="POST",
-        )
-        return urllib.request.urlopen(req, timeout=20).read().decode()
-
-    try:
-        # A transient 429 here gets a retry budget (2026-08-11) before this
-        # function's own documented "ANY failure -> 0.0" contract kicks in —
-        # otherwise a throttled probe could misreport a genuinely funded
-        # ledger as unfunded, turning an infra blip into a false BILLING_TRUTH
-        # SKIP. The outer except Exception below is UNCHANGED: it still
-        # swallows every failure (including an exhausted GatewayThrottled)
-        # into 0.0, exactly as before.
-        raw = _retry_on_429(_do, label=f"ledger probe {url}")
-        parsed = json.loads(raw)
-        return float(extract_balance(parsed))
-    except Exception:
-        return 0.0
+# The ledger-probe helpers (_build_multipart_body, _probe_ledger_balance,
+# WALLET_BALANCE_URL/CAPTURE_BALANCE_URL, _CAP_TEXT_MARKER/_CAP_INSTRUCTION_MARKER)
+# that used to live here were removed 2026-10-29 along with INVARIANT 8
+# (BILLING_TRUTH) and the monthly free-call gateway cap they existed to probe
+# — see npm-package/CHANGELOG.md. No other invariant used them (grepped
+# before removal).
 
 
 def _looks_like_upstream_error(text: str) -> bool:
@@ -1763,25 +1650,35 @@ def invariant_5_cost_visibility(transport: Transport) -> list[str]:
     """
     INVARIANT 5 — COST_VISIBILITY [FREE default + CONTRACT_FULL — http ONLY]:
 
+    OWNER DECISION (2026-10-29): the monthly free-call gateway cap was removed
+    entirely — there is no "N/M free calls remaining" line, no "uncapped (paid
+    account)" line, and no over-cap rejection anymore. There are only TWO
+    footer variants now:
+      no-charge (CAP_EXEMPT_TOOLS: novada_setup/discover/account+aliases):
+        "gateway: no charge for this call"
+      billable (every other tool):
+        "gateway: usage is billed to your Novada account — balance and charges at dashboard.novada.com"
+
     FREE part:
-      novada_discover response must contain exactly ONE status footer line, and that
-      line must be the exempt variant:
-        "gateway: free call — no quota consumed"
-      No duplicate status lines are allowed.
+      novada_discover response must contain exactly ONE status footer line, and
+      that line must be the no-charge variant. No duplicate status lines.
 
     CONTRACT_FULL part:
       novada_search {query: "test", num: 1} must contain exactly ONE status footer
-      line. That line must contain "cost: unknown".  It must NOT contain a fabricated
-      cost number (no pattern like "cost: $N.NN" or "cost: 0.00XX").
+      line, and that line must be the billable variant. It must NOT contain the
+      word "free" and must NOT contain a fabricated cost number or an N/M call
+      counter — "A confident wrong value is worse than no field" still holds:
+      per-call cost is genuinely unknown, so the line points to the dashboard
+      instead of inventing a number.
 
     HOSTED-ONLY: `buildStatusFooter()` (the sole source of every "gateway: ..."
     line this invariant looks for) is defined exclusively in
     hosted-server/vercel/api/mcp.ts. npm-package/src has zero occurrences of
     "gateway:" or "buildStatusFooter" (grepped) — the stdio surface has no
-    concept of a monthly free-call quota or a cost footer at all. Confirmed
-    empirically: novada_discover over stdio emits zero "gateway:" lines.
-    Skips cleanly on stdio rather than failing on a concept that was never
-    supposed to exist there.
+    concept of a gateway billing footer at all. Confirmed empirically:
+    novada_discover over stdio emits zero "gateway:" lines. Skips cleanly on
+    stdio rather than failing on a concept that was never supposed to exist
+    there.
     """
     if not transport.has_gateway_cost_footer:
         raise SkipInvariant(
@@ -1791,7 +1688,7 @@ def invariant_5_cost_visibility(transport: Transport) -> list[str]:
 
     failures = []
 
-    # ── FREE: novada_discover → exempt footer, no duplicates ──────────────────
+    # ── FREE: novada_discover → no-charge footer, no duplicates ───────────────
     is_err_disc, discover_text = transport.call_tool("novada_discover", {})
     if is_err_disc:
         failures.append(
@@ -1807,14 +1704,14 @@ def invariant_5_cost_visibility(transport: Transport) -> list[str]:
             )
         else:
             line = lines[0]
-            if "free call — no quota consumed" not in line:
+            if "no charge for this call" not in line:
                 failures.append(
-                    f"INVARIANT_5[discover]: status line is NOT the exempt variant.\n"
-                    f"  expected: 'gateway: free call — no quota consumed'\n"
+                    f"INVARIANT_5[discover]: status line is NOT the no-charge variant.\n"
+                    f"  expected: 'gateway: no charge for this call'\n"
                     f"  actual:   {line!r}"
                 )
 
-    # ── CONTRACT_FULL: novada_search → truthful quota/cost footer ─────────────
+    # ── CONTRACT_FULL: novada_search → truthful billing footer ────────────────
     if CONTRACT_FULL:
         is_err_search, search_text = transport.call_tool("novada_search", {
             "query": "test",
@@ -1844,22 +1741,34 @@ def invariant_5_cost_visibility(transport: Transport) -> list[str]:
                 )
             else:
                 line = lines[0]
-                if "cost: unknown" not in line:
+                if "billed to your Novada account" not in line:
                     failures.append(
-                        f"INVARIANT_5[search]: status footer must contain 'cost: unknown'.\n"
+                        f"INVARIANT_5[search]: status footer must be the billable variant "
+                        f"('billed to your Novada account').\n  actual: {line!r}"
+                    )
+                if re.search(r'\bfree\b', line, re.IGNORECASE):
+                    failures.append(
+                        f"INVARIANT_5[search]: a billable tool's footer must never contain "
+                        f"the word 'free' (the monthly free-call cap was removed 2026-10-29).\n"
                         f"  actual: {line!r}"
                     )
-                # Check for fabricated cost number: "cost: $N.NN" or "cost: N.NNNN"
-                if re.search(r'cost:\s+\$?\d+\.\d+', line):
+                # No fabricated cost number ("cost: $N.NN" / "cost: N.NNNN") and no
+                # leftover N/M call counter from the old capped-footer era.
+                if re.search(r'cost:\s*\$?\d+\.\d+', line):
                     failures.append(
                         f"INVARIANT_5[search]: status footer contains a fabricated cost "
-                        f"number — must be 'cost: unknown'.\n  actual: {line!r}"
+                        f"number.\n  actual: {line!r}"
+                    )
+                if re.search(r'\d+\s*/\s*\d+', line):
+                    failures.append(
+                        f"INVARIANT_5[search]: status footer must not contain an N/M call "
+                        f"counter (no quota counter exists anymore).\n  actual: {line!r}"
                     )
 
     if not failures:
-        msg = "FREE: discover exempt footer ✓"
+        msg = "FREE: discover no-charge footer ✓"
         if CONTRACT_FULL:
-            msg += "; CONTRACT_FULL: search cost:unknown ✓"
+            msg += "; CONTRACT_FULL: search billable footer ✓"
         print(f"  [5/PASS] COST_VISIBILITY: {msg}")
     else:
         print(f"  [5/FAIL] COST_VISIBILITY: {len(failures)} check(s) failed.")
@@ -2166,98 +2075,13 @@ def invariant_7_oauth_metadata(transport: Transport) -> list[str]:
     return failures
 
 
-def invariant_8_billing_truth(transport: Transport) -> list[str]:
-    """
-    INVARIANT 8 — BILLING_TRUTH [CONTRACT_FULL only — billable; http only in
-    practice since CONTRACT_FULL is refused outright for stdio, see StdioTransport]:
-
-    Permanent regression guard for the 2026-07-30 incident (TOW2-349): the
-    hosted gateway's free-gateway-cap paid-exemption check once read ONLY the
-    master wallet ledger to decide whether a key was "paid" — so a key funded
-    exclusively on the capture ledger (where Scraping Solutions money actually
-    lives; wallet is a pass-through and legitimately sits near 0 for paying
-    customers — pay -> wallet (transit) -> buy products -> money lives in
-    product/plan credits) got capped as if it were free. Fixed via
-    fetchAggregateBalance() (hosted-server/vercel/api/_plan.ts), which queries
-    both ledgers and takes their max.
-
-    Invariant: "a key with purchasable balance on ANY ledger is never denied
-    service."
-
-    Steps:
-      1. Probe both ledgers directly (free reads, NOT billed) with the contract
-         key: wallet balance (data.balance) and capture balance (data is a bare
-         number). Either probe failing/malformed degrades to 0 for that ledger
-         — see _probe_ledger_balance — never crashes the runner.
-      2. If neither ledger shows a positive balance, SKIP — an unfunded
-         contract key is a test-infra state, not a product lie; this invariant
-         cannot distinguish "correctly capped" from "regression" without a
-         funded key.
-      3. If funded on at least one ledger, make ONE cheap billable MCP call
-         (novada_search, num=1, trivial query). If the response matches the
-         free-gateway-cap rejection signature → FAIL: this is exactly the
-         2026-07-30 regression class. is_error for any OTHER reason (upstream
-         flake, SERP not enabled, etc.) is NOT a BILLING_TRUTH failure — this
-         invariant tests the gate, not upstream availability — reported as an
-         inconclusive SKIP with the error head instead. Success (no cap
-         rejection) → PASS.
-    """
-    if not CONTRACT_FULL:
-        raise SkipInvariant("CONTRACT_FULL=1 not set — billable invariant skipped")
-
-    failures = []
-
-    wallet_balance = _probe_ledger_balance(
-        WALLET_BALANCE_URL, KEY, lambda p: p.get("data", {}).get("balance", 0)
-    )
-    capture_balance = _probe_ledger_balance(
-        CAPTURE_BALANCE_URL, KEY, lambda p: p.get("data", 0)
-    )
-
-    funded_ledgers = []
-    if wallet_balance > 0:
-        funded_ledgers.append(f"wallet={wallet_balance}")
-    if capture_balance > 0:
-        funded_ledgers.append(f"capture={capture_balance}")
-
-    if max(wallet_balance, capture_balance) <= 0:
-        raise SkipInvariant(
-            "contract key not funded on any ledger — provision a funded key to "
-            "arm BILLING_TRUTH"
-        )
-
-    is_err, text = transport.call_tool("novada_search", {
-        "query": "test",
-        "num": 1,
-    }, timeout=90)
-
-    if is_err:
-        is_cap_rejection = (
-            text.strip().startswith(_CAP_TEXT_MARKER) and
-            _CAP_INSTRUCTION_MARKER in text
-        )
-        if is_cap_rejection:
-            failures.append(
-                f"INVARIANT_8[cap-rejection]: funded key (ledgers: {', '.join(funded_ledgers)}) "
-                f"was denied service by the free-gateway-cap gate — this is the 2026-07-30 "
-                f"ledger-split regression class (TOW2-349): the gate must check ALL ledgers, "
-                f"not just wallet.\n"
-                f"  response (first 400 chars): {text[:400]!r}"
-            )
-            print(f"  [8/FAIL] BILLING_TRUTH: {len(failures)} check(s) failed.")
-            return failures
-        raise SkipInvariant(
-            f"novada_search returned is_error=True for a reason unrelated to the "
-            f"free-gateway-cap gate — inconclusive, not a BILLING_TRUTH failure "
-            f"(this invariant tests the gate, not upstream availability).\n"
-            f"  error (first 300 chars): {text[:300]!r}"
-        )
-
-    print(
-        f"  [8/PASS] BILLING_TRUTH: funded on {', '.join(funded_ledgers)} — "
-        f"novada_search was NOT denied by the free-gateway-cap gate."
-    )
-    return failures
+# INVARIANT 8 (BILLING_TRUTH) was removed 2026-10-29: it was a permanent
+# regression guard proving "a key with purchasable balance on ANY ledger is
+# never denied service by the free-gateway cap" (2026-07-30 incident,
+# TOW2-349). The free-gateway cap it guarded against was removed entirely the
+# same day (owner decision) — there is no cap left for ANY key, funded or not,
+# to be denied by, so the invariant has no failure mode left to detect. See
+# npm-package/CHANGELOG.md.
 
 
 def invariant_9_param_honesty(transport: Transport) -> list[str]:
@@ -2650,7 +2474,8 @@ INVARIANTS = [
     ("COST_VISIBILITY",       invariant_5_cost_visibility),
     ("HEALTH_TRUTH",          invariant_6_health_truth),
     ("OAUTH_METADATA",        invariant_7_oauth_metadata),
-    ("BILLING_TRUTH",         invariant_8_billing_truth),
+    # ("BILLING_TRUTH", invariant_8_billing_truth) removed 2026-10-29 — see
+    # the removal note above invariant_9_param_honesty's old neighbor spot.
     ("PARAM_HONESTY",         invariant_9_param_honesty),
     ("REAL_SOURCE_URLS",      invariant_10_real_source_urls),
     ("ACTIONABLE_ERRORS",     invariant_11_actionable_errors),
