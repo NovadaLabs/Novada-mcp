@@ -77,12 +77,24 @@ function resolveConcurrency(): number {
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 const HOST = process.env.HOST ?? "127.0.0.1";
 
+function envMs(name: string, fallback: number): number {
+  const raw = parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+}
+
 // Requests may legitimately run up to the vendored FUNCTION_MAX_DURATION_S (300s,
 // see api/mcp.ts's `config.maxDuration`). Keep every Node-level timeout comfortably
 // above that so Node never cuts a slow-but-legitimate request itself.
 const REQUEST_TIMEOUT_MS = 310_000;
 const HEADERS_TIMEOUT_MS = 65_000;
-const KEEP_ALIVE_TIMEOUT_MS = 61_000;
+// Env-overridable (ordinary ops knob, not security-relevant): a socket that is
+// mid-request when SIGTERM arrives only becomes eligible for Node's own idle
+// bookkeeping once its response finishes, and (pre-incident-fix) a plain
+// `server.close()` callback would not fire for it until THIS timer elapses —
+// see drainServer()'s header comment for why the fix no longer depends on
+// that at all, and test/server.test.mjs's "mid-request at SIGTERM" test for
+// why a short override is needed to exercise that timing in CI.
+const KEEP_ALIVE_TIMEOUT_MS = envMs("NOVADA_KEEP_ALIVE_TIMEOUT_MS", 61_000);
 // Drain grace period on SIGTERM — long enough to let an in-flight 300s request
 // finish, short enough that systemd's own TimeoutStopSec (set a bit above this)
 // is never the thing that kills us.
@@ -134,6 +146,147 @@ export async function verifyHostedOrExit(): Promise<void> {
 }
 
 /**
+ * ── Drain correctness (incident fix, 2026-10-29) ────────────────────────────
+ * Root cause of the 2026-10-29 11:49:47–11:51:02 UTC outage: `server.close()`
+ * only invokes its callback once EVERY socket has closed — including sockets
+ * nginx's `upstream { keepalive 32; }` pool is holding open between requests
+ * with no request in flight at all. The old `runWorker()` shutdown relied on
+ * that callback to decide when to `process.exit()`, so a worker with an idle
+ * keepalive socket sat in "draining" for up to `SHUTDOWN_GRACE_MS` (310s)
+ * even though it had zero actual work left to do — `systemctl restart` is
+ * stop-then-start, so the whole service was down until the grace timer (or
+ * systemd's TimeoutStopSec) finally killed it.
+ *
+ * Fix: track in-flight requests EXPLICITLY (never infer liveness from
+ * connection/socket count) and exit the instant that count reaches zero,
+ * instead of waiting on `server.close()`'s own callback.
+ */
+
+/**
+ * Tracks in-flight HTTP requests for one worker's http.Server so a SIGTERM
+ * drain can exit the instant real work is done, independent of how many
+ * sockets (idle keep-alive or otherwise) the server object still considers
+ * open. Holds the actual `ServerResponse` objects (not just a count) so that
+ * `beginDraining()` can retroactively mark every response that is GENUINELY
+ * in flight at the moment the signal arrives — not just future ones.
+ */
+export interface DrainTracker {
+  isDraining(): boolean;
+  activeCount(): number;
+  /** Marks every currently in-flight response (headers not yet sent) with
+   *  `Connection: close`, so it does not return to a client's keepalive pool
+   *  once it finishes — then fires the drained callback immediately if there
+   *  is already nothing in flight. */
+  beginDraining(): void;
+  requestStarted(res: ServerResponse): void;
+  requestEnded(res: ServerResponse): void;
+  /** Calls back the instant activeCount reaches 0 while draining (or
+   *  immediately, if it's already 0 when registered). One watcher at a time
+   *  is all this process ever needs — there is exactly one shutdown
+   *  sequence in flight per worker. */
+  onceDrained(cb: () => void): void;
+}
+
+export function createDrainTracker(): DrainTracker {
+  const active = new Set<ServerResponse>();
+  let draining = false;
+  let drainedCb: (() => void) | undefined;
+
+  function maybeFireDrained(): void {
+    if (draining && active.size === 0 && drainedCb) {
+      const cb = drainedCb;
+      drainedCb = undefined;
+      cb();
+    }
+  }
+
+  return {
+    isDraining: () => draining,
+    activeCount: () => active.size,
+    beginDraining: () => {
+      draining = true;
+      for (const res of active) {
+        if (!res.headersSent) res.setHeader("Connection", "close");
+      }
+      maybeFireDrained();
+    },
+    requestStarted: (res) => {
+      active.add(res);
+    },
+    requestEnded: (res) => {
+      active.delete(res);
+      maybeFireDrained();
+    },
+    onceDrained: (cb) => {
+      drainedCb = cb;
+      maybeFireDrained();
+    },
+  };
+}
+
+/**
+ * Drives one worker's SIGTERM/SIGINT/uncaughtException drain:
+ *  1. `server.close()` — stop accepting new connections (the underlying
+ *     listening socket closes immediately; new connection attempts are
+ *     refused from this point on — this is what makes "no new connections
+ *     accepted during drain" true, independent of the tracker below).
+ *  2. `server.closeIdleConnections()` — force-close sockets that are idle
+ *     RIGHT NOW. This alone fixes the pure-idle-keepalive incident case.
+ *  3. `tracker.beginDraining()` — retroactively tag every response that is
+ *     genuinely in flight (headers not yet sent) with `Connection: close`,
+ *     so its socket closes cleanly once that response finishes instead of
+ *     returning to a client's keepalive pool.
+ *  4. Exit the instant `tracker` reports zero in-flight requests — NEVER
+ *     wait on `server.close()`'s own callback, which is exactly the
+ *     mechanism that hung for up to 310s in the incident.
+ *  5. `graceMs` remains a hard cap (still ~310s in production) so a
+ *     genuinely long-running tool call (up to the 300s budget) is never cut
+ *     short, but a stuck/misbehaving request can't block shutdown forever.
+ *
+ * Residual, accepted race (documented, not fixed — flagged in the
+ * 2026-10-29 round-2 incident-fix review, M1): `closeIdleConnections()`
+ * (per Node's own source — `Server.prototype.closeIdleConnections` — force-
+ * `destroy()`s every socket Node's bookkeeping currently considers idle) can
+ * lose a single-event-loop-tick race against nginx writing a new request
+ * onto a pooled keep-alive socket in the SAME instant this fires, before
+ * Node's HTTP parser has processed those just-arrived bytes and flipped the
+ * socket to "active" — the socket gets destroyed (RST) with the request
+ * discarded before it was ever parsed. Not unique to this design (Go's
+ * `http.Server.Shutdown()` documents an identical caveat) and already
+ * bounded by this round's nginx config rather than left silently unbounded:
+ * nginx's own pre-use staleness check on pooled connections catches most
+ * instances of this cleanly (zero bytes sent, transparently retried on a
+ * fresh connection); for the residual case where nginx's write genuinely
+ * races the destroy, the result is an upstream `error` nginx's
+ * `proxy_next_upstream` (see nginx-snippet-novada-mcp-proxy.conf) retries
+ * against the OTHER instance — and because that config's `non_idempotent`
+ * is deliberately NOT set, a POST is retried there ONLY if nothing was sent
+ * to this instance yet (a pure connection failure, which is exactly what a
+ * destroyed-before-parsed socket looks like from nginx's side) — never
+ * silently replayed after this instance actually started processing it.
+ * Worst case: one client-visible 502 for one unlucky request in the single
+ * tick a drain begins — never a duplicated tool execution.
+ */
+export function drainServer(
+  server: Server,
+  tracker: DrainTracker,
+  opts: { graceMs: number; onExit: (code: number) => void },
+): void {
+  let settled = false;
+  const forceTimer: NodeJS.Timeout = setTimeout(() => finish(1), opts.graceMs);
+  function finish(code: number): void {
+    if (settled) return;
+    settled = true;
+    clearTimeout(forceTimer);
+    opts.onExit(code);
+  }
+  server.close();
+  server.closeIdleConnections();
+  tracker.beginDraining();
+  tracker.onceDrained(() => finish(0));
+}
+
+/**
  * Build the Node http request listener: routes by pathname only (query string
  * ignored, same as vercel.json's exact-match rewrite for /api/reconcile).
  * Every other path — /mcp, /api/mcp, /:key/mcp, /health, /, /.well-known/*,
@@ -147,12 +300,36 @@ export async function verifyHostedOrExit(): Promise<void> {
  * here must never crash this long-lived process or hang the socket — this
  * process serves many requests over its lifetime, unlike a one-shot Vercel
  * invocation — and the NEXT request must still be served normally.
+ *
+ * `tracker` (optional, third param — existing callers/tests that only need
+ * routing + error isolation are unaffected) registers/releases this request
+ * with a `DrainTracker` so a concurrent drain (see drainServer above) knows
+ * this request is in flight, and stamps `Connection: close` on it if a drain
+ * is already underway when it starts.
  */
 export function createRequestListener(
   mcpHandler: NodeHandler,
   reconcileHandler: NodeHandler,
+  tracker?: DrainTracker,
 ): (req: IncomingMessage, res: ServerResponse) => void {
   return function requestListener(req, res) {
+    tracker?.requestStarted(res);
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      tracker?.requestEnded(res);
+    };
+    // "finish" covers the normal case (response fully sent); "close" also
+    // releases on an aborted/reset connection so a client disconnect can
+    // never leave activeCount stuck above 0 and block a drain forever.
+    res.once("finish", release);
+    res.once("close", release);
+
+    if (tracker?.isDraining() && !res.headersSent) {
+      res.setHeader("Connection", "close");
+    }
+
     const pathname = (req.url ?? "/").split("?")[0];
     const handler = pathname === "/api/reconcile" ? reconcileHandler : mcpHandler;
 
@@ -318,7 +495,8 @@ async function runWorker(): Promise<void> {
   const { default: mcpHandler } = (await import("./api/mcp.js")) as { default: NodeHandler };
   const { default: reconcileHandler } = (await import("./api/reconcile.js")) as { default: NodeHandler };
 
-  const server: Server = createServer(createRequestListener(mcpHandler, reconcileHandler));
+  const tracker = createDrainTracker();
+  const server: Server = createServer(createRequestListener(mcpHandler, reconcileHandler, tracker));
   server.requestTimeout = REQUEST_TIMEOUT_MS;
   server.headersTimeout = HEADERS_TIMEOUT_MS;
   server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS;
@@ -327,15 +505,22 @@ async function runWorker(): Promise<void> {
   const shutdown = (reason: string, exitCode: number, graceMs: number): void => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(`[server] worker ${process.pid} ${reason}, draining (up to ${graceMs}ms)...`);
-    server.close(() => {
-      console.log(`[server] worker ${process.pid} drained, exiting(${exitCode})`);
-      process.exit(exitCode);
+    console.log(
+      `[server] worker ${process.pid} ${reason}, draining ${tracker.activeCount()} in-flight request(s) ` +
+        `(idle connections closed immediately, hard cap ${graceMs}ms)...`,
+    );
+    drainServer(server, tracker, {
+      graceMs,
+      onExit: (code) => {
+        if (code !== 0) {
+          console.error(`[server] worker ${process.pid} drain timed out, forcing exit(1)`);
+          process.exit(1);
+        } else {
+          console.log(`[server] worker ${process.pid} drained, exiting(${exitCode})`);
+          process.exit(exitCode);
+        }
+      },
     });
-    setTimeout(() => {
-      console.error(`[server] worker ${process.pid} drain timed out, forcing exit(1)`);
-      process.exit(1);
-    }, graceMs);
   };
   process.on("SIGTERM", () => shutdown("received SIGTERM", 0, SHUTDOWN_GRACE_MS));
   process.on("SIGINT", () => shutdown("received SIGINT", 0, SHUTDOWN_GRACE_MS));

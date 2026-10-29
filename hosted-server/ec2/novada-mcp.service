@@ -1,4 +1,14 @@
 # /etc/systemd/system/novada-mcp.service — mcp.novada.com on EC2
+#
+# SUPERSEDED (incident fix, 2026-10-29): a single unit makes `systemctl
+# restart` inherently stop-then-start — the whole endpoint is down between
+# the stop and the new process becoming healthy (the 2026-10-29 outage).
+# Replaced by the template unit novada-mcp@.service (two independently
+# restartable instances, `novada-mcp@3000` / `novada-mcp@3001`) — see
+# MIGRATE-TO-TEMPLATE-UNIT.md for the no-downtime cutover. This file is left
+# in place, unmodified, as the pre-migration reference (and a rollback
+# reference) until that cutover has actually run on the live box; do not
+# delete it.
 [Unit]
 Description=Novada MCP hosted server (mcp.novada.com)
 After=network-online.target
