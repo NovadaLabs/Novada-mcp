@@ -772,8 +772,20 @@ export async function dispatch(name, args, apiKey, ctx) {
             return novadaAccount(validateAccountParams(args), apiKey);
         // Backward-compat aliases — route to novada_account with the appropriate section.
         // These are hidden from tools/list but still dispatch correctly for old callers.
+        //
+        // CLASS FIX (2026-10-30, account-tools-redaction): every alias below MUST
+        // spread `...args` — ALL 7 aliases accept `format` ("card"/"json", read by
+        // novadaAccount for every section including "summary"/"balance"), and
+        // usage/traffic/plans additionally accept their own section-specific
+        // filters (start_time/end_time/page/page_size/products — see
+        // AccountParamsSchema). wallet_balance/capture_logs/account_summary used
+        // to hardcode `{ section: "X" }` with NO spread — silently dropping even
+        // `format:"json"` and forcing a card back regardless of what the caller
+        // asked for. A table-driven test (tests/core-alias-args-forwarding.test.ts)
+        // now pins "every alias in this switch forwards ...args" so a NEW alias
+        // can't reintroduce this as a new instance of the same bug.
         case "novada_wallet_balance":
-            return novadaAccount(validateAccountParams({ section: "balance" }), apiKey);
+            return novadaAccount(validateAccountParams({ ...args, section: "balance" }), apiKey);
         case "novada_wallet_usage_record":
             return novadaAccount(validateAccountParams({ ...args, section: "usage" }), apiKey);
         case "novada_traffic_daily":
@@ -781,10 +793,14 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_plan_balance_all":
             return novadaAccount(validateAccountParams({ ...args, section: "plans" }), apiKey);
         case "novada_capture_logs":
-            // capture_logs routed to summary since it's a sub-section of the dashboard
-            return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
+            // capture_logs routed to summary since it's a sub-section of the dashboard.
+            // Only `format` actually reaches novadaAccount's "summary" case (start_time/
+            // end_time/page/page_size/products are usage/traffic/plans-only per
+            // AccountParamsSchema and are never read by the summary branch) — but that
+            // one field must still be honored, not silently dropped.
+            return novadaAccount(validateAccountParams({ ...args, section: "summary" }), apiKey);
         case "novada_account_summary":
-            return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
+            return novadaAccount(validateAccountParams({ ...args, section: "summary" }), apiKey);
         case "novada_proxy_account_create":
             return novadaProxyAccountCreate(validateProxyAccountCreateParams(args), apiKey);
         case "novada_proxy_account_list":

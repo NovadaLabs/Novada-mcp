@@ -6,6 +6,20 @@ export interface DeveloperApiEnvelope<T = unknown> {
     data?: T | null;
 }
 export declare function maskPasswords<T>(value: T, seen?: WeakSet<object>): T;
+/**
+ * Recursively mask credential-bearing fields (see CREDENTIAL_FIELDS) anywhere
+ * in a developer-api response before it reaches an agent/user. Generalizes
+ * maskPasswords() — kept separately, unchanged, since its existing call sites
+ * (proxy_account_list.ts, proxy_account_create.ts) and their tests pin its
+ * password-only, "****" (no last-4) behavior.
+ *
+ * Key-based (not shape-based) and recursive so a nested or differently-named
+ * container still gets masked. Mutates in place AND returns the same
+ * reference (matches maskPasswords's call-site convention). Guards against
+ * prototype-pollution keys and cyclic structures.
+ */
+export declare function maskCredentials<T>(value: T, seen?: WeakSet<object>): T;
+export declare function staticHouseStatusTotal(status: "2" | "3", apiKey?: string): Promise<number | undefined>;
 /** Return the developer-api bearer token. Prefers NOVADA_DEVELOPER_API_KEY; falls back to NOVADA_API_KEY. */
 export declare function getDeveloperApiKey(): string;
 /**
