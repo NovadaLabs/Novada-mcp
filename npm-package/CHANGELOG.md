@@ -6,6 +6,15 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+### Security
+- **Static ISP IP dial credentials (account/password) are now masked** in `novada_static_ip_mgmt` (`list`/`export`/`open`/`renew`) and in `novada_plan_balance_all`/`novada_account(section="plans"/"summary")`'s per-IP `raw` field — both hit the same `/v1/static_house/list` endpoint, which returns a per-IP dial username/password pair in cleartext. A new shared helper, `maskCredentials()` (`_core/developer_api.ts`), recursively masks a table-driven set of credential-bearing field names (password/passwd/pwd/pass/secret/token/api_key/apikey → `***`; account/username/user_name → `<PROXY_USER>`, matching `novada_proxy`'s existing convention) without touching IPs, ports, regions, statuses, or expiry dates. `sanitizeServerMsg` (`_core/errors.ts`) gained a matching rule so a credential echoed back in an UPSTREAM ERROR message is masked too, not just the success path. `novada_capture_apikey`'s own existing `****<last4>` masking is unchanged (out of scope — already correct for both its `get` and `reset` actions).
+
+### Fixed
+- **`novada_static_ip_mgmt`'s `list`/`export` default to `status="1"` (in-use)** when the caller omits `status`, instead of returning every IP the account has ever owned (including long-expired/released ones). A new `summary` field reports how many expired/released IPs exist and how to see them (`status:"2"`/`status:"3"`); an explicit `status` (including `""` for all) is still honored exactly.
+- **`novada_plan_balance_all`'s static-ISP `active_ip_count`** (surfaced via `novada_account(section="plans"/"summary")`, the HOSTED-reachable path) used to count IPs of EVERY lifecycle status as "active" (no `status` filter was sent). It now scopes to `status="1"` and adds `expired_ip_count`/`released_ip_count` as additive, backward-compatible fields (best-effort — a failed count probe omits the field rather than failing the whole response).
+- **`novada_account(section="traffic")`'s card rendering** no longer shows static ISP as a misleading `0.0 MB`; it now renders the `applicable:false` "billed per-IP, not by traffic" note the JSON output always carried.
+- **3 `novada_account` backward-compat aliases** (`novada_wallet_balance`, `novada_capture_logs`, `novada_account_summary`) silently dropped ALL caller args, including `format` — a caller asking for `format:"json"` always got a card back. They now forward `...args` like their 3 siblings (`wallet_usage_record`/`traffic_daily`/`plan_balance_all`) already did.
+
 ---
 
 ## [0.9.44] — 2026-10-26
