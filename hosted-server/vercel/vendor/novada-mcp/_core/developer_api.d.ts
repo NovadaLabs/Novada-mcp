@@ -6,6 +6,11 @@ export interface DeveloperApiEnvelope<T = unknown> {
     data?: T | null;
 }
 export declare function maskPasswords<T>(value: T, seen?: WeakSet<object>): T;
+type CredentialFieldKind = "secret" | "username";
+export declare const CREDENTIAL_FIELDS: ReadonlyArray<{
+    key: string;
+    kind: CredentialFieldKind;
+}>;
 /**
  * Recursively mask credential-bearing fields (see CREDENTIAL_FIELDS) anywhere
  * in a developer-api response before it reaches an agent/user. Generalizes
@@ -69,4 +74,5 @@ export declare function devApiParallel<T = unknown>(calls: Array<{
     apiKey?: string;
     timeoutMs?: number;
 }): Promise<ParallelResult<T>[]>;
+export {};
 //# sourceMappingURL=developer_api.d.ts.map

@@ -98,13 +98,14 @@ export function maskPasswords<T>(value: T, seen: WeakSet<object> = new WeakSet()
 // they simply have no row in this table.
 type CredentialFieldKind = "secret" | "username";
 
-const CREDENTIAL_FIELDS: ReadonlyArray<{ key: string; kind: CredentialFieldKind }> = [
+export const CREDENTIAL_FIELDS: ReadonlyArray<{ key: string; kind: CredentialFieldKind }> = [
   { key: "password", kind: "secret" },
   { key: "passwd", kind: "secret" },
   { key: "pwd", kind: "secret" },
   { key: "pass", kind: "secret" },
   { key: "secret", kind: "secret" },
   { key: "token", kind: "secret" },
+  { key: "access_token", kind: "secret" },
   { key: "api_key", kind: "secret" },
   { key: "apikey", kind: "secret" },
   { key: "account", kind: "username" },

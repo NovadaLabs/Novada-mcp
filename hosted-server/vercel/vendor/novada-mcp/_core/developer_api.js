@@ -65,13 +65,14 @@ export function maskPasswords(value, seen = new WeakSet()) {
     }
     return value;
 }
-const CREDENTIAL_FIELDS = [
+export const CREDENTIAL_FIELDS = [
     { key: "password", kind: "secret" },
     { key: "passwd", kind: "secret" },
     { key: "pwd", kind: "secret" },
     { key: "pass", kind: "secret" },
     { key: "secret", kind: "secret" },
     { key: "token", kind: "secret" },
+    { key: "access_token", kind: "secret" },
     { key: "api_key", kind: "secret" },
     { key: "apikey", kind: "secret" },
     { key: "account", kind: "username" },
