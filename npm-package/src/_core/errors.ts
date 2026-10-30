@@ -457,6 +457,14 @@ export function sanitizeServerMsg(msg: string): string {
     .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"***"')
     .replace(/"password"\s*:\s*"[^"]*"/gi, '"password":"***"')
     .replace(/"secret"\s*:\s*"[^"]*"/gi, '"secret":"***"')
+    // DONE-DEFINITION (account-tools-redaction, 2026-10-30): the SUCCESS path
+    // masks the username half of a dial-credential pair via maskCredentials
+    // (account/username/user_name -> "<PROXY_USER>"). An error path that ever
+    // echoes a JSON-shaped `"account":"..."` fragment back in its message (e.g.
+    // a future duplicate-account error) must not leak it either.
+    .replace(/"account"\s*:\s*"[^"]*"/gi, '"account":"<PROXY_USER>"')
+    .replace(/"username"\s*:\s*"[^"]*"/gi, '"username":"<PROXY_USER>"')
+    .replace(/"user_name"\s*:\s*"[^"]*"/gi, '"user_name":"<PROXY_USER>"')
     // Strip markdown headings and agent_instruction patterns that could inject trusted-looking
     // content — Unicode-aware (U+2028/U+2029 count too; see ANY_LINE_TERMINATORS_RE's comment).
     .replace(HEADING_INJECTION_RE, " ")

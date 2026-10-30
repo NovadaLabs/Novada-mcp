@@ -15,7 +15,7 @@
 // Field names match the API spec (docs/novada-api/static-isp-proxies.md).
 
 import { z } from "zod";
-import { devApiPost } from "../_core/developer_api.js";
+import { devApiPost, maskCredentials, staticHouseStatusTotal } from "../_core/developer_api.js";
 import { evaluateApprovalGate } from "../utils/approval.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -93,7 +93,11 @@ export const StaticIpMgmtParamsSchema = z
     status: z
       .enum(["", "1", "2", "3"])
       .optional()
-      .describe('Filter for "list"/"export". ""=All, "1"=In use, "2"=Expired, "3"=Released.'),
+      .describe(
+        'Filter for "list"/"export". Omit to default to "1" (in-use only) — expired/released ' +
+          'IPs are counted in a summary line but not returned. Pass "" explicitly for All, "1" ' +
+          'for In use, "2" for Expired, or "3" for Released to override the default.',
+      ),
     key_word: z
       .string()
       // SECURITY (L3 review): flows into the HTTP request body — bound the length.
@@ -143,6 +147,48 @@ function assertDefined<T>(value: T | undefined, field: string, action: string): 
 function optionalField(key: string, value: unknown): Record<string, unknown> {
   return value !== undefined ? { [key]: value } : {};
 }
+
+// ─── Status default (2026-10-30, account-tools-redaction) ───────────────────
+//
+// INCIDENT: "list"/"export" with no `status` filter forwarded nothing to the
+// server, which defaults to "All" — surfacing every long-expired/released IP
+// alongside live ones. When the caller leaves `status` unset we now request
+// "1" (in-use) ourselves and append a summary line naming how many
+// expired/released IPs exist and how to see them. An EXPLICIT status
+// (including "" for all) is always honored exactly as given — this only
+// changes the OMITTED case.
+
+type StatusFilter = StaticIpMgmtParams["status"];
+
+interface ResolvedStatus {
+  /** Status value actually sent to the server. */
+  effectiveStatus: Exclude<StatusFilter, undefined>;
+  /** True when the caller left `status` unset (we chose "1" on their behalf). */
+  defaulted: boolean;
+}
+
+function resolveStatus(status: StatusFilter): ResolvedStatus {
+  return status === undefined
+    ? { effectiveStatus: "1", defaulted: true }
+    : { effectiveStatus: status, defaulted: false };
+}
+
+/** Human summary line for the IPs hidden by the status default, or undefined when there's nothing to report. */
+function buildStatusSummary(expiredCount: number | undefined, releasedCount: number | undefined): string | undefined {
+  const parts: string[] = [];
+  if (expiredCount !== undefined) parts.push(`${expiredCount} expired`);
+  if (releasedCount !== undefined) parts.push(`${releasedCount} released`);
+  if (parts.length === 0) return undefined;
+  return (
+    `${parts.join(", ")} static IP(s) not shown (status defaulted to "1"=in-use). ` +
+    `Call again with status:"2" for expired, status:"3" for released, or status:"" for all.`
+  );
+}
+
+/** Shared note appended to list/export agent_instruction — the fix for the credential-leak half of the incident. */
+const CREDENTIAL_NOTE =
+  "Dial credentials (account/password), if present in the response, are masked. " +
+  "Get real credentials from https://dashboard.novada.com.";
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
@@ -203,7 +249,7 @@ async function handleOpen(params: StaticIpMgmtParams, apiKey?: string): Promise<
   }
 
   const body: Record<string, unknown> = { ip_type, region, duration, num };
-  const data = await devApiPost<unknown>("/v1/static_house/open", body, { apiKey });
+  const data = maskCredentials(await devApiPost<unknown>("/v1/static_house/open", body, { apiKey }));
 
   return JSON.stringify(
     {
@@ -248,7 +294,7 @@ async function handleRenew(params: StaticIpMgmtParams, apiKey?: string): Promise
   }
 
   const body: Record<string, unknown> = { renew_ip_list, duration };
-  const data = await devApiPost<unknown>("/v1/static_house/renew", body, { apiKey });
+  const data = maskCredentials(await devApiPost<unknown>("/v1/static_house/renew", body, { apiKey }));
 
   return JSON.stringify(
     {
@@ -265,21 +311,31 @@ async function handleRenew(params: StaticIpMgmtParams, apiKey?: string): Promise
 // ── export ───────────────────────────────────────────────────────────────────
 
 async function handleExport(params: StaticIpMgmtParams, apiKey?: string): Promise<string> {
+  const { effectiveStatus, defaulted } = resolveStatus(params.status);
+
   const body: Record<string, unknown> = {
-    ...optionalField("status", params.status),
+    status: effectiveStatus,
     ...optionalField("region", params.region),
     ...optionalField("key_word", params.key_word),
     ...optionalField("is_auto_renew", params.is_auto_renew),
   };
 
-  const data = await devApiPost<unknown>("/v1/static_house/export", body, { apiKey });
+  const [rawData, expiredCount, releasedCount] = await Promise.all([
+    devApiPost<unknown>("/v1/static_house/export", body, { apiKey }),
+    defaulted ? staticHouseStatusTotal("2", apiKey) : Promise.resolve(undefined),
+    defaulted ? staticHouseStatusTotal("3", apiKey) : Promise.resolve(undefined),
+  ]);
+  const data = maskCredentials(rawData);
+  const summary = defaulted ? buildStatusSummary(expiredCount, releasedCount) : undefined;
 
   return JSON.stringify(
     {
       status: "ok",
       data,
+      ...(summary ? { summary } : {}),
       agent_instruction:
-        "Export of static ISP IPs returned. Data includes all IPs matching the applied filters.",
+        `Export of static ISP IPs returned${defaulted ? ' (status defaulted to "1"=in-use)' : ""}. ` +
+        `Data includes all IPs matching the applied filters. ${CREDENTIAL_NOTE}`,
     },
     null,
     2,
@@ -289,23 +345,34 @@ async function handleExport(params: StaticIpMgmtParams, apiKey?: string): Promis
 // ── list ─────────────────────────────────────────────────────────────────────
 
 async function handleList(params: StaticIpMgmtParams, apiKey?: string): Promise<string> {
+  const { effectiveStatus, defaulted } = resolveStatus(params.status);
+
   const body: Record<string, unknown> = {
     page: params.page,
     limit: params.limit,
-    ...optionalField("status", params.status),
+    status: effectiveStatus,
     ...optionalField("region", params.region),
     ...optionalField("key_word", params.key_word),
     ...optionalField("is_auto_renew", params.is_auto_renew),
   };
 
-  const data = await devApiPost<unknown>("/v1/static_house/list", body, { apiKey });
+  const [rawData, expiredCount, releasedCount] = await Promise.all([
+    devApiPost<unknown>("/v1/static_house/list", body, { apiKey }),
+    defaulted ? staticHouseStatusTotal("2", apiKey) : Promise.resolve(undefined),
+    defaulted ? staticHouseStatusTotal("3", apiKey) : Promise.resolve(undefined),
+  ]);
+  const data = maskCredentials(rawData);
+  const summary = defaulted ? buildStatusSummary(expiredCount, releasedCount) : undefined;
 
   return JSON.stringify(
     {
       status: "ok",
       data,
+      ...(summary ? { summary } : {}),
       agent_instruction:
-        "Paginated list of static ISP IPs. Use 'export' action for full unfiltered dump. Use 'open' to purchase new IPs or 'renew' to extend existing ones.",
+        `Paginated list of static ISP IPs${defaulted ? ' (status defaulted to "1"=in-use)' : ""}. ` +
+        `Use 'export' action for a full unfiltered dump. Use 'open' to purchase new IPs or 'renew' ` +
+        `to extend existing ones. ${CREDENTIAL_NOTE}`,
     },
     null,
     2,
