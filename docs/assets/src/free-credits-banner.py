@@ -55,11 +55,7 @@ FONT_WEIGHT = 400  # Inter "Regular"
 
 FONT_SEARCH_PATHS = [
     os.environ.get("INTER_VARIABLE_TTF", ""),
-    str(
-        Path.home()
-        / "Library/Application Support/Google/Chrome/Profile 1/Extensions"
-        / "ljflmlehinmoeknoonhibbjpldiijjmm/14.12.0_0/fonts/Inter-Variable.ttf"
-    ),
+    str(Path.home() / "Library/Fonts/Inter-Variable.ttf"),
     "/tmp/Inter-Variable.ttf",
 ]
 
@@ -75,6 +71,9 @@ def find_font() -> str:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1].startswith("-"):
+        # Writes the banner in place, so never treat a flag (e.g. --help) as subtitle text.
+        raise SystemExit(__doc__)
     text = sys.argv[1] if len(sys.argv) > 1 else NEW_TEXT
 
     font_path = find_font()
