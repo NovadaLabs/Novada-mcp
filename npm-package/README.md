@@ -209,7 +209,7 @@ These are the tools you reach for most:
 
 📚 **[Full reference — all 37 tools →](https://github.com/NovadaLabs/Novada-mcp/blob/main/docs/TOOLS.md)**
 
-**37 tools.** Self-host (`npx novada-mcp`) exposes all 37. The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
+**37 tools.** Self-host (`npx novada-mcp`) exposes all 37. The hosted default surface (`mcp.novada.com`) exposes **29** — the same registry minus 8 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. `novada_static_ip_mgmt` IS hosted-visible (its `list`/`export`/`reveal_credentials` actions work on hosted); only its `open`/`renew` WRITE actions are refused there, at the action level. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ### Where does it run?
 
