@@ -89,6 +89,30 @@ test("buildToolCallEvent: scalar fields passed through correctly", () => {
   assert.equal(row.region, "fra1");
 });
 
+test("buildToolCallEvent: plan/charged/over_cap_allowed/quota_remaining all accept and pass through null (2026-10-29: no gateway cap applies)", () => {
+  const row = buildToolCallEvent({
+    request_id: "req-no-cap",
+    token_hash: "hash-token",
+    plan: null,
+    client_name: null,
+    client_version: null,
+    protocol_version: null,
+    tool: "novada_search",
+    args: { q: "x" },
+    outcome: "ok",
+    latency_ms: 42,
+    charged: null,
+    over_cap_allowed: null,
+    quota_remaining: null,
+    server_version: "1.0.0-hosted",
+    region: "fra1",
+  });
+  assert.equal(row.plan, null);
+  assert.equal(row.charged, null);
+  assert.equal(row.over_cap_allowed, null);
+  assert.equal(row.quota_remaining, null);
+});
+
 test("buildToolCallEvent: oversized tool name is capped to 64 chars (storage/egress abuse fence) [audit 2026-07-31 P7]", () => {
   const huge = "x".repeat(5000);
   const row = buildToolCallEvent({
@@ -503,24 +527,20 @@ test("mcp.ts source: emitGuardRejection is async and every guard-site call is aw
   }
 });
 
-test("mcp.ts source: cap_blocked path emits scheduleToolEvent", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  // scheduleToolEvent now takes a single options object — the outcome field
-  // reads `outcome: "cap_blocked"` rather than a positional string literal.
-  // The cap_blocked emit must appear before the cap-blocked return.
-  const capBlockedIdx = src.indexOf('outcome: "cap_blocked"');
-  const capReturnIdx = src.indexOf('"## Free Gateway Cap Reached"');
-  assert.ok(capBlockedIdx >= 0, 'cap_blocked scheduleToolEvent call must exist');
-  assert.ok(capReturnIdx >= 0, '"## Free Gateway Cap Reached" must exist');
-  assert.ok(capBlockedIdx < capReturnIdx, "cap_blocked telemetry must be scheduled BEFORE the cap-blocked return");
-});
+// "cap_blocked path emits scheduleToolEvent" was deleted 2026-10-29: the
+// gateway cap (and its "## Free Gateway Cap Reached" rejection block) was
+// removed entirely (owner decision) — there is no cap_blocked path left to
+// test. See npm-package/CHANGELOG.md.
 
 test("mcp.ts source: success path emits scheduleToolEvent with outcome ok", () => {
   const src = readFileSync(MCP_TS, "utf8");
   // scheduleToolEvent now takes a single options object — the outcome field
   // reads `outcome: "ok"` (or a ternary resolving to it) rather than a
-  // positional string literal.
-  assert.match(src, /scheduleToolEvent\(\{\s*\n\s*outcome:\s*["']ok["']/, "success path must call scheduleToolEvent with outcome: 'ok'");
+  // positional string literal. Whitespace between "{" and "outcome:" is
+  // intentionally NOT required (2026-10-29: the discover/setup success paths
+  // now call scheduleToolEvent({ outcome: "ok" }) on one line since there is
+  // no longer a `gate`/`plan` field to spread alongside it).
+  assert.match(src, /scheduleToolEvent\(\{\s*outcome:\s*["']ok["']/, "success path must call scheduleToolEvent with outcome: 'ok'");
 });
 
 test("mcp.ts source: error path emits scheduleToolEvent", () => {
@@ -634,9 +654,11 @@ test("mcp.ts source: novada_setup block calls scheduleToolEvent before its retur
   // Find the novada_setup block and assert scheduleToolEvent is present inside it.
   const setupBlockStart = src.indexOf('if (name === "novada_setup")');
   assert.ok(setupBlockStart >= 0, 'novada_setup block must exist in mcp.ts');
-  // The block ends at the next top-level if/const after it (gateway cap gate).
+  // The block ends where the next section begins (2026-10-29: the gateway cap
+  // gate that used to anchor this was removed entirely; "Browser caller-key
+  // billing" is the next stable section marker after novada_setup's block).
   // scheduleToolEvent must appear between the block start and the first post-setup code.
-  const afterSetupIdx = src.indexOf('const monthlyQuota', setupBlockStart);
+  const afterSetupIdx = src.indexOf('// Browser caller-key billing', setupBlockStart);
   assert.ok(afterSetupIdx > setupBlockStart, 'post-setup code must exist after novada_setup block');
   const setupSrc = src.slice(setupBlockStart, afterSetupIdx);
   assert.ok(

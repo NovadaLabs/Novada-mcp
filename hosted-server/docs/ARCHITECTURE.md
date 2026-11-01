@@ -15,7 +15,7 @@ AI client (Claude Desktop / Cursor / Cline / Windsurf / VS Code)
 Vercel Function  (mcp.novada.com — Node.js serverless runtime, single region)
      │
      ├─ Token validation   (stubbed → sub2api in v0.2)
-     ├─ Quota check        (Vercel KV, Upstash Redis: 5000 calls/mo/key)
+     ├─ Per-IP rate limit  (Vercel KV, Upstash Redis: 60 req/min — no call cap)
      ├─ Tool dispatch      (re-uses novada-mcp tool handlers, vendored from npm-package)
      └─ Telemetry          → Sentry (errors) + custom behavior-telemetry event log
      │
@@ -64,23 +64,22 @@ sk-eu-novada-{32 random base62 chars}
 
 ---
 
-## 4. Free quota model
+## 4. Billing model
 
-- **5,000 calls / month / key.**
-- Counter stored in Vercel KV (Upstash Redis), keyed by `<token>:<YYYY-MM>`.
-- Increment on every successful tool call (not on auth/list operations).
-- TTL on each KV entry: 32 days (auto-purge previous month).
-- Reset: implicit — the next month uses a new key.
+> 2026-10-29: the monthly free-call cap described in earlier revisions of this
+> doc was removed (owner decision) — there is no per-token monthly quota
+> counter or free-call allowance anymore. See `npm-package/CHANGELOG.md` under
+> `[Unreleased]`.
 
-**Pseudocode**
-
-```text
-key   = `${token}:${utcYearMonth()}`
-count = (await KV.get(key)) ?? 0
-IF count >= 5000:
-  RETURN 429 with Retry-After = secondsUntilNextMonth()
-await KV.put(key, count + 1, { expirationTtl: 60*60*24*32 })
-```
+- **No monthly call cap.** Every successful tool call is billed to the
+  caller's own Novada account balance — same billing as calling the REST API
+  directly.
+- New accounts start with **$10 free credits** (a one-time signup credit, not
+  a recurring monthly allowance).
+- `novada_setup`, `novada_discover`, `novada_account` (and its aliases) never
+  cost anything and are never counted.
+- Per-IP rate limiting (60 req/min, independent of billing) is unchanged —
+  see §6 for the 429 behavior that remains.
 
 ---
 
@@ -94,8 +93,9 @@ await KV.put(key, count + 1, { expirationTtl: 60*60*24*32 })
   the full tool surface working without porting.
 - **Domain:** `mcp.novada.com` → Vercel custom domain via CNAME (`cname.vercel-dns.com`);
   Novada's DNS stays on AWS Route 53, only the CNAME is added there.
-- **Storage:** Vercel KV (Upstash Redis under the hood, via `@vercel/kv`) for both the
-  per-token monthly quota counter and the per-IP rate limit.
+- **Storage:** Vercel KV (Upstash Redis under the hood, via `@vercel/kv`) for the
+  per-IP rate limit, token-verification cache, and first-run-notice flag. There
+  is no per-token quota counter — see §4.
 - **Telemetry:** Sentry (`@sentry/node`, errors only, `tracesSampleRate: 0`) plus a
   custom metadata-only behavior-telemetry event log (see `vercel/api/_telemetry.ts`).
 - **Deploy:** manual, gated — `hosted-server/scripts/deploy-hosted.sh` (build →
@@ -112,7 +112,7 @@ await KV.put(key, count + 1, { expirationTtl: 60*60*24*32 })
 | Condition                       | Status | Response                                        |
 |---------------------------------|--------|-------------------------------------------------|
 | Missing / malformed token       | 401    | `{ "error": "invalid_token" }`                  |
-| Quota exceeded                  | 429    | `Retry-After: <epoch seconds of next month>`    |
+| Per-IP rate limit exceeded      | 429    | `Retry-After: 60`                               |
 | Tool error (upstream 5xx etc.)  | 200    | JSON-RPC error wrapped in MCP response          |
 | Vercel Function timeout (`maxDuration`, 300s) | 5xx | Logged + alert; client must retry     |
 | Unknown tool name               | 200    | JSON-RPC `MethodNotFound` (-32601)              |
@@ -122,9 +122,8 @@ await KV.put(key, count + 1, { expirationTtl: 60*60*24*32 })
 
 ## 7. Roadmap — v0.2 and beyond
 
-- **sub2api billing integration** — replace stub token validator with real subscription lookup; paid tiers unlock higher quotas + premium proxy pools.
+- **sub2api billing integration** — replace stub token validator with real subscription lookup.
 - **OAuth 2.1 + Dynamic Client Registration (DCR)** — required by Claude Desktop "Custom Connectors" UI. Issue access tokens scoped per workspace; refresh tokens; PKCE.
-- **Per-tool quotas** — heavy tools (`browser`, `research`) cost more "units" than `search`.
 - **Regional pinning** — `mcp.us.novada.com`, `mcp.eu.novada.com`, `mcp.cn.novada.com` for compliance.
 - **Tool gating** — workspace admins disable specific tools (e.g. block `browser` in enterprise plan).
 
@@ -133,6 +132,6 @@ await KV.put(key, count + 1, { expirationTtl: 60*60*24*32 })
 ## 8. Why this design
 
 - **Stateless serverless Function** — each request gets a fresh isolate; no session affinity needed; horizontally scales for free (traded against ~200ms cold start vs Edge's ~50ms — see §5).
-- **KV for quota** — eventually consistent is fine for monthly counters; replaces a heavier SQL/D1-style choice.
+- **KV for rate limiting** — eventually consistent is fine for a per-minute counter; replaces a heavier SQL/D1-style choice.
 - **Single endpoint** matches MCP spec and avoids per-tool route explosion.
 - **Reuse tool handlers** from `novada-mcp` npm package (vendored build) — single source of truth for tool schemas + business logic; the Vercel Function is a thin transport adapter.

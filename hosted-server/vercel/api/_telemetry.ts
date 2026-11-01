@@ -37,7 +37,11 @@ import type { FailureClass } from "../vendor/novada-mcp/_core/errors.js";
 // single-purpose and independently readable.
 
 export type StatusBucket = "success" | "blocked" | "failed" | "pending" | "not_applicable";
-export type RejectionStage = "pre_auth" | "rate_limited" | "cap_blocked" | "tool_filtered" | "dispatched";
+// "cap_blocked" was removed 2026-10-29 along with the monthly free-call cap —
+// no code path can produce it anymore. statusBucket()/hqStatusBucket() below
+// still tolerate it as a raw string value (never typed here) for any
+// historical row still carrying it, but no new row will ever set it.
+export type RejectionStage = "pre_auth" | "rate_limited" | "tool_filtered" | "dispatched";
 export type AuthMethod = "path" | "query" | "bearer";
 /**
  * pending — never yet attempted (or attempted and result unknown).
@@ -143,10 +147,13 @@ export function resolveProduct(tool: string | null): Product | null {
 // ─── §6: governed status_bucket + failure_class derivation ───────────────────
 // SINGLE authoritative place that maps a tool_call `outcome` string (the raw
 // internal enum already used throughout mcp.ts — "ok" | a NovadaErrorCode value
-// | "cap_blocked" | "TIMEOUT" | "TOOL_NOT_ENABLED" | "NOT_AVAILABLE_ON_HOSTED" |
+// | "TIMEOUT" | "TOOL_NOT_ENABLED" | "NOT_AVAILABLE_ON_HOSTED" |
 // "MISSING_TOKEN" | "INVALID_TOKEN" | "GATEWAY_RATE_LIMITED" | "error" | the
 // future WS-B "TARGET_BLOCKED") down to the 5-bucket customer-facing status
 // domain, and the (non-exported) npm-package error->failure_class table.
+// ("cap_blocked" was a possible outcome before 2026-10-29's gateway-cap
+// removal — statusBucket()'s default branch below still classifies it as
+// "failed" if it ever appears in old data, but no new row produces it.)
 
 /**
  * KEEP IN SYNC with npm-package/src/_core/errors.ts's internal (NOT exported)
@@ -255,7 +262,9 @@ export interface McpEventRow {
   error_code: NovadaErrorCode | null;
   failure_class: FailureClass | null;
   retryable: boolean | null;
-  /** pre_auth | rate_limited | cap_blocked | tool_filtered | dispatched. */
+  /** pre_auth | rate_limited | tool_filtered | dispatched (see RejectionStage;
+   *  older rows may still carry the retired "cap_blocked" value — column
+   *  itself stays a bare string so historical data round-trips unchanged). */
   rejection_stage: string | null;
   /** True for "not applicable on hosted" (architectural), false for a caller's own ?tools=/?groups= filter. */
   is_hosted_limitation: boolean | null;
@@ -487,13 +496,17 @@ export function buildToolCallEvent(params: {
   args: Record<string, unknown> | null;
   outcome: string;
   latency_ms: number;
-  charged: boolean;
-  over_cap_allowed: boolean;
-  quota_remaining: number;
+  /** Always null since 2026-10-29 (the monthly free-call cap was removed —
+   *  "no cap applies" to any call). Kept nullable rather than deleted so the
+   *  column survives untouched (no DB migration) and historical rows that do
+   *  carry a boolean still type-check if ever re-read through this builder. */
+  charged: boolean | null;
+  over_cap_allowed: boolean | null;
+  quota_remaining: number | null;
   server_version: string | null;
   region: string | null;
   /** From an actual thrown NovadaError's `.code` — null for guard-site rejections
-   *  that never construct one (auth/rate-limit/cap/tool-filter gates). */
+   *  that never construct one (auth/rate-limit/tool-filter gates). */
   error_code?: NovadaErrorCode | null;
   /** From an actual thrown NovadaError's `.retryable` — null when no NovadaError exists. */
   retryable?: boolean | null;

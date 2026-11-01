@@ -6,9 +6,9 @@ Web search, page extraction and structured platform data for AI agents, backed b
 
 [Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Troubleshooting](#troubleshooting) · [Built for agents](#built-for-agents) · [Links](#links)
 
-[![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card needed](https://raw.githubusercontent.com/NovadaLabs/Novada-mcp/main/docs/assets/free-credits-banner.png)](https://www.novada.com)
+[![Free to start — $10 in free credits, usage billed to your Novada account, no credit card needed](https://raw.githubusercontent.com/NovadaLabs/Novada-mcp/main/docs/assets/free-credits-banner.png)](https://www.novada.com)
 
-**Free to start:** $10 in credits, up to 1,000 calls a month, no credit card.
+**Free to start:** $10 in free credits, no credit card. There is no monthly call cap — usage is billed to your Novada account.
 
 **What it is good at**
 
@@ -183,7 +183,7 @@ novada_research({question: "how do MCP servers work?"}) — parallel multi-sourc
 
 1. Sign up at [novada.com](https://www.novada.com) — no credit card required.
 2. Copy your API key from [novada.com](https://www.novada.com).
-3. You start with **$10 in free credits**, capped at **1,000 calls/month**. Light tools (search, extract) draw down a small fraction of that per call; heavier tools (browser, scrape, proxy) cost more per call and can exhaust the starter balance well before 1,000 calls. Check what's left any time with `novada_account({section: "balance"})` or `novada_setup()`.
+3. You start with **$10 in free credits**. There is no monthly call cap — every call bills your Novada account balance directly. Light tools (search, extract) draw down a small fraction of that per call; heavier tools (browser, scrape, proxy) cost more per call and can exhaust the starter balance quickly. Check what's left any time with `novada_account({section: "balance"})` or `novada_setup()`.
 
 ---
 

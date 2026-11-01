@@ -6,6 +6,13 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+### Changed (hosted server — mcp.novada.com, not part of the npm package)
+- **The monthly free-call gateway cap is removed entirely (owner decision, 2026-10-29).** `mcp.novada.com`'s "1,000 free calls per token per month" limit was a one-time new-user promotion that has ended, not a recurring allowance — every call is now billed to the caller's own Novada account, same as calling the REST API directly; new accounts still get $10 free credits. Removed: the per-token monthly KV quota counter (`decrementQuota`/`refundQuota`/`monthKey`), the paid-tier plan resolution and over-cap exemption (`enforceGatewayCap`, `resolvePlan`, `shouldAllowOverCap`, `classifyPlanFromUsageRecord`, `fetchAggregateBalance`/`parseBalanceValue`, the approval-gate preview-charge exemption), and the `FREE_PLAN_MONTHLY_QUOTA` env var (no longer read). `CAP_EXEMPT_TOOLS`/`ACCOUNT_TOOL_NAMES` survive unchanged and now drive only the gateway status footer. Auth, rate limiting (60 req/min/IP), OAuth, and token caching are unchanged.
+- **Gateway status footer collapses from three variants to two.** The old `"⚠ gateway: N/M free calls remaining this month · cost: unknown…"` and `"gateway: uncapped (paid account) · cost: unknown…"` lines are gone. Billable tools now carry `"gateway: usage is billed to your Novada account — balance and charges at dashboard.novada.com"`; `CAP_EXEMPT_TOOLS` (`novada_setup`, `novada_discover`, `novada_account` + aliases) carry `"gateway: no charge for this call"`. The over-cap rejection message (`"## Free Gateway Cap Reached"`) and its `_meta.quota_remaining` success-path field are both gone.
+- **Telemetry rows keep their schema (no DB migration)** — `charged`/`over_cap_allowed`/`quota_remaining`/`plan` are now always `null` ("no cap applies") instead of a free/pro classification; `validateToken` no longer returns a meaningless `quota_remaining`. The HQ push payload shape is unchanged (`buildHqPayload` already defaulted these to `0`/`""` for a `null` row).
+- Updated the gateway's nightly contract canary (`contract-test.py`): `COST_VISIBILITY` now checks the two-variant footer contract; `BILLING_TRUTH` (which guarded a funded key against the now-removed cap) is deleted.
+- Docs/landing pages that claimed a free monthly call count (`hosted-server/docs/*`, `hosted-server/landing/*`, `hosted-server/vercel/README.md`, `hosted-server/smithery.yaml`) now describe usage-based billing with a $10 new-account credit instead.
+
 ---
 
 ## [0.9.44] — 2026-10-26

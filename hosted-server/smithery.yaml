@@ -6,7 +6,7 @@ startCommand:
       apiKey:
         type: string
         title: "Novada API Key"
-        description: "Your Novada API key from app.novada.com/dashboard. Get one free at novada.com. Leave empty to use the free tier."
-    required: []
+        description: "Your Novada API key from app.novada.com/dashboard. Sign up at novada.com for $10 free credits. Required — every call is billed to your own Novada account."
+    required: ["apiKey"]
   exampleConfig:
     apiKey: "your-api-key-here"
