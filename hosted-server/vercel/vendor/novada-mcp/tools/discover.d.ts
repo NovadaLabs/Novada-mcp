@@ -1,8 +1,17 @@
 import { z } from "zod";
 /**
  * Tools the hosted endpoint never lists. MIRRORS HOSTED_HIDDEN in
- * hosted-server/vercel/api/mcp.ts (same 9 names) — keep the two in sync.
+ * hosted-server/vercel/api/mcp.ts (same 8 names) — keep the two in sync.
  * Used only for the hosted-vs-local note in novada_discover's group listing.
+ *
+ * novada_static_ip_mgmt was REMOVED from this list 2026-11-01 (owner decision
+ * option A): its plain read-only actions ("list"/"export") are now served on
+ * hosted. "open"/"renew" (billable WRITE actions) and, per a 2026-11-01
+ * FOLLOW-UP FINAL decision, "reveal_credentials" (real credentials need a
+ * human-in-the-loop confirmation the stateless hosted endpoint cannot
+ * perform) are all refused, at the ACTION level inside the tool itself (see
+ * static_ip_mgmt.ts's assertActionAvailableOnRuntime) — not via this
+ * whole-tool hiding mechanism.
  */
 export declare const HOSTED_HIDDEN_TOOLS: readonly string[];
 export declare const DiscoverParamsSchema: z.ZodObject<{

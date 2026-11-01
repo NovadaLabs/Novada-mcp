@@ -132,7 +132,7 @@ async function handleAdd(params, apiKey) {
             agent_instruction: "Re-call with the ip parameter set to the IP address to whitelist.",
         }, null, 2);
     }
-    const addGate = evaluateApprovalGate(params, "ip_whitelist_add");
+    const addGate = evaluateApprovalGate(params, "ip_whitelist_add", "novada_ip_whitelist");
     if (!addGate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",
@@ -186,7 +186,7 @@ async function handleDel(params, apiKey) {
             agent_instruction: 'Re-call with the ips parameter set to a comma-separated list of IPs to remove (e.g. "1.2.3.4,5.6.7.8").',
         }, null, 2);
     }
-    const delGate = evaluateApprovalGate(params, "ip_whitelist_del");
+    const delGate = evaluateApprovalGate(params, "ip_whitelist_del", "novada_ip_whitelist");
     if (!delGate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",
@@ -222,7 +222,7 @@ async function handleRemark(params, apiKey) {
             agent_instruction: 'Re-call with the id parameter set to the whitelist entry ID. Use action="list" first to find entry IDs.',
         }, null, 2);
     }
-    const remarkGate = evaluateApprovalGate(params, "ip_whitelist_remark");
+    const remarkGate = evaluateApprovalGate(params, "ip_whitelist_remark", "novada_ip_whitelist");
     if (!remarkGate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",

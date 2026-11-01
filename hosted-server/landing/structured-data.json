@@ -24,7 +24,7 @@
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "USD",
-      "description": "1,000 tool calls per month free. No credit card required."
+      "description": "Usage-based pricing billed to your Novada account. $10 free credits for new accounts. No credit card required to sign up."
     },
     "provider": {
       "@type": "Organization",

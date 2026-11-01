@@ -6,9 +6,9 @@ Web search, page extraction and structured platform data for AI agents, backed b
 
 [Quickstart](#quickstart) · [Get your key](#get-your-key) · [How to choose a tool](#how-to-choose-a-tool) · [Troubleshooting](#troubleshooting) · [Built for agents](#built-for-agents) · [Links](#links)
 
-[![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card needed](https://raw.githubusercontent.com/NovadaLabs/Novada-mcp/main/docs/assets/free-credits-banner.png)](https://www.novada.com)
+[![Free to start — $10 in free credits, usage billed to your Novada account, no credit card needed](https://raw.githubusercontent.com/NovadaLabs/Novada-mcp/main/docs/assets/free-credits-banner.png)](https://www.novada.com)
 
-**Free to start:** $10 in credits, up to 1,000 calls a month, no credit card.
+**Free to start:** $10 in free credits, no credit card. There is no monthly call cap — usage is billed to your Novada account.
 
 **What it is good at**
 
@@ -183,7 +183,7 @@ novada_research({question: "how do MCP servers work?"}) — parallel multi-sourc
 
 1. Sign up at [novada.com](https://www.novada.com) — no credit card required.
 2. Copy your API key from [novada.com](https://www.novada.com).
-3. You start with **$10 in free credits**, capped at **1,000 calls/month**. Light tools (search, extract) draw down a small fraction of that per call; heavier tools (browser, scrape, proxy) cost more per call and can exhaust the starter balance well before 1,000 calls. Check what's left any time with `novada_account({section: "balance"})` or `novada_setup()`.
+3. You start with **$10 in free credits**. There is no monthly call cap — every call bills your Novada account balance directly. Light tools (search, extract) draw down a small fraction of that per call; heavier tools (browser, scrape, proxy) cost more per call and can exhaust the starter balance quickly. Check what's left any time with `novada_account({section: "balance"})` or `novada_setup()`.
 
 ---
 
@@ -209,7 +209,7 @@ These are the tools you reach for most:
 
 📚 **[Full reference — all 37 tools →](https://github.com/NovadaLabs/Novada-mcp/blob/main/docs/TOOLS.md)**
 
-**37 tools.** Self-host (`npx novada-mcp`) exposes all 37. The hosted default surface (`mcp.novada.com`) exposes **28** — the same registry minus 9 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_static_ip_mgmt` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. Call `novada_discover` on your connection to see exactly what's available on it.
+**37 tools.** Self-host (`npx novada-mcp`) exposes all 37. The hosted default surface (`mcp.novada.com`) exposes **29** — the same registry minus 8 tools that don't apply to a stateless serverless endpoint: `novada_browser` / `novada_browser_flow` (both need a persistent CDP WebSocket session a serverless isolate can't hold), `novada_site_copy` (writes files to disk), `novada_ip_whitelist` / `novada_capture_apikey` (write-gated account ops), `novada_session_stats` / `novada_search_feedback` (per-process in-memory state), and `novada_verify` — it is core-derived, not a hand-curated subset. `novada_static_ip_mgmt` IS hosted-visible (its `list`/`export` actions work on hosted); only its `open`/`renew`/`reveal_credentials` actions are refused there, at the action level — `reveal_credentials` needs a human-in-the-loop confirmation (MCP elicitation) the stateless hosted endpoint can't perform, so it's local-only like `open`/`renew`. Call `novada_discover` on your connection to see exactly what's available on it.
 
 ### Where does it run?
 
@@ -238,7 +238,7 @@ These are the tools you reach for most:
 | `novada_proxy_account_list` | ✅ | ✅ |
 | `novada_ip_whitelist` | ✅ | ❌ write-gated account op |
 | `novada_capture_apikey` | ✅ | ❌ write-gated account op |
-| `novada_static_ip_mgmt` | ✅ | ❌ write-gated account op |
+| `novada_static_ip_mgmt` | ✅ | `list`/`export` only — ❌ `open`/`renew`/`reveal_credentials` (write/credential actions, refused at the action level) |
 | `novada_discover` | ✅ | ✅ |
 | `novada_setup` | ✅ | ✅ |
 | `novada_session_stats` | ✅ | ❌ per-process in-memory state |

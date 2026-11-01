@@ -56,6 +56,8 @@ This is **KR-5 in tongwu's June 2026 personal OKRs** — Ethan-flagged P0, targe
     │  Authenticated via NOVADA_API_KEY env var (upstream key)
 ```
 
+> 2026-10-29: the per-token monthly quota line above was removed (owner decision) — see `npm-package/CHANGELOG.md`.
+
 **Decision history:**
 - Initially planned Cloudflare Workers + Wrangler. **Pivoted to Vercel 2026-06-02** because CF free tier requires the root domain (`novada.com`) to be on Cloudflare, but Novada DNS is on AWS Route 53 (migrating the full zone needs domestic tech team + 24-48h propagation + main-site risk).
 - Vercel works with any DNS provider via single CNAME, no migration needed.
@@ -84,7 +86,7 @@ This is **KR-5 in tongwu's June 2026 personal OKRs** — Ethan-flagged P0, targe
 | `NOVADA_API_KEY` | `<sensitive>` | tongwu's **personal Novada test key** (Web Unblocker product, balance $39.46 at start). **TODO**: swap to a dedicated `hosted-mcp-prod` key once fudong / Novada backend team issues one. The personal key works for v0 launch testing but mixes personal + product traffic. |
 | `STUB_AUTH_WARNING_ACCEPTED` | `false` → flip to `true` after reading PRE_LAUNCH_CHECKLIST | Gate. While `false`, every request returns `503 STUB_AUTH_UNACKED`. Intentional — forces operator to read checklist before exposing stub auth. |
 | `RATE_LIMIT_PER_MIN` | `60` | Per-IP rate limit. Counter lives in Vercel KV. |
-| `FREE_PLAN_MONTHLY_QUOTA` | `5000` | Per-token monthly quota. Counter in Vercel KV, 32-day TTL. |
+| `FREE_PLAN_MONTHLY_QUOTA` | `5000` | **Obsolete 2026-10-29** — the monthly free-call cap was removed (owner decision); the code no longer reads this var. |
 | `KV_REST_API_URL` | _(auto-injected)_ | Vercel auto-injects when KV store `novada-mcp-quota` is connected to project. |
 | `KV_REST_API_TOKEN` | _(auto-injected)_ | Same as above. |
 

@@ -86,6 +86,17 @@ const EXPECTED_HINTS = {
   novada_account:                 { readOnlyHint: true,  destructiveHint: false, why: "account/billing dashboard reads only" },
   novada_proxy_account_create:    { readOnlyHint: false, destructiveHint: true,  why: "FIX: creates a real billable sub-account, approval_token-gated like the other WRITE account tools (known mislabel, now corrected)" },
   novada_proxy_account_list:      { readOnlyHint: true,  destructiveHint: false, why: "lists sub-accounts, read-only" },
+  // 2026-11-01 (owner decision, option A): novada_static_ip_mgmt is no longer
+  // fully HOSTED_HIDDEN — "list"/"export" (masked credentials) and
+  // "reveal_credentials" (approval-token-gated; shows real dial credentials
+  // on the execute call ONLY when a human explicitly approved) are now
+  // hosted-visible. "open"/"renew" (billable WRITE actions) are still
+  // refused on THIS runtime, but at the ACTION level inside the tool itself
+  // (static_ip_mgmt.ts's assertActionAvailableOnRuntime) — the tool-level
+  // annotation can't vary per action, so it keeps the same destructiveHint:
+  // true/readOnlyHint:false posture it already had (its most dangerous
+  // action still exists in the schema, even though unreachable here).
+  novada_static_ip_mgmt:          { readOnlyHint: false, destructiveHint: true,  why: "list/export/reveal_credentials are read-only-or-approval-gated-read-only; open/renew (billable writes) are refused at the action level on hosted, but the tool-level annotation keeps its most-dangerous-action posture" },
 };
 
 test("every hosted-visible NON-platform-scraper tool has a reviewed EXPECTED_HINTS row (no tool can reach hosted without annotation review)", () => {

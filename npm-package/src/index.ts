@@ -57,6 +57,7 @@ import {
 // core.ts itself imports it.
 import { validateAiMonitorParams } from "./tools/types.js";
 import type { ProgressReporter } from "./tools/crawl.js";
+import type { ElicitConfirmFn } from "./tools/static_ip_mgmt.js";
 import { classifyError, redactSecrets } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError, DEDICATED_PLATFORM_SLUGS } from "./core.js";
@@ -364,6 +365,34 @@ class NovadaMCPServer {
               });
             };
 
+      // 2026-11-01 follow-up (independent security review, finding HIGH-1):
+      // confirms novada_static_ip_mgmt's action="reveal_credentials" via REAL
+      // MCP elicitation (server -> client -> human) instead of the
+      // approval_token round-trip, but ONLY when the connected client
+      // advertised form-elicitation support at initialize time. Scoped to
+      // this ONE tool name — no other tool reads ctx.elicitConfirm, and this
+      // server never calls elicitInput for anything else. `undefined` means
+      // "no capability" -> static_ip_mgmt.ts falls back to the unchanged
+      // approval_token flow on its own; this file makes no other decision
+      // about that fallback. The stdio transport (this file) is the ONLY
+      // place that can build this closure — it's the only artifact with a
+      // live, connected Server instance; the hosted endpoint
+      // (hosted-server/vercel/api/mcp.ts) never does (see
+      // tools/static_ip_mgmt.ts's header note + reports/
+      // static-ip-reveal-credentials-2026-11-01.md for why that's not a gap
+      // to close, but an architectural constraint of stateless serverless
+      // Streamable HTTP).
+      const elicitConfirm: ElicitConfirmFn | undefined =
+        name === "novada_static_ip_mgmt" && this.server.getClientCapabilities()?.elicitation?.form
+          ? async (message: string) => {
+              const result = await this.server.elicitInput({
+                message,
+                requestedSchema: { type: "object", properties: {} },
+              });
+              return result.action;
+            }
+          : undefined;
+
       // novada_setup is auth-free — handle it before the API_KEY gate
       if (name === "novada_setup") {
         try {
@@ -565,8 +594,8 @@ class NovadaMCPServer {
         // tier disclosure as a separate content block below.
         const result = unauthenticatedTier
           ? await runUnauthenticatedTier(() =>
-              dispatch(name, args as Record<string, unknown>, API_KEY, { onProgress, visibleTools }))
-          : await dispatch(name, args as Record<string, unknown>, API_KEY, { onProgress, visibleTools });
+              dispatch(name, args as Record<string, unknown>, API_KEY, { onProgress, visibleTools, elicitConfirm }))
+          : await dispatch(name, args as Record<string, unknown>, API_KEY, { onProgress, visibleTools, elicitConfirm });
         // Local usage log (user-facing audit trail). Fire-and-forget — never blocks or throws.
         void logUsage({ tool: name, status: "success", ms: Date.now() - t0, target: summarizeTarget(args) });
         // TOW2-242: one-time first-run notice. Appended as a SEPARATE content block

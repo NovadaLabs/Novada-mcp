@@ -66,9 +66,11 @@ params, examples), edit `_TOOL_DEFINITIONS` in `core.ts`, not `index.ts` and not
 | Hosted HTTP server | `https://mcp.novada.com/mcp` | Streamable HTTP | Vercel (Node.js serverless Function, **not** Cloudflare Workers — see below) |
 
 Both run the same tool implementations, but the catalogs differ: local exposes all 37 tools,
-hosted exposes 28. Hosted hides `novada_browser` / `novada_browser_flow` (a persistent CDP
+hosted exposes 29. Hosted hides `novada_browser` / `novada_browser_flow` (a persistent CDP
 session does not fit a stateless serverless function) and the other write/stateful tools
-listed in `docs/TOOLS.md`. The hosted surface also adds auth, a monthly quota, and
+listed in `docs/TOOLS.md`. (`novada_static_ip_mgmt` itself IS hosted-visible — only its
+`open`/`renew` WRITE actions are refused there, at the action level.) The hosted surface
+also adds auth, a monthly quota, and
 rate-limiting on top (see `hosted-server/docs/ARCHITECTURE.md` for that layer's detail).
 On self-host the browser tools additionally require `NOVADA_BROWSER_WS` (see
 `npm-package/README.md`).

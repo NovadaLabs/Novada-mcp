@@ -234,6 +234,29 @@ describe("sanitizeServerMsg", () => {
     const out = sanitizeServerMsg("Task not found: task_id=abc123");
     expect(out).toBe("Task not found: task_id=abc123");
   });
+
+  // DONE-DEFINITION (account-tools-redaction, 2026-10-30): the error path must
+  // redact a credential just as thoroughly as the success path (maskCredentials)
+  // — an upstream error that echoes the dial username back in a JSON-shaped
+  // message fragment (e.g. a hypothetical duplicate-account rejection) must
+  // not leak it.
+  it("masks a JSON-shaped \"account\" field (username half of a dial credential)", () => {
+    // No bare "account:"/"Account :" prose prefix here — that shape is already
+    // caught (collapsed to a generic "***") by redactSecrets' broader
+    // Account/Password/User prose rule (rule 6). This asserts the NARROWER,
+    // complementary case: a JSON-quoted key embedded deeper in a message with
+    // no prose marker immediately before it, which rule 6's
+    // `\s*[:：]` (whitespace, not a quote) between the keyword and the colon
+    // does NOT match.
+    const out = sanitizeServerMsg('Server rejected request: {"code":11000,"account":"ax0kSJ8snE6wF1mR","status":1}');
+    expect(out).toContain('"account":"<PROXY_USER>"');
+    expect(out).not.toContain("ax0kSJ8snE6wF1mR");
+  });
+
+  it("masks a JSON-shaped \"username\"/\"user_name\" field, case-insensitively", () => {
+    expect(sanitizeServerMsg('{"USERNAME":"realUser123"}')).not.toContain("realUser123");
+    expect(sanitizeServerMsg('{"user_name":"realUser456"}')).not.toContain("realUser456");
+  });
 });
 
 // ─── classifyError ────────────────────────────────────────────────────────────

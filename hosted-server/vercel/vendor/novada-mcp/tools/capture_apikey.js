@@ -85,7 +85,7 @@ export async function novadaCaptureApikey(params, apiKey) {
         }, null, 2);
     }
     // ── RESET: destructive — approval-token gate ────────────────────────────────
-    const resetGate = evaluateApprovalGate(params, "reset_apikey");
+    const resetGate = evaluateApprovalGate(params, "reset_apikey", "novada_capture_apikey");
     if (!resetGate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",

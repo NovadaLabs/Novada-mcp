@@ -7,9 +7,9 @@ Web search, page extraction and structured platform data for AI agents, backed b
 [![CI](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[![Free to start — $10 in free credits, up to 1,000 API calls/month, no credit card needed](docs/assets/free-credits-banner.png)](https://www.novada.com)
+[![Free to start — $10 in free credits, usage billed to your Novada account, no credit card needed](docs/assets/free-credits-banner.png)](https://www.novada.com)
 
-**Free to start:** $10 in credits, up to 1,000 calls a month, no credit card.
+**Free to start:** $10 in free credits, no credit card. There is no monthly call cap — usage is billed to your Novada account.
 
 ## What it is good at
 
@@ -53,7 +53,7 @@ Cursor, Windsurf, VS Code and self-host (`npx -y novada-mcp`): see the [install 
 | `novada_map` | Discover what URLs exist on a site before fetching. |
 | `novada_proxy` | Route your own HTTP client through a specific IP type, country or session. |
 
-Not sure? Call `novada_discover`. 37 tools self-hosted; the hosted endpoint exposes 28 of them (self-host adds browser automation and site copy). Full list and per-surface availability: [docs/TOOLS.md](docs/TOOLS.md).
+Not sure? Call `novada_discover`. 37 tools self-hosted; the hosted endpoint exposes 29 of them (self-host adds browser automation, site copy, and the write-gated `open`/`renew` static-IP actions). Full list and per-surface availability: [docs/TOOLS.md](docs/TOOLS.md).
 
 ## How it compares
 

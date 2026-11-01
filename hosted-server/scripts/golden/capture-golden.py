@@ -307,6 +307,13 @@ def capture(base_url: str, outdir: str):
         # create WITHOUT confirm = dry-run
         ("novada_proxy_account_create", {"product": "1", "account": "goldentest01",
                                           "password": "Testpass12345"}),
+        # 2026-11-01 (owner decision, option A): novada_static_ip_mgmt moved OUT
+        # of REFUSED_NAMES below — only its "open"/"renew" WRITE actions are
+        # refused now (at the action level, inside the tool itself), not the
+        # whole tool. "list" (read-only, no approval_token needed) is the safe
+        # probe for THIS matrix, mirroring proxy_account_create's "no confirm =
+        # dry-run" convention above — limit:1 keeps the response small.
+        ("novada_static_ip_mgmt",  {"action": "list", "limit": 1}),
     ]
 
     # Hidden alias probes (the regression guard)
@@ -365,7 +372,9 @@ def capture(base_url: str, outdir: str):
     # Root cause of the 2026-10 poisoned-baseline incident: this script captured
     # against a local-harness environment whose KV (@vercel/kv) was unreachable
     # (the test/support/kv-stub.mjs local stub server was not running), which made
-    # EVERY non-cap-exempt tool call fail inside enforceGatewayCap/decrementQuota
+    # EVERY non-cap-exempt tool call fail inside the then-existing quota calls
+    # (enforceGatewayCap/decrementQuota, removed 2026-10-29; rate limiting and the
+    # token cache still use KV, so the same outage signature still applies)
     # with the exact same bare, structureless signature — and nothing here noticed
     # before the broken capture was committed as the new golden baseline. A real,
     # diverse set of genuine per-tool failures (upstream outages, bad test args,
@@ -385,7 +394,7 @@ def capture(base_url: str, outdir: str):
             f"{KV_OUTAGE_SENTINEL_TOOLS} returned the bare "
             '{"code":..,"message":..} shape (status=err, structural=json, '
             "length_band=xs) — this is the signature of a KV outage in the "
-            "CAPTURING environment (enforceGatewayCap/decrementQuota throwing), "
+            "CAPTURING environment (KV-backed gateway calls — rate limit / token cache — throwing), "
             "not real per-tool failures. Nothing was written. If capturing "
             "locally, start the KV stub first: "
             "`node hosted-server/vercel/test/support/kv-stub.mjs &` "
@@ -399,11 +408,20 @@ def capture(base_url: str, outdir: str):
     # Firewall regression guard: these tools MUST be refused on the hosted endpoint.
     # If a refactor wrongly EXPOSES one, refused flips to false → breach caught by diff.
     print("[5b] refused-set (firewall guard) ...")
+    # 2026-11-01 (owner decision, option A): "novada_static_ip_mgmt" REMOVED from
+    # this list — it is no longer refused as a WHOLE tool (HOSTED_HIDDEN no
+    # longer names it in api/mcp.ts); "list"/"export"/"reveal_credentials" are
+    # genuinely dispatchable on hosted now (see its VISIBLE_TESTS probe above).
+    # Only its "open"/"renew" actions are refused, at the ACTION level inside
+    # the tool itself (assertActionAvailableOnRuntime, a NovadaError, not the
+    # TOOL_NOT_ENABLED pre-dispatch shape this probe calls with {} and checks
+    # for) — this whole-tool probe would misclassify it as a false "BREACH!"
+    # (an empty-args call now fails Zod validation on the required `action`
+    # field, not a not-enabled/unavailable refusal) if left in this list.
     REFUSED_NAMES = [
         "novada_browser",
         "novada_site_copy",
         "novada_ip_whitelist",
-        "novada_static_ip_mgmt",
         "novada_capture_apikey",
         "novada_scraper_task_mgmt",
         "novada_session_stats",
