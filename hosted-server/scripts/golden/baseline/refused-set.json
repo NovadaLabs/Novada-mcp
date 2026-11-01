@@ -46,11 +46,5 @@
     "isError": true,
     "name": "novada_site_copy",
     "refused": true
-  },
-  "novada_static_ip_mgmt": {
-    "code": "TOOL_NOT_ENABLED",
-    "isError": true,
-    "name": "novada_static_ip_mgmt",
-    "refused": true
   }
 }
