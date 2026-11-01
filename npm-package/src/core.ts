@@ -53,6 +53,7 @@ import { PLATFORM_SCRAPER_DEFS, PLATFORM_SCRAPER_HANDLERS, PLATFORM_SCRAPER_TOOL
 import { WORKING_PLATFORM_NAMES, WORKING_PLATFORM_DOMAINS, WORKING_OP_COUNT, SCRAPER_CATALOG } from "./data/scraper_catalog.js";
 import { renderDescriptionForSurface } from "./_core/description_surface.js";
 import type { ProgressReporter } from "./tools/crawl.js";
+import type { ElicitConfirmFn } from "./tools/static_ip_mgmt.js";
 import {
   SearchParamsSchema,
   ExtractParamsSchema,
@@ -798,7 +799,18 @@ export async function dispatch(
   name: string,
   args: Record<string, unknown>,
   apiKey?: string,
-  ctx?: { onProgress?: ProgressReporter; visibleTools?: ReadonlySet<string> }
+  ctx?: {
+    onProgress?: ProgressReporter;
+    visibleTools?: ReadonlySet<string>;
+    /**
+     * Confirms "novada_static_ip_mgmt" action="reveal_credentials" via MCP
+     * elicitation instead of the approval_token flow. `undefined` on every
+     * runtime/client without elicitation support (always undefined on
+     * hosted — see static_ip_mgmt.ts's 2026-11-01 follow-up note). Ignored
+     * by every other tool/action.
+     */
+    elicitConfirm?: ElicitConfirmFn;
+  }
 ): Promise<string> {
   const onProgress = ctx?.onProgress;
 
@@ -941,7 +953,7 @@ export async function dispatch(
     case "novada_capture_apikey":
       return novadaCaptureApikey(validateCaptureApikeyParams(args), apiKey);
     case "novada_static_ip_mgmt":
-      return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey);
+      return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey, ctx?.elicitConfirm);
     default:
       // F-5 (class-not-instance): DERIVE the tool list from the live registry
       // instead of a hand-maintained string — the old hardcoded list omitted

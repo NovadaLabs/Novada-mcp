@@ -466,6 +466,144 @@ describe("novada_static_ip_mgmt — reveal_credentials (2026-11-01, owner decisi
   });
 });
 
+// ─── reveal_credentials — MCP elicitation path (2026-11-01 follow-up) ──────
+//
+// Independent security review, finding HIGH-1: the approval_token round-trips
+// through the AGENT, so a prompt-injected or careless agent could call twice
+// itself with no human in the loop. When the connected MCP client advertises
+// elicitation, the stdio server (index.ts) builds an `elicitConfirm` callback
+// from the live Server's getClientCapabilities()/elicitInput() and threads it
+// through dispatch()'s ctx -> novadaStaticIpMgmt -> handleRevealCredentials.
+// These tests exercise that plumbing end-to-end via dispatch() with a FAKE
+// elicitConfirm (no real MCP transport/SDK mocking needed — proves the
+// dependency-injection seam is clean and testable, per the review's ask).
+//
+// When elicitConfirm is supplied, it is the ONLY confirmation mechanism:
+// approval_token is never read, so a pre-minted/replayed token cannot bypass
+// the human-in-the-loop step — these tests assert elicitConfirm is always
+// invoked regardless of what else the caller passes.
+
+describe("novada_static_ip_mgmt — reveal_credentials via MCP elicitation (2026-11-01 follow-up)", () => {
+  it("accept: reveals real credentials, calls devApiPost exactly ONCE (no second agent-initiated call needed), and the elicit message names the count", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const elicitConfirm = vi.fn(async (_message: string) => "accept" as const);
+    const out = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials", status: "1" },
+      "caller-key-sip",
+      { elicitConfirm },
+    );
+
+    expect(mockedPost).toHaveBeenCalledTimes(1); // ONE upstream call total, not preview+execute
+    expect(elicitConfirm).toHaveBeenCalledTimes(1);
+    expect(elicitConfirm.mock.calls[0][0]).toContain("1 static ISP IP");
+
+    const obj = JSON.parse(out) as { status: string; count: number; rows: Array<Record<string, unknown>> };
+    expect(obj.status).toBe("ok");
+    expect(obj.count).toBe(1);
+    expect(obj.rows[0].username).toBe("ax0kSJ8snE6wF1mR");
+    expect(obj.rows[0].password).toBe("p3K0rNpsP2iR");
+    expect(obj.rows[0].dial_string).toBe("203.0.113.4:8886:ax0kSJ8snE6wF1mR:p3K0rNpsP2iR");
+  });
+
+  it("decline: NO credentials anywhere in the output; clear non-throwing 'declined' response", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const elicitConfirm = vi.fn(async () => "decline" as const);
+    const out = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials" },
+      "caller-key-sip",
+      { elicitConfirm },
+    );
+
+    expect(elicitConfirm).toHaveBeenCalledTimes(1);
+    expect(out).not.toContain("ax0kSJ8snE6wF1mR");
+    expect(out).not.toContain("p3K0rNpsP2iR");
+    const obj = JSON.parse(out) as { status: string; decision: string };
+    expect(obj.status).toBe("declined");
+    expect(obj.decision).toBe("decline");
+  });
+
+  it("cancel: NO credentials anywhere in the output; distinguishable from decline", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const elicitConfirm = vi.fn(async () => "cancel" as const);
+    const out = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials" },
+      "caller-key-sip",
+      { elicitConfirm },
+    );
+
+    expect(out).not.toContain("ax0kSJ8snE6wF1mR");
+    const obj = JSON.parse(out) as { status: string; decision: string };
+    expect(obj.status).toBe("declined");
+    expect(obj.decision).toBe("cancel");
+  });
+
+  it("elicit throws (transport/client error): fails CLOSED — NO credentials, no unhandled rejection", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const elicitConfirm = vi.fn(async () => {
+      throw new Error("client does not support form elicitation");
+    });
+    const out = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials" },
+      "caller-key-sip",
+      { elicitConfirm },
+    );
+
+    expect(out).not.toContain("ax0kSJ8snE6wF1mR");
+    const obj = JSON.parse(out) as { status: string; decision: string };
+    expect(obj.status).toBe("declined");
+    expect(obj.decision).toBe("error");
+  });
+
+  it("TOKEN-BYPASS ATTEMPT: a pre-minted approval_token does NOT bypass elicitation when the capability is present — elicitConfirm is still invoked and a decline still yields no credentials", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    // Mint a token the normal (no-capability) way first, as an agent attempting
+    // to short-circuit the flow might try to carry forward.
+    const preview = await dispatch("novada_static_ip_mgmt", { action: "reveal_credentials" }, "caller-key-sip");
+    const { approval_token } = JSON.parse(preview) as { approval_token: string };
+    mockedPost.mockClear();
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const elicitConfirm = vi.fn(async () => "decline" as const);
+    const out = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials", approval_token }, // a syntactically-valid token supplied anyway
+      "caller-key-sip",
+      { elicitConfirm },
+    );
+
+    // elicitConfirm was STILL invoked — the token had zero effect on the flow.
+    expect(elicitConfirm).toHaveBeenCalledTimes(1);
+    expect(out).not.toContain("ax0kSJ8snE6wF1mR");
+    const obj = JSON.parse(out) as { status: string };
+    expect(obj.status).toBe("declined");
+  });
+
+  it("no elicitation capability (ctx omitted): unchanged approval_token fallback still applies", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    // No ctx at all — exactly how every pre-existing test in this file calls dispatch().
+    const out = await dispatch("novada_static_ip_mgmt", { action: "reveal_credentials" }, "caller-key-sip");
+    const obj = JSON.parse(out) as { status: string; approval_token?: string };
+    expect(obj.status).toBe("confirmation_required");
+    expect(typeof obj.approval_token).toBe("string");
+  });
+});
+
 // ─── hosted action-level refusal for "open"/"renew" (2026-11-01) ───────────
 //
 // novada_static_ip_mgmt is no longer HOSTED_HIDDEN as a whole tool (see

@@ -1819,7 +1819,25 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         name,
         // TOW2-240: pass visibleToolNames so dispatch can suppress agent_instructions
         // that reference tools absent from this endpoint (e.g. novada_search_feedback).
-        dispatch(name, argsObj, apiKey, { onProgress: undefined, visibleTools: visibleToolNames }),
+        //
+        // elicitConfirm is deliberately OMITTED (undefined) here — 2026-11-01 follow-up,
+        // independent security review of novada_static_ip_mgmt's reveal_credentials.
+        // This handler builds a brand-new Server + StreamableHTTPServerTransport PER
+        // HTTP REQUEST (sessionIdGenerator: undefined — stateless mode, see buildServer/
+        // the handler below) and closes it again in the `finally` block before this
+        // function returns. A server-initiated elicitation needs the CLIENT's reply to
+        // reach the SAME in-flight request handler that is still awaiting it; on this
+        // endpoint there is no session to correlate a later reply to, no persistent
+        // process to hold the pending Promise, and the transport is already closed by
+        // the time any reply could arrive. Elicitation is therefore architecturally
+        // unavailable here, not merely unimplemented — faking a capability flag would
+        // make the client hang (or Vercel's own request timeout would fire) waiting for
+        // a reply that can never come back. reveal_credentials stays on its
+        // approval_token fallback on this endpoint; see npm-package/src/tools/
+        // static_ip_mgmt.ts's header note and reports/
+        // static-ip-reveal-credentials-2026-11-01.md for the full writeup. This is NOT
+        // a change to which actions hosted exposes.
+        dispatch(name, argsObj, apiKey, { onProgress: undefined, visibleTools: visibleToolNames, elicitConfirm: undefined }),
       );
 
       logUsage(env, ctx.token, name, true, Date.now() - started);
