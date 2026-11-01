@@ -372,7 +372,9 @@ def capture(base_url: str, outdir: str):
     # Root cause of the 2026-10 poisoned-baseline incident: this script captured
     # against a local-harness environment whose KV (@vercel/kv) was unreachable
     # (the test/support/kv-stub.mjs local stub server was not running), which made
-    # EVERY non-cap-exempt tool call fail inside enforceGatewayCap/decrementQuota
+    # EVERY non-cap-exempt tool call fail inside the then-existing quota calls
+    # (enforceGatewayCap/decrementQuota, removed 2026-10-29; rate limiting and the
+    # token cache still use KV, so the same outage signature still applies)
     # with the exact same bare, structureless signature — and nothing here noticed
     # before the broken capture was committed as the new golden baseline. A real,
     # diverse set of genuine per-tool failures (upstream outages, bad test args,
@@ -392,7 +394,7 @@ def capture(base_url: str, outdir: str):
             f"{KV_OUTAGE_SENTINEL_TOOLS} returned the bare "
             '{"code":..,"message":..} shape (status=err, structural=json, '
             "length_band=xs) — this is the signature of a KV outage in the "
-            "CAPTURING environment (enforceGatewayCap/decrementQuota throwing), "
+            "CAPTURING environment (KV-backed gateway calls — rate limit / token cache — throwing), "
             "not real per-tool failures. Nothing was written. If capturing "
             "locally, start the KV stub first: "
             "`node hosted-server/vercel/test/support/kv-stub.mjs &` "
