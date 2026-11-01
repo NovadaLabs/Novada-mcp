@@ -110,7 +110,7 @@ export async function novadaProxyAccountCreate(
   params: ProxyAccountCreateParams,
   apiKey?: string,
 ): Promise<string> {
-  const gate = evaluateApprovalGate(params as Record<string, unknown>, "create_proxy_sub_account");
+  const gate = evaluateApprovalGate(params as Record<string, unknown>, "create_proxy_sub_account", "novada_proxy_account_create");
   if (!gate.authorized) {
     return JSON.stringify(
       {

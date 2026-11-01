@@ -32,6 +32,10 @@ import { TOOLS } from "../../src/core.js";
  *                            "list" has NO gate call — genuinely read-only.
  *   - tools/static_ip_mgmt.ts: evaluateApprovalGate(..., "static_ip_open")  on "open"
  *                              evaluateApprovalGate(..., "static_ip_renew") on "renew"
+ *                              evaluateApprovalGate(..., "static_ip_reveal_credentials")
+ *                                on "reveal_credentials" (added 2026-11-01, owner
+ *                                decision option A — read-only but gated: shows real
+ *                                dial credentials on the execute call)
  *                              "export"/"list" have NO gate call.
  *   - tools/capture_apikey.ts: evaluateApprovalGate(..., "reset_apikey") on "reset"
  *                              "get" has NO gate call.
@@ -42,7 +46,7 @@ import { TOOLS } from "../../src/core.js";
 const GATED_ACTIONS_BY_TOOL: Readonly<Record<string, readonly string[] | null>> = {
   novada_proxy_account_create: null,
   novada_ip_whitelist: ["add", "del", "remark"],
-  novada_static_ip_mgmt: ["open", "renew"],
+  novada_static_ip_mgmt: ["open", "renew", "reveal_credentials"],
   novada_capture_apikey: ["reset"],
 };
 

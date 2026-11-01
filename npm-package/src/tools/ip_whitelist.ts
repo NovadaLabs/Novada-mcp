@@ -169,7 +169,7 @@ async function handleAdd(params: IpWhitelistParams, apiKey?: string): Promise<st
     );
   }
 
-  const addGate = evaluateApprovalGate(params as Record<string, unknown>, "ip_whitelist_add");
+  const addGate = evaluateApprovalGate(params as Record<string, unknown>, "ip_whitelist_add", "novada_ip_whitelist");
   if (!addGate.authorized) {
     return JSON.stringify(
       {
@@ -253,7 +253,7 @@ async function handleDel(params: IpWhitelistParams, apiKey?: string): Promise<st
     );
   }
 
-  const delGate = evaluateApprovalGate(params as Record<string, unknown>, "ip_whitelist_del");
+  const delGate = evaluateApprovalGate(params as Record<string, unknown>, "ip_whitelist_del", "novada_ip_whitelist");
   if (!delGate.authorized) {
     return JSON.stringify(
       {
@@ -310,7 +310,7 @@ async function handleRemark(params: IpWhitelistParams, apiKey?: string): Promise
     );
   }
 
-  const remarkGate = evaluateApprovalGate(params as Record<string, unknown>, "ip_whitelist_remark");
+  const remarkGate = evaluateApprovalGate(params as Record<string, unknown>, "ip_whitelist_remark", "novada_ip_whitelist");
   if (!remarkGate.authorized) {
     return JSON.stringify(
       {

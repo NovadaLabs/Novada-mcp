@@ -396,6 +396,34 @@ describe("novadaAccount traffic section", () => {
     const obj = JSON.parse(result) as Record<string, unknown>;
     expect(typeof obj.total_mb_across_products).toBe("number");
   });
+
+  // FIX (2026-10-30, scope addition #3): traffic_daily.ts's REAL shape for
+  // static ISP is `{status:"ok", applicable:false, reason:"..."}` (it's billed
+  // per-IP, not by traffic — see novada_static_ip_mgmt/section="plans"), not
+  // `status:"error"` (the pre-existing fixture above used the wrong shape,
+  // which is exactly why this never surfaced: the card's `else` branch read
+  // `total_mb` as undefined -> defaulted to 0 -> rendered a misleading
+  // "0.0 MB" and silently dropped `reason`).
+  it("card: static ISP's applicable:false shows the 'billed per-IP' note, not '0.0 MB'", async () => {
+    mockedTraffic.mockResolvedValue(
+      JSON.stringify({
+        status: "ok",
+        range: { start_time: "2026-06-27", end_time: "2026-07-04" },
+        total_mb_across_products: 2048,
+        per_product: {
+          residential: { status: "ok", total_mb: 2048 },
+          static: {
+            status: "ok",
+            applicable: false,
+            reason: 'static ISP is billed per-IP (see novada_account section="plans"), not by traffic volume',
+          },
+        },
+      }),
+    );
+    const result = await novadaAccount(validateAccountParams({ section: "traffic", format: "card" }));
+    expect(result).not.toMatch(/\|\s*static\s*\|\s*0\.0\s*MB\s*\|/);
+    expect(result).toContain("billed per-IP");
+  });
 });
 
 // ─── Graceful degradation on dev-api business-code failures ──────────────────

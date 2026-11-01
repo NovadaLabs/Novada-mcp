@@ -65,6 +65,87 @@ export function maskPasswords(value, seen = new WeakSet()) {
     }
     return value;
 }
+export const CREDENTIAL_FIELDS = [
+    { key: "password", kind: "secret" },
+    { key: "passwd", kind: "secret" },
+    { key: "pwd", kind: "secret" },
+    { key: "pass", kind: "secret" },
+    { key: "secret", kind: "secret" },
+    { key: "token", kind: "secret" },
+    { key: "access_token", kind: "secret" },
+    { key: "api_key", kind: "secret" },
+    { key: "apikey", kind: "secret" },
+    { key: "account", kind: "username" },
+    { key: "username", kind: "username" },
+    { key: "user_name", kind: "username" },
+];
+const CREDENTIAL_FIELD_MAP = new Map(CREDENTIAL_FIELDS.map((f) => [f.key.toLowerCase(), f.kind]));
+/**
+ * Recursively mask credential-bearing fields (see CREDENTIAL_FIELDS) anywhere
+ * in a developer-api response before it reaches an agent/user. Generalizes
+ * maskPasswords() — kept separately, unchanged, since its existing call sites
+ * (proxy_account_list.ts, proxy_account_create.ts) and their tests pin its
+ * password-only, "****" (no last-4) behavior.
+ *
+ * Key-based (not shape-based) and recursive so a nested or differently-named
+ * container still gets masked. Mutates in place AND returns the same
+ * reference (matches maskPasswords's call-site convention). Guards against
+ * prototype-pollution keys and cyclic structures.
+ */
+export function maskCredentials(value, seen = new WeakSet()) {
+    if (value === null || typeof value !== "object")
+        return value;
+    if (seen.has(value))
+        return value;
+    seen.add(value);
+    if (Array.isArray(value)) {
+        for (const item of value)
+            maskCredentials(item, seen);
+        return value;
+    }
+    const obj = value;
+    for (const key of Object.keys(obj)) {
+        // Never touch prototype-pollution keys.
+        if (key === "__proto__" || key === "constructor" || key === "prototype")
+            continue;
+        const kind = CREDENTIAL_FIELD_MAP.get(key.toLowerCase());
+        const v = obj[key];
+        if (kind && typeof v === "string" && v.length > 0) {
+            obj[key] = kind === "secret" ? "***" : "<PROXY_USER>";
+        }
+        else if (v !== null && typeof v === "object") {
+            maskCredentials(v, seen);
+        }
+    }
+    return value;
+}
+// ─── Static-ISP-IP lifecycle status counting (2026-10-30, scope addition #1) ──
+//
+// CLASS-shaped (feedback_class_not_instance): TWO independent call sites surface
+// "how many static IPs exist" — novada_static_ip_mgmt's list/export (per-call
+// summary of what a status-default hides) AND novada_plan_balance_all's
+// fetchStaticIpSummary (active_ip_count/region_breakdown for novada_account
+// section="plans"/"summary" — the HOSTED-reachable path, which previously
+// counted ALL statuses as "active"). ONE shared, lightweight count probe lives
+// here so both call sites can never drift into two different answers for "how
+// many expired IPs do I have".
+//
+// Status semantics per docs/novada-api/static-isp-proxies.md (/v1/static_house/
+// list): ""=All, "1"=In use, "2"=Expired, "3"=Released — the SAME source used
+// by static_ip_mgmt.ts's own status enum.
+export async function staticHouseStatusTotal(status, apiKey) {
+    try {
+        // limit:1 — only `total` is read; this is a count-only probe, never a page
+        // of actual IP rows.
+        const data = await devApiPost("/v1/static_house/list", { page: 1, limit: 1, status }, { apiKey });
+        return typeof data?.total === "number" ? data.total : undefined;
+    }
+    catch {
+        // Best-effort — a failed count probe must never break its caller's
+        // primary response.
+        return undefined;
+    }
+}
 /** Return the developer-api bearer token. Prefers NOVADA_DEVELOPER_API_KEY; falls back to NOVADA_API_KEY. */
 export function getDeveloperApiKey() {
     const dev = process.env.NOVADA_DEVELOPER_API_KEY?.trim();

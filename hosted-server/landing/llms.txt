@@ -1,6 +1,6 @@
 # Novada MCP
 
-> Novada Hosted MCP is a remote Streamable-HTTP Model Context Protocol server at `https://mcp.novada.com/mcp` that exposes 28 web-data tools — web search, SERP-style scraping, extract, site map, multi-page crawl, source verification, tool discovery, deep research, and 6 proxy types — through a single authenticated URL. Designed for AI agents running in Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf, or any MCP-compatible client. Zero install required; paste the URL and go.
+> Novada Hosted MCP is a remote Streamable-HTTP Model Context Protocol server at `https://mcp.novada.com/mcp` that exposes 29 web-data tools — web search, SERP-style scraping, extract, site map, multi-page crawl, source verification, tool discovery, deep research, and 6 proxy types — through a single authenticated URL. Designed for AI agents running in Claude Desktop, Claude Code, Cursor, Codex, Cline, Windsurf, or any MCP-compatible client. Zero install required; paste the URL and go.
 
 ## Endpoint
 
@@ -14,7 +14,7 @@
 
 ## Tools
 
-28 tools on the hosted endpoint (self-host via `npx novada-mcp` exposes all 37 — the same registry minus 9 tools that need a persistent session, local disk, or write-gated account ops; see Browser tools below for two of them).
+29 tools on the hosted endpoint (self-host via `npx novada-mcp` exposes all 37 — the same registry minus 8 tools that need a persistent session, local disk, or write-gated account ops; see Browser tools below for two of them).
 
 ### First-class data tools (8)
 

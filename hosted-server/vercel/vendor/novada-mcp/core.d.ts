@@ -17,6 +17,7 @@
  * MCP schema for every dispatchable tool (visible + hidden).
  */
 import type { ProgressReporter } from "./tools/crawl.js";
+import type { ElicitConfirmFn } from "./tools/static_ip_mgmt.js";
 export declare const DEDICATED_PLATFORM_SLUGS: string[];
 export declare const _TOOL_DEFINITIONS: Array<{
     name: string;
@@ -74,5 +75,13 @@ export declare function makeUnknownToolError(name: string): Error;
 export declare function dispatch(name: string, args: Record<string, unknown>, apiKey?: string, ctx?: {
     onProgress?: ProgressReporter;
     visibleTools?: ReadonlySet<string>;
+    /**
+     * Confirms "novada_static_ip_mgmt" action="reveal_credentials" via MCP
+     * elicitation instead of the approval_token flow. `undefined` on every
+     * runtime/client without elicitation support (always undefined on
+     * hosted — see static_ip_mgmt.ts's 2026-11-01 follow-up note). Ignored
+     * by every other tool/action.
+     */
+    elicitConfirm?: ElicitConfirmFn;
 }): Promise<string>;
 //# sourceMappingURL=core.d.ts.map

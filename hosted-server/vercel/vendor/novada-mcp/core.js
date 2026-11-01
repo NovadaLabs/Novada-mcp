@@ -488,8 +488,8 @@ export const _TOOL_DEFINITIONS = [
         name: "novada_static_ip_mgmt",
         description: `Manage static ISP IPs (wraps /v1/static_house/* developer-api endpoints).
 
-**Actions:** "open" = purchase new IPs (WRITE, gated by approval_token). "renew" = renew existing IPs (WRITE, gated by approval_token). "export"/"list" = read-only.
-**Behavior:** call "open"/"renew" once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — this does NOT hit the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
+**Actions:** "open" = purchase new IPs (WRITE, gated by approval_token; local MCP server only — not available on the hosted endpoint). "renew" = renew existing IPs (WRITE, gated by approval_token; local MCP server only — not available on the hosted endpoint). "export"/"list" = read-only, dial credentials masked; available on every runtime. "reveal_credentials" = shows the REAL proxy username/password for the filtered IPs — local MCP server only (not available on the hosted endpoint); only use when the human user explicitly asked for them (e.g. to configure another tool with their own static IPs). With an elicitation-capable MCP client, "reveal_credentials" is a single call confirmed by the human user in a live dialog; otherwise it uses the same preview + approval_token two-step as "open"/"renew".
+**Behavior for "open"/"renew"/"reveal_credentials":** call once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — for "open"/"renew" this does NOT hit the API; for "reveal_credentials" it shows only masked IP/port/region/expiry (no credentials yet), or is skipped entirely when the connected client confirms via an elicitation dialog instead. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
         inputSchema: zodToMcpSchema(StaticIpMgmtParamsSchema),
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
@@ -772,8 +772,20 @@ export async function dispatch(name, args, apiKey, ctx) {
             return novadaAccount(validateAccountParams(args), apiKey);
         // Backward-compat aliases — route to novada_account with the appropriate section.
         // These are hidden from tools/list but still dispatch correctly for old callers.
+        //
+        // CLASS FIX (2026-10-30, account-tools-redaction): every alias below MUST
+        // spread `...args` — ALL 7 aliases accept `format` ("card"/"json", read by
+        // novadaAccount for every section including "summary"/"balance"), and
+        // usage/traffic/plans additionally accept their own section-specific
+        // filters (start_time/end_time/page/page_size/products — see
+        // AccountParamsSchema). wallet_balance/capture_logs/account_summary used
+        // to hardcode `{ section: "X" }` with NO spread — silently dropping even
+        // `format:"json"` and forcing a card back regardless of what the caller
+        // asked for. A table-driven test (tests/core-alias-args-forwarding.test.ts)
+        // now pins "every alias in this switch forwards ...args" so a NEW alias
+        // can't reintroduce this as a new instance of the same bug.
         case "novada_wallet_balance":
-            return novadaAccount(validateAccountParams({ section: "balance" }), apiKey);
+            return novadaAccount(validateAccountParams({ ...args, section: "balance" }), apiKey);
         case "novada_wallet_usage_record":
             return novadaAccount(validateAccountParams({ ...args, section: "usage" }), apiKey);
         case "novada_traffic_daily":
@@ -781,10 +793,14 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_plan_balance_all":
             return novadaAccount(validateAccountParams({ ...args, section: "plans" }), apiKey);
         case "novada_capture_logs":
-            // capture_logs routed to summary since it's a sub-section of the dashboard
-            return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
+            // capture_logs routed to summary since it's a sub-section of the dashboard.
+            // Only `format` actually reaches novadaAccount's "summary" case (start_time/
+            // end_time/page/page_size/products are usage/traffic/plans-only per
+            // AccountParamsSchema and are never read by the summary branch) — but that
+            // one field must still be honored, not silently dropped.
+            return novadaAccount(validateAccountParams({ ...args, section: "summary" }), apiKey);
         case "novada_account_summary":
-            return novadaAccount(validateAccountParams({ section: "summary" }), apiKey);
+            return novadaAccount(validateAccountParams({ ...args, section: "summary" }), apiKey);
         case "novada_proxy_account_create":
             return novadaProxyAccountCreate(validateProxyAccountCreateParams(args), apiKey);
         case "novada_proxy_account_list":
@@ -794,7 +810,7 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_capture_apikey":
             return novadaCaptureApikey(validateCaptureApikeyParams(args), apiKey);
         case "novada_static_ip_mgmt":
-            return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey);
+            return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey, ctx?.elicitConfirm);
         default:
             // F-5 (class-not-instance): DERIVE the tool list from the live registry
             // instead of a hand-maintained string — the old hardcoded list omitted

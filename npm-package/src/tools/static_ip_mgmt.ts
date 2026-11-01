@@ -12,15 +12,63 @@
 // parameters executes. `confirm: true` alone is a deprecated no-op — see
 // ../utils/approval.ts.
 //
+// "reveal_credentials" (owner decision 2026-11-01, option A) is a READ-ONLY
+// action gated behind the SAME approval-token flow — not because it mutates
+// anything, but because once real dial credentials are displayed in a chat
+// transcript they may persist in the AI client's own history, so a human
+// must see a masked preview and explicitly approve before they are shown.
+// See the handler below for the full design note.
+//
+// 2026-11-01 FOLLOW-UP (independent security review, finding HIGH-1): the
+// approval_token round-trips through the AGENT (it's a plain string the tool
+// hands back and the agent echoes on the next call) — a prompt-injected or
+// careless agent can simply make BOTH calls itself, back to back, with no
+// human in the loop at all. On the LOCAL stdio server, when the connected
+// MCP CLIENT advertises the `elicitation` capability, "reveal_credentials"
+// now uses REAL MCP elicitation (server -> client -> human, a channel the
+// agent cannot answer on its own behalf) as the confirmation instead of the
+// approval_token round-trip — see handleRevealCredentials below and
+// ElicitConfirmFn. The approval_token flow remains, UNCHANGED, as the
+// fallback for clients that don't support elicitation.
+//
+// 2026-11-01 OWNER DECISION (FINAL): "reveal_credentials" is LOCAL-ONLY.
+// mcp.novada.com is stateless Streamable HTTP — a fresh Server+transport per
+// HTTP request, closed again before any reply could arrive — so real MCP
+// elicitation is architecturally impossible there (see reports/
+// static-ip-reveal-credentials-2026-11-01.md for the evidence), and the
+// approval_token fallback alone is NOT an acceptable substitute on hosted:
+// it round-trips through the agent with no human ever in the loop (the exact
+// HIGH-1 hole elicitation was added to close locally). Rather than ship a
+// weaker, token-only guarantee on hosted, "reveal_credentials" is refused
+// there outright — exactly like "open"/"renew" — at the ACTION level, inside
+// the tool, before either the approval gate, elicitation, or any upstream
+// call runs (see assertActionAvailableOnRuntime() below). "list"/"export"
+// (masked credentials) remain available on every runtime, including hosted.
+//
 // Field names match the API spec (docs/novada-api/static-isp-proxies.md).
 
 import { z } from "zod";
-import { devApiPost } from "../_core/developer_api.js";
+import { devApiPost, maskCredentials, staticHouseStatusTotal } from "../_core/developer_api.js";
 import { evaluateApprovalGate } from "../utils/approval.js";
+import { isHostedEnvironment } from "../config.js";
+import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
+
+// ─── Elicitation confirmation (dependency injection) ────────────────────────
+//
+// The caller (index.ts, the stdio entry — the only place with access to the
+// live MCP `Server` instance and its negotiated client capabilities) builds
+// this function ONLY when the connected client advertised elicitation
+// support, and threads it down through core.ts's dispatch() ctx. static_ip_mgmt.ts
+// never imports the MCP SDK's Server class directly and never forks its
+// tool logic between stdio/hosted — it just receives an optional callback
+// and calls it. `undefined` means "this runtime/client has no elicitation
+// capability" — the fallback approval_token flow applies. Testable with a
+// plain fake async function; no SDK/transport mocking needed in tests.
+export type ElicitConfirmFn = (message: string) => Promise<"accept" | "decline" | "cancel">;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const ACTIONS = ["open", "renew", "export", "list"] as const;
+const ACTIONS = ["open", "renew", "export", "list", "reveal_credentials"] as const;
 const IP_TYPES = ["normal", "premium"] as const;
 const DURATIONS = ["week", "month"] as const;
 
@@ -41,7 +89,7 @@ export const StaticIpMgmtParamsSchema = z
     action: z
       .enum(ACTIONS)
       .describe(
-        'Action to perform. "open" = purchase new static IPs (WRITE, requires approval_token). "renew" = renew existing IPs (WRITE, requires approval_token). "export" = export filtered IP list. "list" = list static IPs with pagination.',
+        'Action to perform. "open" = purchase new static IPs (WRITE, requires approval_token; local MCP server only). "renew" = renew existing IPs (WRITE, requires approval_token; local MCP server only). "export" = export filtered IP list (masked credentials). "list" = list static IPs with pagination (masked credentials). "reveal_credentials" = show REAL dial username/password for filtered IPs — local MCP server only (not available on the hosted endpoint); with an elicitation-capable MCP client this is a single call confirmed by the human user in a dialog, otherwise a preview + approval_token two-step. Only use when the human explicitly asked for them.',
       ),
 
     // ── "open" action fields ──────────────────────────────────────────────
@@ -93,7 +141,11 @@ export const StaticIpMgmtParamsSchema = z
     status: z
       .enum(["", "1", "2", "3"])
       .optional()
-      .describe('Filter for "list"/"export". ""=All, "1"=In use, "2"=Expired, "3"=Released.'),
+      .describe(
+        'Filter for "list"/"export". Omit to default to "1" (in-use only) — expired/released ' +
+          'IPs are counted in a summary line but not returned. Pass "" explicitly for All, "1" ' +
+          'for In use, "2" for Expired, or "3" for Released to override the default.',
+      ),
     key_word: z
       .string()
       // SECURITY (L3 review): flows into the HTTP request body — bound the length.
@@ -111,14 +163,14 @@ export const StaticIpMgmtParamsSchema = z
       .literal(true)
       .optional()
       .describe(
-        'DEPRECATED — ignored. Setting this alone no longer authorizes "open"/"renew" execution (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview, including a PURCHASE — see F2-eval R9). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.',
+        'DEPRECATED — ignored. Setting this alone no longer authorizes "open"/"renew"/"reveal_credentials" execution (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview, including a PURCHASE — see F2-eval R9). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.',
       ),
     approval_token: z
       .string()
       .min(1)
       .optional()
       .describe(
-        'Two-step approval token, required to execute "open"/"renew". Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value — an invented or stale token is rejected.',
+        'Two-step approval token, required to execute "open"/"renew"/"reveal_credentials". Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value — an invented or stale token is rejected.',
       ),
   })
   .strict();
@@ -144,18 +196,376 @@ function optionalField(key: string, value: unknown): Record<string, unknown> {
   return value !== undefined ? { [key]: value } : {};
 }
 
+// ─── Status default (2026-10-30, account-tools-redaction) ───────────────────
+//
+// INCIDENT: "list"/"export" with no `status` filter forwarded nothing to the
+// server, which defaults to "All" — surfacing every long-expired/released IP
+// alongside live ones. When the caller leaves `status` unset we now request
+// "1" (in-use) ourselves and append a summary line naming how many
+// expired/released IPs exist and how to see them. An EXPLICIT status
+// (including "" for all) is always honored exactly as given — this only
+// changes the OMITTED case.
+
+type StatusFilter = StaticIpMgmtParams["status"];
+
+interface ResolvedStatus {
+  /** Status value actually sent to the server. */
+  effectiveStatus: Exclude<StatusFilter, undefined>;
+  /** True when the caller left `status` unset (we chose "1" on their behalf). */
+  defaulted: boolean;
+}
+
+function resolveStatus(status: StatusFilter): ResolvedStatus {
+  return status === undefined
+    ? { effectiveStatus: "1", defaulted: true }
+    : { effectiveStatus: status, defaulted: false };
+}
+
+/** Human summary line for the IPs hidden by the status default, or undefined when there's nothing to report. */
+function buildStatusSummary(expiredCount: number | undefined, releasedCount: number | undefined): string | undefined {
+  const parts: string[] = [];
+  if (expiredCount !== undefined) parts.push(`${expiredCount} expired`);
+  if (releasedCount !== undefined) parts.push(`${releasedCount} released`);
+  if (parts.length === 0) return undefined;
+  return (
+    `${parts.join(", ")} static IP(s) not shown (status defaulted to "1"=in-use). ` +
+    `Call again with status:"2" for expired, status:"3" for released, or status:"" for all.`
+  );
+}
+
+/** Shared note appended to list/export agent_instruction — the fix for the credential-leak half of the incident. */
+const CREDENTIAL_NOTE =
+  "Dial credentials (account/password), if present in the response, are masked. " +
+  "Get real credentials from https://dashboard.novada.com.";
+
+// ─── Hosted action-level refusal (2026-11-01, owner decision — FINAL) ───────
+//
+// novada_static_ip_mgmt as a WHOLE TOOL is no longer HOSTED_HIDDEN (removed
+// from hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set so "list"/"export"
+// — plain read-only, masked credentials — can run on mcp.novada.com). Three
+// actions are still refused there, each for its own reason, enumerated in
+// HOSTED_REFUSED_ACTIONS below (a CLASS table, not three separate
+// if-branches — adding a 4th hosted-refused action later is one new table
+// row, not a new code path):
+//   - "open"/"renew"  — billable, irreversible WRITE actions never ported to
+//     the hosted gateway (no NOVADA_APPROVAL_SECRET provisioning story, no
+//     purchase-reconciliation story there).
+//   - "reveal_credentials" — real dial credentials need a human-in-the-loop
+//     confirmation (MCP elicitation); the stateless hosted endpoint cannot
+//     perform elicitation (see the file-header note above), and falling back
+//     to the agent-carried approval_token alone on hosted would be exactly
+//     the HIGH-1 hole elicitation exists to close, so it is refused outright
+//     rather than served with a weaker guarantee than the local server gives.
+// Now that the TOOL itself is visible, each refusal happens at the ACTION
+// level, inside the tool, before the approval gate, elicitation, or any
+// upstream call runs (mirrors isBrowserAvailableOnRuntime in utils/runtime.ts
+// / browser.ts's own internal runtime gate — tool logic has ONE home, per-repo
+// CLAUDE.md, so this is NOT forked into mcp.ts).
+//
+// Thrown as a NovadaError (not returned as a plain string): mcp.ts's CallTool
+// catch block special-cases `error instanceof NovadaError` BEFORE its generic
+// substring-matching fallback, so this tool's own agent_instruction survives
+// verbatim through redactHostedSecrets() on hosted, and is a complete no-op
+// on every other runtime (isHostedEnvironment() is false there, so this never
+// throws locally — "open"/"renew"/"reveal_credentials" work exactly as before
+// via npx novada-mcp).
+type HostedRefusedAction = "open" | "renew" | "reveal_credentials";
+
+/** CLASS table (not per-action branches) — the full set of actions hosted refuses, and why. */
+const HOSTED_REFUSED_ACTIONS: Readonly<Record<HostedRefusedAction, { reason: string; extraInstruction?: string }>> = {
+  open: {
+    reason: "purchasing static IPs is a billable write action never ported to the hosted gateway",
+  },
+  renew: {
+    reason: "renewing static IPs is a billable write action never ported to the hosted gateway",
+  },
+  reveal_credentials: {
+    reason:
+      "showing real dial credentials requires a human-in-the-loop confirmation (MCP elicitation) that the " +
+      "stateless hosted endpoint cannot perform; an approval_token alone, with no human ever seeing the " +
+      "request, is not an acceptable substitute here",
+    extraInstruction: " Real dial credentials are also always directly available at https://dashboard.novada.com.",
+  },
+};
+
+function assertActionAvailableOnRuntime(action: HostedRefusedAction): void {
+  if (!isHostedEnvironment()) return;
+  const { reason, extraInstruction } = HOSTED_REFUSED_ACTIONS[action];
+  throw new NovadaError({
+    code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
+    message: `novada_static_ip_mgmt action="${action}" is not available on the hosted Novada MCP endpoint — ${reason}.`,
+    agent_instruction:
+      `This action is unavailable on the hosted endpoint. Install the local MCP server to use it — ` +
+      `\`npx novada-mcp\` (npm package "novada-mcp") with your own NOVADA_API_KEY exposes the full tool ` +
+      `surface, including action="${action}".${extraInstruction ?? ""} 'list' and 'export' (masked ` +
+      `credentials) remain available on the hosted endpoint.`,
+    retryable: false,
+  });
+}
+
+// ─── reveal_credentials (2026-11-01, owner decision — LOCAL-ONLY, final) ────
+//
+// Real static-ISP dial credentials (account/password) are masked everywhere
+// by default (maskCredentials, 2026-10-30 incident fix above). A user who
+// EXPLICITLY asks for them (e.g. to configure their own static IPs into
+// AdsPower or another proxy-aware tool) can get them through this READ-ONLY
+// action — on the LOCAL MCP server ONLY (assertActionAvailableOnRuntime at
+// the top of this function refuses it on the hosted endpoint, exactly like
+// "open"/"renew", before any of the logic below ever runs) — gated behind
+// the SAME two-step approval_token flow as the WRITE actions above, not
+// because it mutates anything, but because once real credentials are
+// displayed in a chat transcript they may be retained in the AI client's own
+// history, so a human must see a masked preview and explicitly approve
+// before they are shown (or, when the connected client supports MCP
+// elicitation, confirm a single live dialog instead — see below).
+//
+// Filters are identical to "list" (status/region/key_word/page/limit/
+// is_auto_renew; same resolveStatus() default-to-"1" behavior). `limit` is
+// additionally clamped to REVEAL_CREDENTIALS_LIMIT_CAP regardless of what the
+// caller requests — it defaults to the same 50 as "list", so this only
+// clamps an explicit caller-requested limit above the cap — and the response
+// says so when it does (limit_capped_to field + agent_instruction note).
+//
+// The approval gate binds the ENTIRE parsed-params object (minus
+// approval_token/confirm — see evaluateApprovalGate) as its canonical
+// payload, so status/region/key_word/page/limit are ALL part of what the
+// token authorizes: widening any of them between the preview and the execute
+// call (e.g. asking for a narrow preview then a broader reveal) invalidates
+// the token automatically — no extra bookkeeping needed here, verified by
+// static_ip_mgmt.test.ts.
+const REVEAL_CREDENTIALS_LIMIT_CAP = 50;
+
+type StaticHouseListResponse = { list?: Array<Record<string, unknown>>; total?: number };
+
+/** Preview-safe projection — IP/port/region/expiry ONLY, never account/password. */
+function toPreviewRow(row: Record<string, unknown>): Record<string, unknown> {
+  return { ip: row.ip, port: row.port, region: row.region, expire_time: row.expire_time };
+}
+
+/**
+ * Real-credential row: {ip, port, region, expire_time, username, password}
+ * plus two ready-to-paste formats, built ONLY from fields the API actually
+ * returned — never invents a protocol/port static_house/list doesn't return
+ * (it returns exactly one ip+port pair; no socks5 variant is documented or
+ * observed, so only the generic colon-delimited and http:// forms are built).
+ */
+function toCredentialRow(row: Record<string, unknown>): Record<string, unknown> {
+  const { ip, port } = row;
+  const username = row.account;
+  const password = row.password;
+  const out: Record<string, unknown> = {
+    ip,
+    port,
+    region: row.region,
+    expire_time: row.expire_time,
+    username,
+    password,
+  };
+  const haveIpPort = (typeof ip === "string" || typeof ip === "number")
+    && (typeof port === "string" || typeof port === "number");
+  const haveCreds = typeof username === "string" && username.length > 0
+    && typeof password === "string" && password.length > 0;
+  if (haveIpPort && haveCreds) {
+    out.dial_string = `${ip}:${port}:${username}:${password}`;
+    out.proxy_url = `http://${username}:${password}@${ip}:${port}`;
+  }
+  return out;
+}
+
+/** Human-facing elicitation confirmation message — built once, used for the ONE elicitInput call. */
+function buildElicitMessage(count: number, capNote: string): string {
+  return (
+    `Reveal the REAL proxy username and password for ${count} static ISP IP(s)? ` +
+    "These credentials will be shown in this conversation and may be retained in the AI client's " +
+    "own chat history. Only approve this if you explicitly asked to see or export these credentials " +
+    "(e.g. to configure them in another tool)." + capNote
+  );
+}
+
+/** Non-throwing "no credentials were shown" response for a declined/cancelled/failed elicitation. */
+function buildDeclinedResponse(decision: "decline" | "cancel" | "error"): string {
+  const reason =
+    decision === "decline"
+      ? "The human user declined to reveal credentials."
+      : decision === "cancel"
+        ? "The confirmation was cancelled before a decision was made."
+        : "The confirmation could not be completed (the MCP client's elicitation call failed).";
+  return JSON.stringify(
+    {
+      status: "declined",
+      action: "static_ip_reveal_credentials",
+      decision,
+      reason,
+      agent_instruction:
+        "No credentials were revealed. Do not retry automatically — only re-run this tool if the human " +
+        "user explicitly asks again to see the credentials.",
+    },
+    null,
+    2,
+  );
+}
+
+async function handleRevealCredentials(
+  params: StaticIpMgmtParams,
+  apiKey?: string,
+  elicitConfirm?: ElicitConfirmFn,
+): Promise<string> {
+  // MUST be the first statement: refuses on hosted before any elicitation
+  // check, approval-gate evaluation, or upstream devApiPost call runs — see
+  // the design note above and assertActionAvailableOnRuntime's own doc
+  // comment. A complete no-op locally (isHostedEnvironment() is false there).
+  assertActionAvailableOnRuntime("reveal_credentials");
+
+  const { effectiveStatus } = resolveStatus(params.status);
+  const requestedLimit = params.limit;
+  const limitCapped = requestedLimit > REVEAL_CREDENTIALS_LIMIT_CAP;
+  const effectiveLimit = Math.min(requestedLimit, REVEAL_CREDENTIALS_LIMIT_CAP);
+
+  const body: Record<string, unknown> = {
+    page: params.page,
+    limit: effectiveLimit,
+    status: effectiveStatus,
+    ...optionalField("region", params.region),
+    ...optionalField("key_word", params.key_word),
+    ...optionalField("is_auto_renew", params.is_auto_renew),
+  };
+
+  const capNote = limitCapped
+    ? ` Limit capped to ${REVEAL_CREDENTIALS_LIMIT_CAP} for a credential-revealing call (requested ${requestedLimit}).`
+    : "";
+
+  // ── Elicitation path (2026-11-01 follow-up, HIGH-1) ────────────────────────
+  // When the connected MCP client supports elicitation, it is the ONLY
+  // confirmation mechanism for this action — the approval_token flow is
+  // completely bypassed (not merely "also accepted"): `params.approval_token`
+  // is never read here, so an agent cannot pre-mint or replay a token to skip
+  // the human-in-the-loop step. The human's answer comes back through
+  // elicitConfirm (server -> MCP client -> human -> client -> server), a
+  // channel the agent itself cannot answer on its own behalf. One upstream
+  // call fetches the data needed for both the elicitation message AND (on
+  // accept) the actual credential rows — no second agent-initiated call is
+  // needed or possible.
+  if (elicitConfirm) {
+    const rawData = await devApiPost<StaticHouseListResponse>("/v1/static_house/list", body, { apiKey });
+    const rows = Array.isArray(rawData?.list) ? rawData.list : [];
+    const count = typeof rawData?.total === "number" ? rawData.total : rows.length;
+
+    let decision: "accept" | "decline" | "cancel" | "error";
+    try {
+      decision = await elicitConfirm(buildElicitMessage(count, capNote));
+    } catch {
+      // Fail closed: any failure of the elicitation round-trip (client
+      // disconnected, malformed reply, transport error) means NO credentials
+      // are shown — identical outcome to an explicit decline/cancel.
+      decision = "error";
+    }
+
+    if (decision !== "accept") {
+      return buildDeclinedResponse(decision);
+    }
+
+    return JSON.stringify(
+      {
+        status: "ok",
+        action: "static_ip_reveal_credentials",
+        count,
+        rows: rows.map(toCredentialRow),
+        ...(limitCapped ? { limit_capped_to: REVEAL_CREDENTIALS_LIMIT_CAP } : {}),
+        agent_instruction:
+          "Real dial credentials for the filtered static ISP IPs. Show the user only what they asked for — do " +
+          "not repeat credentials unnecessarily in later turns. Each row includes a ready-to-paste `dial_string` " +
+          "(ip:port:username:password) and `proxy_url` (http://username:password@ip:port) when the API returned " +
+          "a complete credential pair. Real credentials are also always available at https://dashboard.novada.com." +
+          capNote,
+      },
+      null,
+      2,
+    );
+  }
+
+  // ── Fallback: two-step approval_token flow (unchanged) ─────────────────────
+  // Used whenever elicitConfirm is undefined — a LOCAL client that didn't
+  // advertise elicitation support. Never reached on hosted: the runtime
+  // guard above already threw before this line, on every call, for every
+  // client (hosted has no notion of "a client that advertises elicitation").
+  const revealGate = evaluateApprovalGate(params as Record<string, unknown>, "static_ip_reveal_credentials", "novada_static_ip_mgmt");
+
+  if (!revealGate.authorized) {
+    const rawData = await devApiPost<StaticHouseListResponse>("/v1/static_house/list", body, { apiKey });
+    const rows = Array.isArray(rawData?.list) ? rawData.list : [];
+    return JSON.stringify(
+      {
+        status: "confirmation_required",
+        action: "static_ip_reveal_credentials",
+        preview: {
+          count: typeof rawData?.total === "number" ? rawData.total : rows.length,
+          rows: rows.map(toPreviewRow),
+          ...(limitCapped ? { limit_capped_to: REVEAL_CREDENTIALS_LIMIT_CAP } : {}),
+        },
+        approval_token: revealGate.approvalToken,
+        expires_at: new Date(revealGate.expiresAt).toISOString(),
+        expires_in_seconds: revealGate.expiresInSeconds,
+        agent_instruction:
+          "This preview shows IP/port/region/expiry only — no credentials yet. Calling again with the EXACT " +
+          "SAME parameters plus `approval_token` above will display the REAL proxy username and password for " +
+          "these IPs in this conversation, which may be retained in the AI client's own chat history. Only do " +
+          "this if the human user explicitly asked to see or export these credentials (e.g. to configure them " +
+          "in another tool). `confirm: true` alone does nothing — it is deprecated and ignored." + capNote,
+      },
+      null,
+      2,
+    );
+  }
+
+  const rawData = await devApiPost<StaticHouseListResponse>("/v1/static_house/list", body, { apiKey });
+  const rows = Array.isArray(rawData?.list) ? rawData.list : [];
+
+  return JSON.stringify(
+    {
+      status: "ok",
+      action: "static_ip_reveal_credentials",
+      count: typeof rawData?.total === "number" ? rawData.total : rows.length,
+      rows: rows.map(toCredentialRow),
+      ...(limitCapped ? { limit_capped_to: REVEAL_CREDENTIALS_LIMIT_CAP } : {}),
+      agent_instruction:
+        "Real dial credentials for the filtered static ISP IPs. Show the user only what they asked for — do " +
+        "not repeat credentials unnecessarily in later turns. Each row includes a ready-to-paste `dial_string` " +
+        "(ip:port:username:password) and `proxy_url` (http://username:password@ip:port) when the API returned " +
+        "a complete credential pair. Real credentials are also always available at https://dashboard.novada.com." +
+        capNote,
+    },
+    null,
+    2,
+  );
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 /**
  * Unified static ISP IP management tool.
  *
  * "open" and "renew" are WRITE actions gated behind a valid `approval_token`
- * (see ../utils/approval.ts). Without one, they return a preview payload
- * plus a fresh token and do NOT hit the API. "list" and "export" are read-only.
+ * (see ../utils/approval.ts) and refused outright on the hosted endpoint
+ * (see assertActionAvailableOnRuntime above). "reveal_credentials" is a
+ * LOCAL-ONLY action (2026-11-01 owner decision, final — refused on hosted by
+ * the SAME assertActionAvailableOnRuntime guard, for its own reason): on the
+ * local server it is confirmed either via live MCP elicitation (when
+ * `elicitConfirm` is supplied — local stdio clients that advertise the
+ * capability) or, as a fallback, the same `approval_token` flow as the WRITE
+ * actions (shows real dial credentials on the execute call only). "list" and
+ * "export" are read-only, ungated, and available on every runtime.
+ *
+ * `elicitConfirm` is `undefined` on every runtime/client that doesn't support
+ * elicitation (including the hosted endpoint, always — moot there anyway
+ * since "reveal_credentials" never reaches this far on hosted) and is
+ * otherwise built by the caller (index.ts) from the live MCP Server's
+ * negotiated client capabilities. Only "reveal_credentials" reads it; every
+ * other action ignores it.
  */
 export async function novadaStaticIpMgmt(
   params: StaticIpMgmtParams,
   apiKey?: string,
+  elicitConfirm?: ElicitConfirmFn,
 ): Promise<string> {
   switch (params.action) {
     case "open":
@@ -166,18 +576,21 @@ export async function novadaStaticIpMgmt(
       return handleExport(params, apiKey);
     case "list":
       return handleList(params, apiKey);
+    case "reveal_credentials":
+      return handleRevealCredentials(params, apiKey, elicitConfirm);
   }
 }
 
 // ── open ─────────────────────────────────────────────────────────────────────
 
 async function handleOpen(params: StaticIpMgmtParams, apiKey?: string): Promise<string> {
+  assertActionAvailableOnRuntime("open");
   const ip_type = assertDefined(params.ip_type, "ip_type", "open");
   const region = assertDefined(params.region, "region", "open");
   const duration = assertDefined(params.duration, "duration", "open");
   const num = assertDefined(params.num, "num", "open");
 
-  const openGate = evaluateApprovalGate(params as Record<string, unknown>, "static_ip_open");
+  const openGate = evaluateApprovalGate(params as Record<string, unknown>, "static_ip_open", "novada_static_ip_mgmt");
   if (!openGate.authorized) {
     return JSON.stringify(
       {
@@ -203,7 +616,7 @@ async function handleOpen(params: StaticIpMgmtParams, apiKey?: string): Promise<
   }
 
   const body: Record<string, unknown> = { ip_type, region, duration, num };
-  const data = await devApiPost<unknown>("/v1/static_house/open", body, { apiKey });
+  const data = maskCredentials(await devApiPost<unknown>("/v1/static_house/open", body, { apiKey }));
 
   return JSON.stringify(
     {
@@ -220,10 +633,11 @@ async function handleOpen(params: StaticIpMgmtParams, apiKey?: string): Promise<
 // ── renew ────────────────────────────────────────────────────────────────────
 
 async function handleRenew(params: StaticIpMgmtParams, apiKey?: string): Promise<string> {
+  assertActionAvailableOnRuntime("renew");
   const renew_ip_list = assertDefined(params.renew_ip_list, "renew_ip_list", "renew");
   const duration = assertDefined(params.duration, "duration", "renew");
 
-  const renewGate = evaluateApprovalGate(params as Record<string, unknown>, "static_ip_renew");
+  const renewGate = evaluateApprovalGate(params as Record<string, unknown>, "static_ip_renew", "novada_static_ip_mgmt");
   if (!renewGate.authorized) {
     const ipCount = renew_ip_list.split(",").filter(Boolean).length;
     return JSON.stringify(
@@ -248,7 +662,7 @@ async function handleRenew(params: StaticIpMgmtParams, apiKey?: string): Promise
   }
 
   const body: Record<string, unknown> = { renew_ip_list, duration };
-  const data = await devApiPost<unknown>("/v1/static_house/renew", body, { apiKey });
+  const data = maskCredentials(await devApiPost<unknown>("/v1/static_house/renew", body, { apiKey }));
 
   return JSON.stringify(
     {
@@ -265,21 +679,31 @@ async function handleRenew(params: StaticIpMgmtParams, apiKey?: string): Promise
 // ── export ───────────────────────────────────────────────────────────────────
 
 async function handleExport(params: StaticIpMgmtParams, apiKey?: string): Promise<string> {
+  const { effectiveStatus, defaulted } = resolveStatus(params.status);
+
   const body: Record<string, unknown> = {
-    ...optionalField("status", params.status),
+    status: effectiveStatus,
     ...optionalField("region", params.region),
     ...optionalField("key_word", params.key_word),
     ...optionalField("is_auto_renew", params.is_auto_renew),
   };
 
-  const data = await devApiPost<unknown>("/v1/static_house/export", body, { apiKey });
+  const [rawData, expiredCount, releasedCount] = await Promise.all([
+    devApiPost<unknown>("/v1/static_house/export", body, { apiKey }),
+    defaulted ? staticHouseStatusTotal("2", apiKey) : Promise.resolve(undefined),
+    defaulted ? staticHouseStatusTotal("3", apiKey) : Promise.resolve(undefined),
+  ]);
+  const data = maskCredentials(rawData);
+  const summary = defaulted ? buildStatusSummary(expiredCount, releasedCount) : undefined;
 
   return JSON.stringify(
     {
       status: "ok",
       data,
+      ...(summary ? { summary } : {}),
       agent_instruction:
-        "Export of static ISP IPs returned. Data includes all IPs matching the applied filters.",
+        `Export of static ISP IPs returned${defaulted ? ' (status defaulted to "1"=in-use)' : ""}. ` +
+        `Data includes all IPs matching the applied filters. ${CREDENTIAL_NOTE}`,
     },
     null,
     2,
@@ -289,23 +713,34 @@ async function handleExport(params: StaticIpMgmtParams, apiKey?: string): Promis
 // ── list ─────────────────────────────────────────────────────────────────────
 
 async function handleList(params: StaticIpMgmtParams, apiKey?: string): Promise<string> {
+  const { effectiveStatus, defaulted } = resolveStatus(params.status);
+
   const body: Record<string, unknown> = {
     page: params.page,
     limit: params.limit,
-    ...optionalField("status", params.status),
+    status: effectiveStatus,
     ...optionalField("region", params.region),
     ...optionalField("key_word", params.key_word),
     ...optionalField("is_auto_renew", params.is_auto_renew),
   };
 
-  const data = await devApiPost<unknown>("/v1/static_house/list", body, { apiKey });
+  const [rawData, expiredCount, releasedCount] = await Promise.all([
+    devApiPost<unknown>("/v1/static_house/list", body, { apiKey }),
+    defaulted ? staticHouseStatusTotal("2", apiKey) : Promise.resolve(undefined),
+    defaulted ? staticHouseStatusTotal("3", apiKey) : Promise.resolve(undefined),
+  ]);
+  const data = maskCredentials(rawData);
+  const summary = defaulted ? buildStatusSummary(expiredCount, releasedCount) : undefined;
 
   return JSON.stringify(
     {
       status: "ok",
       data,
+      ...(summary ? { summary } : {}),
       agent_instruction:
-        "Paginated list of static ISP IPs. Use 'export' action for full unfiltered dump. Use 'open' to purchase new IPs or 'renew' to extend existing ones.",
+        `Paginated list of static ISP IPs${defaulted ? ' (status defaulted to "1"=in-use)' : ""}. ` +
+        `Use 'export' action for a full unfiltered dump. Use 'open' to purchase new IPs or 'renew' ` +
+        `to extend existing ones. ${CREDENTIAL_NOTE}`,
     },
     null,
     2,

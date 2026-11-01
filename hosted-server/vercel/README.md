@@ -11,7 +11,7 @@ Client  ──HTTPS──▶  Vercel Edge Function (/mcp)  ──HTTPS──▶ 
 ```
 
 This is the **Vercel port** of the Cloudflare Worker at `../worker/`. Same
-behavior, same 28-tool surface, same auth model (the CF Worker's own quota
+behavior, same 29-tool surface, same auth model (the CF Worker's own quota
 model was never updated when the monthly free-call cap was removed here on
 2026-10-29 — it is dormant/undeployed, see `../worker/`). The CF Worker is
 kept as a fallback in case the Vercel deploy needs to be rolled back.
@@ -23,13 +23,15 @@ CNAME — DNS stays on AWS, we just add `mcp.novada.com → cname.vercel-dns.com
 
 ## What you get
 
-- **One URL** for the hosted-visible **28-tool** surface — core-derived, not a
+- **One URL** for the hosted-visible **29-tool** surface — core-derived, not a
   hand-curated list: it's the npm package's full 37-tool registry
-  (`npm-package/src/tools/registry.ts`) minus 9 tools that don't apply to a
+  (`npm-package/src/tools/registry.ts`) minus 8 tools that don't apply to a
   stateless serverless endpoint (`HOSTED_HIDDEN` in `api/mcp.ts` — write-gated
   account mutations, per-process debug state, and `novada_browser` /
   `novada_browser_flow`, both of which need a persistent CDP WebSocket session
-  a serverless isolate can't hold).
+  a serverless isolate can't hold). `novada_static_ip_mgmt` is hosted-visible
+  too — its read-only actions work normally; its `open`/`renew` WRITE actions
+  are refused at the action level (not whole-tool hiding).
   Covers search, extract, crawl, research, map, site-copy-adjacent tools,
   the generic `novada_scrape` plus all 15 `novada_scrape_<platform>` tools,
   proxy, discover, ai_monitor, monitor, setup, account,
@@ -168,7 +170,7 @@ curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-You should see the 28-tool catalog in the response.
+You should see the 29-tool catalog in the response.
 
 Try a tool call:
 
@@ -257,8 +259,14 @@ time:
 
 Both route to the normal `TOOL_NOT_ENABLED` refusal if called by name,
 pointing agents to the **local** MCP server (`npx novada-mcp`) for browser
-automation. All other 28 tools on the hosted surface (of the npm package's 37) <!-- claims-ignore: 28 = hosted-subset count, 37 = local-package total, both on one line; hosted-server/landing's claim_surfaces override does not apply to this file -->
-work normally.
+automation. All other 29 tools on the hosted surface (of the npm package's 37) <!-- claims-ignore: 29 = hosted-subset count, 37 = local-package total, both on one line; hosted-server/landing's claim_surfaces override does not apply to this file -->
+work normally — including `novada_static_ip_mgmt`'s plain `list`/`export`
+actions (masked credentials); its `open`/`renew` WRITE actions, and its
+`reveal_credentials` action, are refused at the action level — the latter
+needs a human-in-the-loop confirmation (MCP elicitation) that this stateless
+endpoint cannot perform, so it is local-only, like `open`/`renew` (see the
+tool's own description for the elicitation / two-step approval-token flow
+that applies on the local server).
 
 ## Local development
 

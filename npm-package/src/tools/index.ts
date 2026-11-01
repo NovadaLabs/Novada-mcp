@@ -73,6 +73,9 @@ export { novadaIpWhitelist, validateIpWhitelistParams, IpWhitelistParamsSchema }
 export type { IpWhitelistParams } from "./ip_whitelist.js";
 export { novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema } from "./static_ip_mgmt.js";
 export type { StaticIpMgmtParams } from "./static_ip_mgmt.js";
+// ElicitConfirmFn is NOT re-exported here — imported directly from
+// ./static_ip_mgmt.js by core.ts/index.ts, same pattern as ProgressReporter
+// (./tools/crawl.js), which is also not barrel-exported.
 
 // ─── NOV-321 / NOV-323: session telemetry + search feedback ─────────────────
 export { novadaSessionStats, validateSessionStatsParams, SessionStatsParamsSchema, recordToolCall } from "./session_stats.js";

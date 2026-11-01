@@ -53,7 +53,7 @@ Cursor, Windsurf, VS Code and self-host (`npx -y novada-mcp`): see the [install 
 | `novada_map` | Discover what URLs exist on a site before fetching. |
 | `novada_proxy` | Route your own HTTP client through a specific IP type, country or session. |
 
-Not sure? Call `novada_discover`. 37 tools self-hosted; the hosted endpoint exposes 28 of them (self-host adds browser automation and site copy). Full list and per-surface availability: [docs/TOOLS.md](docs/TOOLS.md).
+Not sure? Call `novada_discover`. 37 tools self-hosted; the hosted endpoint exposes 29 of them (self-host adds browser automation, site copy, and the write-gated `open`/`renew` static-IP actions). Full list and per-surface availability: [docs/TOOLS.md](docs/TOOLS.md).
 
 ## How it compares
 
