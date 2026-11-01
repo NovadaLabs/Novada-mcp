@@ -6,6 +6,12 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+---
+
+## [0.9.45] — 2026-11-01
+
+Credential-safety and pricing-truth release. Proxy dial credentials are masked everywhere by default and can be revealed only on the local server with an explicit user confirmation; the hosted endpoint drops the obsolete monthly free-call cap and serves the read-only static-IP functions.
+
 ### Added
 - **`novada_static_ip_mgmt` gains a `reveal_credentials` action, local MCP server only** (owner decision 2026-11-01, option A; final scope per a same-day follow-up decision below): static-ISP dial credentials stay masked everywhere by default, but a user who explicitly asks (e.g. to configure their own static IPs in AdsPower or another proxy-aware tool) can get the REAL `account`/`password` pair through this read-only action — gated behind the same two-step `approval_token` flow as `open`/`renew` (`evaluateApprovalGate`, `../utils/approval.ts`), or a single MCP-elicitation-confirmed call on clients that support it (see the Security entry below). Filters are identical to `list` (`status`/`region`/`key_word`/`page`/`limit`/`is_auto_renew`); `limit` is additionally capped at 50 (the response says so when it clamps a higher requested value). The preview call (no `approval_token`) shows masked `ip`/`port`/`region`/`expire_time` rows only — no credentials — plus a count and a warning that the real credentials may be retained in the AI client's own chat history. The execute call (with the matching `approval_token`) returns `{ip, port, region, expire_time, username, password}` per row plus two ready-to-paste formats, `dial_string` (`ip:port:username:password`) and `proxy_url` (`http://username:password@ip:port`), built only from fields the API actually returned. **Not available on the hosted endpoint** — see below.
 
