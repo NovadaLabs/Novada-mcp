@@ -19,6 +19,23 @@
 // must see a masked preview and explicitly approve before they are shown.
 // See the handler below for the full design note.
 //
+// 2026-11-01 FOLLOW-UP (independent security review, finding HIGH-1): the
+// approval_token round-trips through the AGENT (it's a plain string the tool
+// hands back and the agent echoes on the next call) — a prompt-injected or
+// careless agent can simply make BOTH calls itself, back to back, with no
+// human in the loop at all. On the LOCAL stdio server, when the connected
+// MCP CLIENT advertises the `elicitation` capability, "reveal_credentials"
+// now uses REAL MCP elicitation (server -> client -> human, a channel the
+// agent cannot answer on its own behalf) as the confirmation instead of the
+// approval_token round-trip — see handleRevealCredentials below and
+// ElicitConfirmFn. The approval_token flow remains, UNCHANGED, as the
+// fallback for clients that don't support elicitation, and is the ONLY
+// mechanism available on the hosted endpoint (mcp.novada.com is stateless
+// Streamable HTTP — a fresh Server+transport per HTTP request, closed again
+// before any reply could arrive — so a server-initiated request that needs a
+// later client reply cannot complete there; see reports/
+// static-ip-reveal-credentials-2026-11-01.md for the evidence).
+//
 // "open"/"renew" are REFUSED at the action level on the hosted endpoint
 // (mcp.novada.com) — see assertActionAvailableOnRuntime() below — before
 // either the approval gate or any upstream call runs. "list"/"export"/
@@ -247,7 +264,30 @@ function toCredentialRow(row) {
     }
     return out;
 }
-async function handleRevealCredentials(params, apiKey) {
+/** Human-facing elicitation confirmation message — built once, used for the ONE elicitInput call. */
+function buildElicitMessage(count, capNote) {
+    return (`Reveal the REAL proxy username and password for ${count} static ISP IP(s)? ` +
+        "These credentials will be shown in this conversation and may be retained in the AI client's " +
+        "own chat history. Only approve this if you explicitly asked to see or export these credentials " +
+        "(e.g. to configure them in another tool)." + capNote);
+}
+/** Non-throwing "no credentials were shown" response for a declined/cancelled/failed elicitation. */
+function buildDeclinedResponse(decision) {
+    const reason = decision === "decline"
+        ? "The human user declined to reveal credentials."
+        : decision === "cancel"
+            ? "The confirmation was cancelled before a decision was made."
+            : "The confirmation could not be completed (the MCP client's elicitation call failed).";
+    return JSON.stringify({
+        status: "declined",
+        action: "static_ip_reveal_credentials",
+        decision,
+        reason,
+        agent_instruction: "No credentials were revealed. Do not retry automatically — only re-run this tool if the human " +
+            "user explicitly asks again to see the credentials.",
+    }, null, 2);
+}
+async function handleRevealCredentials(params, apiKey, elicitConfirm) {
     const { effectiveStatus } = resolveStatus(params.status);
     const requestedLimit = params.limit;
     const limitCapped = requestedLimit > REVEAL_CREDENTIALS_LIMIT_CAP;
@@ -263,7 +303,51 @@ async function handleRevealCredentials(params, apiKey) {
     const capNote = limitCapped
         ? ` Limit capped to ${REVEAL_CREDENTIALS_LIMIT_CAP} for a credential-revealing call (requested ${requestedLimit}).`
         : "";
-    const revealGate = evaluateApprovalGate(params, "static_ip_reveal_credentials");
+    // ── Elicitation path (2026-11-01 follow-up, HIGH-1) ────────────────────────
+    // When the connected MCP client supports elicitation, it is the ONLY
+    // confirmation mechanism for this action — the approval_token flow is
+    // completely bypassed (not merely "also accepted"): `params.approval_token`
+    // is never read here, so an agent cannot pre-mint or replay a token to skip
+    // the human-in-the-loop step. The human's answer comes back through
+    // elicitConfirm (server -> MCP client -> human -> client -> server), a
+    // channel the agent itself cannot answer on its own behalf. One upstream
+    // call fetches the data needed for both the elicitation message AND (on
+    // accept) the actual credential rows — no second agent-initiated call is
+    // needed or possible.
+    if (elicitConfirm) {
+        const rawData = await devApiPost("/v1/static_house/list", body, { apiKey });
+        const rows = Array.isArray(rawData?.list) ? rawData.list : [];
+        const count = typeof rawData?.total === "number" ? rawData.total : rows.length;
+        let decision;
+        try {
+            decision = await elicitConfirm(buildElicitMessage(count, capNote));
+        }
+        catch {
+            // Fail closed: any failure of the elicitation round-trip (client
+            // disconnected, malformed reply, transport error) means NO credentials
+            // are shown — identical outcome to an explicit decline/cancel.
+            decision = "error";
+        }
+        if (decision !== "accept") {
+            return buildDeclinedResponse(decision);
+        }
+        return JSON.stringify({
+            status: "ok",
+            action: "static_ip_reveal_credentials",
+            count,
+            rows: rows.map(toCredentialRow),
+            ...(limitCapped ? { limit_capped_to: REVEAL_CREDENTIALS_LIMIT_CAP } : {}),
+            agent_instruction: "Real dial credentials for the filtered static ISP IPs. Show the user only what they asked for — do " +
+                "not repeat credentials unnecessarily in later turns. Each row includes a ready-to-paste `dial_string` " +
+                "(ip:port:username:password) and `proxy_url` (http://username:password@ip:port) when the API returned " +
+                "a complete credential pair. Real credentials are also always available at https://dashboard.novada.com." +
+                capNote,
+        }, null, 2);
+    }
+    // ── Fallback: two-step approval_token flow (unchanged) ─────────────────────
+    // Used whenever elicitConfirm is undefined — no connected client (hosted
+    // endpoint, always), or a local client that didn't advertise elicitation.
+    const revealGate = evaluateApprovalGate(params, "static_ip_reveal_credentials", "novada_static_ip_mgmt");
     if (!revealGate.authorized) {
         const rawData = await devApiPost("/v1/static_house/list", body, { apiKey });
         const rows = Array.isArray(rawData?.list) ? rawData.list : [];
@@ -307,11 +391,20 @@ async function handleRevealCredentials(params, apiKey) {
  * "open" and "renew" are WRITE actions gated behind a valid `approval_token`
  * (see ../utils/approval.ts) and refused outright on the hosted endpoint
  * (see assertActionAvailableOnRuntime above). "reveal_credentials" is a
- * READ-ONLY action gated behind the same `approval_token` flow (shows real
- * dial credentials on the execute call only). "list" and "export" are
- * read-only and ungated.
+ * READ-ONLY action confirmed either via live MCP elicitation (when
+ * `elicitConfirm` is supplied — local stdio clients that advertise the
+ * capability) or, as a fallback, the same `approval_token` flow as the WRITE
+ * actions (shows real dial credentials on the execute call only). "list" and
+ * "export" are read-only and ungated.
+ *
+ * `elicitConfirm` is `undefined` on every runtime/client that doesn't support
+ * elicitation (including the hosted endpoint, always — see the 2026-11-01
+ * follow-up note at the top of this file) and is otherwise built by the
+ * caller (index.ts) from the live MCP Server's negotiated client
+ * capabilities. Only "reveal_credentials" reads it; every other action
+ * ignores it.
  */
-export async function novadaStaticIpMgmt(params, apiKey) {
+export async function novadaStaticIpMgmt(params, apiKey, elicitConfirm) {
     switch (params.action) {
         case "open":
             return handleOpen(params, apiKey);
@@ -322,7 +415,7 @@ export async function novadaStaticIpMgmt(params, apiKey) {
         case "list":
             return handleList(params, apiKey);
         case "reveal_credentials":
-            return handleRevealCredentials(params, apiKey);
+            return handleRevealCredentials(params, apiKey, elicitConfirm);
     }
 }
 // ── open ─────────────────────────────────────────────────────────────────────
@@ -332,7 +425,7 @@ async function handleOpen(params, apiKey) {
     const region = assertDefined(params.region, "region", "open");
     const duration = assertDefined(params.duration, "duration", "open");
     const num = assertDefined(params.num, "num", "open");
-    const openGate = evaluateApprovalGate(params, "static_ip_open");
+    const openGate = evaluateApprovalGate(params, "static_ip_open", "novada_static_ip_mgmt");
     if (!openGate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",
@@ -364,7 +457,7 @@ async function handleRenew(params, apiKey) {
     assertActionAvailableOnRuntime("renew");
     const renew_ip_list = assertDefined(params.renew_ip_list, "renew_ip_list", "renew");
     const duration = assertDefined(params.duration, "duration", "renew");
-    const renewGate = evaluateApprovalGate(params, "static_ip_renew");
+    const renewGate = evaluateApprovalGate(params, "static_ip_renew", "novada_static_ip_mgmt");
     if (!renewGate.authorized) {
         const ipCount = renew_ip_list.split(",").filter(Boolean).length;
         return JSON.stringify({

@@ -1,4 +1,5 @@
 import { z } from "zod";
+export type ElicitConfirmFn = (message: string) => Promise<"accept" | "decline" | "cancel">;
 export declare const StaticIpMgmtParamsSchema: z.ZodObject<{
     action: z.ZodEnum<{
         list: "list";
@@ -39,9 +40,18 @@ export declare function validateStaticIpMgmtParams(args: Record<string, unknown>
  * "open" and "renew" are WRITE actions gated behind a valid `approval_token`
  * (see ../utils/approval.ts) and refused outright on the hosted endpoint
  * (see assertActionAvailableOnRuntime above). "reveal_credentials" is a
- * READ-ONLY action gated behind the same `approval_token` flow (shows real
- * dial credentials on the execute call only). "list" and "export" are
- * read-only and ungated.
+ * READ-ONLY action confirmed either via live MCP elicitation (when
+ * `elicitConfirm` is supplied — local stdio clients that advertise the
+ * capability) or, as a fallback, the same `approval_token` flow as the WRITE
+ * actions (shows real dial credentials on the execute call only). "list" and
+ * "export" are read-only and ungated.
+ *
+ * `elicitConfirm` is `undefined` on every runtime/client that doesn't support
+ * elicitation (including the hosted endpoint, always — see the 2026-11-01
+ * follow-up note at the top of this file) and is otherwise built by the
+ * caller (index.ts) from the live MCP Server's negotiated client
+ * capabilities. Only "reveal_credentials" reads it; every other action
+ * ignores it.
  */
-export declare function novadaStaticIpMgmt(params: StaticIpMgmtParams, apiKey?: string): Promise<string>;
+export declare function novadaStaticIpMgmt(params: StaticIpMgmtParams, apiKey?: string, elicitConfirm?: ElicitConfirmFn): Promise<string>;
 //# sourceMappingURL=static_ip_mgmt.d.ts.map

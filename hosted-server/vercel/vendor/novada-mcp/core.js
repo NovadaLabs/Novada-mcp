@@ -810,7 +810,7 @@ export async function dispatch(name, args, apiKey, ctx) {
         case "novada_capture_apikey":
             return novadaCaptureApikey(validateCaptureApikeyParams(args), apiKey);
         case "novada_static_ip_mgmt":
-            return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey);
+            return novadaStaticIpMgmt(validateStaticIpMgmtParams(args), apiKey, ctx?.elicitConfirm);
         default:
             // F-5 (class-not-instance): DERIVE the tool list from the live registry
             // instead of a hand-maintained string — the old hardcoded list omitted
