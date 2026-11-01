@@ -483,7 +483,16 @@ function renderTrafficCard(raw: Record<string, unknown>): string {
   for (const [key, val] of Object.entries(perProduct)) {
     if (!val || typeof val !== "object") continue;
     const v = val as Record<string, unknown>;
-    if (v.status === "error") {
+    // FIX (2026-10-30, scope addition #3): static ISP is `applicable:false`
+    // (billed per-IP, not by traffic — see traffic_daily.ts) and carries NO
+    // `total_mb` field. Checking this BEFORE the error/else branches avoids
+    // falling into "0 -> 0.0 MB" (status is "ok", so it never hit the error
+    // branch either) — the raw json output always kept `reason`; the card
+    // silently dropped it and showed a misleading literal zero.
+    if (v.applicable === false) {
+      const reason = typeof v.reason === "string" ? v.reason : "not applicable";
+      lines.push(`| ${key} | — (${reason}) |`);
+    } else if (v.status === "error") {
       lines.push(`| ${key} | ⛔ error |`);
     } else {
       const mb = typeof v.total_mb === "number" ? v.total_mb : 0;

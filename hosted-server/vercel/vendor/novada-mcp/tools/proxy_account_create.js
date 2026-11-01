@@ -88,7 +88,7 @@ export function validateProxyAccountCreateParams(args) {
  * remark?, limit_flow?.
  */
 export async function novadaProxyAccountCreate(params, apiKey) {
-    const gate = evaluateApprovalGate(params, "create_proxy_sub_account");
+    const gate = evaluateApprovalGate(params, "create_proxy_sub_account", "novada_proxy_account_create");
     if (!gate.authorized) {
         return JSON.stringify({
             status: "confirmation_required",

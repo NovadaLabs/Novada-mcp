@@ -88,7 +88,11 @@ export function hqStatusBucket(row: HqStatusBucketRow): "success" | "client_erro
   // (e.g. an upstream 401), distinct from the pre_auth gateway-key guard above.
   if (row.error_code === NovadaErrorCode.INVALID_API_KEY) return "client_error";
   if (row.error_code === NovadaErrorCode.INVALID_PARAMS) return "client_error";
-  // cap_blocked: the free-gateway-cap guard rejection.
+  // cap_blocked: the free-gateway-cap guard rejection. RETIRED 2026-10-29 (the
+  // cap was removed entirely — no new row can set this) but kept here so any
+  // already-queued/undelivered row still carrying it classifies correctly
+  // when the reconciler eventually pushes it; rejection_stage is a bare
+  // string column (not RejectionStage-typed), so such a row can still exist.
   if (row.rejection_stage === "cap_blocked") return "client_error";
   if (row.error_code === NovadaErrorCode.WRONG_TARGET) return "client_error";
   if (row.error_code === NovadaErrorCode.PRODUCT_UNAVAILABLE) return "client_error";

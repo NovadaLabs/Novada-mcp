@@ -32,7 +32,11 @@ export declare function canonicalJson(value: unknown): string;
  * includes `approval_token` / `confirm` if the caller supplied them, plus
  * every other field the caller supplied with defaults applied). `action` is
  * a short machine-readable label used only in error/preview text (e.g.
- * "create_proxy_sub_account").
+ * "create_proxy_sub_account") — it is NOT part of the signed payload.
+ * `toolName` is the caller's own MCP tool name (e.g. "novada_static_ip_mgmt")
+ * and IS bound into the signed payload (2026-11-01 follow-up) — a token
+ * minted for one tool is structurally rejected by every other tool, even if
+ * their `rest` params happen to collide.
  *
  * Returns `{ authorized: true }` when the call may proceed to the real API.
  *
@@ -41,11 +45,11 @@ export declare function canonicalJson(value: unknown): string;
  * and is NOT an error.
  *
  * THROWS a NovadaError for every rejected shape: `confirm: true` with no
- * token, a token that doesn't verify (wrong, tampered, payload changed
- * since minting), or an expired token. These are never returned as a
- * "denied" value — they must not be mistakable for a preview, and they must
- * surface as `isError: true` at the MCP layer via the standard
+ * token, a token that doesn't verify (wrong, tampered, payload or tool name
+ * changed since minting), or an expired token. These are never returned as
+ * a "denied" value — they must not be mistakable for a preview, and they
+ * must surface as `isError: true` at the MCP layer via the standard
  * dispatch -> classifyError -> toAgentString() path.
  */
-export declare function evaluateApprovalGate(params: Record<string, unknown>, action: string): ApprovalGateResult;
+export declare function evaluateApprovalGate(params: Record<string, unknown>, action: string, toolName: string): ApprovalGateResult;
 //# sourceMappingURL=approval.d.ts.map

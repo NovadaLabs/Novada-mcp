@@ -536,7 +536,7 @@ One event per tool call and one per session initialize, with these fields ONLY:
 - event_type       — "tool_call" or "initialize"
 - request_id       — random UUID per HTTP request (correlation only)
 - token_hash       — SHA-256 hash of your API key (never the key itself)
-- plan             — "free" or "pro" (billing classification)
+- plan             — always null (2026-10-29: there is no free/pro billing tier anymore — every call bills your own Novada account)
 - client_name      — MCP client name from the initialize handshake (e.g. "claude-code")
 - client_version   — MCP client version from the initialize handshake
 - protocol_version — MCP protocol version (currently always null; not exposed per-call)
@@ -546,11 +546,11 @@ One event per tool call and one per session initialize, with these fields ONLY:
                      (lowercase, leading "www." stripped). Never the path, query
                      string, port, credentials, or fragment. Null for tools that
                      take no URL (novada_search queries are not collected at all).
-- outcome          — "ok", an error code, or "cap_blocked"
+- outcome          — "ok" or an error code
 - latency_ms       — how long the call took server-side
-- charged          — whether one free-quota unit was consumed
-- over_cap_allowed — whether the call passed via the paid exemption
-- quota_remaining  — free-quota counter after this call
+- charged          — always null (2026-10-29: the monthly free-call cap was removed — no cap applies, so there is nothing to charge against)
+- over_cap_allowed — always null (same removal — there is no cap to be exempted from)
+- quota_remaining  — always null (same removal — there is no quota counter)
 - server_version   — the gateway build that served the call
 - region           — the serving datacenter region (e.g. "iad1")
 
@@ -570,7 +570,7 @@ the privacy page at https://novada.com for the current policy.
 ## Why this is collected
 
 Service improvement (which tools and parameters are actually used, latency,
-failure modes) and abuse prevention (cap enforcement, anomalous usage patterns).
+failure modes) and abuse prevention (rate-limit enforcement, anomalous usage patterns).
 
 ## Contact
 

@@ -11,8 +11,10 @@ Client  ──HTTPS──▶  Vercel Edge Function (/mcp)  ──HTTPS──▶ 
 ```
 
 This is the **Vercel port** of the Cloudflare Worker at `../worker/`. Same
-behavior, same 28-tool surface, same auth/quota model. The CF Worker is kept as a
-fallback in case the Vercel deploy needs to be rolled back.
+behavior, same 29-tool surface, same auth model (the CF Worker's own quota
+model was never updated when the monthly free-call cap was removed here on
+2026-10-29 — it is dormant/undeployed, see `../worker/`). The CF Worker is
+kept as a fallback in case the Vercel deploy needs to be rolled back.
 
 **Why Vercel:** the CF Workers approach needs the root domain (`novada.com`)
 on Cloudflare DNS. Novada's DNS lives on AWS Route 53 and migrating the whole
@@ -21,13 +23,15 @@ CNAME — DNS stays on AWS, we just add `mcp.novada.com → cname.vercel-dns.com
 
 ## What you get
 
-- **One URL** for the hosted-visible **28-tool** surface — core-derived, not a
+- **One URL** for the hosted-visible **29-tool** surface — core-derived, not a
   hand-curated list: it's the npm package's full 37-tool registry
-  (`npm-package/src/tools/registry.ts`) minus 9 tools that don't apply to a
+  (`npm-package/src/tools/registry.ts`) minus 8 tools that don't apply to a
   stateless serverless endpoint (`HOSTED_HIDDEN` in `api/mcp.ts` — write-gated
   account mutations, per-process debug state, and `novada_browser` /
   `novada_browser_flow`, both of which need a persistent CDP WebSocket session
-  a serverless isolate can't hold).
+  a serverless isolate can't hold). `novada_static_ip_mgmt` is hosted-visible
+  too — its read-only actions work normally; its `open`/`renew` WRITE actions
+  are refused at the action level (not whole-tool hiding).
   Covers search, extract, crawl, research, map, site-copy-adjacent tools,
   the generic `novada_scrape` plus all 15 `novada_scrape_<platform>` tools,
   proxy, discover, ai_monitor, monitor, setup, account,
@@ -36,8 +40,10 @@ CNAME — DNS stays on AWS, we just add `mcp.novada.com → cname.vercel-dns.com
   access token (same header) obtained via sign-in. No URL query parameter or
   path segment is accepted for credentials — Claude Directory review requires
   this (tokens in a URL end up in server logs, proxies, and browser history).
-- **Per-token monthly quota** in Vercel KV (default 5000 calls/mo on free).
-- **Per-IP rate limit** in Vercel KV (default 60 req/min/IP).
+- **No monthly call cap** — every call is billed to the caller's own Novada
+  account balance (owner decision 2026-10-29; the old 1,000-call/mo per-token
+  free allowance was a one-time new-user promotion that has ended).
+- **Per-IP rate limit** in Vercel KV (default 60 req/min/IP) — unchanged.
 - **Stateless Edge runtime** — each request gets a fresh isolate; no session
   affinity needed.
 
@@ -91,12 +97,14 @@ vercel env add NOVADA_API_KEY production
 
 ## 5. Create the Vercel KV store
 
-Vercel KV (Upstash Redis under the hood) backs both the per-token monthly
-quota counter AND the per-IP rate-limit counter.
+Vercel KV (Upstash Redis under the hood) backs the per-IP rate-limit counter,
+the token-verification cache, and the first-run-notice flag. There is no
+per-token quota counter (removed 2026-10-29 — see §"What you get" above).
 
 1. Open https://vercel.com/dashboard/stores
 2. **Create** → **KV**
-3. Name: `novada-mcp-quota`
+3. Name: `novada-mcp-quota` (historical name — kept for continuity; it no
+   longer stores a quota counter)
 4. Connect it to the `novada-mcpserver` project
 5. Vercel auto-injects `KV_REST_API_URL` and `KV_REST_API_TOKEN` as project
    env vars — no manual setup needed.
@@ -113,10 +121,11 @@ vercel env add STUB_AUTH_WARNING_ACCEPTED production
 
 vercel env add RATE_LIMIT_PER_MIN production
 # Enter: 60
-
-vercel env add FREE_PLAN_MONTHLY_QUOTA production
-# Enter: 5000
 ```
+
+`FREE_PLAN_MONTHLY_QUOTA` is obsolete (the monthly free-call cap was removed
+2026-10-29) — the code no longer reads it. No need to set it; it can be
+deleted from Vercel's env vars whenever convenient.
 
 ## 7. Deploy
 
@@ -161,7 +170,7 @@ curl -X POST 'https://novada-mcpserver.vercel.app/mcp' \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-You should see the 28-tool catalog in the response.
+You should see the 29-tool catalog in the response.
 
 Try a tool call:
 
@@ -214,15 +223,15 @@ DNS stays on AWS Route 53 — Vercel only needs the CNAME.
 }
 ```
 
-## Auth & quota model (current stub)
+## Auth & billing model (current stub)
 
 | Concern         | Implementation                                                      |
-|-----------------|---------------------------------------------------------------------|
+|-----------------|-----------------------------------------------------------------------|
 | Token format    | Anything starting with `sk-eu-novada-` is accepted (stub).          |
-| Plan resolution | Hardcoded `free` plan, 5000 calls/mo. **TODO: sub2api integration.**|
-| Counter         | KV key `<token>:<YYYY-MM>`, 32-day TTL, decremented before each call.|
-| Exhaustion      | Returns a structured `QUOTA_EXCEEDED` error to the agent.           |
-| Rate limit      | KV key `rl:<ip>:<minute>`, 120s TTL, 60 req/min default.            |
+| Plan resolution | None — removed 2026-10-29. **TODO: sub2api integration.**           |
+| Billing         | No gateway-side counter. Every call is billed upstream to the caller's own Novada account (same as the REST API). |
+| Cap             | None — there is no monthly free-call allowance.                     |
+| Rate limit      | KV key `rl:<ip>:<minute>`, 120s TTL, 60 req/min default.             |
 | Usage events    | `console.log` JSON (one line per call, view with `vercel logs`).    |
 
 Search for `TODO(sub2api)` in `api/mcp.ts` to find the integration point.
@@ -250,8 +259,14 @@ time:
 
 Both route to the normal `TOOL_NOT_ENABLED` refusal if called by name,
 pointing agents to the **local** MCP server (`npx novada-mcp`) for browser
-automation. All other 28 tools on the hosted surface (of the npm package's 37) <!-- claims-ignore: 28 = hosted-subset count, 37 = local-package total, both on one line; hosted-server/landing's claim_surfaces override does not apply to this file -->
-work normally.
+automation. All other 29 tools on the hosted surface (of the npm package's 37) <!-- claims-ignore: 29 = hosted-subset count, 37 = local-package total, both on one line; hosted-server/landing's claim_surfaces override does not apply to this file -->
+work normally — including `novada_static_ip_mgmt`'s plain `list`/`export`
+actions (masked credentials); its `open`/`renew` WRITE actions, and its
+`reveal_credentials` action, are refused at the action level — the latter
+needs a human-in-the-loop confirmation (MCP elicitation) that this stateless
+endpoint cannot perform, so it is local-only, like `open`/`renew` (see the
+tool's own description for the elicitation / two-step approval-token flow
+that applies on the local server).
 
 ## Local development
 

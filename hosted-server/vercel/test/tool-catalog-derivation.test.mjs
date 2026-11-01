@@ -337,12 +337,12 @@ test("core registry has exactly 37 tools (pinned — mirrors npm-package discove
   assert.equal(CORE_TOOL_NAMES.size, 37, `core registry size changed — update this pinned count, npm-package's discover.test.ts, and every README/SKILL count to ${CORE_TOOL_NAMES.size}`);
 });
 
-test("HOSTED_HIDDEN has exactly 9 entries (pinned — bumped from 8: novada_browser joined 2026-10, every real action unconditionally fails on this runtime)", () => {
-  assert.equal(HOSTED_HIDDEN.size, 9, `HOSTED_HIDDEN size changed — update this pinned count and the hosted-visible-count derivation below to ${HOSTED_HIDDEN.size}`);
+test("HOSTED_HIDDEN has exactly 8 entries (pinned — dropped from 9 on 2026-11-01: novada_static_ip_mgmt's read-only actions are now served on hosted, action-level refusal replaces whole-tool hiding for its 'open'/'renew' WRITE actions)", () => {
+  assert.equal(HOSTED_HIDDEN.size, 8, `HOSTED_HIDDEN size changed — update this pinned count and the hosted-visible-count derivation below to ${HOSTED_HIDDEN.size}`);
 });
 
-test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 28", () => {
-  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 28, "hosted-visible tool count drifted from 28 — update hosted-server/vercel/README.md's '28-tool' mentions to match");
+test("hosted-visible count (CORE_TOOLS minus HOSTED_HIDDEN) is 29", () => {
+  assert.equal(CORE_TOOL_NAMES.size - HOSTED_HIDDEN.size, 29, "hosted-visible tool count drifted from 29 — update hosted-server/vercel/README.md's '29-tool' mentions to match");
 });
 
 test("hosted-server/vercel/README.md states the derived hosted-visible count (currently '29-tool'/'29 tools' — computed, not hardcoded)", () => {

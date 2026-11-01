@@ -9,7 +9,7 @@
 // via static_house/list instead of the generic flow-balance fan-out.
 
 import { z } from "zod";
-import { devApiParallel, devApiPost } from "../_core/developer_api.js";
+import { devApiParallel, devApiPost, maskCredentials, staticHouseStatusTotal } from "../_core/developer_api.js";
 import { NovadaError } from "../_core/errors.js";
 import { novadaCaptureLogs } from "./capture_logs.js";
 
@@ -257,11 +257,27 @@ function isNotProvisioned(code: number | undefined, msg: string): boolean {
  */
 async function fetchStaticIpSummary(apiKey?: string): Promise<PerProductResult> {
   try {
-    const data = await devApiPost<{ list?: unknown[] | null; total?: number }>(
-      "/v1/static_house/list",
-      { page: 1, limit: 200 },
-      { apiKey },
-    );
+    // FIX (2026-10-30, scope addition #1): this used to query with NO status
+    // filter (server default = "" = All), so `active_ip_count` silently
+    // counted expired/released IPs as "active" — the SAME "shows every IP,
+    // including long-expired ones" complaint as novada_static_ip_mgmt's
+    // list/export, reachable here via novada_account(section="plans"/
+    // "summary"), the HOSTED path a casual "what's my static IP quota?"
+    // question is most likely to hit. Status semantics (per
+    // docs/novada-api/static-isp-proxies.md, the same source static_ip_mgmt.ts
+    // uses): ""=All, "1"=In use, "2"=Expired, "3"=Released. Scope `active_*`
+    // to "1" and report expired/released as separate, additive counts (cheap —
+    // staticHouseStatusTotal is a limit:1 count-only probe) so the shape stays
+    // backward compatible.
+    const [data, expired_ip_count, released_ip_count] = await Promise.all([
+      devApiPost<{ list?: unknown[] | null; total?: number }>(
+        "/v1/static_house/list",
+        { page: 1, limit: 200, status: "1" },
+        { apiKey },
+      ),
+      staticHouseStatusTotal("2", apiKey),
+      staticHouseStatusTotal("3", apiKey),
+    ]);
     const list = Array.isArray(data.list) ? data.list : [];
     const region_breakdown: Record<string, number> = {};
     for (const item of list) {
@@ -273,13 +289,19 @@ async function fetchStaticIpSummary(apiKey?: string): Promise<PerProductResult> 
       }
     }
     const active_ip_count = typeof data.total === "number" ? data.total : list.length;
+    // SECURITY (2026-10-30, account-tools-redaction): static_house/list rows carry
+    // a per-IP dial credential pair (account/password) — this `raw` passthrough
+    // is the SAME leak surface as novada_static_ip_mgmt's list/export. Mask
+    // before embedding.
     return {
       status: "ok",
       balance: {
         billing_model: "per_ip_lifecycle",
         active_ip_count,
+        ...(expired_ip_count !== undefined ? { expired_ip_count } : {}),
+        ...(released_ip_count !== undefined ? { released_ip_count } : {}),
         region_breakdown,
-        raw: data,
+        raw: maskCredentials(data),
       },
     };
   } catch (err) {

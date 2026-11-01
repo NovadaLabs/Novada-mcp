@@ -58,6 +58,34 @@
 //
 // Class-not-instance: this is the ONE implementation. All four tools call
 // `evaluateApprovalGate()` — no tool re-implements signing/verification.
+//
+// 2026-11-01 follow-up (independent security review of reveal_credentials,
+// finding MEDIUM-1): the signed canonical payload used to be `canonicalJson(rest)`
+// — the tool's own params MINUS approval_token/confirm — with the per-call
+// `action` string (second argument below) used ONLY for error-message text and
+// to pick an error label, never mixed into the HMAC input. Cross-TOOL replay
+// was prevented only by happenstance: every existing call site's `rest` shape
+// (field names/values) differs enough between tools that no two currently
+// collide. That is NOT a structural guarantee — a future tool whose gated
+// action reduces to the same minimal params object (e.g. a new single-action
+// tool with no discriminator field, like proxy_account_create) could mint a
+// token here and have it verify unmodified against ANY other gated tool,
+// since the secret is shared per-process/per-deployment and nothing in the
+// signed bytes names which TOOL is being authorized.
+//
+// Fix: every caller now passes its own MCP tool name (`toolName`, e.g.
+// "novada_static_ip_mgmt") as a REQUIRED third argument, folded into the
+// signed canonical payload as `{ __tool: toolName, ...rest }`. A token minted
+// for one tool can never verify against another, full stop — enumerated
+// per-call-site (class-not-instance: TypeScript's required-parameter check
+// forces every NEW gated call site to supply its own name; there is no
+// optional/omittable path that could silently reintroduce the gap).
+// `action` (second argument) is UNCHANGED — still error-message/secret-label
+// context only. Within a single multi-action tool (static_ip_mgmt,
+// ip_whitelist, capture_apikey), sub-action separation already comes from
+// `params.action` being part of `rest` for those tools' own schemas;
+// `proxy_account_create` has exactly one gated action, so no in-tool
+// collision is possible there either way.
 import { randomBytes, createHmac, timingSafeEqual } from "node:crypto";
 import { isHostedEnvironment } from "../config.js";
 import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
@@ -168,7 +196,11 @@ function rejection(action, reason) {
  * includes `approval_token` / `confirm` if the caller supplied them, plus
  * every other field the caller supplied with defaults applied). `action` is
  * a short machine-readable label used only in error/preview text (e.g.
- * "create_proxy_sub_account").
+ * "create_proxy_sub_account") — it is NOT part of the signed payload.
+ * `toolName` is the caller's own MCP tool name (e.g. "novada_static_ip_mgmt")
+ * and IS bound into the signed payload (2026-11-01 follow-up) — a token
+ * minted for one tool is structurally rejected by every other tool, even if
+ * their `rest` params happen to collide.
  *
  * Returns `{ authorized: true }` when the call may proceed to the real API.
  *
@@ -177,16 +209,20 @@ function rejection(action, reason) {
  * and is NOT an error.
  *
  * THROWS a NovadaError for every rejected shape: `confirm: true` with no
- * token, a token that doesn't verify (wrong, tampered, payload changed
- * since minting), or an expired token. These are never returned as a
- * "denied" value — they must not be mistakable for a preview, and they must
- * surface as `isError: true` at the MCP layer via the standard
+ * token, a token that doesn't verify (wrong, tampered, payload or tool name
+ * changed since minting), or an expired token. These are never returned as
+ * a "denied" value — they must not be mistakable for a preview, and they
+ * must surface as `isError: true` at the MCP layer via the standard
  * dispatch -> classifyError -> toAgentString() path.
  */
-export function evaluateApprovalGate(params, action) {
+export function evaluateApprovalGate(params, action, toolName) {
     const secret = getApprovalSecret(action); // throws (fail closed) if hosted + unset
     const { approval_token, confirm, ...rest } = params;
-    const canonicalPayload = canonicalJson(rest);
+    // `__tool` is spread LAST so it always wins even if some future schema ever
+    // (incorrectly) declared a field with that name — every caller's schema is
+    // `.strict()` today, so `rest` cannot actually contain `__tool`, but this
+    // ordering costs nothing and removes the failure mode entirely.
+    const canonicalPayload = canonicalJson({ ...rest, __tool: toolName });
     if (typeof approval_token === "string" && approval_token.length > 0) {
         if (verify(secret, approval_token, canonicalPayload)) {
             return { authorized: true };
