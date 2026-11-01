@@ -5,6 +5,7 @@ export declare const StaticIpMgmtParamsSchema: z.ZodObject<{
         open: "open";
         renew: "renew";
         export: "export";
+        reveal_credentials: "reveal_credentials";
     }>;
     ip_type: z.ZodOptional<z.ZodEnum<{
         normal: "normal";
@@ -36,8 +37,11 @@ export declare function validateStaticIpMgmtParams(args: Record<string, unknown>
  * Unified static ISP IP management tool.
  *
  * "open" and "renew" are WRITE actions gated behind a valid `approval_token`
- * (see ../utils/approval.ts). Without one, they return a preview payload
- * plus a fresh token and do NOT hit the API. "list" and "export" are read-only.
+ * (see ../utils/approval.ts) and refused outright on the hosted endpoint
+ * (see assertActionAvailableOnRuntime above). "reveal_credentials" is a
+ * READ-ONLY action gated behind the same `approval_token` flow (shows real
+ * dial credentials on the execute call only). "list" and "export" are
+ * read-only and ungated.
  */
 export declare function novadaStaticIpMgmt(params: StaticIpMgmtParams, apiKey?: string): Promise<string>;
 //# sourceMappingURL=static_ip_mgmt.d.ts.map
