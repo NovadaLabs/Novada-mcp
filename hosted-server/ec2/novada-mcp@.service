@@ -1,0 +1,80 @@
+# /etc/systemd/system/novada-mcp@.service — mcp.novada.com on EC2, ONE
+# instance per TCP port. This is a systemd TEMPLATE unit: the instance name
+# (the part after `@`) is the port the instance listens on, e.g.
+# `novada-mcp@3000.service` / `novada-mcp@3001.service`
+# (`systemctl enable --now novada-mcp@3000`).
+#
+# Incident fix, 2026-10-29: the old single `novada-mcp.service` meant
+# `systemctl restart` was inherently stop-then-start — the whole endpoint was
+# down between the stop and the new process becoming healthy, regardless of
+# how fast drain itself is (see server.mts's drainServer()/createDrainTracker
+# for that separate, now-fixed bug). Running TWO independent instances lets
+# ../deploy-ec2.sh / ../restart-rolling.sh restart them ONE AT A TIME — nginx
+# (../nginx-novada-mcp.conf's `upstream novada_mcp { server ...3000; server
+# ...3001; }`) always has at least one instance to route to. See
+# ../MIGRATE-TO-TEMPLATE-UNIT.md for the no-downtime cutover from the old
+# single unit to this template; the old `novada-mcp.service` file is left in
+# place (not deleted) as the pre-migration reference until that cutover runs.
+#
+# WEB_CONCURRENCY=1 per instance, justified: the box is 2 vCPU. The old
+# single-unit setup ran WEB_CONCURRENCY=2 (1 primary + 2 workers = 2 workers
+# total, matched to 2 vCPUs). Splitting into two independently-restartable
+# instances while KEEPING the same total worker count (so this change is
+# about restart granularity, not a capacity change) means 1 worker per
+# instance x 2 instances = 2 workers total, same as before — each instance's
+# own primary process is cheap (it only supervises; see server.mts
+# runPrimary) so the extra primary from going 1->2 instances is not a
+# meaningful second cost. Setting WEB_CONCURRENCY=2+ per instance here would
+# double total worker count to 4 on a 2-vCPU box, oversubscribing CPU for no
+# benefit — the whole point of this unit is restart granularity, not added
+# concurrency.
+[Unit]
+Description=Novada MCP hosted server (mcp.novada.com) — instance on port %i
+After=network-online.target
+Wants=network-online.target
+# Same reasoning as the old single unit (see ops review 2026-10-23): a bad
+# release makes the primary exit(1) after 3 early worker deaths (~1-2s); with
+# RestartSec=2 that is a short cycle which systemd's compiled-in default
+# (5 starts / 10s) can sit right at the edge of never tripping. Stop after 5
+# starts in 60s per INSTANCE -> that instance's unit enters 'failed'
+# (alertable via `systemctl is-failed novada-mcp@<port>`) instead of
+# restarting quietly forever. Each instance is tracked separately by systemd,
+# so a bad release still trips this on BOTH instances independently — it
+# does not mask the problem just because the other instance stays up.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=novada
+Group=novada
+WorkingDirectory=/opt/novada-mcp/current
+EnvironmentFile=/etc/novada-mcp/env
+# PORT=%i: the instance name (e.g. `3000` in `novada-mcp@3000.service`)
+# becomes this instance's listen port — see server.mts's `PORT` env read.
+Environment=NODE_ENV=production PORT=%i HOST=127.0.0.1 WEB_CONCURRENCY=1
+ExecStart=/usr/bin/node dist/server.mjs
+Restart=always
+RestartSec=2
+# server.mts drains in-flight requests (up to 300s tool budget) on SIGTERM
+TimeoutStopSec=330
+KillMode=mixed
+# Half the old single-unit's 6G (2 instances share the same 6G total budget
+# this box was already sized for — see the WEB_CONCURRENCY note above).
+MemoryMax=3G
+
+# Hardening — identical to the old single unit (novada-mcp.service). See that
+# file's comments for the per-directive rationale; unchanged here.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -9,8 +9,11 @@
     "deploy": "vercel deploy --prod",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
+    "pretest": "npm run build:server",
     "test": "node --test \"test/**/*.test.mjs\"",
-    "sync:hosted": "node ../scripts/sync-to-hosted.mjs"
+    "sync:hosted": "node ../scripts/sync-to-hosted.mjs",
+    "build:server": "rm -rf dist && tsc -p tsconfig.server.json && node scripts/copy-server-assets.mjs",
+    "start:server": "node dist/server.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",

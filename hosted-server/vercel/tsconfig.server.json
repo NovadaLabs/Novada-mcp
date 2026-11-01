@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["api/**/*.ts", "server.mts", "crash-loop-policy.ts"],
+  "exclude": ["node_modules", ".vercel", "dist", "test/**/*"]
+}
