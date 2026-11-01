@@ -515,9 +515,8 @@ function deriveTitle(name: string): string {
 //     architectural limitation). Re-enabling either requires DEPLOYMENT_SUPPORTS_WS=
 //     true on a runtime that can actually hold the WS — not a code change here.
 //   - novada_site_copy     — writes files to disk; Vercel's function FS is read-only.
-//   - novada_ip_whitelist, novada_static_ip_mgmt, novada_capture_apikey — WRITE /
-//     destructive account-mutation actions (whitelist edits, IP purchases, API-key
-//     rotation) never ported to the hosted gateway.
+//   - novada_ip_whitelist, novada_capture_apikey — WRITE/destructive account-mutation
+//     actions (whitelist edits, API-key rotation) never ported to the hosted gateway.
 //   - novada_session_stats, novada_search_feedback — in-memory, per-process state
 //     that resets on every serverless invocation; exposing them on hosted would be
 //     misleading (always reports empty/zero).
@@ -525,6 +524,19 @@ function deriveTitle(name: string): string {
 //     still fully dispatchable by name (see HOSTED_ROUTABLE_ALIASES below).
 // This is now the ONLY exclusion list — TOOLS derives from core, so anything NOT
 // listed here that core registers is visible on hosted by default.
+//
+// novada_static_ip_mgmt was REMOVED from this set 2026-11-01 (owner decision,
+// option A): its read-only actions ("list"/"export"/"reveal_credentials" — the
+// last gated behind the SAME approval-token preview/execute flow as the WRITE
+// actions, shown only because a human explicitly asked for real dial
+// credentials) are now served on hosted exactly like any other tool. Its two
+// billable WRITE actions, "open" and "renew", are STILL refused on hosted —
+// but now at the ACTION level, inside npm-package/src/tools/static_ip_mgmt.ts's
+// own assertActionAvailableOnRuntime() (thrown as a NovadaError, caught by the
+// generic `error instanceof NovadaError` branch below — no mcp.ts fork of tool
+// behavior), not via this whole-tool hiding mechanism. See that function's
+// doc comment for the full rationale.
+//
 // NOTE: novada_scraper_task_mgmt is NOT listed here even though it's also
 // never-ported — it's already invisible in raw TOOLS (npm core hides it as one
 // of its OWN HIDDEN_ALIASES, unrelated to hosted policy), so it would never be a
@@ -537,7 +549,6 @@ const HOSTED_HIDDEN = new Set([
   "novada_browser",
   "novada_site_copy",
   "novada_ip_whitelist",
-  "novada_static_ip_mgmt",
   "novada_capture_apikey",
   "novada_session_stats",
   "novada_search_feedback",

@@ -497,6 +497,25 @@ test("previewCall: multi-action tool (static_ip_mgmt), UNGATED action \"export\"
   assert.equal(isApprovalGatePreviewCall("novada_static_ip_mgmt", { action: "export" }), false);
 });
 
+// 2026-11-01 (owner decision, option A): "reveal_credentials" is a NEW gated
+// action on static_ip_mgmt — read-only, but gated behind the same
+// approval-token preview/execute flow since it displays real dial
+// credentials on the execute call. This row has a LIVE hosted-billing effect
+// (unlike "open"/"renew", which stay refused before ever reaching
+// enforceGatewayCap on hosted): static_ip_mgmt is no longer fully
+// HOSTED_HIDDEN, so a "reveal_credentials" preview call on hosted must be
+// exempted from quota exactly like the other three tools' previews.
+test("previewCall: multi-action tool (static_ip_mgmt), gated action \"reveal_credentials\" with no token → true (preview, NOT charged)", () => {
+  assert.equal(isApprovalGatePreviewCall("novada_static_ip_mgmt", { action: "reveal_credentials" }), true);
+});
+
+test("previewCall: multi-action tool (static_ip_mgmt), \"reveal_credentials\" WITH a valid-shaped approval_token → false (execute attempt, must be charged)", () => {
+  assert.equal(
+    isApprovalGatePreviewCall("novada_static_ip_mgmt", { action: "reveal_credentials", approval_token: "sig123|9999999999999" }),
+    false,
+  );
+});
+
 test("previewCall: multi-action tool (capture_apikey), gated action \"reset\" with no token → true (preview)", () => {
   assert.equal(isApprovalGatePreviewCall("novada_capture_apikey", { action: "reset" }), true);
 });

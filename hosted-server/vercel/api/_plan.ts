@@ -110,6 +110,20 @@ export const CAP_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
 // "ip_whitelist_remark") call site. Updated here to keep this table accurate
 // to what the tool actually gates; ip_whitelist stays HOSTED_HIDDEN so this
 // has no live hosted-behavior effect today, only correctness-of-record.
+//
+// 2026-11-01 (owner decision, option A): static_ip_mgmt is NO LONGER fully
+// HOSTED_HIDDEN — hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN no longer
+// names it, so its read-only actions ("list"/"export"/"reveal_credentials")
+// are now LIVE/dispatchable on hosted (only "open"/"renew" stay refused, at
+// the action level inside the npm-package tool itself). This row's
+// gatedActions therefore has a REAL, live effect for the first time: a
+// "reveal_credentials" PREVIEW call (no approval_token) must be exempted
+// from the quota the same way the other three tools' previews already are —
+// see static_ip_mgmt.ts's evaluateApprovalGate(..., "static_ip_reveal_credentials")
+// call site. "open"/"renew" stay in the set purely for correctness-of-record
+// (they're refused before ever reaching enforceGatewayCap on hosted, same as
+// before this change, via assertActionAvailableOnRuntime — see that
+// function's doc comment in static_ip_mgmt.ts).
 interface ApprovalGatedToolSpec {
   /** Param name selecting an action within a multi-action tool, or null when
    *  the whole tool is one gated write with no action discriminator. */
@@ -131,8 +145,11 @@ export const APPROVAL_GATED_TOOLS: ReadonlyMap<string, ApprovalGatedToolSpec> = 
   ["novada_proxy_account_create", { actionParam: null }],
   // ip_whitelist.ts: "add"/"del"/"remark" call evaluateApprovalGate; only "list" doesn't.
   ["novada_ip_whitelist", { actionParam: "action", gatedActions: new Set(["add", "del", "remark"]) }],
-  // static_ip_mgmt.ts: only "open"/"renew" call evaluateApprovalGate; "list"/"export" don't.
-  ["novada_static_ip_mgmt", { actionParam: "action", gatedActions: new Set(["open", "renew"]) }],
+  // static_ip_mgmt.ts: "open"/"renew"/"reveal_credentials" call evaluateApprovalGate;
+  // "list"/"export" don't. "open"/"renew" are additionally refused outright on
+  // hosted (assertActionAvailableOnRuntime, static_ip_mgmt.ts) — their entry here
+  // is correctness-of-record, not a live quota-exemption path on hosted.
+  ["novada_static_ip_mgmt", { actionParam: "action", gatedActions: new Set(["open", "renew", "reveal_credentials"]) }],
   // capture_apikey.ts: only "reset" calls evaluateApprovalGate; "get" doesn't.
   ["novada_capture_apikey", { actionParam: "action", gatedActions: new Set(["reset"]) }],
 ]);
