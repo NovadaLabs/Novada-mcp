@@ -29,17 +29,21 @@
 // agent cannot answer on its own behalf) as the confirmation instead of the
 // approval_token round-trip — see handleRevealCredentials below and
 // ElicitConfirmFn. The approval_token flow remains, UNCHANGED, as the
-// fallback for clients that don't support elicitation, and is the ONLY
-// mechanism available on the hosted endpoint (mcp.novada.com is stateless
-// Streamable HTTP — a fresh Server+transport per HTTP request, closed again
-// before any reply could arrive — so a server-initiated request that needs a
-// later client reply cannot complete there; see reports/
-// static-ip-reveal-credentials-2026-11-01.md for the evidence).
+// fallback for clients that don't support elicitation.
 //
-// "open"/"renew" are REFUSED at the action level on the hosted endpoint
-// (mcp.novada.com) — see assertActionAvailableOnRuntime() below — before
-// either the approval gate or any upstream call runs. "list"/"export"/
-// "reveal_credentials" are available on every runtime.
+// 2026-11-01 OWNER DECISION (FINAL): "reveal_credentials" is LOCAL-ONLY.
+// mcp.novada.com is stateless Streamable HTTP — a fresh Server+transport per
+// HTTP request, closed again before any reply could arrive — so real MCP
+// elicitation is architecturally impossible there (see reports/
+// static-ip-reveal-credentials-2026-11-01.md for the evidence), and the
+// approval_token fallback alone is NOT an acceptable substitute on hosted:
+// it round-trips through the agent with no human ever in the loop (the exact
+// HIGH-1 hole elicitation was added to close locally). Rather than ship a
+// weaker, token-only guarantee on hosted, "reveal_credentials" is refused
+// there outright — exactly like "open"/"renew" — at the ACTION level, inside
+// the tool, before either the approval gate, elicitation, or any upstream
+// call runs (see assertActionAvailableOnRuntime() below). "list"/"export"
+// (masked credentials) remain available on every runtime, including hosted.
 //
 // Field names match the API spec (docs/novada-api/static-isp-proxies.md).
 
@@ -85,7 +89,7 @@ export const StaticIpMgmtParamsSchema = z
     action: z
       .enum(ACTIONS)
       .describe(
-        'Action to perform. "open" = purchase new static IPs (WRITE, requires approval_token; local MCP server only). "renew" = renew existing IPs (WRITE, requires approval_token; local MCP server only). "export" = export filtered IP list (masked credentials). "list" = list static IPs with pagination (masked credentials). "reveal_credentials" = show REAL dial username/password for filtered IPs (requires approval_token; only use when the human explicitly asked for them).',
+        'Action to perform. "open" = purchase new static IPs (WRITE, requires approval_token; local MCP server only). "renew" = renew existing IPs (WRITE, requires approval_token; local MCP server only). "export" = export filtered IP list (masked credentials). "list" = list static IPs with pagination (masked credentials). "reveal_credentials" = show REAL dial username/password for filtered IPs — local MCP server only (not available on the hosted endpoint); with an elicitation-capable MCP client this is a single call confirmed by the human user in a dialog, otherwise a preview + approval_token two-step. Only use when the human explicitly asked for them.',
       ),
 
     // ── "open" action fields ──────────────────────────────────────────────
@@ -234,53 +238,86 @@ const CREDENTIAL_NOTE =
   "Dial credentials (account/password), if present in the response, are masked. " +
   "Get real credentials from https://dashboard.novada.com.";
 
-// ─── Hosted action-level refusal (2026-11-01, owner decision option A) ──────
+// ─── Hosted action-level refusal (2026-11-01, owner decision — FINAL) ───────
 //
 // novada_static_ip_mgmt as a WHOLE TOOL is no longer HOSTED_HIDDEN (removed
-// from hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set so "list"/"export"/
-// "reveal_credentials" — read-only, or gated-but-safe-to-preview — can run on
-// mcp.novada.com). "open"/"renew" stay billable, irreversible WRITE actions
-// that were never ported to the hosted gateway (no NOVADA_APPROVAL_SECRET
-// provisioning story, no purchase-reconciliation story there) — they must
-// still be refused on hosted, but now that the TOOL itself is visible, the
-// refusal has to happen at the ACTION level, inside the tool, before either
-// the approval gate or any upstream call runs (mirrors isBrowserAvailableOnRuntime
-// in utils/runtime.ts / browser.ts's own internal runtime gate — tool logic
-// has ONE home, per-repo CLAUDE.md, so this is NOT forked into mcp.ts).
+// from hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set so "list"/"export"
+// — plain read-only, masked credentials — can run on mcp.novada.com). Three
+// actions are still refused there, each for its own reason, enumerated in
+// HOSTED_REFUSED_ACTIONS below (a CLASS table, not three separate
+// if-branches — adding a 4th hosted-refused action later is one new table
+// row, not a new code path):
+//   - "open"/"renew"  — billable, irreversible WRITE actions never ported to
+//     the hosted gateway (no NOVADA_APPROVAL_SECRET provisioning story, no
+//     purchase-reconciliation story there).
+//   - "reveal_credentials" — real dial credentials need a human-in-the-loop
+//     confirmation (MCP elicitation); the stateless hosted endpoint cannot
+//     perform elicitation (see the file-header note above), and falling back
+//     to the agent-carried approval_token alone on hosted would be exactly
+//     the HIGH-1 hole elicitation exists to close, so it is refused outright
+//     rather than served with a weaker guarantee than the local server gives.
+// Now that the TOOL itself is visible, each refusal happens at the ACTION
+// level, inside the tool, before the approval gate, elicitation, or any
+// upstream call runs (mirrors isBrowserAvailableOnRuntime in utils/runtime.ts
+// / browser.ts's own internal runtime gate — tool logic has ONE home, per-repo
+// CLAUDE.md, so this is NOT forked into mcp.ts).
 //
 // Thrown as a NovadaError (not returned as a plain string): mcp.ts's CallTool
 // catch block special-cases `error instanceof NovadaError` BEFORE its generic
 // substring-matching fallback, so this tool's own agent_instruction survives
 // verbatim through redactHostedSecrets() on hosted, and is a complete no-op
 // on every other runtime (isHostedEnvironment() is false there, so this never
-// throws locally — "open"/"renew" work exactly as before via npx novada-mcp).
-function assertActionAvailableOnRuntime(action: "open" | "renew"): void {
+// throws locally — "open"/"renew"/"reveal_credentials" work exactly as before
+// via npx novada-mcp).
+type HostedRefusedAction = "open" | "renew" | "reveal_credentials";
+
+/** CLASS table (not per-action branches) — the full set of actions hosted refuses, and why. */
+const HOSTED_REFUSED_ACTIONS: Readonly<Record<HostedRefusedAction, { reason: string; extraInstruction?: string }>> = {
+  open: {
+    reason: "purchasing static IPs is a billable write action never ported to the hosted gateway",
+  },
+  renew: {
+    reason: "renewing static IPs is a billable write action never ported to the hosted gateway",
+  },
+  reveal_credentials: {
+    reason:
+      "showing real dial credentials requires a human-in-the-loop confirmation (MCP elicitation) that the " +
+      "stateless hosted endpoint cannot perform; an approval_token alone, with no human ever seeing the " +
+      "request, is not an acceptable substitute here",
+    extraInstruction: " Real dial credentials are also always directly available at https://dashboard.novada.com.",
+  },
+};
+
+function assertActionAvailableOnRuntime(action: HostedRefusedAction): void {
   if (!isHostedEnvironment()) return;
+  const { reason, extraInstruction } = HOSTED_REFUSED_ACTIONS[action];
   throw new NovadaError({
     code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
-    message:
-      `novada_static_ip_mgmt action="${action}" is not available on the hosted Novada MCP endpoint — ` +
-      `purchasing/renewing static IPs is a billable write action never ported to the hosted gateway.`,
+    message: `novada_static_ip_mgmt action="${action}" is not available on the hosted Novada MCP endpoint — ${reason}.`,
     agent_instruction:
-      `This write action is unavailable on the hosted endpoint. Install the local MCP server to use it — ` +
+      `This action is unavailable on the hosted endpoint. Install the local MCP server to use it — ` +
       `\`npx novada-mcp\` (npm package "novada-mcp") with your own NOVADA_API_KEY exposes the full tool ` +
-      `surface, including action="${action}". 'list', 'export', and 'reveal_credentials' (read-only / ` +
-      `approval-gated-but-read-only) remain available on the hosted endpoint.`,
+      `surface, including action="${action}".${extraInstruction ?? ""} 'list' and 'export' (masked ` +
+      `credentials) remain available on the hosted endpoint.`,
     retryable: false,
   });
 }
 
-// ─── reveal_credentials (2026-11-01, owner decision option A) ───────────────
+// ─── reveal_credentials (2026-11-01, owner decision — LOCAL-ONLY, final) ────
 //
 // Real static-ISP dial credentials (account/password) are masked everywhere
 // by default (maskCredentials, 2026-10-30 incident fix above). A user who
 // EXPLICITLY asks for them (e.g. to configure their own static IPs into
 // AdsPower or another proxy-aware tool) can get them through this READ-ONLY
-// action — gated behind the SAME two-step approval_token flow as the WRITE
-// actions above, not because it mutates anything, but because once real
-// credentials are displayed in a chat transcript they may be retained in the
-// AI client's own history, so a human must see a masked preview and
-// explicitly approve before they are shown.
+// action — on the LOCAL MCP server ONLY (assertActionAvailableOnRuntime at
+// the top of this function refuses it on the hosted endpoint, exactly like
+// "open"/"renew", before any of the logic below ever runs) — gated behind
+// the SAME two-step approval_token flow as the WRITE actions above, not
+// because it mutates anything, but because once real credentials are
+// displayed in a chat transcript they may be retained in the AI client's own
+// history, so a human must see a masked preview and explicitly approve
+// before they are shown (or, when the connected client supports MCP
+// elicitation, confirm a single live dialog instead — see below).
 //
 // Filters are identical to "list" (status/region/key_word/page/limit/
 // is_auto_renew; same resolveStatus() default-to-"1" behavior). `limit` is
@@ -373,6 +410,12 @@ async function handleRevealCredentials(
   apiKey?: string,
   elicitConfirm?: ElicitConfirmFn,
 ): Promise<string> {
+  // MUST be the first statement: refuses on hosted before any elicitation
+  // check, approval-gate evaluation, or upstream devApiPost call runs — see
+  // the design note above and assertActionAvailableOnRuntime's own doc
+  // comment. A complete no-op locally (isHostedEnvironment() is false there).
+  assertActionAvailableOnRuntime("reveal_credentials");
+
   const { effectiveStatus } = resolveStatus(params.status);
   const requestedLimit = params.limit;
   const limitCapped = requestedLimit > REVEAL_CREDENTIALS_LIMIT_CAP;
@@ -441,8 +484,10 @@ async function handleRevealCredentials(
   }
 
   // ── Fallback: two-step approval_token flow (unchanged) ─────────────────────
-  // Used whenever elicitConfirm is undefined — no connected client (hosted
-  // endpoint, always), or a local client that didn't advertise elicitation.
+  // Used whenever elicitConfirm is undefined — a LOCAL client that didn't
+  // advertise elicitation support. Never reached on hosted: the runtime
+  // guard above already threw before this line, on every call, for every
+  // client (hosted has no notion of "a client that advertises elicitation").
   const revealGate = evaluateApprovalGate(params as Record<string, unknown>, "static_ip_reveal_credentials", "novada_static_ip_mgmt");
 
   if (!revealGate.authorized) {
@@ -502,18 +547,20 @@ async function handleRevealCredentials(
  * "open" and "renew" are WRITE actions gated behind a valid `approval_token`
  * (see ../utils/approval.ts) and refused outright on the hosted endpoint
  * (see assertActionAvailableOnRuntime above). "reveal_credentials" is a
- * READ-ONLY action confirmed either via live MCP elicitation (when
+ * LOCAL-ONLY action (2026-11-01 owner decision, final — refused on hosted by
+ * the SAME assertActionAvailableOnRuntime guard, for its own reason): on the
+ * local server it is confirmed either via live MCP elicitation (when
  * `elicitConfirm` is supplied — local stdio clients that advertise the
  * capability) or, as a fallback, the same `approval_token` flow as the WRITE
  * actions (shows real dial credentials on the execute call only). "list" and
- * "export" are read-only and ungated.
+ * "export" are read-only, ungated, and available on every runtime.
  *
  * `elicitConfirm` is `undefined` on every runtime/client that doesn't support
- * elicitation (including the hosted endpoint, always — see the 2026-11-01
- * follow-up note at the top of this file) and is otherwise built by the
- * caller (index.ts) from the live MCP Server's negotiated client
- * capabilities. Only "reveal_credentials" reads it; every other action
- * ignores it.
+ * elicitation (including the hosted endpoint, always — moot there anyway
+ * since "reveal_credentials" never reaches this far on hosted) and is
+ * otherwise built by the caller (index.ts) from the live MCP Server's
+ * negotiated client capabilities. Only "reveal_credentials" reads it; every
+ * other action ignores it.
  */
 export async function novadaStaticIpMgmt(
   params: StaticIpMgmtParams,

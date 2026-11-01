@@ -526,16 +526,20 @@ function deriveTitle(name: string): string {
 // listed here that core registers is visible on hosted by default.
 //
 // novada_static_ip_mgmt was REMOVED from this set 2026-11-01 (owner decision,
-// option A): its read-only actions ("list"/"export"/"reveal_credentials" — the
-// last gated behind the SAME approval-token preview/execute flow as the WRITE
-// actions, shown only because a human explicitly asked for real dial
-// credentials) are now served on hosted exactly like any other tool. Its two
-// billable WRITE actions, "open" and "renew", are STILL refused on hosted —
-// but now at the ACTION level, inside npm-package/src/tools/static_ip_mgmt.ts's
-// own assertActionAvailableOnRuntime() (thrown as a NovadaError, caught by the
-// generic `error instanceof NovadaError` branch below — no mcp.ts fork of tool
-// behavior), not via this whole-tool hiding mechanism. See that function's
-// doc comment for the full rationale.
+// option A): its plain read-only actions ("list"/"export", masked
+// credentials) are served on hosted exactly like any other tool. Its two
+// billable WRITE actions, "open" and "renew", are STILL refused on hosted,
+// and so — per a 2026-11-01 FOLLOW-UP, FINAL owner decision — is
+// "reveal_credentials": real dial credentials need a human-in-the-loop
+// confirmation (MCP elicitation) the stateless hosted endpoint cannot
+// perform (see the dispatch-call comment below), and an agent-carried
+// approval_token alone is not an acceptable substitute, so it is refused
+// outright rather than served with a weaker guarantee than the local server
+// gives. All three are refused at the ACTION level, inside npm-package/src/
+// tools/static_ip_mgmt.ts's own assertActionAvailableOnRuntime() (thrown as a
+// NovadaError, caught by the generic `error instanceof NovadaError` branch
+// below — no mcp.ts fork of tool behavior), not via this whole-tool hiding
+// mechanism. See that function's doc comment for the full rationale.
 //
 // NOTE: novada_scraper_task_mgmt is NOT listed here even though it's also
 // never-ported — it's already invisible in raw TOOLS (npm core hides it as one
@@ -1832,11 +1836,13 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         // the time any reply could arrive. Elicitation is therefore architecturally
         // unavailable here, not merely unimplemented — faking a capability flag would
         // make the client hang (or Vercel's own request timeout would fire) waiting for
-        // a reply that can never come back. reveal_credentials stays on its
-        // approval_token fallback on this endpoint; see npm-package/src/tools/
-        // static_ip_mgmt.ts's header note and reports/
-        // static-ip-reveal-credentials-2026-11-01.md for the full writeup. This is NOT
-        // a change to which actions hosted exposes.
+        // a reply that can never come back. Per the 2026-11-01 FINAL owner decision,
+        // "reveal_credentials" is therefore refused outright on hosted (exactly like
+        // "open"/"renew") rather than left on the agent-carried approval_token
+        // fallback alone — see npm-package/src/tools/static_ip_mgmt.ts's header note
+        // and reports/static-ip-reveal-credentials-2026-11-01.md for the full
+        // writeup. elicitConfirm stays omitted here regardless — it was never read on
+        // this path even before the refusal, and no other tool consumes it.
         dispatch(name, argsObj, apiKey, { onProgress: undefined, visibleTools: visibleToolNames, elicitConfirm: undefined }),
       );
 

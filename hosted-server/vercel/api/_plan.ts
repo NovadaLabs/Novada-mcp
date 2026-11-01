@@ -113,17 +113,23 @@ export const CAP_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
 //
 // 2026-11-01 (owner decision, option A): static_ip_mgmt is NO LONGER fully
 // HOSTED_HIDDEN — hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN no longer
-// names it, so its read-only actions ("list"/"export"/"reveal_credentials")
-// are now LIVE/dispatchable on hosted (only "open"/"renew" stay refused, at
-// the action level inside the npm-package tool itself). This row's
-// gatedActions therefore has a REAL, live effect for the first time: a
-// "reveal_credentials" PREVIEW call (no approval_token) must be exempted
-// from the quota the same way the other three tools' previews already are —
-// see static_ip_mgmt.ts's evaluateApprovalGate(..., "static_ip_reveal_credentials")
-// call site. "open"/"renew" stay in the set purely for correctness-of-record
-// (they're refused before ever reaching enforceGatewayCap on hosted, same as
-// before this change, via assertActionAvailableOnRuntime — see that
-// function's doc comment in static_ip_mgmt.ts).
+// names it, so its plain read-only actions ("list"/"export") are now LIVE/
+// dispatchable on hosted. "open"/"renew" stay refused, at the action level
+// inside the npm-package tool itself (assertActionAvailableOnRuntime).
+//
+// 2026-11-01 FOLLOW-UP (FINAL): "reveal_credentials" joins "open"/"renew" as
+// refused-on-hosted (real credentials need a human-in-the-loop confirmation
+// the stateless hosted endpoint cannot perform — see static_ip_mgmt.ts's
+// header note). All three entries in this row's gatedActions are therefore
+// correctness-of-record for BILLING CLASSIFICATION ONLY, not a live
+// execution path: enforceGatewayCap (mcp.ts) runs BEFORE dispatch(), so a
+// hosted "open"/"renew"/"reveal_credentials" call is still classified as a
+// free PREVIEW attempt (no approval_token present) vs. a charged EXECUTE
+// attempt (a token present, however stale/invalid) by isApprovalGatePreviewCall
+// below — getting that classification right still matters even though
+// dispatch() unconditionally refuses all three on hosted immediately after,
+// via assertActionAvailableOnRuntime, regardless of which bucket the call
+// landed in (see that function's doc comment in static_ip_mgmt.ts).
 interface ApprovalGatedToolSpec {
   /** Param name selecting an action within a multi-action tool, or null when
    *  the whole tool is one gated write with no action discriminator. */
@@ -146,9 +152,10 @@ export const APPROVAL_GATED_TOOLS: ReadonlyMap<string, ApprovalGatedToolSpec> = 
   // ip_whitelist.ts: "add"/"del"/"remark" call evaluateApprovalGate; only "list" doesn't.
   ["novada_ip_whitelist", { actionParam: "action", gatedActions: new Set(["add", "del", "remark"]) }],
   // static_ip_mgmt.ts: "open"/"renew"/"reveal_credentials" call evaluateApprovalGate;
-  // "list"/"export" don't. "open"/"renew" are additionally refused outright on
-  // hosted (assertActionAvailableOnRuntime, static_ip_mgmt.ts) — their entry here
-  // is correctness-of-record, not a live quota-exemption path on hosted.
+  // "list"/"export" don't. All three are additionally refused outright on hosted
+  // (assertActionAvailableOnRuntime, static_ip_mgmt.ts) — their entries here are
+  // billing-classification correctness-of-record, not a live execution path on
+  // hosted (see the 2026-11-01 FOLLOW-UP note above).
   ["novada_static_ip_mgmt", { actionParam: "action", gatedActions: new Set(["open", "renew", "reveal_credentials"]) }],
   // capture_apikey.ts: only "reset" calls evaluateApprovalGate; "get" doesn't.
   ["novada_capture_apikey", { actionParam: "action", gatedActions: new Set(["reset"]) }],

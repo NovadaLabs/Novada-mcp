@@ -604,50 +604,75 @@ describe("novada_static_ip_mgmt — reveal_credentials via MCP elicitation (2026
   });
 });
 
-// ─── hosted action-level refusal for "open"/"renew" (2026-11-01) ───────────
+// ─── hosted action-level refusal for "open"/"renew"/"reveal_credentials" (2026-11-01, FINAL) ─
 //
 // novada_static_ip_mgmt is no longer HOSTED_HIDDEN as a whole tool (see
-// hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set) — "list"/"export"/
-// "reveal_credentials" are now dispatchable on a hosted runtime. "open"/
-// "renew" must still be refused, but now at the ACTION level, BEFORE either
-// the approval gate or any devApiPost call runs.
+// hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set) — "list"/"export" are
+// dispatchable on a hosted runtime like any other tool. "open"/"renew"
+// (billable WRITE actions never ported to hosted) and, per the 2026-11-01
+// FINAL owner decision, "reveal_credentials" (real dial credentials need a
+// human-in-the-loop confirmation — MCP elicitation — that the stateless
+// hosted endpoint cannot perform; an agent-carried approval_token alone is
+// not an acceptable substitute) are ALL refused, at the ACTION level, BEFORE
+// the approval gate, elicitation, or any devApiPost call runs.
+//
+// Table-driven across all three actions (mirrors HOSTED_REFUSED_ACTIONS in
+// src/tools/static_ip_mgmt.ts itself) — a 4th hosted-refused action later
+// extends this table, not a new describe block.
 
-describe("novada_static_ip_mgmt — hosted action-level refusal for open/renew (2026-11-01)", () => {
-  it("'open' on a hosted runtime is refused BEFORE the approval gate runs — confirm:true never reaches the gate's own rejection", async () => {
-    process.env.VERCEL = "1";
-    const { dispatch } = await import("../../src/core.js");
-    await expect(
-      dispatch("novada_static_ip_mgmt", { ...OPEN_PAYLOAD, confirm: true }, "caller-key-sip"),
-    ).rejects.toThrow(/not available on the hosted/);
-    expect(mockedPost).not.toHaveBeenCalled();
-  });
+const HOSTED_REFUSED_CASES: ReadonlyArray<{
+  action: "open" | "renew" | "reveal_credentials";
+  payload: Record<string, unknown>;
+}> = [
+  { action: "open", payload: OPEN_PAYLOAD },
+  { action: "renew", payload: RENEW_PAYLOAD },
+  { action: "reveal_credentials", payload: { action: "reveal_credentials" } },
+];
 
-  it("'open' on a hosted runtime is refused even with no approval_token at all (never returns a preview on hosted)", async () => {
-    process.env.VERCEL = "1";
-    const { dispatch } = await import("../../src/core.js");
-    await expect(
-      dispatch("novada_static_ip_mgmt", { ...OPEN_PAYLOAD }, "caller-key-sip"),
-    ).rejects.toThrow(/not available on the hosted/);
-    expect(mockedPost).not.toHaveBeenCalled();
-  });
+describe.each(HOSTED_REFUSED_CASES)(
+  "novada_static_ip_mgmt — hosted action-level refusal: action=$action (2026-11-01, final)",
+  ({ payload }) => {
+    it("is refused BEFORE the approval gate runs — confirm:true never reaches the gate's own rejection", async () => {
+      process.env.VERCEL = "1";
+      const { dispatch } = await import("../../src/core.js");
+      await expect(
+        dispatch("novada_static_ip_mgmt", { ...payload, confirm: true }, "caller-key-sip"),
+      ).rejects.toThrow(/not available on the hosted/);
+      expect(mockedPost).not.toHaveBeenCalled();
+    });
 
-  it("'renew' on a hosted runtime is refused BEFORE the approval gate runs", async () => {
-    process.env.VERCEL = "1";
-    const { dispatch } = await import("../../src/core.js");
-    await expect(
-      dispatch("novada_static_ip_mgmt", { ...RENEW_PAYLOAD, confirm: true }, "caller-key-sip"),
-    ).rejects.toThrow(/not available on the hosted/);
-    expect(mockedPost).not.toHaveBeenCalled();
-  });
+    it("is refused even with no approval_token/confirm at all (never returns a preview on hosted)", async () => {
+      process.env.VERCEL = "1";
+      const { dispatch } = await import("../../src/core.js");
+      await expect(
+        dispatch("novada_static_ip_mgmt", { ...payload }, "caller-key-sip"),
+      ).rejects.toThrow(/not available on the hosted/);
+      expect(mockedPost).not.toHaveBeenCalled();
+    });
 
-  it("'open' is UNAFFECTED locally (no VERCEL/AWS_LAMBDA env) — preview still works", async () => {
-    const { dispatch } = await import("../../src/core.js");
-    const out = await dispatch("novada_static_ip_mgmt", { ...OPEN_PAYLOAD }, "caller-key-sip");
-    const obj = JSON.parse(out) as { status: string };
-    expect(obj.status).toBe("confirmation_required");
-  });
+    it("is refused on hosted WITHOUT ever invoking elicitConfirm, even when ctx supplies one (hosted never has a real elicitation-capable client; a supplied callback must still never fire)", async () => {
+      process.env.VERCEL = "1";
+      const { dispatch } = await import("../../src/core.js");
+      const elicitConfirm = vi.fn(async () => "accept" as const);
+      await expect(
+        dispatch("novada_static_ip_mgmt", { ...payload }, "caller-key-sip", { elicitConfirm }),
+      ).rejects.toThrow(/not available on the hosted/);
+      expect(mockedPost).not.toHaveBeenCalled();
+      expect(elicitConfirm).not.toHaveBeenCalled();
+    });
 
-  it("'list' remains available on a hosted runtime (only open/renew are refused)", async () => {
+    it("is UNAFFECTED locally (no VERCEL/AWS_LAMBDA env) — preview still works", async () => {
+      const { dispatch } = await import("../../src/core.js");
+      mockedPost.mockResolvedValue({ list: [], total: 0 });
+      const out = await dispatch("novada_static_ip_mgmt", { ...payload }, "caller-key-sip");
+      const obj = JSON.parse(out) as { status: string };
+      expect(obj.status).toBe("confirmation_required");
+    });
+  },
+);
+
+describe("novada_static_ip_mgmt — hosted: list/export remain available (only open/renew/reveal_credentials are refused)", () => {
+  it("'list' remains available on a hosted runtime", async () => {
     process.env.VERCEL = "1";
     const { dispatch } = await import("../../src/core.js");
     mockedPost.mockResolvedValue({ list: [], total: 0 });
@@ -656,18 +681,41 @@ describe("novada_static_ip_mgmt — hosted action-level refusal for open/renew (
     expect(obj.status).toBe("ok");
   });
 
-  it("'reveal_credentials' preview remains available on a hosted runtime (with NOVADA_APPROVAL_SECRET configured, as a real hosted deployment must be)", async () => {
+  it("'export' remains available on a hosted runtime", async () => {
     process.env.VERCEL = "1";
-    process.env.NOVADA_APPROVAL_SECRET = "test-hosted-approval-secret";
     const { dispatch } = await import("../../src/core.js");
-    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
-    try {
-      const out = await dispatch("novada_static_ip_mgmt", { action: "reveal_credentials" }, "caller-key-sip");
-      const obj = JSON.parse(out) as { status: string };
-      expect(obj.status).toBe("confirmation_required");
-    } finally {
-      delete process.env.NOVADA_APPROVAL_SECRET;
-    }
+    mockedPost.mockResolvedValue({ list: [], total: 0 });
+    const out = await dispatch("novada_static_ip_mgmt", { action: "export" }, "caller-key-sip");
+    const obj = JSON.parse(out) as { status: string };
+    expect(obj.status).toBe("ok");
+  });
+});
+
+// ─── reveal_credentials description accuracy (2026-11-01, local-only wording) ─
+//
+// The model-facing description must not claim reveal_credentials is reachable
+// on hosted, and must name BOTH confirmation paths available locally: a
+// single elicitation-confirmed call (elicitation-capable clients) and the
+// preview+approval_token two-step (every other local client).
+
+describe("novada_static_ip_mgmt — reveal_credentials description accuracy (2026-11-01, local-only)", () => {
+  it("the action enum's own .describe() text says reveal_credentials is local-MCP-server-only and names both confirmation paths", async () => {
+    const { StaticIpMgmtParamsSchema } = await import("../../src/tools/static_ip_mgmt.js");
+    const description = StaticIpMgmtParamsSchema.shape.action.description ?? "";
+    expect(description).toMatch(/"reveal_credentials"[^.]*local MCP server only/i);
+    expect(description).toMatch(/not available on the hosted endpoint/i);
+    expect(description).toMatch(/elicitation-capable[^.]*single call confirmed by the human user in a dialog/i);
+    expect(description).toMatch(/approval_token two-step/i);
+  });
+
+  it("core.ts's top-level TOOLS description for novada_static_ip_mgmt does not claim reveal_credentials is reachable on hosted", async () => {
+    const { TOOLS } = await import("../../src/core.js");
+    const tool = TOOLS.find((t) => t.name === "novada_static_ip_mgmt");
+    expect(tool).toBeDefined();
+    const description = tool!.description;
+    // Must not describe reveal_credentials as hosted-reachable (the stale
+    // pre-2026-11-01-final claim this test guards against regressing to).
+    expect(description).not.toMatch(/reveal_credentials["'`]?\s+(?:are|is)\s+(?:also\s+)?(?:reachable|available|served)\s+on\s+(?:the\s+)?hosted/i);
   });
 });
 
