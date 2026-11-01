@@ -12,8 +12,9 @@ handful you reach for most; this is the full list.
   state), and `novada_verify` (currently omitted from the hosted `tools/list` listing). It's
   core-derived, not a hand-curated subset — every other tool below runs on both surfaces.
   `novada_static_ip_mgmt` is one of those "every other tool": it IS hosted-visible, but its
-  `open`/`renew` WRITE actions are refused there at the action level (only `list`/`export`/
-  `reveal_credentials` are reachable on hosted).
+  `open`/`renew`/`reveal_credentials` actions are all refused there at the action level — `reveal_credentials` needs
+  a human-in-the-loop confirmation (MCP elicitation) the stateless hosted endpoint can't perform, so it's
+  local-only like `open`/`renew` (only `list`/`export` are reachable on hosted).
 - Not sure what's on your connection? Call **`novada_discover`** — it returns this catalog live,
   with each tool's name, category, and status.
 - **Hosted?** column below: ✅ = available on `mcp.novada.com`, ❌ = local-only (`npx novada-mcp`).
@@ -115,7 +116,7 @@ action beyond the local-only `close_session`/`list_sessions` bookkeeping returns
 | `novada_proxy_account_list` | Auditing existing proxy sub-accounts | Paginated list | ✅ |
 | `novada_ip_whitelist` | Managing the proxy IP whitelist (Residential, Unlimited, Static ISP) | Whitelist entries — add/del are **WRITE — two-step approval (preview + `approval_token`, re-call with identical params, valid 10 min)** | ❌ write-gated account op |
 | `novada_capture_apikey` | Getting or rotating the Capture API key | Current key, or new key on reset — reset is **WRITE — two-step approval: call once without `approval_token` for a preview + token, re-call with identical params plus the token (valid 10 min)** | ❌ write-gated account op |
-| `novada_static_ip_mgmt` | Managing static ISP IPs | IP list, real dial credentials (on explicit request), or purchase/renewal confirmation — open/renew and reveal_credentials are **WRITE/credential-revealing — two-step approval (preview + `approval_token`, re-call with identical params, valid 10 min)** | ✅ `list`/`export`/`reveal_credentials`; ❌ `open`/`renew` refused at the action level, local MCP only |
+| `novada_static_ip_mgmt` | Managing static ISP IPs | IP list, real dial credentials (on explicit request), or purchase/renewal confirmation — open/renew and reveal_credentials are **WRITE/credential-revealing — two-step approval (preview + `approval_token`, re-call with identical params, valid 10 min), or a single elicitation-confirmed call for reveal_credentials on elicitation-capable clients** | ✅ `list`/`export`; ❌ `open`/`renew`/`reveal_credentials` refused at the action level, local MCP only |
 
 ## Discover / Setup
 

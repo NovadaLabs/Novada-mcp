@@ -253,10 +253,13 @@ time:
 Both route to the normal `TOOL_NOT_ENABLED` refusal if called by name,
 pointing agents to the **local** MCP server (`npx novada-mcp`) for browser
 automation. All other 29 tools on the hosted surface (of the npm package's 37) <!-- claims-ignore: 29 = hosted-subset count, 37 = local-package total, both on one line; hosted-server/landing's claim_surfaces override does not apply to this file -->
-work normally — including `novada_static_ip_mgmt`'s `list`/`export`/
-`reveal_credentials` actions; its `open`/`renew` WRITE actions are refused at
-the action level (see the tool's own description for the two-step
-approval-token flow on `reveal_credentials`).
+work normally — including `novada_static_ip_mgmt`'s plain `list`/`export`
+actions (masked credentials); its `open`/`renew` WRITE actions, and its
+`reveal_credentials` action, are refused at the action level — the latter
+needs a human-in-the-loop confirmation (MCP elicitation) that this stateless
+endpoint cannot perform, so it is local-only, like `open`/`renew` (see the
+tool's own description for the elicitation / two-step approval-token flow
+that applies on the local server).
 
 ## Local development
 
