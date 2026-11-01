@@ -528,11 +528,12 @@
             "open",
             "renew",
             "export",
-            "list"
+            "list",
+            "reveal_credentials"
           ]
         }
       ],
-      "note": "ip_whitelist's action is add/list/del/remark (whitelist CRUD). static_ip_mgmt's action is open/renew/export/list (IP-lease lifecycle). Only 'list' overlaps in meaning; the rest diverge by design."
+      "note": "ip_whitelist's action is add/list/del/remark (whitelist CRUD). static_ip_mgmt's action is open/renew/export/list/reveal_credentials (IP-lease lifecycle). Only 'list' overlaps in meaning; the rest diverge by design."
     },
     {
       "param": "action",
@@ -554,11 +555,12 @@
             "open",
             "renew",
             "export",
-            "list"
+            "list",
+            "reveal_credentials"
           ]
         }
       ],
-      "note": "capture_apikey's action is get/reset (key rotation). static_ip_mgmt's action is open/renew/export/list (IP-lease lifecycle). Same param name, fully disjoint enums, disjoint domains."
+      "note": "capture_apikey's action is get/reset (key rotation). static_ip_mgmt's action is open/renew/export/list/reveal_credentials (IP-lease lifecycle). Same param name, fully disjoint enums, disjoint domains."
     },
     {
       "param": "actions",

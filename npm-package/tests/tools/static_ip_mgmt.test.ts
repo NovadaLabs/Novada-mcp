@@ -292,3 +292,266 @@ describe("novada_static_ip_mgmt — status default to in-use (2026-10-30)", () =
     expect((call[1] as Record<string, unknown>).status).toBe("2");
   });
 });
+
+// ─── reveal_credentials (2026-11-01, owner decision option A) ──────────────
+//
+// A user who explicitly asks can get REAL static-ISP dial credentials
+// through a two-step approval-token flow (reusing evaluateApprovalGate, the
+// same mechanism as "open"/"renew"). Preview shows masked IP/port/region/
+// expiry only; execute shows the real username/password + two ready-to-paste
+// formats. "list"/"export" (tested above) stay masked — no regression.
+
+describe("novada_static_ip_mgmt — reveal_credentials (2026-11-01, owner decision option A)", () => {
+  it("preview (no approval_token): masked rows (ip/port/region/expiry only), count, and an approval_token; no credentials anywhere in the output", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const out = await dispatch("novada_static_ip_mgmt", { action: "reveal_credentials", status: "1" }, "caller-key-sip");
+    expect(out).not.toContain("ax0kSJ8snE6wF1mR");
+    expect(out).not.toContain("p3K0rNpsP2iR");
+
+    const obj = JSON.parse(out) as {
+      status: string;
+      approval_token?: string;
+      preview: { count: number; rows: Array<Record<string, unknown>> };
+    };
+    expect(obj.status).toBe("confirmation_required");
+    expect(typeof obj.approval_token).toBe("string");
+    expect((obj.approval_token ?? "").length).toBeGreaterThan(0);
+    expect(obj.preview.count).toBe(1);
+    const row = obj.preview.rows[0];
+    expect(row.ip).toBe("203.0.113.4");
+    expect(row.port).toBe(8886);
+    expect(row.region).toBe("frankfurt");
+    expect(row.expire_time).toBe(1798761600);
+    expect(row.account).toBeUndefined();
+    expect(row.password).toBeUndefined();
+  });
+
+  it("GREEN: preview -> approval_token -> execute reveals real credentials + both ready-to-paste formats", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const preview = await dispatch("novada_static_ip_mgmt", { action: "reveal_credentials", status: "1" }, "caller-key-sip");
+    const { approval_token } = JSON.parse(preview) as { approval_token: string };
+    expect(approval_token).toBeTruthy();
+
+    const executed = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials", status: "1", approval_token },
+      "caller-key-sip",
+    );
+    expect(mockedPost).toHaveBeenCalledTimes(2); // 1 preview fetch + 1 execute fetch
+    const obj = JSON.parse(executed) as { status: string; count: number; rows: Array<Record<string, unknown>> };
+    expect(obj.status).toBe("ok");
+    expect(obj.count).toBe(1);
+    const row = obj.rows[0];
+    expect(row.ip).toBe("203.0.113.4");
+    expect(row.port).toBe(8886);
+    expect(row.username).toBe("ax0kSJ8snE6wF1mR");
+    expect(row.password).toBe("p3K0rNpsP2iR");
+    expect(row.dial_string).toBe("203.0.113.4:8886:ax0kSJ8snE6wF1mR:p3K0rNpsP2iR");
+    expect(row.proxy_url).toBe("http://ax0kSJ8snE6wF1mR:p3K0rNpsP2iR@203.0.113.4:8886");
+  });
+
+  it("RED: confirm:true self-supplied on reveal_credentials (no approval_token) is REJECTED and never reveals credentials", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    await expect(
+      dispatch("novada_static_ip_mgmt", { action: "reveal_credentials", confirm: true }, "caller-key-sip"),
+    ).rejects.toThrow();
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  it("RED: a token minted for key_word=\"a\" is rejected when the execute call widens key_word (filter-widening tamper)", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const preview = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials", key_word: "a" },
+      "caller-key-sip",
+    );
+    const { approval_token } = JSON.parse(preview) as { approval_token: string };
+
+    await expect(
+      dispatch(
+        "novada_static_ip_mgmt",
+        { action: "reveal_credentials", key_word: "", approval_token },
+        "caller-key-sip",
+      ),
+    ).rejects.toThrow();
+    // Only the 1 preview fetch happened — the widened execute call never reached devApi.
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+  });
+
+  it("RED: a token minted for limit=10 is rejected when the execute call widens limit to 50 (quantity-widening tamper)", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const preview = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials", limit: 10 },
+      "caller-key-sip",
+    );
+    const { approval_token } = JSON.parse(preview) as { approval_token: string };
+
+    await expect(
+      dispatch(
+        "novada_static_ip_mgmt",
+        { action: "reveal_credentials", limit: 50, approval_token },
+        "caller-key-sip",
+      ),
+    ).rejects.toThrow();
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+  });
+
+  it("limit is capped at 50 regardless of a higher requested value, on both preview and execute, and the response says so", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    const preview = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials", limit: 200 },
+      "caller-key-sip",
+    );
+    const previewObj = JSON.parse(preview) as { preview: { limit_capped_to?: number }; approval_token: string };
+    expect(previewObj.preview.limit_capped_to).toBe(50);
+    expect((mockedPost.mock.calls[0][1] as Record<string, unknown>).limit).toBe(50);
+
+    const executed = await dispatch(
+      "novada_static_ip_mgmt",
+      { action: "reveal_credentials", limit: 200, approval_token: previewObj.approval_token },
+      "caller-key-sip",
+    );
+    const execObj = JSON.parse(executed) as { limit_capped_to?: number };
+    expect(execObj.limit_capped_to).toBe(50);
+    expect((mockedPost.mock.calls[1][1] as Record<string, unknown>).limit).toBe(50);
+  });
+
+  it("no status filter defaults to \"1\" (in-use), same as list", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+
+    await dispatch("novada_static_ip_mgmt", { action: "reveal_credentials" }, "caller-key-sip");
+    expect((mockedPost.mock.calls[0][1] as Record<string, unknown>).status).toBe("1");
+  });
+
+  // DONE-DEFINITION: "does a credential leak into the error text on an
+  // upstream failure for the execute call?" sanitizeServerMsg (errors.ts) is
+  // ALREADY proven to mask a bare JSON-shaped `{"account":"..."}` fragment —
+  // see tests/errors.test.ts's "masks a JSON-shaped 'account' field" (added
+  // 2026-10-30 for this exact credential family) — and that masking happens
+  // INSIDE the real devApiPost, before it ever throws. This file mocks
+  // devApiPost at the module level (so it CANNOT exercise that real
+  // sanitization pass — asserting on it here would be testing the mock, not
+  // the product), so what THIS handler must prove instead is narrower but
+  // just as load-bearing: it does not wrap/rewrap/reconstruct the error with
+  // any raw interpolation of its own. Whatever devApiPost throws (already
+  // sanitized in production) propagates verbatim — exactly like "list"/
+  // "export"/"open"/"renew" already do, with no new error-formatting surface
+  // introduced for "reveal_credentials".
+  it("DONE-DEFINITION: an upstream failure on the execute call propagates devApiPost's own (already-sanitized) error verbatim — no new interpolation in the handler", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    const upstreamError = new Error("Developer-api rejected request (code=10001): already sanitized by devApiPost");
+    mockedPost
+      .mockResolvedValueOnce({ list: [ipRow({})], total: 1 })
+      .mockRejectedValueOnce(upstreamError);
+
+    const preview = await dispatch("novada_static_ip_mgmt", { action: "reveal_credentials" }, "caller-key-sip");
+    const { approval_token } = JSON.parse(preview) as { approval_token: string };
+
+    await expect(
+      dispatch("novada_static_ip_mgmt", { action: "reveal_credentials", approval_token }, "caller-key-sip"),
+    ).rejects.toThrow(upstreamError.message);
+  });
+});
+
+// ─── hosted action-level refusal for "open"/"renew" (2026-11-01) ───────────
+//
+// novada_static_ip_mgmt is no longer HOSTED_HIDDEN as a whole tool (see
+// hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set) — "list"/"export"/
+// "reveal_credentials" are now dispatchable on a hosted runtime. "open"/
+// "renew" must still be refused, but now at the ACTION level, BEFORE either
+// the approval gate or any devApiPost call runs.
+
+describe("novada_static_ip_mgmt — hosted action-level refusal for open/renew (2026-11-01)", () => {
+  it("'open' on a hosted runtime is refused BEFORE the approval gate runs — confirm:true never reaches the gate's own rejection", async () => {
+    process.env.VERCEL = "1";
+    const { dispatch } = await import("../../src/core.js");
+    await expect(
+      dispatch("novada_static_ip_mgmt", { ...OPEN_PAYLOAD, confirm: true }, "caller-key-sip"),
+    ).rejects.toThrow(/not available on the hosted/);
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  it("'open' on a hosted runtime is refused even with no approval_token at all (never returns a preview on hosted)", async () => {
+    process.env.VERCEL = "1";
+    const { dispatch } = await import("../../src/core.js");
+    await expect(
+      dispatch("novada_static_ip_mgmt", { ...OPEN_PAYLOAD }, "caller-key-sip"),
+    ).rejects.toThrow(/not available on the hosted/);
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  it("'renew' on a hosted runtime is refused BEFORE the approval gate runs", async () => {
+    process.env.VERCEL = "1";
+    const { dispatch } = await import("../../src/core.js");
+    await expect(
+      dispatch("novada_static_ip_mgmt", { ...RENEW_PAYLOAD, confirm: true }, "caller-key-sip"),
+    ).rejects.toThrow(/not available on the hosted/);
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  it("'open' is UNAFFECTED locally (no VERCEL/AWS_LAMBDA env) — preview still works", async () => {
+    const { dispatch } = await import("../../src/core.js");
+    const out = await dispatch("novada_static_ip_mgmt", { ...OPEN_PAYLOAD }, "caller-key-sip");
+    const obj = JSON.parse(out) as { status: string };
+    expect(obj.status).toBe("confirmation_required");
+  });
+
+  it("'list' remains available on a hosted runtime (only open/renew are refused)", async () => {
+    process.env.VERCEL = "1";
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [], total: 0 });
+    const out = await dispatch("novada_static_ip_mgmt", { action: "list" }, "caller-key-sip");
+    const obj = JSON.parse(out) as { status: string };
+    expect(obj.status).toBe("ok");
+  });
+
+  it("'reveal_credentials' preview remains available on a hosted runtime (with NOVADA_APPROVAL_SECRET configured, as a real hosted deployment must be)", async () => {
+    process.env.VERCEL = "1";
+    process.env.NOVADA_APPROVAL_SECRET = "test-hosted-approval-secret";
+    const { dispatch } = await import("../../src/core.js");
+    mockedPost.mockResolvedValue({ list: [ipRow({})], total: 1 });
+    try {
+      const out = await dispatch("novada_static_ip_mgmt", { action: "reveal_credentials" }, "caller-key-sip");
+      const obj = JSON.parse(out) as { status: string };
+      expect(obj.status).toBe("confirmation_required");
+    } finally {
+      delete process.env.NOVADA_APPROVAL_SECRET;
+    }
+  });
+});
+
+// ─── local saveOutput skip (2026-11-01, Done-definition) ───────────────────
+//
+// reveal_credentials' real-credential response must NEVER be written to disk
+// via the npm package's output auto-save (~/Downloads/novada-mcp/...,
+// utils/output.ts's saveOutput). static_ip_mgmt.ts does not call saveOutput
+// for ANY action — this is a structural (import-level) guarantee, not a
+// runtime branch, so it is asserted as a source-level drift guard: if a
+// future edit ever wires any static_ip_mgmt action to saveOutput, this test
+// fails immediately and must be re-reviewed for the reveal_credentials case
+// specifically.
+describe("novada_static_ip_mgmt — reveal_credentials output is never auto-saved to disk", () => {
+  it("static_ip_mgmt.ts does not import or call saveOutput (structural skip)", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const src = await fs.readFile(
+      path.resolve(__dirname, "../../src/tools/static_ip_mgmt.ts"),
+      "utf-8",
+    );
+    expect(src).not.toMatch(/saveOutput/);
+    expect(src).not.toMatch(/from ["']\.\.\/utils\/output\.js["']/);
+  });
+});
