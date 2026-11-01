@@ -1869,5 +1869,111 @@
       "type": "object"
     },
     "name": "novada_setup"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Manage static ISP IPs (wraps /v1/static_house/* developer-api endpoints).\n\n**Actions:** \"open\" = purchase new IPs (WRITE, gated by approval_token; local MCP server only \u2014 not available on the hosted endpoint). \"renew\" = renew existing IPs (WRITE, gated by approval_token; local MCP server only \u2014 not available on the hosted endpoint). \"export\"/\"list\" = read-only, dial credentials masked; available on every runtime. \"reveal_credentials\" = shows the REAL proxy username/password for the filtered IPs \u2014 local MCP server only (not available on the hosted endpoint); only use when the human user explicitly asked for them (e.g. to configure another tool with their own static IPs). With an elicitation-capable MCP client, \"reveal_credentials\" is a single call confirmed by the human user in a live dialog; otherwise it uses the same preview + approval_token two-step as \"open\"/\"renew\".\n**Behavior for \"open\"/\"renew\"/\"reveal_credentials\":** call once WITHOUT `approval_token` to get a preview plus a fresh token (valid 10 minutes) \u2014 for \"open\"/\"renew\" this does NOT hit the API; for \"reveal_credentials\" it shows only masked IP/port/region/expiry (no credentials yet), or is skipped entirely when the connected client confirms via an elicitation dialog instead. Re-call with the EXACT SAME parameters plus that token to execute. `confirm: true` is a deprecated no-op.\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "Action to perform. \"open\" = purchase new static IPs (WRITE, requires approval_token; local MCP server only). \"renew\" = renew existing IPs (WRITE, requires approval_token; local MCP server only). \"export\" = export filtered IP list (masked credentials). \"list\" = list static IPs with pagination (masked credentials). \"reveal_credentials\" = show REAL dial username/password for filtered IPs \u2014 local MCP server only (not available on the hosted endpoint); with an elicitation-capable MCP client this is a single call confirmed by the human user in a dialog, otherwise a preview + approval_token two-step. Only use when the human explicitly asked for them.",
+          "enum": [
+            "open",
+            "renew",
+            "export",
+            "list",
+            "reveal_credentials"
+          ],
+          "type": "string"
+        },
+        "approval_token": {
+          "description": "Two-step approval token, required to execute \"open\"/\"renew\"/\"reveal_credentials\". Omit on the first call to receive a preview + a fresh approval_token (valid 10 minutes). Re-call with the EXACT SAME parameters plus this field set to that token to execute. Never invent a value \u2014 an invented or stale token is rejected.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "confirm": {
+          "const": true,
+          "description": "DEPRECATED \u2014 ignored. Setting this alone no longer authorizes \"open\"/\"renew\"/\"reveal_credentials\" execution (closed 2026-09, finding F2-2: an agent could self-supply confirm:true with no prior human-reviewed preview, including a PURCHASE \u2014 see F2-eval R9). Use approval_token instead: call once WITHOUT approval_token to receive a preview and a token, then call again with the identical parameters plus approval_token.",
+          "type": "boolean"
+        },
+        "duration": {
+          "description": "Required for \"open\" and \"renew\". Activation/renewal period: \"week\" or \"month\".",
+          "enum": [
+            "week",
+            "month"
+          ],
+          "type": "string"
+        },
+        "ip_type": {
+          "description": "Required for \"open\". IP type: \"normal\" (Standard) or \"premium\" (Premium).",
+          "enum": [
+            "normal",
+            "premium"
+          ],
+          "type": "string"
+        },
+        "is_auto_renew": {
+          "description": "Auto-renew filter for \"list\"/\"export\". 1=Yes, -1=No.",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "key_word": {
+          "description": "Search filter for \"list\"/\"export\". Searches remarks, order number, or IP.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "description": "Entries per page for \"list\" action. Default 50, max 200.",
+          "exclusiveMinimum": 0,
+          "maximum": 200,
+          "type": "integer"
+        },
+        "num": {
+          "description": "Required for \"open\". Number of static IPs to activate.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "page": {
+          "default": 1,
+          "description": "Page number for \"list\" action. Default 1.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "region": {
+          "description": "Required for \"open\". Area/region code. Also optional filter for \"list\" and \"export\".",
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "type": "string"
+        },
+        "renew_ip_list": {
+          "description": "Required for \"renew\". Comma-separated list of IPs to renew.",
+          "pattern": "^[\\d.,]+$",
+          "type": "string"
+        },
+        "status": {
+          "description": "Filter for \"list\"/\"export\". Omit to default to \"1\" (in-use only) \u2014 expired/released IPs are counted in a summary line but not returned. Pass \"\" explicitly for All, \"1\" for In use, \"2\" for Expired, or \"3\" for Released to override the default.",
+          "enum": [
+            "1",
+            "2",
+            "3",
+            ""
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "name": "novada_static_ip_mgmt"
   }
 ]
