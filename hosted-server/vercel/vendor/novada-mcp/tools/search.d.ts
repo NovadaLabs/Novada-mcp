@@ -76,14 +76,22 @@ export declare function parseScraperSearchResults(data: Record<string, unknown>)
  * stays synchronous (no network, simpler to unit-test) — this wrapper is the
  * ONE place both of novadaSearch's call sites and resolveSearchResults (used
  * by research.ts) route through, so the fix lands once for novada_search AND
- * novada_research. A result whose link could not be resolved to a real
- * absolute URL is DROPPED — never surfaced as a relative "/goto?url=..." path.
+ * novada_research.
+ *
+ * 2026-11-04 follow-up: a result whose link could NOT be resolved to a real
+ * absolute URL (even after google_redirect.ts's /goto → /url-HTML → one-hop-
+ * interstitial fallback chain) is no longer dropped from the result set —
+ * it is RETAINED with `url`/`link` cleared to "" and `url_unavailable: true`
+ * set (never surfaced as a relative "/goto?url=..." path either way), so the
+ * agent still sees its title/snippet. `unresolvedGotoLinks` now counts "needed
+ * the fallback chain and it still failed", not "removed from `results`" —
+ * see resolveGoogleLinksInPlace's doc comment.
  */
 export declare function parseAndResolveScraperSearchResults(data: Record<string, unknown>, opts?: {
     deadlineMs?: number;
 }): Promise<{
     results: NovadaSearchResult[];
-    droppedGotoLinks: number;
+    unresolvedGotoLinks: number;
 }>;
 export interface NovadaSearchOptions {
     /**

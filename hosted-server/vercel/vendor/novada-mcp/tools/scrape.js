@@ -1876,7 +1876,7 @@ export async function novadaScrape(params, apiKey) {
         // link/url is already a plain absolute URL — i.e. every OTHER platform's scrape
         // output, and most Google results too — so this call is safe unconditionally.
         const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
-        const { kept: gotoResolvedRecords, dropped: droppedGotoLinks } = await resolveGoogleLinksInPlace(rawRecords, { deadlineMs: gotoResolveDeadline });
+        const { kept: gotoResolvedRecords, dropped: unresolvedGotoLinks } = await resolveGoogleLinksInPlace(rawRecords, { deadlineMs: gotoResolveDeadline });
         rawRecords = gotoResolvedRecords;
         const records = rawRecords.slice(0, effectiveLimit).map(r => flattenRecord(r));
         // Identity oracle (TOW2-305): never surface a DIFFERENT YouTube video than requested as
@@ -1917,8 +1917,8 @@ export async function novadaScrape(params, apiKey) {
         // search-goto-links-2026-11-04: threaded into every populated-record format
         // branch alongside localeDefaultHint — never rendered unless at least one
         // result was actually dropped for an unresolvable Google redirect link.
-        const gotoDroppedHint = droppedGotoLinks > 0
-            ? `- Dropped ${droppedGotoLinks} result(s) whose Google redirect link ("/goto?url=...") could not be resolved to a real URL.`
+        const gotoUnresolvedHint = unresolvedGotoLinks > 0
+            ? `- ${unresolvedGotoLinks} result(s) kept without a link: their Google redirect link could not be resolved to a real URL (title/snippet still included).`
             : null;
         let output;
         switch (format) {
@@ -1948,7 +1948,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
-                    gotoDroppedHint,
+                    gotoUnresolvedHint,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- For human-readable output: use format='markdown'. For spreadsheets: format='csv' or format='excel'.`,
                     `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
@@ -1971,7 +1971,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
-                    gotoDroppedHint,
+                    gotoUnresolvedHint,
                     `- Copy the CSV block above and paste into Excel, Google Sheets, or any spreadsheet app.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='excel' to get a real .xlsx file instead.`,
@@ -2002,7 +2002,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
-                    gotoDroppedHint,
+                    gotoUnresolvedHint,
                     `- Base64 → xlsx: \`echo "<base64>" | base64 -d > data.xlsx\` or use any online base64-to-file converter.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='csv' for a smaller inline text alternative.`,
@@ -2023,7 +2023,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
-                    gotoDroppedHint,
+                    gotoUnresolvedHint,
                     `- The HTML above is a standalone <table> document — save it as .html and open in a browser, or embed the <table> element in a page.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='csv' or format='excel' for spreadsheet-ready output, format='json' for code.`,
@@ -2051,7 +2051,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
-                    gotoDroppedHint,
+                    gotoUnresolvedHint,
                     `- TOON format: first line starts with "HEADERS:" listing columns, subsequent lines are pipe-separated values.`,
                     `- Use format='json' for downstream code processing, format='markdown' for human-readable output.`,
                     `- Increase limit (max 100) to retrieve more records.`,
@@ -2074,7 +2074,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
-                    gotoDroppedHint,
+                    gotoUnresolvedHint,
                     `- Use format='json' or format='csv' for downstream processing. Use format='excel' for a .xlsx spreadsheet.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- For structured scraping of other platforms, change platform and operation.`,

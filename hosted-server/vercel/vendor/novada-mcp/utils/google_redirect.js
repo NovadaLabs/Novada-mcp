@@ -37,27 +37,96 @@
  *       needed) returns a plain HTTP 302 with `Location: <real destination>`
  *       — fast (~50-200ms), no CAPTCHA/consent interstitial observed at this
  *       call volume from either IP.
- *       IMPORTANT NUANCE: the sibling endpoint `/url?sa=...&url=<token>&ved=...`
- *       (the exact URL the upstream scraper surfaces as `redirect_link`) does
- *       NOT behave the same way — it returns HTTP 200 with a tiny HTML page
- *       that performs a client-side `location.replace(...)` (or, for
- *       non-JS clients, a `<meta http-equiv="refresh">`). There is no
- *       `Location` header on that endpoint. This resolver therefore always
- *       re-targets `/goto?url=<token>` (constructed by US, from the token —
- *       never fetches the host-bearing `redirect_link` string directly) to
- *       get a plain 302 we can read without parsing HTML.
  *
- *   (d) Unresolvable (timeout, non-3xx, missing/invalid Location, or Google's
- *       own "goto"/"url" redirect pointing back at itself) → return null. The
- *       caller drops the result — we never hand an agent a relative path.
+ *   2026-11-04 FOLLOW-UP (same day, after sustained probing from one IP):
+ *       at normal volume (c) above is reliable, but after ~40 manual probe
+ *       requests within roughly an hour from ONE residential IP, Google
+ *       started answering some `/goto` calls with HTTP 200 + a ~15KB
+ *       "interstitial" HTML page (a client-side redirect with an additional
+ *       delay) instead of a clean 302 — sometimes pointing at a SECOND
+ *       `/goto?url=<token2>` rather than the real destination directly.
+ *       Dropping every such result (the original fix) is SAFE but collapses
+ *       result quality under sustained production traffic from the single
+ *       EC2 IP this ships from (observed: 1 kept / 7 dropped in one run).
+ *       Two additional fallback paths were added so "the /goto 302 degraded"
+ *       is no longer synonymous with "unresolvable":
  *
- * SSRF posture: the outbound request always targets a HARDCODED host
- * (`https://www.google.com`) that this module constructs itself — the upstream
- * `link`/`redirect_link` strings are NEVER used as a fetch target, only their
- * opaque `url=` query VALUE (an inert token, never parsed as a URL) is spliced
- * into our own request. The resolved `Location` (Google-controlled, but still
- * external input) is re-validated with `isUrlSafe` before being returned, and
- * rejected if it points back at a Google redirect host (loop guard).
+ *   (c2) Parse the upstream scraper's OWN `redirect_link` shape. LIVE-CONFIRMED
+ *        this endpoint returns HTTP 200 with a small HTML/JS page:
+ *          <script>...var redirectUrl='<real URL>';google.navigateTo(...)...</script>
+ *          <noscript><meta content="0;url=<real URL>" http-equiv="refresh"></noscript>
+ *        `extractRedirectUrlFromHtml` parses either form (JS string literal or
+ *        the `<meta refresh>` fallback — attribute-order-independent, since live
+ *        output puts `content` BEFORE `http-equiv`), decoding HTML entities and
+ *        the handful of JS string escapes Google is known to emit (`\/`, `\xNN`,
+ *        `\uNNNN`), then re-validates the result exactly like a `/goto` Location
+ *        (absolute http(s), not another Google redirect host, SSRF-safe).
+ *
+ *        2026-11-04 SECOND follow-up (live-probed while finishing this fix):
+ *        a BARE `https://www.google.com/url?url=<token>` request (no other
+ *        params) does NOT return the page above — it returns a GENERIC
+ *        "Weiterleitungshinweis" ("redirect notice") warning page with no
+ *        destination in it at all ("the page you visited is trying to
+ *        redirect you to an invalid URL"). Google's `/url` endpoint only
+ *        decodes the token server-side when the FULL original query string
+ *        Google itself generated (`sa=t&source=web&rct=j&opi=...&url=<token>
+ *        &ved=...&uoh=1`) is replayed — confirmed by bisecting which params
+ *        matter live: `sa=t` alone bounces to a broken `/CAES...` path, and
+ *        dropping just `opi`/`uoh` leaves `redirectUrl` as the RAW undecoded
+ *        token. Rather than chase which exact subset is load-bearing (clearly
+ *        undocumented, internal Google behavior that can change at any time),
+ *        this resolver replays the upstream scraper's `redirect_link` query
+ *        string VERBATIM (`extractGoogleRedirectQuery`). With no full query
+ *        available it skips (c2) entirely — a bare `url=<token>` request is a
+ *        wasted call, not a fallback. SSRF posture is unaffected — see below:
+ *        the query is only accepted from a Google redirect host's `/url` path,
+ *        must be plain opaque tracking params (charset- and length-checked),
+ *        and is always spliced onto OUR OWN hardcoded
+ *        `https://www.google.com/url`, never used to pick the fetch target.
+ *
+ *        2026-11-05 live finding (why (c2) now runs FIRST when available):
+ *        for FRESH tokens from a just-scraped SERP, `/goto` answered 200 with
+ *        Google's "Anfrage wird verifiziert" bot-check interstitial for 4/4
+ *        tokens — even from an IP where an older token still got a clean 302
+ *        — while replaying `redirect_link` against `/url` returned the real
+ *        destination in `var redirectUrl` for 4/4. Trying (c2) first costs ONE
+ *        request per result instead of two-to-three, and keeps load off the
+ *        bot-check endpoint.
+ *
+ *   (c3) interstitial hop: when `/goto` itself answers 200 (the degraded case
+ *        above) and its body embeds ANOTHER `/goto?url=<token2>` link (the
+ *        "redirect to a redirect" shape observed live), follow that SECOND
+ *        token through (c) exactly ONCE — no further recursion even if that
+ *        second hop is itself a 200. This bounds total extra network cost to
+ *        one additional request per token, never an unbounded chain. The live
+ *        bot-check page embeds the continuation inside a JS string with the
+ *        `=` escaped (`/goto?url\x3dCAES...`); following that token once was
+ *        live-confirmed (2026-11-05) to return the clean 302, so the matcher
+ *        accepts `=`, `\x3d` and `\u003d`.
+ *
+ *   (d) Still unresolvable after (c)/(c2)/(c3) → the result is RETAINED (never
+ *       dropped outright — see 2026-11-04 follow-up decision below), with its
+ *       `link`/`url` cleared to "" and `url_unavailable: true` set. The agent
+ *       still sees the title/snippet (useful, honest content) but is never
+ *       handed a relative or Google-redirect path as a url.
+ *
+ * SSRF posture: every outbound request always targets a HARDCODED host
+ * (`https://www.google.com`) and HARDCODED path (`/goto` or `/url`) that this
+ * module constructs itself — the upstream `link`/`redirect_link` strings are
+ * NEVER used as a fetch target, only their opaque `url=` query VALUE (an inert
+ * token, never parsed as a URL) is spliced into our own request. Any resolved
+ * destination — a `Location` header, a `var redirectUrl=` JS literal, a
+ * `<meta refresh>` target, or an interstitial-embedded `/goto` token — is
+ * Google-controlled but still external input: it is re-validated with
+ * `isUrlSafe` and rejected if it points back at a Google redirect host (loop
+ * guard) before ever being returned to a caller.
+ *
+ * Retention policy (2026-11-04 follow-up, SOP item 3): dropping a result
+ * outright on failure is SAFE (never leaks a bad link) but, under the
+ * single-EC2-IP production topology, throws away content an agent could
+ * still use (title + snippet) even without a fetchable url. Decided: KEEP
+ * the result with `url`/`link` cleared and `url_unavailable: true` set,
+ * rather than removing it from the list — "more useful, still honest".
  */
 import axios from "axios";
 import { TIMEOUTS } from "../config.js";
@@ -116,6 +185,141 @@ export function extractGoogleRedirectToken(raw) {
         return null;
     return token;
 }
+// A live upstream `redirect_link` query (sa, source, rct, opi, url, ved, usg)
+// is a few hundred bytes; generous cap, still far below anything pathological.
+const MAX_REDIRECT_QUERY_LENGTH = 4096;
+// Google's tracking params are opaque ints/base64url hashes. Anything outside
+// this charset is refused rather than forwarded.
+const SAFE_REDIRECT_QUERY_RE = /^[A-Za-z0-9._~%&=+-]+$/;
+/**
+ * Return the FULL query string of a Google `/url?...` redirect link (relative,
+ * or absolute on a Google redirect host) so (c2) can replay it verbatim — see
+ * the module doc for why the bare `url=<token>` form does not work. Returns
+ * null unless the link is exactly that shape, carries a `url=` token, and its
+ * query is plain opaque tracking params within the length cap. Never returns
+ * a host or path: the caller always splices the result onto its own hardcoded
+ * `https://www.google.com/url?`.
+ */
+export function extractGoogleRedirectQuery(raw) {
+    if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_REDIRECT_QUERY_LENGTH * 2)
+        return null;
+    let query;
+    if (raw.startsWith("/url?")) {
+        query = raw.slice("/url?".length).split("#")[0];
+    }
+    else if (/^https?:\/\//i.test(raw)) {
+        let parsed;
+        try {
+            parsed = new URL(raw);
+        }
+        catch {
+            return null;
+        }
+        if (!isGoogleRedirectHost(parsed.hostname) || parsed.pathname !== "/url")
+            return null;
+        query = parsed.search.slice(1);
+    }
+    else {
+        return null;
+    }
+    if (query.length === 0 || query.length > MAX_REDIRECT_QUERY_LENGTH)
+        return null;
+    if (!SAFE_REDIRECT_QUERY_RE.test(query))
+        return null;
+    if (extractGoogleRedirectToken(`/url?${query}`) === null)
+        return null;
+    return query;
+}
+/**
+ * Best-effort extraction of a DIFFERENT embedded `/goto?url=<token>` reference
+ * from an interstitial page body (see (c3) in the module doc) — the degraded
+ * "/goto answers 200 with a page that itself points at another /goto" shape.
+ * Deliberately narrow (bounded token length, must differ from the token we
+ * just requested) so this never turns into an unbounded hop chain: the caller
+ * follows at most ONE token returned by this function, never recurses into
+ * parsing ITS body for a third.
+ */
+function extractEmbeddedGotoToken(html, excludeToken) {
+    if (typeof html !== "string" || html.length === 0)
+        return null;
+    const re = /\/goto\?url(?:=|\\x3d|\\u003d)([^"'&<>\s\\]+)/gi;
+    let m;
+    while ((m = re.exec(html)) !== null) {
+        const token = m[1];
+        if (token && token !== excludeToken && token.length > 0 && token.length <= MAX_TOKEN_LENGTH) {
+            return token;
+        }
+    }
+    return null;
+}
+/**
+ * Undo the small set of JS-string and HTML-entity escaping Google is known to
+ * apply to a URL embedded in `var redirectUrl='...'` or a `<meta refresh>`
+ * `content` attribute. Never throws; a string with none of these escapes
+ * passes through unchanged.
+ */
+function decodeEmbeddedUrl(raw) {
+    let s = raw;
+    s = s.replace(/\\x([0-9a-fA-F]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+    s = s.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+    s = s.replace(/\\\//g, "/");
+    s = s
+        .replace(/&amp;/g, "&")
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/&quot;/g, "\"")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">");
+    return s.trim();
+}
+const REDIRECT_VAR_RE = /var\s+redirectUrl\s*=\s*(['"])([\s\S]*?)\1/;
+const META_REFRESH_RE = /<meta[^>]+http-equiv=["']refresh["'][^>]*content=["'][^"']*?url=([^"']+)["']/i;
+/**
+ * Parse the destination URL out of Google's `/url?...&url=<token>` HTML+JS
+ * page body — see (c2) in the module doc. Tries the `var redirectUrl=` JS
+ * string literal first (present in every live-captured sample), falls back
+ * to the `<noscript><meta http-equiv="refresh" ...></noscript>` form. Applies
+ * the same validation as a `/goto` Location: must be absolute http(s), must
+ * not be another Google redirect host (loop guard), must pass `isUrlSafe`.
+ */
+function extractRedirectUrlFromHtml(html) {
+    if (typeof html !== "string" || html.length === 0)
+        return null;
+    let candidate = null;
+    const varMatch = REDIRECT_VAR_RE.exec(html);
+    if (varMatch)
+        candidate = varMatch[2];
+    if (!candidate) {
+        const metaMatch = META_REFRESH_RE.exec(html);
+        if (metaMatch)
+            candidate = metaMatch[1];
+    }
+    if (!candidate)
+        return null;
+    return validateDestination(decodeEmbeddedUrl(candidate));
+}
+/** Shared validation for ANY candidate destination (a `/goto` Location, a
+ *  parsed `/url` page target, or an interstitial hop's Location): must be an
+ *  absolute http(s) URL, must not be another Google redirect host (loop
+ *  guard), and must pass the codebase's standard SSRF guard. */
+function validateDestination(candidate) {
+    if (typeof candidate !== "string" || candidate.length === 0)
+        return null;
+    if (!/^https?:\/\//i.test(candidate))
+        return null;
+    if (!isUrlSafe(candidate))
+        return null;
+    let host = "";
+    try {
+        host = new URL(candidate).hostname;
+    }
+    catch {
+        return null;
+    }
+    if (!host || isGoogleRedirectHost(host))
+        return null;
+    return candidate;
+}
 /** True when `primary` (a record's link/url field) or the presence of a
  *  `redirectLink` indicates a Google click-tracking wrapper worth resolving.
  *  Cheap, synchronous, zero network cost — the fast no-op path for every
@@ -139,6 +343,12 @@ function isGoogleWrappedLink(primary, redirectLink) {
     return typeof redirectLink === "string" && redirectLink.length > 0;
 }
 const DEFAULT_RESOLVE_TIMEOUT_MS = TIMEOUTS.GOOGLE_REDIRECT_RESOLVE;
+// A /goto 302's body is a few hundred bytes; the /url and interstitial 200
+// bodies observed live are up to ~15KB. Cap well above that so a legitimate
+// body is never truncated, but far short of a real page (defense in depth —
+// if Google ever served something unexpected at this literal, hardcoded path
+// we still bound how much of it we download).
+const MAX_RESOLVE_BODY_BYTES = 65536;
 // Per-process cache: the same token can repeat within one batch (duplicate SERP
 // entries) or across calls in the same search-cache TTL window. Small, TTL'd,
 // capped — mirrors the style of search.ts's own `_searchCache`.
@@ -153,74 +363,111 @@ function cacheGet(token) {
         _resolveCache.delete(token);
         return undefined;
     }
-    return hit.value;
+    return hit.resolution;
 }
-function cacheSet(token, value) {
-    _resolveCache.set(token, { value, ts: Date.now() });
+function cacheSet(token, resolution) {
+    _resolveCache.set(token, { resolution, ts: Date.now() });
     if (_resolveCache.size > RESOLVE_CACHE_MAX) {
         const oldestKey = [..._resolveCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0]?.[0];
         if (oldestKey !== undefined)
             _resolveCache.delete(oldestKey);
     }
+    return resolution;
 }
-/**
- * Resolve a single Google redirect TOKEN to its real destination by requesting
- * Google's own `/goto?url=TOKEN` endpoint (see module doc — NOT `/url`, which
- * does not return a Location header) and reading the 302 `Location`. Never
- * throws: returns null on timeout, non-3xx, a missing/unsafe Location, or a
- * Location that is itself another Google redirect host (loop guard).
- */
-export async function resolveGoogleRedirectToken(token, opts = {}) {
-    const cached = cacheGet(token);
-    if (cached !== undefined)
-        return cached;
-    const timeoutMs = opts.timeoutMs ?? DEFAULT_RESOLVE_TIMEOUT_MS;
-    let result = null;
+const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+/** ONE outbound GET to a hardcoded `https://www.google.com/{goto,url}?<query>` —
+ *  `query` is either `url=<token>` or a vetted `extractGoogleRedirectQuery`
+ *  result, never a host or path. See the module's SSRF posture doc comment.
+ *  Never throws. */
+async function fetchGoogleRedirectPath(path, query, timeoutMs) {
     try {
-        const resp = await axios.get(`https://www.google.com/goto?url=${token}`, {
+        const resp = await axios.get(`https://www.google.com/${path}?${query}`, {
             timeout: timeoutMs,
             maxRedirects: 0,
             validateStatus: () => true,
-            maxContentLength: 8192, // a 302's body is a few hundred bytes; never pull a real page here
-            maxBodyLength: 8192,
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            },
+            maxContentLength: MAX_RESOLVE_BODY_BYTES,
+            maxBodyLength: MAX_RESOLVE_BODY_BYTES,
+            headers: { "User-Agent": USER_AGENT },
             // DNS-rebinding guard, consistent with every other fetch entry point in this
             // codebase (utils/http.ts) — defense in depth even though the host is a
             // hardcoded literal, never resolved from untrusted input.
             lookup: safeLookup,
         });
-        if (resp.status >= 300 && resp.status < 400) {
-            const loc = resp.headers?.location;
-            if (typeof loc === "string" && isUrlSafe(loc)) {
-                let host = "";
-                try {
-                    host = new URL(loc).hostname;
-                }
-                catch {
-                    host = "";
-                }
-                if (host && !isGoogleRedirectHost(host)) {
-                    result = loc;
+        return {
+            status: resp.status,
+            location: typeof resp.headers?.location === "string" ? resp.headers.location : undefined,
+            body: typeof resp.data === "string" ? resp.data : "",
+        };
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Resolve a single Google redirect TOKEN to its real destination, trying in
+ * order: (c2) when the caller has the upstream `/url` query (`urlQuery`),
+ * replay it against `/url` and parse the HTML/JS redirect page; (c) `/goto`
+ * → 302 Location; (c3) if `/goto` instead answers 200 with an embedded SECOND
+ * `/goto` token, follow that ONE extra hop. Never throws: returns `{ url:
+ * null, via: null }` when every path fails (timeout, non-resolving status,
+ * missing/unsafe destination, or a destination that is itself another Google
+ * redirect host — loop guard).
+ */
+export async function resolveGoogleRedirectTokenDetailed(token, opts = {}, urlQuery = null) {
+    const cached = cacheGet(token);
+    if (cached !== undefined)
+        return cached;
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_RESOLVE_TIMEOUT_MS;
+    // (c2) first when available — see the 2026-11-05 note in the module doc.
+    if (urlQuery) {
+        const urlResp = await fetchGoogleRedirectPath("url", urlQuery, timeoutMs);
+        if (urlResp && urlResp.body) {
+            const dest = extractRedirectUrlFromHtml(urlResp.body);
+            if (dest)
+                return cacheSet(token, { url: dest, via: "url_page" });
+        }
+    }
+    // (c) /goto. Tried regardless of why (c2) failed — it is an independent
+    // Google endpoint carrying the same token, not a retry of the same request.
+    const gotoResp = await fetchGoogleRedirectPath("goto", `url=${token}`, timeoutMs);
+    if (gotoResp) {
+        if (gotoResp.status >= 300 && gotoResp.status < 400) {
+            const dest = validateDestination(gotoResp.location);
+            if (dest)
+                return cacheSet(token, { url: dest, via: "goto" });
+        }
+        else if (gotoResp.status === 200 && gotoResp.body) {
+            // (c3) degraded case: /goto answered with an interstitial page instead
+            // of a clean 302. Look for exactly ONE embedded, DIFFERENT /goto token
+            // and follow it once — never recurse into a second interstitial.
+            const embeddedToken = extractEmbeddedGotoToken(gotoResp.body, token);
+            if (embeddedToken) {
+                const hopResp = await fetchGoogleRedirectPath("goto", `url=${embeddedToken}`, timeoutMs);
+                if (hopResp && hopResp.status >= 300 && hopResp.status < 400) {
+                    const dest = validateDestination(hopResp.location);
+                    if (dest)
+                        return cacheSet(token, { url: dest, via: "interstitial_hop" });
                 }
             }
         }
     }
-    catch {
-        result = null;
-    }
-    cacheSet(token, result);
-    return result;
+    return cacheSet(token, { url: null, via: null });
+}
+/** Backward-compatible string-returning wrapper around
+ *  `resolveGoogleRedirectTokenDetailed` — kept for any existing caller that
+ *  only needs the destination, not which path produced it. */
+export async function resolveGoogleRedirectToken(token, opts = {}) {
+    return (await resolveGoogleRedirectTokenDetailed(token, opts)).url;
 }
 /**
  * Resolve the real destination URL for ONE SERP result item following the
  * preference order documented at the top of this module: (a) already-absolute
- * non-Google link → used as-is; (c) resolve via Google's /goto; (d) null (the
- * caller drops the result). (b) decode-without-network is not implemented —
- * investigated and rejected, see module doc.
+ * non-Google link → used as-is (via: "fast_path", zero network calls); (c)/
+ * (c2)/(c3) resolve via Google's own endpoints; (d) unresolved (via: null —
+ * the caller decides retention policy). (b) decode-without-network is not
+ * implemented — investigated and rejected, see module doc.
  */
-export async function resolveSerpLink(candidate, opts = {}) {
+export async function resolveSerpLinkDetailed(candidate, opts = {}) {
     const link = typeof candidate.link === "string" ? candidate.link : undefined;
     const url = typeof candidate.url === "string" ? candidate.url : undefined;
     const redirectLink = typeof candidate.redirect_link === "string" ? candidate.redirect_link : undefined;
@@ -231,30 +478,60 @@ export async function resolveSerpLink(candidate, opts = {}) {
         try {
             const host = new URL(primary).hostname;
             if (!isGoogleRedirectHost(host))
-                return primary;
+                return { url: primary, via: "fast_path" };
         }
         catch { /* not a valid absolute URL — fall through to (c) */ }
     }
-    // (c) — try whichever field actually carries a token, in order of proximity
-    // to what the agent would otherwise have seen.
+    // (c2)'s replayable `/url` query, if any field carries one — upstream's
+    // `redirect_link` is the usual source.
+    let urlQuery = null;
+    for (const field of [redirectLink, link, url]) {
+        if (field && (urlQuery = extractGoogleRedirectQuery(field)) !== null)
+            break;
+    }
+    // (c)/(c2)/(c3) — try each DISTINCT token, in order of proximity to what
+    // the agent would otherwise have seen. The /url replay is attempted at most
+    // once per result (with the first token), never once per field.
+    const tokens = [];
     for (const field of [link, url, redirectLink]) {
-        if (!field)
-            continue;
-        const token = extractGoogleRedirectToken(field);
-        if (!token)
-            continue;
-        const resolved = await resolveGoogleRedirectToken(token, opts);
-        if (resolved)
+        const token = field ? extractGoogleRedirectToken(field) : null;
+        if (token && !tokens.includes(token))
+            tokens.push(token);
+    }
+    for (const [i, token] of tokens.entries()) {
+        const resolved = await resolveGoogleRedirectTokenDetailed(token, opts, i === 0 ? urlQuery : null);
+        if (resolved.url)
             return resolved;
     }
-    return null; // (d)
+    return { url: null, via: null }; // (d)
+}
+/** Backward-compatible string-returning wrapper — existing callers that only
+ *  need the destination (not which path produced it) are unaffected. */
+export async function resolveSerpLink(candidate, opts = {}) {
+    return (await resolveSerpLinkDetailed(candidate, opts)).url;
 }
 // Bounded work per call: real Google SERPs return single-digit-to-low-tens of
 // organic results per page even when `num`/`limit` asks for more, so this cap
 // is headroom, not a typical ceiling. Any item beyond it that IS goto-shaped is
-// treated as unresolved (dropped) rather than launching unbounded network work.
+// treated as unresolved (retained, url cleared) rather than launching unbounded
+// network work.
 const MAX_ITEMS_TO_RESOLVE = 60;
 const DEFAULT_CONCURRENCY = 10;
+function emptyStats() {
+    return { wrapped: 0, resolvedViaGoto: 0, resolvedViaInterstitialHop: 0, resolvedViaUrlPage: 0, unresolved: 0 };
+}
+/** Produce the RETAINED-BUT-UNRESOLVED shape for an item whose Google
+ *  redirect could not be resolved by any path: clears `link`/`url` (so no
+ *  relative or Google-redirect path can ever reach an agent) and sets
+ *  `url_unavailable: true` so callers can render "title/snippet, no link"
+ *  instead of silently treating it the same as a fully populated result. */
+function markUnresolved(item) {
+    const patched = { ...item };
+    patched.link = "";
+    patched.url = "";
+    patched.url_unavailable = true;
+    return patched;
+}
 /**
  * Resolve Google-wrapped links across a batch of SERP-shaped records.
  * Records whose link/url is already a plain absolute URL cost ZERO network
@@ -264,14 +541,17 @@ const DEFAULT_CONCURRENCY = 10;
  * every pipeline that can emit Google-sourced links (class-not-instance: one
  * shared function, not a per-platform branch).
  *
- * A record whose link/url COULD NOT be resolved (timeout, Google 4xx/5xx,
- * budget exhausted) is DROPPED — never passed through with its original
- * relative/wrapped value. Returns the kept records (new objects only where a
- * link was actually rewritten — untouched records keep their original
- * reference) plus how many were dropped, so callers can surface the count.
+ * 2026-11-04 follow-up: a record whose link/url could NOT be resolved
+ * (timeout, Google 4xx/5xx/degraded-200, budget exhausted) is RETAINED — see
+ * `markUnresolved` — never dropped from `kept` the way the original fix did.
+ * `dropped` (kept for the existing field name callers already destructure)
+ * now counts "needed the fallback and still failed", not "removed from the
+ * list" — every input item has a corresponding output item in `kept`, same
+ * length, same order. `stats` gives the per-path resolution breakdown.
  */
 export async function resolveGoogleLinksInPlace(items, opts = {}) {
-    const results = new Array(items.length).fill(null);
+    const results = new Array(items.length);
+    const stats = emptyStats();
     let cursor = 0;
     async function worker() {
         for (;;) {
@@ -284,20 +564,32 @@ export async function resolveGoogleLinksInPlace(items, opts = {}) {
                 results[i] = item; // zero-cost pass-through — same reference, nothing rewritten
                 continue;
             }
+            stats.wrapped++;
             if (i >= MAX_ITEMS_TO_RESOLVE || (opts.deadlineMs !== undefined && Date.now() >= opts.deadlineMs)) {
-                results[i] = null; // bounded-work cutoff — treated as unresolved, dropped
+                stats.unresolved++;
+                results[i] = markUnresolved(item); // bounded-work cutoff — retained, not dropped
                 continue;
             }
-            const resolved = await resolveSerpLink(item, opts);
-            if (!resolved) {
-                results[i] = null;
+            const resolved = await resolveSerpLinkDetailed(item, opts);
+            if (!resolved.url) {
+                stats.unresolved++;
+                results[i] = markUnresolved(item);
                 continue;
             }
+            if (resolved.via === "goto")
+                stats.resolvedViaGoto++;
+            else if (resolved.via === "interstitial_hop")
+                stats.resolvedViaInterstitialHop++;
+            else if (resolved.via === "url_page")
+                stats.resolvedViaUrlPage++;
+            // "fast_path" resolutions never reach here (isGoogleWrappedLink already
+            // filtered them out above as a zero-cost pass-through), so there is no
+            // stats bucket for it in this batch-level counter.
             const patched = { ...item };
             if ("link" in patched)
-                patched.link = resolved;
+                patched.link = resolved.url;
             if ("url" in patched)
-                patched.url = resolved;
+                patched.url = resolved.url;
             results[i] = patched;
         }
     }
@@ -305,14 +597,6 @@ export async function resolveGoogleLinksInPlace(items, opts = {}) {
     if (workerCount > 0) {
         await Promise.all(Array.from({ length: workerCount }, () => worker()));
     }
-    const kept = [];
-    let dropped = 0;
-    for (const r of results) {
-        if (r)
-            kept.push(r);
-        else
-            dropped++;
-    }
-    return { kept, dropped };
+    return { kept: results, dropped: stats.unresolved, stats };
 }
 //# sourceMappingURL=google_redirect.js.map
