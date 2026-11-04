@@ -58,7 +58,7 @@ export const FACEBOOK_SCRAPER_CONFIG: PlatformScraperConfig<FacebookOperation> =
     "profile_by_url/post_by_url/comments_by_post_url/event_by_url/events_by_list_url/events_by_search_url.",
   description: {
     core:
-      "Extract structured Facebook data — public profile pages, posts, comments, and events — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"facebook.com\").",
+      "Extract structured Facebook data — public profile pages, posts, comments, and events — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"facebook.com\").",
     useWhen: [
       "get this public Facebook page's profile info",
       "pull the comments on this Facebook post",
@@ -69,10 +69,10 @@ export const FACEBOOK_SCRAPER_CONFIG: PlatformScraperConfig<FacebookOperation> =
     notFor: [
       { when: "A single Facebook URL to read as plain text", useInstead: "novada_extract" },
       { when: "A general web search not scoped to Facebook", useInstead: "novada_search" },
-      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+      { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
     ],
     returns:
-      "Structured profile/post/comment/event records (page name, post text, comment author/text, event name/date/location, etc.) in the chosen output format — same rendering as novada_scrape.",
+      "Structured profile/post/comment/event records (page name, post text, comment author/text, event name/date/location, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
       "6 verified-working Facebook operations spanning public profile pages, posts, comments, and events (search / single event / event list). Every facebook.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },

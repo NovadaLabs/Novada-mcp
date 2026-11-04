@@ -6,6 +6,19 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+### Changed
+- **Tool descriptions no longer compare options with evaluative wording** (OpenAI plugin review flagged `novada_search`'s description as comparing/preferring; applied to every client, not only OpenAI). Removed superlatives, magnitude claims, and "cheaper/faster than X" phrasing — e.g. `novada_search`'s "(faster, more thorough)" and "fastest/most reliable … slower fallbacks", `novada_extract`'s "15-100x faster on static sites", `novada_crawl`'s "novada_map — much faster", `novada_research`'s "novada_search — faster/cheaper", the SERP scrapers' "cheaper than a raw-SERP scrape" / "raw SERP dump", `novada_proxy`'s "strongest"/"fastest/cheapest", and "slower" in three `render`/`max_depth` parameter descriptions. Routing guidance stays ("use novada_research for…"), and neutral facts about our own options stay ("adds rendering time"). `novada_scrape_perplexity` no longer mentions the broken chatgpt.com scraper. Tier A tool-selection eval unchanged (60% exact / 64% acceptable, identical per-task picks).
+- **Cross-references to sibling tools are marked up for per-surface rendering** (`{{sibling:…}}`, `_core/description_surface.ts`): mentions of `novada_scrape`, `novada_map`, and `novada_monitor` in other tools' descriptions are dropped on a surface that does not list those tools. No visible change on npm or the default hosted surface.
+
+### Added (hosted server — mcp.novada.com, not part of the npm package)
+- **Per-client tool surface for OpenAI** (`hosted-server/vercel/api/_surface.ts`). The same `https://mcp.novada.com/mcp` URL now serves OAuth clients whose registered redirect URIs are on `chatgpt.com` or `openai.com` (exact host or subdomain, https only) a 17-tool surface: search, extract, crawl, research, the Google/Bing/DuckDuckGo/Yandex/Amazon/Walmart/Perplexity/YouTube/GitHub scrapers, proxy, ai_monitor, account, proxy_account_list. On that surface the platform scrapers are annotated `readOnlyHint: false` (each call queues an upstream scrape job), descriptions drop mentions of tools it does not list, hidden backward-compat aliases are not callable, the one-time onboarding notice (it advertises free credits) is not appended, error guidance does not point at the local npm server, and `initialize` returns routing `instructions`. The surface is resolved per request from the access token's `client_id` (cached per process; client records are immutable), so already-connected clients switch without reconnecting. API-key callers and every other OAuth client keep the unchanged 29-tool surface. `config/surfaces.json` gains an `openai` entry; `scripts/check-hosted-drift.mjs` gate (d) requires it to equal the code list and stay a subset of `hosted`.
+
+### Changed (hosted server)
+- `POST /register` accepts `token_endpoint_auth_method` `client_secret_post` / `client_secret_basic` and registers the client as public (`"none"` in the response, no secret issued) instead of returning 400; `/token` takes `client_id` from an HTTP Basic header when the body omits it.
+- `/mcp` CORS preflight allows the `mcp-protocol-version` header.
+- 401 responses no longer mention "$10 free credits" (they still point to https://novada.com for a key): these are pre-auth responses, so the caller's client is unknown and the wording cannot be scoped to non-OpenAI clients.
+- The hosted wall-clock timeout's resume hint names the tool to re-call (the platform scraper itself), instead of always `novada_scrape`.
+
 ---
 
 ## [0.9.45] — 2026-11-01

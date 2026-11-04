@@ -61,7 +61,7 @@ export const GITHUB_SCRAPER_CONFIG: PlatformScraperConfig<GithubOperation> = {
     "repository_by_url/repository_details_by_url, { search_url: \"https://github.com/search?q=ai&type=repositories\" } for repositories_by_search_url.",
   description: {
     core:
-      "Extract structured GitHub repository data — repository details by URL, or multiple repositories from a GitHub search-results URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"github.com\").",
+      "Extract structured GitHub repository data — repository details by URL, or multiple repositories from a GitHub search-results URL — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"github.com\").",
     useWhen: [
       "get repository info (stars, forks, description, language, etc.) for this GitHub repo URL",
       "get the repositories listed on this GitHub search-results URL",
@@ -69,10 +69,10 @@ export const GITHUB_SCRAPER_CONFIG: PlatformScraperConfig<GithubOperation> = {
     notFor: [
       { when: "A single GitHub URL (repo, issue, PR, user) to read as plain text", useInstead: "novada_extract" },
       { when: "A general web/code search not scoped to GitHub, or a GitHub issue/PR/user lookup (no catalog operation exists for those)", useInstead: "novada_search, or novada_extract for a known URL" },
-      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+      { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
     ],
     returns:
-      "Structured repository records (name, description, stars, forks, language, etc.) in the chosen output format — same rendering as novada_scrape.",
+      "Structured repository records (name, description, stars, forks, language, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
       "3 verified-working GitHub operations: two repository-by-URL lookups (`repository_by_url` and `repository_details_by_url` map to distinct catalog scraper_ids — github_repository_repo-url and github_repository_url respectively — both taking the same `url` param; the catalog documents no behavioral difference between them) and repository listing from a GitHub search-results URL. Every github.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },

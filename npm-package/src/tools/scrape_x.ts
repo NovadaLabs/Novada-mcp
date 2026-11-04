@@ -56,7 +56,7 @@ export const X_SCRAPER_CONFIG: PlatformScraperConfig<XOperation> = {
     "post_by_url, { user_name: \"BillGates\" } for profile_by_username, { profile_url: \"https://x.com/BillGates\" } for profile_by_url.",
   description: {
     core:
-      "Extract structured X (Twitter) data — a single post and profile lookups by username or URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"x.com\").",
+      "Extract structured X (Twitter) data — a single post and profile lookups by username or URL — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"x.com\").",
     useWhen: [
       "get the text/engagement stats for this X post URL",
       "get this X profile's info by username",
@@ -65,10 +65,10 @@ export const X_SCRAPER_CONFIG: PlatformScraperConfig<XOperation> = {
     notFor: [
       { when: "A single X/Twitter URL to read as plain text", useInstead: "novada_extract" },
       { when: "A general web search not scoped to X", useInstead: "novada_search" },
-      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+      { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
     ],
     returns:
-      "Structured post/profile records (post text, like/reply/repost counts, profile bio, follower count, etc.) in the chosen output format — same rendering as novada_scrape.",
+      "Structured post/profile records (post text, like/reply/repost counts, profile bio, follower count, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
       "3 verified-working X (Twitter) operations: a single post by URL, and profile lookup by username or by profile URL. Every x.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },
