@@ -148,6 +148,10 @@ function isGoogleRedirectHost(hostname: string): boolean {
 // these strings originate from the upstream scraper, not a raw caller, but the same
 // posture applies defensively).
 const MAX_TOKEN_LENGTH = 4096;
+// Live tokens are base64url ("CAESgwEB6zsw..."); allow percent-escapes and the
+// other URL-unreserved characters, refuse anything else before it is spliced
+// into a request.
+const SAFE_TOKEN_RE = /^[A-Za-z0-9_.~%=-]+$/;
 
 /**
  * Extract the raw (NOT percent-decoded) `url=` token from a Google redirect
@@ -182,6 +186,7 @@ export function extractGoogleRedirectToken(raw: string): string | null {
   if (!m) return null;
   const token = m[1];
   if (token.length === 0 || token.length > MAX_TOKEN_LENGTH) return null;
+  if (!SAFE_TOKEN_RE.test(token)) return null;
   return token;
 }
 
@@ -356,13 +361,17 @@ const MAX_RESOLVE_BODY_BYTES = 65536;
 // entries) or across calls in the same search-cache TTL window. Small, TTL'd,
 // capped — mirrors the style of search.ts's own `_searchCache`.
 const RESOLVE_CACHE_TTL_MS = 10 * 60_000;
+// A failed resolution is remembered only briefly, so a later call (e.g. the
+// agent retrying after url_resolution_warning) actually tries again.
+const RESOLVE_NEGATIVE_CACHE_TTL_MS = 60_000;
 const RESOLVE_CACHE_MAX = 500;
 const _resolveCache = new Map<string, { resolution: TokenResolution; ts: number }>();
 
 function cacheGet(token: string): TokenResolution | undefined {
   const hit = _resolveCache.get(token);
   if (!hit) return undefined;
-  if (Date.now() - hit.ts > RESOLVE_CACHE_TTL_MS) {
+  const ttl = hit.resolution.url === null ? RESOLVE_NEGATIVE_CACHE_TTL_MS : RESOLVE_CACHE_TTL_MS;
+  if (Date.now() - hit.ts > ttl) {
     _resolveCache.delete(token);
     return undefined;
   }
@@ -442,10 +451,21 @@ export async function resolveGoogleRedirectTokenDetailed(
   const cached = cacheGet(token);
   if (cached !== undefined) return cached;
 
-  const timeoutMs = opts.timeoutMs ?? DEFAULT_RESOLVE_TIMEOUT_MS;
+  const baseTimeoutMs = opts.timeoutMs ?? DEFAULT_RESOLVE_TIMEOUT_MS;
+  // Every request is clamped to whatever is left of opts.deadlineMs, so one
+  // item can never carry the batch past its deadline. null = no budget left:
+  // stop without caching (a deadline cut says nothing about the token).
+  const legTimeout = (): number | null => {
+    if (opts.deadlineMs === undefined) return baseTimeoutMs;
+    const remaining = opts.deadlineMs - Date.now();
+    return remaining > 0 ? Math.min(baseTimeoutMs, remaining) : null;
+  };
+  const OUT_OF_TIME: TokenResolution = { url: null, via: null };
 
   // (c2) first when available — see the 2026-11-05 note in the module doc.
   if (urlQuery) {
+    const timeoutMs = legTimeout();
+    if (timeoutMs === null) return OUT_OF_TIME;
     const urlResp = await fetchGoogleRedirectPath("url", urlQuery, timeoutMs);
     if (urlResp && urlResp.body) {
       const dest = extractRedirectUrlFromHtml(urlResp.body);
@@ -455,7 +475,9 @@ export async function resolveGoogleRedirectTokenDetailed(
 
   // (c) /goto. Tried regardless of why (c2) failed — it is an independent
   // Google endpoint carrying the same token, not a retry of the same request.
-  const gotoResp = await fetchGoogleRedirectPath("goto", `url=${token}`, timeoutMs);
+  const gotoTimeoutMs = legTimeout();
+  if (gotoTimeoutMs === null) return OUT_OF_TIME;
+  const gotoResp = await fetchGoogleRedirectPath("goto", `url=${token}`, gotoTimeoutMs);
   if (gotoResp) {
     if (gotoResp.status >= 300 && gotoResp.status < 400) {
       const dest = validateDestination(gotoResp.location);
@@ -465,8 +487,10 @@ export async function resolveGoogleRedirectTokenDetailed(
       // of a clean 302. Look for exactly ONE embedded, DIFFERENT /goto token
       // and follow it once — never recurse into a second interstitial.
       const embeddedToken = extractEmbeddedGotoToken(gotoResp.body, token);
-      if (embeddedToken) {
-        const hopResp = await fetchGoogleRedirectPath("goto", `url=${embeddedToken}`, timeoutMs);
+      const hopTimeoutMs = embeddedToken ? legTimeout() : null;
+      if (embeddedToken && hopTimeoutMs === null) return OUT_OF_TIME;
+      if (embeddedToken && hopTimeoutMs !== null) {
+        const hopResp = await fetchGoogleRedirectPath("goto", `url=${embeddedToken}`, hopTimeoutMs);
         if (hopResp && hopResp.status >= 300 && hopResp.status < 400) {
           const dest = validateDestination(hopResp.location);
           if (dest) return cacheSet(token, { url: dest, via: "interstitial_hop" });
@@ -578,21 +602,34 @@ function emptyStats(): ResolveGoogleLinksStats {
  *  `url_unavailable: true` so callers can render "title/snippet, no link"
  *  instead of silently treating it the same as a fully populated result. */
 function markUnresolved<T extends SerpLinkCandidate>(item: T): T {
-  const patched = { ...item } as Record<string, unknown>;
+  const patched = withoutRedirectLink(item) as Record<string, unknown>;
   patched.link = "";
   patched.url = "";
   patched.url_unavailable = true;
   return patched as T;
 }
 
+/** A copy of `item` without its upstream `redirect_link` (a Google
+ *  click-tracking URL that only exists to feed (c2) above); the same reference
+ *  when there is none. */
+function withoutRedirectLink<T extends SerpLinkCandidate>(item: T): T {
+  if (!("redirect_link" in item)) return item;
+  const { redirect_link: _redirectLink, ...rest } = item;
+  return rest as T;
+}
+
 /**
  * Resolve Google-wrapped links across a batch of SERP-shaped records.
  * Records whose link/url is already a plain absolute URL cost ZERO network
  * calls (checked synchronously before anything async happens) — this makes
- * the function a no-op for every non-Google-wrapped input, including every
- * other platform's scrape records, so it is safe to call unconditionally from
- * every pipeline that can emit Google-sourced links (class-not-instance: one
- * shared function, not a per-platform branch).
+ * the function safe to call unconditionally from every pipeline that can emit
+ * Google-sourced links, including every other platform's scrape records
+ * (class-not-instance: one shared function, not a per-platform branch).
+ *
+ * No returned record carries `redirect_link`: it is a Google click-tracking
+ * URL whose only use is the (c2) replay above, so it is removed here once for
+ * every caller (novada_search/research/verify/ai_monitor and
+ * novada_scrape_google alike) rather than by each caller remembering to.
  *
  * 2026-11-04 follow-up: a record whose link/url could NOT be resolved
  * (timeout, Google 4xx/5xx/degraded-200, budget exhausted) is RETAINED — see
@@ -618,7 +655,7 @@ export async function resolveGoogleLinksInPlace<T extends SerpLinkCandidate>(
       const primary = (typeof item.url === "string" && item.url) || (typeof item.link === "string" && item.link) || "";
 
       if (!isGoogleWrappedLink(primary, item.redirect_link)) {
-        results[i] = item; // zero-cost pass-through — same reference, nothing rewritten
+        results[i] = withoutRedirectLink(item); // zero network cost; same reference unless it carried a redirect_link
         continue;
       }
       stats.wrapped++;
@@ -642,7 +679,7 @@ export async function resolveGoogleLinksInPlace<T extends SerpLinkCandidate>(
       // filtered them out above as a zero-cost pass-through), so there is no
       // stats bucket for it in this batch-level counter.
 
-      const patched = { ...item } as Record<string, unknown>;
+      const patched = { ...withoutRedirectLink(item) } as Record<string, unknown>;
       if ("link" in patched) patched.link = resolved.url;
       if ("url" in patched) patched.url = resolved.url;
       results[i] = patched as T;

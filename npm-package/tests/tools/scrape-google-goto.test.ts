@@ -112,3 +112,52 @@ describe("novada_scrape_google — Google goto-link resolution (generic scrape e
   });
 });
 
+
+// 2026-11-05 review follow-up: live Google records carry `redirect_link` (a
+// google.com/url click-tracking URL). It must never reach any output format.
+describe("novada_scrape_google — redirect_link never reaches the output", () => {
+  const records = [
+    {
+      title: "Wrapped",
+      link: "/goto?url=SCRRL1",
+      redirect_link: "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=SCRRL1&ved=2ahUKE",
+      source: "Example",
+    },
+    {
+      title: "Plain",
+      link: "https://plain.example.com/page",
+      redirect_link: "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=SCRRL2&ved=2ahUKF",
+      source: "Example",
+    },
+  ];
+
+  for (const format of ["markdown", "json", "csv", "html", "toon"] as const) {
+    it(`${format}: no redirect_link field and no google.com/url? link`, async () => {
+      mockDownloadAndGotoResolve(records, { SCRRL1: "https://resolved.example.com/a" });
+      const result = await novadaScrapeGoogle(
+        validateScrapeGoogleParams({ operation: "web_search", params: { q: "test" }, format }),
+        "test-key",
+      );
+      expect(result).not.toContain("redirect_link");
+      expect(result).not.toContain("google.com/url?");
+      expect(result).toContain("https://plain.example.com/page");
+    });
+  }
+
+  it("resolves only the records the response returns (limit), never the discarded tail", async () => {
+    mockDownloadAndGotoResolve(
+      [
+        { title: "One", link: "/goto?url=LIMTOK1" },
+        { title: "Two", link: "/goto?url=LIMTOK2" },
+        { title: "Three", link: "/goto?url=LIMTOK3" },
+      ],
+      { LIMTOK1: "https://one.example.com/", LIMTOK2: "https://two.example.com/", LIMTOK3: "https://three.example.com/" },
+    );
+    await novadaScrapeGoogle(
+      validateScrapeGoogleParams({ operation: "web_search", params: { q: "test" }, limit: 1 }),
+      "test-key",
+    );
+    const googleCalls = mockedAxios.get.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith("https://www.google.com/"));
+    expect(googleCalls).toEqual(["https://www.google.com/goto?url=LIMTOK1"]);
+  });
+});

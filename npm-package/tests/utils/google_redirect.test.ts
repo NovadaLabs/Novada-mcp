@@ -52,6 +52,9 @@ describe("extractGoogleRedirectToken", () => {
     ["absolute URL on a non-Google host with url= param (must not be mistaken for a token)", "https://evil.com/goto?url=" + TOKEN, null],
     ["empty string", "", null],
     ["goto path with no url param", "/goto?foo=bar", null],
+    ["token with a percent-escape is accepted", "/goto?url=CAES%2Fab", "CAES%2Fab"],
+    ["token with markup characters is refused", "/goto?url=CAES<script>", null],
+    ["token with a quote is refused", "/goto?url=CAES\"x", null],
   ];
 
   it.each(cases)("%s", (_label, input, expected) => {
@@ -451,5 +454,76 @@ describe("resolveGoogleLinksInPlace", () => {
       expect((r as Record<string, unknown>).url_unavailable).toBe(true);
       expect(r.snippet).toBeTruthy(); // title/snippet survive even though every link failed
     }
+  });
+});
+
+// ─── 2026-11-05 review follow-ups ──────────────────────────────────────────
+
+describe("deadline is enforced per request, not just per item", () => {
+  it("clamps each request's timeout to the remaining budget", async () => {
+    mockRedirect(302, "https://clamped.example.com/");
+    await resolveGoogleRedirectTokenDetailed(TOKEN + "CLAMP", { timeoutMs: 2000, deadlineMs: Date.now() + 300 });
+    const timeout = (mockedAxios.get.mock.calls[0][1] as Record<string, number>).timeout;
+    expect(timeout).toBeGreaterThan(0);
+    expect(timeout).toBeLessThanOrEqual(300);
+  });
+
+  it("stops before the next request once the deadline passes mid-item, and does not cache that cut", async () => {
+    const tok = TOKEN + "MIDCUT";
+    const deadline = Date.now() + 1000;
+    mockedAxios.get.mockImplementation(async () => {
+      vi.setSystemTime(deadline + 1); // the first leg (/url replay) used up the whole budget
+      return { status: 200, headers: {}, data: "<html>notice page</html>" };
+    });
+    try {
+      const cut = await resolveGoogleRedirectTokenDetailed(tok, { deadlineMs: deadline }, urlQueryFor(tok));
+      expect(cut).toEqual({ url: null, via: null });
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1); // /goto never attempted
+    } finally {
+      vi.useRealTimers();
+    }
+    // Not cached: a later call with budget actually tries again.
+    mockRedirect(302, "https://after-cut.example.com/");
+    const later = await resolveGoogleRedirectTokenDetailed(tok, {}, urlQueryFor(tok));
+    expect(later.url).toBe("https://after-cut.example.com/");
+  });
+});
+
+describe("failed resolutions are cached only briefly", () => {
+  it("a failure is reused within 60 s and retried after it", async () => {
+    const tok = TOKEN + "NEGTTL";
+    vi.useFakeTimers({ now: Date.now() });
+    try {
+      mockedAxios.get.mockResolvedValue({ status: 200, headers: {}, data: "<html>no redirect</html>" });
+      expect((await resolveGoogleRedirectTokenDetailed(tok)).url).toBeNull();
+      const callsAfterFirst = mockedAxios.get.mock.calls.length;
+      expect((await resolveGoogleRedirectTokenDetailed(tok)).url).toBeNull();
+      expect(mockedAxios.get.mock.calls.length).toBe(callsAfterFirst); // served from the negative cache
+
+      vi.setSystemTime(Date.now() + 61_000);
+      mockRedirect(302, "https://recovered.example.com/");
+      expect((await resolveGoogleRedirectTokenDetailed(tok)).url).toBe("https://recovered.example.com/");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("resolveGoogleLinksInPlace removes redirect_link from every record", () => {
+  it("pass-through, resolved, and unresolved records all come back without it", async () => {
+    mockedAxios.get.mockImplementation(async (reqUrl: string) => {
+      if (reqUrl.includes(`url=${TOKEN}RLOK`)) return { status: 302, headers: { location: "https://ok.example.com/" }, data: "" };
+      return { status: 200, headers: {}, data: "<html>no redirect</html>" };
+    });
+    const items = [
+      { title: "plain", link: "https://plain.example.com/", redirect_link: `https://www.google.com/url?sa=t&url=${TOKEN}RLPLAIN` },
+      { title: "ok", link: `/goto?url=${TOKEN}RLOK`, redirect_link: `https://www.google.com/url?sa=t&url=${TOKEN}RLOK` },
+      { title: "bad", link: `/goto?url=${TOKEN}RLBAD`, redirect_link: `https://www.google.com/url?sa=t&url=${TOKEN}RLBAD` },
+      { title: "no-field", link: "https://nofield.example.com/" },
+    ];
+    const { kept } = await resolveGoogleLinksInPlace(items);
+    for (const r of kept) expect(Object.keys(r)).not.toContain("redirect_link");
+    expect(kept.map((r) => r.link)).toEqual(["https://plain.example.com/", "https://ok.example.com/", "", "https://nofield.example.com/"]);
+    expect(kept[3]).toBe(items[3]); // nothing to remove → same reference
   });
 });
