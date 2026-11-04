@@ -1,0 +1,224 @@
+{
+  "_note": "REDACTED live capture — scraper.novada.com, scraper_name=google.com, scraper_id=google_search, captured 2026-11-04 for the search-goto-links bug report. No API keys or account identifiers are present in this payload (it is the raw Google SERP data the scraper returns, unrelated to auth). Base64 image blobs (favicon / about_this_result.source.icon) are truncated to a short placeholder — see reports/search-goto-links-2026-11-04.md for field-occurrence counts across a larger sample.",
+  "samples": {
+    "query_1_best_project_management_software": [
+      {
+        "title": "12 Free Project Management Software 2026 (Reviewed)",
+        "position": 1,
+        "display_link": "https://www.proprofsproject.com› ...",
+        "source": "ProProfs Project",
+        "favicon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>",
+        "link": "https://www.proprofsproject.com/blog/free-project-management-software/",
+        "redirect_link": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESgwEB6zswFd2JfNe2rKNVoO355XecT_9Dien4MYJbSPiz3I6knYzEXCyb6yX0DoQRlwyo2jO52vtxSFUSysv7aO3sjkJ7MbTn25c0K6mM1vTut0emZdw4lsoSnLCUjl8wo67mxdVHadAVAdvk6bSGWUMxZrUk8mZCBAmaLIaZkaU4Zi1wuQ&ved=2ahUKEwji0pWF6-2XAxVSLLkGHe7tL7UQFnoECB8QAQ&uoh=1",
+        "description": "17 de jul. de 2026—Discover the12 best free project management software tools in 2026. Reviewed & ranked by features, free plan limits, and real team fit.",
+        "date": "17 de jul. de 2026",
+        "snippet_highlighted_words": [
+          "12 best free project management software tools in 2026"
+        ],
+        "about_this_result": {
+          "source": {
+            "description": "17 de jul. de 2026—Discover the12 best free project management software tools in 2026. Reviewed & ranked by features, free plan limits, and real team fit.",
+            "source_info_link": "https://www.proprofsproject.com/blog/free-project-management-software/",
+            "icon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>"
+          },
+          "languages": [
+            "en"
+          ],
+          "regions": [
+            "US"
+          ]
+        }
+      },
+      {
+        "title": "Best Project Management Software 2026 - SaaS Compared",
+        "position": 2,
+        "display_link": "https://saascompared.io› blog",
+        "source": "saascompared.io",
+        "favicon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>",
+        "link": "/goto?url=CAESgAEB6zswFdLmPr4Cx6AHIXjhqrGLblXhgqRhqpU2kj-csYQRRK-LdBhQJgDdiDqAejPrgowoYVKDTya5vtqVue9d55FcTOzUrTXZJ1CAbOr0XmpvBbSGExPhHHlbl7LUYzbMKSg6NrtdLsCewSBHnnXrL8V9LsSyaTV6DAtaItyu2w",
+        "redirect_link": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESgAEB6zswFdLmPr4Cx6AHIXjhqrGLblXhgqRhqpU2kj-csYQRRK-LdBhQJgDdiDqAejPrgowoYVKDTya5vtqVue9d55FcTOzUrTXZJ1CAbOr0XmpvBbSGExPhHHlbl7LUYzbMKSg6NrtdLsCewSBHnnXrL8V9LsSyaTV6DAtaItyu2w&ved=2ahUKEwji0pWF6-2XAxVSLLkGHe7tL7UQFnoECCUQAQ&uoh=1",
+        "description": "29 de abr. de 2026—We tested 8project managementtools for teams in2026. Compare ClickUp, monday.com, Asana, Notion, Trello, Coda, Basecamp, ...",
+        "date": "29 de abr. de 2026",
+        "snippet_highlighted_words": [
+          "project management",
+          "2026"
+        ],
+        "about_this_result": {
+          "source": {
+            "description": "29 de abr. de 2026—We tested 8project managementtools for teams in2026. Compare ClickUp, monday.com, Asana, Notion, Trello, Coda, Basecamp, ...",
+            "source_info_link": "/goto?url=CAESgAEB6zswFdLmPr4Cx6AHIXjhqrGLblXhgqRhqpU2kj-csYQRRK-LdBhQJgDdiDqAejPrgowoYVKDTya5vtqVue9d55FcTOzUrTXZJ1CAbOr0XmpvBbSGExPhHHlbl7LUYzbMKSg6NrtdLsCewSBHnnXrL8V9LsSyaTV6DAtaItyu2w",
+            "icon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>"
+          },
+          "languages": [
+            "en"
+          ],
+          "regions": [
+            "US"
+          ]
+        }
+      },
+      {
+        "title": "10 Best Project Management Software In 2026",
+        "position": 3,
+        "display_link": "https://thebusinessdive.com› bes...",
+        "source": "TheBusinessDive",
+        "favicon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>",
+        "link": "/goto?url=CAESeQHrOzAVH9qq7BXnGWymzT0cR4KskjzwFDvSoXQfA52Pux-m06MfFw-zyOSoYLV4w_oBaYCwTKtwb-HILPtMiqQt5AZEpCROyXwWCli7CShBq3NWuCRLSgEiJti9PEXk8dADWqaiE1CCgUdew5iofotBLFC772Yk2rE",
+        "redirect_link": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESeQHrOzAVH9qq7BXnGWymzT0cR4KskjzwFDvSoXQfA52Pux-m06MfFw-zyOSoYLV4w_oBaYCwTKtwb-HILPtMiqQt5AZEpCROyXwWCli7CShBq3NWuCRLSgEiJti9PEXk8dADWqaiE1CCgUdew5iofotBLFC772Yk2rE&ved=2ahUKEwji0pWF6-2XAxVSLLkGHe7tL7UQFnoECCgQAQ&uoh=1",
+        "description": "6 de jul. de 2026—Some of the most popular project management software includeMonday.com, ClickUp, Jira, and Zoho Projects. That said, popularity doesn't always ...",
+        "date": "6 de jul. de 2026",
+        "snippet_highlighted_words": [
+          "Monday.com, ClickUp, Jira, and Zoho Projects"
+        ],
+        "about_this_result": {
+          "source": {
+            "description": "6 de jul. de 2026—Some of the most popular project management software includeMonday.com, ClickUp, Jira, and Zoho Projects. That said, popularity doesn't always ...",
+            "source_info_link": "/goto?url=CAESeQHrOzAVH9qq7BXnGWymzT0cR4KskjzwFDvSoXQfA52Pux-m06MfFw-zyOSoYLV4w_oBaYCwTKtwb-HILPtMiqQt5AZEpCROyXwWCli7CShBq3NWuCRLSgEiJti9PEXk8dADWqaiE1CCgUdew5iofotBLFC772Yk2rE",
+            "icon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>"
+          },
+          "languages": [
+            "en"
+          ],
+          "regions": [
+            "US"
+          ]
+        }
+      },
+      {
+        "title": "Best Project Management Software Tools in 2026",
+        "position": 4,
+        "display_link": "https://zynwork.com› blog › be...",
+        "source": "Zynwork",
+        "favicon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>",
+        "link": "/goto?url=CAESoQEB6zswFcpt4EogoMIfJxZwik_EGe1naf4VR_IuBIOx8BXJPOf9T9tUn9vEKgwShx8m5kPraq0EFO_tNRsk57ZiEe9ghlvQDNFp04yk0W755F8GAAOaM1pgQwEJ0wJJWFbv0g8sCclnCx5NkymwmHw2eZDKFHNloda7enBw_vvgZsCO4lFaHHGFsltRCHwVjiHSy46zpy0eBJP9AVt55zUYfg",
+        "redirect_link": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESoQEB6zswFcpt4EogoMIfJxZwik_EGe1naf4VR_IuBIOx8BXJPOf9T9tUn9vEKgwShx8m5kPraq0EFO_tNRsk57ZiEe9ghlvQDNFp04yk0W755F8GAAOaM1pgQwEJ0wJJWFbv0g8sCclnCx5NkymwmHw2eZDKFHNloda7enBw_vvgZsCO4lFaHHGFsltRCHwVjiHSy46zpy0eBJP9AVt55zUYfg&ved=2ahUKEwji0pWF6-2XAxVSLLkGHe7tL7UQFnoECCoQAQ&uoh=1",
+        "description": "4 de jun. de 2026—Top Project Management Software Tools in 2026 ·1. Zynwork· 2. Jira · 3. Asana · 4. Monday.com · 5. ClickUp.",
+        "date": "4 de jun. de 2026",
+        "snippet_highlighted_words": [
+          "1. Zynwork"
+        ],
+        "about_this_result": {
+          "source": {
+            "description": "4 de jun. de 2026—Top Project Management Software Tools in 2026 ·1. Zynwork· 2. Jira · 3. Asana · 4. Monday.com · 5. ClickUp.",
+            "source_info_link": "/goto?url=CAESoQEB6zswFcpt4EogoMIfJxZwik_EGe1naf4VR_IuBIOx8BXJPOf9T9tUn9vEKgwShx8m5kPraq0EFO_tNRsk57ZiEe9ghlvQDNFp04yk0W755F8GAAOaM1pgQwEJ0wJJWFbv0g8sCclnCx5NkymwmHw2eZDKFHNloda7enBw_vvgZsCO4lFaHHGFsltRCHwVjiHSy46zpy0eBJP9AVt55zUYfg",
+            "icon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>"
+          },
+          "languages": [
+            "en"
+          ],
+          "regions": [
+            "US"
+          ]
+        }
+      }
+    ],
+    "query_2_claude_code_vs_cursor": [
+      {
+        "title": "Claude Code vs Cursor: The Missing Layer Between ...",
+        "position": 1,
+        "display_link": "https://www.qodo.ai› Blog › Learn",
+        "source": "Qodo",
+        "favicon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>",
+        "link": "/goto?url=CAESbAHrOzAV4eHiu9BOuIHsoXkjklGZTQy6oBAB4Eo4HSyYN-RGMrJBahbpKoDVIuFzOriOfOcGYVwldCgynXOFCHTVjb-OEKhMNyjv1-DDicGbJvOyRgePJBZr3I6GwPH3lDtIm-G38H0HHigKmQ",
+        "redirect_link": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESbAHrOzAV4eHiu9BOuIHsoXkjklGZTQy6oBAB4Eo4HSyYN-RGMrJBahbpKoDVIuFzOriOfOcGYVwldCgynXOFCHTVjb-OEKhMNyjv1-DDicGbJvOyRgePJBZr3I6GwPH3lDtIm-G38H0HHigKmQ&ved=2ahUKEwipwY6G6-2XAxVNjZUCHbsIC24QFnoECC4QAQ&uoh=1",
+        "description": "31 de mai. de 2026—The most significant difference is thatClaude Code runs in the terminal across any environment, local, remote, or CI, while Cursor operates ...",
+        "date": "31 de mai. de 2026",
+        "snippet_highlighted_words": [
+          "Claude Code runs in the terminal across any environment"
+        ],
+        "about_this_result": {
+          "source": {
+            "description": "31 de mai. de 2026—The most significant difference is thatClaude Code runs in the terminal across any environment, local, remote, or CI, while Cursor operates ...",
+            "source_info_link": "/goto?url=CAESbAHrOzAV4eHiu9BOuIHsoXkjklGZTQy6oBAB4Eo4HSyYN-RGMrJBahbpKoDVIuFzOriOfOcGYVwldCgynXOFCHTVjb-OEKhMNyjv1-DDicGbJvOyRgePJBZr3I6GwPH3lDtIm-G38H0HHigKmQ",
+            "icon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>"
+          },
+          "languages": [
+            "en"
+          ],
+          "regions": [
+            "US"
+          ]
+        }
+      },
+      {
+        "title": "Claude vs. Cursor AI: Creating an Intuitive To-Do Web App ...",
+        "position": 2,
+        "display_link": "https://www.indiehackers.com› ...",
+        "source": "Indie Hackers",
+        "favicon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>",
+        "link": "/goto?url=CAESuwEB6zswFSgAyfVKNVoSH1jA2LtvRcuWmcUD_Z8rUJ9zxmSYuujNkbpVsfxUzXl1qtgzCZt0skZZ60YMIm1jd1EeMoF1RuiyRY8sV85yQUW3JC-nh6rLx_Jbs57Ttc7p5lA6kT5EyPHr0puX0KhmQ9rB8M4m3EpmQJEac2Mjy3IEQIa-hNMCxUl_eosTg-CgamVuqWq9QlYfmNBLoxO9hk9ZM8B-XEG0vvdnPJYO_u3y2agPLWMSL_Q51Ylu",
+        "redirect_link": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESuwEB6zswFSgAyfVKNVoSH1jA2LtvRcuWmcUD_Z8rUJ9zxmSYuujNkbpVsfxUzXl1qtgzCZt0skZZ60YMIm1jd1EeMoF1RuiyRY8sV85yQUW3JC-nh6rLx_Jbs57Ttc7p5lA6kT5EyPHr0puX0KhmQ9rB8M4m3EpmQJEac2Mjy3IEQIa-hNMCxUl_eosTg-CgamVuqWq9QlYfmNBLoxO9hk9ZM8B-XEG0vvdnPJYO_u3y2agPLWMSL_Q51Ylu&ved=2ahUKEwipwY6G6-2XAxVNjZUCHbsIC24QFnoECCoQAQ&uoh=1",
+        "description": "3 de out. de 2024—Claude Code reads CLAUDEmd. Without them,both tools guess at your project structure and produce inconsistent code. With them, the AI stops re- ...",
+        "date": "3 de out. de 2024",
+        "snippet_highlighted_words": [
+          "both tools guess at your project structure and produce inconsistent code"
+        ],
+        "about_this_result": {
+          "source": {
+            "description": "3 de out. de 2024—Claude Code reads CLAUDEmd. Without them,both tools guess at your project structure and produce inconsistent code. With them, the AI stops re- ...",
+            "source_info_link": "/goto?url=CAESuwEB6zswFSgAyfVKNVoSH1jA2LtvRcuWmcUD_Z8rUJ9zxmSYuujNkbpVsfxUzXl1qtgzCZt0skZZ60YMIm1jd1EeMoF1RuiyRY8sV85yQUW3JC-nh6rLx_Jbs57Ttc7p5lA6kT5EyPHr0puX0KhmQ9rB8M4m3EpmQJEac2Mjy3IEQIa-hNMCxUl_eosTg-CgamVuqWq9QlYfmNBLoxO9hk9ZM8B-XEG0vvdnPJYO_u3y2agPLWMSL_Q51Ylu",
+            "icon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>"
+          },
+          "languages": [
+            "en"
+          ],
+          "regions": [
+            "US"
+          ]
+        }
+      },
+      {
+        "title": "Claude Code vs Cursor. The best AI Coding tool",
+        "position": 3,
+        "display_link": "Mais de 30 marcações \"Gostei\"  ·  há 9 meses",
+        "source": "Medium · Mehul Gupta",
+        "favicon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>",
+        "link": "https://medium.com/data-science-in-your-pocket/claude-code-vs-cursor-97b446515d83",
+        "redirect_link": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESjgEB6zswFc5urjINOS-DfuhodIax7y3hJhzIEKvVHK21BN0KfvWYhhiCIlNjuvtMCog0Aq-a0JMcN-dkVjkAc265t7IwFNjF0i4gOYMScHMwkw_NwV2K_caV4aIGopVvY5XHUcS9fxudk7N3zulI4D_56Pf4142ELszIhBra-8RTpsL-VaW9i7YBrgEuka2i&ved=2ahUKEwipwY6G6-2XAxVNjZUCHbsIC24QFnoECCsQAQ&uoh=1",
+        "description": "Surprisingly,Claude Code often does a better job refactoring very large filesthan Cursor. It reasons about the whole file in one go instead of ...",
+        "snippet_highlighted_words": [
+          "Claude Code often does a better job refactoring very large files"
+        ],
+        "about_this_result": {
+          "source": {
+            "description": "Surprisingly,Claude Code often does a better job refactoring very large filesthan Cursor. It reasons about the whole file in one go instead of ...",
+            "source_info_link": "https://medium.com/data-science-in-your-pocket/claude-code-vs-cursor-97b446515d83",
+            "icon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>"
+          },
+          "languages": [
+            "en"
+          ],
+          "regions": [
+            "US"
+          ]
+        }
+      },
+      {
+        "title": "Cursor vs Claude Code : r/cursor",
+        "position": 4,
+        "display_link": "Mais de 60 comentários  ·  há 1 ano",
+        "source": "Reddit · r/cursor",
+        "favicon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>",
+        "link": "/goto?url=CAESjQEB6zswFYXo7tw-r1-NYZFidDgNfyEWPbnkxuggv9QjO6eOM_Mf3M9l1ckUT08LGtzyKknMOLGG7oVCKMDypaVVoh4PauXgaAYYPuXbziCwFxNq7ow30DQttdJWjIdjZwjhqm7sTvWv7veQIR9tzh_1O-xCN4ehYvks84JVMH7rO2UMKV1Q5mi7Xm7N3aA",
+        "redirect_link": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESjQEB6zswFYXo7tw-r1-NYZFidDgNfyEWPbnkxuggv9QjO6eOM_Mf3M9l1ckUT08LGtzyKknMOLGG7oVCKMDypaVVoh4PauXgaAYYPuXbziCwFxNq7ow30DQttdJWjIdjZwjhqm7sTvWv7veQIR9tzh_1O-xCN4ehYvks84JVMH7rO2UMKV1Q5mi7Xm7N3aA&ved=2ahUKEwipwY6G6-2XAxVNjZUCHbsIC24QFnoECDAQAQ&uoh=1",
+        "description": "Honestamente,ambos são bons, mas para coisas diferentes. O Cursor é melhor para edições rápidas e fluxo de complemento de tabulação. O Claude ...",
+        "snippet_highlighted_words": [
+          "ambos são bons, mas para coisas diferentes"
+        ],
+        "about_this_result": {
+          "source": {
+            "description": "Honestamente,ambos são bons, mas para coisas diferentes. O Cursor é melhor para edições rápidas e fluxo de complemento de tabulação. O Claude ...",
+            "source_info_link": "/goto?url=CAESjQEB6zswFYXo7tw-r1-NYZFidDgNfyEWPbnkxuggv9QjO6eOM_Mf3M9l1ckUT08LGtzyKknMOLGG7oVCKMDypaVVoh4PauXgaAYYPuXbziCwFxNq7ow30DQttdJWjIdjZwjhqm7sTvWv7veQIR9tzh_1O-xCN4ehYvks84JVMH7rO2UMKV1Q5mi7Xm7N3aA",
+            "icon": "data:image/png;base64,<TRUNCATED_FOR_FIXTURE_19KB_BLOB>"
+          },
+          "languages": [
+            "en"
+          ],
+          "regions": [
+            "US"
+          ]
+        }
+      }
+    ]
+  }
+}

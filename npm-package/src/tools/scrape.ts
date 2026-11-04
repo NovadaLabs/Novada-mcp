@@ -12,6 +12,7 @@ import { findKnownBrokenParamValue } from "../data/known_broken_param_values.js"
 import { devApiPost } from "../_core/developer_api.js";
 import { extractRawTaskStatus, type RawTaskStatusResp } from "./scraper_status.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
+import { resolveGoogleLinksInPlace } from "../utils/google_redirect.js";
 
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 
@@ -2214,6 +2215,21 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   // price and a trustworthy is_available. Pure projection of the API json — no-op
   // for platforms (e.g. Walmart) whose flat fields are already populated.
   rawRecords = rawRecords.map(r => normalizeProductRecord(r));
+
+  // search-goto-links-2026-11-04: Google SERP operations (novada_scrape_google
+  // web_search, etc.) can return a `link` that is a relative Google click-tracking
+  // path ("/goto?url=CAES...") instead of a real URL. Resolve through the SAME
+  // shared normalizer novada_search / novada_research use (utils/google_redirect.ts)
+  // BEFORE slicing to effectiveLimit, so a drop is backfilled from the next
+  // upstream-ranked record rather than silently under-filling the response.
+  // Zero network calls (and byte-identical output) for every record whose
+  // link/url is already a plain absolute URL — i.e. every OTHER platform's scrape
+  // output, and most Google results too — so this call is safe unconditionally.
+  const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
+  const { kept: gotoResolvedRecords, dropped: droppedGotoLinks } =
+    await resolveGoogleLinksInPlace(rawRecords, { deadlineMs: gotoResolveDeadline });
+  rawRecords = gotoResolvedRecords;
+
   const records = rawRecords.slice(0, effectiveLimit).map(r => flattenRecord(r)) as Record<string, unknown>[];
 
   // Identity oracle (TOW2-305): never surface a DIFFERENT YouTube video than requested as
@@ -2245,6 +2261,13 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
     ? `- No country/gl specified — defaulted to country="us" (this operation returns an empty SERP without a region hint).`
     : null;
 
+  // search-goto-links-2026-11-04: threaded into every populated-record format
+  // branch alongside localeDefaultHint — never rendered unless at least one
+  // result was actually dropped for an unresolvable Google redirect link.
+  const gotoDroppedHint = droppedGotoLinks > 0
+    ? `- Dropped ${droppedGotoLinks} result(s) whose Google redirect link ("/goto?url=...") could not be resolved to a real URL.`
+    : null;
+
   let output: string;
   switch (format) {
     case "json":
@@ -2273,6 +2296,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         `---`,
         `## Agent Hints`,
         localeDefaultHint,
+        gotoDroppedHint,
         `- Increase limit (max 100) to retrieve more records.`,
         `- For human-readable output: use format='markdown'. For spreadsheets: format='csv' or format='excel'.`,
         `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
@@ -2296,6 +2320,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         `---`,
         `## Agent Hints`,
         localeDefaultHint,
+        gotoDroppedHint,
         `- Copy the CSV block above and paste into Excel, Google Sheets, or any spreadsheet app.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- Use format='excel' to get a real .xlsx file instead.`,
@@ -2327,6 +2352,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         `---`,
         `## Agent Hints`,
         localeDefaultHint,
+        gotoDroppedHint,
         `- Base64 → xlsx: \`echo "<base64>" | base64 -d > data.xlsx\` or use any online base64-to-file converter.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- Use format='csv' for a smaller inline text alternative.`,
@@ -2348,6 +2374,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         `---`,
         `## Agent Hints`,
         localeDefaultHint,
+        gotoDroppedHint,
         `- The HTML above is a standalone <table> document — save it as .html and open in a browser, or embed the <table> element in a page.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- Use format='csv' or format='excel' for spreadsheet-ready output, format='json' for code.`,
@@ -2375,6 +2402,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         `---`,
         `## Agent Hints`,
         localeDefaultHint,
+        gotoDroppedHint,
         `- TOON format: first line starts with "HEADERS:" listing columns, subsequent lines are pipe-separated values.`,
         `- Use format='json' for downstream code processing, format='markdown' for human-readable output.`,
         `- Increase limit (max 100) to retrieve more records.`,
@@ -2398,6 +2426,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         `---`,
         `## Agent Hints`,
         localeDefaultHint,
+        gotoDroppedHint,
         `- Use format='json' or format='csv' for downstream processing. Use format='excel' for a .xlsx spreadsheet.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- For structured scraping of other platforms, change platform and operation.`,

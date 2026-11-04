@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
 import https from "https";
-import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect, type SearchIntent } from "../utils/index.js";
+import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect, resolveGoogleLinksInPlace, type SearchIntent } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS, toolCallDeadline } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
@@ -189,7 +189,7 @@ interface SearchFilterParams {
   language?: string;
 }
 
-interface SubmitSearchResult {
+export interface SubmitSearchResult {
   /** Inline results parsed directly from the submit response (avoids a download round-trip). */
   inlineResults?: Record<string, unknown>;
   /** task_id for polling the download endpoint when inline results are absent. */
@@ -339,12 +339,19 @@ export async function resolveSearchResults(
   apiKey: string,
   submitted: SubmitSearchResult
 ): Promise<NovadaSearchResult[]> {
+  // search-goto-links-2026-11-04: route through parseAndResolveScraperSearchResults
+  // (not the raw parseScraperSearchResults) so research.ts's PRIMARY/FALLBACK engines
+  // (searchWithFallback, research.ts) get the SAME Google-redirect resolution/drop
+  // behavior novada_search gets — this is the one choke point both of research.ts's
+  // call sites go through, so fixing it here fixes novada_research too.
   if (submitted.inlineResults) {
-    return parseScraperSearchResults(submitted.inlineResults);
+    const { results } = await parseAndResolveScraperSearchResults(submitted.inlineResults);
+    return results;
   }
   if (submitted.taskId) {
     const data = await pollSearchResult(apiKey, submitted.taskId);
-    return parseScraperSearchResults(data);
+    const { results } = await parseAndResolveScraperSearchResults(data);
+    return results;
   }
   return [];
 }
@@ -473,6 +480,25 @@ export function parseScraperSearchResults(data: Record<string, unknown>): Novada
   }));
 }
 
+/**
+ * search-goto-links-2026-11-04: parse AND resolve any Google click-tracking
+ * "goto" wrapper links to their real destination (see utils/google_redirect.ts
+ * for the full investigation + design). `parseScraperSearchResults` itself
+ * stays synchronous (no network, simpler to unit-test) — this wrapper is the
+ * ONE place both of novadaSearch's call sites and resolveSearchResults (used
+ * by research.ts) route through, so the fix lands once for novada_search AND
+ * novada_research. A result whose link could not be resolved to a real
+ * absolute URL is DROPPED — never surfaced as a relative "/goto?url=..." path.
+ */
+export async function parseAndResolveScraperSearchResults(
+  data: Record<string, unknown>,
+  opts?: { deadlineMs?: number },
+): Promise<{ results: NovadaSearchResult[]; droppedGotoLinks: number }> {
+  const parsed = parseScraperSearchResults(data);
+  const { kept, dropped } = await resolveGoogleLinksInPlace(parsed, opts);
+  return { results: kept, droppedGotoLinks: dropped };
+}
+
 // ---------------------------------------------------------------------------
 
 const SERP_UNAVAILABLE = `## Search Unavailable
@@ -579,6 +605,10 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   }
 
   let scraperResults: NovadaSearchResult[] = [];
+  // search-goto-links-2026-11-04: count of results dropped because their Google
+  // "goto" redirect link could not be resolved to a real URL — surfaced to the
+  // agent (never silently swallowed) once non-zero, see below.
+  let droppedGotoLinks = 0;
 
   // H3: an unrecognized engine value is USER INPUT, not an account defect.
   // Returning the entitlement message here falsely told the agent their key was
@@ -672,9 +702,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         undefined,
         submitRetryBudget(callDeadline),
       );
+      // search-goto-links-2026-11-04: bound the goto-resolution phase to at most
+      // 8s of wall clock OR whatever remains of the shared callDeadline, whichever
+      // is tighter — never a fresh, unbounded allotment on top of submit+poll.
+      const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
       // Fast path: inline results from submit response (no download round-trip needed)
       if (submitted.inlineResults) {
-        scraperResults = parseScraperSearchResults(submitted.inlineResults);
+        const resolved = await parseAndResolveScraperSearchResults(submitted.inlineResults, { deadlineMs: gotoResolveDeadline });
+        scraperResults = resolved.results;
+        droppedGotoLinks += resolved.droppedGotoLinks;
       } else if (submitted.taskId) {
         // Slow path: poll download endpoint.
         // review2 MEDIUM #2: clamp the poll ceiling to whatever remains of the
@@ -684,7 +720,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         // a no-op (byte-identical to the pre-fix unconditional default).
         const pollCeilingMs = Math.min(TIMEOUTS.SEARCH_TOTAL_CEILING, Math.max(0, callDeadline - Date.now()));
         const resultData = await pollSearchResult(apiKey, submitted.taskId, pollCeilingMs);
-        scraperResults = parseScraperSearchResults(resultData);
+        const resolved = await parseAndResolveScraperSearchResults(resultData, { deadlineMs: gotoResolveDeadline });
+        scraperResults = resolved.results;
+        droppedGotoLinks += resolved.droppedGotoLinks;
       }
     }
   } catch (err: unknown) {
@@ -758,11 +796,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         agent_instruction: "No results found. Try rephrasing the query, switching engine, or using novada_research for multi-source investigation.",
       };
       if (queryTruncated) emptyJson.query_truncated = queryTruncated;
+      // search-goto-links-2026-11-04: surface when EVERY returned result was dropped
+      // because its Google redirect link could not be resolved — otherwise "no
+      // results" looks identical to a genuinely empty SERP.
+      if (droppedGotoLinks > 0) emptyJson.goto_links_dropped = droppedGotoLinks;
       emptyResult = JSON.stringify(emptyJson, null, 2);
     } else {
       emptyResult = [
         `## Search Results`,
-        `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}`,
+        `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}${droppedGotoLinks > 0 ? ` | goto_links_dropped:${droppedGotoLinks}` : ""}`,
         ``,
         `No results found for: "${params.query}"`,
         ``,
@@ -997,6 +1039,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     // available, so agents don't assume the ceiling was hit.
     if (scarcity) jsonResult.scarcity = scarcity;
     if (queryTruncated) jsonResult.query_truncated = queryTruncated;
+    // search-goto-links-2026-11-04: count of upstream results dropped because their
+    // Google redirect link could not be resolved to a real URL — never silent.
+    if (droppedGotoLinks > 0) jsonResult.goto_links_dropped = droppedGotoLinks;
     // Wire output save — best-effort, never breaks the tool.
     // Inject output_saved as a field so JSON remains valid and parseable.
     // FIX-1: Redact home path from output_saved before embedding in agent-visible JSON.
@@ -1034,6 +1079,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
 
   if (scarcity) activeFilters.push(scarcity);
   if (queryTruncated) activeFilters.push(queryTruncated);
+  if (droppedGotoLinks > 0) activeFilters.push(`goto_links_dropped:${droppedGotoLinks}`);
 
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 
