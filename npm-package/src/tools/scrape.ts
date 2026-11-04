@@ -1336,6 +1336,38 @@ function isBase64Blob(v: unknown): boolean {
   return false;
 }
 
+// search-goto-links-2026-11-04 item (i): curateTabularRecords (above) already drops
+// base64-blob COLUMNS for csv/excel/html, but json and markdown render the raw/
+// flattened records directly — a Google SERP result's `favicon` (and nested
+// `about_this_result.source.icon`) field is a `data:image/png;base64,...` blob,
+// live-measured at ~19KB EACH; 5 results = ~100KB of useless image data landing in
+// the agent's context on every novada_scrape_google / novada_search call. Reuses
+// isBase64Blob (same detector `curateTabularRecords` already uses) so the two never
+// drift on what counts as "a blob" — just a different consumer action (replace the
+// value with a short marker, recursively, rather than dropping the whole column —
+// json/markdown have no "column" concept and a nested field like
+// about_this_result.source.icon needs a recursive walk to reach).
+const BASE64_STRIPPED_MARKER = "[base64 image data stripped]";
+
+/** Recursively replace any base64-blob STRING value (see isBase64Blob) with a short
+ *  marker, walking arrays and plain objects. Never mutates the input. */
+export function stripBase64Blobs<T>(value: T): T {
+  if (typeof value === "string") {
+    return (isBase64Blob(value) ? BASE64_STRIPPED_MARKER : value) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return (value as unknown[]).map((v) => stripBase64Blobs(v)) as unknown as T;
+  }
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = stripBase64Blobs(v);
+    }
+    return out as unknown as T;
+  }
+  return value;
+}
+
 // Curated key columns that a human opening a spreadsheet actually wants, in
 // priority order. Matched case-insensitively against the *leaf* of a flattened
 // dot-path key (e.g. "price.value" → leaf "value" also checks the full key).
@@ -2248,11 +2280,22 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   // For json we want clean structured records (not the flattened dot-path display version).
   // rawRecords are already sliced by effectiveLimit above via `rawRecords.slice(0, effectiveLimit)`.
   // `records` is the flattenRecord'd version used for markdown/toon tabular display.
-  const cleanRecords = rawRecords.slice(0, effectiveLimit);
+  // search-goto-links-2026-11-04 item (i): strip base64 blobs (favicon/image data URIs)
+  // recursively — json has no "column" to drop, so this is a per-value replacement,
+  // not curateTabularRecords's column-drop (which stays on the ORIGINAL `records` below
+  // so its csv/excel/html behavior is unchanged).
+  const cleanRecords = rawRecords.slice(0, effectiveLimit).map((r) => stripBase64Blobs(r));
   // For the human tabular formats (csv/excel/html): drop base64-blob columns
   // (favicon/image data URIs — useless in a spreadsheet + fragile in CSV) and
   // lead with curated key columns (title/price/rating/url/…). Display-only.
   const tabularRecords = curateTabularRecords(records);
+  // search-goto-links-2026-11-04 item (i): same stripping for markdown/toon, which
+  // render `records` directly (not through curateTabularRecords's column-drop).
+  // Derived SEPARATELY from `records` so `tabularRecords` above still curates from
+  // the unstripped original — stripping first would turn every blob into a short
+  // marker string that no longer matches isBase64Blob, silently defeating
+  // curateTabularRecords's own column-drop for csv/excel/html.
+  const displayRecords = records.map((r) => stripBase64Blobs(r));
 
   // TOW2-372 change 2: one shared disclosure line, threaded into every
   // populated-record format branch below — never rendered unless the locale
@@ -2386,11 +2429,11 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
       // TOON: headers declared once, then pipe-separated rows — 40-65% token savings vs JSON/markdown
       // Union all keys across records to avoid dropping columns from heterogeneous rows
       const headerSet = new Set<string>();
-      for (const r of records) Object.keys(r).forEach(k => headerSet.add(k));
+      for (const r of displayRecords) Object.keys(r).forEach(k => headerSet.add(k));
       const headers = Array.from(headerSet);
       const toonRows = [
         `HEADERS: ${headers.join(" | ")}`,
-        ...records.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
+        ...displayRecords.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
       ];
       // G-2: NOT wrapped — token-optimized machine format, see the json case's comment.
       output = [
@@ -2421,7 +2464,7 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
         ``,
         `---`,
         ``,
-        wrapUntrusted(formatAsMarkdown(records), `${platform}/${operation}`),
+        wrapUntrusted(formatAsMarkdown(displayRecords), `${platform}/${operation}`),
         ``,
         `---`,
         `## Agent Hints`,
