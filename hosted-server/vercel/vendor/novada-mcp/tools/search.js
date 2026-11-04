@@ -470,12 +470,10 @@ export function parseScraperSearchResults(data) {
  */
 export async function parseAndResolveScraperSearchResults(data, opts) {
     const parsed = parseScraperSearchResults(data);
+    // The resolver also removes redirect_link (only carried here to feed its
+    // /url replay), so no consumer can surface it.
     const { kept, dropped } = await resolveGoogleLinksInPlace(parsed, opts);
-    // redirect_link only exists to feed the resolver's /url replay; strip it here,
-    // at the one choke point every search/research/verify/ai_monitor path shares,
-    // so no consumer has to remember to omit it.
-    const results = kept.map(({ redirect_link: _redirectLink, ...rest }) => rest);
-    return { results, unresolvedGotoLinks: dropped };
+    return { results: kept, unresolvedGotoLinks: dropped };
 }
 // ---------------------------------------------------------------------------
 const SERP_UNAVAILABLE = `## Search Unavailable

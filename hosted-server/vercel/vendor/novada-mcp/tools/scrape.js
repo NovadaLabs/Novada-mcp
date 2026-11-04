@@ -1869,14 +1869,16 @@ export async function novadaScrape(params, apiKey) {
         // search-goto-links-2026-11-04: Google SERP operations (novada_scrape_google
         // web_search, etc.) can return a `link` that is a relative Google click-tracking
         // path ("/goto?url=CAES...") instead of a real URL. Resolve through the SAME
-        // shared normalizer novada_search / novada_research use (utils/google_redirect.ts)
-        // BEFORE slicing to effectiveLimit, so a drop is backfilled from the next
-        // upstream-ranked record rather than silently under-filling the response.
-        // Zero network calls (and byte-identical output) for every record whose
-        // link/url is already a plain absolute URL — i.e. every OTHER platform's scrape
-        // output, and most Google results too — so this call is safe unconditionally.
+        // shared normalizer novada_search / novada_research use (utils/google_redirect.ts).
+        // Only the records this response will actually return (the first
+        // effectiveLimit) are resolved: an unresolvable record is kept without a link
+        // rather than dropped, so there is nothing to backfill from further down the
+        // list, and resolving discarded records would only spend Google requests.
+        // Zero network calls for every record whose link/url is already a plain
+        // absolute URL — i.e. every OTHER platform's scrape output — so this call is
+        // safe unconditionally.
         const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
-        const { kept: gotoResolvedRecords, dropped: unresolvedGotoLinks } = await resolveGoogleLinksInPlace(rawRecords, { deadlineMs: gotoResolveDeadline });
+        const { kept: gotoResolvedRecords, dropped: unresolvedGotoLinks } = await resolveGoogleLinksInPlace(rawRecords.slice(0, effectiveLimit), { deadlineMs: gotoResolveDeadline });
         rawRecords = gotoResolvedRecords;
         const records = rawRecords.slice(0, effectiveLimit).map(r => flattenRecord(r));
         // Identity oracle (TOW2-305): never surface a DIFFERENT YouTube video than requested as

@@ -218,10 +218,14 @@ export interface ResolveGoogleLinksStats {
  * Resolve Google-wrapped links across a batch of SERP-shaped records.
  * Records whose link/url is already a plain absolute URL cost ZERO network
  * calls (checked synchronously before anything async happens) — this makes
- * the function a no-op for every non-Google-wrapped input, including every
- * other platform's scrape records, so it is safe to call unconditionally from
- * every pipeline that can emit Google-sourced links (class-not-instance: one
- * shared function, not a per-platform branch).
+ * the function safe to call unconditionally from every pipeline that can emit
+ * Google-sourced links, including every other platform's scrape records
+ * (class-not-instance: one shared function, not a per-platform branch).
+ *
+ * No returned record carries `redirect_link`: it is a Google click-tracking
+ * URL whose only use is the (c2) replay above, so it is removed here once for
+ * every caller (novada_search/research/verify/ai_monitor and
+ * novada_scrape_google alike) rather than by each caller remembering to.
  *
  * 2026-11-04 follow-up: a record whose link/url could NOT be resolved
  * (timeout, Google 4xx/5xx/degraded-200, budget exhausted) is RETAINED — see
