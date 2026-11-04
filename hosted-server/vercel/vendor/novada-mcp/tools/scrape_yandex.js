@@ -49,19 +49,19 @@ export const YANDEX_SCRAPER_CONFIG = {
     operations: YANDEX_OPERATION_CONFIGS,
     paramsFieldDoc: "Operation-specific parameters for the selected `operation`. E.g. { q: \"wireless earbuds\", yandex_domain: \"yandex.ru\" } for web_search.",
     description: {
-        core: "Extract structured Yandex web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"yandex.com\"). Returns the raw organic-results SERP, with TLD/language/time-range controls novada_search does not expose, not a generated answer.",
+        core: "Extract structured Yandex web search SERP data via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"yandex.com\"). Returns the raw organic-results SERP, with TLD/language/time-range controls novada_search does not expose, not a generated answer.",
         useWhen: [
             "get the raw Yandex search results (titles, links, ranks) for <query>",
             "search a specific Yandex TLD (params.yandex_domain, e.g. \"yandex.ru\") for Russian/Eastern European content",
             "search Yandex restricted to a time range (params.within)",
         ],
         notFor: [
-            { when: "A general question needing just an answer or a few good links", useInstead: "novada_search with engine=\"yandex\" (ranked/reranked instead of a raw SERP dump)" },
+            { when: "A general question needing just an answer or a few good links", useInstead: "novada_search with engine=\"yandex\" (returns ranked results rather than raw SERP records)" },
             { when: "A complex question needing cited multi-source synthesis", useInstead: "novada_research" },
             { when: "Reading one already-known URL's page content", useInstead: "novada_extract" },
-            { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+            { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
         ],
-        returns: "Structured organic-result SERP records (title/url/snippet/rank) in the chosen output format, same rendering as novada_scrape.",
+        returns: "Structured organic-result SERP records (title/url/snippet/rank) in the chosen output format{{sibling:novada_scrape}}, same rendering as novada_scrape{{/sibling}}.",
         operationsNote: "1 verified-working Yandex operation (web search, requires params.yandex_domain TLD selector). The single yandex.com catalog operation is currently status:\"ok\".",
     },
 };

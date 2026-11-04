@@ -51,7 +51,7 @@ export const INSTAGRAM_SCRAPER_CONFIG = {
         "comments_by_post_url/post_by_url, { profileurl: \"https://www.instagram.com/handle/\", resultsLimit: 10 } for " +
         "posts_by_profile, { username: \"handle\" } for profile_by_username.",
     description: {
-        core: "Extract structured Instagram data — profiles, posts, reels, and comments — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"instagram.com\").",
+        core: "Extract structured Instagram data — profiles, posts, reels, and comments — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"instagram.com\").",
         useWhen: [
             "get the latest posts from this Instagram profile",
             "pull the comments on this Instagram post or reel",
@@ -62,9 +62,9 @@ export const INSTAGRAM_SCRAPER_CONFIG = {
         notFor: [
             { when: "A single Instagram URL to read as plain text", useInstead: "novada_extract" },
             { when: "A general web search not scoped to Instagram", useInstead: "novada_search" },
-            { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+            { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
         ],
-        returns: "Structured profile/post/reel/comment records (username, follower count, caption, like count, comment author/text, etc.) in the chosen output format — same rendering as novada_scrape.",
+        returns: "Structured profile/post/reel/comment records (username, follower count, caption, like count, comment author/text, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
         operationsNote: "7 verified-working Instagram operations spanning profile lookup (by URL or username), posts and reels (by profile or by direct URL), and comments. `posts_by_profile` requires BOTH `profileurl` AND `resultsLimit` together. Every instagram.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
     },
 };
