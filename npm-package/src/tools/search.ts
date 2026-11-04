@@ -196,6 +196,81 @@ export interface SubmitSearchResult {
   taskId?: string;
 }
 
+/** Format a Date as Google's `tbs=cdr:`/`cd_min:`/`cd_max:` date shape: M/D/YYYY
+ *  (no leading zeros — verified live 2026-11-04 against both padded and
+ *  unpadded forms; Google accepts unpadded). Returns null for an unparseable
+ *  ISO string rather than silently sending a malformed date. */
+function toGoogleTbsDate(iso: string): string | null {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
+}
+
+/**
+ * search-goto-links-2026-11-04 item (ii): map the tool's engine-agnostic
+ * time_range/start_date/end_date params to the field name+value shape each
+ * upstream scraper_id ACTUALLY understands, instead of sending a literal
+ * `time_range=week` form field no catalog op declares.
+ *
+ * Live-verified 2026-11-04 (same production scraper.novada.com this bug was
+ * reproduced against): a query with `time_range=week` returned results dated
+ * from 2025 and even a future-relative "12 мар. 2026" — proving the field was
+ * silently ignored. The SAME query with `tbs=qdr:w` returned ONLY results
+ * dated "2 days ago" / "6 days ago" / within the last week. `tbs=cdr:1,
+ * cd_min:M/D/YYYY,cd_max:M/D/YYYY` was independently verified to constrain
+ * results to an exact custom range (tested against a Jan-2024 window, a
+ * trailing-7-day window, and a full-year window — every returned date fell
+ * inside the requested range in all three).
+ *
+ *   google.com     -> tbs=qdr:{d|w|m|y}  (relative), or
+ *                      tbs=cdr:1,cd_min:...,cd_max:... (custom range — wins
+ *                      over time_range when either start_date/end_date is set,
+ *                      matching novadaSearch's own window-override precedence)
+ *   duckduckgo.com -> df={d|w|m|y}       (the catalog's OWN declared enum for
+ *                      this op IS exactly first-letter day/week/month/year —
+ *                      scraper_catalog.ts duckduckgo.com → df, opts ["d","w","m","y"])
+ *   yandex.com     -> UNRESOLVED. The catalog declares `within` with opts
+ *                      ["0","77","1","2"] — not a self-evident day/week/month/
+ *                      year encoding, and no live verification confirmed a
+ *                      mapping. Left as the PRE-EXISTING (already broken,
+ *                      documented) `time_range=...` passthrough rather than
+ *                      guess at a wrong code — see the fix report's "known
+ *                      follow-up" section.
+ */
+function buildTimeFilterFields(scraperName: string, f: SearchFilterParams): Array<[string, string]> {
+  if (scraperName === "google.com") {
+    if (f.start_date || f.end_date) {
+      const minDate = (f.start_date && toGoogleTbsDate(f.start_date)) ?? "1/1/2000";
+      const today = new Date();
+      const maxDate =
+        (f.end_date && toGoogleTbsDate(f.end_date)) ??
+        `${today.getUTCMonth() + 1}/${today.getUTCDate()}/${today.getUTCFullYear()}`;
+      return [["tbs", `cdr:1,cd_min:${minDate},cd_max:${maxDate}`]];
+    }
+    if (f.time_range) {
+      const QDR: Record<string, string> = { day: "d", week: "w", month: "m", year: "y" };
+      const code = QDR[f.time_range];
+      if (code) return [["tbs", `qdr:${code}`]];
+    }
+    return [];
+  }
+  if (scraperName === "duckduckgo.com") {
+    if (f.time_range) {
+      const DF: Record<string, string> = { day: "d", week: "w", month: "m", year: "y" };
+      const code = DF[f.time_range];
+      if (code) return [["df", code]];
+    }
+    return [];
+  }
+  // yandex.com and any future engine: preserve the pre-existing (unverified,
+  // likely no-op) passthrough — see doc comment above.
+  const fields: Array<[string, string]> = [];
+  if (f.time_range) fields.push(["time_range", f.time_range]);
+  if (f.start_date) fields.push(["start_date", f.start_date]);
+  if (f.end_date) fields.push(["end_date", f.end_date]);
+  return fields;
+}
+
 /** Submit a search task via the Scraper API.
  *
  * Returns inline results when the API includes them synchronously in the submit
@@ -232,9 +307,7 @@ export async function submitSearchScrapeTask(
   if (scraperName === "bing.com") {
     form.append("safe", "off");
   }
-  if (filterParams.time_range) form.append("time_range", filterParams.time_range);
-  if (filterParams.start_date) form.append("start_date", filterParams.start_date);
-  if (filterParams.end_date) form.append("end_date", filterParams.end_date);
+  for (const [key, value] of buildTimeFilterFields(scraperName, filterParams)) form.append(key, value);
   if (filterParams.country) form.append("country", filterParams.country);
   if (filterParams.language) form.append("language", filterParams.language);
 
