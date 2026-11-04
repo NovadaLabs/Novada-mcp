@@ -120,6 +120,14 @@ export const TIMEOUTS = {
     // submit call sites hardcoded (`timeout: 60000`) before this fix — centralized here
     // instead of duplicated so local behavior is provably unchanged by the budget logic.
     SUBMIT_TIMEOUT_LOCAL: 60_000,
+    // search-goto-links-2026-11-04: per-request timeout for resolving ONE Google
+    // click-tracking redirect token (GET https://www.google.com/goto?url=...,
+    // reading the 302 Location — see utils/google_redirect.ts). Live-verified
+    // response time is 50-200ms; 2s leaves comfortable headroom for a slow hop
+    // without letting one stuck request eat a meaningful slice of the tool's
+    // overall deadline (resolution runs with bounded concurrency, see
+    // MAX_ITEMS_TO_RESOLVE in that module).
+    GOOGLE_REDIRECT_RESOLVE: 2_000,
 };
 // Excel max sheet name length
 export const EXCEL_MAX_SHEET_NAME = 31;

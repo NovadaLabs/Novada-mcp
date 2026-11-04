@@ -60,6 +60,7 @@ export declare const TIMEOUTS: {
     readonly SEARCH_POLL_TIMEOUT: 45000;
     readonly SEARCH_TOTAL_CEILING: 50000;
     readonly SUBMIT_TIMEOUT_LOCAL: 60000;
+    readonly GOOGLE_REDIRECT_RESOLVE: 2000;
 };
 export declare const EXCEL_MAX_SHEET_NAME = 31;
 //# sourceMappingURL=config.d.ts.map

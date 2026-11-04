@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
 import https from "https";
-import { rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect } from "../utils/index.js";
+import { rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect, resolveGoogleLinksInPlace } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS, toolCallDeadline } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
@@ -147,6 +147,84 @@ async function submitBingSearch(apiKey, query) {
     }
     return [];
 }
+/** Format a Date as Google's `tbs=cdr:`/`cd_min:`/`cd_max:` date shape: M/D/YYYY
+ *  (no leading zeros — verified live 2026-11-04 against both padded and
+ *  unpadded forms; Google accepts unpadded). Returns null for an unparseable
+ *  ISO string rather than silently sending a malformed date. */
+function toGoogleTbsDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime()))
+        return null;
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
+}
+/**
+ * search-goto-links-2026-11-04 item (ii): map the tool's engine-agnostic
+ * time_range/start_date/end_date params to the field name+value shape each
+ * upstream scraper_id ACTUALLY understands, instead of sending a literal
+ * `time_range=week` form field no catalog op declares.
+ *
+ * Live-verified 2026-11-04 (same production scraper.novada.com this bug was
+ * reproduced against): a query with `time_range=week` returned results dated
+ * from 2025 and even a future-relative "12 мар. 2026" — proving the field was
+ * silently ignored. The SAME query with `tbs=qdr:w` returned ONLY results
+ * dated "2 days ago" / "6 days ago" / within the last week. `tbs=cdr:1,
+ * cd_min:M/D/YYYY,cd_max:M/D/YYYY` was independently verified to constrain
+ * results to an exact custom range (tested against a Jan-2024 window, a
+ * trailing-7-day window, and a full-year window — every returned date fell
+ * inside the requested range in all three).
+ *
+ *   google.com     -> tbs=qdr:{d|w|m|y}  (relative), or
+ *                      tbs=cdr:1,cd_min:...,cd_max:... (custom range — wins
+ *                      over time_range when either start_date/end_date is set,
+ *                      matching novadaSearch's own window-override precedence)
+ *   duckduckgo.com -> df={d|w|m|y}       (the catalog's OWN declared enum for
+ *                      this op IS exactly first-letter day/week/month/year —
+ *                      scraper_catalog.ts duckduckgo.com → df, opts ["d","w","m","y"])
+ *   yandex.com     -> UNRESOLVED. The catalog declares `within` with opts
+ *                      ["0","77","1","2"] — not a self-evident day/week/month/
+ *                      year encoding, and no live verification confirmed a
+ *                      mapping. Left as the PRE-EXISTING (already broken,
+ *                      documented) `time_range=...` passthrough rather than
+ *                      guess at a wrong code — see the fix report's "known
+ *                      follow-up" section.
+ */
+function buildTimeFilterFields(scraperName, f) {
+    if (scraperName === "google.com") {
+        if (f.start_date || f.end_date) {
+            const minDate = (f.start_date && toGoogleTbsDate(f.start_date)) ?? "1/1/2000";
+            const today = new Date();
+            const maxDate = (f.end_date && toGoogleTbsDate(f.end_date)) ??
+                `${today.getUTCMonth() + 1}/${today.getUTCDate()}/${today.getUTCFullYear()}`;
+            return [["tbs", `cdr:1,cd_min:${minDate},cd_max:${maxDate}`]];
+        }
+        if (f.time_range) {
+            const QDR = { day: "d", week: "w", month: "m", year: "y" };
+            const code = QDR[f.time_range];
+            if (code)
+                return [["tbs", `qdr:${code}`]];
+        }
+        return [];
+    }
+    if (scraperName === "duckduckgo.com") {
+        if (f.time_range) {
+            const DF = { day: "d", week: "w", month: "m", year: "y" };
+            const code = DF[f.time_range];
+            if (code)
+                return [["df", code]];
+        }
+        return [];
+    }
+    // yandex.com and any future engine: preserve the pre-existing (unverified,
+    // likely no-op) passthrough — see doc comment above.
+    const fields = [];
+    if (f.time_range)
+        fields.push(["time_range", f.time_range]);
+    if (f.start_date)
+        fields.push(["start_date", f.start_date]);
+    if (f.end_date)
+        fields.push(["end_date", f.end_date]);
+    return fields;
+}
 /** Submit a search task via the Scraper API.
  *
  * Returns inline results when the API includes them synchronously in the submit
@@ -175,12 +253,8 @@ timeoutMs = TIMEOUTS.SUBMIT_TIMEOUT_LOCAL) {
     if (scraperName === "bing.com") {
         form.append("safe", "off");
     }
-    if (filterParams.time_range)
-        form.append("time_range", filterParams.time_range);
-    if (filterParams.start_date)
-        form.append("start_date", filterParams.start_date);
-    if (filterParams.end_date)
-        form.append("end_date", filterParams.end_date);
+    for (const [key, value] of buildTimeFilterFields(scraperName, filterParams))
+        form.append(key, value);
     if (filterParams.country)
         form.append("country", filterParams.country);
     if (filterParams.language)
@@ -261,12 +335,19 @@ timeoutMs = TIMEOUTS.SUBMIT_TIMEOUT_LOCAL) {
  * download endpoint (slow path).
  */
 export async function resolveSearchResults(apiKey, submitted) {
+    // search-goto-links-2026-11-04: route through parseAndResolveScraperSearchResults
+    // (not the raw parseScraperSearchResults) so research.ts's PRIMARY/FALLBACK engines
+    // (searchWithFallback, research.ts) get the SAME Google-redirect resolution/drop
+    // behavior novada_search gets — this is the one choke point both of research.ts's
+    // call sites go through, so fixing it here fixes novada_research too.
     if (submitted.inlineResults) {
-        return parseScraperSearchResults(submitted.inlineResults);
+        const { results } = await parseAndResolveScraperSearchResults(submitted.inlineResults);
+        return results;
     }
     if (submitted.taskId) {
         const data = await pollSearchResult(apiKey, submitted.taskId);
-        return parseScraperSearchResults(data);
+        const { results } = await parseAndResolveScraperSearchResults(data);
+        return results;
     }
     return [];
 }
@@ -368,6 +449,21 @@ export function parseScraperSearchResults(data) {
         date: item.date ?? item.published,
     }));
 }
+/**
+ * search-goto-links-2026-11-04: parse AND resolve any Google click-tracking
+ * "goto" wrapper links to their real destination (see utils/google_redirect.ts
+ * for the full investigation + design). `parseScraperSearchResults` itself
+ * stays synchronous (no network, simpler to unit-test) — this wrapper is the
+ * ONE place both of novadaSearch's call sites and resolveSearchResults (used
+ * by research.ts) route through, so the fix lands once for novada_search AND
+ * novada_research. A result whose link could not be resolved to a real
+ * absolute URL is DROPPED — never surfaced as a relative "/goto?url=..." path.
+ */
+export async function parseAndResolveScraperSearchResults(data, opts) {
+    const parsed = parseScraperSearchResults(data);
+    const { kept, dropped } = await resolveGoogleLinksInPlace(parsed, opts);
+    return { results: kept, droppedGotoLinks: dropped };
+}
 // ---------------------------------------------------------------------------
 const SERP_UNAVAILABLE = `## Search Unavailable
 
@@ -457,6 +553,10 @@ export async function novadaSearch(params, apiKey, options) {
         return replayed;
     }
     let scraperResults = [];
+    // search-goto-links-2026-11-04: count of results dropped because their Google
+    // "goto" redirect link could not be resolved to a real URL — surfaced to the
+    // agent (never silently swallowed) once non-zero, see below.
+    let droppedGotoLinks = 0;
     // H3: an unrecognized engine value is USER INPUT, not an account defect.
     // Returning the entitlement message here falsely told the agent their key was
     // broken when they merely passed a bad enum. Emit a clear invalid-parameter
@@ -532,9 +632,15 @@ export async function novadaSearch(params, apiKey, options) {
                 country: params.country || undefined,
                 language: params.language || undefined,
             }, timeoutMs), undefined, submitRetryBudget(callDeadline));
+            // search-goto-links-2026-11-04: bound the goto-resolution phase to at most
+            // 8s of wall clock OR whatever remains of the shared callDeadline, whichever
+            // is tighter — never a fresh, unbounded allotment on top of submit+poll.
+            const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
             // Fast path: inline results from submit response (no download round-trip needed)
             if (submitted.inlineResults) {
-                scraperResults = parseScraperSearchResults(submitted.inlineResults);
+                const resolved = await parseAndResolveScraperSearchResults(submitted.inlineResults, { deadlineMs: gotoResolveDeadline });
+                scraperResults = resolved.results;
+                droppedGotoLinks += resolved.droppedGotoLinks;
             }
             else if (submitted.taskId) {
                 // Slow path: poll download endpoint.
@@ -545,7 +651,9 @@ export async function novadaSearch(params, apiKey, options) {
                 // a no-op (byte-identical to the pre-fix unconditional default).
                 const pollCeilingMs = Math.min(TIMEOUTS.SEARCH_TOTAL_CEILING, Math.max(0, callDeadline - Date.now()));
                 const resultData = await pollSearchResult(apiKey, submitted.taskId, pollCeilingMs);
-                scraperResults = parseScraperSearchResults(resultData);
+                const resolved = await parseAndResolveScraperSearchResults(resultData, { deadlineMs: gotoResolveDeadline });
+                scraperResults = resolved.results;
+                droppedGotoLinks += resolved.droppedGotoLinks;
             }
         }
     }
@@ -614,12 +722,17 @@ export async function novadaSearch(params, apiKey, options) {
             };
             if (queryTruncated)
                 emptyJson.query_truncated = queryTruncated;
+            // search-goto-links-2026-11-04: surface when EVERY returned result was dropped
+            // because its Google redirect link could not be resolved — otherwise "no
+            // results" looks identical to a genuinely empty SERP.
+            if (droppedGotoLinks > 0)
+                emptyJson.goto_links_dropped = droppedGotoLinks;
             emptyResult = JSON.stringify(emptyJson, null, 2);
         }
         else {
             emptyResult = [
                 `## Search Results`,
-                `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}`,
+                `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}${droppedGotoLinks > 0 ? ` | goto_links_dropped:${droppedGotoLinks}` : ""}`,
                 ``,
                 `No results found for: "${params.query}"`,
                 ``,
@@ -845,6 +958,10 @@ export async function novadaSearch(params, apiKey, options) {
             jsonResult.scarcity = scarcity;
         if (queryTruncated)
             jsonResult.query_truncated = queryTruncated;
+        // search-goto-links-2026-11-04: count of upstream results dropped because their
+        // Google redirect link could not be resolved to a real URL — never silent.
+        if (droppedGotoLinks > 0)
+            jsonResult.goto_links_dropped = droppedGotoLinks;
         // Wire output save — best-effort, never breaks the tool.
         // Inject output_saved as a field so JSON remains valid and parseable.
         // FIX-1: Redact home path from output_saved before embedding in agent-visible JSON.
@@ -888,6 +1005,8 @@ export async function novadaSearch(params, apiKey, options) {
         activeFilters.push(scarcity);
     if (queryTruncated)
         activeFilters.push(queryTruncated);
+    if (droppedGotoLinks > 0)
+        activeFilters.push(`goto_links_dropped:${droppedGotoLinks}`);
     const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
     const lines = [
         `## Search Results`,

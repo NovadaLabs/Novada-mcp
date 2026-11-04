@@ -31,7 +31,7 @@ interface SearchFilterParams {
     country?: string;
     language?: string;
 }
-interface SubmitSearchResult {
+export interface SubmitSearchResult {
     /** Inline results parsed directly from the submit response (avoids a download round-trip). */
     inlineResults?: Record<string, unknown>;
     /** task_id for polling the download endpoint when inline results are absent. */
@@ -69,6 +69,22 @@ export declare function resolveSearchResults(apiKey: string, submitted: SubmitSe
 export declare function pollSearchResult(apiKey: string, taskId: string, ceilingMs?: number): Promise<Record<string, unknown>>;
 /** Parse scraper API result data into NovadaSearchResult[]. */
 export declare function parseScraperSearchResults(data: Record<string, unknown>): NovadaSearchResult[];
+/**
+ * search-goto-links-2026-11-04: parse AND resolve any Google click-tracking
+ * "goto" wrapper links to their real destination (see utils/google_redirect.ts
+ * for the full investigation + design). `parseScraperSearchResults` itself
+ * stays synchronous (no network, simpler to unit-test) — this wrapper is the
+ * ONE place both of novadaSearch's call sites and resolveSearchResults (used
+ * by research.ts) route through, so the fix lands once for novada_search AND
+ * novada_research. A result whose link could not be resolved to a real
+ * absolute URL is DROPPED — never surfaced as a relative "/goto?url=..." path.
+ */
+export declare function parseAndResolveScraperSearchResults(data: Record<string, unknown>, opts?: {
+    deadlineMs?: number;
+}): Promise<{
+    results: NovadaSearchResult[];
+    droppedGotoLinks: number;
+}>;
 export interface NovadaSearchOptions {
     /**
      * Whether the `novada_search_feedback` tool is reachable in the current

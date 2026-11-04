@@ -11,6 +11,7 @@ import { findKnownBrokenParamValue } from "../data/known_broken_param_values.js"
 import { devApiPost } from "../_core/developer_api.js";
 import { extractRawTaskStatus } from "./scraper_status.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
+import { resolveGoogleLinksInPlace } from "../utils/google_redirect.js";
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 // How long the SYNC novada_scrape path will poll before returning a structured
 // (non-error) "still processing" result. 0.9.5: raised from 14s → 45s so slow
@@ -1076,6 +1077,36 @@ function isBase64Blob(v) {
         return true;
     return false;
 }
+// search-goto-links-2026-11-04 item (i): curateTabularRecords (above) already drops
+// base64-blob COLUMNS for csv/excel/html, but json and markdown render the raw/
+// flattened records directly — a Google SERP result's `favicon` (and nested
+// `about_this_result.source.icon`) field is a `data:image/png;base64,...` blob,
+// live-measured at ~19KB EACH; 5 results = ~100KB of useless image data landing in
+// the agent's context on every novada_scrape_google / novada_search call. Reuses
+// isBase64Blob (same detector `curateTabularRecords` already uses) so the two never
+// drift on what counts as "a blob" — just a different consumer action (replace the
+// value with a short marker, recursively, rather than dropping the whole column —
+// json/markdown have no "column" concept and a nested field like
+// about_this_result.source.icon needs a recursive walk to reach).
+const BASE64_STRIPPED_MARKER = "[base64 image data stripped]";
+/** Recursively replace any base64-blob STRING value (see isBase64Blob) with a short
+ *  marker, walking arrays and plain objects. Never mutates the input. */
+export function stripBase64Blobs(value) {
+    if (typeof value === "string") {
+        return (isBase64Blob(value) ? BASE64_STRIPPED_MARKER : value);
+    }
+    if (Array.isArray(value)) {
+        return value.map((v) => stripBase64Blobs(v));
+    }
+    if (value !== null && typeof value === "object") {
+        const out = {};
+        for (const [k, v] of Object.entries(value)) {
+            out[k] = stripBase64Blobs(v);
+        }
+        return out;
+    }
+    return value;
+}
 // Curated key columns that a human opening a spreadsheet actually wants, in
 // priority order. Matched case-insensitively against the *leaf* of a flattened
 // dot-path key (e.g. "price.value" → leaf "value" also checks the full key).
@@ -1835,6 +1866,18 @@ export async function novadaScrape(params, apiKey) {
         // price and a trustworthy is_available. Pure projection of the API json — no-op
         // for platforms (e.g. Walmart) whose flat fields are already populated.
         rawRecords = rawRecords.map(r => normalizeProductRecord(r));
+        // search-goto-links-2026-11-04: Google SERP operations (novada_scrape_google
+        // web_search, etc.) can return a `link` that is a relative Google click-tracking
+        // path ("/goto?url=CAES...") instead of a real URL. Resolve through the SAME
+        // shared normalizer novada_search / novada_research use (utils/google_redirect.ts)
+        // BEFORE slicing to effectiveLimit, so a drop is backfilled from the next
+        // upstream-ranked record rather than silently under-filling the response.
+        // Zero network calls (and byte-identical output) for every record whose
+        // link/url is already a plain absolute URL — i.e. every OTHER platform's scrape
+        // output, and most Google results too — so this call is safe unconditionally.
+        const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
+        const { kept: gotoResolvedRecords, dropped: droppedGotoLinks } = await resolveGoogleLinksInPlace(rawRecords, { deadlineMs: gotoResolveDeadline });
+        rawRecords = gotoResolvedRecords;
         const records = rawRecords.slice(0, effectiveLimit).map(r => flattenRecord(r));
         // Identity oracle (TOW2-305): never surface a DIFFERENT YouTube video than requested as
         // success. Runs on the raw upstream records (which carry the real id/url). No-op for
@@ -1849,16 +1892,33 @@ export async function novadaScrape(params, apiKey) {
         // For json we want clean structured records (not the flattened dot-path display version).
         // rawRecords are already sliced by effectiveLimit above via `rawRecords.slice(0, effectiveLimit)`.
         // `records` is the flattenRecord'd version used for markdown/toon tabular display.
-        const cleanRecords = rawRecords.slice(0, effectiveLimit);
+        // search-goto-links-2026-11-04 item (i): strip base64 blobs (favicon/image data URIs)
+        // recursively — json has no "column" to drop, so this is a per-value replacement,
+        // not curateTabularRecords's column-drop (which stays on the ORIGINAL `records` below
+        // so its csv/excel/html behavior is unchanged).
+        const cleanRecords = rawRecords.slice(0, effectiveLimit).map((r) => stripBase64Blobs(r));
         // For the human tabular formats (csv/excel/html): drop base64-blob columns
         // (favicon/image data URIs — useless in a spreadsheet + fragile in CSV) and
         // lead with curated key columns (title/price/rating/url/…). Display-only.
         const tabularRecords = curateTabularRecords(records);
+        // search-goto-links-2026-11-04 item (i): same stripping for markdown/toon, which
+        // render `records` directly (not through curateTabularRecords's column-drop).
+        // Derived SEPARATELY from `records` so `tabularRecords` above still curates from
+        // the unstripped original — stripping first would turn every blob into a short
+        // marker string that no longer matches isBase64Blob, silently defeating
+        // curateTabularRecords's own column-drop for csv/excel/html.
+        const displayRecords = records.map((r) => stripBase64Blobs(r));
         // TOW2-372 change 2: one shared disclosure line, threaded into every
         // populated-record format branch below — never rendered unless the locale
         // default actually applied on THIS call (see `localeDefaulted` above).
         const localeDefaultHint = localeDefaulted
             ? `- No country/gl specified — defaulted to country="us" (this operation returns an empty SERP without a region hint).`
+            : null;
+        // search-goto-links-2026-11-04: threaded into every populated-record format
+        // branch alongside localeDefaultHint — never rendered unless at least one
+        // result was actually dropped for an unresolvable Google redirect link.
+        const gotoDroppedHint = droppedGotoLinks > 0
+            ? `- Dropped ${droppedGotoLinks} result(s) whose Google redirect link ("/goto?url=...") could not be resolved to a real URL.`
             : null;
         let output;
         switch (format) {
@@ -1888,6 +1948,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
+                    gotoDroppedHint,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- For human-readable output: use format='markdown'. For spreadsheets: format='csv' or format='excel'.`,
                     `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
@@ -1910,6 +1971,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
+                    gotoDroppedHint,
                     `- Copy the CSV block above and paste into Excel, Google Sheets, or any spreadsheet app.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='excel' to get a real .xlsx file instead.`,
@@ -1940,6 +2002,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
+                    gotoDroppedHint,
                     `- Base64 → xlsx: \`echo "<base64>" | base64 -d > data.xlsx\` or use any online base64-to-file converter.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='csv' for a smaller inline text alternative.`,
@@ -1960,6 +2023,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
+                    gotoDroppedHint,
                     `- The HTML above is a standalone <table> document — save it as .html and open in a browser, or embed the <table> element in a page.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- Use format='csv' or format='excel' for spreadsheet-ready output, format='json' for code.`,
@@ -1970,12 +2034,12 @@ export async function novadaScrape(params, apiKey) {
                 // TOON: headers declared once, then pipe-separated rows — 40-65% token savings vs JSON/markdown
                 // Union all keys across records to avoid dropping columns from heterogeneous rows
                 const headerSet = new Set();
-                for (const r of records)
+                for (const r of displayRecords)
                     Object.keys(r).forEach(k => headerSet.add(k));
                 const headers = Array.from(headerSet);
                 const toonRows = [
                     `HEADERS: ${headers.join(" | ")}`,
-                    ...records.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
+                    ...displayRecords.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
                 ];
                 // G-2: NOT wrapped — token-optimized machine format, see the json case's comment.
                 output = [
@@ -1987,6 +2051,7 @@ export async function novadaScrape(params, apiKey) {
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
+                    gotoDroppedHint,
                     `- TOON format: first line starts with "HEADERS:" listing columns, subsequent lines are pipe-separated values.`,
                     `- Use format='json' for downstream code processing, format='markdown' for human-readable output.`,
                     `- Increase limit (max 100) to retrieve more records.`,
@@ -2004,11 +2069,12 @@ export async function novadaScrape(params, apiKey) {
                     ``,
                     `---`,
                     ``,
-                    wrapUntrusted(formatAsMarkdown(records), `${platform}/${operation}`),
+                    wrapUntrusted(formatAsMarkdown(displayRecords), `${platform}/${operation}`),
                     ``,
                     `---`,
                     `## Agent Hints`,
                     localeDefaultHint,
+                    gotoDroppedHint,
                     `- Use format='json' or format='csv' for downstream processing. Use format='excel' for a .xlsx spreadsheet.`,
                     `- Increase limit (max 100) to retrieve more records.`,
                     `- For structured scraping of other platforms, change platform and operation.`,
