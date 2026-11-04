@@ -543,6 +543,7 @@ export function parseScraperSearchResults(data: Record<string, unknown>): Novada
   if (!Array.isArray(organic)) return [];
 
   return (organic as Record<string, unknown>[]).map(item => ({
+    ...(typeof item.redirect_link === "string" ? { redirect_link: item.redirect_link } : {}),
     title: (item.title as string | undefined) ?? "",
     url: (item.url as string | undefined) ?? (item.link as string | undefined) ?? ((item.source as Record<string, unknown> | undefined)?.link as string | undefined) ?? "",
     link: (item.link as string | undefined) ?? (item.url as string | undefined) ?? ((item.source as Record<string, unknown> | undefined)?.link as string | undefined) ?? "",
@@ -560,16 +561,28 @@ export function parseScraperSearchResults(data: Record<string, unknown>): Novada
  * stays synchronous (no network, simpler to unit-test) — this wrapper is the
  * ONE place both of novadaSearch's call sites and resolveSearchResults (used
  * by research.ts) route through, so the fix lands once for novada_search AND
- * novada_research. A result whose link could not be resolved to a real
- * absolute URL is DROPPED — never surfaced as a relative "/goto?url=..." path.
+ * novada_research.
+ *
+ * 2026-11-04 follow-up: a result whose link could NOT be resolved to a real
+ * absolute URL (even after google_redirect.ts's /goto → /url-HTML → one-hop-
+ * interstitial fallback chain) is no longer dropped from the result set —
+ * it is RETAINED with `url`/`link` cleared to "" and `url_unavailable: true`
+ * set (never surfaced as a relative "/goto?url=..." path either way), so the
+ * agent still sees its title/snippet. `unresolvedGotoLinks` now counts "needed
+ * the fallback chain and it still failed", not "removed from `results`" —
+ * see resolveGoogleLinksInPlace's doc comment.
  */
 export async function parseAndResolveScraperSearchResults(
   data: Record<string, unknown>,
   opts?: { deadlineMs?: number },
-): Promise<{ results: NovadaSearchResult[]; droppedGotoLinks: number }> {
+): Promise<{ results: NovadaSearchResult[]; unresolvedGotoLinks: number }> {
   const parsed = parseScraperSearchResults(data);
   const { kept, dropped } = await resolveGoogleLinksInPlace(parsed, opts);
-  return { results: kept, droppedGotoLinks: dropped };
+  // redirect_link only exists to feed the resolver's /url replay; strip it here,
+  // at the one choke point every search/research/verify/ai_monitor path shares,
+  // so no consumer has to remember to omit it.
+  const results = kept.map(({ redirect_link: _redirectLink, ...rest }) => rest);
+  return { results, unresolvedGotoLinks: dropped };
 }
 
 // ---------------------------------------------------------------------------
@@ -681,7 +694,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   // search-goto-links-2026-11-04: count of results dropped because their Google
   // "goto" redirect link could not be resolved to a real URL — surfaced to the
   // agent (never silently swallowed) once non-zero, see below.
-  let droppedGotoLinks = 0;
+  let unresolvedGotoLinks = 0;
 
   // H3: an unrecognized engine value is USER INPUT, not an account defect.
   // Returning the entitlement message here falsely told the agent their key was
@@ -783,7 +796,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       if (submitted.inlineResults) {
         const resolved = await parseAndResolveScraperSearchResults(submitted.inlineResults, { deadlineMs: gotoResolveDeadline });
         scraperResults = resolved.results;
-        droppedGotoLinks += resolved.droppedGotoLinks;
+        unresolvedGotoLinks += resolved.unresolvedGotoLinks;
       } else if (submitted.taskId) {
         // Slow path: poll download endpoint.
         // review2 MEDIUM #2: clamp the poll ceiling to whatever remains of the
@@ -795,7 +808,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         const resultData = await pollSearchResult(apiKey, submitted.taskId, pollCeilingMs);
         const resolved = await parseAndResolveScraperSearchResults(resultData, { deadlineMs: gotoResolveDeadline });
         scraperResults = resolved.results;
-        droppedGotoLinks += resolved.droppedGotoLinks;
+        unresolvedGotoLinks += resolved.unresolvedGotoLinks;
       }
     }
   } catch (err: unknown) {
@@ -872,12 +885,12 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       // search-goto-links-2026-11-04: surface when EVERY returned result was dropped
       // because its Google redirect link could not be resolved — otherwise "no
       // results" looks identical to a genuinely empty SERP.
-      if (droppedGotoLinks > 0) emptyJson.goto_links_dropped = droppedGotoLinks;
+      if (unresolvedGotoLinks > 0) emptyJson.goto_links_unresolved = unresolvedGotoLinks;
       emptyResult = JSON.stringify(emptyJson, null, 2);
     } else {
       emptyResult = [
         `## Search Results`,
-        `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}${droppedGotoLinks > 0 ? ` | goto_links_dropped:${droppedGotoLinks}` : ""}`,
+        `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}${unresolvedGotoLinks > 0 ? ` | goto_links_unresolved:${unresolvedGotoLinks}` : ""}`,
         ``,
         `No results found for: "${params.query}"`,
         ``,
@@ -918,6 +931,16 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   const scarcity = reranked.length < requestedNum
     ? `requested:${requestedNum} returned:${reranked.length}`
     : "";
+
+  // search-goto-links-2026-11-04 follow-up (SOP item 2): when EVERY result in
+  // this batch had its Google redirect link resolved to nothing, the response
+  // still carries real title/snippet content (retention policy — see
+  // resolveGoogleLinksInPlace) but has ZERO working urls. That must never look
+  // like a silent, near-empty success — surface it as an explicit warning in
+  // both json and markdown below.
+  const allUrlsUnavailable = reranked.length > 0 && reranked.every(
+    (r) => (r as NovadaSearchResult & { url_unavailable?: boolean }).url_unavailable === true
+  );
 
   // P1-7: Auto-extract content from top N results when extract_options is provided
   // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
@@ -1080,6 +1103,12 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
           url: url ? decodeBingRedirect(url) : null,
           snippet: rawSnippet ? wrapUntrusted(rawSnippet, url || "search result") : "",
         };
+        // search-goto-links-2026-11-04 follow-up: this result's Google redirect
+        // could not be resolved — url is already null above; flag WHY explicitly
+        // so an agent doesn't read a missing url as "this result simply has none".
+        if ((r as NovadaSearchResult & { url_unavailable?: boolean }).url_unavailable) {
+          result.url_unavailable = true;
+        }
         if (r.published || r.date) result.published = r.published || r.date;
         // F15: include within_time_range annotation when present
         const rAnnot = r as NovadaSearchResult & { within_time_range?: boolean | null };
@@ -1112,9 +1141,20 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     // available, so agents don't assume the ceiling was hit.
     if (scarcity) jsonResult.scarcity = scarcity;
     if (queryTruncated) jsonResult.query_truncated = queryTruncated;
-    // search-goto-links-2026-11-04: count of upstream results dropped because their
-    // Google redirect link could not be resolved to a real URL — never silent.
-    if (droppedGotoLinks > 0) jsonResult.goto_links_dropped = droppedGotoLinks;
+    // search-goto-links-2026-11-04: count of results whose Google redirect link
+    // could not be resolved to a real URL — retained (url_unavailable:true on
+    // the item above), never silently dropped from result_count.
+    if (unresolvedGotoLinks > 0) jsonResult.goto_links_unresolved = unresolvedGotoLinks;
+    // search-goto-links-2026-11-04 follow-up (SOP item 2): an explicit, honest
+    // signal for the degenerate case — every result in this batch has no
+    // working url. Titles/snippets are still present; this is NOT the same as
+    // a genuinely empty SERP, so it must not look like one.
+    if (allUrlsUnavailable) {
+      jsonResult.url_resolution_warning =
+        `All ${reranked.length} result(s) could not be resolved to a real URL — Google's redirect-resolution ` +
+        `step failed for every result in this batch (titles and snippets are still included above). ` +
+        `This is usually transient upstream rate-limiting; retry, or try engine="duckduckgo"/"yandex".`;
+    }
     // Wire output save — best-effort, never breaks the tool.
     // Inject output_saved as a field so JSON remains valid and parseable.
     // FIX-1: Redact home path from output_saved before embedding in agent-visible JSON.
@@ -1152,7 +1192,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
 
   if (scarcity) activeFilters.push(scarcity);
   if (queryTruncated) activeFilters.push(queryTruncated);
-  if (droppedGotoLinks > 0) activeFilters.push(`goto_links_dropped:${droppedGotoLinks}`);
+  if (unresolvedGotoLinks > 0) activeFilters.push(`goto_links_unresolved:${unresolvedGotoLinks}`);
 
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 
@@ -1160,9 +1200,20 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     `## Search Results`,
     `results:${reranked.length} | engine:${engineLabel} | source: live | reranked:true | search_id:${searchId}${filterStr}`,
     ``,
-    `---`,
-    ``,
   ];
+  // search-goto-links-2026-11-04 follow-up (SOP item 2): same honest,
+  // never-silent warning as the json branch above — placed right under the
+  // header so it can't be missed, before the (still-present) results below.
+  if (allUrlsUnavailable) {
+    lines.push(
+      `**Warning:** all ${reranked.length} result(s) below could not be resolved to a real URL — ` +
+      `Google's redirect-resolution step failed for every result in this batch. Titles and snippets ` +
+      `are still shown; this is usually transient upstream rate-limiting — retry, or try ` +
+      `engine="duckduckgo"/"yandex".`,
+      ``,
+    );
+  }
+  lines.push(`---`, ``);
 
   // Item 3: track seen snippets to detect when Google falls back to the same
   // meta-description for multiple results. Duplicates are NOT dropped (the result
@@ -1172,8 +1223,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   for (let i = 0; i < reranked.length; i++) {
     const r = reranked[i];
     const rawUrl = r.url || r.link;
-    if (!rawUrl) continue; // Skip results with no URL — would render as "N/A" and break agents
-    let url = decodeBingRedirect(rawUrl);
+    // search-goto-links-2026-11-04 follow-up: a result whose Google redirect
+    // link could not be resolved carries url_unavailable:true (link/url
+    // already cleared to "" by resolveGoogleLinksInPlace) — render its
+    // title/snippet WITHOUT a link rather than skipping it outright. Any
+    // OTHER url-less result (not from this fix — a rare upstream shape from a
+    // different engine) keeps the original "skip, would render as N/A" guard.
+    const isUrlUnavailable = (r as NovadaSearchResult & { url_unavailable?: boolean }).url_unavailable === true;
+    if (!rawUrl && !isUrlUnavailable) continue; // Skip results with no URL — would render as "N/A" and break agents
+    let url = rawUrl ? decodeBingRedirect(rawUrl) : "";
 
     // Item 2: strip inline HTML tags from snippets preserving word-boundary spaces.
     // Tag-boundary joins (e.g. <b>is</b> an) without a space produce "isan". Replace
@@ -1201,11 +1259,17 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       ? snippetDisplay.slice(0, 397) + "..."
       : snippetDisplay || "No description";
 
-    lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
+    if (url) {
+      lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
+    } else {
+      // url_unavailable: never render an empty markdown link "[title]()".
+      lines.push(`## ${i + 1}. ${r.title || "Untitled"}`);
+      lines.push(`url: unavailable (Google's redirect link could not be resolved)`);
+    }
     if (r.published || r.date) lines.push(`published: ${r.published || r.date}`);
     // G-2: "No description" is OUR fallback (no fetched text exists) — leave it
     // unwrapped. A genuine snippet is fetched-from-web free text.
-    lines.push(cleanSnippet === "No description" ? cleanSnippet : wrapUntrusted(cleanSnippet, url));
+    lines.push(cleanSnippet === "No description" ? cleanSnippet : wrapUntrusted(cleanSnippet, url || "search result"));
     // extracted_content is always a string here (markdown path): either raw text, raw JSON string,
     // or null. The cast reflects this — the object case only arises in the JSON output path above.
     const rExt = r as NovadaSearchResult & { extracted_content?: string | null; extract_error?: string; within_time_range?: boolean | null };

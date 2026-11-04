@@ -76,7 +76,7 @@ describe("novada_scrape_google — Google goto-link resolution (generic scrape e
     expect(result).toContain("https://scrape-resolved-json.example.com/article");
   });
 
-  it("drops a record whose goto link is unresolvable and surfaces the drop count in Agent Hints", async () => {
+  it("keeps a record whose goto link is unresolvable without a link and surfaces the count in Agent Hints", async () => {
     mockDownloadAndGotoResolve(
       [
         { title: "Resolvable", link: "/goto?url=SCRTOK3", source: "A" },
@@ -95,8 +95,8 @@ describe("novada_scrape_google — Google goto-link resolution (generic scrape e
     // not the generic phrase.
     expect(result).not.toContain("SCRTOKBAD");
     expect(result).toContain("https://scrape-good.example.com/");
-    expect(result).not.toContain("Unresolvable");
-    expect(result).toContain("Dropped 1 result(s)");
+    expect(result).toContain("Unresolvable"); // retained: title still visible
+    expect(result).toContain("1 result(s) kept without a link");
   });
 
   it("an already-absolute link is passed through with zero resolve calls", async () => {
