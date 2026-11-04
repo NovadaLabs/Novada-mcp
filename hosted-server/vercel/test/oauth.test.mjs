@@ -333,7 +333,7 @@ test("T10 register happy: 201, UUID client_id, NO client_secret, KV record shape
   });
 });
 
-test("T11 register rejections: bad/custom-scheme/empty redirect_uris, secret auth method, malformed JSON", async () => {
+test("T11 register rejections: bad/custom-scheme/empty redirect_uris, unsupported auth method, malformed JSON", async () => {
   const url = "https://mcp.novada.com/register";
   const cases = [
     [postJson(url, { redirect_uris: ["http://evil.com/cb"] }), "invalid_redirect_uri"],
@@ -342,7 +342,10 @@ test("T11 register rejections: bad/custom-scheme/empty redirect_uris, secret aut
     // >2048 chars: valid https shape, but over the KV-flood length cap.
     [postJson(url, { redirect_uris: ["https://a.com/" + "x".repeat(2048)] }), "invalid_redirect_uri"],
     [postJson(url, { client_name: "x" }), "invalid_redirect_uri"], // missing redirect_uris
-    [postJson(url, { redirect_uris: ["https://a.com/cb"], token_endpoint_auth_method: "client_secret_basic" }), "invalid_client_metadata"],
+    // 2026-11-05: client_secret_post/basic are now ACCEPTED (registered as public,
+    // see T11b) — OpenAI's portal defaults to them. An auth method we cannot
+    // honor at all is still refused.
+    [postJson(url, { redirect_uris: ["https://a.com/cb"], token_endpoint_auth_method: "private_key_jwt" }), "invalid_client_metadata"],
     [postJson(url, "not json{{"), "invalid_client_metadata"],
   ];
   for (const [req, expectedError] of cases) {
@@ -740,7 +743,9 @@ test("T28 mcp.ts: WWW-Authenticate with resource_metadata on all three 401 sites
 test("T29 mcp.ts: AT resolution wired before key validation inside fetchHandler", () => {
   const src = readFileSync(MCP_TS, "utf8");
   const fh = src.slice(src.indexOf("async function fetchHandler"));
-  const resolveIdx = fh.indexOf("resolveAccessToken(");
+  // 2026-11-05: resolveAccessTokenRecord (same resolution, also returns the
+  // client_id that selects the tool surface — see api/_surface.ts).
+  const resolveIdx = fh.indexOf("resolveAccessTokenRecord(");
   const validateIdx = fh.indexOf("await validateToken(");
   assert.ok(resolveIdx !== -1, "fetchHandler must resolve nvo_at_ tokens");
   assert.ok(validateIdx !== -1, "fetchHandler must still validate the (resolved) token");
@@ -837,4 +842,46 @@ test("T34 authorize POST invalid-key re-render widens form-action to the validat
   // able to follow the cross-origin redirect too.
   assert.ok(csp.includes("form-action 'self' https://claude.ai"),
     "retry path must widen form-action to the validated redirect origin");
+});
+
+test("T11b register: client_secret_post / client_secret_basic are registered as public clients (no secret issued)", async () => {
+  for (const method of ["client_secret_post", "client_secret_basic"]) {
+    const deps = makeDeps();
+    const res = await handleRegister(
+      postJson("https://mcp.novada.com/register", { redirect_uris: ["https://chatgpt.com/cb"], token_endpoint_auth_method: method }),
+      deps,
+    );
+    assert.equal(res.status, 201, method);
+    const body = await res.json();
+    assert.equal(body.token_endpoint_auth_method, "none", `${method} must be answered with the method actually applied`);
+    assert.equal(body.client_secret, undefined, "no client_secret is ever minted");
+    const stored = deps.store.get(`oauthclient:${body.client_id}`).value;
+    assert.equal(stored.token_endpoint_auth_method, "none");
+  }
+});
+
+test("T31 /token accepts client_id from HTTP Basic auth when the body omits it (client_secret_basic clients)", async () => {
+  const deps = makeDeps();
+  const { clientId, redirectUri, code } = await obtainCode(deps);
+  const req = new Request("https://mcp.novada.com/token", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      authorization: `Basic ${Buffer.from(`${clientId}:ignored-secret`).toString("base64")}`,
+    },
+    body: new URLSearchParams({ grant_type: "authorization_code", code, code_verifier: RFC_VERIFIER, redirect_uri: redirectUri }).toString(),
+  });
+  const res = await handleToken(req, IP, deps);
+  assert.equal(res.status, 200, await res.clone().text());
+  assert.match((await res.json()).access_token, /^nvo_at_/);
+});
+
+test("T32 resolveAccessTokenRecord returns the token's client_id alongside the key", async () => {
+  const { resolveAccessTokenRecord } = await import("../api/_oauth.ts");
+  const deps = makeDeps();
+  const { clientId, redirectUri, code } = await obtainCode(deps);
+  const res = await handleToken(tokenForm({ grant_type: "authorization_code", code, code_verifier: RFC_VERIFIER, client_id: clientId, redirect_uri: redirectUri }), IP, deps);
+  const at = (await res.json()).access_token;
+  assert.deepEqual(await resolveAccessTokenRecord(at, deps), { apiKey: CUSTOMER_KEY, clientId });
+  assert.equal(await resolveAccessTokenRecord("nvo_at_unknown", deps), null);
 });

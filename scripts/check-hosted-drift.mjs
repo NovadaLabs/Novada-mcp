@@ -135,6 +135,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
 const SURFACES_PATH = path.join(ROOT, "config", "surfaces.json");
+const SURFACE_TS_PATH = path.join(ROOT, "hosted-server", "vercel", "api", "_surface.ts");
 const REGISTRY_PATH = path.join(ROOT, "npm-package", "src", "tools", "registry.ts");
 const TOOLS_DIR = path.join(ROOT, "npm-package", "src", "tools");
 const MCP_TS_PATH = path.join(ROOT, "hosted-server", "vercel", "api", "mcp.ts");
@@ -717,6 +718,37 @@ function main() {
     console.log(
       `[check-hosted-drift] PASS (c): "hosted-15" (${manifestHosted15Set.size} tools) ⊆ "hosted" ` +
       `(${manifestHostedSet.size} tools), modulo the documented exception(s): ${expectedExceptionsSeen.join(", ") || "none"}`
+    );
+  }
+
+  // (d) "openai" — the per-client surface (hosted-server/vercel/api/_surface.ts).
+  // The manifest list must equal the code's OPENAI_SURFACE_TOOLS literal, and
+  // stay a subset of "hosted": that surface can only narrow the hosted catalog
+  // (mcp.ts's buildSurfaceTools also refuses at startup to serve a name hosted
+  // doesn't, but this gate catches it before deploy).
+  const manifestOpenaiTools = getManifestSurfaceTools(manifest, "openai");
+  const manifestOpenaiSet = new Set(manifestOpenaiTools);
+  const surfaceSrc = readFileSync(SURFACE_TS_PATH, "utf8");
+  const codeOpenaiSet = new Set(
+    extractToolNames(surfaceSrc, "export const OPENAI_SURFACE_TOOLS: ReadonlySet<string> = new Set([", "]);", "OPENAI_SURFACE_TOOLS"),
+  );
+  const openaiNotHosted = [...manifestOpenaiSet].filter((n) => !manifestHostedSet.has(n));
+  if (manifestOpenaiSet.size !== manifestOpenaiTools.length) {
+    failed = true;
+    console.error(`[check-hosted-drift] FAIL (d): config/surfaces.json "openai".tools contains duplicate name(s)`);
+  } else if (!setsEqual(manifestOpenaiSet, codeOpenaiSet)) {
+    failed = true;
+    console.error(
+      `[check-hosted-drift] FAIL (d): config/surfaces.json "openai".tools does not match _surface.ts's OPENAI_SURFACE_TOOLS. ` +
+      `Only in manifest: ${[...manifestOpenaiSet].filter((n) => !codeOpenaiSet.has(n)).join(", ") || "none"}; ` +
+      `only in code: ${[...codeOpenaiSet].filter((n) => !manifestOpenaiSet.has(n)).join(", ") || "none"}`
+    );
+  } else if (openaiNotHosted.length > 0) {
+    failed = true;
+    console.error(`[check-hosted-drift] FAIL (d): "openai" lists tool(s) not on "hosted": ${openaiNotHosted.join(", ")}`);
+  } else {
+    console.log(
+      `[check-hosted-drift] PASS (d): "openai" (${manifestOpenaiSet.size} tools) matches _surface.ts and ⊆ "hosted"`
     );
   }
 

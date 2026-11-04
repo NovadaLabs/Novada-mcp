@@ -143,9 +143,16 @@ import { kv } from "@vercel/kv";
 import {
   isOAuthPath,
   handleOAuthRequest,
-  resolveAccessToken,
+  resolveAccessTokenRecord,
+  lookupClientRedirectUris,
   deriveIssuer,
 } from "./_oauth.js";
+import {
+  SURFACE_POLICIES,
+  applyAnnotationRules,
+  resolveClientSurface,
+} from "./_surface.js";
+import type { HostedSurface, SurfacePolicy } from "./_surface.js";
 import type { OAuthDeps } from "./_oauth.js";
 
 // Public "well-known static text" domain-verification routes (OpenAI Apps
@@ -267,10 +274,11 @@ const TOOL_WALL_CLOCK_MS = (FUNCTION_MAX_DURATION_S - 4) * 1000; // ~296s after 
 // same submit/poll engine, so they get the same resume-hint — derived from
 // PLATFORM_SCRAPER_TOOLS (not hand-listed) so a new platform config is covered with zero
 // edits here, mirroring npm-package's src/index.ts SCRAPE_GROUP derivation.
+const PLATFORM_SCRAPER_NAMES: ReadonlySet<string> = new Set(PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name));
 const SCRAPE_TOOLS = new Set([
   "novada_scrape",
   "novada_scraper_submit",
-  ...PLATFORM_SCRAPER_TOOLS.map((t) => t.toolDefinition.name),
+  ...PLATFORM_SCRAPER_NAMES,
 ]);
 
 /**
@@ -289,21 +297,28 @@ const GATEWAY_CEILING_ERRORS = new WeakSet<object>();
  * returns a JSON-RPC error envelope instead of being hard-killed into a bare 504.
  * For scrape tools: include task_id resume hint and no-recharge reminder.
  */
-function withWallClock<T>(toolName: string, p: Promise<T>): Promise<T> {
+function withWallClock<T>(toolName: string, p: Promise<T>, policy: SurfacePolicy): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const guard = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       const isScrape = SCRAPE_TOOLS.has(toolName);
+      // A platform scraper resumes on itself (each has its own task_id param);
+      // novada_scrape and its legacy submit alias resume on novada_scrape.
+      const resumeTool = PLATFORM_SCRAPER_NAMES.has(toolName) ? toolName : "novada_scrape";
       const agent_instruction = isScrape
         ? `The scrape task was still running when the hosted endpoint hit its wall-clock budget. ` +
-          `If the tool returned a task_id before this error, re-call novada_scrape with that task_id ` +
+          `If the tool returned a task_id before this error, re-call ${resumeTool} with that task_id ` +
           `(no new charge — it skips re-submit and goes straight to polling). ` +
-          `If no task_id was returned, retry the call. ` +
-          `For operations that reliably exceed the hosted cap, use the local MCP server ` +
-          `(\`npx novada-mcp\`) which has no per-call wall-clock limit.`
+          `If no task_id was returned, retry the call.` +
+          (policy.mentionLocalServer
+            ? ` For operations that reliably exceed the hosted cap, use the local MCP server ` +
+              `(\`npx novada-mcp\`) which has no per-call wall-clock limit.`
+            : "")
         : `The hosted endpoint wall-clock budget (${TOOL_WALL_CLOCK_MS / 1000}s) was reached. ` +
-          `Retry with a narrower request (fewer URLs, render="static", a smaller depth/limit), ` +
-          `or run the local MCP server (\`npx novada-mcp\`) which has no per-call wall-clock cap.`;
+          `Retry with a narrower request (fewer URLs, render="static", a smaller depth/limit)` +
+          (policy.mentionLocalServer
+            ? `, or run the local MCP server (\`npx novada-mcp\`) which has no per-call wall-clock cap.`
+            : ".");
       const ceilingError = new NovadaError({
         code: NovadaErrorCode.TASK_PENDING,
         message: `${toolName} exceeded the hosted ${TOOL_WALL_CLOCK_MS / 1000}s time budget and was stopped before the function timed out.`,
@@ -698,6 +713,38 @@ const TOOL_GROUPS: Record<string, string[]> = {
 // being hidden from listing (novada_verify) route through HOSTED_HIDDEN_ALIASES
 // instead — that check is independent of ALL_TOOL_NAMES/resolveAllowedTools.
 const ALL_TOOL_NAMES = new Set(TOOLS.filter((t) => !HOSTED_HIDDEN.has(t.name)).map((t) => t.name));
+
+// ─── Per-client tool surfaces (see ./_surface.ts) ────────────────────────────
+// A non-default surface lists a SUBSET of the hosted catalog. Its descriptions
+// are re-rendered against its OWN tool set, so a sibling span naming a tool it
+// does not list (novada_scrape, novada_map, …) is stripped there exactly the way
+// HOSTED_HIDDEN tools are stripped on the default surface; then the surface's
+// annotation rules apply. Built once at module load. A surface naming a tool the
+// hosted catalog does not serve throws here, so a bad list fails the instance's
+// startup (and deploy-ec2.sh's health gate rolls it back) instead of silently
+// serving a shorter list.
+function buildSurfaceTools(policy: SurfacePolicy): typeof TOOLS {
+  if (!policy.tools) return TOOLS;
+  const names = policy.tools;
+  const notServed = [...names].filter((n) => !ALL_TOOL_NAMES.has(n));
+  if (notServed.length > 0) {
+    throw new Error(`surface lists tools the hosted catalog does not serve: ${notServed.join(", ")}`);
+  }
+  return buildToolsForSurface(names)
+    .filter((t) => names.has(t.name))
+    .map((t) => ({
+      name: t.name,
+      title: TOOL_TITLES[t.name] ?? deriveTitle(t.name),
+      description: t.description,
+      inputSchema: t.inputSchema,
+      annotations: applyAnnotationRules(t.name, t.annotations, policy.annotationRules),
+    }));
+}
+const SURFACE_TOOLS: Readonly<Record<HostedSurface, typeof TOOLS>> = {
+  default: TOOLS,
+  openai: buildSurfaceTools(SURFACE_POLICIES.openai),
+};
+const NO_ALIASES: ReadonlySet<string> = new Set();
 
 /**
  * Resolve the allowed-tool set from URL params. Returns null = no filter (all tools).
@@ -1374,11 +1421,19 @@ function sentryBeforeBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrum
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────
-function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; requestId: string; authMethod: AuthMethod | null; userAgent: string | null }): Server {
+function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; requestId: string; authMethod: AuthMethod | null; userAgent: string | null; surface: HostedSurface }): Server {
+  const policy = SURFACE_POLICIES[ctx.surface];
   const server = new Server(
     { name: "novada", version: HOSTED_VERSION },
-    { capabilities: { tools: {}, prompts: {}, resources: {} } },
+    {
+      capabilities: policy.promptsAndResources ? { tools: {}, prompts: {}, resources: {} } : { tools: {} },
+      ...(policy.instructions ? { instructions: policy.instructions } : {}),
+    },
   );
+  // Backward-compat aliases (novada_health, novada_unblock, …) are callable by
+  // name only where the surface allows it — some fold into tools a narrower
+  // surface does not list (e.g. the scraper stubs → novada_scrape).
+  const routableAliases = policy.routeHiddenAliases ? HOSTED_HIDDEN_ALIASES : NO_ALIASES;
 
   // B2 fix (2026-07-20, synthesis.md blocker): this filter used to be gated on
   // `isHosted` (a VERCEL/VERCEL_ENV env-var sniff) — fail-OPEN, because those vars
@@ -1390,8 +1445,8 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
   // isHosted) — those two silently carried the correct behavior; only this one
   // filter, which drives the actually-served ListTools/CallTool surface, forgot it.
   const visibleTools = (ctx.allowedTools
-    ? TOOLS.filter((t) => ctx.allowedTools!.has(t.name))
-    : TOOLS
+    ? SURFACE_TOOLS[ctx.surface].filter((t) => ctx.allowedTools!.has(t.name))
+    : SURFACE_TOOLS[ctx.surface]
   ).filter(t => !HOSTED_HIDDEN.has(t.name));
   // Names actually exposed on this endpoint — drives both ListTools and the
   // discover catalog so an agent never sees a tool it can't call. A tool can be
@@ -1535,7 +1590,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // Tool-set filter: reject tools not in the endpoint's ?tools=/?groups= selection.
     // This is a CALLER config choice (their own URL params), not a hosted
     // architectural limitation — is_hosted_limitation stays false.
-    if (ctx.allowedTools && !ctx.allowedTools.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
+    if (ctx.allowedTools && !ctx.allowedTools.has(name) && !routableAliases.has(name)) {
       await scheduleToolEvent({
         outcome: "TOOL_NOT_ENABLED",
         rejectionStage: "tool_filtered",
@@ -1556,12 +1611,15 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // touched, with an agent_instruction pointing at the npm package where the full
     // tool surface is available. This IS a hosted architectural limitation —
     // is_hosted_limitation is true.
-    if (!visibleToolNames.has(name) && !HOSTED_HIDDEN_ALIASES.has(name)) {
+    if (!visibleToolNames.has(name) && !routableAliases.has(name)) {
       await scheduleToolEvent({
         outcome: "TOOL_NOT_ENABLED",
         rejectionStage: "tool_filtered",
         isHostedLimitation: true,
       });
+      if (policy.notOnSurfaceMessage) {
+        return { content: [{ type: "text" as const, text: policy.notOnSurfaceMessage(name) }], isError: true };
+      }
       return {
         content: [{
           type: "text" as const,
@@ -1654,7 +1712,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         const discoverFooter = buildStatusFooter(name);
         // TOW2-242: first-run notice on this successful path too (separate block).
         const discoverContent = appendGatewayFooter([{ type: "text" as const, text: sanitized }], discoverFooter);
-        const discoverNotice = await maybeGetFirstRunNoticeHosted(ctx.token);
+        const discoverNotice = policy.firstRunNotice ? await maybeGetFirstRunNoticeHosted(ctx.token) : null;
         if (discoverNotice) discoverContent.push({ type: "text" as const, text: discoverNotice });
         await scheduleToolEvent({ outcome: "ok" });
         return { content: discoverContent };
@@ -1690,6 +1748,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         // writeup. elicitConfirm stays omitted here regardless — it was never read on
         // this path even before the refusal, and no other tool consumes it.
         dispatch(name, argsObj, apiKey, { onProgress: undefined, visibleTools: visibleToolNames, elicitConfirm: undefined }),
+        policy,
       );
 
       logUsage(env, ctx.token, name, true, Date.now() - started);
@@ -1704,7 +1763,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       // concatenated into the result text, which would corrupt JSON outputs),
       // ONLY on this successful path. Fails quiet → never throws.
       const content = appendGatewayFooter([{ type: "text" as const, text: sanitized }], statusFooter);
-      const notice = await maybeGetFirstRunNoticeHosted(ctx.token);
+      const notice = policy.firstRunNotice ? await maybeGetFirstRunNoticeHosted(ctx.token) : null;
       if (notice) content.push({ type: "text" as const, text: notice });
       // Classify in-band ceiling timeout from extractSingle — returned as a string
       // starting with "## Extraction Error" (not thrown), so it reaches this success
@@ -1786,7 +1845,9 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
       // Common hosted failure: NOVADA_WEB_UNBLOCKER_KEY not set → extract render fails
       if (rawMsg.includes("NOVADA_WEB_UNBLOCKER_KEY") || rawMsg.includes("UNBLOCKER_NOT_CONFIGURED")) {
-        userMsg = `Extract JS rendering is not configured on this hosted endpoint. The tool attempted static extraction only. For JS-heavy pages, use a local MCP server with NOVADA_WEB_UNBLOCKER_KEY configured, or try novada_scrape for platform-specific data.`;
+        userMsg = policy.mentionLocalServer
+          ? `Extract JS rendering is not configured on this hosted endpoint. The tool attempted static extraction only. For JS-heavy pages, use a local MCP server with NOVADA_WEB_UNBLOCKER_KEY configured, or try novada_scrape for platform-specific data.`
+          : `Extract JS rendering is not configured on this hosted endpoint. The tool attempted static extraction only.`;
       }
       // Proxy not configured
       else if (rawMsg.includes("PROXY_AUTH_FAILURE") || rawMsg.includes("proxy credentials not configured")) {
@@ -1839,6 +1900,8 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
   // MCP prompts — list + get, delegated to the vendored prompts module (npm parity).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (!policy.promptsAndResources) return server;
+
   server.setRequestHandler(ListPromptsRequestSchema, async () => listPrompts() as any);
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -2117,7 +2180,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
       headers: {
         "access-control-allow-origin": "*",
         "access-control-allow-methods": "GET, POST, OPTIONS",
-        "access-control-allow-headers": "content-type, authorization, mcp-session-id",
+        "access-control-allow-headers": "content-type, authorization, mcp-session-id, mcp-protocol-version",
         "access-control-max-age": "86400",
       },
     });
@@ -2172,7 +2235,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     // test first if you ever refactor this.
     return jsonError(401, "MISSING_TOKEN",
       "Missing API key. Pass your own Novada API key as an Authorization: Bearer YOUR_KEY header, or sign in via OAuth — the hosted endpoint bills each call to your own Novada balance. URL query parameters and path segments are never read as credentials.",
-      "Add an Authorization: Bearer YOUR_KEY header to the request (get a key with $10 free credits at https://novada.com), or complete the OAuth sign-in flow — discovery metadata is at /.well-known/oauth-authorization-server.",
+      "Add an Authorization: Bearer YOUR_KEY header to the request (get a key at https://novada.com), or complete the OAuth sign-in flow — discovery metadata is at /.well-known/oauth-authorization-server.",
       { "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 
@@ -2180,15 +2243,21 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // resolve to the underlying Novada API key BEFORE validateToken (which only
   // understands real Novada keys), so a raw key and a resolved OAuth key take
   // the exact same path from here on.
+  // Which tool surface this caller sees (./_surface.ts). API-key callers stay on
+  // "default"; an OAuth token maps through the client it was issued to.
+  let surface: HostedSurface = "default";
   if (token.startsWith("nvo_at_")) {
-    const resolved = await resolveAccessToken(token, buildOAuthDeps(env));
-    if (!resolved) {
+    const oauthDeps = buildOAuthDeps(env);
+    const record = await resolveAccessTokenRecord(token, oauthDeps);
+    if (!record) {
       await emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
       return jsonError(401, "INVALID_TOKEN",
         "This OAuth access token is expired, revoked, or unknown.",
         "Refresh via grant_type=refresh_token, or restart the OAuth flow at /.well-known/oauth-authorization-server.",
         { "www-authenticate": `Bearer error="invalid_token", resource_metadata="${resourceMetadataUrl(url)}"` });
     }
+    surface = await resolveClientSurface(record.clientId, (clientId) => lookupClientRedirectUris(clientId, oauthDeps));
+    const resolved = record.apiKey;
     token = resolved;
   }
 
@@ -2205,7 +2274,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     // encrypt it so HQ can still resolve which account attempted the call.
     await emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
     return jsonError(401, "INVALID_TOKEN", message,
-      "Check your key at https://dashboard.novada.com/api-key/ — make sure it belongs to YOUR account, not a different one. Get a Novada API key with $10 free credits at https://novada.com if you don't have one.",
+      "Check your key at https://dashboard.novada.com/api-key/ — make sure it belongs to YOUR account, not a different one. Get a Novada API key at https://novada.com if you don't have one.",
       { "www-authenticate": `Bearer error="invalid_token", resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 
@@ -2236,7 +2305,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   if (!apiKey) {
     return jsonError(401, "MISSING_TOKEN",
       "No Novada API key provided. Pass your own key as an Authorization: Bearer YOUR_KEY header — the hosted endpoint bills each call to your own Novada balance and never to a shared account.",
-      "Add an Authorization: Bearer YOUR_KEY header to the request. Get a Novada API key with $10 free credits at https://novada.com — then use it as the Bearer token.",
+      "Add an Authorization: Bearer YOUR_KEY header to the request. Get a Novada API key at https://novada.com — then use it as the Bearer token.",
       { "www-authenticate": `Bearer resource_metadata="${resourceMetadataUrl(url)}"` });
   }
 
@@ -2250,7 +2319,7 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // Build a fresh server + transport per request (stateless mode). Edge
   // functions are per-request isolates with no shared memory — same pattern
   // as the CF Worker port.
-  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, requestId, authMethod, userAgent });
+  const server = buildServer(apiKey, env, { token, tokenHash, allowedTools, requestId, authMethod, userAgent, surface });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
     enableJsonResponse: true,

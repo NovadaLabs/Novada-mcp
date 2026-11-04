@@ -76,15 +76,26 @@ test("visibleTools filter expression itself does not reference isHosted / proces
  * Extract and EXECUTE mcp.ts's real `visibleTools` filter expression (not a
  * reimplementation) against given TOOLS/HOSTED_HIDDEN/ctx data.
  */
+// 2026-11-05: the expression now reads SURFACE_TOOLS[ctx.surface] (per-client
+// surfaces, api/_surface.ts). Every surface is fed the SAME unfiltered tool
+// list here and the default surface is used unless a test says otherwise, so
+// the HOSTED_HIDDEN filter is still what is under test, on every surface.
 function computeVisibleToolsFromSource(tools, hostedHidden, ctx) {
   const code = sliceBetween(
     "const visibleTools = (ctx.allowedTools",
     "\n  const visibleToolNames",
     "visibleTools filter",
   ).replace(/allowedTools!\./g, "allowedTools.");
-  const fn = new Function("TOOLS", "HOSTED_HIDDEN", "ctx", `${code}\nreturn visibleTools;`);
-  return fn(tools, hostedHidden, ctx);
+  const fn = new Function("SURFACE_TOOLS", "HOSTED_HIDDEN", "ctx", `${code}\nreturn visibleTools;`);
+  return fn({ default: tools, openai: tools }, hostedHidden, { surface: "default", ...ctx });
 }
+
+test("visibleTools excludes every HOSTED_HIDDEN tool on the openai surface too", () => {
+  const visibleNames = new Set(
+    computeVisibleToolsFromSource(CORE_TOOLS, HOSTED_HIDDEN, { allowedTools: null, surface: "openai" }).map((t) => t.name),
+  );
+  for (const hidden of HOSTED_HIDDEN) assert.ok(!visibleNames.has(hidden), `${hidden} leaked on the openai surface`);
+});
 
 test("visibleTools excludes every HOSTED_HIDDEN tool with NO ?tools=/?groups= filter, VERCEL/VERCEL_ENV unset", () => {
   // Simulates exactly the failure mode the refuter found: env vars absent (no opt-in
