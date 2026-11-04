@@ -64,7 +64,7 @@ export const WALMART_SCRAPER_CONFIG: PlatformScraperConfig<WalmartOperation> = {
     "product_by_url/product_by_url_and_zipcode.",
   description: {
     core:
-      "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"walmart.com\").",
+      "Extract structured Walmart data — product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"walmart.com\").",
     useWhen: [
       "search Walmart for <keyword> and give me prices/ratings",
       "get product listings from this Walmart category URL",
@@ -75,10 +75,10 @@ export const WALMART_SCRAPER_CONFIG: PlatformScraperConfig<WalmartOperation> = {
     notFor: [
       { when: "A single Walmart URL to read as plain text", useInstead: "novada_extract" },
       { when: "A general web search not scoped to Walmart", useInstead: "novada_search" },
-      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+      { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
     ],
     returns:
-      "Structured product records (title, price, rating, availability, SKU, etc.) in the chosen output format — same rendering as novada_scrape.",
+      "Structured product records (title, price, rating, availability, SKU, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
       "5 verified-working Walmart operations spanning keyword search, category-URL listings, SKU lookup, zip-code-specific pricing, and direct product URL. `product_by_keyword` requires BOTH `domain` AND `keyword` together; `product_by_category_url` requires ALL THREE of `category_url`, `all`, AND `page_limit` together; `product_by_url_and_zipcode` requires BOTH `url` AND `zipcode` together. Every walmart.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },

@@ -89,7 +89,7 @@ export const YOUTUBE_SCRAPER_CONFIG: PlatformScraperConfig<YoutubeOperation> = {
     "video_file_by_url/audio_file_by_url/video_by_url, { keyword: \"proxy\" } for channels_by_keyword/videos_by_keyword.",
   description: {
     core:
-      "Extract structured YouTube data — video/channel metadata, comments, downloadable video/audio files — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\").",
+      "Extract structured YouTube data — video/channel metadata, comments, downloadable video/audio files — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"youtube.com\").",
     useWhen: [
       "pull the comments on this YouTube video",
       "get channel info for this YouTube channel URL",
@@ -101,10 +101,10 @@ export const YOUTUBE_SCRAPER_CONFIG: PlatformScraperConfig<YoutubeOperation> = {
       { when: "A single YouTube URL to read as plain text", useInstead: "novada_extract" },
       { when: "A general web/video search not scoped to YouTube", useInstead: "novada_search" },
       { when: "The transcript/subtitles of a YouTube video", note: "this operation (transcript_by_video) is currently backend_broken (live-verified 2026-10-13) and has been removed from this tool's enum; no working alternative exists today" },
-      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+      { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
     ],
     returns:
-      "Structured video/channel/comment records (title, views, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format — same rendering as novada_scrape.",
+      "Structured video/channel/comment records (title, views, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
       "12 verified-working YouTube operations spanning video/audio downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel. 1 known backend_broken op (transcript_by_video, live-verified 2026-10-13: API_DOWN 404 \"subtitles_error: Unable to download API page\" across 2 different video_ids) is excluded from this enum.",
   },

@@ -56,7 +56,7 @@ export const AMAZON_SCRAPER_CONFIG = {
         "product_by_asin, { url: \"https://www.amazon.com/dp/...\" } for product_by_url/reviews_by_url/" +
         "seller_by_url/bestsellers/global_product_by_url, { keyword: \"wireless earbuds\" } for products_by_keywords.",
     description: {
-        core: "Extract structured Amazon data — product details, reviews, seller info, bestseller lists, category/brand listings — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"amazon.com\").",
+        core: "Extract structured Amazon data — product details, reviews, seller info, bestseller lists, category/brand listings — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"amazon.com\").",
         useWhen: [
             "get the price/rating/title for Amazon ASIN B0...",
             "pull the reviews for this Amazon product URL",
@@ -65,12 +65,12 @@ export const AMAZON_SCRAPER_CONFIG = {
             "what's in this Amazon Best Sellers list",
         ],
         notFor: [
-            { when: "Any other platform", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+            { when: "Any other platform", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
             { when: "A general Google/web search", useInstead: "novada_search" },
             { when: "Reading one arbitrary URL's raw content", useInstead: "novada_extract" },
         ],
-        returns: "Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen output format — same rendering as novada_scrape.",
-        operationsNote: "10 verified-working Amazon operations. 3 known backend-broken ones are excluded from this enum (rejected client-side before any backend call) — unlike novada_scrape(platform=\"amazon.com\", ...), which still forwards them with a warning.",
+        returns: "Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
+        operationsNote: "10 verified-working Amazon operations. 3 known backend-broken ones are excluded from this enum (rejected client-side before any backend call){{sibling:novada_scrape}} — unlike novada_scrape(platform=\"amazon.com\", ...), which still forwards them with a warning{{/sibling}}.",
     },
 };
 /** The materialized Amazon platform-scraper tool (definition + registry entry + handler). */

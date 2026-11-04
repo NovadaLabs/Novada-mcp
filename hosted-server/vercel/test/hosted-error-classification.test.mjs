@@ -72,16 +72,20 @@ function extractErrorFormatter() {
 
   assert.ok(!/ as const/.test(code), `extracted block still has an un-stripped "as const":\n${code}`);
 
+  // 2026-11-05: the block reads the per-client surface policy (api/_surface.ts)
+  // for whether it may point at the local npm server. Callers get the default
+  // policy unless they pass one.
   const fn = new Function(
     "error",
     "NovadaError",
     "classifyError",
+    "policy",
     `
     const redactHostedSecrets = (s) => s; // identity stub — see file header
     ${code}
     `
   );
-  return fn;
+  return (error, NovadaErrorCls, classify, policy = { mentionLocalServer: true }) => fn(error, NovadaErrorCls, classify, policy);
 }
 
 const formatHostedToolError = extractErrorFormatter();
@@ -147,4 +151,11 @@ test("2026-10-26 fix: an unrecognized error still classifies honestly as UNKNOWN
   const text = result.content[0].text;
   assert.ok(!text.startsWith("Tool error:"), `must not be the generic fallback, got: ${text}`);
   assert.ok(text.includes("Error [UNKNOWN]"), `must carry the UNKNOWN code honestly, got: ${text}`);
+});
+
+test("2026-11-05: on a surface that must not point at another client, the unblocker branch drops the local-server and novada_scrape pointers", () => {
+  const result = formatHostedToolError(new Error("NOVADA_WEB_UNBLOCKER_KEY is not set"), NovadaError, classifyError, { mentionLocalServer: false });
+  const text = result.content[0].text;
+  assert.ok(text.includes("Extract JS rendering is not configured on this hosted endpoint"), text);
+  assert.doesNotMatch(text, /local MCP|novada_scrape|npx/);
 });

@@ -68,11 +68,11 @@ const NO_DEDICATED_TOOL_WORKING_EXAMPLE = WORKING_PLATFORM_DOMAINS
 export const _TOOL_DEFINITIONS = [
     {
         name: "novada_search",
-        description: `Search the web for clean, ready-to-use content — titles, URLs, snippets, reranked by relevance. For multi-source questions, use novada_research instead (faster, more thorough).
+        description: `Search the web and return result titles, URLs, and snippets, ranked by relevance. For questions that need passages from several sources, use novada_research instead.
 
-**Use for:** current events, URL lookup, fact-checking, competitive research. enrich_top=true auto-extracts the #1 result.
-**Not for:** a known URL (novada_extract) or a multi-source report (novada_research).
-**Tip:** engine='google' (default) is fastest/most reliable; duckduckgo/yandex are slower fallbacks.
+**Use for:** current events, finding URLs, fact-checking, topic research. Set enrich_top=true to also extract the full content of the top result.
+**Not for:** reading a known URL (novada_extract) or gathering passages from several sources in one call (novada_research).
+**Engines:** engine='google' (default), 'duckduckgo', or 'yandex' (Russian and Eastern European content).
 **Domain filtering:** includeDomains/excludeDomains inject \`site:domain\` into the query (not API-side).
 **Project grouping:** \`project="my-project"\` groups outputs under a subfolder (~/Downloads/novada-mcp/<date>/<project>/).`,
         inputSchema: zodToMcpSchema(SearchParamsSchema),
@@ -89,8 +89,8 @@ export const _TOOL_DEFINITIONS = [
 - \`clean=true\`: strip nav/sidebar, main content only (~15K chars vs ~100K full page).
 
 **Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) — works on anti-bot pages automatically.
-**Not for:** URL discovery (novada_map), multi-page crawl (novada_crawl), rich platform data like Amazon/LinkedIn (novada_scrape).
-**Key rule:** leave render="auto" (default) — 15-100x faster on static sites; only set render="render" for known JS-heavy SPAs.
+**Not for:** multi-page crawl (novada_crawl){{sibling:novada_map}}, URL discovery (novada_map){{/sibling}}{{sibling:novada_scrape}}, structured platform data like Amazon/LinkedIn (novada_scrape){{/sibling}}.
+**Key rule:** leave render="auto" (default) — it uses a plain fetch when that is enough and escalates to JS rendering only when the page needs it; set render="render" only for known JS-heavy SPAs.
 **Geo-routing:** \`country="de"\` (ISO 2-letter) routes render fetches through that country's exit IP — for localized pricing or geo-restricted content.
 **Auto-saved:** every extraction is written to \`~/Downloads/novada-mcp/YYYY-MM-DD/\` (path shown in the response).
 **Project grouping:** \`project="my-project"\` groups outputs under a subfolder.`,
@@ -103,8 +103,8 @@ export const _TOOL_DEFINITIONS = [
 
 {{sibling:novada_site_copy}}**Wrong tool for whole-site jobs:** for >20 pages or a full docs site on disk, use \`novada_site_copy\` instead (up to 1000 pages, streams to disk, returns a manifest). {{/sibling}}novada_crawl hard-caps at 20 pages and returns bodies inline.
 
-**Best for:** competitive content analysis, a handful of related pages inline (returns bodies directly).
-**Not for:** a single page (novada_extract), URL discovery only (novada_map — much faster){{sibling:novada_site_copy}}, a whole site to disk (novada_site_copy){{/sibling}}.
+**Best for:** content analysis across a handful of related pages, returned inline.
+**Not for:** a single page (novada_extract){{sibling:novada_map}}, URL discovery only (novada_map){{/sibling}}{{sibling:novada_site_copy}}, a whole site to disk (novada_site_copy){{/sibling}}.
 **Performance:** avoid max_pages > 10 on large sites — crawl time scales ~1.4s/page (max_pages=20 ≈ 28s minimum). Use select_paths to narrow scope before raising max_pages.
 **Rendering:** \`render\` defaults to "auto" (static first, escalates to JS on detection) — not static-only.`,
         inputSchema: zodToMcpSchema(CrawlParamsSchema),
@@ -115,7 +115,7 @@ export const _TOOL_DEFINITIONS = [
         description: `One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extracts full content from top sources → returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative — you compose the final answer from the gathered passages.
 
 **Use for:** complex questions needing passages from ≥3 independent sources in one call — comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.
-**Not for:** a single fact or one URL (novada_search — faster/cheaper), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).
+**Not for:** a single fact or one URL (novada_search), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).
 **Depth:** "quick" (3 queries), "deep" (6), "comprehensive" (8-9), "auto" (default — quick or deep by question length, never comprehensive).
 **Project grouping:** \`project="my-project"\` groups outputs under a subfolder.
 **Recency:** \`time_range\` ("day"|"week"|"month"|"year"), \`start_date\`/\`end_date\` (ISO YYYY-MM-DD) propagate to every internal search call.
@@ -176,9 +176,9 @@ export const _TOOL_DEFINITIONS = [
 **Returns a masked config:** username shown as \`<PROXY_USER>\`, password as \`***\` — credentials are never printed. Self-host: set NOVADA_PROXY_USER/PASS (or let them auto-fetch from NOVADA_API_KEY) and fill the password from your environment. Hosted: take user/pass from dashboard.novada.com and use the returned host/port/username pattern.
 
 **\`type\` guide:**
-- \`residential\` — strongest anti-bot bypass, real home ISP IPs; escalate here when blocked
-- \`isp\` — looks like a home user; best for social/ecommerce; ignores country param
-- \`datacenter\` — fastest/cheapest; non-anti-bot, high-volume targets
+- \`residential\` — real home ISP IPs; for anti-bot-protected targets, and where to escalate when other types are blocked
+- \`isp\` — looks like a home user; suited to social/ecommerce; ignores country param
+- \`datacenter\` — datacenter IPs; for high-volume work on targets without anti-bot protection
 - \`mobile\` — 4G/5G device IPs; mobile-targeted content and app APIs
 - \`static\` — same dedicated ISP IP every request; set session_id + country explicitly for account-management workflows — omitting either silently falls back to a SHARED "default"/"us" identity, not an error
 - \`dedicated\` — exclusive datacenter IP; set session_id explicitly for high-trust platforms — omitting it silently falls back to a SHARED "default" identity, not an error
@@ -342,11 +342,11 @@ export const _TOOL_DEFINITIONS = [
     },
     {
         name: "novada_ai_monitor",
-        description: `Search PUBLIC indexed pages on AI-company domains (chatgpt.com/openai.com, perplexity.ai, anthropic.com, etc.) for brand mentions and sentiment. NOT page-change monitoring (novada_monitor) and does NOT query live AI models — a brand absent from indexed pages may still be discussed live; this only reflects indexed-page coverage.
+        description: `Search PUBLIC indexed pages on AI-company domains (chatgpt.com/openai.com, perplexity.ai, anthropic.com, etc.) for brand mentions and sentiment. NOT page-change monitoring{{sibling:novada_monitor}} (novada_monitor){{/sibling}} and does NOT query live AI models — a brand absent from indexed pages may still be discussed live; this only reflects indexed-page coverage.
 
 **How it works:** for each selected domain group, runs a Google search scoped to that domain (e.g. site:openai.com "brandname") and analyzes snippets for sentiment, claims, and competitor co-mentions.
 **Best for:** checking brand presence on AI-company public docs/blogs/changelogs.
-**Not for:** live model answers about your brand (query the model directly), general web search (novada_search), real-time social monitoring (novada_scrape with twitter/instagram).
+**Not for:** live model answers about your brand (query the model directly), general web search (novada_search){{sibling:novada_scrape}}, real-time social monitoring (novada_scrape with twitter/instagram){{/sibling}}.
 **Output:** per-domain sentiment (positive/neutral/negative), key claims from indexed snippets, competitor mentions, mention counts, source URLs.
 **Domains:** chatgpt.com+openai.com, perplexity.ai, grok.com+x.com/i/grok, claude.ai+anthropic.com, gemini.google.com. Default: chatgpt, perplexity, grok.`,
         inputSchema: zodToMcpSchema(AiMonitorParamsSchema),

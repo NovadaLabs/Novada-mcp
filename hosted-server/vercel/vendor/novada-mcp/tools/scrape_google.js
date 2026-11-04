@@ -58,7 +58,7 @@ export const GOOGLE_SCRAPER_CONFIG = {
         "web_search/ai_mode, { keyword: \"pizza\" } for shopping, { url: \"https://www.google.com/maps/place/...\" } " +
         "for maps_by_url/maps_reviews_by_url, { place_id: \"ChIJ...\" } for maps_by_place_id.",
     description: {
-        core: "Extract structured Google SERP data — organic web search, AI Mode answers, Maps place/review details, Shopping, Jobs, Hotels, Videos — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"google.com\"). Returns raw structured SERP records, not a generated answer.",
+        core: "Extract structured Google SERP data — organic web search, AI Mode answers, Maps place/review details, Shopping, Jobs, Hotels, Videos — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"google.com\"). Returns raw structured SERP records, not a generated answer.",
         useWhen: [
             "get the raw Google search results (titles, links, ranks) for <query>",
             "what's in Google's AI Mode answer for <query>",
@@ -67,12 +67,12 @@ export const GOOGLE_SCRAPER_CONFIG = {
             "find Google Jobs, Hotels, or Videos results for <query>",
         ],
         notFor: [
-            { when: "A general question needing just an answer or a few good links", useInstead: "novada_search (multi-engine: google/duckduckgo/yandex, ranked/reranked, cheaper than a raw-SERP scrape)" },
+            { when: "A general question needing just an answer or a few good links", useInstead: "novada_search (multi-engine: google/duckduckgo/yandex; returns ranked results rather than raw SERP records)" },
             { when: "A complex question needing cited multi-source synthesis", useInstead: "novada_research" },
             { when: "Reading one already-known URL's page content", useInstead: "novada_extract" },
-            { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+            { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
         ],
-        returns: "Structured SERP records per operation — organic results (title/url/snippet/rank), AI Mode answer content, Maps place details/reviews, Shopping listings (price/rating), Jobs/Hotels/Videos listings — in the chosen output format, same rendering as novada_scrape.",
+        returns: "Structured SERP records per operation — organic results (title/url/snippet/rank), AI Mode answer content, Maps place details/reviews, Shopping listings (price/rating), Jobs/Hotels/Videos listings — in the chosen output format{{sibling:novada_scrape}}, same rendering as novada_scrape{{/sibling}}.",
         operationsNote: "13 verified-working Google operations spanning web search, AI Mode, Maps (location/place_id/CID/URL lookups + reviews), Shopping, Jobs, Hotels, and Videos. Every google.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
     },
 };

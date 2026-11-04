@@ -58,6 +58,28 @@
         "novada_static_ip_mgmt"
       ],
       "description": "mcp.novada.com's REAL, LIVE default surface as of 2026-11-01 (2026-07-20 core-derivation refactor, then Round 3's SHEIN removal, a 2026-10 connector-review pass, and a 2026-11-01 owner decision (option A) — see $comment). Core-derived: npm-package's core.ts TOOLS (37 registered tools) minus hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set (8 tools: novada_browser_flow, novada_browser, novada_site_copy, novada_ip_whitelist, novada_capture_apikey, novada_session_stats, novada_search_feedback, novada_verify). novada_browser moved into HOSTED_HIDDEN in the 2026-10 connector-review pass (every real browser action unconditionally fails on this runtime) — it remains in the PINNED 'hosted-15' fixture above by design; see $comment and check-hosted-drift.mjs's gate (c) exception. novada_static_ip_mgmt was ADDED to this list 2026-11-01: its 'open'/'renew' WRITE actions, and (per a 2026-11-01 FOLLOW-UP FINAL owner decision) its 'reveal_credentials' action, are refused on hosted (action-level refusal inside the tool, not whole-tool hiding) — 'list'/'export' work here like any other tool."
+    },
+    "openai": {
+      "tools": [
+        "novada_search",
+        "novada_extract",
+        "novada_crawl",
+        "novada_research",
+        "novada_scrape_google",
+        "novada_scrape_bing",
+        "novada_scrape_duckduckgo",
+        "novada_scrape_yandex",
+        "novada_scrape_amazon",
+        "novada_scrape_walmart",
+        "novada_scrape_perplexity",
+        "novada_scrape_youtube",
+        "novada_scrape_github",
+        "novada_proxy",
+        "novada_ai_monitor",
+        "novada_account",
+        "novada_proxy_account_list"
+      ],
+      "description": "mcp.novada.com's surface for OAuth clients whose registered redirect URIs are on chatgpt.com or openai.com (OpenAI plugin review, 2026-11-05). Same URL as 'hosted'; selected per request from the access token's client_id (hosted-server/vercel/api/_surface.ts — OPENAI_SURFACE_TOOLS is the code-side source; scripts/check-hosted-drift.mjs gate (d) requires this list to equal it and to stay a subset of 'hosted'). The 12 'hosted' tools not listed here (novada_scrape, novada_discover, novada_monitor, novada_setup, novada_map, novada_proxy_account_create, novada_static_ip_mgmt, and the instagram/facebook/tiktok/x/linkedin scrapers) are neither listed nor callable on this surface."
     }
   }
 }
