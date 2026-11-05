@@ -222,9 +222,9 @@ export interface ResolveGoogleLinksStats {
  * Google-sourced links, including every other platform's scrape records
  * (class-not-instance: one shared function, not a per-platform branch).
  *
- * No returned record carries `redirect_link`: it is a Google click-tracking
- * URL whose only use is the (c2) replay above, so it is removed here once for
- * every caller (novada_search/research/verify/ai_monitor and
+ * No returned record carries `redirect_link` or any other Google redirect
+ * wrapper below its top-level link/url (see `sanitizeRecord`) — removed here
+ * once for every caller (novada_search/research/verify/ai_monitor and
  * novada_scrape_google alike) rather than by each caller remembering to.
  *
  * 2026-11-04 follow-up: a record whose link/url could NOT be resolved
