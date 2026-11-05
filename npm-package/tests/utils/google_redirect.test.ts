@@ -583,3 +583,13 @@ describe("near-misses of the wrapper shape are kept (over-stripping guard)", () 
     expect(mockedAxios.get).not.toHaveBeenCalled();
   });
 });
+
+describe("a non-string top-level link/url is sanitized like any nested value", () => {
+  it("removes a wrapper inside an object-valued top-level link", async () => {
+    const rec = { title: "Shopping", link: { href: `/goto?url=${TOKEN}OBJLINK`, anchor: "Buy" }, url: [`/url?sa=t&url=${TOKEN}ARRURL`, "https://shop.example.com/"] };
+    const { kept } = await resolveGoogleLinksInPlace([rec as never]);
+    expect(JSON.stringify(kept[0])).not.toMatch(/\/goto\?url=|\/url\?sa=/);
+    expect((kept[0] as Record<string, unknown>).link).toEqual({ anchor: "Buy" });
+    expect((kept[0] as Record<string, unknown>).url).toEqual(["https://shop.example.com/"]);
+  });
+});
