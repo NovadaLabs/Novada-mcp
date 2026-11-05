@@ -151,7 +151,7 @@ test("mcp.ts missing/invalid key → clear error pointing to novada.com", () => 
   const src = readFileSync(MCP_TS, "utf8");
   assert.match(src, /MISSING_TOKEN/, "must keep a MISSING_TOKEN error");
   assert.match(src, /INVALID_TOKEN/, "must keep an INVALID_TOKEN error");
-  assert.match(src, /https:\/\/novada\.com/, "error must direct users to novada.com for a key + free credits");
+  assert.match(src, /https:\/\/novada\.com/, "error must direct users to novada.com for a key");
 });
 
 test("mcp.ts threads caller key: dispatch + withCredentials use the caller apiKey", () => {
