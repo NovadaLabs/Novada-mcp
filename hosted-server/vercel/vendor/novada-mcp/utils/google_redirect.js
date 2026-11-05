@@ -619,7 +619,9 @@ function withoutNestedRedirects(value, depth) {
 function sanitizeRecord(item) {
     let out = null;
     for (const [key, v] of Object.entries(item)) {
-        if (key === "link" || key === "url")
+        // A string top-level link/url was already resolved (or cleared) above; any
+        // other value under those keys is walked like the rest of the record.
+        if ((key === "link" || key === "url") && typeof v === "string")
             continue;
         if (key === "redirect_link" || isGoogleRedirectString(v)) {
             out ??= { ...item };
