@@ -668,7 +668,9 @@ function withoutNestedRedirects(value: unknown, depth: number): unknown {
 function sanitizeRecord<T extends SerpLinkCandidate>(item: T): T {
   let out: Record<string, unknown> | null = null;
   for (const [key, v] of Object.entries(item as Record<string, unknown>)) {
-    if (key === "link" || key === "url") continue;
+    // A string top-level link/url was already resolved (or cleared) above; any
+    // other value under those keys is walked like the rest of the record.
+    if ((key === "link" || key === "url") && typeof v === "string") continue;
     if (key === "redirect_link" || isGoogleRedirectString(v)) {
       out ??= { ...(item as Record<string, unknown>) };
       delete out[key];
