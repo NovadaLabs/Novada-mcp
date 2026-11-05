@@ -885,3 +885,18 @@ test("T32 resolveAccessTokenRecord returns the token's client_id alongside the k
   assert.deepEqual(await resolveAccessTokenRecord(at, deps), { apiKey: CUSTOMER_KEY, clientId });
   assert.equal(await resolveAccessTokenRecord("nvo_at_unknown", deps), null);
 });
+
+test("T34 /token: a malformed or empty Basic header never supplies a client_id (body client_id still required)", async () => {
+  for (const header of ["Basic", "Basic !!!not-base64!!!", "Basic " + Buffer.from(":secret-only").toString("base64"), "Bearer abc"]) {
+    const deps = makeDeps();
+    const { redirectUri, code } = await obtainCode(deps);
+    const req = new Request("https://mcp.novada.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", authorization: header },
+      body: new URLSearchParams({ grant_type: "authorization_code", code, code_verifier: RFC_VERIFIER, redirect_uri: redirectUri }).toString(),
+    });
+    const res = await handleToken(req, IP, deps);
+    assert.notEqual(res.status, 200, `header ${JSON.stringify(header)} must not authenticate a client`);
+    assert.equal((await res.json()).access_token, undefined);
+  }
+});

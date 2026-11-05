@@ -412,7 +412,7 @@ export interface NovadaApiResponse {
 
 export const ProxyParamsSchema = withCamelCaseAliases(z.object({
   type: z.enum(["residential", "isp", "datacenter", "mobile", "static", "dedicated"]).default("residential")
-    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static'/'dedicated' for a fixed IP — set session_id explicitly, or it silently falls back to a SHARED \"default\" identity (not an error)."),
+    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume work on targets without anti-bot protection, 'static'/'dedicated' for a fixed IP — set session_id explicitly, or it silently falls back to a SHARED \"default\" identity (not an error)."),
   country: z.string().regex(/^[a-zA-Z]{2}$/, "country must be a 2-letter ISO code (e.g. 'us', 'gb', 'de')").optional()
     .describe("ISO 2-letter country code (e.g. 'us','gb','de'). Omit for any country. NOTE: silently ignored when type='isp'."),
   city: z.string().max(50).regex(/^[a-zA-Z\s\-]+$/, "city must contain only letters, spaces, or hyphens").optional()
