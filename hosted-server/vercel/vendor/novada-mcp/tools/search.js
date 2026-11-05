@@ -188,13 +188,17 @@ function toGoogleTbsDate(iso) {
  *                      guess at a wrong code — see the fix report's "known
  *                      follow-up" section.
  */
+const LATEST_UTC_OFFSET_MS = 14 * 60 * 60 * 1000;
 function buildTimeFilterFields(scraperName, f) {
     if (scraperName === "google.com") {
         if (f.start_date || f.end_date) {
             const minDate = (f.start_date && toGoogleTbsDate(f.start_date)) ?? "1/1/2000";
-            const today = new Date();
+            // Open-ended range: end at the latest calendar date anywhere (UTC+14), so
+            // "today" is included for every caller — the plain UTC date is still
+            // yesterday for anyone east of UTC late in the UTC day.
+            const latestToday = new Date(Date.now() + LATEST_UTC_OFFSET_MS);
             const maxDate = (f.end_date && toGoogleTbsDate(f.end_date)) ??
-                `${today.getUTCMonth() + 1}/${today.getUTCDate()}/${today.getUTCFullYear()}`;
+                `${latestToday.getUTCMonth() + 1}/${latestToday.getUTCDate()}/${latestToday.getUTCFullYear()}`;
             return [["tbs", `cdr:1,cd_min:${minDate},cd_max:${maxDate}`]];
         }
         if (f.time_range) {
