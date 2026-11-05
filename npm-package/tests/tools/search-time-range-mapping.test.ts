@@ -52,17 +52,22 @@ describe("buildTimeFilterFields wire format — google.com", () => {
     expect(form.get("end_date")).toBeNull();
   });
 
-  it("start_date only -> cd_max defaults to today", async () => {
-    const realNow = Date.now;
-    vi.spyOn(Date, "now").mockImplementation(() => new Date("2026-11-04T00:00:00Z").getTime());
+  // Fake timers drive both Date.now() and `new Date()`; the previous version
+  // only stubbed Date.now, never reached the code's clock, and passed only on
+  // the calendar day it was written.
+  it.each([
+    ["early in the UTC day", "2026-11-04T00:00:00Z", "11/4/2026"],
+    ["late in the UTC day — already the next day east of UTC", "2026-11-04T23:30:00Z", "11/5/2026"],
+  ])("start_date only -> cd_max is the latest calendar date anywhere (%s)", async (_label, now, expectedMax) => {
+    vi.useFakeTimers({ now: new Date(now) });
     try {
       await submitSearchScrapeTask(API_KEY, "google.com", "google_search", "q", 10, "q", true, {
         start_date: "2026-10-01",
       });
       const form = formBodyOf();
-      expect(form.get("tbs")).toBe("cdr:1,cd_min:10/1/2026,cd_max:11/4/2026");
+      expect(form.get("tbs")).toBe(`cdr:1,cd_min:10/1/2026,cd_max:${expectedMax}`);
     } finally {
-      Date.now = realNow;
+      vi.useRealTimers();
     }
   });
 
