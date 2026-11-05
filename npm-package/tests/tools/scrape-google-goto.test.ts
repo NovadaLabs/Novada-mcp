@@ -161,3 +161,26 @@ describe("novada_scrape_google — redirect_link never reaches the output", () =
     expect(googleCalls).toEqual(["https://www.google.com/goto?url=LIMTOK1"]);
   });
 });
+
+describe("novada_scrape_google — nested redirect links (video key_moments, source_info_link)", () => {
+  it("json and markdown carry no relative or Google-redirect link at any depth", async () => {
+    for (const format of ["json", "markdown"] as const) {
+      mockDownloadAndGotoResolve(
+        [{
+          title: "Video",
+          link: "https://www.youtube.com/watch?v=abc",
+          key_moments: [{ link: "/goto?url=KMTOK", time: "00:10", title: "Part" }],
+          rich: { source_info_link: "/goto?url=SITOK" },
+        }],
+        {},
+      );
+      const result = await novadaScrapeGoogle(
+        validateScrapeGoogleParams({ operation: "web_search", params: { q: "test" }, format }),
+        "test-key",
+      );
+      expect(result).not.toContain("/goto?url=");
+      expect(result).toContain("https://www.youtube.com/watch?v=abc");
+      expect(result).toContain("00:10");
+    }
+  });
+});

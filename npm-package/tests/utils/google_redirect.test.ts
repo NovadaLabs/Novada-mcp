@@ -527,3 +527,59 @@ describe("resolveGoogleLinksInPlace removes redirect_link from every record", ()
     expect(kept[3]).toBe(items[3]); // nothing to remove → same reference
   });
 });
+
+describe("nested Google redirect wrappers are removed, everything else in the record is kept", () => {
+  const record = {
+    title: "Kubernetes Operators Explained",
+    link: "https://www.youtube.com/watch?v=i9V4oCa5f9I",
+    source_info_link: `/goto?url=${TOKEN}SRCINFO`,
+    key_moments: [
+      { link: `/goto?url=${TOKEN}KM1`, time: "00:00", title: "Intro" },
+      { link: "https://www.youtube.com/watch?v=i9V4oCa5f9I&t=45", time: "00:45", title: "Control loop" },
+    ],
+    references: [`https://www.google.com/url?sa=t&url=${TOKEN}REF&ved=x`, "https://kubernetes.io/docs/concepts/extend-kubernetes/operator/"],
+    about: { source: { maps: "https://www.google.com/maps/place/IBM", path: "/watch?v=abc", deep: { link: `/url?sa=t&url=${TOKEN}DEEP` } } },
+  };
+
+  it("drops wrappers at every depth with zero network calls (top-level link already absolute)", async () => {
+    const { kept } = await resolveGoogleLinksInPlace([record]);
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+    const out = kept[0] as typeof record;
+    expect(JSON.stringify(out)).not.toMatch(/\/goto\?url=|google\.com\/url\?|\/url\?sa=/);
+    expect(out).not.toHaveProperty("source_info_link");
+    expect(out.key_moments).toEqual([
+      { time: "00:00", title: "Intro" },
+      { link: "https://www.youtube.com/watch?v=i9V4oCa5f9I&t=45", time: "00:45", title: "Control loop" },
+    ]);
+    expect(out.references).toEqual(["https://kubernetes.io/docs/concepts/extend-kubernetes/operator/"]);
+    expect(out.about).toEqual({ source: { maps: "https://www.google.com/maps/place/IBM", path: "/watch?v=abc", deep: {} } });
+    expect(out.link).toBe(record.link);
+  });
+
+  it("never mutates the input record", async () => {
+    const snapshot = JSON.stringify(record);
+    await resolveGoogleLinksInPlace([record]);
+    expect(JSON.stringify(record)).toBe(snapshot);
+  });
+});
+
+describe("near-misses of the wrapper shape are kept (over-stripping guard)", () => {
+  const nearMisses = {
+    title: "How URL shorteners and goto statements work",
+    link: "https://example.com/a",
+    article: "https://example.com/url-shortener-guide",
+    google_lookalike_path: "https://www.google.com/url-guide",
+    google_search: "https://www.google.com/search?q=goto+url",
+    google_maps: "https://www.google.com/maps/place/IBM?url=x",
+    relative_docs: "/goto/docs?page=2",
+    relative_no_token: "/url?sa=t&ved=abc",
+    lookalike_host: "https://google.com.example.net/url?url=CAESabc",
+    notes: ["url=CAESabc is a token", "/goto?nothing=1"],
+  };
+
+  it("every near-miss value survives sanitization unchanged", async () => {
+    const { kept } = await resolveGoogleLinksInPlace([nearMisses]);
+    expect(kept[0]).toEqual(nearMisses);
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+});

@@ -602,20 +602,85 @@ function emptyStats(): ResolveGoogleLinksStats {
  *  `url_unavailable: true` so callers can render "title/snippet, no link"
  *  instead of silently treating it the same as a fully populated result. */
 function markUnresolved<T extends SerpLinkCandidate>(item: T): T {
-  const patched = withoutRedirectLink(item) as Record<string, unknown>;
+  const patched = sanitizeRecord(item) as Record<string, unknown>;
   patched.link = "";
   patched.url = "";
   patched.url_unavailable = true;
   return patched as T;
 }
 
-/** A copy of `item` without its upstream `redirect_link` (a Google
- *  click-tracking URL that only exists to feed (c2) above); the same reference
- *  when there is none. */
-function withoutRedirectLink<T extends SerpLinkCandidate>(item: T): T {
-  if (!("redirect_link" in item)) return item;
-  const { redirect_link: _redirectLink, ...rest } = item;
-  return rest as T;
+/** A Google click-tracking wrapper: relative `/goto?`/`/url?`, or a Google
+ *  redirect host's `/goto`/`/url`, carrying a `url=` token. */
+function isGoogleRedirectString(value: unknown): boolean {
+  return typeof value === "string" && extractGoogleRedirectToken(value) !== null;
+}
+
+// Raw SERP records nest a few levels (key_moments[], sitelinks[], …); the cap
+// only bounds pathological input.
+const MAX_SANITIZE_DEPTH = 8;
+
+/** Copy-on-write: `value` without any Google redirect wrapper found inside it
+ *  (object properties removed, array elements filtered). The same reference
+ *  when there is nothing to remove. */
+function withoutNestedRedirects(value: unknown, depth: number): unknown {
+  if (depth > MAX_SANITIZE_DEPTH || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    let changed = false;
+    const out: unknown[] = [];
+    for (const el of value) {
+      if (isGoogleRedirectString(el)) {
+        changed = true;
+        continue;
+      }
+      const next = withoutNestedRedirects(el, depth + 1);
+      if (next !== el) changed = true;
+      out.push(next);
+    }
+    return changed ? out : value;
+  }
+  let out: Record<string, unknown> | null = null;
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    if (isGoogleRedirectString(v)) {
+      out ??= { ...(value as Record<string, unknown>) };
+      delete out[key];
+      continue;
+    }
+    const next = withoutNestedRedirects(v, depth + 1);
+    if (next !== v) {
+      out ??= { ...(value as Record<string, unknown>) };
+      out[key] = next;
+    }
+  }
+  return out ?? value;
+}
+
+/**
+ * `item` as it may leave this module: without its upstream `redirect_link`
+ * (only used to feed (c2) above) and without any OTHER Google redirect
+ * wrapper anywhere in the record — e.g. a video result's
+ * `key_moments[].link` timestamps or a nested `source_info_link`
+ * (live 2026-11-05, novada_scrape_google). Only the record's own top-level
+ * `link`/`url` is resolved over the network; secondary links are removed
+ * rather than resolved (one request each would multiply Google traffic and
+ * throttle the primary links) and never returned as relative paths. The same
+ * reference when there is nothing to remove.
+ */
+function sanitizeRecord<T extends SerpLinkCandidate>(item: T): T {
+  let out: Record<string, unknown> | null = null;
+  for (const [key, v] of Object.entries(item as Record<string, unknown>)) {
+    if (key === "link" || key === "url") continue;
+    if (key === "redirect_link" || isGoogleRedirectString(v)) {
+      out ??= { ...(item as Record<string, unknown>) };
+      delete out[key];
+      continue;
+    }
+    const next = withoutNestedRedirects(v, 1);
+    if (next !== v) {
+      out ??= { ...(item as Record<string, unknown>) };
+      out[key] = next;
+    }
+  }
+  return (out ?? item) as T;
 }
 
 /**
@@ -626,9 +691,9 @@ function withoutRedirectLink<T extends SerpLinkCandidate>(item: T): T {
  * Google-sourced links, including every other platform's scrape records
  * (class-not-instance: one shared function, not a per-platform branch).
  *
- * No returned record carries `redirect_link`: it is a Google click-tracking
- * URL whose only use is the (c2) replay above, so it is removed here once for
- * every caller (novada_search/research/verify/ai_monitor and
+ * No returned record carries `redirect_link` or any other Google redirect
+ * wrapper below its top-level link/url (see `sanitizeRecord`) — removed here
+ * once for every caller (novada_search/research/verify/ai_monitor and
  * novada_scrape_google alike) rather than by each caller remembering to.
  *
  * 2026-11-04 follow-up: a record whose link/url could NOT be resolved
@@ -655,7 +720,7 @@ export async function resolveGoogleLinksInPlace<T extends SerpLinkCandidate>(
       const primary = (typeof item.url === "string" && item.url) || (typeof item.link === "string" && item.link) || "";
 
       if (!isGoogleWrappedLink(primary, item.redirect_link)) {
-        results[i] = withoutRedirectLink(item); // zero network cost; same reference unless it carried a redirect_link
+        results[i] = sanitizeRecord(item); // zero network cost; same reference unless it carried a redirect_link
         continue;
       }
       stats.wrapped++;
@@ -679,7 +744,7 @@ export async function resolveGoogleLinksInPlace<T extends SerpLinkCandidate>(
       // filtered them out above as a zero-cost pass-through), so there is no
       // stats bucket for it in this batch-level counter.
 
-      const patched = { ...withoutRedirectLink(item) } as Record<string, unknown>;
+      const patched = { ...sanitizeRecord(item) } as Record<string, unknown>;
       if ("link" in patched) patched.link = resolved.url;
       if ("url" in patched) patched.url = resolved.url;
       results[i] = patched as T;
