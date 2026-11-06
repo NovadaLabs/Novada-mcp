@@ -123,7 +123,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS/DFS, extracts each page inline. Use select_paths globs to target sections (e.g. \"/docs/api/**\").\n\nnovada_crawl hard-caps at 20 pages and returns bodies inline.\n\n**Best for:** competitive content analysis, a handful of related pages inline (returns bodies directly).\n**Not for:** a single page (novada_extract), URL discovery only (novada_map \u2014 much faster).\n**Performance:** avoid max_pages > 10 on large sites \u2014 crawl time scales ~1.4s/page (max_pages=20 \u2248 28s minimum). Use select_paths to narrow scope before raising max_pages.\n**Rendering:** `render` defaults to \"auto\" (static first, escalates to JS on detection) \u2014 not static-only.",
+    "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS/DFS, extracts each page inline. Use select_paths globs to target sections (e.g. \"/docs/api/**\").\n\nnovada_crawl hard-caps at 20 pages and returns bodies inline.\n\n**Best for:** content analysis across a handful of related pages, returned inline.\n**Not for:** a single page (novada_extract), URL discovery only (novada_map).\n**Performance:** avoid max_pages > 10 on large sites \u2014 crawl time scales ~1.4s/page (max_pages=20 \u2248 28s minimum). Use select_paths to narrow scope before raising max_pages.\n**Rendering:** `render` defaults to \"auto\" (static first, escalates to JS on detection) \u2014 not static-only.",
     "inputSchema": {
       "properties": {
         "exclude_paths": {
@@ -157,7 +157,7 @@
         },
         "render": {
           "default": "auto",
-          "description": "Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (slower, handles JS sites).",
+          "description": "Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (adds rendering time; handles JS sites).",
           "enum": [
             "auto",
             "static",
@@ -234,7 +234,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract content from any URL. Auto-handles Cloudflare/DataDome/Kasada via escalation (static \u2192 JS render \u2192 Browser CDP). Batch mode: pass url as an array for up to 10 pages in parallel.\n\n**Format selection:**\n- `format=\"markdown\"` (default): full-page content for reading/analysis.\n- `format=\"json\"`: structured object (url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at). Use with `fields=[\"price\",\"title\"]` to populate `fields`. Common mistake: using markdown when you need specific fields \u2014 use format=\"json\"+fields instead.\n- `format=\"html\"`: raw HTML (truncated at 100K chars by default; adjust via max_chars).\n- `clean=true`: strip nav/sidebar, main content only (~15K chars vs ~100K full page).\n\n**Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) \u2014 works on anti-bot pages automatically.\n**Not for:** URL discovery (novada_map), multi-page crawl (novada_crawl), rich platform data like Amazon/LinkedIn (novada_scrape).\n**Key rule:** leave render=\"auto\" (default) \u2014 15-100x faster on static sites; only set render=\"render\" for known JS-heavy SPAs.\n**Geo-routing:** `country=\"de\"` (ISO 2-letter) routes render fetches through that country's exit IP \u2014 for localized pricing or geo-restricted content.\n**Auto-saved:** every extraction is written to `~/Downloads/novada-mcp/YYYY-MM-DD/` (path shown in the response).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
+    "description": "Extract content from any URL. Auto-handles Cloudflare/DataDome/Kasada via escalation (static \u2192 JS render \u2192 Browser CDP). Batch mode: pass url as an array for up to 10 pages in parallel.\n\n**Format selection:**\n- `format=\"markdown\"` (default): full-page content for reading/analysis.\n- `format=\"json\"`: structured object (url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at). Use with `fields=[\"price\",\"title\"]` to populate `fields`. Common mistake: using markdown when you need specific fields \u2014 use format=\"json\"+fields instead.\n- `format=\"html\"`: raw HTML (truncated at 100K chars by default; adjust via max_chars).\n- `clean=true`: strip nav/sidebar, main content only (~15K chars vs ~100K full page).\n\n**Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) \u2014 works on anti-bot pages automatically.\n**Not for:** multi-page crawl (novada_crawl), URL discovery (novada_map), structured platform data like Amazon/LinkedIn (novada_scrape).\n**Key rule:** leave render=\"auto\" (default) \u2014 it uses a plain fetch when that is enough and escalates to JS rendering only when the page needs it; set render=\"render\" only for known JS-heavy SPAs.\n**Geo-routing:** `country=\"de\"` (ISO 2-letter) routes render fetches through that country's exit IP \u2014 for localized pricing or geo-restricted content.\n**Auto-saved:** every extraction is written to `~/Downloads/novada-mcp/YYYY-MM-DD/` (path shown in the response).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
     "inputSchema": {
       "properties": {
         "clean": {
@@ -362,7 +362,7 @@
         },
         "max_depth": {
           "default": 2,
-          "description": "Link-hops from root to follow. Default 2. Higher = more pages found but slower.",
+          "description": "Link-hops from root to follow. Default 2. Higher = more pages found and a longer run.",
           "maximum": 5,
           "minimum": 1,
           "type": "integer"
@@ -430,7 +430,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Route your own HTTP requests through residential or mobile IPs \u2014 geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag (format=url|env|curl).\n\n**Best for:** a specific country/city IP, sticky multi-step sessions, testing geo-restricted content.\n**Not for:** page extraction (novada_extract \u2014 proxy is automatic) or web search (novada_search).\n**Returns a masked config:** username shown as `<PROXY_USER>`, password as `***` \u2014 credentials are never printed. Self-host: set NOVADA_PROXY_USER/PASS (or let them auto-fetch from NOVADA_API_KEY) and fill the password from your environment. Hosted: take user/pass from dashboard.novada.com and use the returned host/port/username pattern.\n\n**`type` guide:**\n- `residential` \u2014 strongest anti-bot bypass, real home ISP IPs; escalate here when blocked\n- `isp` \u2014 looks like a home user; best for social/ecommerce; ignores country param\n- `datacenter` \u2014 fastest/cheapest; non-anti-bot, high-volume targets\n- `mobile` \u2014 4G/5G device IPs; mobile-targeted content and app APIs\n- `static` \u2014 same dedicated ISP IP every request; set session_id + country explicitly for account-management workflows \u2014 omitting either silently falls back to a SHARED \"default\"/\"us\" identity, not an error\n- `dedicated` \u2014 exclusive datacenter IP; set session_id explicitly for high-trust platforms \u2014 omitting it silently falls back to a SHARED \"default\" identity, not an error\n\n**Escalation when blocked:** datacenter \u2192 isp \u2192 residential.",
+    "description": "Route your own HTTP requests through residential or mobile IPs \u2014 geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag (format=url|env|curl).\n\n**Best for:** a specific country/city IP, sticky multi-step sessions, testing geo-restricted content.\n**Not for:** page extraction (novada_extract \u2014 proxy is automatic) or web search (novada_search).\n**Returns a masked config:** username shown as `<PROXY_USER>`, password as `***` \u2014 credentials are never printed. Self-host: set NOVADA_PROXY_USER/PASS (or let them auto-fetch from NOVADA_API_KEY) and fill the password from your environment. Hosted: take user/pass from dashboard.novada.com and use the returned host/port/username pattern.\n\n**`type` guide:**\n- `residential` \u2014 real home ISP IPs; for anti-bot-protected targets, and where to escalate when other types are blocked\n- `isp` \u2014 looks like a home user; suited to social/ecommerce; ignores country param\n- `datacenter` \u2014 datacenter IPs; for high-volume work on targets without anti-bot protection\n- `mobile` \u2014 4G/5G device IPs; mobile-targeted content and app APIs\n- `static` \u2014 same dedicated ISP IP every request; set session_id + country explicitly for account-management workflows \u2014 omitting either silently falls back to a SHARED \"default\"/\"us\" identity, not an error\n- `dedicated` \u2014 exclusive datacenter IP; set session_id explicitly for high-trust platforms \u2014 omitting it silently falls back to a SHARED \"default\" identity, not an error\n\n**Escalation when blocked:** datacenter \u2192 isp \u2192 residential.",
     "inputSchema": {
       "properties": {
         "city": {
@@ -462,7 +462,7 @@
         },
         "type": {
           "default": "residential",
-          "description": "Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static'/'dedicated' for a fixed IP \u2014 set session_id explicitly, or it silently falls back to a SHARED \"default\" identity (not an error).",
+          "description": "Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume work on targets without anti-bot protection, 'static'/'dedicated' for a fixed IP \u2014 set session_id explicitly, or it silently falls back to a SHARED \"default\" identity (not an error).",
           "enum": [
             "residential",
             "isp",
@@ -619,7 +619,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "One call \u2192 3-10 parallel searches across Google/Bing/DuckDuckGo \u2192 dedup \u2192 extracts full content from top sources \u2192 returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative \u2014 you compose the final answer from the gathered passages.\n\n**Use for:** complex questions needing passages from \u22653 independent sources in one call \u2014 comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** a single fact or one URL (novada_search \u2014 faster/cheaper), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default \u2014 quick or deep by question length, never comprehensive).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.\n**Recency:** `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`/`end_date` (ISO YYYY-MM-DD) propagate to every internal search call.\n**Response size:** extracts full content from the top 5 sources only (even at depth=\"comprehensive\"); each source is capped at novada_extract's own default 25,000-char limit \u2014 bounded total, not unbounded \"every source in full.\"",
+    "description": "One call \u2192 3-10 parallel searches across Google/Bing/DuckDuckGo \u2192 dedup \u2192 extracts full content from top sources \u2192 returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative \u2014 you compose the final answer from the gathered passages.\n\n**Use for:** complex questions needing passages from \u22653 independent sources in one call \u2014 comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** a single fact or one URL (novada_search), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default \u2014 quick or deep by question length, never comprehensive).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.\n**Recency:** `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`/`end_date` (ISO YYYY-MM-DD) propagate to every internal search call.\n**Response size:** extracts full content from the top 5 sources only (even at depth=\"comprehensive\"); each source is capped at novada_extract's own default 25,000-char limit \u2014 bounded total, not unbounded \"every source in full.\"",
     "inputSchema": {
       "properties": {
         "depth": {
@@ -754,7 +754,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured Amazon data \u2014 product details, reviews, seller info, bestseller lists, category/brand listings \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"amazon.com\").\n\n**Use when:** \"get the price/rating/title for Amazon ASIN B0...\", \"pull the reviews for this Amazon product URL\", \"search Amazon for <keyword> with price and rating\", \"who is this Amazon seller\", \"what's in this Amazon Best Sellers list\".\n**Not for:** Any other platform \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\"). A general Google/web search \u2014 use novada_search. Reading one arbitrary URL's raw content \u2014 use novada_extract.\n**Returns:** Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 10 verified-working Amazon operations. 3 known backend-broken ones are excluded from this enum (rejected client-side before any backend call) \u2014 unlike novada_scrape(platform=\"amazon.com\",...), which still forwards them with a warning.",
+    "description": "Extract structured Amazon data \u2014 product details, reviews, seller info, bestseller lists, category/brand listings \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"amazon.com\").\n\n**Use when:** \"get the price/rating/title for Amazon ASIN B0...\", \"pull the reviews for this Amazon product URL\", \"search Amazon for <keyword> with price and rating\", \"who is this Amazon seller\", \"what's in this Amazon Best Sellers list\".\n**Not for:** Any other platform \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\"). A general Google/web search \u2014 use novada_search. Reading one arbitrary URL's raw content \u2014 use novada_extract.\n**Returns:** Structured product/review/seller records (title, price, rating, asin, availability, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 10 verified-working Amazon operations. 3 known backend-broken ones are excluded from this enum (rejected client-side before any backend call) \u2014 unlike novada_scrape(platform=\"amazon.com\",...), which still forwards them with a warning.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -803,7 +803,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -827,7 +827,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured Bing SERP data \u2014 organic web search, video results, news results, shopping listings \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"bing.com\"). Bing is NOT a selectable engine on novada_search \u2014 this is the only intentional way to query Bing specifically.\n\n**Use when:** \"get the raw Bing search results (titles, links, ranks) for <query>\", \"find Bing video results for <query>\", \"find Bing news results for <query>, sorted by date\", \"search Bing Shopping for <keyword>\".\n**Not for:** A general question needing just an answer or a few good links \u2014 use novada_search \u2014 google/duckduckgo/yandex only (Bing is not selectable there); ranked, cheaper than a raw-SERP scrape. A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content \u2014 use novada_extract. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured SERP records per operation \u2014 organic results (title/url/snippet/rank), video results, news results (with date), shopping listings (price/rating) \u2014 in the chosen output format, same rendering as novada_scrape.\n**Ops:** 4 verified-working Bing operations: web search, videos, news, and shopping. Every bing.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured Bing SERP data \u2014 organic web search, video results, news results, shopping listings \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"bing.com\"). Bing is NOT a selectable engine on novada_search \u2014 this is the only intentional way to query Bing specifically.\n\n**Use when:** \"get the raw Bing search results (titles, links, ranks) for <query>\", \"find Bing video results for <query>\", \"find Bing news results for <query>, sorted by date\", \"search Bing Shopping for <keyword>\".\n**Not for:** A general question needing just an answer or a few good links \u2014 use novada_search (google/duckduckgo/yandex only \u2014 Bing is not selectable there; returns ranked results rather than raw SERP records). A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content \u2014 use novada_extract. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured SERP records per operation \u2014 organic results (title/url/snippet/rank), video results, news results (with date), shopping listings (price/rating) \u2014 in the chosen output format, same rendering as novada_scrape.\n**Ops:** 4 verified-working Bing operations: web search, videos, news, and shopping. Every bing.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -870,7 +870,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -894,7 +894,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured DuckDuckGo web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"duckduckgo.com\"). Returns the raw organic-results SERP, with region/time/adult-content filters novada_search does not expose, not a generated answer.\n\n**Use when:** \"get the raw DuckDuckGo search results (titles, links, ranks) for <query>\", \"search DuckDuckGo restricted to a specific region (params.kl) or time range (params.df)\", \"compare DuckDuckGo's ranking for <query> against another engine's raw SERP\".\n**Not for:** A general question needing just an answer or a few good links \u2014 use novada_search with engine=\"duckduckgo\" (ranked/reranked instead of a raw SERP dump). A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content \u2014 use novada_extract. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured organic-result SERP records (title/url/snippet/rank) in the chosen output format, same rendering as novada_scrape.\n**Ops:** 1 verified-working DuckDuckGo operation (web search). The single duckduckgo.com catalog operation is currently status:\"ok\".",
+    "description": "Extract structured DuckDuckGo web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"duckduckgo.com\"). Returns the raw organic-results SERP, with region/time/adult-content filters novada_search does not expose, not a generated answer.\n\n**Use when:** \"get the raw DuckDuckGo search results (titles, links, ranks) for <query>\", \"search DuckDuckGo restricted to a specific region (params.kl) or time range (params.df)\", \"compare DuckDuckGo's ranking for <query> against another engine's raw SERP\".\n**Not for:** A general question needing just an answer or a few good links \u2014 use novada_search with engine=\"duckduckgo\" (returns ranked results rather than raw SERP records). A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content \u2014 use novada_extract. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured organic-result SERP records (title/url/snippet/rank) in the chosen output format, same rendering as novada_scrape.\n**Ops:** 1 verified-working DuckDuckGo operation (web search). The single duckduckgo.com catalog operation is currently status:\"ok\".",
     "inputSchema": {
       "properties": {
         "format": {
@@ -934,7 +934,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -958,7 +958,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured Facebook data \u2014 public profile pages, posts, comments, and events \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"facebook.com\").\n\n**Use when:** \"get this public Facebook page's profile info\", \"pull the comments on this Facebook post\", \"get details for this Facebook event\", \"find events matching <query> on Facebook\", \"list the upcoming events on this Facebook page\".\n**Not for:** A single Facebook URL to read as plain text \u2014 use novada_extract. A general web search not scoped to Facebook \u2014 use novada_search. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured profile/post/comment/event records (page name, post text, comment author/text, event name/date/location, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 6 verified-working Facebook operations spanning public profile pages, posts, comments, and events (search / single event / event list). Every facebook.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured Facebook data \u2014 public profile pages, posts, comments, and events \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"facebook.com\").\n\n**Use when:** \"get this public Facebook page's profile info\", \"pull the comments on this Facebook post\", \"get details for this Facebook event\", \"find events matching <query> on Facebook\", \"list the upcoming events on this Facebook page\".\n**Not for:** A single Facebook URL to read as plain text \u2014 use novada_extract. A general web search not scoped to Facebook \u2014 use novada_search. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured profile/post/comment/event records (page name, post text, comment author/text, event name/date/location, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 6 verified-working Facebook operations spanning public profile pages, posts, comments, and events (search / single event / event list). Every facebook.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1003,7 +1003,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1027,7 +1027,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured GitHub repository data \u2014 repository details by URL, or multiple repositories from a GitHub search-results URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"github.com\").\n\n**Use when:** \"get repository info (stars, forks, description, language, etc.) for this GitHub repo URL\", \"get the repositories listed on this GitHub search-results URL\".\n**Not for:** A single GitHub URL (repo, issue, PR, user) to read as plain text \u2014 use novada_extract. A general web/code search not scoped to GitHub, or a GitHub issue/PR/user lookup (no catalog operation exists for those) \u2014 use novada_search, or novada_extract for a known URL. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured repository records (name, description, stars, forks, language, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 3 verified-working GitHub operations: two repository-by-URL lookups (`repository_by_url` and `repository_details_by_url` map to distinct catalog scraper_ids \u2014 github_repository_repo-url and github_repository_url respectively \u2014 both taking the same `url` param; the catalog documents no behavioral difference between them) and repository listing from a GitHub search-results URL. Every github.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured GitHub repository data \u2014 repository details by URL, or multiple repositories from a GitHub search-results URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"github.com\").\n\n**Use when:** \"get repository info (stars, forks, description, language, etc.) for this GitHub repo URL\", \"get the repositories listed on this GitHub search-results URL\".\n**Not for:** A single GitHub URL (repo, issue, PR, user) to read as plain text \u2014 use novada_extract. A general web/code search not scoped to GitHub, or a GitHub issue/PR/user lookup (no catalog operation exists for those) \u2014 use novada_search, or novada_extract for a known URL. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured repository records (name, description, stars, forks, language, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 3 verified-working GitHub operations: two repository-by-URL lookups (`repository_by_url` and `repository_details_by_url` map to distinct catalog scraper_ids \u2014 github_repository_repo-url and github_repository_url respectively \u2014 both taking the same `url` param; the catalog documents no behavioral difference between them) and repository listing from a GitHub search-results URL. Every github.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1069,7 +1069,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1093,7 +1093,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured Google SERP data \u2014 organic web search, AI Mode answers, Maps place/review details, Shopping, Jobs, Hotels, Videos \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"google.com\"). Returns raw structured SERP records, not a generated answer.\n\n**Use when:** \"get the raw Google search results (titles, links, ranks) for <query>\", \"what's in Google's AI Mode answer for <query>\", \"pull Google Maps reviews or place details for this URL / place_id / CID\", \"search Google Shopping for <keyword>\", \"find Google Jobs, Hotels, or Videos results for <query>\".\n**Not for:** A general question needing just an answer or a few good links \u2014 use novada_search (multi-engine: google/duckduckgo/yandex, ranked/reranked, cheaper than a raw-SERP scrape). A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content \u2014 use novada_extract. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured SERP records per operation \u2014 organic results (title/url/snippet/rank), AI Mode answer content, Maps place details/reviews, Shopping listings (price/rating), Jobs/Hotels/Videos listings \u2014 in the chosen output format, same rendering as novada_scrape.\n**Ops:** 13 verified-working Google operations spanning web search, AI Mode, Maps (location/place_id/CID/URL lookups + reviews), Shopping, Jobs, Hotels, and Videos. Every google.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured Google SERP data \u2014 organic web search, AI Mode answers, Maps place/review details, Shopping, Jobs, Hotels, Videos \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"google.com\"). Returns raw structured SERP records, not a generated answer.\n\n**Use when:** \"get the raw Google search results (titles, links, ranks) for <query>\", \"what's in Google's AI Mode answer for <query>\", \"pull Google Maps reviews or place details for this URL / place_id / CID\", \"search Google Shopping for <keyword>\", \"find Google Jobs, Hotels, or Videos results for <query>\".\n**Not for:** A general question needing just an answer or a few good links \u2014 use novada_search (multi-engine: google/duckduckgo/yandex; returns ranked results rather than raw SERP records). A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content \u2014 use novada_extract. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured SERP records per operation \u2014 organic results (title/url/snippet/rank), AI Mode answer content, Maps place details/reviews, Shopping listings (price/rating), Jobs/Hotels/Videos listings \u2014 in the chosen output format, same rendering as novada_scrape.\n**Ops:** 13 verified-working Google operations spanning web search, AI Mode, Maps (location/place_id/CID/URL lookups + reviews), Shopping, Jobs, Hotels, and Videos. Every google.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1145,7 +1145,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1169,7 +1169,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured Instagram data \u2014 profiles, posts, reels, and comments \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"instagram.com\").\n\n**Use when:** \"get the latest posts from this Instagram profile\", \"pull the comments on this Instagram post or reel\", \"get details for this single Instagram post or reel URL\", \"get Instagram profile info by URL or username\", \"get the reels posted by this Instagram profile\".\n**Not for:** A single Instagram URL to read as plain text \u2014 use novada_extract. A general web search not scoped to Instagram \u2014 use novada_search. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured profile/post/reel/comment records (username, follower count, caption, like count, comment author/text, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 7 verified-working Instagram operations spanning profile lookup (by URL or username), posts and reels (by profile or by direct URL), and comments. `posts_by_profile` requires BOTH `profileurl` AND `resultsLimit` together. Every instagram.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured Instagram data \u2014 profiles, posts, reels, and comments \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"instagram.com\").\n\n**Use when:** \"get the latest posts from this Instagram profile\", \"pull the comments on this Instagram post or reel\", \"get details for this single Instagram post or reel URL\", \"get Instagram profile info by URL or username\", \"get the reels posted by this Instagram profile\".\n**Not for:** A single Instagram URL to read as plain text \u2014 use novada_extract. A general web search not scoped to Instagram \u2014 use novada_search. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured profile/post/reel/comment records (username, follower count, caption, like count, comment author/text, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 7 verified-working Instagram operations spanning profile lookup (by URL or username), posts and reels (by profile or by direct URL), and comments. `posts_by_profile` requires BOTH `profileurl` AND `resultsLimit` together. Every instagram.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1215,7 +1215,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1239,7 +1239,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured LinkedIn data \u2014 job listings (by location/filters, jobs search-results URL, or a single job posting URL) and company profile info by URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"linkedin.com\").\n\n**Use when:** \"find LinkedIn job listings in <location> matching <keyword/level/remote/etc.>\", \"get all the job listings from this LinkedIn jobs search URL\", \"get details for this single LinkedIn job posting URL\", \"get company info for this LinkedIn company URL\".\n**Not for:** A single LinkedIn URL to read as plain text \u2014 use novada_extract. A general web search not scoped to LinkedIn \u2014 use novada_search. A LinkedIn personal PROFILE (not a company or job) \u2014 no catalog operation exists for this today \u2014 use novada_extract on the profile URL, or novada_search. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured job-listing/company records (title, location, level, company name, follower count, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 4 verified-working LinkedIn operations spanning job search (by location, with optional keyword/level/remote/company filters), job listings from a search-results URL, a single job posting by URL, and company info by URL. `jobs_search` requires `params.location` \u2014 the catalog's actual required key for this op, despite its upstream name reading \"By Keywords\" (keyword itself is optional there). Every linkedin.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured LinkedIn data \u2014 job listings (by location/filters, jobs search-results URL, or a single job posting URL) and company profile info by URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"linkedin.com\").\n\n**Use when:** \"find LinkedIn job listings in <location> matching <keyword/level/remote/etc.>\", \"get all the job listings from this LinkedIn jobs search URL\", \"get details for this single LinkedIn job posting URL\", \"get company info for this LinkedIn company URL\".\n**Not for:** A single LinkedIn URL to read as plain text \u2014 use novada_extract. A general web search not scoped to LinkedIn \u2014 use novada_search. A LinkedIn personal PROFILE (not a company or job) \u2014 no catalog operation exists for this today \u2014 use novada_extract on the profile URL, or novada_search. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured job-listing/company records (title, location, level, company name, follower count, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 4 verified-working LinkedIn operations spanning job search (by location, with optional keyword/level/remote/company filters), job listings from a search-results URL, a single job posting by URL, and company info by URL. `jobs_search` requires `params.location` \u2014 the catalog's actual required key for this op, despite its upstream name reading \"By Keywords\" (keyword itself is optional there). Every linkedin.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1282,7 +1282,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1306,7 +1306,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract the actual AI-generated answer Perplexity returns for a query \u2014 by a Perplexity query URL or a raw search term \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"perplexity.ai\"). Scrapes Perplexity's own live-rendered answer page (the model's actual response text) \u2014 NOT a web search results list and NOT an indexed-page brand-mention scan.\n\n**Use when:** \"what does Perplexity AI answer for <query>\", \"get Perplexity's generated answer for this perplexity.ai URL\", \"get Perplexity's answer for the search term <term>\".\n**Not for:** A general web/multi-engine search for information (not Perplexity's own generated answer) \u2014 use novada_search. Checking whether a brand is mentioned on AI-company indexed public pages \u2014 use novada_ai_monitor \u2014 scans INDEXED PUBLIC PAGES for brand mentions across AI-company domains; does not fetch a live generated answer for an arbitrary query. A complex question needing cited, multi-source synthesis \u2014 use novada_research. Reading one already-known URL's raw page content \u2014 use novada_extract. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Perplexity's rendered answer content (the text of its generated response) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term. Every perplexity.ai catalog operation is currently status:\"ok\" \u2014 unlike its sibling chatgpt.com, whose only 2 catalog operations are BOTH backend_broken (verified 2026-07-13, \"submit hangs >120s\"), which is why no dedicated chatgpt.com scraper tool exists.",
+    "description": "Extract the actual AI-generated answer Perplexity returns for a query \u2014 by a Perplexity query URL or a raw search term \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"perplexity.ai\"). Scrapes Perplexity's own live-rendered answer page (the model's actual response text) \u2014 NOT a web search results list and NOT an indexed-page brand-mention scan.\n\n**Use when:** \"what does Perplexity AI answer for <query>\", \"get Perplexity's generated answer for this perplexity.ai URL\", \"get Perplexity's answer for the search term <term>\".\n**Not for:** A general web/multi-engine search for information (not Perplexity's own generated answer) \u2014 use novada_search. Checking whether a brand is mentioned on AI-company indexed public pages \u2014 use novada_ai_monitor \u2014 scans INDEXED PUBLIC PAGES for brand mentions across AI-company domains; does not fetch a live generated answer for an arbitrary query. A complex question needing cited, multi-source synthesis \u2014 use novada_research. Reading one already-known URL's raw page content \u2014 use novada_extract. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Perplexity's rendered answer content (the text of its generated response) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term. Every perplexity.ai catalog operation is currently status:\"ok\".",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1347,7 +1347,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1371,7 +1371,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured TikTok data \u2014 profile info, post/video details, and post lists by profile, hashtag, or search URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"tiktok.com\").\n\n**Use when:** \"get the latest posts from this TikTok profile\", \"get details for this single TikTok video URL\", \"pull TikTok profile info for this URL\", \"search TikTok profiles from this discover/search URL\", \"get posts from this TikTok hashtag/discover page\".\n**Not for:** A single TikTok URL to read as plain text \u2014 use novada_extract. A general web search not scoped to TikTok \u2014 use novada_search. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured profile/post records (username, follower count, video description, likes, view count, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 5 verified-working TikTok operations: profile search by list URL, profile by URL, posts by list URL, posts by profile URL, and a single post by URL. Every tiktok.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured TikTok data \u2014 profile info, post/video details, and post lists by profile, hashtag, or search URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"tiktok.com\").\n\n**Use when:** \"get the latest posts from this TikTok profile\", \"get details for this single TikTok video URL\", \"pull TikTok profile info for this URL\", \"search TikTok profiles from this discover/search URL\", \"get posts from this TikTok hashtag/discover page\".\n**Not for:** A single TikTok URL to read as plain text \u2014 use novada_extract. A general web search not scoped to TikTok \u2014 use novada_search. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured profile/post records (username, follower count, video description, likes, view count, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 5 verified-working TikTok operations: profile search by list URL, profile by URL, posts by list URL, posts by profile URL, and a single post by URL. Every tiktok.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1415,7 +1415,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1439,7 +1439,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured Walmart data \u2014 product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"walmart.com\").\n\n**Use when:** \"search Walmart for <keyword> and give me prices/ratings\", \"get product listings from this Walmart category URL\", \"what's the price/availability for this Walmart SKU\", \"get this Walmart product's info for a specific zip code\", \"get product details for this Walmart product URL\".\n**Not for:** A single Walmart URL to read as plain text \u2014 use novada_extract. A general web search not scoped to Walmart \u2014 use novada_search. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured product records (title, price, rating, availability, SKU, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 5 verified-working Walmart operations spanning keyword search, category-URL listings, SKU lookup, zip-code-specific pricing, and direct product URL. `product_by_keyword` requires BOTH `domain` AND `keyword` together; `product_by_category_url` requires ALL THREE of `category_url`, `all`, AND `page_limit` together; `product_by_url_and_zipcode` requires BOTH `url` AND `zipcode` together. Every walmart.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured Walmart data \u2014 product details by keyword search, category URL, SKU, zip-code-specific pricing, or direct product URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"walmart.com\").\n\n**Use when:** \"search Walmart for <keyword> and give me prices/ratings\", \"get product listings from this Walmart category URL\", \"what's the price/availability for this Walmart SKU\", \"get this Walmart product's info for a specific zip code\", \"get product details for this Walmart product URL\".\n**Not for:** A single Walmart URL to read as plain text \u2014 use novada_extract. A general web search not scoped to Walmart \u2014 use novada_search. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured product records (title, price, rating, availability, SKU, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 5 verified-working Walmart operations spanning keyword search, category-URL listings, SKU lookup, zip-code-specific pricing, and direct product URL. `product_by_keyword` requires BOTH `domain` AND `keyword` together; `product_by_category_url` requires ALL THREE of `category_url`, `all`, AND `page_limit` together; `product_by_url_and_zipcode` requires BOTH `url` AND `zipcode` together. Every walmart.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1483,7 +1483,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1507,7 +1507,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured X (Twitter) data \u2014 a single post and profile lookups by username or URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"x.com\").\n\n**Use when:** \"get the text/engagement stats for this X post URL\", \"get this X profile's info by username\", \"get this X profile's info by profile URL\".\n**Not for:** A single X/Twitter URL to read as plain text \u2014 use novada_extract. A general web search not scoped to X \u2014 use novada_search. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured post/profile records (post text, like/reply/repost counts, profile bio, follower count, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 3 verified-working X (Twitter) operations: a single post by URL, and profile lookup by username or by profile URL. Every x.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
+    "description": "Extract structured X (Twitter) data \u2014 a single post and profile lookups by username or URL \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"x.com\").\n\n**Use when:** \"get the text/engagement stats for this X post URL\", \"get this X profile's info by username\", \"get this X profile's info by profile URL\".\n**Not for:** A single X/Twitter URL to read as plain text \u2014 use novada_extract. A general web search not scoped to X \u2014 use novada_search. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured post/profile records (post text, like/reply/repost counts, profile bio, follower count, etc.) in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 3 verified-working X (Twitter) operations: a single post by URL, and profile lookup by username or by profile URL. Every x.com catalog operation is currently status:\"ok\" \u2014 none are excluded for being backend_broken.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1549,7 +1549,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1573,7 +1573,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured Yandex web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"yandex.com\"). Returns the raw organic-results SERP, with TLD/language/time-range controls novada_search does not expose, not a generated answer.\n\n**Use when:** \"get the raw Yandex search results (titles, links, ranks) for <query>\", \"search a specific Yandex TLD (params.yandex_domain, e.g. \"yandex.ru\") for Russian/Eastern European content\", \"search Yandex restricted to a time range (params.within)\".\n**Not for:** A general question needing just an answer or a few good links \u2014 use novada_search with engine=\"yandex\" (ranked/reranked instead of a raw SERP dump). A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content \u2014 use novada_extract. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured organic-result SERP records (title/url/snippet/rank) in the chosen output format, same rendering as novada_scrape.\n**Ops:** 1 verified-working Yandex operation (web search, requires params.yandex_domain TLD selector). The single yandex.com catalog operation is currently status:\"ok\".",
+    "description": "Extract structured Yandex web search SERP data via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"yandex.com\"). Returns the raw organic-results SERP, with TLD/language/time-range controls novada_search does not expose, not a generated answer.\n\n**Use when:** \"get the raw Yandex search results (titles, links, ranks) for <query>\", \"search a specific Yandex TLD (params.yandex_domain, e.g. \"yandex.ru\") for Russian/Eastern European content\", \"search Yandex restricted to a time range (params.within)\".\n**Not for:** A general question needing just an answer or a few good links \u2014 use novada_search with engine=\"yandex\" (returns ranked results rather than raw SERP records). A complex question needing cited multi-source synthesis \u2014 use novada_research. Reading one already-known URL's page content \u2014 use novada_extract. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured organic-result SERP records (title/url/snippet/rank) in the chosen output format, same rendering as novada_scrape.\n**Ops:** 1 verified-working Yandex operation (web search, requires params.yandex_domain TLD selector). The single yandex.com catalog operation is currently status:\"ok\".",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1613,7 +1613,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1637,7 +1637,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract structured YouTube data \u2014 video/channel metadata, comments, downloadable video/audio files \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\").\n\n**Use when:** \"pull the comments on this YouTube video\", \"get channel info for this YouTube channel URL\", \"search YouTube channels for <keyword>\", \"find YouTube videos matching <keyword>, filtered by duration/upload date/attributes\", \"download a YouTube video or its audio track\".\n**Not for:** A single YouTube URL to read as plain text \u2014 use novada_extract. A general web/video search not scoped to YouTube \u2014 use novada_search. The transcript/subtitles of a YouTube video \u2014 this operation (transcript_by_video) is currently backend_broken (live-verified 2026-10-13) and has been removed from this tool's enum; no working alternative exists today. A different platform's data \u2014 use its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured video/channel/comment records (title, views, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 12 verified-working YouTube operations spanning video/audio downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel. 1 known backend_broken op (transcript_by_video, live-verified 2026-10-13: API_DOWN 404 \"subtitles_error: Unable to download API page\" across 2 different video_ids) is excluded from this enum.",
+    "description": "Extract structured YouTube data \u2014 video/channel metadata, comments, downloadable video/audio files \u2014 via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"youtube.com\").\n\n**Use when:** \"pull the comments on this YouTube video\", \"get channel info for this YouTube channel URL\", \"search YouTube channels for <keyword>\", \"find YouTube videos matching <keyword>, filtered by duration/upload date/attributes\", \"download a YouTube video or its audio track\".\n**Not for:** A single YouTube URL to read as plain text \u2014 use novada_extract. A general web/video search not scoped to YouTube \u2014 use novada_search. The transcript/subtitles of a YouTube video \u2014 this operation (transcript_by_video) is currently backend_broken (live-verified 2026-10-13) and has been removed from this tool's enum; no working alternative exists today. A different platform's data \u2014 use that platform's dedicated scraper tool, if one is listed, or novada_scrape(platform=\"<domain>\").\n**Returns:** Structured video/channel/comment records (title, views, comment author/text, channel subscriber count, etc.) plus downloadable video/audio file links, in the chosen output format \u2014 same rendering as novada_scrape.\n**Ops:** 12 verified-working YouTube operations spanning video/audio downloads, channel lookup + search, comments, and video search by keyword/label/filters/playlist/channel. 1 known backend_broken op (transcript_by_video, live-verified 2026-10-13: API_DOWN 404 \"subtitles_error: Unable to download API page\" across 2 different video_ids) is excluded from this enum.",
     "inputSchema": {
       "properties": {
         "format": {
@@ -1688,7 +1688,7 @@
           "type": "object"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'competitor-pricing'.",
+          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
           "maxLength": 30,
           "type": "string"
         },
@@ -1712,7 +1712,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Search the web for clean, ready-to-use content \u2014 titles, URLs, snippets, reranked by relevance. For multi-source questions, use novada_research instead (faster, more thorough).\n\n**Use for:** current events, URL lookup, fact-checking, competitive research. enrich_top=true auto-extracts the #1 result.\n**Not for:** a known URL (novada_extract) or a multi-source report (novada_research).\n**Tip:** engine='google' (default) is fastest/most reliable; duckduckgo/yandex are slower fallbacks.\n**Domain filtering:** includeDomains/excludeDomains inject `site:domain` into the query (not API-side).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder (~/Downloads/novada-mcp/<date>/<project>/).",
+    "description": "Search the web and return result titles, URLs, and snippets, ranked by relevance. For questions that need passages from several sources, use novada_research instead.\n\n**Use for:** current events, finding URLs, fact-checking, topic research. Set enrich_top=true to also extract the full content of the top result.\n**Not for:** reading a known URL (novada_extract) or gathering passages from several sources in one call (novada_research).\n**Engines:** engine='google' (default), 'duckduckgo', or 'yandex' (Russian and Eastern European content).\n**Domain filtering:** includeDomains/excludeDomains inject `site:domain` into the query (not API-side).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder (~/Downloads/novada-mcp/<date>/<project>/).",
     "inputSchema": {
       "properties": {
         "country": {
@@ -1725,7 +1725,7 @@
         },
         "engine": {
           "default": "google",
-          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content.",
+          "description": "Search engine to use. 'google' (default, recommended for general queries). 'duckduckgo': privacy-focused; responses take noticeably longer. 'yandex': Russian/Eastern European content.",
           "enum": [
             "google",
             "duckduckgo",

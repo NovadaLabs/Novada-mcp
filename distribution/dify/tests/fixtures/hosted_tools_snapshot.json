@@ -16,7 +16,7 @@
         },
         "format": {
           "default": "card",
-          "description": "Output format. 'card' (default): human-readable markdown card — scannable headline, status table with icons, expired plans highlighted. 'json': clean flat structured object for programmatic use — no data.data nesting, human-readable values, errors[] aggregated.",
+          "description": "Output format. 'card' (default): human-readable markdown card \u2014 scannable headline, status table with icons, expired plans highlighted. 'json': clean flat structured object for programmatic use \u2014 no data.data nesting, human-readable values, errors[] aggregated.",
           "enum": [
             "card",
             "json"
@@ -46,7 +46,7 @@
         },
         "section": {
           "default": "summary",
-          "description": "Which account data to fetch. 'summary' (default): full dashboard — wallet balance + plan balances + recent capture logs + health entitlements (proxy/browser). 'balance': master wallet balance (currency). 'usage': paginated wallet usage/transaction history. 'plans': per-product plan balances (residential/isp/mobile/datacenter/static/capture). 'traffic': daily proxy traffic consumption.",
+          "description": "Which account data to fetch. 'summary' (default): full dashboard \u2014 wallet balance + plan balances + recent capture logs + health entitlements (proxy/browser). 'balance': master wallet balance (currency). 'usage': paginated wallet usage/transaction history. 'plans': per-product plan balances (residential/isp/mobile/datacenter/static/capture). 'traffic': daily proxy traffic consumption.",
           "enum": [
             "summary",
             "balance",
@@ -74,7 +74,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS/DFS, extracts each page inline. Use select_paths globs to target sections (e.g. \"/docs/api/**\").\n\nnovada_crawl hard-caps at 20 pages and returns bodies inline.\n\n**Best for:** competitive content analysis, a handful of related pages inline (returns bodies directly).\n**Not for:** a single page (novada_extract), URL discovery only (novada_map — much faster).\n**Performance:** avoid max_pages > 10 on large sites — crawl time scales ~1.4s/page (max_pages=20 ≈ 28s minimum). Use select_paths to narrow scope before raising max_pages.\n**Rendering:** `render` defaults to \"auto\" (static first, escalates to JS on detection) — not static-only.",
+    "description": "Use when you need content from a bounded set of pages (up to 20) and don't have the URLs yet. Crawls BFS/DFS, extracts each page inline. Use select_paths globs to target sections (e.g. \"/docs/api/**\").\n\nnovada_crawl hard-caps at 20 pages and returns bodies inline.\n\n**Best for:** content analysis across a handful of related pages, returned inline.\n**Not for:** a single page (novada_extract), URL discovery only (novada_map).\n**Performance:** avoid max_pages > 10 on large sites \u2014 crawl time scales ~1.4s/page (max_pages=20 \u2248 28s minimum). Use select_paths to narrow scope before raising max_pages.\n**Rendering:** `render` defaults to \"auto\" (static first, escalates to JS on detection) \u2014 not static-only.",
     "inputSchema": {
       "properties": {
         "exclude_paths": {
@@ -97,7 +97,7 @@
           "type": "string"
         },
         "instructions": {
-          "description": "Natural language hint for which pages to prioritize, e.g. 'only API reference pages', 'skip blog and changelog'. Echoed back in the output as a hint — it does NOT filter which pages get crawled; use select_paths/exclude_paths for actual filtering, or act on this hint yourself when choosing follow-up calls.",
+          "description": "Natural language hint for which pages to prioritize, e.g. 'only API reference pages', 'skip blog and changelog'. Echoed back in the output as a hint \u2014 it does NOT filter which pages get crawled; use select_paths/exclude_paths for actual filtering, or act on this hint yourself when choosing follow-up calls.",
           "type": "string"
         },
         "max_pages": {
@@ -108,7 +108,7 @@
         },
         "render": {
           "default": "auto",
-          "description": "Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (slower, handles JS sites).",
+          "description": "Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (adds rendering time; handles JS sites).",
           "enum": [
             "auto",
             "static",
@@ -128,7 +128,7 @@
         },
         "strategy": {
           "default": "bfs",
-          "description": "Crawl traversal order. 'bfs' (default): breadth-first — visits all pages at current depth before going deeper, good for broad discovery. 'dfs': depth-first — follows links deeply before backtracking, good for exploring specific paths.",
+          "description": "Crawl traversal order. 'bfs' (default): breadth-first \u2014 visits all pages at current depth before going deeper, good for broad discovery. 'dfs': depth-first \u2014 follows links deeply before backtracking, good for exploring specific paths.",
           "enum": [
             "bfs",
             "dfs"
@@ -154,7 +154,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract content from any URL. Auto-handles Cloudflare/DataDome/Kasada via escalation (static → JS render → Browser CDP). Batch mode: pass url as an array for up to 10 pages in parallel.\n\n**Format selection:**\n- `format=\"markdown\"` (default): full-page content for reading/analysis.\n- `format=\"json\"`: structured object (url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at). Use with `fields=[\"price\",\"title\"]` to populate `fields`. Common mistake: using markdown when you need specific fields — use format=\"json\"+fields instead.\n- `format=\"html\"`: raw HTML (truncated at 100K chars by default; adjust via max_chars).\n- `clean=true`: strip nav/sidebar, main content only (~15K chars vs ~100K full page).\n\n**Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) — works on anti-bot pages automatically.\n**Not for:** URL discovery (novada_map), multi-page crawl (novada_crawl), rich platform data like Amazon/LinkedIn (novada_scrape).\n**Key rule:** leave render=\"auto\" (default) — 15-100x faster on static sites; only set render=\"render\" for known JS-heavy SPAs.\n**Geo-routing:** `country=\"de\"` (ISO 2-letter) routes render fetches through that country's exit IP — for localized pricing or geo-restricted content.\n**Auto-saved:** every extraction is written to `~/Downloads/novada-mcp/YYYY-MM-DD/` (path shown in the response).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
+    "description": "Extract content from any URL. Auto-handles Cloudflare/DataDome/Kasada via escalation (static \u2192 JS render \u2192 Browser CDP). Batch mode: pass url as an array for up to 10 pages in parallel.\n\n**Format selection:**\n- `format=\"markdown\"` (default): full-page content for reading/analysis.\n- `format=\"json\"`: structured object (url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at). Use with `fields=[\"price\",\"title\"]` to populate `fields`. Common mistake: using markdown when you need specific fields \u2014 use format=\"json\"+fields instead.\n- `format=\"html\"`: raw HTML (truncated at 100K chars by default; adjust via max_chars).\n- `clean=true`: strip nav/sidebar, main content only (~15K chars vs ~100K full page).\n\n**Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) \u2014 works on anti-bot pages automatically.\n**Not for:** multi-page crawl (novada_crawl), URL discovery (novada_map), structured platform data like Amazon/LinkedIn (novada_scrape).\n**Key rule:** leave render=\"auto\" (default) \u2014 it uses a plain fetch when that is enough and escalates to JS rendering only when the page needs it; set render=\"render\" only for known JS-heavy SPAs.\n**Geo-routing:** `country=\"de\"` (ISO 2-letter) routes render fetches through that country's exit IP \u2014 for localized pricing or geo-restricted content.\n**Auto-saved:** every extraction is written to `~/Downloads/novada-mcp/YYYY-MM-DD/` (path shown in the response).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
     "inputSchema": {
       "properties": {
         "clean": {
@@ -162,13 +162,13 @@
           "type": "boolean"
         },
         "country": {
-          "description": "ISO 3166-1 alpha-2 country code (e.g. 'de','us','gb') to route the fetch through an exit IP there — for localized pricing, geo-restricted content, or per-country comparisons. Only applies to render/unblocker fetches (render=\"render\"|\"js\" or auto-escalation to render); no effect on a pure static fetch. Batch mode (url array) applies the same country to all URLs.",
+          "description": "ISO 3166-1 alpha-2 country code (e.g. 'de','us','gb') to route the fetch through an exit IP there \u2014 for localized pricing, geo-restricted content, or per-country comparisons. Only applies to render/unblocker fetches (render=\"render\"|\"js\" or auto-escalation to render); no effect on a pure static fetch. Batch mode (url array) applies the same country to all URLs.",
           "maxLength": 2,
           "minLength": 2,
           "type": "string"
         },
         "fields": {
-          "description": "Specific fields to extract (e.g. ['price','author','availability','rating']). ADVISORY/confidence-gated: each returns {value, source, confidence}. Source priority: JSON-LD → infobox/table/microdata → anchored pattern → loose scan (last resort). Below the confidence floor, the match is SUPPRESSED (value=null, low_confidence:true, raw candidate in low_confidence_value) instead of a confidently-wrong guess. Treat a resolved value as a hint, not ground truth — check source/confidence and retry with render='render' when null/low_confidence.",
+          "description": "Specific fields to extract (e.g. ['price','author','availability','rating']). ADVISORY/confidence-gated: each returns {value, source, confidence}. Source priority: JSON-LD \u2192 infobox/table/microdata \u2192 anchored pattern \u2192 loose scan (last resort). Below the confidence floor, the match is SUPPRESSED (value=null, low_confidence:true, raw candidate in low_confidence_value) instead of a confidently-wrong guess. Treat a resolved value as a hint, not ground truth \u2014 check source/confidence and retry with render='render' when null/low_confidence.",
           "items": {
             "minLength": 1,
             "type": "string"
@@ -178,7 +178,7 @@
         },
         "format": {
           "default": "markdown",
-          "description": "Output format. 'markdown' (default): structured readable output. 'text': plain text. 'html': raw HTML (truncated at 100K chars by default; pass max_chars to adjust). 'json': structured JSON object with typed fields — best for programmatic agent consumption.",
+          "description": "Output format. 'markdown' (default): structured readable output. 'text': plain text. 'html': raw HTML (truncated at 100K chars by default; pass max_chars to adjust). 'json': structured JSON object with typed fields \u2014 best for programmatic agent consumption.",
           "enum": [
             "text",
             "markdown",
@@ -194,7 +194,7 @@
           "type": "integer"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only — no effect on hosted.",
+          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only \u2014 no effect on hosted.",
           "maxLength": 30,
           "type": "string"
         },
@@ -247,7 +247,7 @@
           "type": "string"
         },
         "wait_ms": {
-          "description": "Fixed ms to wait after page load before capturing (browser mode only). Prefer wait_for (CSS selector) when possible — more reliable. Fallback for pages with no stable selector. Max 30000ms.",
+          "description": "Fixed ms to wait after page load before capturing (browser mode only). Prefer wait_for (CSS selector) when possible \u2014 more reliable. Fallback for pages with no stable selector. Max 30000ms.",
           "maximum": 30000,
           "minimum": 0,
           "type": "integer"
@@ -267,7 +267,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Discover URLs on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl. Returns URLs only — no content. Hard cap: 100 URLs.\n\n**Best for:** site structure discovery, finding the right subpage, pre-flight before novada_crawl/novada_extract.\n**Not for:** reading content (use novada_crawl/novada_extract).\n**Note:** limited results on JS SPAs — flagged in the output.",
+    "description": "Discover URLs on a site before deciding what to read. Tries sitemap.xml first (fast), falls back to BFS crawl. Returns URLs only \u2014 no content. Hard cap: 100 URLs.\n\n**Best for:** site structure discovery, finding the right subpage, pre-flight before novada_crawl/novada_extract.\n**Not for:** reading content (use novada_crawl/novada_extract).\n**Note:** limited results on JS SPAs \u2014 flagged in the output.",
     "inputSchema": {
       "properties": {
         "include_subdomains": {
@@ -282,7 +282,7 @@
         },
         "max_depth": {
           "default": 2,
-          "description": "Link-hops from root to follow. Default 2. Higher = more pages found but slower.",
+          "description": "Link-hops from root to follow. Default 2. Higher = more pages found and a longer run.",
           "maximum": 5,
           "minimum": 1,
           "type": "integer"
@@ -309,12 +309,12 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "One call → 3-10 parallel searches across Google/Bing/DuckDuckGo → dedup → extracts full content from top sources → returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative — you compose the final answer from the gathered passages.\n\n**Use for:** complex questions needing passages from ≥3 independent sources in one call — comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** a single fact or one URL (novada_search — faster/cheaper), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default — quick or deep by question length, never comprehensive).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.\n**Recency:** `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`/`end_date` (ISO YYYY-MM-DD) propagate to every internal search call.\n**Response size:** extracts full content from the top 5 sources only (even at depth=\"comprehensive\"); each source is capped at novada_extract's own default 25,000-char limit — bounded total, not unbounded \"every source in full.\"",
+    "description": "One call \u2192 3-10 parallel searches across Google/Bing/DuckDuckGo \u2192 dedup \u2192 extracts full content from top sources \u2192 returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative \u2014 you compose the final answer from the gathered passages.\n\n**Use for:** complex questions needing passages from \u22653 independent sources in one call \u2014 comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** a single fact or one URL (novada_search), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default \u2014 quick or deep by question length, never comprehensive).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.\n**Recency:** `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`/`end_date` (ISO YYYY-MM-DD) propagate to every internal search call.\n**Response size:** extracts full content from the top 5 sources only (even at depth=\"comprehensive\"); each source is capped at novada_extract's own default 25,000-char limit \u2014 bounded total, not unbounded \"every source in full.\"",
     "inputSchema": {
       "properties": {
         "depth": {
           "default": "auto",
-          "description": "'quick'=3 searches, 'deep'=6, 'comprehensive'=8-9, 'auto' (default)=picks quick or deep by question length — never comprehensive.",
+          "description": "'quick'=3 searches, 'deep'=6, 'comprehensive'=8-9, 'auto' (default)=picks quick or deep by question length \u2014 never comprehensive.",
           "enum": [
             "quick",
             "deep",
@@ -332,16 +332,16 @@
           "type": "string"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only — no effect on hosted.",
+          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only \u2014 no effect on hosted.",
           "maxLength": 30,
           "type": "string"
         },
         "query": {
-          "description": "REQUIRED — provide either `question` or `query`. Alias for `question` — use either.",
+          "description": "REQUIRED \u2014 provide either `question` or `query`. Alias for `question` \u2014 use either.",
           "type": "string"
         },
         "question": {
-          "description": "REQUIRED — provide either `question` or `query`. The research question to answer (min 5 characters).",
+          "description": "REQUIRED \u2014 provide either `question` or `query`. The research question to answer (min 5 characters).",
           "minLength": 5,
           "type": "string"
         },
@@ -372,12 +372,12 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Use for structured data from a specific platform — clean tabular records, not raw HTML. Proxies the Novada Scraper API (scraper.novada.com; public docs: https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api). Supports 14 platforms (~76 operations): Google, LinkedIn, Amazon, YouTube, Walmart, DuckDuckGo, TikTok, Bing, Instagram, X (Twitter), Facebook, Perplexity AI, Yandex, GitHub.\n\n**Best for:** e-commerce product data, social posts/comments, job listings, reviews, real estate, market data.\n**Not for:** general web pages outside this platform list — use novada_extract instead.\n**Prefer the dedicated tool when one exists:** for amazon/google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/walmart/linkedin/github/perplexity, call novada_scrape_<platform> instead — same engine, but its `operation` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling or when resuming by task_id.\n**Output formats:** markdown (default table), json (records array inside a fenced \"## Scrape Results\" block), toon (pipe-separated, 40-65% smaller — best for large result sets), csv, excel (base64), html.\n**Example:** platform=\"amazon.com\", operation=\"amazon_product_keywords\", params={keyword:\"iphone 16\", num:5}.\n**Amazon price fields:** trust `final_price`/`price` (check `_price_source`) — `initial_price` and `buybox_prices.final_price` are often 0 by design, not a bug; `buybox_prices.unit_price` is raw per-unit data, never the listing price.\n**Discover platforms:** read the `novada://scraper-platforms` resource for the full, always-current operation list (slugs + required params), or see the public reference at https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api.\n**Resume:** pass `task_id` from a prior status:processing call to fetch the result without a new billable task (platform/operation still required, display-only).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
+    "description": "Use for structured data from a specific platform \u2014 clean tabular records, not raw HTML. Proxies the Novada Scraper API (scraper.novada.com; public docs: https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api). Supports 14 platforms (~76 operations): Google, LinkedIn, Amazon, YouTube, Walmart, DuckDuckGo, TikTok, Bing, Instagram, X (Twitter), Facebook, Perplexity AI, Yandex, GitHub.\n\n**Best for:** e-commerce product data, social posts/comments, job listings, reviews, real estate, market data.\n**Not for:** general web pages outside this platform list \u2014 use novada_extract instead.\n**Prefer the dedicated tool when one exists:** for amazon/google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/walmart/linkedin/github/perplexity, call novada_scrape_<platform> instead \u2014 same engine, but its `operation` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling or when resuming by task_id.\n**Output formats:** markdown (default table), json (records array inside a fenced \"## Scrape Results\" block), toon (pipe-separated, 40-65% smaller \u2014 best for large result sets), csv, excel (base64), html.\n**Example:** platform=\"amazon.com\", operation=\"amazon_product_keywords\", params={keyword:\"iphone 16\", num:5}.\n**Amazon price fields:** trust `final_price`/`price` (check `_price_source`) \u2014 `initial_price` and `buybox_prices.final_price` are often 0 by design, not a bug; `buybox_prices.unit_price` is raw per-unit data, never the listing price.\n**Discover platforms:** read the `novada://scraper-platforms` resource for the full, always-current operation list (slugs + required params), or see the public reference at https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api.\n**Resume:** pass `task_id` from a prior status:processing call to fetch the result without a new billable task (platform/operation still required, display-only).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
     "inputSchema": {
       "properties": {
         "format": {
           "default": "markdown",
-          "description": "'markdown' (default): structured table. 'json': records array with key fields surfaced — returned inside a \"## Scrape Results\" wrapper as a fenced json block, NOT a bare object. 'csv': inline CSV, header + one row/record. 'excel': real .xlsx as inline base64 — decode or use the download hint. 'html': inline HTML <table>. 'toon': token-optimized pipe-separated (40-65% smaller than json/markdown).",
+          "description": "'markdown' (default): structured table. 'json': records array with key fields surfaced \u2014 returned inside a \"## Scrape Results\" wrapper as a fenced json block, NOT a bare object. 'csv': inline CSV, header + one row/record. 'excel': real .xlsx as inline base64 \u2014 decode or use the download hint. 'html': inline HTML <table>. 'toon': token-optimized pipe-separated (40-65% smaller than json/markdown).",
           "enum": [
             "json",
             "csv",
@@ -419,12 +419,12 @@
           "type": "string"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only — no effect on hosted.",
+          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only \u2014 no effect on hosted.",
           "maxLength": 30,
           "type": "string"
         },
         "task_id": {
-          "description": "Optional. When provided, skips submitting a new scrape task and fetches the result of this existing task_id directly — no new billable task is created. Use this to resume a previous novada_scrape call that returned status:processing without incurring a duplicate charge. platform and operation are still required (used for display only when resuming).",
+          "description": "Optional. When provided, skips submitting a new scrape task and fetches the result of this existing task_id directly \u2014 no new billable task is created. Use this to resume a previous novada_scrape call that returned status:processing without incurring a duplicate charge. platform and operation are still required (used for display only when resuming).",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
           "type": "string"
         }
@@ -444,7 +444,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Search the web for clean, ready-to-use content — titles, URLs, snippets, reranked by relevance. For multi-source questions, use novada_research instead (faster, more thorough).\n\n**Use for:** current events, URL lookup, fact-checking, competitive research. enrich_top=true auto-extracts the #1 result.\n**Not for:** a known URL (novada_extract) or a multi-source report (novada_research).\n**Tip:** engine='google' (default) is fastest/most reliable; duckduckgo/yandex are slower fallbacks.\n**Domain filtering:** includeDomains/excludeDomains inject `site:domain` into the query (not API-side).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder (~/Downloads/novada-mcp/<date>/<project>/).",
+    "description": "Search the web and return result titles, URLs, and snippets, ranked by relevance. For questions that need passages from several sources, use novada_research instead.\n\n**Use for:** current events, finding URLs, fact-checking, topic research. Set enrich_top=true to also extract the full content of the top result.\n**Not for:** reading a known URL (novada_extract) or gathering passages from several sources in one call (novada_research).\n**Engines:** engine='google' (default), 'duckduckgo', or 'yandex' (Russian and Eastern European content).\n**Domain filtering:** includeDomains/excludeDomains inject `site:domain` into the query (not API-side).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder (~/Downloads/novada-mcp/<date>/<project>/).",
     "inputSchema": {
       "properties": {
         "country": {
@@ -457,7 +457,7 @@
         },
         "engine": {
           "default": "google",
-          "description": "Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content.",
+          "description": "Search engine to use. 'google' (default, recommended for general queries). 'duckduckgo': privacy-focused; responses take noticeably longer. 'yandex': Russian/Eastern European content.",
           "enum": [
             "google",
             "duckduckgo",
@@ -482,7 +482,7 @@
         },
         "extract_options": {
           "additionalProperties": false,
-          "description": "Auto-extracts content from the top top_n results and appends it — eliminates a separate novada_extract call. Adds latency proportional to top_n; use top_n=1-3 for most queries.",
+          "description": "Auto-extracts content from the top top_n results and appends it \u2014 eliminates a separate novada_extract call. Adds latency proportional to top_n; use top_n=1-3 for most queries.",
           "properties": {
             "fields": {
               "items": {
@@ -492,7 +492,7 @@
             },
             "format": {
               "default": "markdown",
-              "description": "Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields — best for programmatic agent consumption.",
+              "description": "Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields \u2014 best for programmatic agent consumption.",
               "enum": [
                 "text",
                 "markdown",
@@ -547,7 +547,7 @@
           "type": "integer"
         },
         "project": {
-          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only — no effect on hosted.",
+          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only \u2014 no effect on hosted.",
           "maxLength": 30,
           "type": "string"
         },
