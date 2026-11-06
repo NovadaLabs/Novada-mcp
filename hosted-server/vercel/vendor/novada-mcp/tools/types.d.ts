@@ -200,6 +200,10 @@ export interface NovadaSearchResult {
     snippet?: string;
     published?: string;
     date?: string;
+    /** Upstream Google `/url?...` redirect link. Internal plumbing for
+     *  google_redirect.ts's /url replay — resolveGoogleLinksInPlace removes it
+     *  before results reach any renderer. */
+    redirect_link?: string;
 }
 export interface NovadaApiResponse {
     code?: number;

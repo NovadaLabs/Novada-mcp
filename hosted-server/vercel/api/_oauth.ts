@@ -684,6 +684,14 @@ export async function handleOAuthRequest(request: Request, url: URL, ip: string,
  * (enforced by the router, which owns the IP), ≤10 redirect_uris, 100-char
  * client_name, 180-day KV TTL.
  */
+// Requested token_endpoint_auth_method values a registration is accepted with.
+// Every client is registered as PUBLIC regardless — no client_secret is ever
+// minted and the response always says "none" (RFC 7591 §3.2.1: the server
+// returns the metadata it actually applied). Rejecting the client_secret_*
+// requests outright (the previous behavior) made clients that default to them,
+// such as OpenAI's plugin portal, fail registration with a 400.
+const REGISTRABLE_AUTH_METHODS: ReadonlySet<string> = new Set(["none", "client_secret_post", "client_secret_basic"]);
+
 export async function handleRegister(request: Request, deps: OAuthDeps): Promise<Response> {
   const nowMs = deps.now?.() ?? Date.now();
 
@@ -722,7 +730,8 @@ export async function handleRegister(request: Request, deps: OAuthDeps): Promise
     }
   }
 
-  if (meta.token_endpoint_auth_method !== undefined && meta.token_endpoint_auth_method !== "none") {
+  if (meta.token_endpoint_auth_method !== undefined
+    && !(typeof meta.token_endpoint_auth_method === "string" && REGISTRABLE_AUTH_METHODS.has(meta.token_endpoint_auth_method))) {
     return oauthJson(400, {
       error: "invalid_client_metadata",
       error_description: "only public clients are supported",
@@ -983,6 +992,29 @@ async function readTokenParams(request: Request): Promise<Record<string, string>
   return out;
 }
 
+/** client_id from an `Authorization: Basic base64(client_id:secret)` header, if
+ *  any. A client registered with client_secret_basic may keep authenticating
+ *  that way at /token; the secret part is ignored (none was ever issued — PKCE
+ *  protects the code exchange). null when absent or malformed. */
+function clientIdFromBasicAuth(request: Request): string | null {
+  const header = request.headers.get("authorization") ?? "";
+  const m = /^Basic\s+([A-Za-z0-9+/=]+)$/i.exec(header.trim());
+  if (!m) return null;
+  let decoded: string;
+  try {
+    decoded = atob(m[1]);
+  } catch {
+    return null;
+  }
+  const colon = decoded.indexOf(":");
+  const id = colon === -1 ? decoded : decoded.slice(0, colon);
+  try {
+    return decodeURIComponent(id) || null;
+  } catch {
+    return null;
+  }
+}
+
 const CODE_INVALID_GRANT = {
   error: "invalid_grant",
   error_description: "authorization code is invalid, expired, or already used",
@@ -1004,6 +1036,10 @@ export async function handleToken(request: Request, ip: string, deps: OAuthDeps)
   if (!encKey) return encKeyMissingResponse();
 
   const p = await readTokenParams(request);
+  if (!p.client_id) {
+    const basicClientId = clientIdFromBasicAuth(request);
+    if (basicClientId) p.client_id = basicClientId;
+  }
   const grantType = p.grant_type;
   if (grantType !== "authorization_code" && grantType !== "refresh_token") {
     return tokenJson(400, {
@@ -1128,6 +1164,18 @@ export async function handleToken(request: Request, ip: string, deps: OAuthDeps)
  * refresh instruction. Never throws.
  */
 export async function resolveAccessToken(token: string, deps: OAuthDeps): Promise<string | null> {
+  return (await resolveAccessTokenRecord(token, deps))?.apiKey ?? null;
+}
+
+export interface ResolvedAccessToken {
+  /** The caller's plaintext Novada API key. */
+  apiKey: string;
+  /** The OAuth client the token was issued to — mcp.ts maps it to a tool surface. */
+  clientId: string;
+}
+
+/** Same resolution as resolveAccessToken, also returning the token's client_id. Never throws. */
+export async function resolveAccessTokenRecord(token: string, deps: OAuthDeps): Promise<ResolvedAccessToken | null> {
   const encKey = await loadEncKey(deps);
   if (!encKey) return null;
   let raw: unknown;
@@ -1138,5 +1186,17 @@ export async function resolveAccessToken(token: string, deps: OAuthDeps): Promis
   }
   const rec = parseTokenRecord(raw);
   if (!rec) return null;
-  return decryptApiKey(rec.enc, encKey);
+  const apiKey = await decryptApiKey(rec.enc, encKey);
+  if (apiKey === null) return null;
+  return { apiKey, clientId: rec.client_id };
+}
+
+/**
+ * A registered client's redirect URIs, or null when the client is unknown or
+ * expired. Unlike resolveAccessToken this DOES throw on a KV error — the
+ * caller (_surface.ts resolveClientSurface) decides the fallback.
+ */
+export async function lookupClientRedirectUris(clientId: string, deps: OAuthDeps): Promise<string[] | null> {
+  const client = await lookupClient(clientId, deps);
+  return client ? client.redirect_uris : null;
 }

@@ -2,6 +2,8 @@ export { fetchWithRetry, fetchViaProxy, fetchWithRender, detectJsHeavyContent, d
 export { withCredentials, getWebUnblockerKey, getBrowserWs, getProxyCredentials } from "./credentials.js";
 export type { ToolCredentials } from "./credentials.js";
 export { normalizeUrl, isContentLink, decodeBingRedirect } from "./url.js";
+export { resolveGoogleLinksInPlace, resolveSerpLink, resolveSerpLinkDetailed, resolveGoogleRedirectToken, resolveGoogleRedirectTokenDetailed, extractGoogleRedirectToken } from "./google_redirect.js";
+export type { SerpLinkCandidate, ResolveOptions as GoogleRedirectResolveOptions, ResolveGoogleLinksStats, GoogleRedirectResolutionPath, TokenResolution, SerpLinkResolution } from "./google_redirect.js";
 export { extractMainContent, extractFullPageContent, extractTitle, extractTitleFrom, extractDescription, extractDescriptionFrom, extractLinks, extractLinksFrom, extractStructuredData, extractStructuredDataFrom, scoreExtraction, qualityLabel, stripBoilerplate, hasSubstantiveContent, detectKuferAvailability, truncatePreservingTable } from "./html.js";
 export type { StructuredData, ExtractionQuality, KuferAvailabilityResult, KuferAvailabilityStatus } from "./html.js";
 export { cleanParams } from "./params.js";

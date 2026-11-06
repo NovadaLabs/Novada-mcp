@@ -65,7 +65,7 @@ export const BING_SCRAPER_CONFIG: PlatformScraperConfig<BingOperation> = {
     "web_search/videos/news/shopping; all four operations share the same q-driven query shape.",
   description: {
     core:
-      "Extract structured Bing SERP data — organic web search, video results, news results, shopping listings — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"bing.com\"). Bing is NOT a selectable engine on novada_search — this is the only intentional way to query Bing specifically.",
+      "Extract structured Bing SERP data — organic web search, video results, news results, shopping listings — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"bing.com\"). Bing is NOT a selectable engine on novada_search — this is the only intentional way to query Bing specifically.",
     useWhen: [
       "get the raw Bing search results (titles, links, ranks) for <query>",
       "find Bing video results for <query>",
@@ -73,13 +73,13 @@ export const BING_SCRAPER_CONFIG: PlatformScraperConfig<BingOperation> = {
       "search Bing Shopping for <keyword>",
     ],
     notFor: [
-      { when: "A general question needing just an answer or a few good links", useInstead: "novada_search — google/duckduckgo/yandex only (Bing is not selectable there); ranked, cheaper than a raw-SERP scrape" },
+      { when: "A general question needing just an answer or a few good links", useInstead: "novada_search (google/duckduckgo/yandex only — Bing is not selectable there; returns ranked results rather than raw SERP records)" },
       { when: "A complex question needing cited multi-source synthesis", useInstead: "novada_research" },
       { when: "Reading one already-known URL's page content", useInstead: "novada_extract" },
-      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+      { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
     ],
     returns:
-      "Structured SERP records per operation — organic results (title/url/snippet/rank), video results, news results (with date), shopping listings (price/rating) — in the chosen output format, same rendering as novada_scrape.",
+      "Structured SERP records per operation — organic results (title/url/snippet/rank), video results, news results (with date), shopping listings (price/rating) — in the chosen output format{{sibling:novada_scrape}}, same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
       "4 verified-working Bing operations: web search, videos, news, and shopping. Every bing.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },

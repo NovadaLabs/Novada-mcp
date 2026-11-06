@@ -59,4 +59,12 @@ regexes = [
   # implementation); not a real robot secret.
   '''secret = "SECtestsecret1234567890"''',
   '''secret: "SECtestsecret1234567890"''',
+  # hosted-server/vercel/test/openai-surface-e2e.test.mjs — made-up,
+  # format-valid key for the local OAuth e2e; it is never sent upstream (the
+  # test seeds the key-verification cache in a local KV stub).
+  '''FAKE_API_KEY = "e2eSurfaceTestKey0123456789"''',
+  # npm-package/tests/utils/google_redirect.test.ts — a Google SERP
+  # click-tracking token (the opaque `url=` value of a /goto link), not a
+  # credential.
+  '''TOKEN = "CAESgwEB6zswFd2JfNe2rKNVoO355XecT_9Dien4MYJbSPiz3I6knYzEXCyb6yX0DoQR"''',
 ]

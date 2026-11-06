@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
 import https from "https";
-import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect, type SearchIntent } from "../utils/index.js";
+import { USER_AGENT, rerankResults, detectIntent, isSocialOrPr, SOCIAL_PR_DOMAINS, decodeBingRedirect, resolveGoogleLinksInPlace, type SearchIntent } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS, toolCallDeadline } from "../config.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
@@ -189,11 +189,91 @@ interface SearchFilterParams {
   language?: string;
 }
 
-interface SubmitSearchResult {
+export interface SubmitSearchResult {
   /** Inline results parsed directly from the submit response (avoids a download round-trip). */
   inlineResults?: Record<string, unknown>;
   /** task_id for polling the download endpoint when inline results are absent. */
   taskId?: string;
+}
+
+/** Format a Date as Google's `tbs=cdr:`/`cd_min:`/`cd_max:` date shape: M/D/YYYY
+ *  (no leading zeros — verified live 2026-11-04 against both padded and
+ *  unpadded forms; Google accepts unpadded). Returns null for an unparseable
+ *  ISO string rather than silently sending a malformed date. */
+function toGoogleTbsDate(iso: string): string | null {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
+}
+
+/**
+ * search-goto-links-2026-11-04 item (ii): map the tool's engine-agnostic
+ * time_range/start_date/end_date params to the field name+value shape each
+ * upstream scraper_id ACTUALLY understands, instead of sending a literal
+ * `time_range=week` form field no catalog op declares.
+ *
+ * Live-verified 2026-11-04 (same production scraper.novada.com this bug was
+ * reproduced against): a query with `time_range=week` returned results dated
+ * from 2025 and even a future-relative "12 мар. 2026" — proving the field was
+ * silently ignored. The SAME query with `tbs=qdr:w` returned ONLY results
+ * dated "2 days ago" / "6 days ago" / within the last week. `tbs=cdr:1,
+ * cd_min:M/D/YYYY,cd_max:M/D/YYYY` was independently verified to constrain
+ * results to an exact custom range (tested against a Jan-2024 window, a
+ * trailing-7-day window, and a full-year window — every returned date fell
+ * inside the requested range in all three).
+ *
+ *   google.com     -> tbs=qdr:{d|w|m|y}  (relative), or
+ *                      tbs=cdr:1,cd_min:...,cd_max:... (custom range — wins
+ *                      over time_range when either start_date/end_date is set,
+ *                      matching novadaSearch's own window-override precedence)
+ *   duckduckgo.com -> df={d|w|m|y}       (the catalog's OWN declared enum for
+ *                      this op IS exactly first-letter day/week/month/year —
+ *                      scraper_catalog.ts duckduckgo.com → df, opts ["d","w","m","y"])
+ *   yandex.com     -> UNRESOLVED. The catalog declares `within` with opts
+ *                      ["0","77","1","2"] — not a self-evident day/week/month/
+ *                      year encoding, and no live verification confirmed a
+ *                      mapping. Left as the PRE-EXISTING (already broken,
+ *                      documented) `time_range=...` passthrough rather than
+ *                      guess at a wrong code — see the fix report's "known
+ *                      follow-up" section.
+ */
+const LATEST_UTC_OFFSET_MS = 14 * 60 * 60 * 1000;
+
+function buildTimeFilterFields(scraperName: string, f: SearchFilterParams): Array<[string, string]> {
+  if (scraperName === "google.com") {
+    if (f.start_date || f.end_date) {
+      const minDate = (f.start_date && toGoogleTbsDate(f.start_date)) ?? "1/1/2000";
+      // Open-ended range: end at the latest calendar date anywhere (UTC+14), so
+      // "today" is included for every caller — the plain UTC date is still
+      // yesterday for anyone east of UTC late in the UTC day.
+      const latestToday = new Date(Date.now() + LATEST_UTC_OFFSET_MS);
+      const maxDate =
+        (f.end_date && toGoogleTbsDate(f.end_date)) ??
+        `${latestToday.getUTCMonth() + 1}/${latestToday.getUTCDate()}/${latestToday.getUTCFullYear()}`;
+      return [["tbs", `cdr:1,cd_min:${minDate},cd_max:${maxDate}`]];
+    }
+    if (f.time_range) {
+      const QDR: Record<string, string> = { day: "d", week: "w", month: "m", year: "y" };
+      const code = QDR[f.time_range];
+      if (code) return [["tbs", `qdr:${code}`]];
+    }
+    return [];
+  }
+  if (scraperName === "duckduckgo.com") {
+    if (f.time_range) {
+      const DF: Record<string, string> = { day: "d", week: "w", month: "m", year: "y" };
+      const code = DF[f.time_range];
+      if (code) return [["df", code]];
+    }
+    return [];
+  }
+  // yandex.com and any future engine: preserve the pre-existing (unverified,
+  // likely no-op) passthrough — see doc comment above.
+  const fields: Array<[string, string]> = [];
+  if (f.time_range) fields.push(["time_range", f.time_range]);
+  if (f.start_date) fields.push(["start_date", f.start_date]);
+  if (f.end_date) fields.push(["end_date", f.end_date]);
+  return fields;
 }
 
 /** Submit a search task via the Scraper API.
@@ -232,9 +312,7 @@ export async function submitSearchScrapeTask(
   if (scraperName === "bing.com") {
     form.append("safe", "off");
   }
-  if (filterParams.time_range) form.append("time_range", filterParams.time_range);
-  if (filterParams.start_date) form.append("start_date", filterParams.start_date);
-  if (filterParams.end_date) form.append("end_date", filterParams.end_date);
+  for (const [key, value] of buildTimeFilterFields(scraperName, filterParams)) form.append(key, value);
   if (filterParams.country) form.append("country", filterParams.country);
   if (filterParams.language) form.append("language", filterParams.language);
 
@@ -339,12 +417,19 @@ export async function resolveSearchResults(
   apiKey: string,
   submitted: SubmitSearchResult
 ): Promise<NovadaSearchResult[]> {
+  // search-goto-links-2026-11-04: route through parseAndResolveScraperSearchResults
+  // (not the raw parseScraperSearchResults) so research.ts's PRIMARY/FALLBACK engines
+  // (searchWithFallback, research.ts) get the SAME Google-redirect resolution/drop
+  // behavior novada_search gets — this is the one choke point both of research.ts's
+  // call sites go through, so fixing it here fixes novada_research too.
   if (submitted.inlineResults) {
-    return parseScraperSearchResults(submitted.inlineResults);
+    const { results } = await parseAndResolveScraperSearchResults(submitted.inlineResults);
+    return results;
   }
   if (submitted.taskId) {
     const data = await pollSearchResult(apiKey, submitted.taskId);
-    return parseScraperSearchResults(data);
+    const { results } = await parseAndResolveScraperSearchResults(data);
+    return results;
   }
   return [];
 }
@@ -463,6 +548,7 @@ export function parseScraperSearchResults(data: Record<string, unknown>): Novada
   if (!Array.isArray(organic)) return [];
 
   return (organic as Record<string, unknown>[]).map(item => ({
+    ...(typeof item.redirect_link === "string" ? { redirect_link: item.redirect_link } : {}),
     title: (item.title as string | undefined) ?? "",
     url: (item.url as string | undefined) ?? (item.link as string | undefined) ?? ((item.source as Record<string, unknown> | undefined)?.link as string | undefined) ?? "",
     link: (item.link as string | undefined) ?? (item.url as string | undefined) ?? ((item.source as Record<string, unknown> | undefined)?.link as string | undefined) ?? "",
@@ -471,6 +557,35 @@ export function parseScraperSearchResults(data: Record<string, unknown>): Novada
     published: (item.published as string | undefined) ?? (item.date as string | undefined),
     date: (item.date as string | undefined) ?? (item.published as string | undefined),
   }));
+}
+
+/**
+ * search-goto-links-2026-11-04: parse AND resolve any Google click-tracking
+ * "goto" wrapper links to their real destination (see utils/google_redirect.ts
+ * for the full investigation + design). `parseScraperSearchResults` itself
+ * stays synchronous (no network, simpler to unit-test) — this wrapper is the
+ * ONE place both of novadaSearch's call sites and resolveSearchResults (used
+ * by research.ts) route through, so the fix lands once for novada_search AND
+ * novada_research.
+ *
+ * 2026-11-04 follow-up: a result whose link could NOT be resolved to a real
+ * absolute URL (even after google_redirect.ts's /goto → /url-HTML → one-hop-
+ * interstitial fallback chain) is no longer dropped from the result set —
+ * it is RETAINED with `url`/`link` cleared to "" and `url_unavailable: true`
+ * set (never surfaced as a relative "/goto?url=..." path either way), so the
+ * agent still sees its title/snippet. `unresolvedGotoLinks` now counts "needed
+ * the fallback chain and it still failed", not "removed from `results`" —
+ * see resolveGoogleLinksInPlace's doc comment.
+ */
+export async function parseAndResolveScraperSearchResults(
+  data: Record<string, unknown>,
+  opts?: { deadlineMs?: number },
+): Promise<{ results: NovadaSearchResult[]; unresolvedGotoLinks: number }> {
+  const parsed = parseScraperSearchResults(data);
+  // The resolver also removes redirect_link (only carried here to feed its
+  // /url replay), so no consumer can surface it.
+  const { kept, dropped } = await resolveGoogleLinksInPlace(parsed, opts);
+  return { results: kept, unresolvedGotoLinks: dropped };
 }
 
 // ---------------------------------------------------------------------------
@@ -579,6 +694,10 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   }
 
   let scraperResults: NovadaSearchResult[] = [];
+  // search-goto-links-2026-11-04: count of results dropped because their Google
+  // "goto" redirect link could not be resolved to a real URL — surfaced to the
+  // agent (never silently swallowed) once non-zero, see below.
+  let unresolvedGotoLinks = 0;
 
   // H3: an unrecognized engine value is USER INPUT, not an account defect.
   // Returning the entitlement message here falsely told the agent their key was
@@ -672,9 +791,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         undefined,
         submitRetryBudget(callDeadline),
       );
+      // search-goto-links-2026-11-04: bound the goto-resolution phase to at most
+      // 8s of wall clock OR whatever remains of the shared callDeadline, whichever
+      // is tighter — never a fresh, unbounded allotment on top of submit+poll.
+      const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
       // Fast path: inline results from submit response (no download round-trip needed)
       if (submitted.inlineResults) {
-        scraperResults = parseScraperSearchResults(submitted.inlineResults);
+        const resolved = await parseAndResolveScraperSearchResults(submitted.inlineResults, { deadlineMs: gotoResolveDeadline });
+        scraperResults = resolved.results;
+        unresolvedGotoLinks += resolved.unresolvedGotoLinks;
       } else if (submitted.taskId) {
         // Slow path: poll download endpoint.
         // review2 MEDIUM #2: clamp the poll ceiling to whatever remains of the
@@ -684,7 +809,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         // a no-op (byte-identical to the pre-fix unconditional default).
         const pollCeilingMs = Math.min(TIMEOUTS.SEARCH_TOTAL_CEILING, Math.max(0, callDeadline - Date.now()));
         const resultData = await pollSearchResult(apiKey, submitted.taskId, pollCeilingMs);
-        scraperResults = parseScraperSearchResults(resultData);
+        const resolved = await parseAndResolveScraperSearchResults(resultData, { deadlineMs: gotoResolveDeadline });
+        scraperResults = resolved.results;
+        unresolvedGotoLinks += resolved.unresolvedGotoLinks;
       }
     }
   } catch (err: unknown) {
@@ -758,11 +885,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         agent_instruction: "No results found. Try rephrasing the query, switching engine, or using novada_research for multi-source investigation.",
       };
       if (queryTruncated) emptyJson.query_truncated = queryTruncated;
+      // search-goto-links-2026-11-04: surface when EVERY returned result was dropped
+      // because its Google redirect link could not be resolved — otherwise "no
+      // results" looks identical to a genuinely empty SERP.
+      if (unresolvedGotoLinks > 0) emptyJson.goto_links_unresolved = unresolvedGotoLinks;
       emptyResult = JSON.stringify(emptyJson, null, 2);
     } else {
       emptyResult = [
         `## Search Results`,
-        `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}`,
+        `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}${unresolvedGotoLinks > 0 ? ` | goto_links_unresolved:${unresolvedGotoLinks}` : ""}`,
         ``,
         `No results found for: "${params.query}"`,
         ``,
@@ -803,6 +934,16 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   const scarcity = reranked.length < requestedNum
     ? `requested:${requestedNum} returned:${reranked.length}`
     : "";
+
+  // search-goto-links-2026-11-04 follow-up (SOP item 2): when EVERY result in
+  // this batch had its Google redirect link resolved to nothing, the response
+  // still carries real title/snippet content (retention policy — see
+  // resolveGoogleLinksInPlace) but has ZERO working urls. That must never look
+  // like a silent, near-empty success — surface it as an explicit warning in
+  // both json and markdown below.
+  const allUrlsUnavailable = reranked.length > 0 && reranked.every(
+    (r) => (r as NovadaSearchResult & { url_unavailable?: boolean }).url_unavailable === true
+  );
 
   // P1-7: Auto-extract content from top N results when extract_options is provided
   // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
@@ -965,6 +1106,12 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
           url: url ? decodeBingRedirect(url) : null,
           snippet: rawSnippet ? wrapUntrusted(rawSnippet, url || "search result") : "",
         };
+        // search-goto-links-2026-11-04 follow-up: this result's Google redirect
+        // could not be resolved — url is already null above; flag WHY explicitly
+        // so an agent doesn't read a missing url as "this result simply has none".
+        if ((r as NovadaSearchResult & { url_unavailable?: boolean }).url_unavailable) {
+          result.url_unavailable = true;
+        }
         if (r.published || r.date) result.published = r.published || r.date;
         // F15: include within_time_range annotation when present
         const rAnnot = r as NovadaSearchResult & { within_time_range?: boolean | null };
@@ -997,6 +1144,20 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     // available, so agents don't assume the ceiling was hit.
     if (scarcity) jsonResult.scarcity = scarcity;
     if (queryTruncated) jsonResult.query_truncated = queryTruncated;
+    // search-goto-links-2026-11-04: count of results whose Google redirect link
+    // could not be resolved to a real URL — retained (url_unavailable:true on
+    // the item above), never silently dropped from result_count.
+    if (unresolvedGotoLinks > 0) jsonResult.goto_links_unresolved = unresolvedGotoLinks;
+    // search-goto-links-2026-11-04 follow-up (SOP item 2): an explicit, honest
+    // signal for the degenerate case — every result in this batch has no
+    // working url. Titles/snippets are still present; this is NOT the same as
+    // a genuinely empty SERP, so it must not look like one.
+    if (allUrlsUnavailable) {
+      jsonResult.url_resolution_warning =
+        `All ${reranked.length} result(s) could not be resolved to a real URL — Google's redirect-resolution ` +
+        `step failed for every result in this batch (titles and snippets are still included above). ` +
+        `This is usually transient upstream rate-limiting; retry, or try engine="duckduckgo"/"yandex".`;
+    }
     // Wire output save — best-effort, never breaks the tool.
     // Inject output_saved as a field so JSON remains valid and parseable.
     // FIX-1: Redact home path from output_saved before embedding in agent-visible JSON.
@@ -1034,6 +1195,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
 
   if (scarcity) activeFilters.push(scarcity);
   if (queryTruncated) activeFilters.push(queryTruncated);
+  if (unresolvedGotoLinks > 0) activeFilters.push(`goto_links_unresolved:${unresolvedGotoLinks}`);
 
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 
@@ -1041,9 +1203,20 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     `## Search Results`,
     `results:${reranked.length} | engine:${engineLabel} | source: live | reranked:true | search_id:${searchId}${filterStr}`,
     ``,
-    `---`,
-    ``,
   ];
+  // search-goto-links-2026-11-04 follow-up (SOP item 2): same honest,
+  // never-silent warning as the json branch above — placed right under the
+  // header so it can't be missed, before the (still-present) results below.
+  if (allUrlsUnavailable) {
+    lines.push(
+      `**Warning:** all ${reranked.length} result(s) below could not be resolved to a real URL — ` +
+      `Google's redirect-resolution step failed for every result in this batch. Titles and snippets ` +
+      `are still shown; this is usually transient upstream rate-limiting — retry, or try ` +
+      `engine="duckduckgo"/"yandex".`,
+      ``,
+    );
+  }
+  lines.push(`---`, ``);
 
   // Item 3: track seen snippets to detect when Google falls back to the same
   // meta-description for multiple results. Duplicates are NOT dropped (the result
@@ -1053,8 +1226,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   for (let i = 0; i < reranked.length; i++) {
     const r = reranked[i];
     const rawUrl = r.url || r.link;
-    if (!rawUrl) continue; // Skip results with no URL — would render as "N/A" and break agents
-    let url = decodeBingRedirect(rawUrl);
+    // search-goto-links-2026-11-04 follow-up: a result whose Google redirect
+    // link could not be resolved carries url_unavailable:true (link/url
+    // already cleared to "" by resolveGoogleLinksInPlace) — render its
+    // title/snippet WITHOUT a link rather than skipping it outright. Any
+    // OTHER url-less result (not from this fix — a rare upstream shape from a
+    // different engine) keeps the original "skip, would render as N/A" guard.
+    const isUrlUnavailable = (r as NovadaSearchResult & { url_unavailable?: boolean }).url_unavailable === true;
+    if (!rawUrl && !isUrlUnavailable) continue; // Skip results with no URL — would render as "N/A" and break agents
+    let url = rawUrl ? decodeBingRedirect(rawUrl) : "";
 
     // Item 2: strip inline HTML tags from snippets preserving word-boundary spaces.
     // Tag-boundary joins (e.g. <b>is</b> an) without a space produce "isan". Replace
@@ -1082,11 +1262,17 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       ? snippetDisplay.slice(0, 397) + "..."
       : snippetDisplay || "No description";
 
-    lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
+    if (url) {
+      lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
+    } else {
+      // url_unavailable: never render an empty markdown link "[title]()".
+      lines.push(`## ${i + 1}. ${r.title || "Untitled"}`);
+      lines.push(`url: unavailable (Google's redirect link could not be resolved)`);
+    }
     if (r.published || r.date) lines.push(`published: ${r.published || r.date}`);
     // G-2: "No description" is OUR fallback (no fetched text exists) — leave it
     // unwrapped. A genuine snippet is fetched-from-web free text.
-    lines.push(cleanSnippet === "No description" ? cleanSnippet : wrapUntrusted(cleanSnippet, url));
+    lines.push(cleanSnippet === "No description" ? cleanSnippet : wrapUntrusted(cleanSnippet, url || "search result"));
     // extracted_content is always a string here (markdown path): either raw text, raw JSON string,
     // or null. The cast reflects this — the object case only arises in the JSON output path above.
     const rExt = r as NovadaSearchResult & { extracted_content?: string | null; extract_error?: string; within_time_range?: boolean | null };

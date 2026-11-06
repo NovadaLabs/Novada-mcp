@@ -8,11 +8,11 @@
     "url": "https://github.com/NovadaLabs/novada-mcp",
     "source": "github"
   },
-  "version": "0.9.45",
+  "version": "0.9.46",
   "tools": [
     {
       "name": "novada_search",
-      "description": "Search the web for clean, ready-to-use content — titles, URLs, snippets, reranked by relevance. For multi-source questions, use novada_research instead (faster, more thorough)."
+      "description": "Search the web and return result titles, URLs, and snippets, ranked by relevance. For questions that need passages from several sources, use novada_research instead."
     },
     {
       "name": "novada_extract",
@@ -232,7 +232,7 @@
     {
       "registryType": "npm",
       "identifier": "novada-mcp",
-      "version": "0.9.45",
+      "version": "0.9.46",
       "transport": {
         "type": "stdio"
       },

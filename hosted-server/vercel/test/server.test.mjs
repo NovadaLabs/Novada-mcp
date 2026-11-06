@@ -166,7 +166,7 @@ test("server.mjs integration (built EC2 entrypoint)", async (t) => {
         // would come back comma-joined and fail this assertion).
         assert.equal(res.headers.get("access-control-allow-origin"), "*");
         assert.equal(res.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
-        assert.equal(res.headers.get("access-control-allow-headers"), "content-type, authorization, mcp-session-id");
+        assert.equal(res.headers.get("access-control-allow-headers"), "content-type, authorization, mcp-session-id, mcp-protocol-version");
       });
 
       await t.test("GET /.well-known/oauth-protected-resource -> 200", async () => {

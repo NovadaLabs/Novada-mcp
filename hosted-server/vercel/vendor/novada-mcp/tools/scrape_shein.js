@@ -39,7 +39,7 @@ export const SHEIN_SCRAPER_CONFIG = {
     paramsFieldDoc: "Operation-specific parameters for the selected `operation`. E.g. { ID: \"Tween-Girls-...-p-423721658\" } for " +
         "product_by_id, { url: \"https://us.shein.com/...html\" } for product_by_url.",
     description: {
-        core: "Extract structured SHEIN product data — product details by product ID or product URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"shein.com\").",
+        core: "Extract structured SHEIN product data — product details by product ID or product URL — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"shein.com\").",
         useWhen: [
             "get SHEIN product details for this product ID",
             "get SHEIN product details for this product URL",
@@ -48,10 +48,10 @@ export const SHEIN_SCRAPER_CONFIG = {
             { when: "A single SHEIN URL to read as plain text", useInstead: "novada_extract" },
             { when: "A general web search not scoped to SHEIN", useInstead: "novada_search" },
             { when: "SHEIN keyword or category product-list search (no working operation exists for these today)", useInstead: "novada_search, or novada_extract on a SHEIN category/search page URL — the 3 ops that would cover this are all backend_broken (60s+ submit hang) and deliberately excluded from this enum" },
-            { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+            { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
         ],
-        returns: "Structured product records (title, price, rating, images, etc.) in the chosen output format — same rendering as novada_scrape.",
-        operationsNote: "2 verified-working SHEIN operations: product lookup by product ID or by product URL. 3 known backend_broken SHEIN operations — product-list by keyword, by category ID, and by category URL, all failing with a 60s+ submit-endpoint hang — are intentionally NOT in this enum; this tool rejects them before any backend call, unlike novada_scrape(platform=\"shein.com\", ...), which still forwards them with a warning.",
+        returns: "Structured product records (title, price, rating, images, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
+        operationsNote: "2 verified-working SHEIN operations: product lookup by product ID or by product URL. 3 known backend_broken SHEIN operations — product-list by keyword, by category ID, and by category URL, all failing with a 60s+ submit-endpoint hang — are intentionally NOT in this enum; this tool rejects them before any backend call{{sibling:novada_scrape}}, unlike novada_scrape(platform=\"shein.com\", ...), which still forwards them with a warning{{/sibling}}.",
     },
 };
 /** The materialized SHEIN platform-scraper tool (definition + registry entry + handler). */

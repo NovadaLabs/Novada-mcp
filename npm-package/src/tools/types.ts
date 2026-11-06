@@ -99,7 +99,7 @@ const safeUrl = z.string({
 export const SearchParamsSchema = withCamelCaseAliases(z.object({
   query: z.string().min(1, "Search query is required"),
   engine: z.enum(["google", "duckduckgo", "yandex"]).default("google")
-    .describe("Search engine to use. 'google': best general relevance + fastest (default, recommended). 'duckduckgo': privacy-focused (markedly slower). 'yandex': Russian/Eastern European content."),
+    .describe("Search engine to use. 'google' (default, recommended for general queries). 'duckduckgo': privacy-focused; responses take noticeably longer. 'yandex': Russian/Eastern European content."),
   num: z.number().int().min(1).max(20).default(10),
   country: z.string().default(""),
   language: z.string().default(""),
@@ -245,7 +245,7 @@ export const CrawlParamsSchema = withCamelCaseAliases(z.object({
   format: z.enum(["markdown", "json"]).default("markdown")
     .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
   render: z.enum(["auto", "static", "render"]).default("auto")
-    .describe("Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (slower, handles JS sites)."),
+    .describe("Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (adds rendering time; handles JS sites)."),
   // NOV-673: `limit` (alias for max_pages) and `mode` (alias for strategy) removed.
   // Both were dead: Zod's .default() on max_pages/strategy always filled those fields,
   // making the `??` fallbacks in crawl.ts unreachable. Removing them from the schema
@@ -284,7 +284,7 @@ export const MapParamsSchema = withCamelCaseAliases(z.object({
   limit: z.number().int().min(1).max(100).default(50),
   include_subdomains: z.boolean().default(false),
   max_depth: z.number().int().min(1).max(5).default(2)
-    .describe("Link-hops from root to follow. Default 2. Higher = more pages found but slower."),
+    .describe("Link-hops from root to follow. Default 2. Higher = more pages found and a longer run."),
 }), {
   includeSubdomains: "include_subdomains",
   maxDepth: "max_depth",
@@ -308,7 +308,7 @@ export const SiteCopyParamsSchema = withCamelCaseAliases(z.object({
   include_subdomains: z.boolean().default(false)
     .describe("When true, also copy pages on subdomains of the root host. Default false (same-host only)."),
   render: z.enum(["auto", "static", "render"]).default("auto")
-    .describe("Rendering mode for each page fetch. 'auto' (default): static, escalate to render on JS-heavy detection. 'static': always static. 'render': always render (slower)."),
+    .describe("Rendering mode for each page fetch. 'auto' (default): static, escalate to render on JS-heavy detection. 'static': always static. 'render': always render (adds rendering time)."),
   project: z.string().max(30).optional()
     .describe("Optional project name to group outputs under ~/Downloads/novada-mcp/<date>/<project>/site-copy/. Defaults to the site domain. (local stdio only; no effect on the hosted endpoint)"),
 }), {
@@ -395,6 +395,10 @@ export interface NovadaSearchResult {
   snippet?: string;
   published?: string;
   date?: string;
+  /** Upstream Google `/url?...` redirect link. Internal plumbing for
+   *  google_redirect.ts's /url replay — resolveGoogleLinksInPlace removes it
+   *  before results reach any renderer. */
+  redirect_link?: string;
 }
 
 export interface NovadaApiResponse {
@@ -408,7 +412,7 @@ export interface NovadaApiResponse {
 
 export const ProxyParamsSchema = withCamelCaseAliases(z.object({
   type: z.enum(["residential", "isp", "datacenter", "mobile", "static", "dedicated"]).default("residential")
-    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume/low-cost, 'static'/'dedicated' for a fixed IP — set session_id explicitly, or it silently falls back to a SHARED \"default\" identity (not an error)."),
+    .describe("Proxy type. 'residential' for most anti-bot scenarios, 'mobile' for app automation, 'isp' for sticky sessions, 'datacenter' for high-volume work on targets without anti-bot protection, 'static'/'dedicated' for a fixed IP — set session_id explicitly, or it silently falls back to a SHARED \"default\" identity (not an error)."),
   country: z.string().regex(/^[a-zA-Z]{2}$/, "country must be a 2-letter ISO code (e.g. 'us', 'gb', 'de')").optional()
     .describe("ISO 2-letter country code (e.g. 'us','gb','de'). Omit for any country. NOTE: silently ignored when type='isp'."),
   city: z.string().max(50).regex(/^[a-zA-Z\s\-]+$/, "city must contain only letters, spaces, or hyphens").optional()

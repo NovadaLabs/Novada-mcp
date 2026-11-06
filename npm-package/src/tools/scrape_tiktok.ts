@@ -56,7 +56,7 @@ export const TIKTOK_SCRAPER_CONFIG: PlatformScraperConfig<TiktokOperation> = {
     "profile_by_url/posts_by_profile/post_by_url, { search_url: \"https://www.tiktok.com/search?q=...\" } for profiles_by_search_url.",
   description: {
     core:
-      "Extract structured TikTok data — profile info, post/video details, and post lists by profile, hashtag, or search URL — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"tiktok.com\").",
+      "Extract structured TikTok data — profile info, post/video details, and post lists by profile, hashtag, or search URL — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"tiktok.com\").",
     useWhen: [
       "get the latest posts from this TikTok profile",
       "get details for this single TikTok video URL",
@@ -67,10 +67,10 @@ export const TIKTOK_SCRAPER_CONFIG: PlatformScraperConfig<TiktokOperation> = {
     notFor: [
       { when: "A single TikTok URL to read as plain text", useInstead: "novada_extract" },
       { when: "A general web search not scoped to TikTok", useInstead: "novada_search" },
-      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+      { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
     ],
     returns:
-      "Structured profile/post records (username, follower count, video description, likes, view count, etc.) in the chosen output format — same rendering as novada_scrape.",
+      "Structured profile/post records (username, follower count, video description, likes, view count, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
       "5 verified-working TikTok operations: profile search by list URL, profile by URL, posts by list URL, posts by profile URL, and a single post by URL. Every tiktok.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
   },

@@ -58,7 +58,7 @@ describe("novadaResearch", () => {
     expect(mockedAxios.post.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("propagates time_range to every internal search call", async () => {
+  it("propagates time_range to every internal search call as Google's tbs=qdr: filter (search-goto-links-2026-11-04 item ii)", async () => {
     mockedAxios.post.mockResolvedValue(
       searchEnvelope([
         { title: "Recent Source", url: "https://recent.com", description: "Fresh news about the topic this week" },
@@ -70,12 +70,19 @@ describe("novadaResearch", () => {
 
     await novadaResearch({ question: "What happened this week?", depth: "quick", time_range: "week" }, API_KEY);
 
-    // Every POST call (each internal search) must carry time_range in its form body
+    // search-goto-links-2026-11-04 item (ii): research.ts's PRIMARY engine is
+    // google.com (succeeds here, so every call below is a google_search submit) —
+    // live-verified 2026-11-04 that the upstream google_search scraper does NOT
+    // read a literal `time_range` field (it silently ignores it and returns
+    // unfiltered results) but DOES respect Google's own `tbs=qdr:w` syntax.
+    // A bare `time_range=week` form field must NEVER be sent again — that was
+    // the confirmed-broken behavior this fix replaces.
     const postCalls = mockedAxios.post.mock.calls;
     expect(postCalls.length).toBeGreaterThanOrEqual(1);
     for (const [, body] of postCalls) {
       const formBody = body as URLSearchParams;
-      expect(formBody.get("time_range")).toBe("week");
+      expect(formBody.get("tbs")).toBe("qdr:w");
+      expect(formBody.get("time_range")).toBeNull();
     }
   });
 

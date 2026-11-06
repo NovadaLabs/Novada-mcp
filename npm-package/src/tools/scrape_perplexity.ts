@@ -56,7 +56,7 @@ export const PERPLEXITY_SCRAPER_CONFIG: PlatformScraperConfig<PerplexityOperatio
     "answer_by_url, { search_terms: \"Today's weather\" } for answer_by_search_term.",
   description: {
     core:
-      "Extract the actual AI-generated answer Perplexity returns for a query — by a Perplexity query URL or a raw search term — via a closed, typed `operation` enum (same engine as novada_scrape, pinned to platform=\"perplexity.ai\"). Scrapes Perplexity's own live-rendered answer page (the model's actual response text) — NOT a web search results list and NOT an indexed-page brand-mention scan.",
+      "Extract the actual AI-generated answer Perplexity returns for a query — by a Perplexity query URL or a raw search term — via a closed, typed `operation` enum ({{sibling:novada_scrape}}same engine as novada_scrape, {{/sibling}}pinned to platform=\"perplexity.ai\"). Scrapes Perplexity's own live-rendered answer page (the model's actual response text) — NOT a web search results list and NOT an indexed-page brand-mention scan.",
     useWhen: [
       "what does Perplexity AI answer for <query>",
       "get Perplexity's generated answer for this perplexity.ai URL",
@@ -67,10 +67,10 @@ export const PERPLEXITY_SCRAPER_CONFIG: PlatformScraperConfig<PerplexityOperatio
       { when: "Checking whether a brand is mentioned on AI-company indexed public pages", useInstead: "novada_ai_monitor — scans INDEXED PUBLIC PAGES for brand mentions across AI-company domains; does not fetch a live generated answer for an arbitrary query" },
       { when: "A complex question needing cited, multi-source synthesis", useInstead: "novada_research" },
       { when: "Reading one already-known URL's raw page content", useInstead: "novada_extract" },
-      { when: "A different platform's data", useInstead: "its own novada_scrape_<platform> tool, or novada_scrape(platform=\"<domain>\")" },
+      { when: "A different platform's data", useInstead: "that platform's dedicated scraper tool, if one is listed{{sibling:novada_scrape}}, or novada_scrape(platform=\"<domain>\"){{/sibling}}" },
     ],
     returns:
-      "Perplexity's rendered answer content (the text of its generated response) in the chosen output format — same rendering as novada_scrape.",
+      "Perplexity's rendered answer content (the text of its generated response) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
       // Round 4 (F1, independent judge 2026-10-13): no longer spells out the
       // hypothetical tool name "novada_scrape_chatgpt" — the strict mechanical
@@ -78,7 +78,7 @@ export const PERPLEXITY_SCRAPER_CONFIG: PlatformScraperConfig<PerplexityOperatio
       // tool, so naming a tool that does NOT exist (even to say it doesn't
       // exist) reads as a ghost reference. Same fact, phrased without
       // constructing that identifier.
-      "2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term. Every perplexity.ai catalog operation is currently status:\"ok\" — unlike its sibling chatgpt.com, whose only 2 catalog operations are BOTH backend_broken (verified 2026-07-13, \"submit hangs >120s\"), which is why no dedicated chatgpt.com scraper tool exists.",
+      "2 verified-working Perplexity operations: answer by a perplexity.ai query URL, or answer by a raw search term. Every perplexity.ai catalog operation is currently status:\"ok\".",
   },
 };
 

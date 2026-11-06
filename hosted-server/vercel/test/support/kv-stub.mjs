@@ -16,7 +16,7 @@
  */
 import { createServer } from "node:http";
 
-const PORT = 4799;
+const PORT = Number(process.env.KV_STUB_PORT) || 4799;
 const store = new Map(); // key → { value: string, expiresAt: number | null }
 
 const now = () => Date.now();

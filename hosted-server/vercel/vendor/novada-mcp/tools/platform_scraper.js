@@ -72,7 +72,7 @@ export function createPlatformScraperTool(config) {
         task_id: z.string().regex(TASK_ID_REGEX, TASK_ID_REGEX_MSG).optional()
             .describe("Resume a previous slow task instead of submitting a new billable one."),
         project: z.string().max(30).optional()
-            .describe("Group outputs in a subfolder, e.g. 'competitor-pricing'."),
+            .describe("Group outputs in a subfolder, e.g. 'product-research'."),
     }), { taskId: "task_id" });
     function validateParams(args) {
         return ParamsSchema.parse(args ?? {});

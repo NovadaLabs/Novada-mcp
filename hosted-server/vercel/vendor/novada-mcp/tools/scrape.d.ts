@@ -66,6 +66,9 @@ export declare function normalizeProductRecord(raw: Record<string, unknown>): Re
 export declare function filterSubcategoryRank(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>>;
 /** Returns true if the description contains known UI-chrome patterns. */
 export declare function descriptionHasChrome(description: string): boolean;
+/** Recursively replace any base64-blob STRING value (see isBase64Blob) with a short
+ *  marker, walking arrays and plain objects. Never mutates the input. */
+export declare function stripBase64Blobs<T>(value: T): T;
 /**
  * Curate flattened records for tabular display (csv / excel / html):
  *   1. Drop columns whose non-empty values are majority base64 blobs (useless + fragile).
