@@ -6,6 +6,12 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+---
+
+## [0.9.46] — 2026-11-06
+
+OpenAI plugin review release. Search, research, and Google scraping return real destination URLs instead of Google's relative click-tracking links; tool descriptions drop comparative wording; and the hosted endpoint serves ChatGPT/OpenAI clients a reviewed 17-tool surface on the same URL.
+
 ### Changed
 - **Tool descriptions no longer compare options with evaluative wording** (OpenAI plugin review flagged `novada_search`'s description as comparing/preferring; applied to every client, not only OpenAI). Removed superlatives, magnitude claims, and "cheaper/faster than X" phrasing — e.g. `novada_search`'s "(faster, more thorough)" and "fastest/most reliable … slower fallbacks", `novada_extract`'s "15-100x faster on static sites", `novada_crawl`'s "novada_map — much faster", `novada_research`'s "novada_search — faster/cheaper", the SERP scrapers' "cheaper than a raw-SERP scrape" / "raw SERP dump", `novada_proxy`'s "strongest"/"fastest/cheapest", and "slower" in three `render`/`max_depth` parameter descriptions. Routing guidance stays ("use novada_research for…"), and neutral facts about our own options stay ("adds rendering time"). `novada_scrape_perplexity` no longer mentions the broken chatgpt.com scraper. Tier A tool-selection eval unchanged (60% exact / 64% acceptable, identical per-task picks).
 - **Cross-references to sibling tools are marked up for per-surface rendering** (`{{sibling:…}}`, `_core/description_surface.ts`): mentions of `novada_scrape`, `novada_map`, and `novada_monitor` in other tools' descriptions are dropped on a surface that does not list those tools. No visible change on npm or the default hosted surface.
