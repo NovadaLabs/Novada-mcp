@@ -290,8 +290,8 @@ test("brief-F R1/R3 (was brief-A2's documented gap): antigravity mcp_config.json
   const root = cloneFixture(GREEN_ROOT);
   try {
     const cfg = readJson(root, "distribution/plugins/antigravity/mcp_config.json");
-    cfg.mcpServers.novada.url = cfg.mcpServers.novada.serverUrl;
-    delete cfg.mcpServers.novada.serverUrl;
+    cfg.mcpServers.web.url = cfg.mcpServers.web.serverUrl;
+    delete cfg.mcpServers.web.serverUrl;
     writeJson(root, "distribution/plugins/antigravity/mcp_config.json", cfg);
 
     const results = await runChecks(root);
@@ -306,7 +306,7 @@ test("brief-F R1/R3 (was brief-A2's documented gap): antigravity mcp_config.json
     assert.match(sdc.failures[0], /surface_peers/);
 
     const ee = findResult(results, "endpoint_equal");
-    assert.equal(ee.failures.length, 1, "url_field (/mcpServers/novada/serverUrl) no longer resolves once the key is renamed, so endpoint_equal reports got=undefined");
+    assert.equal(ee.failures.length, 1, "url_field (/mcpServers/web/serverUrl) no longer resolves once the key is renamed, so endpoint_equal reports got=undefined");
     assert.match(ee.failures[0], /mcp_config\.json/);
 
     const gc = findResult(results, "generated_clean");
@@ -321,7 +321,7 @@ test("brief-F R1/R3 (was brief-A2's documented gap): antigravity mcp_config.json
     const fs_ = findResult(results, "field_shape");
     assert.equal(fs_.failures.length, 2, "one must=exist failure (serverUrl missing) + one must=not_exist failure (url present)");
     assert.ok(fs_.failures.some((f) => /serverUrl/.test(f) && /want=present/.test(f)));
-    assert.ok(fs_.failures.some((f) => /\/mcpServers\/novada\/url/.test(f) && /want=absent/.test(f)));
+    assert.ok(fs_.failures.some((f) => /\/mcpServers\/web\/url/.test(f) && /want=absent/.test(f)));
 
     assert.equal(findResult(results, "legibility").failures.length, 0, "the bare url VALUE is still the real hosted endpoint — no secret, no parse error, no hand-typed count");
 
@@ -358,7 +358,7 @@ test("brief-A2 NEW RULE legibility(secret_literal): red when an Authorization he
   const root = cloneFixture(GREEN_ROOT);
   try {
     const cfg = readJson(root, "distribution/plugins/antigravity/mcp_config.json");
-    cfg.mcpServers.novada.headers = { Authorization: "Bearer sk-aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890" };
+    cfg.mcpServers.web.headers = { Authorization: "Bearer sk-aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890" };
     writeJson(root, "distribution/plugins/antigravity/mcp_config.json", cfg);
 
     const results = await runChecks(root);
@@ -380,7 +380,7 @@ test("brief-A2 NEW RULE legibility(secret_literal): a \\${VAR} template in the S
   const root = cloneFixture(GREEN_ROOT);
   try {
     const cfg = readJson(root, "distribution/plugins/antigravity/mcp_config.json");
-    cfg.mcpServers.novada.headers = { Authorization: "Bearer ${NOVADA_API_KEY}" };
+    cfg.mcpServers.web.headers = { Authorization: "Bearer ${NOVADA_API_KEY}" };
     writeJson(root, "distribution/plugins/antigravity/mcp_config.json", cfg);
 
     const results = await runChecks(root);
@@ -620,7 +620,7 @@ test("R4 NEW: legibility(secret_literal) red when a header literally named \"x-a
   const root = cloneFixture(GREEN_ROOT);
   try {
     const cfg = readJson(root, "distribution/plugins/antigravity/mcp_config.json");
-    cfg.mcpServers.novada.headers = { "x-api-key": "sk-aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890" };
+    cfg.mcpServers.web.headers = { "x-api-key": "sk-aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890" };
     writeJson(root, "distribution/plugins/antigravity/mcp_config.json", cfg);
 
     const results = await runChecks(root);
@@ -679,7 +679,7 @@ test("R4 NEW: legibility(secret_literal) red when a literal API key sits in a UR
     // branch (which runs first and returns early on a match, same cascade-attribution concern as
     // every other mutation test in this file — a recognizably-prefixed key in a query string would
     // mask the very code path this test exists to prove).
-    cfg.mcpServers.novada.serverUrl = "https://mcp.novada.com/mcp?apikey=myPlainOpaqueDeployValue123456";
+    cfg.mcpServers.web.serverUrl = "https://mcp.novada.com/mcp?apikey=myPlainOpaqueDeployValue123456";
     writeJson(root, "distribution/plugins/antigravity/mcp_config.json", cfg);
 
     const results = await runChecks(root);

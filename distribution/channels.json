@@ -752,12 +752,44 @@
       "location_rule": "plugin.json must exist at the plugin directory root (distribution/plugins/antigravity/plugin.json), with mcp_config.json beside it (see the antigravity-mcp-config row) — CONFIRMED by live CLI test (agy v1.3.5, 2026-10-15): `agy plugin install <github-url>/tree/<ref>/<subpath>` clones the whole repo and looks for the manifest at that subpath, so installing this SUBFOLDER directly out of the novada-mcp monorepo is structurally supported (does not require moving the plugin to its own repo).",
       "writer_kind": "json-full",
       "full_template": {
+        "$schema": "https://antigravity.google/schemas/v1/plugin.json",
         "name": "{{name}}",
-        "description": "{{description}}"
+        "displayName": "Novada",
+        "version": "{{version}}",
+        "description": "{{description}}",
+        "logo": "assets/logo.svg",
+        "suggestedPrompts": [
+          "Compare the top 5 Amazon results for 'standing desk' by price and rating",
+          "List Data Analyst jobs on LinkedIn in Germany posted this week, with company and link",
+          "What changed in the EU battery regulation this year? Give me sources I can quote"
+        ],
+        "author": {
+          "name": "Novada",
+          "url": "https://www.novada.com"
+        },
+        "homepage": "{{homepage}}",
+        "repository": "{{repository}}",
+        "license": "MIT",
+        "keywords": [
+          "web-search",
+          "web-scraping",
+          "data-extraction",
+          "web-crawling",
+          "research",
+          "serp",
+          "anti-bot",
+          "proxy",
+          "amazon",
+          "linkedin"
+        ]
       },
-      "version_field": null,
-      "version_field_reason": "CONFIRMED this round (not just 'unverified' per BLOCKER #2 — independently re-fetched antigravity.google/docs/plugins/ on 2026-10-15): plugin.json's JSON Schema is `{name, description}` with `additionalProperties: false` (the page's own quoted schema block) — there is structurally no version field to own or verify. Do not add one.",
+      "version_field": "/version",
+      "version_field_reason": "2026-11-10: Antigravity's plugin.json schema now includes version (https://antigravity.google/schemas/v1/plugin.json); the Marketplace requires it and installed clients use it to detect updates. Owned via {{version}} so it always equals npm-package/package.json.",
       "name_field": "/name",
+      "name_override": {
+        "value": "novada",
+        "reason": "Antigravity namespaces bundled MCP servers as <plugin-name>_<server-name>, and the Marketplace wants the name to be the product, not the npm package. 'novada' + server 'web' gives the tool prefix novada_web; listing.name ('novada-mcp') stays the npm/registry identity."
+      },
       "description_field": "/description",
       "description_max_len": 220,
       "surface": "hosted",
@@ -780,7 +812,7 @@
       "writer_kind": "json-full",
       "full_template": {
         "mcpServers": {
-          "novada": {
+          "web": {
             "serverUrl": "{{hosted_endpoint}}"
           }
         }
@@ -790,13 +822,13 @@
       "description_field": null,
       "surface": "hosted",
       "surface_reason": "brief-N (2026-10-19, D1): same hosted-only endpoint as the sibling antigravity-plugin row. No description_field on this row, so no check ever reads surface for it — recorded for documentation/consistency.",
-      "url_field": "/mcpServers/novada/serverUrl",
+      "url_field": "/mcpServers/web/serverUrl",
       "url_field_reason": "brief-F R1: previously hand-written with no check verifying it against listing.json's hosted_endpoint — tampering with it passed every check (0 failures). Now both OWNED (generate.mjs rewrites it from listing.hosted_endpoint on every run) and verified by endpoint_equal.",
       "required_fields": {
-        "/mcpServers/novada/serverUrl": {
+        "/mcpServers/web/serverUrl": {
           "must": "exist"
         },
-        "/mcpServers/novada/url": {
+        "/mcpServers/web/url": {
           "must": "not_exist"
         }
       },
