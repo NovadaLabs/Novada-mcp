@@ -166,6 +166,38 @@ Edit `.vscode/mcp.json` (top-level key is `servers`, not `mcpServers`):
 }
 ```
 
+### OpenCode
+
+Add Novada from the CLI (writes to the current project; add `--global` for every project):
+
+```bash
+opencode mcp add novada --url https://mcp.novada.com/mcp
+```
+
+Then open OpenCode, run `/mcps`, select `novada`, and sign in with your Novada account (OAuth).
+
+Prefer an API key? Set `NOVADA_API_KEY` in your environment and use `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "novada": {
+        "type": "remote",
+        "url": "https://mcp.novada.com/mcp",
+        "oauth": false,
+        "headers": { "Authorization": "Bearer {env:NOVADA_API_KEY}" }
+      }
+    }
+  }
+}
+```
+
+Self-host: `opencode mcp add novada --env NOVADA_API_KEY=your_key -- npx -y novada-mcp`
+
+Tested on OpenCode V2 (version x.y.z — fill in).
+
 ### Try it
 
 ```
