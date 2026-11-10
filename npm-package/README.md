@@ -196,7 +196,7 @@ Prefer an API key? Set `NOVADA_API_KEY` in your environment and use `opencode.js
 
 Self-host: `opencode mcp add novada --env NOVADA_API_KEY=your_key -- npx -y novada-mcp`
 
-Tested on OpenCode V2 (version x.y.z — fill in).
+Tested on OpenCode V2 (v2.2.6, OAuth sign-in).
 
 ### Try it
 
