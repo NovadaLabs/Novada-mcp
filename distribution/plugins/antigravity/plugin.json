@@ -1,4 +1,32 @@
 {
-  "name": "novada-mcp",
-  "description": "AI agents' single API key for web search, content extraction, site crawling and mapping, multi-source research, structured platform scraping, and proxy routing."
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "novada",
+  "displayName": "Novada",
+  "version": "0.9.46",
+  "description": "AI agents' single API key for web search, content extraction, site crawling and mapping, multi-source research, structured platform scraping, and proxy routing.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Compare the top 5 Amazon results for 'standing desk' by price and rating",
+    "List Data Analyst jobs on LinkedIn in Germany posted this week, with company and link",
+    "What changed in the EU battery regulation this year? Give me sources I can quote"
+  ],
+  "author": {
+    "name": "Novada",
+    "url": "https://www.novada.com"
+  },
+  "homepage": "https://novada.com",
+  "repository": "https://github.com/NovadaLabs/novada-mcp",
+  "license": "MIT",
+  "keywords": [
+    "web-search",
+    "web-scraping",
+    "data-extraction",
+    "web-crawling",
+    "research",
+    "serp",
+    "anti-bot",
+    "proxy",
+    "amazon",
+    "linkedin"
+  ]
 }
