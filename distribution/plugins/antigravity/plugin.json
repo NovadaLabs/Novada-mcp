@@ -2,7 +2,7 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "novada",
   "displayName": "Novada",
-  "version": "0.9.47",
+  "version": "0.9.48",
   "description": "AI agents' single API key for web search, content extraction, site crawling and mapping, multi-source research, structured platform scraping, and proxy routing.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
