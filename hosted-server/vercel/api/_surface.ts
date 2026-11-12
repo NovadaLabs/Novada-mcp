@@ -58,7 +58,11 @@ export function classifyRedirectUris(redirectUris: readonly string[]): HostedSur
   return "default";
 }
 
-/** The 17 tools the OpenAI surface lists (plugin review scope, 2026-11-04 spec §2).
+/** The 15 tools the OpenAI surface lists (plugin review scope, 2026-11-04 spec §2;
+ *  novada_proxy and novada_scrape_perplexity dropped 2026-11-12 after the
+ *  OpenAI review held both for further review — proxy configuration is of no
+ *  use inside ChatGPT, and scraping another AI product's answers is the
+ *  policy-sensitive kind of tool the review exists to catch).
  *  Everything else — the generic novada_scrape executor and its catalog
  *  (novada_discover), stateful/one-off tools (novada_monitor, novada_setup,
  *  novada_map), account writes (novada_proxy_account_create,
@@ -75,10 +79,8 @@ export const OPENAI_SURFACE_TOOLS: ReadonlySet<string> = new Set([
   "novada_scrape_yandex",
   "novada_scrape_amazon",
   "novada_scrape_walmart",
-  "novada_scrape_perplexity",
   "novada_scrape_youtube",
   "novada_scrape_github",
-  "novada_proxy",
   "novada_ai_monitor",
   "novada_account",
   "novada_proxy_account_list",
@@ -119,9 +121,9 @@ const OPENAI_INSTRUCTIONS = [
   "- Read a page whose URL you already have: novada_extract.",
   "- Read several related pages under one site or section: novada_crawl.",
   "- Gather passages from several sources for one question in a single call: novada_research.",
-  "- Structured data from one platform: novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_amazon, novada_scrape_walmart, novada_scrape_perplexity, novada_scrape_youtube, novada_scrape_github. Some of these run as background jobs; when a result says the job is still processing, call the same tool again with the task_id it returned.",
+  "- Structured data from one platform: novada_scrape_google, novada_scrape_bing, novada_scrape_duckduckgo, novada_scrape_yandex, novada_scrape_amazon, novada_scrape_walmart, novada_scrape_youtube, novada_scrape_github. Some of these run as background jobs; when a result says the job is still processing, call the same tool again with the task_id it returned.",
   "- Brand mentions and sentiment on AI-company websites (their indexed public pages): novada_ai_monitor.",
-  "- Proxy connection settings: novada_proxy. Account balance and plans: novada_account. Proxy sub-accounts: novada_proxy_account_list.",
+  "- Account balance and plans: novada_account. Proxy sub-accounts: novada_proxy_account_list.",
 ].join("\n");
 
 export const SURFACE_POLICIES: Readonly<Record<HostedSurface, SurfacePolicy>> = {

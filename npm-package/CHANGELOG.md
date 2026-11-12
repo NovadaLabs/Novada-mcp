@@ -8,6 +8,19 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.47] — 2026-11-12
+
+OpenAI plugin review, round 2. The hosted endpoint no longer describes local-only behavior (saving output files, environment variables), descriptions drop wording about getting past site protections and named third-party sites, and the OpenAI surface narrows to 15 tools.
+
+### Changed
+- **Hosted descriptions and schemas leave out what only applies to the local server** (`_core/description_surface.ts`). Description text can now be marked `{{local}}…{{/local}}` or `{{hosted}}…{{/hosted}}` and is kept only on the matching runtime. The hosted endpoint never writes output files, so `novada_extract`'s "Auto-saved … ~/Downloads" line, the "Project grouping" lines (search, extract, research, scrape), `novada_proxy`'s environment-variable setup sentence, and the `NOVADA_DEVELOPER_API_KEY` auth lines on the account tools are now local-only. The OpenAI scan had read the auto-save line as a user-visible side effect on a `readOnlyHint` tool. Hosted `tools/list` also stops advertising parameters that do nothing there: `project` (every tool) and `novada_proxy`'s `verify`. The schemas still accept them, so existing callers are not rejected. npm output is unchanged apart from the wording below.
+- **Neutral wording, all clients.** `novada_extract` no longer names anti-bot vendors ("Auto-handles Cloudflare/DataDome/Kasada", "works on anti-bot pages") — it now says it starts with a plain fetch and switches to JS rendering or a full browser when the page needs it; its `render` parameter drops the `NOVADA_BROWSER_WS` requirement (the Browser API is auto-provisioned from the API key). `novada_search`'s `engine` parameter no longer calls one engine "recommended" and another slower; `source_type` and `exclude_social` describe site categories instead of listing named sites; the `exclude_domains` example uses `example.com`; the description's opening line no longer redirects to `novada_research` (the "Not for" line still routes). `novada_ai_monitor`'s brand example no longer names another company.
+
+### Changed (hosted server — mcp.novada.com, not part of the npm package)
+- **OpenAI surface: 17 → 15 tools.** `novada_proxy` (returns proxy connection settings, of no use inside ChatGPT) and `novada_scrape_perplexity` (scrapes another AI product's answers) are no longer listed or callable for ChatGPT/OpenAI clients; `initialize` instructions updated. Every other client keeps the unchanged 29-tool surface.
+
+---
+
 ## [0.9.46] — 2026-11-06
 
 OpenAI plugin review release. Search, research, and Google scraping return real destination URLs instead of Google's relative click-tracking links; tool descriptions drop comparative wording; and the hosted endpoint serves ChatGPT/OpenAI clients a reviewed 17-tool surface on the same URL.

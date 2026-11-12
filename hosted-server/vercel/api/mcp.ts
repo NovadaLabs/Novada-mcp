@@ -596,7 +596,7 @@ const HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS: ReadonlySet<string> = new Set(
 // calls buildToolsForSurface() a SECOND, independent time here rather than
 // re-parsing CORE_TOOLS's already-resolved text, which no longer carries the
 // `{{sibling:}}` markup to re-resolve).
-const CORE_TOOLS_FOR_HOSTED = buildToolsForSurface(HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS);
+const CORE_TOOLS_FOR_HOSTED = buildToolsForSurface(HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS, "hosted");
 
 const TOOLS = CORE_TOOLS_FOR_HOSTED.map((t) => ({
   name: t.name,
@@ -730,7 +730,7 @@ function buildSurfaceTools(policy: SurfacePolicy): typeof TOOLS {
   if (notServed.length > 0) {
     throw new Error(`surface lists tools the hosted catalog does not serve: ${notServed.join(", ")}`);
   }
-  return buildToolsForSurface(names)
+  return buildToolsForSurface(names, "hosted")
     .filter((t) => names.has(t.name))
     .map((t) => ({
       name: t.name,

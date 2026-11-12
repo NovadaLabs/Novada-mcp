@@ -35,11 +35,11 @@ const RFC_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 const CHATGPT_REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect";
 const CLAUDE_REDIRECT = "https://claude.ai/api/mcp/auth_callback";
 
-const OPENAI_17 = [
+const OPENAI_15 = [
   "novada_search", "novada_extract", "novada_crawl", "novada_research",
   "novada_scrape_google", "novada_scrape_bing", "novada_scrape_duckduckgo", "novada_scrape_yandex",
-  "novada_scrape_amazon", "novada_scrape_walmart", "novada_scrape_perplexity", "novada_scrape_youtube",
-  "novada_scrape_github", "novada_proxy", "novada_ai_monitor", "novada_account", "novada_proxy_account_list",
+  "novada_scrape_amazon", "novada_scrape_walmart", "novada_scrape_youtube",
+  "novada_scrape_github", "novada_ai_monitor", "novada_account", "novada_proxy_account_list",
 ];
 
 async function getFreePort() {
@@ -181,9 +181,9 @@ test("per-client tool surface through the built server", { skip: !existsSync(DIS
       assert.deepEqual(Object.keys(init.capabilities).sort(), ["tools"]);
     });
 
-    await t.test("ChatGPT-registered client: tools/list is exactly the 17, scrapers not read-only", async () => {
+    await t.test("ChatGPT-registered client: tools/list is exactly the 15, scrapers not read-only", async () => {
       const { tools } = await mcp(base, chatgptToken, "tools/list");
-      assert.deepEqual(tools.map((x) => x.name).sort(), [...OPENAI_17].sort());
+      assert.deepEqual(tools.map((x) => x.name).sort(), [...OPENAI_15].sort());
       const google = tools.find((x) => x.name === "novada_scrape_google");
       assert.equal(google.annotations.readOnlyHint, false);
       assert.equal(google.annotations.destructiveHint, false);
@@ -193,7 +193,7 @@ test("per-client tool surface through the built server", { skip: !existsSync(DIS
       assert.doesNotMatch(text, /free credits|cheaper|fastest/i);
     });
 
-    for (const name of ["novada_scrape", "novada_static_ip_mgmt", "novada_health", "novada_scraper_submit"]) {
+    for (const name of ["novada_scrape", "novada_static_ip_mgmt", "novada_proxy", "novada_scrape_perplexity", "novada_health", "novada_scraper_submit"]) {
       await t.test(`ChatGPT-registered client: calling ${name} is refused without pointing at another client`, async () => {
         const result = await mcp(base, chatgptToken, "tools/call", { name, arguments: {} });
         assert.equal(result.isError, true);

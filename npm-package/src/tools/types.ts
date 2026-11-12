@@ -99,7 +99,7 @@ const safeUrl = z.string({
 export const SearchParamsSchema = withCamelCaseAliases(z.object({
   query: z.string().min(1, "Search query is required"),
   engine: z.enum(["google", "duckduckgo", "yandex"]).default("google")
-    .describe("Search engine to use. 'google' (default, recommended for general queries). 'duckduckgo': privacy-focused; responses take noticeably longer. 'yandex': Russian/Eastern European content."),
+    .describe("Search engine to use: 'google' (default), 'duckduckgo', or 'yandex' (Russian and Eastern European content)."),
   num: z.number().int().min(1).max(20).default(10),
   country: z.string().default(""),
   language: z.string().default(""),
@@ -112,11 +112,11 @@ export const SearchParamsSchema = withCamelCaseAliases(z.object({
   include_domains: z.array(z.string()).optional()
     .describe("Only return results from these domains. E.g. ['github.com', 'arxiv.org']. Max 10."),
   exclude_domains: z.array(z.string()).optional()
-    .describe("Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10."),
+    .describe("Exclude results from these domains. E.g. ['example.com', 'example.org']. Max 10."),
   source_type: z.enum(["any", "news", "research", "official", "social"]).optional()
-    .describe("Bias result authority. 'research'/'official': exclude social+PR domains, boost authoritative sources (*.gov, *.edu, arxiv.org, reuters.com, wikipedia.org). 'social': keep social results (no down-rank). 'news'/'any'/omitted: mild default reranking. Combines with automatic query-intent detection."),
+    .describe("Bias result authority. 'research'/'official': rank government, academic, and reference sources higher and leave out social-media and press-release sites. 'social': keep social-media results at normal rank. 'news'/'any'/omitted: default ranking. Combines with automatic query-intent detection."),
   exclude_social: z.boolean().optional()
-    .describe("When true, hard-drop social and press-release results (facebook, linkedin, x/twitter, instagram, tiktok, reddit, quora, medium, prnewswire, businesswire, globenewswire, prweb, einpresswire) from the response after fetching."),
+    .describe("When true, remove social-media, forum, and press-release sites from the results."),
   format: z.enum(["markdown", "json"]).default("markdown")
     .describe("Output format. 'markdown': human-readable (default). 'json': structured object for programmatic agent use."),
   enrich_top: z.boolean().optional()
@@ -172,7 +172,7 @@ const _ExtractParamsInner = z.object({
   query: z.string().optional()
     .describe("Optional query for relevance context. Helps the calling agent focus on relevant sections."),
   render: z.enum(["auto", "static", "render", "js", "browser"]).default("auto")
-    .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS)."),
+    .describe("Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force full-browser rendering (Browser API)."),
   fields: z.array(z.string().min(1)).max(20).optional()
     .describe("Specific fields to extract (e.g. ['price','author','availability','rating']). ADVISORY/confidence-gated: each returns {value, source, confidence}. Source priority: JSON-LD → infobox/table/microdata → anchored pattern → loose scan (last resort). Below the confidence floor, the match is SUPPRESSED (value=null, low_confidence:true, raw candidate in low_confidence_value) instead of a confidently-wrong guess. Treat a resolved value as a hint, not ground truth — check source/confidence and retry with render='render' when null/low_confidence."),
   max_chars: z.number().int().min(1000).max(100000).optional()
@@ -676,7 +676,7 @@ export const AiMonitorParamsSchema = z.object({
   // H5 / M8: cap length + strip quote chars so a `"` can't break the site: scoping
   // and inject search operators (result-manipulation only — transport is form-encoded).
   brand: z.string().min(1).max(200)
-    .describe("Brand or product name to search for on AI-company public web domains. E.g. 'novada', 'firecrawl', 'stripe'."),
+    .describe("Brand or product name to search for on AI-company public web domains. E.g. 'novada', 'acme', 'stripe'."),
   // H5: validate against the known model keys (lowercased) so an unknown value —
   // including prototype-pollution keys like "__proto__" — is rejected at the Zod
   // boundary with a clear INVALID_PARAMS message instead of crashing the runtime

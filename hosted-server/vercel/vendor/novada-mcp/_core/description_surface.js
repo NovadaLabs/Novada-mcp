@@ -27,6 +27,45 @@
 // appear in a model-facing description on EITHER surface at all (removed at
 // the source instead; see novada_account's description + its own comment).
 const SIBLING_SPAN_RE = /\{\{sibling:(novada_[a-z_]+)\}\}([\s\S]*?)\{\{\/sibling\}\}/g;
+const RUNTIME_SPAN_RE = /\{\{(local|hosted)\}\}([\s\S]*?)\{\{\/\1\}\}/g;
+/**
+ * Input-schema properties that do nothing on the hosted runtime, so hosted does
+ * not advertise them. One row per parameter; `tools: "*"` = every tool that has
+ * it. The schemas still ACCEPT these keys (a client sending one is not
+ * rejected) — they are only left out of the listed inputSchema.
+ */
+export const HOSTED_INERT_PARAMS = [
+    // project is also part of novada_search's cache key; that changes caching only, never the returned content.
+    { param: "project", tools: "*", reason: "groups saved output files into a subfolder; hosted never writes output files" },
+    { param: "verify", tools: ["novada_proxy"], reason: "the live IP-echo check runs on local/stdio only; hosted skips it" },
+];
+function isHostedInert(toolName, param) {
+    return HOSTED_INERT_PARAMS.some((r) => r.param === param && (r.tools === "*" || r.tools.includes(toolName)));
+}
+/**
+ * Render a tool's inputSchema for `runtime`: runtime/sibling spans in every
+ * property description are resolved exactly like the tool description, and on
+ * hosted the HOSTED_INERT_PARAMS rows are removed (from `properties` and
+ * `required`). Never mutates the input.
+ */
+export function renderInputSchemaForSurface(toolName, inputSchema, availableToolNames, runtime) {
+    const props = inputSchema.properties;
+    if (!props)
+        return inputSchema;
+    const outProps = {};
+    for (const [name, prop] of Object.entries(props)) {
+        if (runtime === "hosted" && isHostedInert(toolName, name))
+            continue;
+        outProps[name] = typeof prop.description === "string"
+            ? { ...prop, description: renderDescriptionForSurface(prop.description, availableToolNames, runtime) }
+            : prop;
+    }
+    const out = { ...inputSchema, properties: outProps };
+    if (Array.isArray(inputSchema.required)) {
+        out.required = inputSchema.required.filter((n) => n in outProps);
+    }
+    return out;
+}
 /**
  * Render `description`'s `{{sibling:toolName}}...{{/sibling}}` spans against
  * `availableToolNames` — the exact, real tool-name set the SERVING surface
@@ -34,12 +73,15 @@ const SIBLING_SPAN_RE = /\{\{sibling:(novada_[a-z_]+)\}\}([\s\S]*?)\{\{\/sibling
  * (indistinguishable from never having been marked up); a span whose tool is
  * NOT available is removed entirely (not replaced with a placeholder — the
  * surrounding sentence must still read as a complete, accurate claim without
- * it). Cosmetic whitespace/punctuation cleanup follows so a fully-stripped
+ * it). `{{local}}`/`{{hosted}}` spans are kept only on the matching `runtime`.
+ * Cosmetic whitespace/punctuation cleanup follows so a fully-stripped
  * sentence or bullet doesn't leave a dangling double-space, empty
  * parenthetical, or stray leading comma behind.
  */
-export function renderDescriptionForSurface(description, availableToolNames) {
-    let out = description.replace(SIBLING_SPAN_RE, (_full, toolName, inner) => availableToolNames.has(toolName) ? inner : "");
+export function renderDescriptionForSurface(description, availableToolNames, runtime) {
+    let out = description
+        .replace(SIBLING_SPAN_RE, (_full, toolName, inner) => availableToolNames.has(toolName) ? inner : "")
+        .replace(RUNTIME_SPAN_RE, (_full, spanRuntime, inner) => spanRuntime === runtime ? inner : "");
     // Cosmetic-only cleanup of artifacts a fully-removed span can leave behind.
     // Order matters: collapse empty parens/doubled-separator pairs BEFORE the
     // generic whitespace collapse, so e.g. "(novada_site_copy)" -> "()" -> ""

@@ -79,7 +79,7 @@ test("mcp.ts: hosted TOOLS is built via CORE_TOOLS_FOR_HOSTED.map(...), not a ha
   assert.match(mcpSrc, /const TOOLS = CORE_TOOLS_FOR_HOSTED\.map\(/, "TOOLS must be derived from CORE_TOOLS_FOR_HOSTED");
   assert.match(
     mcpSrc,
-    /const CORE_TOOLS_FOR_HOSTED = buildToolsForSurface\(HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS\);/,
+    /const CORE_TOOLS_FOR_HOSTED = buildToolsForSurface\(HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS, "hosted"\);/,
     "CORE_TOOLS_FOR_HOSTED must itself be derived from buildToolsForSurface(...), not a hand-curated literal",
   );
   assert.match(
