@@ -16,6 +16,7 @@
  * surface it; remove a name there to hide it. _TOOL_DEFINITIONS holds the full
  * MCP schema for every dispatchable tool (visible + hidden).
  */
+import { type ServingRuntime } from "./_core/description_surface.js";
 import type { ProgressReporter } from "./tools/crawl.js";
 import type { ElicitConfirmFn } from "./tools/static_ip_mgmt.js";
 export declare const DEDICATED_PLATFORM_SLUGS: string[];
@@ -33,7 +34,9 @@ export declare const _TOOL_DEFINITIONS: Array<{
  * so a description never recommends a sibling tool the CALLING surface can't
  * actually list/dispatch. The REGISTERED_TOOL_NAMES inclusion filter is NOT
  * parameterized — every surface starts from the same base registry; only
- * sibling-mention rendering differs per surface. One function, two real call
+ * sibling-mention rendering differs per surface; `runtime` selects which
+ * `{{local}}`/`{{hosted}}` spans survive and, on hosted, drops the
+ * HOSTED_INERT_PARAMS from each inputSchema. One function, two real call
  * sites today: `TOOLS` below (npm-package's own surface, rendered against its
  * own REGISTERED_TOOL_NAMES — renders a no-op there, since npm hides nothing)
  * and hosted-server/vercel/api/mcp.ts's own ListTools assembly (rendered
@@ -41,18 +44,18 @@ export declare const _TOOL_DEFINITIONS: Array<{
  * surface — add/adjust the `{{sibling:}}` markup once in _TOOL_DEFINITIONS
  * above instead.
  */
-export declare function buildToolsForSurface(availableForSiblingMentions: ReadonlySet<string>): {
+export declare function buildToolsForSurface(availableForSiblingMentions: ReadonlySet<string>, runtime: ServingRuntime): {
     description: string;
+    inputSchema: Record<string, unknown>;
     title: string;
     name: string;
-    inputSchema: Record<string, unknown>;
     annotations: Record<string, boolean>;
 }[];
 export declare const TOOLS: {
     description: string;
+    inputSchema: Record<string, unknown>;
     title: string;
     name: string;
-    inputSchema: Record<string, unknown>;
     annotations: Record<string, boolean>;
 }[];
 export declare const HIDDEN_ALIASES: ReadonlySet<string>;

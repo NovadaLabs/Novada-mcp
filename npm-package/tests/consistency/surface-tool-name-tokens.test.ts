@@ -121,13 +121,13 @@ describe("surface-tool-name-tokens (F1): npm's own TOOLS catalog references only
 
   describe("buildToolsForSurface — the ONE choke point, exercised directly (not just via its npm-side result)", () => {
     it("rendering against npm's OWN REGISTERED_TOOL_NAMES is a no-op for sibling markup — output is identical to TOOLS (npm hides nothing)", () => {
-      const rebuilt = buildToolsForSurface(REGISTERED_TOOL_NAMES);
+      const rebuilt = buildToolsForSurface(REGISTERED_TOOL_NAMES, "local");
       expect(rebuilt.map((t) => t.description)).toEqual(TOOLS.map((t) => t.description));
     });
 
     it("rendering against a RESTRICTED set strips sibling-only spans for the excluded tool, proving the mechanism actually branches on availability (not a pass-through)", () => {
       const withoutSiteCopy = new Set([...REGISTERED_TOOL_NAMES].filter((n) => n !== "novada_site_copy"));
-      const restricted = buildToolsForSurface(withoutSiteCopy);
+      const restricted = buildToolsForSurface(withoutSiteCopy, "local");
       const crawl = restricted.find((t) => t.name === "novada_crawl")!;
       expect(crawl.description).not.toContain("novada_site_copy");
       // And the surrounding sentence must still read cleanly (no leftover
@@ -141,5 +141,39 @@ describe("surface-tool-name-tokens (F1): npm's own TOOLS catalog references only
       const rawCrawl = _TOOL_DEFINITIONS.find((t) => t.name === "novada_crawl")!;
       expect(rawCrawl.description).toContain("{{sibling:novada_site_copy}}");
     });
+  });
+});
+
+describe("runtime spans and hosted-inert params (2026-11-12, OpenAI review round 2)", () => {
+  it("{{local}} text survives on local and is removed on hosted; {{hosted}} is the mirror", async () => {
+    const { renderDescriptionForSurface } = await import("../../src/_core/description_surface.js");
+    const src = "Reads pages.{{local}}\n**Auto-saved:** to disk.{{/local}} Creds: {{local}}set ENV.{{/local}}{{hosted}}use the dashboard.{{/hosted}}";
+    expect(renderDescriptionForSurface(src, new Set(), "local")).toBe("Reads pages.\n**Auto-saved:** to disk. Creds: set ENV.");
+    expect(renderDescriptionForSurface(src, new Set(), "hosted")).toBe("Reads pages. Creds: use the dashboard.");
+  });
+
+  it("every tool definition: no runtime markup survives either runtime, and local output keeps every local line", () => {
+    for (const runtime of ["local", "hosted"] as const) {
+      for (const t of buildToolsForSurface(REGISTERED_TOOL_NAMES, runtime)) {
+        expect(JSON.stringify(t), `${t.name} (${runtime})`).not.toMatch(/\{\{\/?(?:local|hosted)\}\}/);
+      }
+    }
+    const extractLocal = TOOLS.find((t) => t.name === "novada_extract")!;
+    expect(extractLocal.description).toContain("**Auto-saved:**");
+  });
+
+  it("hosted drops project from every tool and verify from novada_proxy; local keeps both; required[] stays consistent", () => {
+    const hosted = buildToolsForSurface(REGISTERED_TOOL_NAMES, "hosted");
+    for (const t of hosted) {
+      const schema = t.inputSchema as { properties?: Record<string, unknown>; required?: string[] };
+      expect(Object.keys(schema.properties ?? {}), t.name).not.toContain("project");
+      for (const r of schema.required ?? []) expect(schema.properties, `${t.name} requires missing ${r}`).toHaveProperty(r);
+    }
+    const proxyHosted = hosted.find((t) => t.name === "novada_proxy")!.inputSchema as { properties: Record<string, unknown> };
+    expect(proxyHosted.properties).not.toHaveProperty("verify");
+    const proxyLocal = TOOLS.find((t) => t.name === "novada_proxy")!.inputSchema as { properties: Record<string, unknown> };
+    expect(proxyLocal.properties).toHaveProperty("verify");
+    const extractHosted = hosted.find((t) => t.name === "novada_extract")!;
+    expect(extractHosted.description).not.toMatch(/Auto-saved|~\/Downloads|Project grouping/);
   });
 });

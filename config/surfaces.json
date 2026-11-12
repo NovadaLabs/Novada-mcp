@@ -71,15 +71,13 @@
         "novada_scrape_yandex",
         "novada_scrape_amazon",
         "novada_scrape_walmart",
-        "novada_scrape_perplexity",
         "novada_scrape_youtube",
         "novada_scrape_github",
-        "novada_proxy",
         "novada_ai_monitor",
         "novada_account",
         "novada_proxy_account_list"
       ],
-      "description": "mcp.novada.com's surface for OAuth clients whose registered redirect URIs are on chatgpt.com or openai.com (OpenAI plugin review, 2026-11-05). Same URL as 'hosted'; selected per request from the access token's client_id (hosted-server/vercel/api/_surface.ts — OPENAI_SURFACE_TOOLS is the code-side source; scripts/check-hosted-drift.mjs gate (d) requires this list to equal it and to stay a subset of 'hosted'). The 12 'hosted' tools not listed here (novada_scrape, novada_discover, novada_monitor, novada_setup, novada_map, novada_proxy_account_create, novada_static_ip_mgmt, and the instagram/facebook/tiktok/x/linkedin scrapers) are neither listed nor callable on this surface."
+      "description": "mcp.novada.com's surface for OAuth clients whose registered redirect URIs are on chatgpt.com or openai.com (OpenAI plugin review, 2026-11-05). Same URL as 'hosted'; selected per request from the access token's client_id (hosted-server/vercel/api/_surface.ts — OPENAI_SURFACE_TOOLS is the code-side source; scripts/check-hosted-drift.mjs gate (d) requires this list to equal it and to stay a subset of 'hosted'). The 14 'hosted' tools not listed here (novada_scrape, novada_discover, novada_monitor, novada_setup, novada_map, novada_proxy, novada_proxy_account_create, novada_static_ip_mgmt, novada_scrape_perplexity, and the instagram/facebook/tiktok/x/linkedin scrapers — novada_proxy and novada_scrape_perplexity were dropped 2026-11-12 after the OpenAI review held them) are neither listed nor callable on this surface."
     }
   }
 }

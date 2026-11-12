@@ -329,7 +329,7 @@ describe("{{sibling:}} markup leak guard (F-review error-path gap)", () => {
   it("not-inert proof: a deliberately UNCLOSED span (missing {{/sibling}}) is left un-stripped and WOULD be caught by the above guard", async () => {
     const { renderDescriptionForSurface } = await import("../../src/_core/description_surface.js");
     const malformed = "Use {{sibling:novada_site_copy}}this other tool for whole-site jobs.";
-    const rendered = renderDescriptionForSurface(malformed, new Set<string>()); // tool NOT available
+    const rendered = renderDescriptionForSurface(malformed, new Set<string>(), "local"); // tool NOT available
     // No matching close tag means SIBLING_SPAN_RE never matches at all — the
     // raw markup passes through completely unstripped, exactly the leak this
     // guard exists to catch.

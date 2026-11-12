@@ -102,7 +102,7 @@ test("resolveClientSurface: storage error → default for that request, never th
 
 const policy = SURFACE_POLICIES.openai;
 // Same computation as mcp.ts buildSurfaceTools (minus titles, which are not under test here).
-const openaiTools = buildToolsForSurface(OPENAI_SURFACE_TOOLS)
+const openaiTools = buildToolsForSurface(OPENAI_SURFACE_TOOLS, "hosted")
   .filter((t) => OPENAI_SURFACE_TOOLS.has(t.name))
   .map((t) => ({ ...t, annotations: applyAnnotationRules(t.name, t.annotations, policy.annotationRules) }));
 const coreByName = new Map(CORE_TOOLS.map((t) => [t.name, t]));
@@ -113,8 +113,8 @@ function allStrings(value, out = []) {
   return out;
 }
 
-test("openai surface lists exactly the 17 reviewed tools, all of them real", () => {
-  assert.equal(OPENAI_SURFACE_TOOLS.size, 17);
+test("openai surface lists exactly the 15 reviewed tools, all of them real", () => {
+  assert.equal(OPENAI_SURFACE_TOOLS.size, 15);
   assert.deepEqual(new Set(openaiTools.map((t) => t.name)), OPENAI_SURFACE_TOOLS);
   assert.deepEqual(new Set(surfaces.openai.tools), OPENAI_SURFACE_TOOLS, "config/surfaces.json must match _surface.ts");
 });
@@ -162,9 +162,47 @@ test("no pricing, promotional, or comparative wording anywhere in the openai too
   }
 });
 
+// OpenAI review round 2 (2026-11-12). Each row is one class of wording the
+// review flagged or held: local-only behavior shown on hosted (the auto-save
+// line read as a side effect on a readOnlyHint tool), wording about getting
+// past site protections, and named third-party brands in ranking/filter text
+// (read as comparing or disparaging). Applied to every string of every listed
+// tool.
+const BANNED_ON_OPENAI = [
+  { name: "local file output", re: /~\/Downloads|auto-saved|written to disk|\bsubfolder\b/i },
+  { name: "local runtime env var", re: /\bNOVADA_[A-Z_]+\b/ },
+  { name: "local runtime configuration", re: /self-host|local stdio|local\/stdio|npx /i },
+  { name: "getting past site protections", re: /anti-bot|\bbypass|cloudflare|datadome|kasada|captcha|\bunblock(?!er)|evad|circumvent/i },
+  { name: "named third-party sites in ranking/filter text", re: /\b(?:reddit|quora|facebook|linkedin|instagram|tiktok|reuters|wikipedia|prnewswire|businesswire|firecrawl|tavily)\b/i },
+  { name: "comparative recommendation", re: /\brecommended\b|noticeably (?:longer|slower)|\bbetter than\b/i },
+];
+
+test("no local-only, protection-bypass, third-party-brand, or comparative wording on the openai surface", () => {
+  for (const t of openaiTools) {
+    for (const s of allStrings({ description: t.description, inputSchema: t.inputSchema })) {
+      for (const { name, re } of BANNED_ON_OPENAI) {
+        assert.doesNotMatch(s, re, `${t.name} [${name}]: "${(s.match(re) || [""])[0]}" in: ${s.slice(0, 160)}`);
+      }
+    }
+  }
+});
+
+test("hosted rendering drops params that do nothing on hosted (project; novada_proxy's verify) and leaves no runtime markup", () => {
+  const hostedAll = buildToolsForSurface(new Set(CORE_TOOLS.map((t) => t.name)), "hosted");
+  for (const t of hostedAll) {
+    const props = Object.keys(t.inputSchema.properties ?? {});
+    assert.ok(!props.includes("project"), `${t.name} still lists project on hosted`);
+    assert.doesNotMatch(JSON.stringify(t), /\{\{\/?(?:local|hosted|sibling)/, t.name);
+  }
+  assert.ok(!Object.keys(hostedAll.find((t) => t.name === "novada_proxy").inputSchema.properties).includes("verify"));
+  // The local surface still lists them (npm users rely on project/verify).
+  assert.ok(Object.keys(CORE_TOOLS.find((t) => t.name === "novada_extract").inputSchema.properties).includes("project"));
+  assert.ok(Object.keys(CORE_TOOLS.find((t) => t.name === "novada_proxy").inputSchema.properties).includes("verify"));
+});
+
 test("platform scrapers are marked not read-only (they queue scrape jobs) and not destructive", () => {
   const scrapers = openaiTools.filter((t) => t.name.startsWith("novada_scrape_"));
-  assert.equal(scrapers.length, 9);
+  assert.equal(scrapers.length, 8);
   for (const t of scrapers) {
     assert.equal(t.annotations.readOnlyHint, false, t.name);
     assert.equal(t.annotations.destructiveHint, false, t.name);

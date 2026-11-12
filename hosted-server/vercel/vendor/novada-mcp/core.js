@@ -19,7 +19,7 @@
 import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaSiteCopy, novadaProxy, novadaScrape, novadaVerify, novadaBrowser, novadaDiscover, novadaBrowserFlow, novadaAiMonitor, novadaMonitor, validateMonitorParams, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateSiteCopyParams, validateProxyParams, PROXY_ALIAS_MAP, validateScrapeParams, validateVerifyParams, validateBrowserParams, validateDiscoverParams, validateBrowserFlowParams, REGISTERED_TOOL_NAMES, TOOL_REGISTRY, } from "./tools/index.js";
 import { PLATFORM_SCRAPER_DEFS, PLATFORM_SCRAPER_HANDLERS, PLATFORM_SCRAPER_TOOLS } from "./tools/platform_scrapers.js";
 import { WORKING_PLATFORM_NAMES, WORKING_PLATFORM_DOMAINS, WORKING_OP_COUNT, SCRAPER_CATALOG } from "./data/scraper_catalog.js";
-import { renderDescriptionForSurface } from "./_core/description_surface.js";
+import { renderDescriptionForSurface, renderInputSchemaForSurface } from "./_core/description_surface.js";
 import { SearchParamsSchema, ExtractParamsSchema, CrawlParamsSchema, ResearchParamsSchema, MapParamsSchema, SiteCopyParamsSchema, SITE_COPY_HARD_MAX, ProxyParamsSchema, ScrapeParamsSchema, VerifyParamsSchema, BrowserParamsSchema, AiMonitorParamsSchema, validateAiMonitorParams, validateHealthParams, } from "./tools/types.js";
 import { _performRenderProbe, HEALTH_PROBE_DISCLAIMER, formatProbeSection, } from "./tools/health.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
@@ -68,19 +68,19 @@ const NO_DEDICATED_TOOL_WORKING_EXAMPLE = WORKING_PLATFORM_DOMAINS
 export const _TOOL_DEFINITIONS = [
     {
         name: "novada_search",
-        description: `Search the web and return result titles, URLs, and snippets, ranked by relevance. For questions that need passages from several sources, use novada_research instead.
+        description: `Search the web and return result titles, URLs, and snippets, ranked by relevance.
 
 **Use for:** current events, finding URLs, fact-checking, topic research. Set enrich_top=true to also extract the full content of the top result.
 **Not for:** reading a known URL (novada_extract) or gathering passages from several sources in one call (novada_research).
 **Engines:** engine='google' (default), 'duckduckgo', or 'yandex' (Russian and Eastern European content).
-**Domain filtering:** includeDomains/excludeDomains inject \`site:domain\` into the query (not API-side).
-**Project grouping:** \`project="my-project"\` groups outputs under a subfolder (~/Downloads/novada-mcp/<date>/<project>/).`,
+**Domain filtering:** includeDomains/excludeDomains inject \`site:domain\` into the query (not API-side).{{local}}
+**Project grouping:** \`project="my-project"\` groups outputs under a subfolder (~/Downloads/novada-mcp/<date>/<project>/).{{/local}}`,
         inputSchema: zodToMcpSchema(SearchParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },
     {
         name: "novada_extract",
-        description: `Extract content from any URL. Auto-handles Cloudflare/DataDome/Kasada via escalation (static → JS render → Browser CDP). Batch mode: pass url as an array for up to 10 pages in parallel.
+        description: `Extract content from any URL. Uses a plain fetch first and switches to JS rendering or a full browser only when the page needs it. Batch mode: pass url as an array for up to 10 pages in parallel.
 
 **Format selection:**
 - \`format="markdown"\` (default): full-page content for reading/analysis.
@@ -88,12 +88,12 @@ export const _TOOL_DEFINITIONS = [
 - \`format="html"\`: raw HTML (truncated at 100K chars by default; adjust via max_chars).
 - \`clean=true\`: strip nav/sidebar, main content only (~15K chars vs ~100K full page).
 
-**Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) — works on anti-bot pages automatically.
+**Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) — including JavaScript-heavy pages.
 **Not for:** multi-page crawl (novada_crawl){{sibling:novada_map}}, URL discovery (novada_map){{/sibling}}{{sibling:novada_scrape}}, structured platform data like Amazon/LinkedIn (novada_scrape){{/sibling}}.
 **Key rule:** leave render="auto" (default) — it uses a plain fetch when that is enough and escalates to JS rendering only when the page needs it; set render="render" only for known JS-heavy SPAs.
-**Geo-routing:** \`country="de"\` (ISO 2-letter) routes render fetches through that country's exit IP — for localized pricing or geo-restricted content.
+**Geo-routing:** \`country="de"\` (ISO 2-letter) routes render fetches through that country's exit IP — for localized pricing or geo-restricted content.{{local}}
 **Auto-saved:** every extraction is written to \`~/Downloads/novada-mcp/YYYY-MM-DD/\` (path shown in the response).
-**Project grouping:** \`project="my-project"\` groups outputs under a subfolder.`,
+**Project grouping:** \`project="my-project"\` groups outputs under a subfolder.{{/local}}`,
         inputSchema: zodToMcpSchema(ExtractParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -116,8 +116,8 @@ export const _TOOL_DEFINITIONS = [
 
 **Use for:** complex questions needing passages from ≥3 independent sources in one call — comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.
 **Not for:** a single fact or one URL (novada_search), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).
-**Depth:** "quick" (3 queries), "deep" (6), "comprehensive" (8-9), "auto" (default — quick or deep by question length, never comprehensive).
-**Project grouping:** \`project="my-project"\` groups outputs under a subfolder.
+**Depth:** "quick" (3 queries), "deep" (6), "comprehensive" (8-9), "auto" (default — quick or deep by question length, never comprehensive).{{local}}
+**Project grouping:** \`project="my-project"\` groups outputs under a subfolder.{{/local}}
 **Recency:** \`time_range\` ("day"|"week"|"month"|"year"), \`start_date\`/\`end_date\` (ISO YYYY-MM-DD) propagate to every internal search call.
 **Response size:** extracts full content from the top 5 sources only (even at depth="comprehensive"); each source is capped at novada_extract's own default 25,000-char limit — bounded total, not unbounded "every source in full."`,
         inputSchema: zodToMcpSchema(ResearchParamsSchema),
@@ -156,8 +156,8 @@ export const _TOOL_DEFINITIONS = [
 **Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}.
 **Amazon price fields:** trust \`final_price\`/\`price\` (check \`_price_source\`) — \`initial_price\` and \`buybox_prices.final_price\` are often 0 by design, not a bug; \`buybox_prices.unit_price\` is raw per-unit data, never the listing price.
 **Discover platforms:** read the \`novada://scraper-platforms\` resource for the full, always-current operation list (slugs + required params), or see the public reference at https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api.
-**Resume:** pass \`task_id\` from a prior status:processing call to fetch the result without a new billable task (platform/operation still required, display-only).
-**Project grouping:** \`project="my-project"\` groups outputs under a subfolder.`,
+**Resume:** pass \`task_id\` from a prior status:processing call to fetch the result without a new billable task (platform/operation still required, display-only).{{local}}
+**Project grouping:** \`project="my-project"\` groups outputs under a subfolder.{{/local}}`,
         inputSchema: zodToMcpSchema(ScrapeParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -173,7 +173,7 @@ export const _TOOL_DEFINITIONS = [
 
 **Best for:** a specific country/city IP, sticky multi-step sessions, testing geo-restricted content.
 **Not for:** page extraction (novada_extract — proxy is automatic) or web search (novada_search).
-**Returns a masked config:** username shown as \`<PROXY_USER>\`, password as \`***\` — credentials are never printed. Self-host: set NOVADA_PROXY_USER/PASS (or let them auto-fetch from NOVADA_API_KEY) and fill the password from your environment. Hosted: take user/pass from dashboard.novada.com and use the returned host/port/username pattern.
+**Returns a masked config:** username shown as \`<PROXY_USER>\`, password as \`***\` — credentials are never printed. {{local}}Set NOVADA_PROXY_USER/PASS (or let them auto-fetch from NOVADA_API_KEY) and fill the password from your environment.{{/local}}{{hosted}}Take user/pass from dashboard.novada.com and use the returned host/port/username pattern.{{/hosted}}
 
 **\`type\` guide:**
 - \`residential\` — real home ISP IPs; for anti-bot-protected targets, and where to escalate when other types are blocked
@@ -406,8 +406,8 @@ export const _TOOL_DEFINITIONS = [
 **section="balance":** master wallet currency balance.
 **section="usage":** paginated transaction history (start_time/end_time/page/page_size).
 **section="plans":** per-product plan balances (residential/isp/mobile/datacenter/static/capture); filter with products[].
-**section="traffic":** daily proxy traffic consumption; filter with start_time/end_time/products[].
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+**section="traffic":** daily proxy traffic consumption; filter with start_time/end_time/products[].{{local}}
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).{{/local}}`,
         // Round 4 (S1-connector, F1 addendum): the back-compat alias list
         // ("novada_wallet_balance, novada_wallet_usage_record, novada_plan_balance_all,
         // novada_traffic_daily, novada_capture_logs, novada_account_summary,
@@ -430,8 +430,8 @@ export const _TOOL_DEFINITIONS = [
 
 **Best for:** provisioning a team-member or per-project sub-account against your master plan.
 **Params:** product ("1"=Residential, "2"=Rotating ISP, "3"=Rotating Datacenter, "4"=Unlimited, "7"=Unblocker, "9"=Mobile), account (3-64, [a-zA-Z0-9_-]), password (8-64), status ("1" active default | "-3" disabled), remark?, limit_flow? (GB cap), approval_token.
-**Wire format:** multipart/form-data.
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+**Wire format:** multipart/form-data.{{local}}
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).{{/local}}`,
         inputSchema: zodToMcpSchema(ProxyAccountCreateParamsSchema),
         // destructiveHint:true (connector-review fix) — creates a real, billable
         // sub-account against the caller's master plan (an account-mutation action with
@@ -448,8 +448,8 @@ export const _TOOL_DEFINITIONS = [
 
 **Best for:** auditing sub-accounts, finding account names before rotating credentials.
 **Params:** product (REQUIRED — same codes as create), page, limit (max 200), status? ("1"|"-3"), account? (exact-match filter).
-**Wire format:** multipart/form-data.
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+**Wire format:** multipart/form-data.{{local}}
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).{{/local}}`,
         inputSchema: zodToMcpSchema(ProxyAccountListParamsSchema),
         annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -459,8 +459,8 @@ export const _TOOL_DEFINITIONS = [
 
 **Actions:** "add" (WRITE, gated by approval_token), "list" (read-only), "del" (WRITE, gated by approval_token), "remark" (WRITE, gated by approval_token).
 **Behavior for "add"/"del"/"remark":** call once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — this does NOT hit the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
-**Required:** action, product (1=Residential, 4=Unlimited, 5=Static ISP).
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+**Required:** action, product (1=Residential, 4=Unlimited, 5=Static ISP).{{local}}
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).{{/local}}`,
         inputSchema: zodToMcpSchema(IpWhitelistParamsSchema),
         // NOV-578 #5: action:"del" permanently removes whitelist entries → destructiveHint MUST be
         // true so MCP clients surface a confirmation. (add/remark also write; list is read-only, but
@@ -473,8 +473,8 @@ export const _TOOL_DEFINITIONS = [
         description: `Get or reset the Capture API key (wraps POST /v1/capture/get_apikey and /v1/capture/reset_apikey).
 
 **Actions:** "get" = retrieve the current key (read-only). "reset" = regenerate it — DESTRUCTIVE, invalidates the old key, gated by a two-step approval_token.
-**Behavior:** call "reset" once WITHOUT \`approval_token\` to get a warning preview plus a fresh token (valid 10 minutes) — this does NOT call the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+**Behavior:** call "reset" once WITHOUT \`approval_token\` to get a warning preview plus a fresh token (valid 10 minutes) — this does NOT call the API. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.{{local}}
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).{{/local}}`,
         inputSchema: zodToMcpSchema(CaptureApikeyParamsSchema),
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
     },
@@ -489,8 +489,8 @@ export const _TOOL_DEFINITIONS = [
         description: `Manage static ISP IPs (wraps /v1/static_house/* developer-api endpoints).
 
 **Actions:** "open" = purchase new IPs (WRITE, gated by approval_token; local MCP server only — not available on the hosted endpoint). "renew" = renew existing IPs (WRITE, gated by approval_token; local MCP server only — not available on the hosted endpoint). "export"/"list" = read-only, dial credentials masked; available on every runtime. "reveal_credentials" = shows the REAL proxy username/password for the filtered IPs — local MCP server only (not available on the hosted endpoint); only use when the human user explicitly asked for them (e.g. to configure another tool with their own static IPs). With an elicitation-capable MCP client, "reveal_credentials" is a single call confirmed by the human user in a live dialog; otherwise it uses the same preview + approval_token two-step as "open"/"renew".
-**Behavior for "open"/"renew"/"reveal_credentials":** call once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — for "open"/"renew" this does NOT hit the API; for "reveal_credentials" it shows only masked IP/port/region/expiry (no credentials yet), or is skipped entirely when the connected client confirms via an elicitation dialog instead. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.
-**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+**Behavior for "open"/"renew"/"reveal_credentials":** call once WITHOUT \`approval_token\` to get a preview plus a fresh token (valid 10 minutes) — for "open"/"renew" this does NOT hit the API; for "reveal_credentials" it shows only masked IP/port/region/expiry (no credentials yet), or is skipped entirely when the connected client confirms via an elicitation dialog instead. Re-call with the EXACT SAME parameters plus that token to execute. \`confirm: true\` is a deprecated no-op.{{local}}
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).{{/local}}`,
         inputSchema: zodToMcpSchema(StaticIpMgmtParamsSchema),
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
     },
@@ -543,7 +543,9 @@ const _TITLE_BY_NAME = new Map(TOOL_REGISTRY.map((t) => [t.name, t.title]));
  * so a description never recommends a sibling tool the CALLING surface can't
  * actually list/dispatch. The REGISTERED_TOOL_NAMES inclusion filter is NOT
  * parameterized — every surface starts from the same base registry; only
- * sibling-mention rendering differs per surface. One function, two real call
+ * sibling-mention rendering differs per surface; `runtime` selects which
+ * `{{local}}`/`{{hosted}}` spans survive and, on hosted, drops the
+ * HOSTED_INERT_PARAMS from each inputSchema. One function, two real call
  * sites today: `TOOLS` below (npm-package's own surface, rendered against its
  * own REGISTERED_TOOL_NAMES — renders a no-op there, since npm hides nothing)
  * and hosted-server/vercel/api/mcp.ts's own ListTools assembly (rendered
@@ -551,16 +553,17 @@ const _TITLE_BY_NAME = new Map(TOOL_REGISTRY.map((t) => [t.name, t.title]));
  * surface — add/adjust the `{{sibling:}}` markup once in _TOOL_DEFINITIONS
  * above instead.
  */
-export function buildToolsForSurface(availableForSiblingMentions) {
+export function buildToolsForSurface(availableForSiblingMentions, runtime) {
     return _TOOL_DEFINITIONS
         .filter((t) => REGISTERED_TOOL_NAMES.has(t.name))
         .map((t) => ({
         ...t,
-        description: renderDescriptionForSurface(t.description, availableForSiblingMentions),
+        description: renderDescriptionForSurface(t.description, availableForSiblingMentions, runtime),
+        inputSchema: renderInputSchemaForSurface(t.name, t.inputSchema, availableForSiblingMentions, runtime),
         title: _TITLE_BY_NAME.get(t.name) ?? t.name,
     }));
 }
-export const TOOLS = buildToolsForSurface(REGISTERED_TOOL_NAMES);
+export const TOOLS = buildToolsForSurface(REGISTERED_TOOL_NAMES, "local");
 // ─── Hidden Aliases ────────────────────────────────────────────────────────
 // Names dispatched via switch but intentionally absent from TOOLS/ListTools.
 // Includes: backward-compat aliases, deprecated tool names, and the 10 tools

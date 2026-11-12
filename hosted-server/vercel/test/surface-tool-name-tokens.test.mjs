@@ -60,7 +60,7 @@ const HOSTED_HIDDEN = new Set(namesIn(hostedHiddenSlice));
 const HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS = new Set(
   CORE_TOOLS.map((t) => t.name).filter((n) => !HOSTED_HIDDEN.has(n)),
 );
-const CORE_TOOLS_FOR_HOSTED = buildToolsForSurface(HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS);
+const CORE_TOOLS_FOR_HOSTED = buildToolsForSurface(HOSTED_AVAILABLE_FOR_SIBLING_MENTIONS, "hosted");
 // listedOnHosted mirrors mcp.ts's own `const listedOnHosted = ...TOOLS.filter((t) =>
 // !HOSTED_HIDDEN.has(t.name))...` — the set an examiner's ListTools call would
 // actually see (CORE_TOOLS_FOR_HOSTED still includes every tool buildToolsForSurface

@@ -12,11 +12,11 @@
   "tools": [
     {
       "name": "novada_search",
-      "description": "Search the web and return result titles, URLs, and snippets, ranked by relevance. For questions that need passages from several sources, use novada_research instead."
+      "description": "Search the web and return result titles, URLs, and snippets, ranked by relevance."
     },
     {
       "name": "novada_extract",
-      "description": "Extract content from any URL. Auto-handles Cloudflare/DataDome/Kasada via escalation (static → JS render → Browser CDP)."
+      "description": "Extract content from any URL. Uses a plain fetch first and switches to JS rendering or a full browser only when the page needs it."
     },
     {
       "name": "novada_crawl",
