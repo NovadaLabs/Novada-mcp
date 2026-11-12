@@ -48,6 +48,7 @@ const RUNTIME_SPAN_RE = /\{\{(local|hosted)\}\}([\s\S]*?)\{\{\/\1\}\}/g;
  * rejected) — they are only left out of the listed inputSchema.
  */
 export const HOSTED_INERT_PARAMS: ReadonlyArray<{ param: string; tools: "*" | readonly string[]; reason: string }> = [
+  // project is also part of novada_search's cache key; that changes caching only, never the returned content.
   { param: "project", tools: "*", reason: "groups saved output files into a subfolder; hosted never writes output files" },
   { param: "verify", tools: ["novada_proxy"], reason: "the live IP-echo check runs on local/stdio only; hosted skips it" },
 ];
