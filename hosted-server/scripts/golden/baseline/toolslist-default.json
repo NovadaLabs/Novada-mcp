@@ -6,7 +6,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements via the `section` param.\n\n**Best for:** \"what's my account status / balance\" one-shot checks.\n**section=\"summary\" (default):** wallet balance + plan quotas + recent capture logs + product entitlements.\n**section=\"balance\":** master wallet currency balance.\n**section=\"usage\":** paginated transaction history (start_time/end_time/page/page_size).\n**section=\"plans\":** per-product plan balances (residential/isp/mobile/datacenter/static/capture); filter with products[].\n**section=\"traffic\":** daily proxy traffic consumption; filter with start_time/end_time/products[].\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).",
+    "description": "Single-call account & billing dashboard. Composes wallet balance, plan balances, capture logs, and health entitlements via the `section` param.\n\n**Best for:** \"what's my account status / balance\" one-shot checks.\n**section=\"summary\" (default):** wallet balance + plan quotas + recent capture logs + product entitlements.\n**section=\"balance\":** master wallet currency balance.\n**section=\"usage\":** paginated transaction history (start_time/end_time/page/page_size).\n**section=\"plans\":** per-product plan balances (residential/isp/mobile/datacenter/static/capture); filter with products[].\n**section=\"traffic\":** daily proxy traffic consumption; filter with start_time/end_time/products[].",
     "inputSchema": {
       "properties": {
         "end_time": {
@@ -78,7 +78,7 @@
     "inputSchema": {
       "properties": {
         "brand": {
-          "description": "Brand or product name to search for on AI-company public web domains. E.g. 'novada', 'firecrawl', 'stripe'.",
+          "description": "Brand or product name to search for on AI-company public web domains. E.g. 'novada', 'acme', 'stripe'.",
           "maxLength": 200,
           "minLength": 1,
           "type": "string"
@@ -234,7 +234,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Extract content from any URL. Auto-handles Cloudflare/DataDome/Kasada via escalation (static \u2192 JS render \u2192 Browser CDP). Batch mode: pass url as an array for up to 10 pages in parallel.\n\n**Format selection:**\n- `format=\"markdown\"` (default): full-page content for reading/analysis.\n- `format=\"json\"`: structured object (url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at). Use with `fields=[\"price\",\"title\"]` to populate `fields`. Common mistake: using markdown when you need specific fields \u2014 use format=\"json\"+fields instead.\n- `format=\"html\"`: raw HTML (truncated at 100K chars by default; adjust via max_chars).\n- `clean=true`: strip nav/sidebar, main content only (~15K chars vs ~100K full page).\n\n**Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) \u2014 works on anti-bot pages automatically.\n**Not for:** multi-page crawl (novada_crawl), URL discovery (novada_map), structured platform data like Amazon/LinkedIn (novada_scrape).\n**Key rule:** leave render=\"auto\" (default) \u2014 it uses a plain fetch when that is enough and escalates to JS rendering only when the page needs it; set render=\"render\" only for known JS-heavy SPAs.\n**Geo-routing:** `country=\"de\"` (ISO 2-letter) routes render fetches through that country's exit IP \u2014 for localized pricing or geo-restricted content.\n**Auto-saved:** every extraction is written to `~/Downloads/novada-mcp/YYYY-MM-DD/` (path shown in the response).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
+    "description": "Extract content from any URL. Uses a plain fetch first and switches to JS rendering or a full browser only when the page needs it. Batch mode: pass url as an array for up to 10 pages in parallel.\n\n**Format selection:**\n- `format=\"markdown\"` (default): full-page content for reading/analysis.\n- `format=\"json\"`: structured object (url, title, content, quality, links, structured_data, fields, hints, mode, fetched_at). Use with `fields=[\"price\",\"title\"]` to populate `fields`. Common mistake: using markdown when you need specific fields \u2014 use format=\"json\"+fields instead.\n- `format=\"html\"`: raw HTML (truncated at 100K chars by default; adjust via max_chars).\n- `clean=true`: strip nav/sidebar, main content only (~15K chars vs ~100K full page).\n\n**Use for:** reading pages, batch-extracting search results, structured fields (price, author, date) \u2014 including JavaScript-heavy pages.\n**Not for:** multi-page crawl (novada_crawl), URL discovery (novada_map), structured platform data like Amazon/LinkedIn (novada_scrape).\n**Key rule:** leave render=\"auto\" (default) \u2014 it uses a plain fetch when that is enough and escalates to JS rendering only when the page needs it; set render=\"render\" only for known JS-heavy SPAs.\n**Geo-routing:** `country=\"de\"` (ISO 2-letter) routes render fetches through that country's exit IP \u2014 for localized pricing or geo-restricted content.",
     "inputSchema": {
       "properties": {
         "clean": {
@@ -273,18 +273,13 @@
           "minimum": 1000,
           "type": "integer"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only \u2014 no effect on hosted.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "query": {
           "description": "Optional query for relevance context. Helps the calling agent focus on relevant sections.",
           "type": "string"
         },
         "render": {
           "default": "auto",
-          "description": "Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force Browser API CDP (requires NOVADA_BROWSER_WS).",
+          "description": "Rendering mode. 'auto' (default): tries static first, escalates if JS-heavy. 'static': static HTML only. 'js' (or 'render'): force JS rendering via Web Unblocker. 'browser': force full-browser rendering (Browser API).",
           "enum": [
             "auto",
             "static",
@@ -430,7 +425,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Route your own HTTP requests through residential or mobile IPs \u2014 geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag (format=url|env|curl).\n\n**Best for:** a specific country/city IP, sticky multi-step sessions, testing geo-restricted content.\n**Not for:** page extraction (novada_extract \u2014 proxy is automatic) or web search (novada_search).\n**Returns a masked config:** username shown as `<PROXY_USER>`, password as `***` \u2014 credentials are never printed. Self-host: set NOVADA_PROXY_USER/PASS (or let them auto-fetch from NOVADA_API_KEY) and fill the password from your environment. Hosted: take user/pass from dashboard.novada.com and use the returned host/port/username pattern.\n\n**`type` guide:**\n- `residential` \u2014 real home ISP IPs; for anti-bot-protected targets, and where to escalate when other types are blocked\n- `isp` \u2014 looks like a home user; suited to social/ecommerce; ignores country param\n- `datacenter` \u2014 datacenter IPs; for high-volume work on targets without anti-bot protection\n- `mobile` \u2014 4G/5G device IPs; mobile-targeted content and app APIs\n- `static` \u2014 same dedicated ISP IP every request; set session_id + country explicitly for account-management workflows \u2014 omitting either silently falls back to a SHARED \"default\"/\"us\" identity, not an error\n- `dedicated` \u2014 exclusive datacenter IP; set session_id explicitly for high-trust platforms \u2014 omitting it silently falls back to a SHARED \"default\" identity, not an error\n\n**Escalation when blocked:** datacenter \u2192 isp \u2192 residential.",
+    "description": "Route your own HTTP requests through residential or mobile IPs \u2014 geo-targeting, IP rotation, bypassing IP-based rate limits. Returns a proxy URL, shell exports, or a curl --proxy flag (format=url|env|curl).\n\n**Best for:** a specific country/city IP, sticky multi-step sessions, testing geo-restricted content.\n**Not for:** page extraction (novada_extract \u2014 proxy is automatic) or web search (novada_search).\n**Returns a masked config:** username shown as `<PROXY_USER>`, password as `***` \u2014 credentials are never printed. Take user/pass from dashboard.novada.com and use the returned host/port/username pattern.\n\n**`type` guide:**\n- `residential` \u2014 real home ISP IPs; for anti-bot-protected targets, and where to escalate when other types are blocked\n- `isp` \u2014 looks like a home user; suited to social/ecommerce; ignores country param\n- `datacenter` \u2014 datacenter IPs; for high-volume work on targets without anti-bot protection\n- `mobile` \u2014 4G/5G device IPs; mobile-targeted content and app APIs\n- `static` \u2014 same dedicated ISP IP every request; set session_id + country explicitly for account-management workflows \u2014 omitting either silently falls back to a SHARED \"default\"/\"us\" identity, not an error\n- `dedicated` \u2014 exclusive datacenter IP; set session_id explicitly for high-trust platforms \u2014 omitting it silently falls back to a SHARED \"default\" identity, not an error\n\n**Escalation when blocked:** datacenter \u2192 isp \u2192 residential.",
     "inputSchema": {
       "properties": {
         "city": {
@@ -472,10 +467,6 @@
             "dedicated"
           ],
           "type": "string"
-        },
-        "verify": {
-          "description": "Verify the issued config with ONE live IP-echo request routed through the proxy (default true). Appends evidence \u2014 exit IP, org/ASN, country, latency \u2014 to the response; failures are classified (402 payment / 407 auth / timeout) WITHOUT withholding the config. Costs ~1 KB of metered proxy traffic and ~1s of latency per call \u2014 set false to skip. Local/stdio runtimes only; skipped automatically (and disclosed) on hosted runtimes.",
-          "type": "boolean"
         }
       },
       "required": [],
@@ -490,7 +481,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "\u26a0\ufe0f WRITE \u2014 Create a proxy sub-account. Two-step approval-token gate.\n\n**Behavior:** call once WITHOUT `approval_token` to get a `confirmation_required` JSON preview (password masked) plus a fresh `approval_token` valid for 10 minutes \u2014 this does NOT hit the API. Show the preview to the human, then re-call with the EXACT SAME parameters plus that `approval_token` after explicit approval. `confirm: true` is a deprecated no-op and does NOT substitute for the token.\n\n**Best for:** provisioning a team-member or per-project sub-account against your master plan.\n**Params:** product (\"1\"=Residential, \"2\"=Rotating ISP, \"3\"=Rotating Datacenter, \"4\"=Unlimited, \"7\"=Unblocker, \"9\"=Mobile), account (3-64, [a-zA-Z0-9_-]), password (8-64), status (\"1\" active default | \"-3\" disabled), remark?, limit_flow? (GB cap), approval_token.\n**Wire format:** multipart/form-data.\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).",
+    "description": "\u26a0\ufe0f WRITE \u2014 Create a proxy sub-account. Two-step approval-token gate.\n\n**Behavior:** call once WITHOUT `approval_token` to get a `confirmation_required` JSON preview (password masked) plus a fresh `approval_token` valid for 10 minutes \u2014 this does NOT hit the API. Show the preview to the human, then re-call with the EXACT SAME parameters plus that `approval_token` after explicit approval. `confirm: true` is a deprecated no-op and does NOT substitute for the token.\n\n**Best for:** provisioning a team-member or per-project sub-account against your master plan.\n**Params:** product (\"1\"=Residential, \"2\"=Rotating ISP, \"3\"=Rotating Datacenter, \"4\"=Unlimited, \"7\"=Unblocker, \"9\"=Mobile), account (3-64, [a-zA-Z0-9_-]), password (8-64), status (\"1\" active default | \"-3\" disabled), remark?, limit_flow? (GB cap), approval_token.\n**Wire format:** multipart/form-data.",
     "inputSchema": {
       "properties": {
         "account": {
@@ -563,7 +554,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "List proxy sub-accounts (wraps developer-api POST /v1/proxy_account/list).\n\n**Best for:** auditing sub-accounts, finding account names before rotating credentials.\n**Params:** product (REQUIRED \u2014 same codes as create), page, limit (max 200), status? (\"1\"|\"-3\"), account? (exact-match filter).\n**Wire format:** multipart/form-data.\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).",
+    "description": "List proxy sub-accounts (wraps developer-api POST /v1/proxy_account/list).\n\n**Best for:** auditing sub-accounts, finding account names before rotating credentials.\n**Params:** product (REQUIRED \u2014 same codes as create), page, limit (max 200), status? (\"1\"|\"-3\"), account? (exact-match filter).\n**Wire format:** multipart/form-data.",
     "inputSchema": {
       "properties": {
         "account": {
@@ -619,7 +610,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "One call \u2192 3-10 parallel searches across Google/Bing/DuckDuckGo \u2192 dedup \u2192 extracts full content from top sources \u2192 returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative \u2014 you compose the final answer from the gathered passages.\n\n**Use for:** complex questions needing passages from \u22653 independent sources in one call \u2014 comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** a single fact or one URL (novada_search), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default \u2014 quick or deep by question length, never comprehensive).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.\n**Recency:** `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`/`end_date` (ISO YYYY-MM-DD) propagate to every internal search call.\n**Response size:** extracts full content from the top 5 sources only (even at depth=\"comprehensive\"); each source is capped at novada_extract's own default 25,000-char limit \u2014 bounded total, not unbounded \"every source in full.\"",
+    "description": "One call \u2192 3-10 parallel searches across Google/Bing/DuckDuckGo \u2192 dedup \u2192 extracts full content from top sources \u2192 returns CITED SOURCE MATERIAL (numbered passages), not a written answer. Extractive, not generative \u2014 you compose the final answer from the gathered passages.\n\n**Use for:** complex questions needing passages from \u22653 independent sources in one call \u2014 comparative analysis, market research, technical deep dives, competitive intelligence. Replaces 5-10 manual search+extract calls.\n**Not for:** a single fact or one URL (novada_search), a known URL (novada_extract), or a finished prose report (this returns source material, not an answer).\n**Depth:** \"quick\" (3 queries), \"deep\" (6), \"comprehensive\" (8-9), \"auto\" (default \u2014 quick or deep by question length, never comprehensive).\n**Recency:** `time_range` (\"day\"|\"week\"|\"month\"|\"year\"), `start_date`/`end_date` (ISO YYYY-MM-DD) propagate to every internal search call.\n**Response size:** extracts full content from the top 5 sources only (even at depth=\"comprehensive\"); each source is capped at novada_extract's own default 25,000-char limit \u2014 bounded total, not unbounded \"every source in full.\"",
     "inputSchema": {
       "properties": {
         "depth": {
@@ -639,11 +630,6 @@
         },
         "focus": {
           "description": "Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'.",
-          "type": "string"
-        },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only \u2014 no effect on hosted.",
-          "maxLength": 30,
           "type": "string"
         },
         "query": {
@@ -682,12 +668,12 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Use for structured data from a specific platform \u2014 clean tabular records, not raw HTML. Proxies the Novada Scraper API (scraper.novada.com; public docs: https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api). Supports 14 platforms (~76 operations): Google, LinkedIn, Amazon, YouTube, Walmart, DuckDuckGo, TikTok, Bing, Instagram, X (Twitter), Facebook, Perplexity AI, Yandex, GitHub.\n\n**Best for:** e-commerce product data, social posts/comments, job listings, reviews, real estate, market data.\n**Not for:** general web pages outside this platform list \u2014 use novada_extract instead.\n**Prefer the dedicated tool when one exists:** for amazon/google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/walmart/linkedin/github/perplexity, call novada_scrape_<platform> instead \u2014 same engine, but its `operation` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling or when resuming by task_id.\n**Output formats:** markdown (default table), json (records array inside a fenced \"## Scrape Results\" block), toon (pipe-separated, 40-65% smaller \u2014 best for large result sets), csv, excel (base64), html.\n**Example:** platform=\"amazon.com\", operation=\"amazon_product_keywords\", params={keyword:\"iphone 16\", num:5}.\n**Amazon price fields:** trust `final_price`/`price` (check `_price_source`) \u2014 `initial_price` and `buybox_prices.final_price` are often 0 by design, not a bug; `buybox_prices.unit_price` is raw per-unit data, never the listing price.\n**Discover platforms:** read the `novada://scraper-platforms` resource for the full, always-current operation list (slugs + required params), or see the public reference at https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api.\n**Resume:** pass `task_id` from a prior status:processing call to fetch the result without a new billable task (platform/operation still required, display-only).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder.",
+    "description": "Use for structured data from a specific platform \u2014 clean tabular records, not raw HTML. Proxies the Novada Scraper API (scraper.novada.com; public docs: https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api). Supports 14 platforms (~76 operations): Google, LinkedIn, Amazon, YouTube, Walmart, DuckDuckGo, TikTok, Bing, Instagram, X (Twitter), Facebook, Perplexity AI, Yandex, GitHub.\n\n**Best for:** e-commerce product data, social posts/comments, job listings, reviews, real estate, market data.\n**Not for:** general web pages outside this platform list \u2014 use novada_extract instead.\n**Prefer the dedicated tool when one exists:** for amazon/google/bing/duckduckgo/yandex/youtube/instagram/facebook/tiktok/x/walmart/linkedin/github/perplexity, call novada_scrape_<platform> instead \u2014 same engine, but its `operation` enum uses typed friendly names and is rejected client-side before any network call if wrong. Use THIS generic tool for platforms with no dedicated sibling or when resuming by task_id.\n**Output formats:** markdown (default table), json (records array inside a fenced \"## Scrape Results\" block), toon (pipe-separated, 40-65% smaller \u2014 best for large result sets), csv, excel (base64), html.\n**Example:** platform=\"amazon.com\", operation=\"amazon_product_keywords\", params={keyword:\"iphone 16\", num:5}.\n**Amazon price fields:** trust `final_price`/`price` (check `_price_source`) \u2014 `initial_price` and `buybox_prices.final_price` are often 0 by design, not a bug; `buybox_prices.unit_price` is raw per-unit data, never the listing price.\n**Discover platforms:** read the `novada://scraper-platforms` resource for the full, always-current operation list (slugs + required params), or see the public reference at https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api.\n**Resume:** pass `task_id` from a prior status:processing call to fetch the result without a new billable task (platform/operation still required, display-only).",
     "inputSchema": {
       "properties": {
         "format": {
           "default": "markdown",
-          "description": "'markdown' (default): structured table. 'json': records array with key fields surfaced \u2014 returned inside a \"## Scrape Results\" wrapper as a fenced json block, NOT a bare object. 'csv': inline CSV, header + one row/record. 'excel': real .xlsx as inline base64 \u2014 decode or use the download hint. 'html': inline HTML <table>. 'toon': token-optimized pipe-separated (40-65% smaller than json/markdown).",
+          "description": "'markdown' (default): structured table. 'json': records array with key fields surfaced \u2014 returned inside a \"## Scrape Results\" wrapper as a fenced json block, NOT a bare object. 'csv': inline CSV, header + one row/record. 'excel': real.xlsx as inline base64 \u2014 decode or use the download hint. 'html': inline HTML <table>. 'toon': token-optimized pipe-separated (40-65% smaller than json/markdown).",
           "enum": [
             "json",
             "csv",
@@ -726,11 +712,6 @@
           "maxLength": 100,
           "minLength": 1,
           "pattern": "^[a-zA-Z0-9._\\-]+$",
-          "type": "string"
-        },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only \u2014 no effect on hosted.",
-          "maxLength": 30,
           "type": "string"
         },
         "task_id": {
@@ -802,11 +783,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -869,11 +845,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -932,11 +903,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
         },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
@@ -1002,11 +968,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -1067,11 +1028,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
         },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
@@ -1144,11 +1100,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -1214,11 +1165,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -1281,11 +1227,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -1345,11 +1286,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
         },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
@@ -1414,11 +1350,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -1482,11 +1413,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -1548,11 +1474,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -1611,11 +1532,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
         },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
@@ -1687,11 +1603,6 @@
           },
           "type": "object"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'product-research'.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "task_id": {
           "description": "Resume a previous slow task instead of submitting a new billable one.",
           "pattern": "^[a-zA-Z0-9_\\-\\.]{1,128}$",
@@ -1712,7 +1623,7 @@
       "openWorldHint": true,
       "readOnlyHint": true
     },
-    "description": "Search the web and return result titles, URLs, and snippets, ranked by relevance. For questions that need passages from several sources, use novada_research instead.\n\n**Use for:** current events, finding URLs, fact-checking, topic research. Set enrich_top=true to also extract the full content of the top result.\n**Not for:** reading a known URL (novada_extract) or gathering passages from several sources in one call (novada_research).\n**Engines:** engine='google' (default), 'duckduckgo', or 'yandex' (Russian and Eastern European content).\n**Domain filtering:** includeDomains/excludeDomains inject `site:domain` into the query (not API-side).\n**Project grouping:** `project=\"my-project\"` groups outputs under a subfolder (~/Downloads/novada-mcp/<date>/<project>/).",
+    "description": "Search the web and return result titles, URLs, and snippets, ranked by relevance.\n\n**Use for:** current events, finding URLs, fact-checking, topic research. Set enrich_top=true to also extract the full content of the top result.\n**Not for:** reading a known URL (novada_extract) or gathering passages from several sources in one call (novada_research).\n**Engines:** engine='google' (default), 'duckduckgo', or 'yandex' (Russian and Eastern European content).\n**Domain filtering:** includeDomains/excludeDomains inject `site:domain` into the query (not API-side).",
     "inputSchema": {
       "properties": {
         "country": {
@@ -1725,7 +1636,7 @@
         },
         "engine": {
           "default": "google",
-          "description": "Search engine to use. 'google' (default, recommended for general queries). 'duckduckgo': privacy-focused; responses take noticeably longer. 'yandex': Russian/Eastern European content.",
+          "description": "Search engine to use: 'google' (default), 'duckduckgo', or 'yandex' (Russian and Eastern European content).",
           "enum": [
             "google",
             "duckduckgo",
@@ -1738,14 +1649,14 @@
           "type": "boolean"
         },
         "exclude_domains": {
-          "description": "Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10.",
+          "description": "Exclude results from these domains. E.g. ['example.com', 'example.org']. Max 10.",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "exclude_social": {
-          "description": "When true, hard-drop social and press-release results (facebook, linkedin, x/twitter, instagram, tiktok, reddit, quora, medium, prnewswire, businesswire, globenewswire, prweb, einpresswire) from the response after fetching.",
+          "description": "When true, remove social-media, forum, and press-release sites from the results.",
           "type": "boolean"
         },
         "extract_options": {
@@ -1814,17 +1725,12 @@
           "minimum": 1,
           "type": "integer"
         },
-        "project": {
-          "description": "Group outputs in a subfolder, e.g. 'france-vs-norway'. Local stdio only \u2014 no effect on hosted.",
-          "maxLength": 30,
-          "type": "string"
-        },
         "query": {
           "minLength": 1,
           "type": "string"
         },
         "source_type": {
-          "description": "Bias result authority. 'research'/'official': exclude social+PR domains, boost authoritative sources (*.gov, *.edu, arxiv.org, reuters.com, wikipedia.org). 'social': keep social results (no down-rank). 'news'/'any'/omitted: mild default reranking. Combines with automatic query-intent detection.",
+          "description": "Bias result authority. 'research'/'official': rank government, academic, and reference sources higher and leave out social-media and press-release sites. 'social': keep social-media results at normal rank. 'news'/'any'/omitted: default ranking. Combines with automatic query-intent detection.",
           "enum": [
             "any",
             "news",
@@ -1877,7 +1783,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Manage static ISP IPs (wraps /v1/static_house/* developer-api endpoints).\n\n**Actions:** \"open\" = purchase new IPs (WRITE, gated by approval_token; local MCP server only \u2014 not available on the hosted endpoint). \"renew\" = renew existing IPs (WRITE, gated by approval_token; local MCP server only \u2014 not available on the hosted endpoint). \"export\"/\"list\" = read-only, dial credentials masked; available on every runtime. \"reveal_credentials\" = shows the REAL proxy username/password for the filtered IPs \u2014 local MCP server only (not available on the hosted endpoint); only use when the human user explicitly asked for them (e.g. to configure another tool with their own static IPs). With an elicitation-capable MCP client, \"reveal_credentials\" is a single call confirmed by the human user in a live dialog; otherwise it uses the same preview + approval_token two-step as \"open\"/\"renew\".\n**Behavior for \"open\"/\"renew\"/\"reveal_credentials\":** call once WITHOUT `approval_token` to get a preview plus a fresh token (valid 10 minutes) \u2014 for \"open\"/\"renew\" this does NOT hit the API; for \"reveal_credentials\" it shows only masked IP/port/region/expiry (no credentials yet), or is skipped entirely when the connected client confirms via an elicitation dialog instead. Re-call with the EXACT SAME parameters plus that token to execute. `confirm: true` is a deprecated no-op.\n**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).",
+    "description": "Manage static ISP IPs (wraps /v1/static_house/* developer-api endpoints).\n\n**Actions:** \"open\" = purchase new IPs (WRITE, gated by approval_token; local MCP server only \u2014 not available on the hosted endpoint). \"renew\" = renew existing IPs (WRITE, gated by approval_token; local MCP server only \u2014 not available on the hosted endpoint). \"export\"/\"list\" = read-only, dial credentials masked; available on every runtime. \"reveal_credentials\" = shows the REAL proxy username/password for the filtered IPs \u2014 local MCP server only (not available on the hosted endpoint); only use when the human user explicitly asked for them (e.g. to configure another tool with their own static IPs). With an elicitation-capable MCP client, \"reveal_credentials\" is a single call confirmed by the human user in a live dialog; otherwise it uses the same preview + approval_token two-step as \"open\"/\"renew\".\n**Behavior for \"open\"/\"renew\"/\"reveal_credentials\":** call once WITHOUT `approval_token` to get a preview plus a fresh token (valid 10 minutes) \u2014 for \"open\"/\"renew\" this does NOT hit the API; for \"reveal_credentials\" it shows only masked IP/port/region/expiry (no credentials yet), or is skipped entirely when the connected client confirms via an elicitation dialog instead. Re-call with the EXACT SAME parameters plus that token to execute. `confirm: true` is a deprecated no-op.",
     "inputSchema": {
       "properties": {
         "action": {
