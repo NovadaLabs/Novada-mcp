@@ -27,6 +27,18 @@ export declare const _TOOL_DEFINITIONS: Array<{
     annotations: Record<string, boolean>;
 }>;
 /**
+ * Coerce `args` for tool `name` against that tool's own advertised
+ * inputSchema (see `_INPUT_SCHEMA_BY_NAME` above). Used by `dispatch()`
+ * below AND by the handful of call sites (stdio index.ts, hosted mcp.ts)
+ * that validate a tool's params OUTSIDE dispatch() — novada_setup,
+ * novada_session_stats, novada_search_feedback (auth-free, pre-key-gate on
+ * stdio) and novada_discover (hosted's own early-return) — so every real
+ * parse site in either transport runs the SAME coercion exactly once per
+ * request. A tool name absent from the map (see doc above) passes `args`
+ * through unchanged.
+ */
+export declare function coerceToolArgs(name: string, args: Record<string, unknown> | undefined): Record<string, unknown> | undefined;
+/**
  * Round 4 (S1-connector, F1 — CLASS fix): builds the ListTools-shaped array for
  * ANY serving surface, given that surface's OWN real tool-name set
  * (`availableForSiblingMentions`) — used to resolve every description's

@@ -180,6 +180,7 @@ import {
   TOOLS as CORE_TOOLS,
   buildToolsForSurface,
   dispatch,
+  coerceToolArgs,
 } from "../vendor/novada-mcp/core.js";
 // Platform-scraper family metadata (name + source platform domain) — same aggregator
 // npm-package's own src/index.ts imports for its NOVADA_GROUPS "scrape"/"scraper"
@@ -1495,7 +1496,12 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    const argsObj = (args as Record<string, unknown>) ?? {};
+    // Coerce form-playground stringified numbers/booleans ("num":"3") against
+    // this tool's OWN advertised schema — ONCE, here, before any of this
+    // handler's several parse sites (the novada_discover / novada_setup
+    // early-returns below and the main dispatch() call) sees `argsObj`. See
+    // vendored core.ts's coerceToolArgs doc.
+    const argsObj = coerceToolArgs(name, (args as Record<string, unknown>) ?? {}) ?? {};
     const started = Date.now();
 
     // Telemetry helper — CAPTURE (mcp_events insert) is now AWAITED before the
