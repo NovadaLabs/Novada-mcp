@@ -8,6 +8,15 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.48] — 2026-11-12
+
+Accept numeric and boolean values sent as strings, for form-based tool playgrounds such as Arcade.
+
+### Fixed
+- Accept numeric and boolean values sent as strings (form-based playgrounds such as Arcade). `num: "3"` or `verify: "true"` no longer fail with "expected number/boolean, received string" — every number/integer/boolean parameter on every tool (including nested fields, e.g. `novada_search`'s `extract_options.top_n` and `novada_browser`'s `actions[].ms`) is now coerced from a stringified value, driven by the tool's own advertised schema, on stdio and on the hosted endpoint (default and OpenAI surfaces). Advertised `inputSchema`s are unchanged; a decimal string on an integer field, an out-of-range value, or a non-`"true"`/`"false"` string on a boolean field is still rejected with the same error a real mistyped value gets. An empty string on an optional field is now treated as omitted.
+
+---
+
 ## [0.9.47] — 2026-11-12
 
 OpenAI plugin review, round 2. The hosted endpoint no longer describes local-only behavior (saving output files, environment variables), descriptions drop wording about getting past site protections and named third-party sites, and the OpenAI surface narrows to 15 tools.

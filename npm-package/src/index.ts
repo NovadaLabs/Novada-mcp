@@ -60,7 +60,7 @@ import type { ProgressReporter } from "./tools/crawl.js";
 import type { ElicitConfirmFn } from "./tools/static_ip_mgmt.js";
 import { classifyError, redactSecrets } from "./_core/errors.js";
 import { ZodError } from "zod";
-import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError, DEDICATED_PLATFORM_SLUGS } from "./core.js";
+import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError, DEDICATED_PLATFORM_SLUGS, coerceToolArgs } from "./core.js";
 // Round 4b (S1-connector, F-review "Round-4 review" FIX-FIRST, 2026-10-13): the
 // --help CLI banner below used to hand-type the platform/op/dedicated-scraper
 // counts and name SHEIN + ChatGPT as supported examples — stale since Round 3's
@@ -318,7 +318,8 @@ class NovadaMCPServer {
     });
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-      const { name, arguments: args } = request.params;
+      const { name } = request.params;
+      let args = request.params.arguments as Record<string, unknown> | undefined;
 
       // F13 (2026-09-10 audit): resolve the tool NAME before EVERYTHING else —
       // param validation, the API-key gate, the active-set filter. A name this
@@ -335,6 +336,14 @@ class NovadaMCPServer {
           isError: true,
         };
       }
+
+      // Coerce form-playground stringified numbers/booleans ("num":"3")
+      // against this tool's OWN advertised schema — ONCE, here, before any
+      // of this handler's several parse sites (the novada_setup /
+      // novada_session_stats / novada_search_feedback auth-free bypass
+      // below, PRE_KEY_VALIDATORS's pre-key-gate pass, and the final
+      // dispatch() call) sees `args`. See core.ts's coerceToolArgs doc.
+      args = coerceToolArgs(name, args);
 
       // F-2: derive an "unknown parameter(s) ignored" warning from the tool's
       // OWN declared inputSchema (utils/validate.ts — class-driven, no
