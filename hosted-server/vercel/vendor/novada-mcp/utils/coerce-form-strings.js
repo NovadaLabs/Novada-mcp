@@ -76,6 +76,19 @@
  * and a candidate string longer than MAX_COERCIBLE_STRING_LENGTH is left
  * untouched (Zod's own type check rejects it exactly as before — never
  * worse than pre-fix behaviour, simply not coerced).
+ *
+ * The walk itself is bounded independent of Zod's own limits (`.max(20)` on
+ * `novada_browser_flow`'s `actions`, etc.), which only apply AFTER this
+ * helper has already allocated and copied the whole structure — an
+ * attacker-sized payload (nesting depth or element/key count) would
+ * otherwise pay that cost before being rejected. Two independent caps:
+ * `MAX_WALK_DEPTH` (nesting depth) and `MAX_VISITED_NODES` (total
+ * object/array/leaf values visited across the whole call, shared via one
+ * counter so a wide-but-shallow structure is bounded exactly like a
+ * narrow-but-deep one). Once either cap is hit, the walker stops coercing
+ * and returns the remaining input UNCHANGED from that point on — never
+ * throws — so Zod (or the schema's own `.max()`) rejects/accepts the
+ * oversized/too-deep input exactly as it would with this helper absent.
  */
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 /** Bound on the string length we even attempt to regex-match/parse as a
@@ -83,6 +96,17 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
  *  attacker-supplied megabyte-long "number-ish" string. No legitimate
  *  numeric or boolean form field is anywhere near this long. */
 const MAX_COERCIBLE_STRING_LENGTH = 32;
+/** Nesting-depth cap (object-in-object, array-in-object, discriminated-union
+ *  branch, …). No real tool schema nests anywhere close to this. */
+export const MAX_WALK_DEPTH = 32;
+/** Cap on the total number of object/array/leaf values visited across one
+ *  top-level `coerceFormStrings` call — bounds a wide (many keys/elements)
+ *  structure the same way `MAX_WALK_DEPTH` bounds a deep one. No real tool
+ *  call is anywhere close to this either. */
+export const MAX_VISITED_NODES = 10_000;
+function budgetExhausted(depth, budget) {
+    return depth > MAX_WALK_DEPTH || budget.visited > MAX_VISITED_NODES;
+}
 const INTEGER_STRING_RE = /^-?\d+$/;
 const NUMBER_STRING_RE = /^-?\d+(?:\.\d+)?$/;
 function asNode(v) {
@@ -201,7 +225,7 @@ function effectiveRequired(schema, props) {
     }
     return out;
 }
-function coerceObject(value, schema) {
+function coerceObject(value, schema, depth, budget) {
     const props = asNode(schema.properties) ?? {};
     const required = effectiveRequired(schema, props);
     const out = {};
@@ -209,6 +233,16 @@ function coerceObject(value, schema) {
         if (DANGEROUS_KEYS.has(key))
             continue;
         const raw = value[key];
+        // Cap hit mid-object: stop coercing from here on, but keep copying the
+        // remaining keys through UNCHANGED (never throw, never drop data Zod
+        // would otherwise see) — Zod's own validation (or its `.max()`/`.min()`
+        // on this very object) then runs exactly as it would with this helper
+        // disabled for the rest of the structure.
+        budget.visited++;
+        if (budgetExhausted(depth, budget)) {
+            out[key] = raw;
+            continue;
+        }
         const propSchema = asNode(props[key]);
         if (!propSchema) {
             out[key] = raw; // not a declared property — not ours to judge; Zod strips/accepts as before
@@ -218,11 +252,13 @@ function coerceObject(value, schema) {
         if (kind && typeof raw === "string" && raw.trim().length === 0 && !required.has(key)) {
             continue; // "" on an optional numeric/boolean field — treat as omitted
         }
-        out[key] = coerceValue(raw, propSchema, kind);
+        out[key] = coerceValue(raw, propSchema, kind, depth + 1, budget);
     }
     return out;
 }
-function coerceValue(value, schema, precomputedKind) {
+function coerceValue(value, schema, precomputedKind, depth, budget) {
+    if (budgetExhausted(depth, budget))
+        return value;
     const kind = precomputedKind !== undefined ? precomputedKind : coercionKind(schema);
     if (kind && typeof value === "string") {
         return coerceLeafString(value, kind);
@@ -231,18 +267,29 @@ function coerceValue(value, schema, precomputedKind) {
         return value;
     if (Array.isArray(value)) {
         const items = asNode(schema.items);
-        return items ? value.map((el) => coerceValue(el, items)) : value;
+        if (!items)
+            return value;
+        const out = [];
+        for (const el of value) {
+            budget.visited++;
+            if (budgetExhausted(depth, budget)) {
+                out.push(el);
+                continue;
+            }
+            out.push(coerceValue(el, items, undefined, depth + 1, budget));
+        }
+        return out;
     }
     const objVal = value;
     if (kind === undefined) {
         const branches = (schema.oneOf ?? schema.anyOf);
         if (Array.isArray(branches)) {
             const matched = findUnionBranch(objVal, branches);
-            return matched ? coerceObject(objVal, matched) : value;
+            return matched ? coerceObject(objVal, matched, depth, budget) : value;
         }
     }
     if (schemaType(schema) === "object" || schema.properties) {
-        return coerceObject(objVal, schema);
+        return coerceObject(objVal, schema, depth, budget);
     }
     return value;
 }
@@ -252,12 +299,17 @@ function coerceValue(value, schema, precomputedKind) {
  * would accept. Returns a NEW value; never mutates `value`. When `value` is
  * not a plain object (or `schema` has no usable shape), the input is
  * returned unchanged and Zod reports its own error as before.
+ *
+ * Bounded (see module header): beyond `MAX_WALK_DEPTH` nesting or
+ * `MAX_VISITED_NODES` total visited values, the remainder of the input is
+ * returned unchanged rather than walked further — this function never
+ * throws for an oversized/too-deep input.
  */
 export function coerceFormStrings(value, schema) {
     const schemaNode = asNode(schema);
     if (!schemaNode || value === null || typeof value !== "object" || Array.isArray(value)) {
         return value;
     }
-    return coerceObject(value, schemaNode);
+    return coerceObject(value, schemaNode, 0, { visited: 0 });
 }
 //# sourceMappingURL=coerce-form-strings.js.map

@@ -22,8 +22,9 @@
  * guards against on every future run).
  */
 import { describe, it, expect } from "vitest";
-import { coerceFormStrings } from "../src/utils/coerce-form-strings.js";
-import { TOOLS, coerceToolArgs } from "../src/core.js";
+import { coerceFormStrings, MAX_WALK_DEPTH, MAX_VISITED_NODES } from "../src/utils/coerce-form-strings.js";
+import { TOOLS, coerceToolArgs, resolveToolSchema, HIDDEN_ALIASES, _ALIAS_TARGET_TOOL, _ALIAS_DIRECT_SCHEMA } from "../src/core.js";
+import { z } from "zod";
 import {
   validateSearchParams,
   validateExtractParams,
@@ -41,6 +42,8 @@ import {
   validateCaptureApikeyParams,
   validateStaticIpMgmtParams,
   validateSessionStatsParams,
+  validateHealthParams,
+  validateScraperTaskMgmtParams,
 } from "../src/tools/index.js";
 /**
  * Captures the message of a thrown error, regardless of whether the
@@ -209,9 +212,9 @@ describe("coerceToolArgs", () => {
     expect(coerceToolArgs("novada_search", { query: "x", num: "5" })).toEqual({ query: "x", num: 5 });
   });
 
-  it("passes args through unchanged for a name with no schema entry (legacy remap-only alias)", () => {
+  it("passes args through unchanged for a name with no resolvable schema at all", () => {
     const args = { max_chars: "5000" };
-    expect(coerceToolArgs("novada_unblock", args)).toEqual(args);
+    expect(coerceToolArgs("novada_totally_unknown_tool_name", args)).toEqual(args);
   });
 
   it("passes undefined through unchanged", () => {
@@ -665,5 +668,257 @@ describe("mirror test — string-typed params are never coerced", () => {
         if (typeof v === "string") expect(coerced[k]).toBe(v);
       }
     }
+  });
+});
+
+// ─── Review round 2, finding #1: hidden backward-compat aliases ───────────
+//
+// HIDDEN_ALIASES names dispatch by forwarding args into ANOTHER tool's real
+// validator (or, for novada_health/novada_health_all, their own schema that
+// isn't any other tool's _TOOL_DEFINITIONS entry). coerceToolArgs must
+// resolve the schema that's ACTUALLY validated for that name, not whatever
+// _TOOL_DEFINITIONS entry happens to share the name (novada_proxy_residential's
+// own entry there — ProxyResidentialParamsSchema — has no `verify` field at
+// all; dispatch() actually validates its args with the generic
+// ProxyParamsSchema).
+
+describe("alias coercion completeness (review round 2, finding #1)", () => {
+  it("every HIDDEN_ALIASES member is accounted for: in _ALIAS_TARGET_TOOL, in _ALIAS_DIRECT_SCHEMA, or correctly self-served by its own _TOOL_DEFINITIONS entry", () => {
+    const unaccounted: string[] = [];
+    for (const name of HIDDEN_ALIASES) {
+      const inTargetMap = _ALIAS_TARGET_TOOL.has(name);
+      const inDirectSchema = _ALIAS_DIRECT_SCHEMA.has(name);
+      const resolved = resolveToolSchema(name);
+      if (!inTargetMap && !inDirectSchema && !resolved) {
+        unaccounted.push(name); // no mapping AND no fallback schema at all — a real gap
+      }
+    }
+    expect(unaccounted).toEqual([]);
+  });
+
+  it("every _ALIAS_TARGET_TOOL value names a real, resolvable tool (no typo'd target)", () => {
+    for (const [alias, target] of _ALIAS_TARGET_TOOL) {
+      expect(resolveToolSchema(target), `alias "${alias}" -> target "${target}" has no resolvable schema`).toBeTruthy();
+    }
+  });
+
+  it("resolveToolSchema prefers the alias mapping over a same-named _TOOL_DEFINITIONS entry (the bug this finding fixed)", () => {
+    // novada_proxy_residential has its OWN _TOOL_DEFINITIONS entry
+    // (ProxyResidentialParamsSchema — no `verify` field), but must resolve
+    // to novada_proxy's schema (which DOES have `verify`).
+    const schema = resolveToolSchema("novada_proxy_residential") as Record<string, unknown>;
+    const props = schema.properties as Record<string, unknown>;
+    expect(props.verify).toBeTruthy();
+  });
+});
+
+/** The property node for `key` on `alias`'s REAL resolved target schema (not
+ *  a same-named-but-wrong _TOOL_DEFINITIONS entry) — used to pick a value
+ *  that respects that field's own min/max, the same way the main matrix's
+ *  `pickValid` does for ordinary tools. */
+function aliasPropNode(alias: string, key: string): JsonSchemaNode {
+  const schema = resolveToolSchema(alias) as JsonSchemaNode;
+  return (schema.properties as Record<string, JsonSchemaNode>)[key];
+}
+
+interface AliasCase {
+  alias: string;
+  key: string;
+  kind: "integer" | "boolean";
+  /** Reproduces exactly what dispatch()'s switch passes to the real
+   *  validator for this alias, so "accepted" is proven end-to-end, not just
+   *  at the coercion layer. */
+  validate: (coercedArgs: Record<string, unknown>) => unknown;
+}
+
+const ALIAS_CASES: AliasCase[] = [
+  {
+    alias: "novada_unblock",
+    key: "max_chars",
+    kind: "integer",
+    // dispatch() builds a NEW object for novada_extract from the coerced
+    // args; reproduce that shape exactly (url/method/max_chars/wait_for).
+    validate: (a) =>
+      validateExtractParams({
+        url: "https://example.com",
+        format: "html",
+        render: "render",
+        ...(a.max_chars !== undefined && { max_chars: a.max_chars }),
+      }),
+  },
+  {
+    alias: "novada_wallet_balance",
+    key: "page",
+    kind: "integer",
+    validate: (a) => validateAccountParams({ ...a, section: "balance" }),
+  },
+  {
+    alias: "novada_proxy_residential",
+    key: "verify",
+    kind: "boolean",
+    validate: (a) => validateProxyParams({ ...a, type: "residential" }),
+  },
+  {
+    alias: "novada_scraper_submit",
+    key: "limit",
+    kind: "integer",
+    validate: (a) => validateScrapeParams({ platform: "amazon.com", operation: "product_by_asin", ...a }),
+  },
+  {
+    alias: "novada_health_all",
+    key: "probe",
+    kind: "boolean",
+    validate: (a) => validateHealthParams(a),
+  },
+  {
+    alias: "novada_scraper_task_mgmt",
+    key: "limit",
+    kind: "integer",
+    validate: (a) => validateScraperTaskMgmtParams({ action: "list", ...a }),
+  },
+];
+
+describe("alias coercion matrix (review round 2, finding #1)", () => {
+  it("every alias with a numeric/boolean field in its resolved schema is represented above (non-trivial, not a hand-picked few)", () => {
+    const aliasesWithLeaves = [...HIDDEN_ALIASES].filter((name) => {
+      const schema = resolveToolSchema(name);
+      const props = (schema?.properties ?? {}) as Record<string, Record<string, unknown>>;
+      return Object.values(props).some((p) => p.type === "integer" || p.type === "number" || p.type === "boolean");
+    });
+    // Every alias family with at least one numeric/boolean leaf has a
+    // representative in ALIAS_CASES: unblock, the 6 wallet/account aliases
+    // (one representative), the 6 proxy-type aliases (one representative),
+    // scraper_submit, health + health_all, scraper_task_mgmt.
+    expect(aliasesWithLeaves.length).toBeGreaterThanOrEqual(ALIAS_CASES.length);
+    for (const c of ALIAS_CASES) expect(aliasesWithLeaves).toContain(c.alias);
+  });
+
+  for (const c of ALIAS_CASES) {
+    describe(`${c.alias}.${c.key}`, () => {
+      it("a stringified valid value is accepted", () => {
+        const valid = c.kind === "integer" ? pickValid(aliasPropNode(c.alias, c.key)) : "true";
+        const coerced = coerceToolArgs(c.alias, { [c.key]: valid }) as Record<string, unknown>;
+        expect(coerced[c.key]).toBe(c.kind === "integer" ? Number(valid) : true);
+        expect(() => c.validate(coerced)).not.toThrow();
+      });
+
+      it(c.kind === "integer" ? '"abc" is rejected unchanged' : '"yes" is rejected unchanged', () => {
+        const invalid = c.kind === "integer" ? "abc" : "yes";
+        const coerced = coerceToolArgs(c.alias, { [c.key]: invalid }) as Record<string, unknown>;
+        expect(coerced[c.key]).toBe(invalid);
+        expect(() => c.validate(coerced)).toThrow();
+      });
+
+      it('"" on this optional field is treated as omitted', () => {
+        const coerced = coerceToolArgs(c.alias, { [c.key]: "" }) as Record<string, unknown>;
+        expect(coerced[c.key]).toBeUndefined();
+        expect(() => c.validate(coerced)).not.toThrow();
+      });
+    });
+  }
+});
+
+// ─── Review round 2, finding #2: bound the walk independent of Zod ────────
+
+describe("bounded walk (review round 2, finding #2)", () => {
+  function nestedIntegerSchema(depth: number): Record<string, unknown> {
+    let schema: Record<string, unknown> = { type: "integer" };
+    for (let i = 0; i < depth; i++) {
+      schema = { type: "object", properties: { n: schema }, required: [] };
+    }
+    return schema;
+  }
+  function nestedIntegerValue(depth: number, leaf: unknown): unknown {
+    let value: unknown = leaf;
+    for (let i = 0; i < depth; i++) value = { n: value };
+    return value;
+  }
+
+  it(`a structure nested well beyond MAX_WALK_DEPTH (${MAX_WALK_DEPTH}) does not throw and completes promptly`, () => {
+    const depth = MAX_WALK_DEPTH * 4;
+    const schema = nestedIntegerSchema(depth);
+    const value = nestedIntegerValue(depth, "3");
+    const start = Date.now();
+    let result: unknown;
+    expect(() => {
+      result = coerceFormStrings(value, schema);
+    }).not.toThrow();
+    expect(Date.now() - start).toBeLessThan(1000);
+    expect(result).toBeTruthy();
+  });
+
+  it("within MAX_WALK_DEPTH, a leaf still coerces; well beyond it, the leaf is left exactly as Zod would see it with the helper absent", () => {
+    const shallow = MAX_WALK_DEPTH - 2;
+    const shallowSchema = nestedIntegerSchema(shallow);
+    const shallowResult = coerceFormStrings(nestedIntegerValue(shallow, "7"), shallowSchema) as Record<string, unknown>;
+    let cursor: Record<string, unknown> = shallowResult;
+    for (let i = 0; i < shallow - 1; i++) cursor = cursor.n as Record<string, unknown>;
+    expect(cursor.n).toBe(7); // coerced — well within the cap
+
+    const deep = MAX_WALK_DEPTH * 3;
+    const deepSchema = nestedIntegerSchema(deep);
+    const rawValue = nestedIntegerValue(deep, "7");
+    const deepResult = coerceFormStrings(rawValue, deepSchema);
+    // Build a minimal Zod schema mirroring the same nesting to compare the
+    // SAME rejection the helper-absent path would get. Both the coerced
+    // (but-past-the-cap, so really still "7" the string somewhere inside)
+    // and the raw value must produce byte-identical Zod errors.
+    let zodSchema: z.ZodTypeAny = z.number().int();
+    for (let i = 0; i < deep; i++) zodSchema = z.object({ n: zodSchema });
+    const coercedErr = (() => {
+      try {
+        zodSchema.parse(deepResult);
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+    })();
+    const rawErr = (() => {
+      try {
+        zodSchema.parse(rawValue);
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+    })();
+    expect(coercedErr).not.toBeNull();
+    expect(coercedErr).toBe(rawErr); // same Zod error with or without the helper, past the cap
+  });
+
+  it(`an array far larger than MAX_VISITED_NODES (${MAX_VISITED_NODES}) does not throw and completes promptly`, () => {
+    const schema = { type: "object", properties: { items: { type: "array", items: { type: "integer" } } }, required: [] };
+    const bigArray = Array.from({ length: MAX_VISITED_NODES * 2 }, (_, i) => String(i));
+    const start = Date.now();
+    let result: Record<string, unknown> | undefined;
+    expect(() => {
+      result = coerceFormStrings({ items: bigArray }, schema) as Record<string, unknown>;
+    }).not.toThrow();
+    expect(Date.now() - start).toBeLessThan(2000);
+    const items = result!.items as unknown[];
+    expect(items.length).toBe(bigArray.length); // no elements dropped, only coercion stops
+    // Once the budget is exhausted, remaining elements are returned AS-IS
+    // (still the original strings) rather than coerced.
+    expect(items[items.length - 1]).toBe(String(MAX_VISITED_NODES * 2 - 1));
+  });
+
+  it("a wide object (many keys) far larger than MAX_VISITED_NODES does not throw, and the whole object is still returned", () => {
+    const schema = {
+      type: "object",
+      properties: Object.fromEntries(
+        Array.from({ length: MAX_VISITED_NODES * 2 }, (_, i) => [`k${i}`, { type: "integer" }]),
+      ),
+      required: [],
+    };
+    const value = Object.fromEntries(Array.from({ length: MAX_VISITED_NODES * 2 }, (_, i) => [`k${i}`, String(i)]));
+    const start = Date.now();
+    let result: Record<string, unknown> | undefined;
+    expect(() => {
+      result = coerceFormStrings(value, schema) as Record<string, unknown>;
+    }).not.toThrow();
+    expect(Date.now() - start).toBeLessThan(2000);
+    expect(Object.keys(result!).length).toBe(Object.keys(value).length); // no keys dropped
+    // First keys (within budget) coerced; last key (past budget) untouched.
+    expect(result!.k0).toBe(0);
+    expect(result!["k" + (MAX_VISITED_NODES * 2 - 1)]).toBe(String(MAX_VISITED_NODES * 2 - 1));
   });
 });

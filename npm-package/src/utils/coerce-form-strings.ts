@@ -76,6 +76,19 @@
  * and a candidate string longer than MAX_COERCIBLE_STRING_LENGTH is left
  * untouched (Zod's own type check rejects it exactly as before — never
  * worse than pre-fix behaviour, simply not coerced).
+ *
+ * The walk itself is bounded independent of Zod's own limits (`.max(20)` on
+ * `novada_browser_flow`'s `actions`, etc.), which only apply AFTER this
+ * helper has already allocated and copied the whole structure — an
+ * attacker-sized payload (nesting depth or element/key count) would
+ * otherwise pay that cost before being rejected. Two independent caps:
+ * `MAX_WALK_DEPTH` (nesting depth) and `MAX_VISITED_NODES` (total
+ * object/array/leaf values visited across the whole call, shared via one
+ * counter so a wide-but-shallow structure is bounded exactly like a
+ * narrow-but-deep one). Once either cap is hit, the walker stops coercing
+ * and returns the remaining input UNCHANGED from that point on — never
+ * throws — so Zod (or the schema's own `.max()`) rejects/accepts the
+ * oversized/too-deep input exactly as it would with this helper absent.
  */
 
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -85,6 +98,27 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
  *  attacker-supplied megabyte-long "number-ish" string. No legitimate
  *  numeric or boolean form field is anywhere near this long. */
 const MAX_COERCIBLE_STRING_LENGTH = 32;
+
+/** Nesting-depth cap (object-in-object, array-in-object, discriminated-union
+ *  branch, …). No real tool schema nests anywhere close to this. */
+export const MAX_WALK_DEPTH = 32;
+
+/** Cap on the total number of object/array/leaf values visited across one
+ *  top-level `coerceFormStrings` call — bounds a wide (many keys/elements)
+ *  structure the same way `MAX_WALK_DEPTH` bounds a deep one. No real tool
+ *  call is anywhere close to this either. */
+export const MAX_VISITED_NODES = 10_000;
+
+/** Shared, mutable visit counter for one top-level `coerceFormStrings` call —
+ *  NOT per-recursion-level state; every nested call during that one walk
+ *  increments the SAME counter so the cap is on total work, not per-branch. */
+interface WalkBudget {
+  visited: number;
+}
+
+function budgetExhausted(depth: number, budget: WalkBudget): boolean {
+  return depth > MAX_WALK_DEPTH || budget.visited > MAX_VISITED_NODES;
+}
 
 const INTEGER_STRING_RE = /^-?\d+$/;
 const NUMBER_STRING_RE = /^-?\d+(?:\.\d+)?$/;
@@ -197,13 +231,28 @@ function effectiveRequired(schema: JsonSchemaNode, props: JsonSchemaNode): Reado
   return out;
 }
 
-function coerceObject(value: JsonSchemaNode, schema: JsonSchemaNode): JsonSchemaNode {
+function coerceObject(
+  value: JsonSchemaNode,
+  schema: JsonSchemaNode,
+  depth: number,
+  budget: WalkBudget,
+): JsonSchemaNode {
   const props = asNode(schema.properties) ?? {};
   const required = effectiveRequired(schema, props);
   const out: JsonSchemaNode = {};
   for (const key of Object.keys(value)) {
     if (DANGEROUS_KEYS.has(key)) continue;
     const raw = value[key];
+    // Cap hit mid-object: stop coercing from here on, but keep copying the
+    // remaining keys through UNCHANGED (never throw, never drop data Zod
+    // would otherwise see) — Zod's own validation (or its `.max()`/`.min()`
+    // on this very object) then runs exactly as it would with this helper
+    // disabled for the rest of the structure.
+    budget.visited++;
+    if (budgetExhausted(depth, budget)) {
+      out[key] = raw;
+      continue;
+    }
     const propSchema = asNode(props[key]);
     if (!propSchema) {
       out[key] = raw; // not a declared property — not ours to judge; Zod strips/accepts as before
@@ -213,12 +262,19 @@ function coerceObject(value: JsonSchemaNode, schema: JsonSchemaNode): JsonSchema
     if (kind && typeof raw === "string" && raw.trim().length === 0 && !required.has(key)) {
       continue; // "" on an optional numeric/boolean field — treat as omitted
     }
-    out[key] = coerceValue(raw, propSchema, kind);
+    out[key] = coerceValue(raw, propSchema, kind, depth + 1, budget);
   }
   return out;
 }
 
-function coerceValue(value: unknown, schema: JsonSchemaNode, precomputedKind?: CoercionKind): unknown {
+function coerceValue(
+  value: unknown,
+  schema: JsonSchemaNode,
+  precomputedKind: CoercionKind | undefined,
+  depth: number,
+  budget: WalkBudget,
+): unknown {
+  if (budgetExhausted(depth, budget)) return value;
   const kind = precomputedKind !== undefined ? precomputedKind : coercionKind(schema);
   if (kind && typeof value === "string") {
     return coerceLeafString(value, kind);
@@ -227,7 +283,17 @@ function coerceValue(value: unknown, schema: JsonSchemaNode, precomputedKind?: C
 
   if (Array.isArray(value)) {
     const items = asNode(schema.items);
-    return items ? value.map((el) => coerceValue(el, items)) : value;
+    if (!items) return value;
+    const out: unknown[] = [];
+    for (const el of value) {
+      budget.visited++;
+      if (budgetExhausted(depth, budget)) {
+        out.push(el);
+        continue;
+      }
+      out.push(coerceValue(el, items, undefined, depth + 1, budget));
+    }
+    return out;
   }
 
   const objVal = value as JsonSchemaNode;
@@ -235,12 +301,12 @@ function coerceValue(value: unknown, schema: JsonSchemaNode, precomputedKind?: C
     const branches = (schema.oneOf ?? schema.anyOf) as unknown[] | undefined;
     if (Array.isArray(branches)) {
       const matched = findUnionBranch(objVal, branches);
-      return matched ? coerceObject(objVal, matched) : value;
+      return matched ? coerceObject(objVal, matched, depth, budget) : value;
     }
   }
 
   if (schemaType(schema) === "object" || schema.properties) {
-    return coerceObject(objVal, schema);
+    return coerceObject(objVal, schema, depth, budget);
   }
 
   return value;
@@ -252,11 +318,16 @@ function coerceValue(value: unknown, schema: JsonSchemaNode, precomputedKind?: C
  * would accept. Returns a NEW value; never mutates `value`. When `value` is
  * not a plain object (or `schema` has no usable shape), the input is
  * returned unchanged and Zod reports its own error as before.
+ *
+ * Bounded (see module header): beyond `MAX_WALK_DEPTH` nesting or
+ * `MAX_VISITED_NODES` total visited values, the remainder of the input is
+ * returned unchanged rather than walked further — this function never
+ * throws for an oversized/too-deep input.
  */
 export function coerceFormStrings(value: unknown, schema: unknown): unknown {
   const schemaNode = asNode(schema);
   if (!schemaNode || value === null || typeof value !== "object" || Array.isArray(value)) {
     return value;
   }
-  return coerceObject(value as JsonSchemaNode, schemaNode);
+  return coerceObject(value as JsonSchemaNode, schemaNode, 0, { visited: 0 });
 }

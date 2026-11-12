@@ -647,32 +647,93 @@ export const _TOOL_DEFINITIONS: Array<{ name: string; description: string; input
  * filtered to `REGISTERED_TOOL_NAMES`): several tools are dispatched but
  * intentionally unlisted (novada_proxy_residential and its 5 proxy-type
  * siblings, the 4 scraper stubs) and still need coercion when an old caller
- * invokes them by name. Legacy remap-only aliases with NO definition entry
- * of their own (novada_unblock, novada_health, novada_wallet_balance, …) are
- * not in this map — they immediately rewrite their args into ANOTHER named
- * tool's shape before calling that tool's own validator, and are not listed
- * on any surface a form-based client could read a schema from.
+ * invokes them by name.
+ *
+ * Review round 2 (MEDIUM finding): a HIDDEN_ALIASES name must NOT always be
+ * looked up here directly, even when an entry under that exact name exists.
+ * `novada_proxy_residential`'s own entry below carries
+ * `ProxyResidentialParamsSchema` (a narrower legacy shape with no `verify`
+ * field at all) — but `dispatch()`'s switch actually validates its args
+ * with the GENERIC `ProxyParamsSchema` (`validateProxyParams({...args,
+ * type: aliasType})`). Coercing against the alias's own (unused-for-
+ * validation) entry would silently skip `verify`. See `resolveToolSchema`
+ * below, which checks the real alias→target mapping FIRST and only falls
+ * back to a direct lookup here for names with no such mapping.
  */
 const _INPUT_SCHEMA_BY_NAME: ReadonlyMap<string, Record<string, unknown>> = new Map(
   _TOOL_DEFINITIONS.map((t) => [t.name, t.inputSchema]),
 );
 
 /**
- * Coerce `args` for tool `name` against that tool's own advertised
- * inputSchema (see `_INPUT_SCHEMA_BY_NAME` above). Used by `dispatch()`
+ * Every `HIDDEN_ALIASES` name that dispatch()'s switch forwards into ANOTHER
+ * tool's real validator — mapped to that tool's name, so coercion runs
+ * against the schema that's ACTUALLY validated. Derived from the SAME
+ * alias relationships the switch itself encodes (`PROXY_ALIAS_MAP` for the
+ * 6 proxy-type variants; the rest mirror the switch's own
+ * `validateXParams({...args, ...})` forwarding calls) rather than a fresh
+ * hand-list — `tests/alias-coercion-completeness.test.ts` asserts every
+ * `HIDDEN_ALIASES` member is accounted for here, in `_ALIAS_DIRECT_SCHEMA`,
+ * or correctly self-served by a direct `_INPUT_SCHEMA_BY_NAME` entry (the 3
+ * scraper stubs below, whose dispatch case never reads `args` at all, so
+ * coercing is a harmless no-op either way) — so a newly added alias that's
+ * missed here fails a test instead of silently passing through uncoerced.
+ */
+export const _ALIAS_TARGET_TOOL: ReadonlyMap<string, string> = new Map([
+  ...Object.keys(PROXY_ALIAS_MAP).map((name) => [name, "novada_proxy"] as const),
+  ["novada_unblock", "novada_extract"],
+  ["novada_wallet_balance", "novada_account"],
+  ["novada_wallet_usage_record", "novada_account"],
+  ["novada_traffic_daily", "novada_account"],
+  ["novada_plan_balance_all", "novada_account"],
+  ["novada_capture_logs", "novada_account"],
+  ["novada_account_summary", "novada_account"],
+  ["novada_scraper_submit", "novada_scrape"],
+]);
+
+/**
+ * `HIDDEN_ALIASES` names validated against their OWN schema — one that
+ * isn't any OTHER tool's `_TOOL_DEFINITIONS` entry, so `_ALIAS_TARGET_TOOL`
+ * doesn't apply. `novada_health`/`novada_health_all` validate `args` with
+ * `validateHealthParams` (`HealthParamsSchema`) before hardcoding
+ * `{section:"summary"}` for the actual `novadaAccount` call underneath —
+ * the account section is fixed, but `probe` (boolean) is real caller input.
+ */
+export const _ALIAS_DIRECT_SCHEMA: ReadonlyMap<string, Record<string, unknown>> = new Map([
+  ["novada_health", zodToMcpSchema(HealthParamsSchema)],
+  ["novada_health_all", zodToMcpSchema(HealthParamsSchema)],
+]);
+
+/**
+ * Resolve the schema to coerce `name`'s args against: an alias's real
+ * target first (`_ALIAS_DIRECT_SCHEMA`, then `_ALIAS_TARGET_TOOL`), falling
+ * back to a direct `_INPUT_SCHEMA_BY_NAME` lookup for every non-aliased
+ * name (every visible tool, plus the 3 scraper-stub aliases whose own entry
+ * is harmlessly unused). Exported for the completeness test.
+ */
+export function resolveToolSchema(name: string): Record<string, unknown> | undefined {
+  const direct = _ALIAS_DIRECT_SCHEMA.get(name);
+  if (direct) return direct;
+  const targetTool = _ALIAS_TARGET_TOOL.get(name);
+  if (targetTool) return _INPUT_SCHEMA_BY_NAME.get(targetTool);
+  return _INPUT_SCHEMA_BY_NAME.get(name);
+}
+
+/**
+ * Coerce `args` for tool `name` against the schema that is ACTUALLY
+ * validated for it (see `resolveToolSchema` above). Used by `dispatch()`
  * below AND by the handful of call sites (stdio index.ts, hosted mcp.ts)
  * that validate a tool's params OUTSIDE dispatch() — novada_setup,
  * novada_session_stats, novada_search_feedback (auth-free, pre-key-gate on
  * stdio) and novada_discover (hosted's own early-return) — so every real
  * parse site in either transport runs the SAME coercion exactly once per
- * request. A tool name absent from the map (see doc above) passes `args`
- * through unchanged.
+ * request. A tool name with no resolvable schema passes `args` through
+ * unchanged.
  */
 export function coerceToolArgs(
   name: string,
   args: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
-  const schema = _INPUT_SCHEMA_BY_NAME.get(name);
+  const schema = resolveToolSchema(name);
   if (!schema || args === undefined) return args;
   const coerced = coerceFormStrings(args, schema);
   return (coerced as Record<string, unknown> | undefined) ?? args;

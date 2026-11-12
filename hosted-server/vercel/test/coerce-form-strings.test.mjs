@@ -20,6 +20,11 @@
  *      novada_static_ip_mgmt) are absent from "openai" too (narrower list) —
  *      actually coerces through the vendored `coerceToolArgs` + the
  *      vendored real Zod validators, no network.
+ *   3. (review round 2) the hidden backward-compat aliases hosted's default
+ *      surface still routes by name (`novada_wallet_balance`,
+ *      `novada_proxy_residential`, …) resolve to their REAL target schema
+ *      through the same vendored `coerceToolArgs` — not a same-named-but-
+ *      wrong schema — mirroring npm-package's own alias-completeness suite.
  *
  * Runs on plain Node ≥22.18 (`node --test`) — same runtime/style as
  * openai-surface.test.mjs.
@@ -33,7 +38,9 @@ import { OPENAI_SURFACE_TOOLS } from "../api/_surface.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const VENDOR = join(__dirname, "..", "vendor", "novada-mcp");
-const { TOOLS: CORE_TOOLS, buildToolsForSurface, coerceToolArgs } = await import(join(VENDOR, "core.js"));
+const { TOOLS: CORE_TOOLS, buildToolsForSurface, coerceToolArgs, HIDDEN_ALIASES, resolveToolSchema } = await import(
+  join(VENDOR, "core.js")
+);
 const {
   validateSearchParams,
   validateExtractParams,
@@ -230,4 +237,30 @@ test("[default] novada_static_ip_mgmt: num/page/limit/is_auto_renew strings coer
   assert.equal(coerced.limit, 20);
   assert.equal(coerced.is_auto_renew, 1);
   assert.doesNotThrow(() => validateStaticIpMgmtParams(coerced));
+});
+
+// ─── Review round 2, finding #1: hidden backward-compat aliases (hosted) ──
+// hosted's default surface routes every HIDDEN_ALIASES name EXCEPT
+// novada_scraper_task_mgmt by name (HOSTED_NEVER_ROUTABLE_NPM_ALIASES in
+// api/mcp.ts) through this SAME vendored coerceToolArgs. Confirm a couple
+// of representative routable aliases resolve to their real target schema.
+
+test("[default] alias coercion: every HOSTED-routable HIDDEN_ALIASES name resolves to SOME schema (none silently pass through)", () => {
+  const HOSTED_NEVER_ROUTABLE = new Set(["novada_scraper_task_mgmt"]);
+  for (const name of HIDDEN_ALIASES) {
+    if (HOSTED_NEVER_ROUTABLE.has(name)) continue;
+    assert.ok(resolveToolSchema(name), `alias "${name}" has no resolvable schema`);
+  }
+});
+
+test("[default] novada_wallet_balance (alias -> novada_account): page \"3\" coerces to 3", () => {
+  const coerced = coerceToolArgs("novada_wallet_balance", { page: "3" });
+  assert.equal(coerced.page, 3);
+  assert.doesNotThrow(() => validateAccountParams({ ...coerced, section: "balance" }));
+});
+
+test("[default] novada_proxy_residential (alias -> novada_proxy): verify \"true\" coerces to boolean true (its OWN entry has no verify field at all)", () => {
+  const coerced = coerceToolArgs("novada_proxy_residential", { verify: "true" });
+  assert.equal(coerced.verify, true);
+  assert.doesNotThrow(() => validateProxyParams({ ...coerced, type: "residential" }));
 });

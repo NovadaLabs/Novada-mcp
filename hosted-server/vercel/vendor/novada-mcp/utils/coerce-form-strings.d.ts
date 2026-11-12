@@ -76,13 +76,39 @@
  * and a candidate string longer than MAX_COERCIBLE_STRING_LENGTH is left
  * untouched (Zod's own type check rejects it exactly as before — never
  * worse than pre-fix behaviour, simply not coerced).
+ *
+ * The walk itself is bounded independent of Zod's own limits (`.max(20)` on
+ * `novada_browser_flow`'s `actions`, etc.), which only apply AFTER this
+ * helper has already allocated and copied the whole structure — an
+ * attacker-sized payload (nesting depth or element/key count) would
+ * otherwise pay that cost before being rejected. Two independent caps:
+ * `MAX_WALK_DEPTH` (nesting depth) and `MAX_VISITED_NODES` (total
+ * object/array/leaf values visited across the whole call, shared via one
+ * counter so a wide-but-shallow structure is bounded exactly like a
+ * narrow-but-deep one). Once either cap is hit, the walker stops coercing
+ * and returns the remaining input UNCHANGED from that point on — never
+ * throws — so Zod (or the schema's own `.max()`) rejects/accepts the
+ * oversized/too-deep input exactly as it would with this helper absent.
  */
+/** Nesting-depth cap (object-in-object, array-in-object, discriminated-union
+ *  branch, …). No real tool schema nests anywhere close to this. */
+export declare const MAX_WALK_DEPTH = 32;
+/** Cap on the total number of object/array/leaf values visited across one
+ *  top-level `coerceFormStrings` call — bounds a wide (many keys/elements)
+ *  structure the same way `MAX_WALK_DEPTH` bounds a deep one. No real tool
+ *  call is anywhere close to this either. */
+export declare const MAX_VISITED_NODES = 10000;
 /**
  * Coerce every string in `value` that a numeric/boolean leaf of `schema`
  * (the tool's own advertised JSON Schema, e.g. from `_TOOL_DEFINITIONS`)
  * would accept. Returns a NEW value; never mutates `value`. When `value` is
  * not a plain object (or `schema` has no usable shape), the input is
  * returned unchanged and Zod reports its own error as before.
+ *
+ * Bounded (see module header): beyond `MAX_WALK_DEPTH` nesting or
+ * `MAX_VISITED_NODES` total visited values, the remainder of the input is
+ * returned unchanged rather than walked further — this function never
+ * throws for an oversized/too-deep input.
  */
 export declare function coerceFormStrings(value: unknown, schema: unknown): unknown;
 //# sourceMappingURL=coerce-form-strings.d.ts.map
