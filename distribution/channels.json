@@ -693,8 +693,8 @@
     },
     {
       "id": "glama",
-      "path": "npm-package/glama.json",
-      "location_rule": "npm-package/glama.json must exist at the npm package root — glama.ai reads it for maintainer attribution only; Glama pulls name/version/description/tools directly from the npm registry + repo README, not from this file.",
+      "path": "glama.json",
+      "location_rule": "glama.json must exist at the REPOSITORY root (glama.ai claim page, 2026-11-14: \"Add glama.json to the root of the repository with your GitHub username under maintainers\") — it was under npm-package/ until 2026-11-14, where Glama never saw it, so the listing stayed unclaimed and its Docker build spec could not be configured. glama.ai reads it for maintainer attribution only; Glama pulls name/version/description/tools from the npm registry + repo README, not from this file.",
       "writer_kind": null,
       "owned_fields": [],
       "version_field": null,

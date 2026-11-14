@@ -62,7 +62,7 @@ test("findDuplicateJsonKeys unit control (brief-L L1): two keys that decode to D
 test("json_no_duplicate_keys integration (brief-L L1): a \\u-escaped duplicate of glama.json's top-level \"$schema\" key (identical decoded value) is now caught end to end — PREDICTED exactly 1 total failure", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const path = join(root, "npm-package", "glama.json");
+    const path = join(root, "glama.json");
     // Same "identical value" construction brief-K's own glama.json duplicate-key test uses — this
     // isolates the mutation to json_no_duplicate_keys alone: tamper_evident (glama is a
     // closed_shape row) stays blind by construction because JSON.parse collapses both spellings

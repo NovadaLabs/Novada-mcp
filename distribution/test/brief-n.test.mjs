@@ -185,7 +185,7 @@ test("D2 isExternalRow exemption: location_rules/shape_declared/ci_paths_cover a
 test("D2 isExternalRow mirror: a NON-external row missing its file is still caught by location_rules exactly as before (the exemption is row-specific, not a blanket skip)", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    rmSync(join(root, "npm-package", "glama.json"));
+    rmSync(join(root, "glama.json"));
     const results = await runChecks(root);
     const lr = findResult(results, "location_rules");
     assert.ok(lr.failures.some((f) => f.includes("glama.json")), "a normal row's missing file must still be reported");

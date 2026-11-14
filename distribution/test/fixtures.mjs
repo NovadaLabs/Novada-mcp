@@ -98,7 +98,7 @@ export function buildGreenFixture() {
   );
 
   // glama row: no owned fields at all — just needs to exist and parse.
-  writeFileDeep(root, "npm-package/glama.json", JSON.stringify({ $schema: "https://glama.ai/mcp/schemas/server.json", maintainers: ["Goldentrii"] }, null, 2) + "\n");
+  writeFileDeep(root, "glama.json", JSON.stringify({ $schema: "https://glama.ai/mcp/schemas/server.json", maintainers: ["Goldentrii"] }, null, 2) + "\n");
 
   // brief-N (2026-10-19, D2): claude-code-plugin/claude-code-marketplace (npm-package/
   // .claude-plugin/) were retired — the real Claude Code channel is now the `kind: "external"`

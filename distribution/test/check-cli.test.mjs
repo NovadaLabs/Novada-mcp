@@ -85,7 +85,7 @@ test("check.mjs CLI: green fixture via a SYMLINKED path exits 0 and prints all 5
 // uses — reused here, invoked via subprocess through a symlink instead of via runChecks().
 test("check.mjs CLI: red fixture (glama.json removed) via a SYMLINKED path exits 1 with the predicted single failure", () => {
   const root = makeCliRunnable(cloneFixture(buildAndRememberGreen()));
-  rmSync(join(root, "npm-package", "glama.json"));
+  rmSync(join(root, "glama.json"));
   const { linkParent, link } = symlinkTo(root);
   try {
     const result = runCheckMjsCli(join(link, "distribution", "check.mjs"));

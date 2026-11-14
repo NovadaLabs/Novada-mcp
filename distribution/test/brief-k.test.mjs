@@ -365,7 +365,7 @@ test("json_no_duplicate_keys: a duplicate top-level key (identical value) in ser
 test("json_no_duplicate_keys: a duplicate top-level key (identical value) in glama.json (generated_by: null) — PREDICTED exactly 1 failure", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const path = join(root, "npm-package", "glama.json");
+    const path = join(root, "glama.json");
     writeFileSync(path, injectDuplicateJsonKeyLine(readFileSync(path, "utf8"), "$schema"));
 
     const results = await runChecks(root);
