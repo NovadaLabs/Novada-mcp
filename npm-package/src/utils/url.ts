@@ -1,36 +1,72 @@
-// ─── Dedup noise params (research-query-quality-2026-11-14) ────────────────
-// Source URLs that are otherwise identical often differ only by a locale/
-// tracking param the publisher's CMS stamps per-request (e.g. a Facebook
-// Answers article served at the same path under ?locale=pa_IN / pt_BR /
-// tr_TR). Left in, normalizeUrl treats each locale variant as a distinct
-// source — the exact bug reported 2026-11-14 (three locale-wrapped copies of
-// one facebook.com/fb-answers/... article counted as three separate sources).
-// Table-driven (class, not instance) so adding a new noise param is a new
-// row here, never a new branch at the call site. Exact names cover one-off
-// known noise keys; prefixes cover whole families (utm_source, utm_medium, …).
-const NOISE_PARAM_EXACT = new Set([
-  "locale", "hl", "lang", "fbclid", "gclid", "msclkid", "ref", "ref_src",
-  "igshid", "mc_cid", "mc_eid", "_ga", "si",
-]);
-const NOISE_PARAM_PREFIXES = ["utm_"];
-
-/** True when `paramName` is a known non-content (locale/tracking) query param
- *  that should be stripped before dedup — never a meaningful content param
- *  like `id`, `q`, or `page` on an unrelated host. */
-function isNoiseParam(paramName: string): boolean {
-  const lower = paramName.toLowerCase();
-  if (NOISE_PARAM_EXACT.has(lower)) return true;
-  return NOISE_PARAM_PREFIXES.some((p) => lower.startsWith(p));
-}
-
-/** Normalize a URL for deduplication: strip trailing slash, www, fragment,
- *  strip known non-content (locale/tracking) params, sort remaining params. */
+/** Normalize a URL for deduplication: strip trailing slash, www, fragment, sort params.
+ *
+ * research-query-quality-2026-11-14 review round 2 (HIGH #1): this function is
+ * also the TRAVERSAL key for crawl.ts/map.ts/site_copy.ts — it decides which
+ * URLs have "already been visited" and therefore get skipped. It must stay
+ * conservative here: many real sites serve genuinely different CONTENT under
+ * a locale/language query param (translated docs pages, Google Support locale
+ * variants), so stripping `lang`/`hl` globally would make `crawl`/`site_copy`
+ * silently skip a real second-language page it hasn't actually visited yet —
+ * under-coverage, the mirror-image failure of the over-counting bug this file
+ * was originally changed to fix. See `normalizeUrlForResultDedup` below for
+ * the noise-param-stripping variant, used ONLY by research.ts's post-hoc
+ * result-list dedup (where collapsing a locale-duplicate source is correct). */
 export function normalizeUrl(urlStr: string): string {
   try {
     const u = new URL(urlStr);
     u.hash = "";
     u.hostname = u.hostname.replace(/^www\./, "");
     u.pathname = u.pathname.replace(/\/+$/, "") || "/";
+    u.searchParams.sort();
+    return u.toString();
+  } catch {
+    return urlStr;
+  }
+}
+
+// ─── Result-dedup-only noise params (research-query-quality-2026-11-14) ────
+// Source URLs in a SEARCH RESULT LIST are often otherwise identical except
+// for a locale/tracking param the publisher's CMS stamps per-request (e.g. a
+// Facebook Answers article served at the same path under ?locale=pa_IN /
+// pt_BR / tr_TR). Left in, two requests for the SAME article count as two
+// separate sources — the bug reported 2026-11-14 (three locale-wrapped copies
+// of one facebook.com/fb-answers/... article counted as three sources).
+//
+// This is deliberately a SEPARATE function from `normalizeUrl` above (review
+// round 2, HIGH #1): collapsing a locale duplicate is correct for research's
+// already-fetched result list, but wrong as the crawl/map/site_copy
+// TRAVERSAL key, where it would cause a real, not-yet-visited page to be
+// silently treated as already seen. Table-driven (class, not instance) so
+// adding a new noise param is a new row here, never a new branch at the call
+// site. Exact names cover one-off known noise keys; prefixes cover whole
+// families (utm_source, utm_medium, …).
+// "tl" added 2026-11-14 review round 2: live-reproduced during re-verification
+// — reddit.com serves the SAME thread under ?tl=ru / ?tl=de / ?tl=el
+// (translate-locale) redirects, which collapsed the research.ts dedup bug
+// this table exists to fix, just under a different param name than "locale".
+const NOISE_PARAM_EXACT = new Set([
+  "locale", "hl", "lang", "tl", "fbclid", "gclid", "msclkid", "ref", "ref_src",
+  "igshid", "mc_cid", "mc_eid", "_ga", "si",
+]);
+const NOISE_PARAM_PREFIXES = ["utm_"];
+
+/** True when `paramName` is a known non-content (locale/tracking) query param
+ *  that should be stripped before RESULT-LIST dedup — never a meaningful
+ *  content param like `id`, `q`, or `page` on an unrelated host, and never
+ *  applied to the crawl/map/site_copy traversal key (see `normalizeUrl`). */
+function isNoiseParam(paramName: string): boolean {
+  const lower = paramName.toLowerCase();
+  if (NOISE_PARAM_EXACT.has(lower)) return true;
+  return NOISE_PARAM_PREFIXES.some((p) => lower.startsWith(p));
+}
+
+/** Normalize a URL for RESEARCH RESULT-LIST dedup only: everything
+ *  `normalizeUrl` does, PLUS stripping known non-content (locale/tracking)
+ *  params. Do not use this as a crawl/map/site_copy traversal key — use
+ *  `normalizeUrl` there. */
+export function normalizeUrlForResultDedup(urlStr: string): string {
+  try {
+    const u = new URL(normalizeUrl(urlStr));
     // Snapshot keys before deleting — deleting while iterating a live
     // URLSearchParams iterator can skip entries.
     for (const key of [...new Set(u.searchParams.keys())]) {
@@ -39,7 +75,7 @@ export function normalizeUrl(urlStr: string): string {
     u.searchParams.sort();
     return u.toString();
   } catch {
-    return urlStr;
+    return normalizeUrl(urlStr);
   }
 }
 

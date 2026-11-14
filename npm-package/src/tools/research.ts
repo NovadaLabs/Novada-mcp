@@ -1,4 +1,4 @@
-import { normalizeUrl, decodeBingRedirect } from "../utils/index.js";
+import { normalizeUrlForResultDedup, decodeBingRedirect } from "../utils/index.js";
 import { saveOutput } from "../utils/output.js";
 import type { ResearchParams, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
@@ -111,13 +111,28 @@ async function searchWithFallback(
 
 type QuestionDomain = "tech" | "business" | "comparison" | "howto" | "general";
 
-// Comparison trigger phrases, EN + DE in ONE shared table — used by both
-// detectDomain (classification) and extractComparands (named-entity
+/** Supported languages for suffix/filler text. "unknown" is a DETECTION
+ *  OUTCOME (genuinely unsupported script), not a row with its own filler —
+ *  see detectLanguage and the "fail safe" branches in generateSearchQueries. */
+type Lang = "en" | "de" | "fr" | "es";
+type DetectedLang = Lang | "unknown";
+const SUPPORTED_LANGS: readonly Lang[] = ["en", "de", "fr", "es"];
+
+// Comparison trigger phrases, ONE shared table keyed by language — used by
+// both detectDomain (classification) and extractComparands (named-entity
 // extraction) so the two never disagree about what counts as a comparison
-// question. Table-driven: a third language is a new array entry below, not a
-// new regex at each call site (class-not-instance).
-const COMPARISON_TRIGGER_REGEX =
-  /\b(vs\.?|versus|compared?\s+to|compare|alternative|better than|difference between|pros and cons|vergleich(?:e[nst]?)?|gegenüber|unterschied(?:e)?\s+zwischen|zwischen)\b/i;
+// question. Table-driven (review round 2, requirement 3): a 5th language is
+// a new array entry here, not a new regex at any call site.
+const COMPARISON_TRIGGER_WORDS: Record<Lang, string[]> = {
+  en: ["vs\\.?", "versus", "compared?\\s+to", "compare", "alternative", "better than", "difference between", "pros and cons"],
+  de: ["vs\\.?", "versus", "gegen", "vergleich(?:e[nst]?)?", "gegenüber", "unterschied(?:e)?\\s+zwischen", "zwischen"],
+  fr: ["vs\\.?", "versus", "contre", "comparaisons?", "comparer", "diff[ée]rences?\\s+entre", "entre"],
+  es: ["vs\\.?", "versus", "contra", "comparaci[oó]n", "comparar", "diferencias?\\s+entre", "entre"],
+};
+const COMPARISON_TRIGGER_REGEX = new RegExp(
+  `\\b(${SUPPORTED_LANGS.flatMap(l => COMPARISON_TRIGGER_WORDS[l]).join("|")})\\b`,
+  "i"
+);
 
 function detectDomain(question: string): QuestionDomain {
   const q = question.toLowerCase();
@@ -139,10 +154,10 @@ function detectDomain(question: string): QuestionDomain {
 
 /** Domain-specific query suffixes for targeted search diversity, one row per
  *  supported language. Adding a language = a new key here, not a new branch
- *  at any call site. "en" is the fallback when the question's language can't
- *  be confidently detected (keeps every pre-existing English-only test green). */
-type Lang = "en" | "de";
-
+ *  at any call site. Only reached when detectLanguage resolved a SUPPORTED
+ *  language — "unknown" is handled by a separate, filler-free branch in
+ *  generateSearchQueries so an unsupported language never gets a guessed
+ *  translation (requirement 3). */
 const DOMAIN_SUFFIXES_BY_LANG: Record<Lang, Record<QuestionDomain, string[]>> = {
   en: {
     tech:       ["github", "documentation official", "stackoverflow solution"],
@@ -158,83 +173,174 @@ const DOMAIN_SUFFIXES_BY_LANG: Record<Lang, Record<QuestionDomain, string[]>> = 
     howto:      ["schritt für schritt anleitung", "praxisbeispiel", "best practices"],
     general:    ["übersicht erklärt", "analyse", "expertenmeinung"],
   },
+  fr: {
+    tech:       ["github", "documentation officielle", "solution stackoverflow"],
+    business:   ["étude de cas", "analyse de marché", "rapport sectoriel"],
+    comparison: ["tableau comparatif", "avis détaillé", "comparatif performances"],
+    howto:      ["tutoriel étape par étape", "exemple d'implémentation", "meilleures pratiques"],
+    general:    ["aperçu expliqué", "analyse", "avis d'expert"],
+  },
+  es: {
+    tech:       ["github", "documentación oficial", "solución stackoverflow"],
+    business:   ["caso de estudio", "análisis de mercado", "informe del sector"],
+    comparison: ["tabla comparativa", "análisis detallado", "comparativa de rendimiento"],
+    howto:      ["tutorial paso a paso", "ejemplo de implementación", "mejores prácticas"],
+    general:    ["resumen explicado", "análisis", "opinión de experto"],
+  },
 };
 
-/** German function/connector words common enough in a short query that one
- *  hit is a reliable signal — used only to pick the EN/DE suffix table below;
- *  never silently drops content, so a false "en" default just falls back to
- *  the pre-existing English suffixes (safe default, matches old behavior). */
-const DE_SIGNAL_WORDS = new Set([
-  "und", "oder", "aber", "für", "mit", "ist", "sind", "wie", "warum", "wann",
-  "wo", "wer", "welche", "welcher", "welches", "der", "die", "das", "ein",
-  "eine", "einen", "einem", "im", "am", "beim", "vom", "zum", "zur", "bei",
-  "über", "unter", "durch", "ohne", "nicht", "kein", "keine", "zwischen",
-  "vergleich", "gegenüber", "unterschied",
-]);
+/** Shorter per-language filler words for the other suffix slots
+ *  (challenges/case-study/examples/review/best-practices/pricing). One row
+ *  per language — a 5th language is a new object here. */
+const EXTRA_WORDS_BY_LANG: Record<Lang, {
+  challengesLimitations: string;
+  caseStudyExamples: string;
+  examplesUseCases: string;
+  reviewExperience: string;
+  bestPractices: string;
+  pricing: string;
+}> = {
+  en: { challengesLimitations: "challenges limitations", caseStudyExamples: "case study examples", examplesUseCases: "examples use cases", reviewExperience: "review experience", bestPractices: "best practices", pricing: "pricing" },
+  de: { challengesLimitations: "herausforderungen grenzen", caseStudyExamples: "praxisbeispiele", examplesUseCases: "beispiele anwendungsfälle", reviewExperience: "erfahrungen test", bestPractices: "bewährte praktiken", pricing: "preise" },
+  fr: { challengesLimitations: "défis limites", caseStudyExamples: "étude de cas exemples", examplesUseCases: "exemples cas d'usage", reviewExperience: "avis expérience", bestPractices: "meilleures pratiques", pricing: "prix" },
+  es: { challengesLimitations: "desafíos limitaciones", caseStudyExamples: "caso de estudio ejemplos", examplesUseCases: "ejemplos casos de uso", reviewExperience: "opinión experiencia", bestPractices: "mejores prácticas", pricing: "precios" },
+};
+
+/** Function/connector words common enough in a short question that one hit
+ *  is a reliable language signal. Used for (a) detectLanguage's scoring and
+ *  (b) filtering non-content words out of `keywords`/the comparison residual.
+ *  One row per supported language — a 5th language is a new array here. */
+const SIGNAL_WORDS_BY_LANG: Record<Lang, string[]> = {
+  en: ["the", "is", "are", "how", "what", "why", "when", "where", "who", "which", "and", "or", "of", "in", "on", "at", "to", "for", "with", "a", "an", "do", "does"],
+  de: ["und", "oder", "aber", "für", "mit", "ist", "sind", "wie", "warum", "wann", "wo", "wer", "welche", "welcher", "welches", "der", "die", "das", "ein", "eine", "einen", "einem", "im", "am", "beim", "vom", "zum", "zur", "bei", "über", "unter", "durch", "ohne", "nicht", "kein", "keine", "zwischen", "vergleich", "gegenüber", "unterschied", "gegen"],
+  fr: ["le", "la", "les", "un", "une", "des", "et", "ou", "entre", "pour", "avec", "dans", "sur", "qui", "que", "quoi", "comment", "pourquoi", "quand", "où", "est", "sont", "comparaison", "comparer", "contre"],
+  es: ["el", "la", "los", "las", "un", "una", "y", "o", "u", "e", "entre", "para", "con", "en", "sobre", "quien", "que", "como", "cuando", "donde", "es", "son", "comparación", "comparar", "contra"],
+};
+const ALL_SIGNAL_WORDS = new Set(SUPPORTED_LANGS.flatMap(l => SIGNAL_WORDS_BY_LANG[l]));
 
 /** Detect the question's language from a small function-word table.
- *  Deliberately conservative (umlaut/ß OR ≥1 DE signal word) — a missed
- *  German detection just falls back to the English suffix table (safe), so
- *  there is no false-positive cost to widening this later. */
-function detectLanguage(question: string): Lang {
+ *
+ * research-query-quality-2026-11-14 review round 2 (MEDIUM #3): covers
+ * en/de/fr/es, not just en/de. Defaults to "en" when no non-English signal
+ * is found (keeps every pre-existing English-keyword-phrase test green —
+ * e.g. "quantum computing applications" has no function words in ANY
+ * language but is still English) — "unknown" is reserved for a genuinely
+ * different, unsupported SCRIPT (CJK/Cyrillic/Arabic/etc.), where guessing
+ * English and appending English filler would be actively wrong. This is the
+ * fail-safe the review asked for: never confidently mislabel a different
+ * language as English, while not refusing to guess on terse English input. */
+function detectLanguage(question: string): DetectedLang {
+  if (/[Ѐ-ӿ一-鿿぀-ヿ가-힣֐-׿؀-ۿ]/.test(question)) {
+    return "unknown";
+  }
   const q = question.toLowerCase();
-  if (/[äöüß]/.test(q)) return "de";
   const tokens = q.split(/[^a-zà-ÿ0-9]+/).filter(Boolean);
-  return tokens.some(t => DE_SIGNAL_WORDS.has(t)) ? "de" : "en";
+  const nonEnglish: Exclude<Lang, "en">[] = ["de", "fr", "es"];
+  let best: Lang = "en";
+  let bestCount = 0;
+  for (const l of nonEnglish) {
+    const set = new Set(SIGNAL_WORDS_BY_LANG[l]);
+    let count = 0;
+    for (const t of tokens) if (set.has(t)) count++;
+    if (l === "de" && /[äöüß]/.test(q)) count += 1;
+    if (l === "fr" && /[éèêëçœ]/.test(q)) count += 0.5;
+    if (l === "es" && /[ñ¿¡]/.test(q)) count += 0.5;
+    if (count > bestCount) { bestCount = count; best = l; }
+  }
+  return bestCount > 0 ? best : "en";
 }
 
 // ─── Comparand Detection ─────────────────────────────────────────────────────
 // F14-2: For comparison questions, detect named comparands (single brand
-// tokens like "O2"/"Vodafone" or short multi-word entities like "Deutsche
-// Telekom") and check whether any sources mention them — emit a warning when
-// a comparand has zero hits. Also feeds generateSearchQueries so comparison
-// questions get one targeted query PER comparand instead of the full
-// question padded with a generic suffix (2026-11-14 field report).
+// tokens like "O2"/"Vodafone"/"eBay" or short multi-word entities like
+// "Deutsche Telekom") and check whether any sources mention them — emit a
+// warning when a comparand has zero hits. Also feeds generateSearchQueries so
+// comparison questions get one targeted query PER comparand instead of the
+// full question padded with a generic suffix (2026-11-14 field report).
 
-// Words that can appear immediately beside a comparand but are never
-// themselves comparands: EN/DE question starters, comparison verbs/
-// prepositions, and list connectors. Checked against the lowercased, bare
-// token — kept separate from DOMAIN/STOP tables because this list is about
-// SYNTAX (what glues a comparand list together), not vocabulary.
-const COMPARAND_EXCLUDE_WORDS = new Set([
-  "what", "how", "why", "when", "where", "who", "which", "is", "are", "the",
-  "a", "an", "for", "compare", "comparing", "compared", "between", "and",
-  "or", "with", "from", "in", "on", "at", "to", "vs", "versus", "offers",
-  "differences", "difference", "pros", "cons",
-  "vergleich", "vergleichen", "vergleicht", "vergleiche", "zwischen", "und",
-  "oder", "gegenüber", "unterschied", "unterschiede", "im",
-]);
+/** Non-comparand syntax words, per language — question starters, comparison
+ *  verbs/prepositions. Checked against the lowercased, bare token. Kept
+ *  separate from the DOMAIN/STOP tables because this is about SYNTAX (what
+ *  glues a comparand list together), not general vocabulary. Union across
+ *  all supported languages: knowing a word is comparison-syntax in ANY
+ *  supported language is enough to exclude it everywhere (harmless
+ *  cross-lingual overlap, and a 5th language is a new array entry). */
+const COMPARAND_EXCLUDE_WORDS_BY_LANG: Record<Lang, string[]> = {
+  en: ["what", "how", "why", "when", "where", "who", "which", "is", "are", "the", "a", "an", "for", "compare", "comparing", "compared", "between", "and", "or", "with", "from", "in", "on", "at", "to", "vs", "versus", "offers", "differences", "difference", "pros", "cons"],
+  de: ["vergleich", "vergleichen", "vergleicht", "vergleiche", "zwischen", "und", "oder", "gegenüber", "gegen", "unterschied", "unterschiede", "im", "der", "die", "das"],
+  fr: ["comparaison", "comparaisons", "comparer", "entre", "et", "ou", "contre", "différence", "différences"],
+  es: ["comparación", "comparar", "entre", "y", "o", "u", "e", "contra", "diferencia", "diferencias"],
+};
+const COMPARAND_EXCLUDE_WORDS = new Set(SUPPORTED_LANGS.flatMap(l => COMPARAND_EXCLUDE_WORDS_BY_LANG[l]));
 
-/** List-connector words — these close the CURRENT comparand phrase but the
- *  list keeps going (see extractComparands' Oxford-comma handling below). */
-const LIST_CONNECTOR_WORDS = new Set(["and", "und", "or", "oder"]);
+/** List-connector words, per language — these close the CURRENT comparand
+ *  phrase but the list keeps going (Oxford-comma handling below), AND cover
+ *  "vs"-chains ("A vs B vs C vs D") the SAME way, not as a special case
+ *  (review round 2, HIGH #2: comparison connectors are ONE class). Union
+ *  across languages for the same reason as COMPARAND_EXCLUDE_WORDS. Trailing
+ *  punctuation like "vs." is stripped from tokens before lookup, so a bare
+ *  "vs" entry covers it. */
+const LIST_CONNECTOR_WORDS_BY_LANG: Record<Lang, string[]> = {
+  en: ["and", "or", "vs", "versus"],
+  de: ["und", "oder", "vs", "versus", "gegen"],
+  fr: ["et", "ou", "vs", "versus", "contre"],
+  es: ["y", "e", "o", "u", "vs", "versus", "contra"],
+};
+const LIST_CONNECTOR_WORDS = new Set(SUPPORTED_LANGS.flatMap(l => LIST_CONNECTOR_WORDS_BY_LANG[l]));
+const LIST_CONNECTOR_REGEX_SOURCE = `\\b(${[...LIST_CONNECTOR_WORDS].join("|")})\\b`;
+
+/** Generic/common nouns, per language, that must NEVER be absorbed into a
+ *  2-word comparand phrase even though they're capitalized in German (every
+ *  German noun is) or otherwise look brand-like — e.g. "Telekom
+ *  Geschäftskunden" → comparand "Telekom" (not "Telekom Geschäftskunden"),
+ *  "O2 Business" → comparand "O2". Table-driven (review round 2, MEDIUM #4):
+ *  a 5th language or a newly-noticed generic noun is a new array entry, not
+ *  an ad-hoc length tweak. */
+const GENERIC_NOUN_WORDS_BY_LANG: Record<Lang, string[]> = {
+  en: ["business", "enterprise", "cloud", "services", "solutions", "group", "corp", "inc"],
+  de: ["geschäftskunden", "unternehmen", "kunden", "bevölkerung", "einwohner", "gmbh", "ag", "mobilfunk"],
+  fr: ["entreprise", "entreprises", "clients", "population"],
+  es: ["empresa", "empresas", "clientes", "población"],
+};
+const GENERIC_NOUNS = new Set(SUPPORTED_LANGS.flatMap(l => GENERIC_NOUN_WORDS_BY_LANG[l]));
+
+/** Real brand names are never this long — a defensive cap so a pathological
+ *  input can never reach buildComparisonTopicResidual's regex construction
+ *  with an unbounded-length comparand (review round 2, LOW: defense in depth
+ *  alongside novadaResearch's own QUESTION_MAX_LENGTH gate upstream). */
+const MAX_COMPARAND_TOKEN_LENGTH = 60;
 
 /** A token counts as a comparand candidate when it's capitalized (proper
- *  noun, works for both "O2" and "Telekom"/"Deutsche") or an alnum brand
- *  token like "O2"/"5G" (letter+digit either order), and isn't one of the
- *  syntax words above. */
+ *  noun, works for "O2"/"Telekom"/"Deutsche"), an alnum brand token like
+ *  "O2"/"5G" (letter+digit either order), or has an internal lowercase→
+ *  uppercase hump like "eBay"/"iPhone" (review round 2, MEDIUM #4:
+ *  lowercase-initial brands) — and isn't one of the syntax words above. */
 function isComparandToken(token: string): boolean {
   const clean = token.replace(/[?!.,:;()]/g, "");
-  if (clean.length < 2) return false;
+  if (clean.length < 2 || clean.length > MAX_COMPARAND_TOKEN_LENGTH) return false;
   if (COMPARAND_EXCLUDE_WORDS.has(clean.toLowerCase())) return false;
-  return /^[A-Z]/.test(clean) || /^[A-Za-z]+\d+$/.test(clean) || /^\d+[A-Za-z]+$/.test(clean);
+  if (/^[A-Z]/.test(clean)) return true;
+  if (/^[A-Za-z]+\d+$/.test(clean) || /^\d+[A-Za-z]+$/.test(clean)) return true;
+  if (/[a-z][A-Z]/.test(clean)) return true;
+  return false;
 }
 
 /** Max tokens grouped into one comparand phrase. Caps at 2 so a genuine
- *  two-word brand ("Deutsche Telekom") survives whole while a run of
- *  German-capitalized COMMON NOUNS that follows the list (German capitalizes
- *  every noun, so "Geschäftskunden Internet Vergleich" looks identical to a
- *  proper noun run) does not get swallowed into the last comparand — it
- *  becomes topic residual instead (see buildComparisonTopicResidual). */
+ *  two-word brand ("Deutsche Telekom") survives whole. The GENERIC_NOUNS
+ *  check below (not this cap alone) is what stops a trailing common noun
+ *  from being swallowed as the comparand's 2nd word. */
 const MAX_COMPARAND_PHRASE_WORDS = 2;
 
 /** Extract candidate comparands from a comparison question. Groups adjacent
  *  comparand tokens into one phrase (comma or list-connector = hard
  *  boundary even between two capitalized tokens, so "O2, Telekom" stays two
  *  comparands while "Deutsche Telekom" — no separator between them — stays
- *  one). Stops entirely once ≥2 comparands have been found and the list is
- *  closed by an ordinary word, so trailing topic/location words ("in
- *  Germany: prices, speeds...") are never misread as more comparands. */
+ *  one; "A vs B vs C vs D" stays four, since "vs" is a connector, not a
+ *  list-terminator). A generic noun right after a single-word comparand ends
+ *  that phrase at one word instead of extending it to two. Stops entirely
+ *  once ≥2 comparands have been found and the list is closed by an ordinary
+ *  word, so trailing topic/location words ("in Germany: prices, speeds...")
+ *  are never misread as more comparands. */
 export function extractComparands(question: string): string[] {
   if (!COMPARISON_TRIGGER_REGEX.test(question)) return [];
 
@@ -255,13 +361,26 @@ export function extractComparands(question: string): string[] {
     const clean = raw.replace(/[?!.,:;()]/g, "");
     if (clean.length === 0) { flush(); continue; }
     const hadComma = /,$/.test(raw);
+    const lowerClean = clean.toLowerCase();
+
+    if (current.length === 1 && GENERIC_NOUNS.has(lowerClean)) {
+      // review round 2, MEDIUM #4: a generic noun right after a single-word
+      // comparand ends THIS phrase at one word ("Telekom Geschäftskunden" →
+      // comparand "Telekom") instead of being absorbed by the 2-word cap.
+      flush();
+      if (phrases.length >= 2) listClosed = true;
+      continue;
+    }
+
     if (isComparandToken(clean) && current.length < MAX_COMPARAND_PHRASE_WORDS) {
       current.push(clean);
       if (hadComma) flush();
-    } else if (LIST_CONNECTOR_WORDS.has(clean.toLowerCase())) {
-      // "and"/"und"/"or"/"oder" closes the CURRENT phrase but the list keeps
-      // going — an Oxford-comma list ("X, Y, Z and W") puts the connector
-      // before the LAST item, not after it, so this must not end the scan.
+    } else if (LIST_CONNECTOR_WORDS.has(lowerClean)) {
+      // "and"/"und"/"vs"/"versus"/... closes the CURRENT phrase but the list
+      // keeps going — both an Oxford-comma list ("X, Y, Z and W") and a
+      // "vs"-chain ("A vs B vs C vs D") put a connector before the LAST
+      // item, not after it, so this must never end the scan (review round 2,
+      // HIGH #2: connectors are one shared class, not a comma-only special case).
       flush();
     } else {
       // Any other non-comparand word genuinely ends the list (topic/
@@ -280,25 +399,36 @@ export function extractComparands(question: string): string[] {
  *  e.g. "O2, Telekom und Deutsche Telekom Geschäftskunden Internet
  *  Vergleich" minus its 3 comparands → "Geschäftskunden Internet". Appended
  *  to each per-comparand query so it stays specific instead of bare brand
- *  names. Filtered through both languages' stopwords and capped so a long
- *  tail clause doesn't balloon every comparand query. */
+ *  names. Filtered through every supported language's signal words and
+ *  capped so a long tail clause doesn't balloon every comparand query. */
 function buildComparisonTopicResidual(topic: string, comparands: string[]): string {
   let residual = topic;
-  for (const c of comparands) {
+  for (const rawComparand of comparands) {
+    // Defensive length cap (review round 2, LOW) — never build a regex from
+    // an unbounded-length comparand, even though isComparandToken already
+    // rejects anything this long before it can reach extractComparands' output.
+    const c = rawComparand.length > MAX_COMPARAND_TOKEN_LENGTH
+      ? rawComparand.slice(0, MAX_COMPARAND_TOKEN_LENGTH)
+      : rawComparand;
     const escaped = c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     residual = residual.replace(new RegExp(`\\b${escaped}\\b`, "i"), " ");
   }
-  // Fresh global copy for replacement — COMPARISON_TRIGGER_REGEX itself stays
-  // non-global so its repeated .test() calls elsewhere (detectDomain,
+  // Fresh global copies for replacement — COMPARISON_TRIGGER_REGEX itself
+  // stays non-global so its repeated .test() calls elsewhere (detectDomain,
   // extractComparands) never accumulate lastIndex state across calls.
   residual = residual.replace(new RegExp(COMPARISON_TRIGGER_REGEX.source, "gi"), " ");
-  residual = residual.replace(/\b(and|und|or|oder)\b/gi, " ");
+  residual = residual.replace(new RegExp(LIST_CONNECTOR_REGEX_SOURCE, "gi"), " ");
   residual = residual.replace(/[,:;]/g, " ");
 
   const words = residual.split(/\s+/).filter(Boolean);
   const content = words.filter(w => {
+    // Stray punctuation debris (e.g. a lone "." left behind when "vs." is
+    // matched without its trailing dot — `\b` cannot assert a boundary
+    // between a dot and a following space, so the regex above backtracks to
+    // leave the dot unconsumed) is never usable query text.
+    if (!/[a-z0-9]/i.test(w)) return false;
     const lower = w.toLowerCase();
-    return !STOP_WORDS.has(lower) && !DE_SIGNAL_WORDS.has(lower) && !COMPARAND_EXCLUDE_WORDS.has(lower);
+    return !STOP_WORDS.has(lower) && !ALL_SIGNAL_WORDS.has(lower) && !COMPARAND_EXCLUDE_WORDS.has(lower);
   });
   return content.slice(0, 6).join(" ");
 }
@@ -410,7 +540,11 @@ export async function novadaResearch(
       // into one source instead of appearing as duplicates. decodeBingRedirect
       // never throws — a non-bing URL (the common case) passes through unchanged.
       const rawUrl: string = decodeBingRedirect(r.url || r.link || "");
-      const normalized = normalizeUrl(rawUrl);
+      // research-query-quality-2026-11-14 review round 2: use the dedup-only
+      // normalizer here (strips locale/tracking params), NOT plain
+      // normalizeUrl — that one is also crawl/map/site_copy's traversal key
+      // and must stay conservative (see utils/url.ts).
+      const normalized = normalizeUrlForResultDedup(rawUrl);
       if (normalized && !uniqueSources.has(normalized)) {
         const rawSnippet = r.description || r.snippet || "";
         const cleanSnippet = rawSnippet
@@ -1202,27 +1336,38 @@ const STOP_WORDS = new Set([
   "and", "or", "but", "can", "will", "should", "would", "could",
 ]);
 
+/** Real questions never need to be this long for query-generation purposes —
+ *  a defensive cap independent of novadaResearch's own QUESTION_MAX_LENGTH
+ *  gate (review round 2, LOW: these functions are now exported, so a future
+ *  direct caller that bypasses that gate still can't feed pathological input
+ *  into the regex-building below). */
+const MAX_QUESTION_LENGTH_FOR_QUERY_GEN = 2000;
+
 /** Generate diverse search queries for broader research coverage.
  *
  * F14-2: Use the full `topic` string (not a truncated 4-word keyPhrase) as the
  * base for all derived sub-queries so that named entities (proper nouns at word
- * positions 5+) survive into search sub-queries. The keyPhrase is still derived
- * for the reddit/hn social queries where shorter phrases work better.
+ * positions 5+) survive into search sub-queries.
  *
- * research-query-quality-2026-11-14: three further fixes layered on top of
- * the above, driven by a live owner report (German business-broadband
- * question → irrelevant, near-duplicate results):
- *  1. Comparison questions (EN "vs"/"compare X, Y and Z" and DE "Vergleich"/
- *     comma lists) now get ONE targeted query per comparand + the residual
- *     topic phrase, plus one side-by-side query — instead of the full
- *     question padded with a generic suffix (which produced near-duplicate
- *     searches and truncated multi-word entities like "Deutsche Telekom").
- *  2. The generic (non-comparison) suffix table is now per-language
- *     (DOMAIN_SUFFIXES_BY_LANG) and the social/HN filler queries — which
- *     have no clean non-English equivalent — are skipped entirely for a
- *     detected non-English question rather than appending English filler.
- *  3. "2024 2025 trends" / "best practices 2025" are now computed from
+ * research-query-quality-2026-11-14 (round 1 + round 2 review fixes):
+ *  1. Comparison questions — EN "vs"/"compare X, Y and Z", DE "Vergleich"/
+ *     comma lists, FR "comparaison"/"entre...et", ES "comparación"/
+ *     "entre...y", and "vs"-CHAINS of any length ("A vs B vs C vs D") — now
+ *     get ONE targeted query per comparand + the residual topic phrase, plus
+ *     one side-by-side query, instead of the full question padded with a
+ *     generic suffix. Comparison connectors (and/und/et/y, vs/versus/gegen/
+ *     contre/contra) are ONE shared table (LIST_CONNECTOR_WORDS), not a
+ *     comma-only special case, so a 3+-item "vs"-chain is never truncated.
+ *  2. The generic (non-comparison) suffix table is per-language (en/de/fr/
+ *     es). A genuinely unsupported language (detectLanguage returns
+ *     "unknown" — different script) gets ZERO filler suffixes appended
+ *     (fail safe) rather than a guessed-English or guessed-translated one.
+ *  3. "2024 2025 trends" / "best practices 2025" are computed from
  *     `new Date()` at call time, never hard-coded.
+ *  4. A per-comparand query is only emitted when the topic residual is
+ *     non-empty — a bare 1-token query ("TCP") is skipped in favor of the
+ *     side-by-side query ("TCP vs UDP"), which always has disambiguating
+ *     context.
  * Every generated query is deduped (case/whitespace-insensitive) before
  * returning, so no future suffix addition can reintroduce a near-duplicate.
  */
@@ -1232,39 +1377,52 @@ export function generateSearchQueries(
   comprehensive: boolean,
   focus?: string
 ): string[] {
-  const queries: string[] = [question];
-  const words = question.toLowerCase().split(/\s+/);
+  const safeQuestion = question.length > MAX_QUESTION_LENGTH_FOR_QUERY_GEN
+    ? question.slice(0, MAX_QUESTION_LENGTH_FOR_QUERY_GEN)
+    : question;
+  const queries: string[] = [safeQuestion];
+  const words = safeQuestion.toLowerCase().split(/\s+/);
   // F14-2: use full topic (without trailing punctuation) as base for sub-queries
-  const topic = question.replace(/[?!.]+$/, "").trim();
-  const keywords = words.filter(w => !STOP_WORDS.has(w) && !DE_SIGNAL_WORDS.has(w) && w.length > 2);
+  const topic = safeQuestion.replace(/[?!.]+$/, "").trim();
+  const keywords = words.filter(w => !STOP_WORDS.has(w) && !ALL_SIGNAL_WORDS.has(w) && w.length > 2);
 
   // Apply focus to sub-queries if provided
   const focusSuffix = focus ? ` ${focus}` : "";
 
-  const domain = detectDomain(question);
-  const lang = detectLanguage(question);
-  const comparands = domain === "comparison" ? extractComparands(question) : [];
+  const domain = detectDomain(safeQuestion);
+  const lang = detectLanguage(safeQuestion);
+  const comparands = domain === "comparison" ? extractComparands(safeQuestion) : [];
 
   const thisYear = new Date().getFullYear();
   const lastYear = thisYear - 1;
 
   if (comparands.length >= 2) {
     const residual = buildComparisonTopicResidual(topic, comparands);
-    const residualSuffix = residual ? ` ${residual}` : "";
-    for (const c of comparands) {
-      queries.push(`${c}${residualSuffix}${focusSuffix}`);
-    }
-    // One side-by-side query, in addition to the full original question
-    // (queries[0]) and the per-comparand queries above.
-    queries.push(`${comparands.join(" vs ")}${residualSuffix}${focusSuffix}`.trim());
-    if (comprehensive) {
-      const pricingWord = lang === "de" ? "preise" : "pricing";
+    if (residual) {
+      const residualSuffix = ` ${residual}`;
       for (const c of comparands) {
-        queries.push(`${c}${residualSuffix} ${pricingWord}${focusSuffix}`);
+        queries.push(`${c}${residualSuffix}${focusSuffix}`);
+      }
+      if (comprehensive && lang !== "unknown") {
+        const pricingWord = EXTRA_WORDS_BY_LANG[lang].pricing;
+        for (const c of comparands) {
+          queries.push(`${c}${residualSuffix} ${pricingWord}${focusSuffix}`);
+        }
       }
     }
+    // One side-by-side query, in addition to the full original question
+    // (queries[0]) and the per-comparand queries above (if any). Always has
+    // disambiguating context from pairing the comparands, so this is never a
+    // bare 1-token query even when residual is empty.
+    queries.push(`${comparands.join(" vs ")}${residual ? ` ${residual}` : ""}${focusSuffix}`.trim());
+  } else if (lang === "unknown") {
+    // Genuinely unsupported script — never guess a filler language onto it
+    // (requirement 3, fail safe). Keep diversity structural (quoted exact
+    // phrase) instead of appending any language's words.
+    queries.push(`"${topic}"${focusSuffix}`);
   } else {
     const domainSuffixes = DOMAIN_SUFFIXES_BY_LANG[lang][domain];
+    const extra = EXTRA_WORDS_BY_LANG[lang];
     if (keywords.length > 2) {
       // F14-2: Use full `topic` so named entities (e.g. "Novada", "TypeScript", "Model Context Protocol")
       // are preserved in derived sub-queries, not truncated by a 4-word slice.
@@ -1272,7 +1430,7 @@ export function generateSearchQueries(
       queries.push(`${topic} ${domainSuffixes[1]}${focusSuffix}`);
       if (deep || comprehensive) {
         queries.push(`${topic} ${domainSuffixes[2]}${focusSuffix}`);
-        queries.push(`${topic} ${lang === "de" ? "herausforderungen grenzen" : "challenges limitations"}${focusSuffix}`);
+        queries.push(`${topic} ${extra.challengesLimitations}${focusSuffix}`);
         // Social queries (reddit/HN) have no clean non-English equivalent —
         // skip rather than append English filler onto a non-English question.
         // Uses full `topic` (not a truncated keyword slice) so a multi-word
@@ -1282,7 +1440,7 @@ export function generateSearchQueries(
         }
       }
       if (comprehensive) {
-        queries.push(`${topic} ${lang === "de" ? "praxisbeispiele" : "case study examples"}${focusSuffix}`);
+        queries.push(`${topic} ${extra.caseStudyExamples}${focusSuffix}`);
         queries.push(`${topic} ${lastYear} ${thisYear} trends${focusSuffix}`);
         if (lang === "en") queries.push(`${topic} hacker news discussion`);
       }
@@ -1290,12 +1448,12 @@ export function generateSearchQueries(
       queries.push(`"${topic}" ${domainSuffixes[0]}${focusSuffix}`);
       queries.push(`${topic} ${domainSuffixes[1]}${focusSuffix}`);
       if (deep || comprehensive) {
-        queries.push(`${topic} ${lang === "de" ? "beispiele anwendungsfälle" : "examples use cases"}${focusSuffix}`);
-        queries.push(`${topic} ${lang === "de" ? "erfahrungen test" : "review experience"}${focusSuffix}`);
+        queries.push(`${topic} ${extra.examplesUseCases}${focusSuffix}`);
+        queries.push(`${topic} ${extra.reviewExperience}${focusSuffix}`);
         if (lang === "en") queries.push(`${topic} reddit discussion opinions`);
       }
       if (comprehensive) {
-        queries.push(`${topic} ${lang === "de" ? "bewährte praktiken" : "best practices"} ${thisYear}${focusSuffix}`);
+        queries.push(`${topic} ${extra.bestPractices} ${thisYear}${focusSuffix}`);
         if (lang === "en") queries.push(`${topic} hacker news discussion`);
       }
     }

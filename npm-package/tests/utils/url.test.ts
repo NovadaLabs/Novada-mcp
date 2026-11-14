@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeUrl, isContentLink, decodeBingRedirect } from "../../src/utils/url.js";
+import { normalizeUrl, normalizeUrlForResultDedup, isContentLink, decodeBingRedirect } from "../../src/utils/url.js";
 
 describe("normalizeUrl", () => {
   it("strips trailing slash", () => {
@@ -43,26 +43,74 @@ describe("normalizeUrl", () => {
     expect(result).toBe("https://example.com:8080/path");
   });
 
-  // ─── research-query-quality-2026-11-14: dedup noise-param stripping ──────
-  // Field report: the same facebook.com/fb-answers/... article served under
-  // ?locale=pa_IN / pt_BR / tr_TR was counted as three separate sources
-  // because normalizeUrl only sorted params, never stripped locale noise.
+  // ─── research-query-quality-2026-11-14 review round 2 (HIGH #1) ──────────
+  // Plain normalizeUrl is ALSO crawl.ts/map.ts/site_copy.ts's traversal key —
+  // it must NOT strip locale/language params, or those tools would silently
+  // treat a genuinely different (translated) page as "already visited".
+  // Noise-param stripping lives only in normalizeUrlForResultDedup below.
 
-  it("strips a locale param so three locale variants of the same page collapse to one URL", () => {
+  it("mirror (traversal correctness): plain normalizeUrl keeps ?lang=de and ?lang=en DISTINCT", () => {
+    const de = normalizeUrl("https://docs.example.com/guide?lang=de");
+    const en = normalizeUrl("https://docs.example.com/guide?lang=en");
+    expect(de).not.toBe(en);
+  });
+
+  it("mirror (traversal correctness): plain normalizeUrl keeps ?locale= variants DISTINCT", () => {
     const a = normalizeUrl("https://www.facebook.com/fb-answers/article/123?locale=pa_IN");
     const b = normalizeUrl("https://www.facebook.com/fb-answers/article/123?locale=pt_BR");
-    const c = normalizeUrl("https://www.facebook.com/fb-answers/article/123?locale=tr_TR");
+    expect(a).not.toBe(b);
+  });
+
+  it("mirror (traversal correctness): plain normalizeUrl keeps ?hl= variants DISTINCT", () => {
+    const de = normalizeUrl("https://example.com/docs?hl=de");
+    const en = normalizeUrl("https://example.com/docs?hl=en");
+    expect(de).not.toBe(en);
+  });
+
+  it("handles multiple trailing slashes", () => {
+    expect(normalizeUrl("https://example.com/path///")).toBe("https://example.com/path");
+  });
+});
+
+describe("normalizeUrlForResultDedup", () => {
+  // Field report: the same facebook.com/fb-answers/... article served under
+  // ?locale=pa_IN / pt_BR / tr_TR was counted as three separate SOURCES in a
+  // novada_research result list. This normalizer is scoped to that call site
+  // only (research.ts) — never used as a crawl/map/site_copy traversal key.
+
+  it("does everything plain normalizeUrl does (www/trailing-slash/hash/sort)", () => {
+    expect(normalizeUrlForResultDedup("https://www.example.com/docs/?z=1&a=2#intro")).toBe(
+      "https://example.com/docs?a=2&z=1"
+    );
+  });
+
+  it("strips a locale param so three locale variants of the same page collapse to one URL", () => {
+    const a = normalizeUrlForResultDedup("https://www.facebook.com/fb-answers/article/123?locale=pa_IN");
+    const b = normalizeUrlForResultDedup("https://www.facebook.com/fb-answers/article/123?locale=pt_BR");
+    const c = normalizeUrlForResultDedup("https://www.facebook.com/fb-answers/article/123?locale=tr_TR");
     expect(a).toBe(b);
     expect(b).toBe(c);
     expect(a).toBe("https://facebook.com/fb-answers/article/123");
   });
 
   it("strips hl (Google-style UI-language) param", () => {
-    expect(normalizeUrl("https://example.com/docs?hl=de")).toBe("https://example.com/docs");
+    expect(normalizeUrlForResultDedup("https://example.com/docs?hl=de")).toBe("https://example.com/docs");
+  });
+
+  // Live-reproduced 2026-11-14 review round 2 re-verification: reddit.com
+  // served the SAME thread under ?tl=ru / ?tl=de / ?tl=el (translate-locale)
+  // during the live eval — a real-world recurrence of the reported bug under
+  // a param name this table didn't originally cover.
+  it("strips tl (reddit-style translate-locale) param so locale variants of the same thread collapse", () => {
+    const ru = normalizeUrlForResultDedup("https://www.reddit.com/r/germany/comments/1b46svu/telekom_vs_o2_dsl_internet/?tl=ru");
+    const de = normalizeUrlForResultDedup("https://www.reddit.com/r/germany/comments/1b46svu/telekom_vs_o2_dsl_internet/?tl=de");
+    const none = normalizeUrlForResultDedup("https://www.reddit.com/r/germany/comments/1b46svu/telekom_vs_o2_dsl_internet/");
+    expect(ru).toBe(de);
+    expect(de).toBe(none);
   });
 
   it("strips every utm_* param (whole family, not just utm_source)", () => {
-    const result = normalizeUrl(
+    const result = normalizeUrlForResultDedup(
       "https://example.com/post?utm_source=newsletter&utm_medium=email&utm_campaign=launch&id=42"
     );
     // utm_* stripped, but the meaningful `id` param survives.
@@ -70,13 +118,13 @@ describe("normalizeUrl", () => {
   });
 
   it("strips fbclid and gclid click-id tracking params", () => {
-    expect(normalizeUrl("https://example.com/page?fbclid=abc123")).toBe("https://example.com/page");
-    expect(normalizeUrl("https://example.com/page?gclid=xyz789")).toBe("https://example.com/page");
+    expect(normalizeUrlForResultDedup("https://example.com/page?fbclid=abc123")).toBe("https://example.com/page");
+    expect(normalizeUrlForResultDedup("https://example.com/page?gclid=xyz789")).toBe("https://example.com/page");
   });
 
   it("collapses a locale variant AND a trailing-slash variant to the same normalized URL", () => {
-    const a = normalizeUrl("https://example.com/article/?locale=en_US");
-    const b = normalizeUrl("https://example.com/article");
+    const a = normalizeUrlForResultDedup("https://example.com/article/?locale=en_US");
+    const b = normalizeUrlForResultDedup("https://example.com/article");
     expect(a).toBe(b);
   });
 
@@ -84,22 +132,22 @@ describe("normalizeUrl", () => {
   // over-reach into a DIFFERENT, meaningful param on an unrelated host —
   // `id`/`q` on a product or search page is content, not tracking noise.
   it("mirror: does NOT strip meaningful params like ?id= or ?q= on an unrelated host", () => {
-    expect(normalizeUrl("https://shop.example.com/product?id=42")).toBe(
+    expect(normalizeUrlForResultDedup("https://shop.example.com/product?id=42")).toBe(
       "https://shop.example.com/product?id=42"
     );
-    expect(normalizeUrl("https://shop.example.com/search?q=widgets")).toBe(
+    expect(normalizeUrlForResultDedup("https://shop.example.com/search?q=widgets")).toBe(
       "https://shop.example.com/search?q=widgets"
     );
   });
 
   it("mirror: two DIFFERENT product ids on the same host stay distinct after normalization", () => {
-    const a = normalizeUrl("https://shop.example.com/product?id=42");
-    const b = normalizeUrl("https://shop.example.com/product?id=43");
+    const a = normalizeUrlForResultDedup("https://shop.example.com/product?id=42");
+    const b = normalizeUrlForResultDedup("https://shop.example.com/product?id=43");
     expect(a).not.toBe(b);
   });
 
-  it("handles multiple trailing slashes", () => {
-    expect(normalizeUrl("https://example.com/path///")).toBe("https://example.com/path");
+  it("returns the original string for invalid URLs", () => {
+    expect(normalizeUrlForResultDedup("not-a-url")).toBe("not-a-url");
   });
 });
 

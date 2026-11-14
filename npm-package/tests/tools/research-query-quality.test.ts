@@ -59,9 +59,11 @@ interface Fixture {
   /** Entities that, if a query contains their FIRST word, must also contain
    *  the full phrase — guards against mid-entity truncation. */
   wholeEntities?: string[];
-  /** True when the question is phrased in German — asserts 0 English filler
-   *  across every generated query. */
-  isGerman?: boolean;
+  /** True when the question is phrased in a non-English language (German,
+   *  French, Spanish, or an unsupported script) — asserts 0 English filler
+   *  across every generated query (review round 2, MEDIUM #3: en/de/fr/es,
+   *  fail-safe for anything else). */
+  nonEnglish?: boolean;
 }
 
 const FIXTURES: Fixture[] = [
@@ -70,7 +72,7 @@ const FIXTURES: Fixture[] = [
     question: "O2, Telekom und Deutsche Telekom Geschäftskunden Internet Vergleich",
     mustAppearSomewhere: ["O2", "Telekom", "Deutsche Telekom"],
     wholeEntities: ["Deutsche Telekom"],
-    isGerman: true,
+    nonEnglish: true,
   },
   {
     label: "EN comma-list (Oxford 'and'), 3 comparands",
@@ -88,7 +90,7 @@ const FIXTURES: Fixture[] = [
     question: "AWS vs Azure Cloud Kosten Vergleich",
     mustAppearSomewhere: ["AWS", "Azure Cloud"],
     wholeEntities: ["Azure Cloud"],
-    isGerman: true,
+    nonEnglish: true,
   },
   {
     label: "EN 'Compare X, Y, Z and W' (Oxford comma), 4 comparands",
@@ -105,7 +107,7 @@ const FIXTURES: Fixture[] = [
     label: "DE 'und' list without comma, 2 comparands",
     question: "O2 und Telekom Geschäftskunden Vergleich",
     mustAppearSomewhere: ["O2", "Telekom"],
-    isGerman: true,
+    nonEnglish: true,
   },
   {
     label: "EN how-to, single topic (no comparands)",
@@ -116,7 +118,7 @@ const FIXTURES: Fixture[] = [
     label: "DE how-to, single topic (no comparands)",
     question: "Wie konfiguriere ich nginx rate limiting?",
     mustAppearSomewhere: ["nginx"],
-    isGerman: true,
+    nonEnglish: true,
   },
   {
     label: "EN single-topic, named entity at word position 5+",
@@ -133,13 +135,91 @@ const FIXTURES: Fixture[] = [
     label: "DE comparison trigger but only 1 comparand → falls back to generic path (no crash)",
     question: "Vergleich von Cloud-Anbietern",
     mustAppearSomewhere: ["Cloud-Anbietern"],
-    isGerman: true,
+    nonEnglish: true,
   },
   {
     label: "EN comparison-domain question with 'vs' but short (regression: F14-2 zero-hit comparand case)",
     question: "Compare ProxyA vs UnknownBrandXYZ residential proxy performance",
     mustAppearSomewhere: ["ProxyA", "UnknownBrandXYZ"],
   },
+
+  // ─── Review round 2 additions (2026-11-14) ─────────────────────────────
+
+  {
+    label: "EN 3-item 'vs' chain (HIGH #2 regression fixture)",
+    question: "Vodafone vs O2 vs 1&1 mobile plans",
+    mustAppearSomewhere: ["Vodafone", "O2"],
+  },
+  {
+    label: "EN 4-item 'vs' chain, multi-word trailing entity (HIGH #2 required fixture)",
+    question: "AWS vs Azure vs GCP vs Oracle Cloud pricing",
+    mustAppearSomewhere: ["AWS", "Azure", "GCP", "Oracle"],
+  },
+  {
+    label: "EN mixed comma-list + 'vs' ('A, B vs C', HIGH #2 required fixture)",
+    question: "Spotify, Apple Music vs YouTube Music streaming price",
+    mustAppearSomewhere: ["Spotify", "Apple Music", "YouTube Music"],
+    wholeEntities: ["Apple Music", "YouTube Music"],
+  },
+  {
+    label: "DE 'gegen' as a vs-equivalent connector",
+    question: "Vodafone gegen O2 Mobilfunk",
+    mustAppearSomewhere: ["Vodafone", "O2"],
+    nonEnglish: true,
+  },
+  {
+    label: "FR comparison ('comparaison entre X et Y', MEDIUM #3 required fixture)",
+    question: "Comparaison entre Orange et SFR",
+    mustAppearSomewhere: ["Orange", "SFR"],
+    nonEnglish: true,
+  },
+  {
+    label: "ES comparison ('comparación entre X y Y', MEDIUM #3 required fixture)",
+    question: "Comparación entre Movistar y Vodafone precios",
+    mustAppearSomewhere: ["Movistar", "Vodafone"],
+    nonEnglish: true,
+  },
+  {
+    label: "EN lowercase-initial brand ('eBay', MEDIUM #4 required fixture)",
+    question: "eBay vs Amazon seller fees",
+    mustAppearSomewhere: ["eBay", "Amazon"],
+  },
+  {
+    label: "EN camelCase brand ('iPhone') paired with a multi-word entity",
+    question: "iPhone vs Samsung Galaxy camera quality",
+    mustAppearSomewhere: ["iPhone", "Samsung Galaxy"],
+    wholeEntities: ["Samsung Galaxy"],
+  },
+  {
+    label: "DE generic-noun cap: 'Telekom Geschäftskunden' → comparand 'Telekom' only (MEDIUM #4 required fixture)",
+    question: "O2 und Telekom Geschäftskunden Vergleich",
+    mustAppearSomewhere: ["O2", "Telekom"],
+    nonEnglish: true,
+  },
+  {
+    label: "EN/DE generic-noun cap keeps a real 2-word entity whole, drops a trailing common noun (MEDIUM #4 required fixture)",
+    question: "Nordrhein-Westfalen vs Baden-Württemberg Bevölkerung",
+    mustAppearSomewhere: ["Nordrhein-Westfalen", "Baden-Württemberg"],
+    wholeEntities: ["Nordrhein-Westfalen", "Baden-Württemberg"],
+  },
+  {
+    label: "non-Latin script (CJK) — fail-safe to 'unknown' language, zero filler",
+    question: "比较一下腾讯和阿里巴巴",
+    mustAppearSomewhere: ["腾讯", "阿里巴巴"],
+    nonEnglish: true,
+  },
+];
+
+// Non-comparison inputs that LOOK like a comparand list ("X and Y") but have
+// no comparison trigger word — must never produce comparands or a
+// comparison-branch query (review round 2, Check 2 non-regression spot-checks).
+const NON_COMPARISON_FALSE_POSITIVE_FIXTURES: string[] = [
+  "pros and cons of Rust",
+  "Barnes and Noble revenue",
+  "salt, fat, acid, heat book summary",
+  "Bed Bath and Beyond closing stores",
+  "Dungeons and Dragons character build",
+  "Lewis and Clark expedition history",
 ];
 
 describe("generateSearchQueries — fixture table (≥12 questions, en+de)", () => {
@@ -172,8 +252,8 @@ describe("generateSearchQueries — fixture table (≥12 questions, en+de)", () 
         });
       }
 
-      if (fx.isGerman) {
-        it("no English filler suffix on a German question", () => {
+      if (fx.nonEnglish) {
+        it("no English filler suffix on a non-English question", () => {
           for (const deep of [false, true]) {
             for (const comprehensive of [false, true]) {
               const queries = generateSearchQueries(fx.question, deep, comprehensive);
@@ -201,6 +281,17 @@ describe("generateSearchQueries — fixture table (≥12 questions, en+de)", () 
   }
 });
 
+// Non-comparison inputs that LOOK like a comparand list ("X and Y") but have
+// no comparison trigger word — must never trip the ≥2-comparand branch
+// (review round 2, Check 2 non-regression spot-checks).
+describe("generateSearchQueries / extractComparands — non-comparison false positives", () => {
+  for (const question of NON_COMPARISON_FALSE_POSITIVE_FIXTURES) {
+    it(`"${question}" never yields ≥2 comparands`, () => {
+      expect(extractComparands(question).length).toBeLessThan(2);
+    });
+  }
+});
+
 describe("extractComparands — comparand grouping", () => {
   it("keeps a comma-separated list AND a two-word brand whole, in one pass", () => {
     const comparands = extractComparands("O2, Telekom und Deutsche Telekom Geschäftskunden Internet Vergleich");
@@ -222,6 +313,70 @@ describe("extractComparands — comparand grouping", () => {
 
   it("returns an empty list for a non-comparison question", () => {
     expect(extractComparands("How does nginx rate limiting work?")).toEqual([]);
+  });
+
+  // ─── Review round 2, HIGH #2: "vs" chains ──────────────────────────────
+
+  it("a 3-item 'vs' chain yields all 3 comparands, not just the first 2", () => {
+    expect(extractComparands("Vodafone vs O2 vs Telekom mobile plans")).toEqual(["Vodafone", "O2", "Telekom"]);
+  });
+
+  it("a 4-item 'vs' chain yields all 4 comparands, not just the first 2", () => {
+    expect(extractComparands("AWS vs Azure vs GCP vs Oracle Cloud pricing")).toEqual(["AWS", "Azure", "GCP", "Oracle"]);
+  });
+
+  it("'A vs. B' (abbreviated, with a trailing period on 'vs') still yields both comparands", () => {
+    expect(extractComparands("AWS vs. Azure")).toEqual(["AWS", "Azure"]);
+  });
+
+  it("'A versus B' (spelled out) yields both comparands", () => {
+    expect(extractComparands("Figma versus Sketch")).toEqual(["Figma", "Sketch"]);
+  });
+
+  it("German 'A gegen B' (vs-equivalent) yields both comparands", () => {
+    expect(extractComparands("Vodafone gegen O2 Mobilfunk")).toEqual(["Vodafone", "O2"]);
+  });
+
+  it("a mixed comma-list + 'vs' ('A, B vs C') yields all 3 comparands, preserving 2-word entities", () => {
+    expect(extractComparands("Spotify, Apple Music vs YouTube Music streaming price")).toEqual([
+      "Spotify", "Apple Music", "YouTube Music",
+    ]);
+  });
+
+  // ─── Review round 2, MEDIUM #3: fr/es comparison questions ─────────────
+
+  it("French 'comparaison entre X et Y' yields both comparands", () => {
+    expect(extractComparands("Comparaison entre Orange et SFR")).toEqual(["Orange", "SFR"]);
+  });
+
+  it("Spanish 'comparación entre X y Y' yields both comparands", () => {
+    expect(extractComparands("Comparación entre Movistar y Vodafone precios")).toEqual(["Movistar", "Vodafone"]);
+  });
+
+  // ─── Review round 2, MEDIUM #4: lowercase-initial / camelCase brands ───
+
+  it("a camelCase brand with a lowercase initial ('eBay') is recognized as a comparand", () => {
+    expect(extractComparands("eBay vs Amazon seller fees")).toEqual(["eBay", "Amazon"]);
+  });
+
+  it("a camelCase brand ('iPhone') paired with a 2-word entity, both kept correctly", () => {
+    expect(extractComparands("iPhone vs Samsung Galaxy camera quality")).toEqual(["iPhone", "Samsung Galaxy"]);
+  });
+
+  // ─── Review round 2, MEDIUM #4: generic-noun cap on 2-word phrases ─────
+
+  it("a trailing generic noun ('Geschäftskunden') is NOT absorbed into a 1-word comparand", () => {
+    expect(extractComparands("O2 und Telekom Geschäftskunden Vergleich")).toEqual(["O2", "Telekom"]);
+  });
+
+  it("a real 2-word entity stays whole while a trailing generic noun ('Bevölkerung') is dropped", () => {
+    expect(extractComparands("Nordrhein-Westfalen vs Baden-Württemberg Bevölkerung")).toEqual([
+      "Nordrhein-Westfalen", "Baden-Württemberg",
+    ]);
+  });
+
+  it("a generic noun ('Business') between 'vs' and a trailing noun is dropped from the comparand", () => {
+    expect(extractComparands("Vodafone vs O2 Business Mobilfunk Tarife")).toEqual(["Vodafone", "O2"]);
   });
 });
 
@@ -290,5 +445,60 @@ describe("generateSearchQueries — focus param propagation", () => {
     const queries = generateSearchQueries("how to configure nginx rate limiting", false, false, "Kubernetes ingress");
     const derived = queries.slice(1);
     expect(derived.some(q => q.includes("Kubernetes ingress"))).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Review round 2, LOW: no bare 1-token sub-queries (append the topic
+// residual, or skip and rely on the side-by-side query instead).
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("generateSearchQueries — no bare 1-token comparand queries", () => {
+  it("a comparison with an empty topic residual never emits a bare single-token query", () => {
+    const queries = generateSearchQueries("difference between TCP and UDP", true, true);
+    for (const q of queries) {
+      const wordCount = q.trim().split(/\s+/).length;
+      expect(wordCount, `query "${q}" is a bare single token`).toBeGreaterThan(1);
+    }
+    // Both comparands still appear — via the side-by-side query, not a bare one.
+    expect(queries.some(q => /\btcp\b/i.test(q) && /\budp\b/i.test(q))).toBe(true);
+  });
+
+  it("a 2-comparand question with zero residual still produces ≥1 query mentioning both (via side-by-side)", () => {
+    const queries = generateSearchQueries("eBay vs Amazon", true, true);
+    expect(queries.some(q => /\bebay\b/i.test(q) && /\bamazon\b/i.test(q))).toBe(true);
+    for (const q of queries) {
+      expect(q.trim().split(/\s+/).length).toBeGreaterThan(1);
+    }
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Review round 2, MEDIUM #3: unsupported-script language detection fails
+// SAFE — zero filler suffixes, never a guessed-English translation.
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("generateSearchQueries — unsupported-script language fails safe", () => {
+  it("a CJK-script question gets zero English (or any-language) filler suffixes", () => {
+    const question = "比较一下腾讯和阿里巴巴云服务";
+    const queries = generateSearchQueries(question, true, true);
+    for (const q of queries) {
+      for (const marker of ENGLISH_FILLER_MARKERS) {
+        expect(q.toLowerCase(), `query "${q}" contains filler "${marker}"`).not.toContain(marker);
+      }
+    }
+    // Still returns at least the original question — never throws, never empty.
+    expect(queries.length).toBeGreaterThan(0);
+    expect(queries[0]).toBe(question);
+  });
+
+  it("a Cyrillic-script question gets zero English filler suffixes", () => {
+    const question = "сравнение Яндекс и Google";
+    const queries = generateSearchQueries(question, true, true);
+    for (const q of queries) {
+      for (const marker of ENGLISH_FILLER_MARKERS) {
+        expect(q.toLowerCase()).not.toContain(marker);
+      }
+    }
   });
 });
