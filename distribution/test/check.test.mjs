@@ -136,7 +136,7 @@ test("location_rules: red when a required manifest file is removed", async () =>
     // glama.json is used (not plugin.json) because it has zero owned/verified fields — deleting
     // it cannot also crash generate.mjs's computeWrites() (which must read an owned row's file
     // to diff it), keeping this fixture isolated to location_rules only.
-    rmSync(join(root, "npm-package", "glama.json"));
+    rmSync(join(root, "glama.json"));
 
     const results = await runChecks(root);
     const lr = findResult(results, "location_rules");
@@ -201,7 +201,7 @@ test("legibility: red when a manifest becomes unparseable JSON", async () => {
     // brief-N (2026-10-19, D2): glama.json replaces the retired npm-package/.claude-plugin/
     // marketplace.json — same "zero owned/verified fields" isolation reasoning the
     // location_rules test above already uses for glama.json.
-    const marketplacePath = join(root, "npm-package", "glama.json");
+    const marketplacePath = join(root, "glama.json");
     const raw = readFileSync(marketplacePath, "utf8");
     writeFileSync(marketplacePath, raw.slice(0, -2)); // truncate -> invalid JSON
 
@@ -523,6 +523,7 @@ test("ci_paths_cover: red when ci.yml carries a paths: filter that misses a chan
         "  push:",
         "    paths:",
         '      - "npm-package/**"',
+        '      - "glama.json"',
         '      - "distribution/**"',
         "  workflow_dispatch: {}",
         "",
@@ -555,6 +556,7 @@ test("ci_paths_cover: a paths: filter that covers every row (literal filename en
         "  push:",
         "    paths:",
         '      - "npm-package/**"',
+        '      - "glama.json"',
         '      - "distribution/**"',
         '      - "gemini-extension.json"',
         "  workflow_dispatch: {}",
@@ -580,6 +582,7 @@ test("ci_paths_cover: a brand-new row at an uncovered root path is caught by a s
         "  push:",
         "    paths:",
         '      - "npm-package/**"',
+        '      - "glama.json"',
         '      - "distribution/**"',
         '      - "gemini-extension.json"',
         "  workflow_dispatch: {}",

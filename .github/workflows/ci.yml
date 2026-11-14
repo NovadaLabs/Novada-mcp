@@ -14,6 +14,7 @@ on:
       # distribution/check.mjs's ci_paths_cover check now fails the build if any channel row's
       # path stops being covered by this list (or any future one added here).
       - "gemini-extension.json"
+      - "glama.json"
   pull_request:
     branches: [main]
     paths:
@@ -21,6 +22,7 @@ on:
       - "distribution/**"
       - ".github/workflows/**"
       - "gemini-extension.json"
+      - "glama.json"
   workflow_dispatch: {}
 
 defaults:
