@@ -6,6 +6,9 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+### Fixed
+- **`novada_research` sub-query generation and source dedup** (owner report 2026-11-14: a German business-broadband question returned irrelevant, near-duplicate results). Comparison questions — English `vs`/`versus`/`compare X, Y and Z` and German `Vergleich`/comma lists, including Oxford-comma lists — now get one targeted query per named comparand (`"O2 Geschäftskunden Internet"`, `"Telekom Geschäftskunden Internet"`, `"Deutsche Telekom Geschäftskunden Internet"`, …) plus one side-by-side query, instead of the full question padded with a generic (and, for non-English questions, English) filler suffix; a two-word brand like "Deutsche Telekom" is kept whole instead of being truncated mid-name. The generic (non-comparison) suffix table is now per-language (English/German), computed years (`new Date()`) replace the hard-coded "2024 2025 trends"/"best practices 2025", and every generated query is deduped so no future suffix addition can reintroduce a near-duplicate search. Source dedup (`normalizeUrl`, used by `novada_research`/`novada_crawl`/`novada_map`/`novada_site_copy`) now strips known non-content query params (`locale`, `hl`, `utm_*`, `fbclid`, `gclid`, …) before comparing URLs, so the same article served under different locale/tracking params (e.g. three `facebook.com/fb-answers/...` locale variants) collapses to one source instead of three; a meaningful param on an unrelated page (`?id=`, `?q=`) is left untouched.
+
 ---
 
 ## [0.9.48] — 2026-11-12

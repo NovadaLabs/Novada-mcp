@@ -1,4 +1,5 @@
-/** Normalize a URL for deduplication: strip trailing slash, www, fragment, sort params */
+/** Normalize a URL for deduplication: strip trailing slash, www, fragment,
+ *  strip known non-content (locale/tracking) params, sort remaining params. */
 export declare function normalizeUrl(urlStr: string): string;
 /**
  * Decode a Bing SERP redirect URL into the real destination it wraps.

@@ -1,10 +1,41 @@
-/** Normalize a URL for deduplication: strip trailing slash, www, fragment, sort params */
+// ─── Dedup noise params (research-query-quality-2026-11-14) ────────────────
+// Source URLs that are otherwise identical often differ only by a locale/
+// tracking param the publisher's CMS stamps per-request (e.g. a Facebook
+// Answers article served at the same path under ?locale=pa_IN / pt_BR /
+// tr_TR). Left in, normalizeUrl treats each locale variant as a distinct
+// source — the exact bug reported 2026-11-14 (three locale-wrapped copies of
+// one facebook.com/fb-answers/... article counted as three separate sources).
+// Table-driven (class, not instance) so adding a new noise param is a new
+// row here, never a new branch at the call site. Exact names cover one-off
+// known noise keys; prefixes cover whole families (utm_source, utm_medium, …).
+const NOISE_PARAM_EXACT = new Set([
+    "locale", "hl", "lang", "fbclid", "gclid", "msclkid", "ref", "ref_src",
+    "igshid", "mc_cid", "mc_eid", "_ga", "si",
+]);
+const NOISE_PARAM_PREFIXES = ["utm_"];
+/** True when `paramName` is a known non-content (locale/tracking) query param
+ *  that should be stripped before dedup — never a meaningful content param
+ *  like `id`, `q`, or `page` on an unrelated host. */
+function isNoiseParam(paramName) {
+    const lower = paramName.toLowerCase();
+    if (NOISE_PARAM_EXACT.has(lower))
+        return true;
+    return NOISE_PARAM_PREFIXES.some((p) => lower.startsWith(p));
+}
+/** Normalize a URL for deduplication: strip trailing slash, www, fragment,
+ *  strip known non-content (locale/tracking) params, sort remaining params. */
 export function normalizeUrl(urlStr) {
     try {
         const u = new URL(urlStr);
         u.hash = "";
         u.hostname = u.hostname.replace(/^www\./, "");
         u.pathname = u.pathname.replace(/\/+$/, "") || "/";
+        // Snapshot keys before deleting — deleting while iterating a live
+        // URLSearchParams iterator can skip entries.
+        for (const key of [...new Set(u.searchParams.keys())]) {
+            if (isNoiseParam(key))
+                u.searchParams.delete(key);
+        }
         u.searchParams.sort();
         return u.toString();
     }

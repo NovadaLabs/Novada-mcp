@@ -43,6 +43,61 @@ describe("normalizeUrl", () => {
     expect(result).toBe("https://example.com:8080/path");
   });
 
+  // ─── research-query-quality-2026-11-14: dedup noise-param stripping ──────
+  // Field report: the same facebook.com/fb-answers/... article served under
+  // ?locale=pa_IN / pt_BR / tr_TR was counted as three separate sources
+  // because normalizeUrl only sorted params, never stripped locale noise.
+
+  it("strips a locale param so three locale variants of the same page collapse to one URL", () => {
+    const a = normalizeUrl("https://www.facebook.com/fb-answers/article/123?locale=pa_IN");
+    const b = normalizeUrl("https://www.facebook.com/fb-answers/article/123?locale=pt_BR");
+    const c = normalizeUrl("https://www.facebook.com/fb-answers/article/123?locale=tr_TR");
+    expect(a).toBe(b);
+    expect(b).toBe(c);
+    expect(a).toBe("https://facebook.com/fb-answers/article/123");
+  });
+
+  it("strips hl (Google-style UI-language) param", () => {
+    expect(normalizeUrl("https://example.com/docs?hl=de")).toBe("https://example.com/docs");
+  });
+
+  it("strips every utm_* param (whole family, not just utm_source)", () => {
+    const result = normalizeUrl(
+      "https://example.com/post?utm_source=newsletter&utm_medium=email&utm_campaign=launch&id=42"
+    );
+    // utm_* stripped, but the meaningful `id` param survives.
+    expect(result).toBe("https://example.com/post?id=42");
+  });
+
+  it("strips fbclid and gclid click-id tracking params", () => {
+    expect(normalizeUrl("https://example.com/page?fbclid=abc123")).toBe("https://example.com/page");
+    expect(normalizeUrl("https://example.com/page?gclid=xyz789")).toBe("https://example.com/page");
+  });
+
+  it("collapses a locale variant AND a trailing-slash variant to the same normalized URL", () => {
+    const a = normalizeUrl("https://example.com/article/?locale=en_US");
+    const b = normalizeUrl("https://example.com/article");
+    expect(a).toBe(b);
+  });
+
+  // Mirror test (Pendulum discriminator): a noise-param strip must not
+  // over-reach into a DIFFERENT, meaningful param on an unrelated host —
+  // `id`/`q` on a product or search page is content, not tracking noise.
+  it("mirror: does NOT strip meaningful params like ?id= or ?q= on an unrelated host", () => {
+    expect(normalizeUrl("https://shop.example.com/product?id=42")).toBe(
+      "https://shop.example.com/product?id=42"
+    );
+    expect(normalizeUrl("https://shop.example.com/search?q=widgets")).toBe(
+      "https://shop.example.com/search?q=widgets"
+    );
+  });
+
+  it("mirror: two DIFFERENT product ids on the same host stay distinct after normalization", () => {
+    const a = normalizeUrl("https://shop.example.com/product?id=42");
+    const b = normalizeUrl("https://shop.example.com/product?id=43");
+    expect(a).not.toBe(b);
+  });
+
   it("handles multiple trailing slashes", () => {
     expect(normalizeUrl("https://example.com/path///")).toBe("https://example.com/path");
   });
