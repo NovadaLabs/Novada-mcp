@@ -1,5 +1,22 @@
-/** Normalize a URL for deduplication: strip trailing slash, www, fragment, sort params */
+/** Normalize a URL for deduplication: strip trailing slash, www, fragment, sort params.
+ *
+ * research-query-quality-2026-11-14 review round 2 (HIGH #1): this function is
+ * also the TRAVERSAL key for crawl.ts/map.ts/site_copy.ts — it decides which
+ * URLs have "already been visited" and therefore get skipped. It must stay
+ * conservative here: many real sites serve genuinely different CONTENT under
+ * a locale/language query param (translated docs pages, Google Support locale
+ * variants), so stripping `lang`/`hl` globally would make `crawl`/`site_copy`
+ * silently skip a real second-language page it hasn't actually visited yet —
+ * under-coverage, the mirror-image failure of the over-counting bug this file
+ * was originally changed to fix. See `normalizeUrlForResultDedup` below for
+ * the noise-param-stripping variant, used ONLY by research.ts's post-hoc
+ * result-list dedup (where collapsing a locale-duplicate source is correct). */
 export declare function normalizeUrl(urlStr: string): string;
+/** Normalize a URL for RESEARCH RESULT-LIST dedup only: everything
+ *  `normalizeUrl` does, PLUS stripping known non-content (locale/tracking)
+ *  params. Do not use this as a crawl/map/site_copy traversal key — use
+ *  `normalizeUrl` there. */
+export declare function normalizeUrlForResultDedup(urlStr: string): string;
 /**
  * Decode a Bing SERP redirect URL into the real destination it wraps.
  *
