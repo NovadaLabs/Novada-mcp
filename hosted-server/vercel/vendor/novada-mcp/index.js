@@ -214,6 +214,11 @@ function toAgentErrorText(error, toolName) {
 // individually): strip the mark from every text block and, if any block
 // carried one, set isError:true. A result already isError:true is left alone.
 function applyHonestFailureFlag(result) {
+    // An explicit isError:true (set upstream, e.g. the dispatch catch-block for a
+    // thrown error) must short-circuit before the failure-mark scan below — this
+    // function only ever ADDS isError:true, never removes/downgrades one already set.
+    if (result?.isError === true)
+        return result;
     if (!Array.isArray(result?.content))
         return result;
     let sawFailureMark = false;

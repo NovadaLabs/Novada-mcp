@@ -27,6 +27,7 @@ vi.mock("../../src/tools/extract.js", () => ({
 
 import { novadaExtract } from "../../src/tools/extract.js";
 import { novadaResearch } from "../../src/tools/research.js";
+import { toolFailure } from "../../src/_core/errors.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -49,16 +50,22 @@ const successfulExtract = (content: string): string =>
 /**
  * Simulates novadaExtract returning the TOTAL_REQUEST_CEILING sentinel string
  * (exactly as extract.ts:1294 does — a return value, not a thrown exception).
+ *
+ * Round 6 (review HIGH): wrapped with toolFailure() — the real extract.ts
+ * formatter always does this before returning a failure string, so a mock that
+ * returns the bare, unmarked text is simulating a world that no longer exists
+ * (isToolFailure() would report it as SUCCESS, exactly the bug this round fixes
+ * in research.ts/search.ts). This mock must mirror the real contract.
  */
 const ceilingExtract = (url: string): string =>
-  [
+  toolFailure([
     `## Extraction Error`,
     `url: ${url}`,
     `error: Request exceeded the 30s total ceiling and was aborted.`,
     ``,
     `## Agent Action`,
     `agent_instruction: This URL took too long (>30s). Try render="static" to skip escalation, or novada_scrape for platform-specific data.`,
-  ].join("\n");
+  ].join("\n"));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -230,5 +237,55 @@ describe("P2: Extraction Error sentinel must be caught before content reaches sy
       result,
       "agent_instruction from timed-out extraction must not appear in research output"
     ).not.toMatch(/Try render="static" to skip escalation/);
+  });
+
+  // Round 6 (review HIGH, class fix): research.ts calls novadaExtract in-process,
+  // OUTSIDE the one transport choke point (applyHonestFailureFlag). It must detect
+  // a failed extraction via isToolFailure(), never by re-deriving its own copy of
+  // extract.ts's failure heading text (the exact duplication this round removes).
+  it("GAP-P2-5 (round 6): a real toolFailure()-marked error is detected and excluded even if its wording never matches a known heading", async () => {
+    const url = "https://odd-failure.example.com/page";
+    mockedAxios.post.mockResolvedValue(
+      searchEnvelope([{ title: "Odd Failure Page", url, description: "A page that fails oddly" }])
+    );
+    // Deliberately NOT one of the two historically-hardcoded headings — proves
+    // detection no longer depends on matching a specific text literal at all.
+    mockedNovadaExtract.mockResolvedValueOnce(
+      toolFailure("## Something Else Entirely Went Wrong\nno recognizable heading here")
+    );
+
+    const result = await novadaResearch(
+      { question: "What happened on the odd failure page?", depth: "quick" },
+      API_KEY
+    );
+
+    expect(result).not.toContain("no recognizable heading here");
+    expect(result).not.toMatch(/\u{F0001}/u);
+  });
+
+  // Mirror (pendulum — prove the discriminator is the marker, not the wording):
+  // an UNMARKED string that happens to start with the OLD sentinel text must be
+  // treated as real page content, never as a failure.
+  it("GAP-P2-6 (round 6): an UNMARKED extraction whose body text merely contains the OLD sentinel wording is still grounded, real content — never excluded as a failure (detection is structural, never textual)", async () => {
+    const url = "https://real-article.example.com/incident-retrospective";
+    mockedAxios.post.mockResolvedValue(
+      searchEnvelope([{ title: "Incident Retrospective", url, description: "A retrospective on a past production incident" }])
+    );
+    // Deliberately contains the literal old sentinel wording ("Extract Failed")
+    // mid-sentence, as ordinary page prose — never via toolFailure(). If
+    // detection were still text-based this would be misclassified.
+    mockedNovadaExtract.mockResolvedValueOnce(
+      successfulExtract(
+        "This incident retrospective explains why engineers saw an 'Extract Failed' error code during a production outage that lasted three hours and affected customers across the EU region before the on-call team identified a misconfigured DNS record as the root cause."
+      )
+    );
+
+    const result = await novadaResearch(
+      { question: "What caused the production incident where engineers saw an Extract Failed error?", depth: "quick" },
+      API_KEY
+    );
+
+    expect(result).toContain("misconfigured DNS record as the root cause");
+    expect(result).toMatch(/material:grounded/);
   });
 });

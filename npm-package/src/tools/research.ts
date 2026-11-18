@@ -4,7 +4,7 @@ import type { ResearchParams, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
 import type { ProgressReporter } from "./crawl.js";
-import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets, toolFailure } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets, toolFailure, isToolFailure, stripToolFailureMark } from "../_core/errors.js";
 import { wrapUntrusted, unwrapUntrusted } from "../utils/untrusted.js";
 
 // C1: distinguish a REAL account-level entitlement failure (Scraper API not
@@ -579,17 +579,23 @@ export async function novadaResearch(
     const extractResults = await Promise.allSettled(
       topSources.map(async (source) => {
         try {
-          const content = await novadaExtract(
+          const rawContent = await novadaExtract(
             { url: source.url, format: "markdown", query: params.question, render: "auto" },
             apiKey
           );
-          // Skip failed extractions.
-          // extract.ts returns "## Extract Failed" on generic errors (extract.ts:242)
-          // and "## Extraction Error" on TOTAL_REQUEST_CEILING timeout (extract.ts:1294).
-          // Both must be caught here so timeout error text never reaches source-material assembly.
-          if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
+          // Round 6 (review HIGH, class fix): novadaExtract is called in-process here —
+          // this consumer is OUTSIDE the one transport choke point (applyHonestFailureFlag
+          // in index.ts/mcp.ts), so it must detect failure via isToolFailure() itself,
+          // never by re-deriving its own copy of extract.ts's failure heading text. The
+          // old `content.startsWith("## Extract Failed" | "## Extraction Error")` check
+          // silently broke the moment toolFailure() started prepending an invisible
+          // marker ahead of that text — every failed extraction's error text was treated
+          // as source material instead of being skipped (round-3f-gap.test.ts's mock of
+          // the bare unmarked string stayed green for a world that no longer exists).
+          if (isToolFailure(rawContent)) {
             return { ok: false as const, title: source.title, url: source.url, snippet: source.snippet };
           }
+          const content = stripToolFailureMark(rawContent);
           // Strip all extract-output metadata — only keep the page body content.
           // R1/R9: extract prepends a save-header — `📁 ...` (local) or `path: ...`
           // (hosted, often EMPTY as `path: `). Both must be removed or the dangling

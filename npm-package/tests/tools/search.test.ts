@@ -3,7 +3,7 @@ import axios, { AxiosError } from "axios";
 import { novadaSearch } from "../../src/tools/search.js";
 import { validateSearchParams } from "../../src/tools/types.js";
 import * as extractModule from "../../src/tools/extract.js";
-import { NovadaErrorCode } from "../../src/_core/errors.js";
+import { NovadaErrorCode, toolFailure } from "../../src/_core/errors.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -180,6 +180,72 @@ describe("novadaSearch", () => {
     expect(result).not.toContain("Extracted content for https://example.com/4");
     expect(result).not.toContain("Extracted content for https://example.com/5");
     expect(novadaExtractSpy).toHaveBeenCalledTimes(3);
+    novadaExtractSpy.mockRestore();
+  });
+
+  // Round 6 (review HIGH, class fix): novadaSearch's extract_options/enrich_top
+  // path calls novadaExtract in-process, OUTSIDE the one transport choke point
+  // (applyHonestFailureFlag). It must detect a failed extraction via
+  // isToolFailure(), never by re-deriving its own copy of extract.ts's failure
+  // heading text — that duplicate literal silently stopped working the moment
+  // toolFailure() started prepending an invisible marker ahead of the text.
+  it("GAP-P2-3 (round 6): a toolFailure()-marked extraction failure is excluded from extracted content, never leaked as source material", async () => {
+    mockGoogleSuccess([
+      { title: "R1", url: "https://example.com/1", description: "D1" },
+    ]);
+
+    const novadaExtractSpy = vi.spyOn(extractModule, "novadaExtract").mockImplementation(async () => {
+      return toolFailure("## Extract Failed\nurl: https://example.com/1\nError: DNS lookup failed for this host");
+    });
+
+    const result = await novadaSearch(
+      {
+        query: "test-marked-failure",
+        engine: "google",
+        num: 10,
+        country: "",
+        language: "",
+        extract_options: { format: "markdown", top_n: 1 },
+      },
+      API_KEY
+    );
+
+    // The failure is correctly excluded from real content — it must appear ONLY
+    // via the explicit `extract_error:` diagnostic field, never embedded inside
+    // the untrusted-content wrapper as if it were real page body text.
+    expect(result).toMatch(/extract_error:[\s\S]*DNS lookup failed for this host/);
+    const contentBlockMatch = result.match(/<!-- BEGIN EXTERNAL CONTENT[\s\S]*?<!-- END EXTERNAL CONTENT -->/);
+    expect(contentBlockMatch?.[0] ?? "").not.toContain("DNS lookup failed for this host");
+    // The invisible PUA marker itself must never reach the rendered output either.
+    expect(result).not.toMatch(/\u{F0001}/u);
+    novadaExtractSpy.mockRestore();
+  });
+
+  // Mirror of the test above (pendulum — prove the discriminator is the marker,
+  // not the wording): the SAME heading text, unmarked, must be treated as real
+  // page content, not a failure — detection is structural, never textual.
+  it("GAP-P2-4 (round 6): an UNMARKED string that merely says '## Extract Failed' is treated as real content, not a failure (detection is structural, never textual)", async () => {
+    mockGoogleSuccess([
+      { title: "R1", url: "https://example.com/1", description: "D1" },
+    ]);
+
+    const novadaExtractSpy = vi.spyOn(extractModule, "novadaExtract").mockImplementation(async () => {
+      return "## Extract Failed is the title of this legitimately-extracted blog post about outage postmortems";
+    });
+
+    const result = await novadaSearch(
+      {
+        query: "test-unmarked-lookalike",
+        engine: "google",
+        num: 10,
+        country: "",
+        language: "",
+        extract_options: { format: "markdown", top_n: 1 },
+      },
+      API_KEY
+    );
+
+    expect(result).toContain("legitimately-extracted blog post about outage postmortems");
     novadaExtractSpy.mockRestore();
   });
 

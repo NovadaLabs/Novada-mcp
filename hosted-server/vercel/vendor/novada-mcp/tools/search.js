@@ -6,7 +6,7 @@ import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, TIMEOUTS, toolCallDeadline } f
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
 import { novadaExtract } from "./extract.js";
-import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets, serpCaptureFailedHint, toolFailure } from "../_core/errors.js";
+import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets, serpCaptureFailedHint, toolFailure, isToolFailure, stripToolFailureMark } from "../_core/errors.js";
 import { withSingleTransientRetry, submitRetryBudget } from "../_core/submit-retry.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
@@ -797,11 +797,15 @@ export async function novadaSearch(params, apiKey, options) {
     const allUrlsUnavailable = reranked.length > 0 && reranked.every((r) => r.url_unavailable === true);
     // P1-7: Auto-extract content from top N results when extract_options is provided
     // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
-    // Sentinel strings emitted by novadaExtract to signal a fetch failure.
-    // INVARIANT: do NOT change EXTRACT_FAILED_SENTINEL — src/tools/research.ts:214-215 depends on it.
-    // EXTRACT_ERROR_SENTINEL is the timeout-ceiling path (extract.ts ~1294).
-    const EXTRACT_FAILED_SENTINEL = "## Extract Failed";
-    const EXTRACT_ERROR_SENTINEL = "## Extraction Error";
+    // Round 6 (review HIGH, class fix): this used to detect a failed extraction by
+    // re-deriving its OWN copy of extract.ts's failure-heading text
+    // (EXTRACT_FAILED_SENTINEL/EXTRACT_ERROR_SENTINEL, independently duplicated from
+    // research.ts's equally-hardcoded copy of the same strings). Both broke silently
+    // the moment toolFailure() started prepending an invisible marker ahead of that
+    // text. novadaExtract is called in-process here, OUTSIDE the one transport choke
+    // point (applyHonestFailureFlag) — this consumer must detect failure via
+    // isToolFailure() itself, the same helper every other in-process consumer uses,
+    // not a parallel text-literal copy.
     if (params.extract_options || params.enrich_top) {
         const opts = params.extract_options ?? { top_n: 1, format: "markdown" };
         const topN = opts.top_n ?? (params.enrich_top ? 1 : 3);
@@ -810,24 +814,23 @@ export async function novadaSearch(params, apiKey, options) {
             .filter((u) => Boolean(u));
         const extractResults = await Promise.all(urlsToExtract.map(async (url) => {
             try {
-                const content = await novadaExtract({
+                const rawContent = await novadaExtract({
                     url,
                     format: opts.format ?? "markdown",
                     render: "auto",
                     fields: opts.fields,
                     max_chars: opts.max_chars,
                 }, apiKey);
+                // F6b / C4: a failed extraction must never propagate into extracted_content.
+                // Round 6: isToolFailure() is the ONLY failure signal now — checked BEFORE
+                // any text manipulation, never derived from the message's wording.
+                if (isToolFailure(rawContent)) {
+                    const errorText = stripToolFailureMark(rawContent);
+                    return { url, content: null, extract_error: errorText.slice(0, 300), ok: false, sentinel: true };
+                }
+                const content = stripToolFailureMark(rawContent);
                 // Strip the output-save prefix that novadaExtract prepends (📁 ...)
                 const rawText = content.replace(/^📁[^\n]*\n\n/, "");
-                // F6b / C4: Detect failure sentinels — treat as a soft failure.
-                // "## Extract Failed" = caught exception path (research.ts depends on this string — do NOT rename).
-                // "## Extraction Error" = TOTAL_REQUEST_CEILING timeout path (extract.ts ~1294).
-                // Neither sentinel must propagate into extracted_content.
-                const trimmed = rawText.trimStart();
-                if (trimmed.startsWith(EXTRACT_FAILED_SENTINEL) ||
-                    trimmed.startsWith(EXTRACT_ERROR_SENTINEL)) {
-                    return { url, content: null, extract_error: rawText.slice(0, 300), ok: false, sentinel: true };
-                }
                 // F6a: When BOTH extract_options.format==="json" AND the outer params.format==="json",
                 // JSON.parse the content so extracted_content is a nested object in the JSON output.
                 // When the outer format is markdown, keep rawText as a string so the markdown renderer

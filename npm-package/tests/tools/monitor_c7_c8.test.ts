@@ -232,7 +232,9 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
   // Regression (P1): the hosted browser-unavailable path returns
   // "## Browser Mode Unavailable" (utils/runtime.ts). It previously slipped past
   // the C8 guard (which only checked ## Extract Failed / ## Extraction Error)
-  // and got hashed + baselined. Now covered by isExtractionFailureSentinel().
+  // and got hashed + baselined. Now covered structurally: every failure string
+  // (including this one) is wrapped by toolFailure(), detected via
+  // isToolFailure() — no heading-text list to keep in sync.
   it("returns error/unavailable status (NOT baseline_recorded) when extract returns ## Browser Mode Unavailable sentinel", async () => {
     const browserUnavailableOutput = toolFailure([
       `## Browser Mode Unavailable`,

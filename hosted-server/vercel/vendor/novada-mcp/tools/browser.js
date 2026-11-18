@@ -9,10 +9,11 @@ import { isBrowserTransportAvailable } from "../utils/runtime.js";
  * `render=`/`method=` param (`${fieldName}="browser" requires…`, "Use
  * ${fieldName}='render'…") which reads wrong for this tool — novada_browser has
  * no render param, and telling the agent to pass one would trigger a schema
- * reject. Same heading ("## Browser Mode Unavailable" — a member of runtime.ts's
- * EXTRACTION_FAILURE_SENTINELS set) and same machine status token
- * (status:browser_unavailable_on_runtime) so downstream consumers see one
- * consistent shape; only the prose is tool-appropriate.
+ * reject. Same heading ("## Browser Mode Unavailable") and same machine status
+ * token (status:browser_unavailable_on_runtime) so downstream consumers see one
+ * consistent shape; only the prose is tool-appropriate. Both this function and
+ * runtime.ts's getBrowserUnavailableError() wrap their return with toolFailure()
+ * — the structural marker is the failure signal, not the heading text.
  */
 function browserUnavailableOnRuntimeMessage() {
     return toolFailure([

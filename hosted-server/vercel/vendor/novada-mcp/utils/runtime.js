@@ -142,27 +142,14 @@ export function getBrowserUnavailableError(paramValue, fieldName = "render", ren
             `Alternatively, use ${fieldName}="render" (Web Unblocker) for JS rendering — no extra config needed.`,
     ].join("\n"));
 }
-/**
- * Markdown-heading prefixes that novadaExtract (and its browser-tier fallback)
- * emit as a STRING instead of throwing, to signal a failed extraction:
- *  - "## Extract Failed"        — extract.ts caught-exception path
- *  - "## Extraction Error"      — extract.ts TOTAL_REQUEST_CEILING timeout path
- *  - "## Browser Mode Unavailable" — getBrowserUnavailableError() above (hosted/no-WS)
- *
- * Consumers that baseline or diff extract output (monitor.ts) MUST treat any of
- * these as a failure, NOT as page content — otherwise the error text gets hashed
- * and stored as a baseline, producing false "changed" reports on the next call.
- *
- * Single source of truth: add any future sentinel prefix here and every consumer
- * using isExtractionFailureSentinel() picks it up automatically.
- */
-export const EXTRACTION_FAILURE_SENTINELS = [
-    "## Extract Failed",
-    "## Extraction Error",
-    "## Browser Mode Unavailable",
-];
-/** True when `content` is one of the extraction-failure sentinel strings above. */
-export function isExtractionFailureSentinel(content) {
-    return EXTRACTION_FAILURE_SENTINELS.some((s) => content.startsWith(s));
-}
+// Round 6 (review HIGH, class fix): the EXTRACTION_FAILURE_SENTINELS text-literal
+// list and isExtractionFailureSentinel() that used to live here are deleted — every
+// in-process consumer of novadaExtract's string output (monitor.ts, research.ts,
+// search.ts) now detects failure structurally via isToolFailure()/
+// stripToolFailureMark() (_core/errors.ts), never by re-deriving its own copy of
+// extract.ts's failure-heading text. That text-literal duplication (research.ts and
+// search.ts each hardcoded their OWN copy of "## Extract Failed"/"## Extraction
+// Error", independently of this list and of each other) is exactly the class of bug
+// that went silently stale when toolFailure() started prepending an invisible
+// marker ahead of the text.
 //# sourceMappingURL=runtime.js.map
