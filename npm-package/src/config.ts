@@ -23,15 +23,77 @@ export const SCRAPER_DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
 export const WEB_UNBLOCKER_BASE = "https://webunlocker.novada.com";
 
 /**
- * True on serverless hosts (Vercel / AWS Lambda) that cannot hold a persistent
- * WebSocket. The Browser API is CDP-over-WebSocket, so `render="browser"` can
- * never run there — callers use this to fail fast with a clear error and to keep
- * `render="auto"` from escalating into an impossible tier. (health.ts /
- * health_all.ts carry local copies; dedupe to this in a follow-up.)
+ * Round 5 (owner direction, 2026-11-18): ONE runtime-capability object,
+ * replacing the scattered `isHostedEnvironment()`/`process.env.VERCEL`
+ * checks that used to be re-derived independently at ~11 call sites across
+ * the codebase (utils/output.ts, utils/first-run-notice.ts, tools/
+ * site_copy.ts each had their OWN inline VERCEL check, inconsistently
+ * including AWS_LAMBDA_FUNCTION_NAME or not — a silent-drift risk; utils/
+ * browser.ts had two MORE copies that diverged the moment
+ * DEPLOYMENT_SUPPORTS_WS was introduced, see the A/B verifier finding in
+ * utils/runtime.ts's history). Every capability check in this codebase
+ * should read a `RUNTIME` field directly instead of re-deriving its own
+ * notion of "hosted."
+ *
+ * `kind` resolution order:
+ *  1. `NOVADA_RUNTIME_KIND=hosted|local` — an explicit, HONEST self-
+ *     declaration. This is how the EC2 entrypoint (hosted-server/vercel/
+ *     server.mts) identifies itself as hosted WITHOUT forging Vercel's own
+ *     env vars (the previous design set `VERCEL=1`/`VERCEL_ENV`/
+ *     `VERCEL_REGION` before importing any handler — a masquerade, not a
+ *     capability declaration).
+ *  2. Falls back to real platform auto-detection (`VERCEL` / `VERCEL_ENV` /
+ *     `AWS_LAMBDA_FUNCTION_NAME`) when `NOVADA_RUNTIME_KIND` is unset — this
+ *     is what makes an ACTUAL Vercel/Lambda deployment "hosted" for free,
+ *     with no entrypoint-side forcing needed at all.
+ *  3. Otherwise "local" (the npm-package stdio server).
+ *
+ * `canHoldWebSocket` keeps the existing `DEPLOYMENT_SUPPORTS_WS=true` opt-in
+ * override (EC2 is hosted but DOES hold a persistent CDP WebSocket, unlike
+ * genuine serverless) as its own independent field — deliberately NOT folded
+ * into `kind`, since "is this hosted" and "can this hold a WS" are different
+ * questions with different answers on EC2.
+ *
+ * Fields are plain getters over ONE computation (`computeRuntime()`), not a
+ * snapshot frozen at import time: in every real deployment (local stdio,
+ * EC2, Vercel/Lambda) these env vars are fixed before the process starts and
+ * never change mid-process, so this is observationally "set once at
+ * startup" there — but reading live means the test suite can simulate a
+ * different runtime by mutating `process.env` directly, without every test
+ * needing `vi.resetModules()` + a fresh dynamic import. There is still
+ * exactly ONE implementation of the resolution logic — never a second,
+ * independently-derived copy.
  */
-export function isHostedEnvironment(): boolean {
-  return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+export type RuntimeKind = "local" | "hosted";
+
+export interface Runtime {
+  readonly kind: RuntimeKind;
+  /** Can this process write to the local filesystem (~/Downloads, flag files)? False on serverless (read-only FS outside /tmp). */
+  readonly canWriteFiles: boolean;
+  /** Can this process hold a persistent CDP WebSocket for the Browser API (CDP) tier? */
+  readonly canHoldWebSocket: boolean;
 }
+
+function computeRuntimeKind(): RuntimeKind {
+  const forced = process.env.NOVADA_RUNTIME_KIND;
+  if (forced === "hosted" || forced === "local") return forced;
+  return process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME
+    ? "hosted"
+    : "local";
+}
+
+export const RUNTIME: Runtime = {
+  get kind(): RuntimeKind {
+    return computeRuntimeKind();
+  },
+  get canWriteFiles(): boolean {
+    return computeRuntimeKind() !== "hosted";
+  },
+  get canHoldWebSocket(): boolean {
+    if (process.env.DEPLOYMENT_SUPPORTS_WS === "true") return true;
+    return computeRuntimeKind() !== "hosted";
+  },
+};
 
 /**
  * scrape-transient-review2-2026-10-21.md MEDIUM #2 (additive budgets): the
@@ -62,7 +124,7 @@ export function isHostedEnvironment(): boolean {
  * this helper, not just a coincidence of the numbers chosen.
  */
 export function toolCallDeadline(startMs: number = Date.now()): number {
-  return isHostedEnvironment() ? startMs + HOSTED_SAFE_CEILING_MS : Infinity;
+  return RUNTIME.kind === "hosted" ? startMs + HOSTED_SAFE_CEILING_MS : Infinity;
 }
 
 // Optional: Browser API WebSocket endpoint (CDP)

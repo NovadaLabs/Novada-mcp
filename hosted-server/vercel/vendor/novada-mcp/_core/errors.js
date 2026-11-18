@@ -253,296 +253,48 @@ export function isBlockClassFetchFailure(err) {
     const statuses = collectStatuses(err);
     return statuses.some((s) => BLOCK_CLASS_STATUSES.has(s));
 }
-// ─── Honest-failure detection (F3, 2026-11-18 reliability fix; H1 fix round 2) ─
+// ─── Honest-failure detection (F3, 2026-11-18 reliability fix) ────────────────
 //
-// Many tools signal failure by RETURNING a normally-shaped string whose text
-// happens to describe a failure, instead of throwing — e.g. extract.ts returns
-// "## Extract Failed" / "## Browser Mode Unavailable" text from a successful
-// async function call. The MCP dispatch choke points (npm-package/src/index.ts,
-// hosted-server/vercel/api/mcp.ts) already set `isError: true` at every CATCH
-// site; this closes the other gap — a non-throwing result whose text IS the
-// failure. 2026-11-18 layer-study.md: 7 of 24 AWS-research tool calls were
-// exactly this shape (failure body, isError:false), which is why the problem
-// was invisible to both telemetry and the agent's own retry logic.
+// Round 5 (owner direction, "越优化越 pure"): replaced a textual/heading-based
+// detector (a 104-entry classification table + a recursive source scanner)
+// with a STRUCTURAL one. A tool fails in exactly one of two ways:
+//  1. It throws (a NovadaError or any Error) — already caught and converted
+//     to isError:true at every dispatch choke point (index.ts/mcp.ts), unchanged.
+//  2. It returns a string that IS the failure — now marked at the exact point
+//     the formatter decides the call failed, via toolFailure() below, instead
+//     of being INFERRED later by reading the returned text for a heading or
+//     status word. There is no table to keep complete and no scanner to run —
+//     the mark travels with the value from its one point of origin.
 //
-// H1 (independent review, round 2): the FIRST version of this detector used a
-// word-boundary regex (`\b(?:Failed|Error|Unavailable)\b`) over the whole first
-// line. That is unsafe: several tools' SUCCESS header interpolates caller input
-// into that SAME first line — research.ts:1266 `` `## Research: ${args.topic}` ``
-// (every research call, success AND failure, starts with this), ai_monitor.ts
-// `` `## Brand Presence on AI-Company Domains — ${brand}` ``. A topic/brand
-// containing the word "error" or "failed" (e.g. "common React error boundary
-// patterns") flipped a fully successful result to isError:true. Caller-supplied
-// text (topic, query, url, brand) must NEVER be inspected by this detector.
-//
-// Fix: two signals, NEITHER of which can carry caller text —
-//  1. PRIMARY — the `agent_instruction: status:X` marker every formatter emits.
-//     Verified (by reading every site, not assumed) that every `status:` token
-//     in the codebase is a fixed string literal or a ternary between fixed
-//     string literals (`status:failed`, `status:${hasMaterial?"success":"partial"}`,
-//     `status:search_unavailable`, `status:browser_unavailable_on_runtime`,
-//     `error: invalid_params`, ...) — never string-interpolated from a tool
-//     param. grep `status:` across npm-package/src/tools/*.ts to re-verify if a
-//     new tool is added; a hit that is NOT one of these fixed enumerable tokens
-//     means this invariant has been violated and this comment is now stale.
-//  2. SECONDARY — an EXACT, closed table of formatter-owned header strings
-//     (FAILURE_HEADER_LITERALS below), matched by whole-line EQUALITY against
-//     the trimmed first line — never a substring/word-boundary scan over
-//     arbitrary interpolated content. Enumerated by grepping every literal
-//     `` `## X` `` string under npm-package/src/tools/*.ts and keeping only the
-//     ones that are TRUE fixed literals (no `${...}` interpolation anywhere in
-//     that header line) and that a tool returns ONLY on genuine failure. A
-//     header that interpolates caller input (`## Research: ${topic}`, `##
-//     Brand Presence on AI-Company Domains — ${brand}`) is deliberately
-//     EXCLUDED from this table — such a header can never prove failure on its
-//     own text, by construction, regardless of what the caller's input says.
-// "## Research Incomplete" / "## Verify Incomplete" ARE included — pure fixed
-// literals, no interpolation — but are genuine zero-material failures (same
-// `status:*_failed`/`status:*unavailable` family as their siblings), distinct
-// from the real partial-success shape (`` `## Research: ${topic}` `` with
-// `status:partial`), which is excluded by never being in this table at all.
-// H1 round-3 (independent review): this table must be COMPLETE, not just the
-// literals this fix wave happened to touch first. Completeness is enforced by
-// tests/_core/failure-envelope-coverage.test.ts, which statically scans every
-// `npm-package/src/tools/*.ts` file for any markdown-heading string literal
-// containing a failure word and asserts it is classified HERE or in
-// NON_FAILURE_HEADER_ALLOWLIST below — an unclassified new heading fails CI.
-// Do not add a heading to this file without also running that test.
-export const FAILURE_HEADER_LITERALS = new Set([
-    "## Extract Failed",
-    "## Extraction Error",
-    "## Browser Mode Unavailable",
-    "## Search Unavailable",
-    "## Invalid Parameter — engine",
-    "## Research Unavailable",
-    "## Research Incomplete",
-    "## Verify Unavailable",
-    "## Verify Incomplete",
-    // Round 3 (independent review): missed in rounds 1-2 — caught by the
-    // completeness scanner, not manual re-reading.
-    "## Browser Flow — API Error", // browser_flow.ts:356
-    "## Browser Flow — Endpoint Unavailable", // browser_flow.ts:374
-    "## Monitor: Error", // monitor.ts:631
-    // Round 4 (independent review): the WORD-LIST scanner itself was the bug —
-    // these two headings contain no trigger word ("Not Configured" / "Missing
-    // Dependency" are not in Error|Failed|Unavailable|Incomplete|Invalid|
-    // Refused|Denied) so they were never even candidates. Caught only once the
-    // scanner was replaced with EXHAUSTIVE classification (every heading in
-    // tools/** must appear in FAILURE_HEADER_LITERALS or SUCCESS_OR_NEUTRAL_HEADERS
-    // — no keyword filter decides what counts as "a candidate").
-    "## Browser API — Not Configured", // browser.ts:125 — no NOVADA_BROWSER_WS/auto-provision; terminal
-    "## Browser API — Missing Dependency", // browser.ts:149 — playwright-core not installed; terminal
-]);
+// Implementation: a reserved, non-printable sentinel prefix (a Unicode
+// Private-Use-Area code point, never produced by any real formatter's prose,
+// a URL, or caller-supplied text) that toolFailure() prepends and the
+// dispatch choke point strips before the text ever reaches the caller. This
+// is structural, not content-based: the marker's PRESENCE is the signal, not
+// anything about the text's wording — a successful novada_research call on a
+// topic containing the word "error" is never touched by this, because
+// toolFailure() is simply never called on that code path.
+const TOOL_FAILURE_MARKER = "\u{F0001}"; // Unicode Private Use Area (Plane 15) — reserved, never real content
 /**
- * EXHAUSTIVE classification (round 4, independent review) of every OTHER
- * markdown heading a tools/** formatter can emit — i.e. every heading NOT in
- * FAILURE_HEADER_LITERALS. Built from a recursive, comment-aware static scan
- * of npm-package/src/tools/** (tests/consistency/failure-envelope-coverage.test.ts
- * runs the SAME scan every CI invocation — not a one-time manual pass) that
- * found 219 non-comment heading-literal occurrences, 104 distinct strings, 14
- * of which are real failures (now in FAILURE_HEADER_LITERALS above). This map
- * covers the other 90 distinct strings (reduced to 83 keys after prefix
- * collapsing — see keyOf() below).
- *
- * Replaces round 1-3's keyword-filtered approach (`Error|Failed|Unavailable|
- * Incomplete|Invalid|Refused|Denied`) entirely — that filter was itself the
- * bug: "## Browser API — Not Configured" / "## Browser API — Missing
- * Dependency" (browser.ts) are real, currently-shipping failures that contain
- * NONE of those words, so they were never even candidates for review. There
- * is no keyword list in this round's design — every heading found by the scan
- * must be in exactly one of the two tables, full stop.
- *
- * Key shape: a non-interpolated heading is keyed by its exact trimmed text. A
- * heading containing `${` is keyed by keyOf()'s fixed prefix — the substring
- * before the first `${`, computed identically by the runtime-irrelevant
- * static scanner and documented here so a human reviewer can see what each
- * entry actually covers. Several visually-different headings legitimately
- * reduce to the same short prefix (`"## "`, `"### "`, `"### ["` — e.g. every
- * `### [${idx}] ...` numbered-item sub-heading across crawl.ts/extract.ts/
- * research.ts) — that is fine: the prefix itself contains no failure word by
- * construction, so the key's classification holds regardless of which
- * specific call site produced it; the test file's header documents each
- * collapsed group so a reviewer can still see what was merged.
- *
- * Reason column: most entries are structural sub-headings (used as a LATER
- * line inside an already-classified body, never alone) or static section
- * titles never used on a failure path — tagged "structural" for brevity.
- * Entries that could plausibly look ambiguous get a real, specific reason.
+ * Marks `text` as a tool-level failure. Call this at the exact `return`
+ * statement a formatter uses to report failure — e.g.
+ * `return toolFailure(["## Extract Failed", ...].join("\n"));` — instead of
+ * returning the formatted string bare. The dispatch choke point
+ * (index.ts/mcp.ts) detects the mark via isToolFailure() and sets
+ * isError:true, then strips it via stripToolFailureMark() before the text
+ * reaches the caller — the marker itself is never visible to anyone.
  */
-export const SUCCESS_OR_NEUTRAL_HEADERS = new Map([
-    // ── Structural sub-headings (appear as a LATER line inside an already-
-    // classified success/neutral/failure body; never used alone as the first
-    // line, never the sole signal of outcome) ──
-    ["## Agent Action", "structural sub-heading"],
-    ["## Agent Hints", "structural sub-heading"],
-    ["## Agent Instruction", "structural sub-heading"],
-    ["## Agent Memory", "structural sub-heading"],
-    ["## agent_instruction", "structural sub-heading (lowercase proxy_*.ts variant)"],
-    ["## as curl:", "structural sub-heading (proxy.ts curl-snippet label)"],
-    ["## Changed Fields", "structural sub-heading (monitor.ts change-detected body)"],
-    ["## Chainable Output", "structural sub-heading"],
-    ["## Content Changed", "structural sub-heading (monitor.ts change-detected body)"],
-    ["## Extraction Diagnostics", "structural sub-heading"],
-    ["## Fields Summary", "structural sub-heading"],
-    ["## Key Findings", "structural sub-heading (research.ts success body)"],
-    ["## Ledger (plan preflight)", "structural sub-heading (proxy.ts)"],
-    ["## Requested Fields", "structural sub-heading"],
-    ["## Requested Fields (none resolved)", "structural sub-heading — zero-match is a field-level diagnostic, not a tool failure"],
-    ["## Same-Domain Links (", "structural sub-heading, interpolated count — prefix-keyed"],
-    ["## Links (", "structural sub-heading, interpolated count — prefix-keyed"],
-    ["## Setup", "structural sub-heading (proxy.ts config instructions)"],
-    ["## Sources", "structural sub-heading (research.ts success body)"],
-    ["## Sources matching a negation of the claim (", "structural sub-heading (verify.ts), interpolated count — prefix-keyed"],
-    ["## Sources matching the claim wording (", "structural sub-heading (verify.ts), interpolated count — prefix-keyed"],
-    ["## Structured Data", "structural sub-heading"],
-    ["## Summary", "structural sub-heading (ai_monitor.ts)"],
-    ["## Tracked Fields", "structural sub-heading (monitor.ts)"],
-    ["## Usage Examples", "structural sub-heading"],
-    ["## Verification (one live IP-echo through this proxy — ~1 KB metered traffic, ~1s; disable with verify=false)", "structural sub-heading (proxy.ts verification section label, not a verdict)"],
-    ["## Warnings", "structural sub-heading"],
-    ["## Why This Happens", "structural sub-heading (used inside browser.ts/runtime.ts's OWN already-classified failure messages — explanatory, not a second signal)"],
-    ["# ", "structural sub-heading, interpolated — prefix-keyed (site_copy.ts page titles)"],
-    ["# Add this flag to any curl command — replace *** with $NOVADA_PROXY_PASS:", "structural sub-heading (proxy_*.ts curl instructions)"],
-    ["# Replace *** with your proxy password", "structural sub-heading (proxy_*.ts curl instructions)"],
-    ["# Set NOVADA_PROXY_PASS in your environment first, then copy these lines:", "structural sub-heading (proxy.ts shell-env instructions)"],
-    ["# Set NOVADA_PROXY_PASS in your environment first:", "structural sub-heading (proxy_*.ts shell-env instructions)"],
-    ["### ", "structural sub-heading, interpolated — prefix-keyed (ai_monitor.ts per-model/discover.ts per-category sub-sections)"],
-    ["### Action ", "structural sub-heading, interpolated — prefix-keyed (browser.ts/browser_flow.ts per-action result line)"],
-    ["### Pages (first ", "structural sub-heading, interpolated — prefix-keyed (site_copy.ts)"],
-    ["### Recent calls (last ", "structural sub-heading, interpolated — prefix-keyed (session_stats.ts)"],
-    ["### [", "structural sub-heading, interpolated — prefix-keyed (numbered-item sub-heading shared by crawl.ts/extract.ts (x2)/research.ts)"],
-    // ── Top-level SUCCESS headers (first line of a genuinely successful result) ──
-    ["## Active Browser Sessions", "success — novada_browser list-sessions result"],
-    ["## Batch Extract Results", "success — extract.ts batch mode"],
-    ["## Batch Extract Results (Full)", "success — extract.ts batch mode, full detail"],
-    ["## Browser Flow Results", "success — browser_flow.ts completed run"],
-    ["## Browser Session Results", "success — novada_browser completed run"],
-    ["## Claim Verification", "success — verify.ts completed verdict"],
-    ["## Crawl Results", "success — crawl.ts completed run"],
-    ["## Extracted Content", "success — extract.ts's one success header, used by all 3 formatter call sites"],
-    ["## Monitor: Changes Detected", "success — monitor.ts: this check ran and found a real content change; not a failure"],
-    ["## Monitor: First Check", "success — monitor.ts: baseline established; not a failure"],
-    ["## Monitor: No Changes", "success — monitor.ts: this check ran cleanly and found nothing changed; not a failure"],
-    ["## Next Steps", "success — search.ts result-footer section"],
-    ["## Scrape Results", "success — scrape.ts completed run (6 call sites, same literal)"],
-    ["## Search Results", "success — search.ts completed run"],
-    ["## Session Closed", "success — novada_browser session-close confirmation"],
-    ["## Site Copy", "success — site_copy.ts in-progress/summary section"],
-    ["## Site Copy Complete", "success — site_copy.ts completed run"],
-    ["## Site Map", "success — map.ts completed run (also used by the SPA_NO_URLS_FOUND notice below — same header, deliberately: see Agent Notice — Under-delivery)"],
-    // ── Account/proxy config cards — informational displays, never a pass/fail
-    // verdict on their own (account.ts, proxy*.ts) ──
-    ["## Wallet Balance\\n\\n**", "informational card (account.ts renderBalanceCard) — single-line template packing \\n escapes, prefix-keyed up to the first interpolation"],
-    ["## Proxy Configuration", "informational card — proxy credentials/usage display, not a verdict"],
-    ["## Proxy Configuration (Shell Environment)", "informational card — proxy credentials display"],
-    ["## Proxy Configuration (curl)", "informational card — proxy credentials display"],
-    ["## Datacenter Proxy Configuration", "informational card — proxy_datacenter.ts"],
-    ["## Datacenter Proxy Configuration (Shell Environment)", "informational card — proxy_datacenter.ts"],
-    ["## Datacenter Proxy Configuration (curl)", "informational card — proxy_datacenter.ts"],
-    ["## Dedicated Proxy Configuration", "informational card — proxy_dedicated.ts"],
-    ["## Dedicated Proxy Configuration (Shell Environment)", "informational card — proxy_dedicated.ts"],
-    ["## Dedicated Proxy Configuration (curl)", "informational card — proxy_dedicated.ts"],
-    ["## ISP Proxy Configuration", "informational card — proxy_isp.ts"],
-    ["## ISP Proxy Configuration (Shell Environment)", "informational card — proxy_isp.ts"],
-    ["## ISP Proxy Configuration (curl)", "informational card — proxy_isp.ts"],
-    ["## Mobile Proxy Configuration", "informational card — proxy_mobile.ts"],
-    ["## Mobile Proxy Configuration (Shell Environment)", "informational card — proxy_mobile.ts"],
-    ["## Mobile Proxy Configuration (curl)", "informational card — proxy_mobile.ts"],
-    ["## Residential Proxy Configuration", "informational card — proxy_residential.ts"],
-    ["## Residential Proxy Configuration (Shell Environment)", "informational card — proxy_residential.ts"],
-    ["## Residential Proxy Configuration (curl)", "informational card — proxy_residential.ts"],
-    ["## Static Proxy Configuration", "informational card — proxy_static.ts"],
-    ["## Static Proxy Configuration (Shell Environment)", "informational card — proxy_static.ts"],
-    ["## Static Proxy Configuration (curl)", "informational card — proxy_static.ts"],
-    // ── AMBIGUOUS — reviewed explicitly, reason is load-bearing ──
-    [
-        "## Agent Notice — Under-delivery",
-        "AMBIGUOUS, reviewed: map.ts's own comment at the call site states this is " +
-            "\"surfaced as a friendly agent message (not an error block) so the tool " +
-            "always returns a successful string response\" when a crawl/SPA page found " +
-            "no additional URLs — an explicit design decision that under-delivery vs. " +
-            "the requested URL count is informational (with next-step guidance), not a " +
-            "tool failure. Shares the same preceding \"## Site Map\" success header.",
-    ],
-    [
-        "## Brand Presence on AI-Company Domains — ",
-        "AMBIGUOUS, reviewed: ai_monitor.ts's header interpolates the caller's brand " +
-            "(prefix-keyed, so brand text itself is never inspected). Per-query failures " +
-            "are folded into an aggregate sentiment:\"not_found\" entry inside this SAME " +
-            "success-shaped report (never a standalone failure return) — same partial-" +
-            "success pattern as novada_research's status:partial.",
-    ],
-    [
-        "## Research: ",
-        "AMBIGUOUS, reviewed: research.ts's real first-line header for EVERY outcome " +
-            "except the two standalone total-failure headers already in " +
-            "FAILURE_HEADER_LITERALS (## Research Unavailable / ## Research Incomplete). " +
-            "Interpolates the caller's topic (prefix-keyed — topic text is never " +
-            "inspected). Success/partial is distinguished later in the body by " +
-            "status:success vs status:partial (FAILURE_STATUS_RE deliberately excludes " +
-            "status:partial).",
-    ],
-    [
-        "## Researched source material for: ",
-        "AMBIGUOUS, reviewed: research.ts mid-body section heading for the SAME " +
-            "success/partial result as \"## Research: \" above (never appears on a " +
-            "standalone-failure path) — interpolates the caller's topic, prefix-keyed.",
-    ],
-    [
-        "## ",
-        "AMBIGUOUS, reviewed: bare \"## \" prefix shared by 3 interpolated headings " +
-            "with near-zero fixed text before the first ${} — discover.ts's per-platform " +
-            "operations section (`## ${platform} — Scraper Operations`, always success: " +
-            "listing operations for a known platform) and search.ts's 2 per-result " +
-            "title lines (`## ${i+1}. ...`, always success: one of N found results, " +
-            "never emitted on a failed search — search's own failure path returns " +
-            "## Search Unavailable before any results are rendered).",
-    ],
-]);
-/** Classification key for a heading: the full trimmed text for a literal
- *  heading, or the fixed substring before the first `${` for an interpolated
- *  one — identical function used by the completeness scanner
- *  (tests/consistency/failure-envelope-coverage.test.ts) so this file's
- *  documentation and the enforced CI check can never drift apart. */
-export function headingClassificationKey(heading) {
-    const i = heading.indexOf("${");
-    return i === -1 ? heading : heading.slice(0, i);
+export function toolFailure(text) {
+    return TOOL_FAILURE_MARKER + text;
 }
-/** Marks a non-"## heading" failure signal some tools use instead/in addition
- *  (e.g. "agent_instruction: status:failed", "status:browser_unavailable_on_runtime",
- *  "status:search_unavailable"). Deliberately does NOT match "status:success" or
- *  the many other non-failure status tokens (status:no_content is advisory, not
- *  matched here — it is attached to results that already carry real content).
- *  Safe against caller-text injection: see the verified invariant above — every
- *  token this can match is a fixed string literal in the codebase, never
- *  interpolated from params.topic/params.query/params.url/etc. */
-export const FAILURE_STATUS_RE = /agent_instruction:\s*status:\s*(?:failed|[a-z0-9_]*unavailable|[a-z0-9_]*_failed)\b/i;
-/**
- * Round 3 (independent review) — `agent_status:` is a SEPARATE, sibling
- * convention to `agent_instruction: status:X` (monitor.ts, verify.ts use it
- * alongside, not instead of, the one above). Verified by reading every
- * `agent_status:` site in npm-package/src/tools/*.ts: the value is always a
- * fixed string literal — `baseline_set` / `no_change` / `changes_found`
- * (success, monitor.ts) vs `error` (failure, monitor.ts) / `search_unavailable`
- * / `search_temporarily_failed` (failure, verify.ts) — never interpolated from
- * a tool param. `error` is matched as a whole token (not a substring) so it
- * can never accidentally match inside a longer success-shaped identifier. */
-export const FAILURE_AGENT_STATUS_RE = /\bagent_status:\s*(?:error|[a-z0-9_]*unavailable|[a-z0-9_]*_failed)\b/i;
-/**
- * True when `text` (a tool's returned result, NOT a thrown error) is itself a
- * failure envelope per the class above. Checked ONLY against structured
- * markers emitted by the tools' own formatters — never a loose keyword scan
- * over the whole body or an arbitrary interpolated line, which would
- * false-positive on legitimate content/caller-text that happens to contain
- * "error"/"failed"/"unavailable".
- */
-export function looksLikeFailureEnvelope(text) {
-    if (typeof text !== "string" || text.length === 0)
-        return false;
-    const firstLine = (text.slice(0, 200).split("\n", 1)[0] ?? "").trimEnd();
-    if (FAILURE_HEADER_LITERALS.has(firstLine))
-        return true;
-    return FAILURE_STATUS_RE.test(text) || FAILURE_AGENT_STATUS_RE.test(text);
+/** True when `text` was produced by toolFailure() and not yet stripped. */
+export function isToolFailure(text) {
+    return typeof text === "string" && text.startsWith(TOOL_FAILURE_MARKER);
+}
+/** Removes the toolFailure() mark, if present. Safe to call on any string
+ *  (including one that was never marked) — a no-op in that case. */
+export function stripToolFailureMark(text) {
+    return text.startsWith(TOOL_FAILURE_MARKER) ? text.slice(TOOL_FAILURE_MARKER.length) : text;
 }
 // ─── agent_instruction Templates ─────────────────────────────────────────────
 const INSTRUCTIONS = {

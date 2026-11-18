@@ -31,7 +31,7 @@
  * scrape-transient-2026-10-21 follow-up round 1 (MEDIUM, see
  * reports/scrape-transient-review-2026-10-21.md): the retry used to be
  * time-unaware. `submitScrapeTask`/`submitSearchScrapeTask` each used a flat
- * 60s axios timeout regardless of `isHostedEnvironment()`, so a worst case of
+ * 60s axios timeout regardless of `RUNTIME.kind`, so a worst case of
  * two ~60s attempts (~120.5s with the retry delay) could exceed both
  * `HOSTED_SAFE_CEILING_MS` (50s) and `HOSTED_FUNCTION_LIMIT_MS` (60s,
  * config.ts) — turning a transient upstream blip into a platform 504 instead

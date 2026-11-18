@@ -7,7 +7,7 @@ import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets, serpCaptureFailedHint } from "../_core/errors.js";
+import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets, serpCaptureFailedHint, toolFailure } from "../_core/errors.js";
 import { withSingleTransientRetry, submitRetryBudget } from "../_core/submit-retry.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 
@@ -705,7 +705,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   // message listing valid engines.
   if (!SCRAPER_SEARCH_ENGINES.has(engine)) {
     const valid = [...SCRAPER_SEARCH_ENGINES].join(", ");
-    return [
+    return toolFailure([
       `## Invalid Parameter — engine`,
       ``,
       `engine="${engine}" is not a supported search engine.`,
@@ -714,7 +714,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       ``,
       `## Agent Instruction`,
       `error: invalid_params | param: engine | valid_values: ${valid} | action: retry with one of the valid engines`,
-    ].join("\n");
+    ].join("\n"));
   }
 
   // Apply domain filters as query modifiers (site: syntax works on all engines)
@@ -838,7 +838,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       status === 401 || status === 402 || status === 403 ||
       /code 40[0-9]|permission|quota|unauthorized|forbidden|no permission/i.test(msg);
     if (isEntitlement) {
-      return SERP_UNAVAILABLE;
+      return toolFailure(SERP_UNAVAILABLE);
     }
     // Already-classified NovadaError (e.g. INVALID_API_KEY / API_DOWN from
     // submitSearchScrapeTask) passes through unchanged so its auth/quota

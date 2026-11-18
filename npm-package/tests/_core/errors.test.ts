@@ -157,7 +157,7 @@ describe("summarizeAggregateError", () => {
 });
 
 // ─── F2 (2026-11-18 reliability fix wave): block-class fetch-failure classifier ──
-import { isBlockClassFetchFailure, BLOCK_CLASS_STATUSES, NOT_ESCALATE_STATUSES, looksLikeFailureEnvelope } from "../../src/_core/errors.js";
+import { isBlockClassFetchFailure, BLOCK_CLASS_STATUSES, NOT_ESCALATE_STATUSES, toolFailure, isToolFailure, stripToolFailureMark } from "../../src/_core/errors.js";
 
 function axiosLikeError(status: number): unknown {
   return Object.assign(new Error(`Request failed with status code ${status}`), {
@@ -203,160 +203,56 @@ describe("isBlockClassFetchFailure — F2 escalation discriminator", () => {
   });
 });
 
-// ─── F3 (2026-11-18 reliability fix wave): honest-failure-envelope detector ──────
-describe("looksLikeFailureEnvelope — F3 honest isError discriminator", () => {
+// ─── F3 (round 5, owner direction): structural toolFailure() marker ──────────
+//
+// Replaces the deleted textual/heading-table approach entirely (no
+// FAILURE_HEADER_LITERALS, no SUCCESS_OR_NEUTRAL_HEADERS, no scanner). A
+// failure is marked at its one point of origin via toolFailure(); the
+// marker's PRESENCE is the only signal — never the text's wording — so a
+// successful result can say literally anything (including the words
+// "error", "failed", "unavailable") without ever being misclassified.
+describe("toolFailure / isToolFailure / stripToolFailureMark — F3 structural marker", () => {
+  it("isToolFailure is true only for text that went through toolFailure()", () => {
+    expect(isToolFailure(toolFailure("## Extract Failed\nsomething broke"))).toBe(true);
+    expect(isToolFailure("## Extract Failed\nsomething broke")).toBe(false); // never marked
+  });
+
+  it("stripToolFailureMark removes the mark and is a no-op on unmarked text", () => {
+    const marked = toolFailure("## Extract Failed\nbody");
+    expect(stripToolFailureMark(marked)).toBe("## Extract Failed\nbody");
+    expect(stripToolFailureMark("plain text")).toBe("plain text");
+  });
+
+  it("the mark survives being the FIRST thing in a JSON-formatted failure (monitor.ts's JSON branch) and strips back to valid JSON", () => {
+    const json = JSON.stringify({ status: "error", error: "boom" });
+    const marked = toolFailure(json);
+    expect(isToolFailure(marked)).toBe(true);
+    const stripped = stripToolFailureMark(marked);
+    expect(() => JSON.parse(stripped)).not.toThrow();
+    expect(JSON.parse(stripped)).toEqual({ status: "error", error: "boom" });
+  });
+
+  // H1's original bug (rounds 1-4): a word-list/heading-table detector reading
+  // TEXT for "error"/"failed"/"unavailable" flips a caller-interpolated
+  // success header to isError:true. Structurally impossible now — there is
+  // no text inspection at all. Prove it directly: a string that is NOT
+  // marked, no matter what it says, is never a failure.
   it.each([
-    "## Extract Failed\nurl: https://example.com\n\nError: timeout",
-    "## Browser Mode Unavailable\n\nrender=\"browser\" requires NOVADA_BROWSER_WS.",
-    "## Extraction Error\n\nsomething went wrong",
-    "## Search Unavailable\n\nScraper API not activated.",
-    "## Research Unavailable\n\nSearch failed with an account/authorization error.",
-    "## Verify Unavailable\n\nCannot verify this claim right now.",
-    // Real literal from search.ts:709 — NOT a generic "## Invalid Parameter"
-    // prefix (round-1 test used a made-up variant that doesn't exist in source).
-    "## Invalid Parameter — engine\n\nengine=\"bogus\" is not a supported search engine.",
-  ])("flags a known failure header as a failure envelope: %s", (text) => {
-    expect(looksLikeFailureEnvelope(text)).toBe(true);
+    "## Research: common React error boundary patterns\n\nagent_instruction: status:success",
+    "## Extracted Content\nurl: https://example.com/articles/why-extract-failed-is-a-myth\ntitle: Service Unavailable Explained",
+    "## Brand Presence on AI-Company Domains — Error Unavailable Failed Inc\n\nSentiment: positive.",
+  ])("unmarked text is never a failure regardless of wording: %j", (text) => {
+    expect(isToolFailure(text)).toBe(false);
   });
 
-  it.each([
-    "## Extracted Content\nurl: https://example.com\nmode: static | quality:ok",
-    "## Search Results\n\n1. Example — https://example.com",
-    "## Researched source material for: topic\n\n...",
-    "## Scrape Results\n\n| field | value |",
-    "## Crawl Results\n\n...",
-    "## Site Map\n\n...",
-    "## Batch Extract Results\n\n...",
-  ])("does NOT flag a known success header: %s", (text) => {
-    expect(looksLikeFailureEnvelope(text)).toBe(false);
-  });
-
-  // H1 (independent review, round 2) — PoC confirmed the round-1 regex-based
-  // detector flipped a fully successful novada_research call to isError:true
-  // whenever the CALLER's topic happened to contain "error"/"failed"/
-  // "unavailable". The real first line of EVERY research result (success,
-  // partial, AND the two genuine-failure headers are separate strings) is
-  // `` `## Research: ${args.topic}` `` (research.ts:1266) — never in
-  // FAILURE_HEADER_LITERALS, so no topic content can ever match it now.
-  it.each([
-    "common React error boundary patterns",
-    "how to recover from a failed database migration",
-    "why is my site unavailable during deploys",
-    "## Extract Failed — is this a real heading inside a topic string",
-  ])("H1 pendulum — a successful novada_research result is NOT flagged merely because the caller's topic contains %j", (topic) => {
-    const text = [
-      `## Research: ${topic}`,
-      ``,
-      `**Query**: ${topic} | **top_sources**: 5 | **depth**: deep`,
-      `**requested_depth**: deep | **resolved_depth**: deep`,
-      `**queries**: 6/6 succeeded`,
-      ``,
-      `## Researched source material for: ${topic}`,
-      ``,
-      `[1] Some cited passage about ${topic}...`,
-      ``,
-      `## Key Findings`,
-      `- A real finding.`,
-      ``,
-      `## Sources`,
-      `| # | Title | URL |`,
-      `|---|---|---|`,
-      `| 1 | Example | https://example.com |`,
-      ``,
-      `## Agent Hints`,
-      `- Compose the answer from the material above.`,
-      ``,
-      `## Agent Action`,
-      `agent_instruction: status:success | requested_depth:deep | resolved_depth:deep | queries:6/6 | sources:5 | material:full | answer_ready:true`,
-    ].join("\n");
-    expect(looksLikeFailureEnvelope(text)).toBe(false);
-  });
-
-  it.each([
-    "errors in the novada_search pipeline for pages about Extract Failed messages",
-    "unavailable listings on real estate sites",
-  ])("H1 pendulum — a successful novada_search result is NOT flagged merely because the caller's query contains %j", (query) => {
-    const text = [
-      `## Search Results`,
-      ``,
-      `Query: ${query}`,
-      `1. Example result — https://example.com`,
-      `2. Another result — https://example.org`,
-      ``,
-      `## Agent Hints`,
-      `- Use novada_extract on a result URL for full content.`,
-    ].join("\n");
-    expect(looksLikeFailureEnvelope(text)).toBe(false);
-  });
-
-  it.each([
-    "https://example.com/articles/why-extract-failed-is-a-myth",
-    "https://example.com/pages/service-unavailable-explained",
-  ])("H1 pendulum — a successful novada_extract result is NOT flagged merely because the fetched url/title contains failure-shaped words (%j)", (url) => {
-    const text = [
-      `## Extracted Content`,
-      `url: ${url}`,
-      `mode: static | source: live | quality:ok (score:80/100) | content_present:true | content_ok:true`,
-      `fetched_at: 2026-11-18T00:00:00.000Z`,
-      `title: Why "Extract Failed" and "Service Unavailable" Are Not the Same Thing`,
-      ``,
-      `Real article body content here, plenty of substantive prose.`,
-    ].join("\n");
-    expect(looksLikeFailureEnvelope(text)).toBe(false);
-  });
-
-  it("H1 pendulum — ai_monitor's brand-interpolated header is never flagged regardless of brand text", () => {
-    const text = [
-      `## Brand Presence on AI-Company Domains — Error Unavailable Failed Inc`,
-      ``,
-      `Sentiment: positive. 3 mentions found.`,
-    ].join("\n");
-    expect(looksLikeFailureEnvelope(text)).toBe(false);
-  });
-
-  it("flags a genuine zero-result research failure via its status marker even though its header says 'Incomplete', not Failed/Error/Unavailable", () => {
-    const text = [
-      "## Research Incomplete",
-      "",
-      "All search queries returned 0 results.",
-      "",
-      "## Agent Action",
-      "agent_instruction: status:search_temporarily_failed | action: retry_once",
-    ].join("\n");
-    expect(looksLikeFailureEnvelope(text)).toBe(true);
-  });
-
-  it("does NOT flag research's partial-success shape (some sub-queries failed, but material was assembled)", () => {
-    const text = [
-      "## Researched source material for: topic",
-      "",
-      "some cited content here",
-      "",
-      "## Agent Action",
-      "agent_instruction: status:partial | requested_depth:deep | resolved_depth:deep | queries:4/6 | sources:5 | material:full | answer_ready:true",
-    ].join("\n");
-    expect(looksLikeFailureEnvelope(text)).toBe(false);
-  });
-
-  it("does NOT flag ordinary content that merely discusses errors/failures in its own body text", () => {
-    const text = [
-      "## Extracted Content",
-      "url: https://example.com/blog/how-we-handle-errors",
-      "mode: static | quality:ok (score:80/100) | content_present:true | content_ok:true",
-      "",
-      "This article explains how our error handling and failure recovery system works.",
-      "It discusses common error codes like 404 Not Found and 503 Service Unavailable.",
-    ].join("\n");
-    expect(looksLikeFailureEnvelope(text)).toBe(false);
-  });
-
-  it("is false-safe on non-string/empty input", () => {
-    expect(looksLikeFailureEnvelope("")).toBe(false);
-    expect(looksLikeFailureEnvelope(undefined)).toBe(false);
-    expect(looksLikeFailureEnvelope(null)).toBe(false);
-    expect(looksLikeFailureEnvelope(42)).toBe(false);
+  it("is false-safe on non-string/empty/nullish input", () => {
+    expect(isToolFailure("")).toBe(false);
+    expect(isToolFailure(undefined)).toBe(false);
+    expect(isToolFailure(null)).toBe(false);
+    expect(isToolFailure(42)).toBe(false);
   });
 });
+
 
 // ─── F3 wiring check — stdio index.ts (mirrors the hosted mcp.ts structural test) ──
 import { readFileSync } from "fs";

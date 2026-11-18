@@ -13,13 +13,14 @@
  * Scope:
  *  - stdio (local npm): shown EXACTLY ONCE per install, tracked by a flag file
  *    at ~/.novada-mcp/first-run.json (default store below).
- *  - hosted (Vercel): tracked per-token in KV — that store is implemented in the
- *    hosted server (mcp.ts), NOT here (this module never touches KV or fs on
- *    serverless). See the VERCEL hard-guard in the default store.
+ *  - hosted (Vercel/EC2): tracked per-token in KV — that store is implemented in
+ *    the hosted server (mcp.ts), NOT here (this module never touches KV or fs on
+ *    serverless/hosted). See the RUNTIME.canWriteFiles hard-guard in the default store.
  */
 import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { RUNTIME } from "../config.js";
 /**
  * The notice copy — verbatim, owner-approved (TOW2-242). $10 USD, novada.com ONLY
  * (never mcp.novada.com). Shown exactly once. Do not edit without owner approval.
@@ -37,15 +38,6 @@ function flagPath() {
     return path.join(os.homedir(), FLAG_DIR, FLAG_FILE);
 }
 /**
- * Detect serverless runtime (Vercel). On serverless the filesystem is read-only
- * (EROFS scar) — never touch fs there. isVercel() gates the default store into a
- * permanent no-op that returns hasNoticed=true, so the stdio store is inert on
- * hosted even if it were ever constructed there.
- */
-function isVercel() {
-    return !!(process.env.VERCEL || process.env.VERCEL_ENV);
-}
-/**
  * Filesystem-backed store for the local stdio server. EVERY fs op is wrapped in
  * try/catch and fails quiet:
  *  - hasNoticed(): flag file exists/parses → true; ENOENT (never shown) → false;
@@ -58,7 +50,7 @@ function isVercel() {
  */
 export class FileNoticeStore {
     async hasNoticed() {
-        if (isVercel())
+        if (!RUNTIME.canWriteFiles)
             return true;
         try {
             const raw = await fs.readFile(flagPath(), "utf8");
@@ -75,7 +67,7 @@ export class FileNoticeStore {
         }
     }
     async markNoticed() {
-        if (isVercel())
+        if (!RUNTIME.canWriteFiles)
             return;
         try {
             const dir = path.dirname(flagPath());

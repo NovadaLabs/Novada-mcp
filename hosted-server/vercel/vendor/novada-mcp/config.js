@@ -18,16 +18,27 @@ export const SCRAPER_DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
 // Web Unblocker — JS-rendered pages, POST /request with Bearer token auth.
 // Response: { code: 0, data: { code: 200, html: "...", use_balance: N } }
 export const WEB_UNBLOCKER_BASE = "https://webunlocker.novada.com";
-/**
- * True on serverless hosts (Vercel / AWS Lambda) that cannot hold a persistent
- * WebSocket. The Browser API is CDP-over-WebSocket, so `render="browser"` can
- * never run there — callers use this to fail fast with a clear error and to keep
- * `render="auto"` from escalating into an impossible tier. (health.ts /
- * health_all.ts carry local copies; dedupe to this in a follow-up.)
- */
-export function isHostedEnvironment() {
-    return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+function computeRuntimeKind() {
+    const forced = process.env.NOVADA_RUNTIME_KIND;
+    if (forced === "hosted" || forced === "local")
+        return forced;
+    return process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME
+        ? "hosted"
+        : "local";
 }
+export const RUNTIME = {
+    get kind() {
+        return computeRuntimeKind();
+    },
+    get canWriteFiles() {
+        return computeRuntimeKind() !== "hosted";
+    },
+    get canHoldWebSocket() {
+        if (process.env.DEPLOYMENT_SUPPORTS_WS === "true")
+            return true;
+        return computeRuntimeKind() !== "hosted";
+    },
+};
 /**
  * scrape-transient-review2-2026-10-21.md MEDIUM #2 (additive budgets): the
  * submit-phase budget (`submitRetryBudget()`, `_core/submit-retry.ts`) and a
@@ -57,7 +68,7 @@ export function isHostedEnvironment() {
  * this helper, not just a coincidence of the numbers chosen.
  */
 export function toolCallDeadline(startMs = Date.now()) {
-    return isHostedEnvironment() ? startMs + HOSTED_SAFE_CEILING_MS : Infinity;
+    return RUNTIME.kind === "hosted" ? startMs + HOSTED_SAFE_CEILING_MS : Infinity;
 }
 // Optional: Browser API WebSocket endpoint (CDP)
 // Format: wss://username:password@upg-scbr2.novada.com

@@ -2,7 +2,7 @@ import { normalizeUrlForResultDedup, decodeBingRedirect } from "../utils/index.j
 import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
-import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets, toolFailure } from "../_core/errors.js";
 import { wrapUntrusted, unwrapUntrusted } from "../utils/untrusted.js";
 // C1: distinguish a REAL account-level entitlement failure (Scraper API not
 // activated / bad key / quota) from a transient blip (timeout, 5xx, DNS). Only
@@ -581,7 +581,7 @@ export async function novadaResearch(params, apiKey, onProgress) {
     // outage becomes a false permanent "activate the Scraper API" dead-end.
     if (failedCount === queries.length || totalResults === 0) {
         if (authSignal.entitlement) {
-            return [
+            return toolFailure([
                 `## Research Unavailable`,
                 ``,
                 `Search failed with an account/authorization error. The Scraper API (which powers search) is not activated on this API key, or the key is invalid.`,
@@ -598,11 +598,11 @@ export async function novadaResearch(params, apiKey, onProgress) {
                 ``,
                 `## Agent Action`,
                 `agent_instruction: status:search_unavailable | action: call novada_account(section="summary") to confirm, then activate_scraper_api | question_not_answered: true`,
-            ].join("\n");
+            ].join("\n"));
         }
         // No auth signal → transient / no-results. Retry is the real remedy; do NOT
         // assert a permanent activation defect.
-        return [
+        return toolFailure([
             `## Research Incomplete`,
             ``,
             `All search queries returned 0 results — likely a temporary upstream issue (timeout, rate-limit, or a query that matched nothing), not an account problem.`,
@@ -619,7 +619,7 @@ export async function novadaResearch(params, apiKey, onProgress) {
             ``,
             `## Agent Action`,
             `agent_instruction: status:search_temporarily_failed | action: retry_once; if it persists call novada_account(section="summary") | question_not_answered: true`,
-        ].join("\n");
+        ].join("\n"));
     }
     // NOV-319 phase 4/4: assembling the cited source material.
     await reportProgress(onProgress, {

@@ -58,6 +58,19 @@ const DOWNLOAD_WRAPPED_EMPTY_RECORDS = {
 };
 
 /**
+ * Round 5 (independent A/B verifier, 2026-11-18): novada_scrape_instagram's live
+ * failure shape — the `results` array is NOT empty (length 1), so the OLD
+ * `records.length === 0` gate never fired, but the one entry carries no usable
+ * field values at all (every value is null/undefined/"") — functionally
+ * identical to zero records. Same P1-3 class the comment above already names
+ * as the recurring "per-instance fixes kept missing members of the class" bug.
+ */
+const DOWNLOAD_WRAPPED_ALL_EMPTY_FIELD_RECORD = {
+  data: [{ spider_code: 200, rest: { results: [{ username: null, caption: "", likes: null, url: undefined }] } }],
+  status: 200, headers: {}, config: {} as never, statusText: "OK",
+};
+
+/**
  * Build a params object that passes preflightScrape for (platform, scraperId), derived
  * generically from the catalog (single source of truth): every catalog param key is
  * supplied (satisfies "all" mode, "any" mode, and extraAll alike), preferring the
@@ -199,6 +212,18 @@ describe("F9 observed fixtures — the three hosted-0.9.37 FAIL rows now classif
     mockedAxios.post.mockResolvedValue(SUBMIT_EXPLICIT_EMPTY);
     const result = await tool.dispatch({ operation: opName, params }, "test-key");
     expectEmptyResultEnvelope(result);
+  });
+
+  // Round 5 regression test: the verifier's LIVE finding was a non-empty
+  // array whose only entry had no usable fields — a shape the three cases
+  // above (explicit-empty / empty-download / zero-length-array) do NOT cover.
+  it("novada_scrape_instagram: a non-empty records array whose only entry has NO usable field values is also empty_result, not status: ok", async () => {
+    const { tool, opName, params } = observedCase("novada_scrape_instagram");
+    mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
+    mockedAxios.get.mockResolvedValue(DOWNLOAD_WRAPPED_ALL_EMPTY_FIELD_RECORD);
+    const result = await tool.dispatch({ operation: opName, params }, "test-key");
+    expectEmptyResultEnvelope(result);
+    expect(result).toContain("empty_signal: no_records_extracted");
   });
 
   it("novada_scrape_facebook: 0-record empty-download response is empty_result, not status: ok", async () => {

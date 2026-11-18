@@ -25,7 +25,7 @@
 //     untrusted gateway) and is charset-allowlisted + length-capped before it
 //     can enter agent-facing evidence (see sanitizeEchoField).
 import http from "node:http";
-import { isHostedEnvironment } from "../config.js";
+import { RUNTIME } from "../config.js";
 export const DEFAULT_ECHO_TIMEOUT_MS = 5000;
 // THE echo endpoint — one named constant, HTTP (not HTTPS) on purpose (see
 // module header: absolute-form forward-proxy GET, no CONNECT tunnel).
@@ -46,12 +46,11 @@ const MAX_ECHO_BODY_BYTES = 64 * 1024;
  * disclose the skip instead.
  *
  * Class-not-instance (review MEDIUM-3): hosted detection reuses the ONE
- * canonical predicate (config.ts isHostedEnvironment — VERCEL / VERCEL_ENV /
- * AWS_LAMBDA_FUNCTION_NAME) instead of a parallel hand-rolled list; the Edge
- * runtime is the only verify-specific member.
+ * canonical runtime snapshot (config.ts RUNTIME) instead of a parallel
+ * hand-rolled list; the Edge runtime is the only verify-specific member.
  */
 export function isVerifySupportedRuntime() {
-    return !(isHostedEnvironment() || process.env.NEXT_RUNTIME === "edge");
+    return !(RUNTIME.kind === "hosted" || process.env.NEXT_RUNTIME === "edge");
 }
 // ─── Echo-field sanitization (agent-context injection surface) ───────────────
 //

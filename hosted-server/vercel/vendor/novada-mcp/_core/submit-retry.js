@@ -1,5 +1,5 @@
 import { NovadaError, NovadaErrorCode, makeNovadaError } from "./errors.js";
-import { isHostedEnvironment, HOSTED_SAFE_CEILING_MS, TIMEOUTS } from "../config.js";
+import { RUNTIME, HOSTED_SAFE_CEILING_MS, TIMEOUTS } from "../config.js";
 /**
  * Single home for the "absorb one transient upstream submit failure" retry
  * policy, shared by every tool that submits a task to the Scraper API's
@@ -33,7 +33,7 @@ import { isHostedEnvironment, HOSTED_SAFE_CEILING_MS, TIMEOUTS } from "../config
  * scrape-transient-2026-10-21 follow-up round 1 (MEDIUM, see
  * reports/scrape-transient-review-2026-10-21.md): the retry used to be
  * time-unaware. `submitScrapeTask`/`submitSearchScrapeTask` each used a flat
- * 60s axios timeout regardless of `isHostedEnvironment()`, so a worst case of
+ * 60s axios timeout regardless of `RUNTIME.kind`, so a worst case of
  * two ~60s attempts (~120.5s with the retry delay) could exceed both
  * `HOSTED_SAFE_CEILING_MS` (50s) and `HOSTED_FUNCTION_LIMIT_MS` (60s,
  * config.ts) — turning a transient upstream blip into a platform 504 instead
@@ -114,7 +114,7 @@ export const SINGLE_TRANSIENT_RETRY_DELAY_MS = 500;
  * "enough time for a submit we trust to very likely succeed."
  */
 export function submitRetryBudget(deadline) {
-    if (!isHostedEnvironment()) {
+    if (RUNTIME.kind !== "hosted") {
         return { totalMs: Infinity, perAttemptMs: TIMEOUTS.SUBMIT_TIMEOUT_LOCAL };
     }
     const totalMs = deadline !== undefined ? Math.max(0, deadline - Date.now()) : HOSTED_SAFE_CEILING_MS;

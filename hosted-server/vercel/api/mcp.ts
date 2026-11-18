@@ -196,7 +196,7 @@ import {
   validateDiscoverParams,
 } from "../vendor/novada-mcp/tools/index.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
-import { NovadaError, NovadaErrorCode, classifyError, looksLikeFailureEnvelope } from "../vendor/novada-mcp/_core/errors.js";
+import { NovadaError, NovadaErrorCode, classifyError, isToolFailure, stripToolFailureMark } from "../vendor/novada-mcp/_core/errors.js";
 // Real upstream key verification for validateToken — same wallet-balance probe
 // novada_setup already uses to confirm "does this key actually work".
 import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
@@ -1430,18 +1430,31 @@ function sentryBeforeBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrum
 // F3 (2026-11-18 reliability fix wave) — hosted mirror of the same choke-point
 // fix in npm-package/src/index.ts: every per-tool branch inside the
 // CallToolRequestSchema handler below already sets isError:true on its own
-// catch path, but a tool that returns a failure-shaped STRING without
-// throwing ("## Extract Failed", "## Browser Mode Unavailable", ...) falls
-// through all of those untouched. Applied once, at the point every branch's
-// result funnels through (the handler is wrapped below), not per-branch.
+// catch path, but a tool that returns a failure STRING without throwing
+// falls through all of those untouched. Round 5 (owner direction): the
+// failure is marked structurally via toolFailure() at its point of origin
+// (_core/errors.ts), not inferred later from the text's wording — this
+// function just strips the mark and flips isError, applied once at the
+// point every branch's result funnels through (the handler is wrapped
+// below), not per-branch.
 function applyHonestFailureFlag<T extends { content?: Array<{ type: string; text?: string }>; isError?: boolean }>(
   result: T
 ): T {
-  if (result?.isError === true || !Array.isArray(result?.content)) return result;
-  const hasFailureEnvelope = result.content.some(
-    (block) => block?.type === "text" && looksLikeFailureEnvelope(block.text)
-  );
-  return hasFailureEnvelope ? { ...result, isError: true } : result;
+  // An explicit isError:true (set upstream, e.g. the dispatch catch-block for a
+  // thrown error) must short-circuit before the failure-mark scan below — this
+  // function only ever ADDS isError:true, never removes/downgrades one already set.
+  if (result?.isError === true) return result;
+  if (!Array.isArray(result?.content)) return result;
+  let sawFailureMark = false;
+  const content = result.content.map((block) => {
+    if (block?.type === "text" && isToolFailure(block.text)) {
+      sawFailureMark = true;
+      return { ...block, text: stripToolFailureMark(block.text as string) };
+    }
+    return block;
+  });
+  if (!sawFailureMark) return result;
+  return { ...result, content, isError: true };
 }
 
 // ─── MCP server factory ──────────────────────────────────────────────────────

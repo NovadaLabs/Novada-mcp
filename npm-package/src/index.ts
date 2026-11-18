@@ -58,7 +58,7 @@ import {
 import { validateAiMonitorParams } from "./tools/types.js";
 import type { ProgressReporter } from "./tools/crawl.js";
 import type { ElicitConfirmFn } from "./tools/static_ip_mgmt.js";
-import { classifyError, redactSecrets, looksLikeFailureEnvelope } from "./_core/errors.js";
+import { classifyError, redactSecrets, isToolFailure, stripToolFailureMark } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError, DEDICATED_PLATFORM_SLUGS, coerceToolArgs } from "./core.js";
 // Round 4b (S1-connector, F-review "Round-4 review" FIX-FIRST, 2026-10-13): the
@@ -268,24 +268,32 @@ function toAgentErrorText(error: unknown, toolName: string): string {
 // sets `isError: true` on its own CATCH path (grep `isError: true` in this
 // file — dozens of sites, one per thrown-error shape). The gap this closes is
 // the OTHER shape: a tool function that does NOT throw, but whose returned
-// STRING is itself a failure envelope ("## Extract Failed", "## Browser Mode
-// Unavailable", ...) — those results fall through every one of those
-// `isError: true` sites untouched and default to `isError: false`
-// (2026-11-18 layer-study.md: 7/24 AWS-research calls were exactly this).
-//
-// Applied at the SINGLE point every branch's return value funnels through
-// (the handler is wrapped below, not each branch individually) — a result
-// already marked isError:true is left alone; a result not yet marked that way
-// is re-checked against looksLikeFailureEnvelope() (_core/errors.ts) for every
-// text block and flipped if any one matches.
+// STRING is itself a failure — marked structurally at its point of origin via
+// toolFailure() (_core/errors.ts; round 5, owner direction: replaced a
+// textual heading-table/scanner with this sentinel-marker approach — simpler,
+// and the mark travels with the value instead of being inferred later from
+// its wording). Applied at the SINGLE point every branch's return value
+// funnels through (the handler is wrapped below, not each branch
+// individually): strip the mark from every text block and, if any block
+// carried one, set isError:true. A result already isError:true is left alone.
 function applyHonestFailureFlag<T extends { content?: Array<{ type: string; text?: string }>; isError?: boolean }>(
   result: T
 ): T {
-  if (result?.isError === true || !Array.isArray(result?.content)) return result;
-  const hasFailureEnvelope = result.content.some(
-    (block) => block?.type === "text" && looksLikeFailureEnvelope(block.text)
-  );
-  return hasFailureEnvelope ? { ...result, isError: true } : result;
+  // An explicit isError:true (set upstream, e.g. the dispatch catch-block for a
+  // thrown error) must short-circuit before the failure-mark scan below — this
+  // function only ever ADDS isError:true, never removes/downgrades one already set.
+  if (result?.isError === true) return result;
+  if (!Array.isArray(result?.content)) return result;
+  let sawFailureMark = false;
+  const content = result.content.map((block) => {
+    if (block?.type === "text" && isToolFailure(block.text)) {
+      sawFailureMark = true;
+      return { ...block, text: stripToolFailureMark(block.text as string) };
+    }
+    return block;
+  });
+  if (!sawFailureMark) return result;
+  return { ...result, content, isError: true };
 }
 
 // ─── MCP Server ──────────────────────────────────────────────────────────────

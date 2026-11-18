@@ -5,7 +5,7 @@ import type { FieldResult } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import { saveOutput } from "../utils/output.js";
 import type { ExtractParams } from "./types.js";
-import { makeNovadaError, NovadaErrorCode, redactSecrets, summarizeAggregateError, isBlockClassFetchFailure } from "../_core/errors.js";
+import { makeNovadaError, NovadaErrorCode, redactSecrets, summarizeAggregateError, isBlockClassFetchFailure, toolFailure } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
@@ -552,7 +552,7 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     const renderAlreadyFailed =
       params.render === "render" || params.render === "js" ||
       /web unblocker error|web unblocker failed|render returned a bot challenge/i.test(rawMessage);
-    return [
+    return toolFailure([
       `## Extract Failed`,
       `url: ${urlList[0]}`,
       ``,
@@ -567,7 +567,7 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
       ``,
       `## Agent Action`,
       `agent_instruction: status:failed | ${suggestedFix}${pmcHint ? ` | ${pmcHint}` : ""}`,
-    ].join("\n");
+    ].join("\n"));
   }
 }
 
@@ -1308,8 +1308,9 @@ async function extractSingleInner(
     // On serverless (Vercel/Lambda), connectOverCDP cannot hold the WS and fails with a raw
     // "AuthorizationError" that looks like a credentials problem but is actually a transport
     // limitation. Fail fast with a structured, actionable error instead.
-    // isBrowserAvailableOnRuntime() checks: isHostedEnvironment() (false on Vercel unless
-    // DEPLOYMENT_SUPPORTS_WS=true override) AND whether NOVADA_BROWSER_WS creds are set.
+    // isBrowserAvailableOnRuntime() checks: RUNTIME.canHoldWebSocket (config.ts — false
+    // when RUNTIME.kind === "hosted" unless DEPLOYMENT_SUPPORTS_WS=true override) AND
+    // whether NOVADA_BROWSER_WS creds are set.
     if (!isBrowserAvailableOnRuntime()) {
       // NOV-GB2: BEFORE falling back to render, probe for a GitBook .md sibling —
       // the ONLY way GitBook docs content is reachable when browser is unavailable.
@@ -1348,8 +1349,34 @@ async function extractSingleInner(
         }
       }
     } else {
-      html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
-      usedMode = "browser";
+      // Round 5 (independent A/B verifier): this arm used to call
+      // fetchViaBrowser() with NO try/catch at all — any throw here (the
+      // stale transport error utils/browser.ts used to raise before the
+      // ONE-gate fix above, OR a genuine CDP/navigation failure) propagated
+      // straight past F1's fallback-to-render logic entirely, since that
+      // logic only lived in the `!isBrowserAvailableOnRuntime()` branch.
+      // Verified live: discord.com/g2.com/glassdoor.com/ticketmaster.com
+      // failed in 10-30ms with zero render attempt once hosted caller-key
+      // provisioning (F1's mcp.ts half) made isBrowserAvailableOnRuntime()
+      // return true. Both arms now get the identical fallback: browser fails
+      // → try render (if not already) → honest failure naming both tiers.
+      try {
+        html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
+        usedMode = "browser";
+      } catch (browserErr) {
+        const browserMsg = browserErr instanceof Error ? browserErr.message : String(browserErr);
+        try {
+          const r = await runRenderTier();
+          if (r.terminal) return r.value;
+          // runRenderTier succeeded — html/usedMode set by it; fall through.
+        } catch (renderFallbackErr) {
+          const renderMsg = renderFallbackErr instanceof Error ? renderFallbackErr.message : String(renderFallbackErr);
+          return getBrowserUnavailableError("browser", "render", {
+            tried: true,
+            error: redactSecrets(`browser tier failed: ${browserMsg}; render tier also failed: ${renderMsg}`),
+          });
+        }
+      }
     }
   } else if (effectiveMode === "render") {
     const r = await runRenderTier();
@@ -2483,14 +2510,14 @@ async function extractSingle(
       // Return a structured error string in the same format as other extraction errors
       // so callers (batch mode, novadaExtract) get usable output rather than a thrown exception.
       const ceiling_s = TIMEOUTS.TOTAL_REQUEST_CEILING / 1000;
-      return [
+      return toolFailure([
         `## Extraction Error`,
         `url: ${params.url}`,
         `error: Request exceeded the ${ceiling_s}s total ceiling and was aborted.`,
         ``,
         `## Agent Action`,
         `agent_instruction: This URL took too long (>${ceiling_s}s). Try render="static" to skip escalation, or novada_scrape for platform-specific data.`,
-      ].join("\n");
+      ].join("\n"));
     }
     throw err;
   } finally {

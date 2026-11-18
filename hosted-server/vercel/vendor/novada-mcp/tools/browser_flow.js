@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { z } from "zod";
-import { classifyBusinessCode, classifyError, makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets, sanitizeServerMsg, } from "../_core/errors.js";
+import { classifyBusinessCode, classifyError, makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets, sanitizeServerMsg, toolFailure, } from "../_core/errors.js";
 import { isBlockedHost } from "../utils/ssrf.js";
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 const BrowserFlowActionSchema = z.object({
@@ -241,7 +241,7 @@ function formatSuccessResponse(url, actions, results, sessionId) {
     return lines.join("\n");
 }
 function formatApiError(url, actions, message, sessionId) {
-    return [
+    return toolFailure([
         `## Browser Flow — API Error`,
         `url: ${url}`,
         `actions_requested: ${actions.length}${sessionId ? ` | session_id: ${sessionId}` : ""}`,
@@ -255,10 +255,10 @@ function formatApiError(url, actions, message, sessionId) {
         `  2. Check that the Browser Flow product is activated: https://dashboard.novada.com/overview/browser/`,
         `  3. Fallback: Use novada_browser with the same actions — it uses CDP and has higher reliability.`,
         `  4. Fallback: Use novada_proxy_residential to route your own requests if you just need IP geo-targeting.`,
-    ].join("\n");
+    ].join("\n"));
 }
 function formatEndpointUnavailable(url, actions) {
-    return [
+    return toolFailure([
         `## Browser Flow — Endpoint Unavailable`,
         `url: ${url}`,
         `actions_requested: ${actions.length}`,
@@ -271,6 +271,6 @@ function formatEndpointUnavailable(url, actions) {
         `  - novada_browser: CDP-based browser automation with navigate, click, type, screenshot, aria_snapshot — more action types, same cloud browser infrastructure.`,
         `  - novada_extract with render="render": Fetch a single URL without interaction (faster, lower cost).`,
         `  - novada_proxy_residential: Get a residential proxy to route your own HTTP client through.`,
-    ].join("\n");
+    ].join("\n"));
 }
 //# sourceMappingURL=browser_flow.js.map

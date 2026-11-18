@@ -1,5 +1,5 @@
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
-import { makeNovadaError, NovadaError, NovadaErrorCode, LINE_TERMINATOR_CHARS } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, LINE_TERMINATOR_CHARS, toolFailure } from "../_core/errors.js";
 import { classifyAuthority } from "../utils/authority.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 // FIX-4: Max claim length — prevents excessively long claims from blowing up search queries
@@ -237,7 +237,7 @@ export async function novadaVerify(params, apiKey) {
     if (queryResults.every(r => r.failed && r.results.length === 0)) {
         const isEntitlement = queryResults.some(r => r.entitlement);
         if (isEntitlement) {
-            return [
+            return toolFailure([
                 `## Verify Unavailable`,
                 ``,
                 `Search failed with an account/authorization error on all 3 queries. The Scraper API (which powers search) is not activated on this API key, or the key is invalid.`,
@@ -248,11 +248,11 @@ export async function novadaVerify(params, apiKey) {
                 ``,
                 `## Agent Instruction`,
                 `agent_status: search_unavailable | action: activate_scraper_api | do_not_interpret_as: genuine_insufficient_data`,
-            ].join("\n");
+            ].join("\n"));
         }
         // No auth signal → transient or genuinely-empty. Retry once; only escalate
         // to activation if it persists. Do NOT suppress the retry path.
-        return [
+        return toolFailure([
             `## Verify Incomplete`,
             ``,
             `Search returned 0 results for all 3 queries — likely a temporary upstream issue (timeout, rate-limit, or DNS), not a settled verdict on the claim.`,
@@ -263,7 +263,7 @@ export async function novadaVerify(params, apiKey) {
             ``,
             `## Agent Instruction`,
             `agent_status: search_temporarily_failed | action: retry_once; if it persists call novada_account(section="summary")`,
-        ].join("\n");
+        ].join("\n"));
     }
     // Dispute markers: snippets must contain genuine disagreement language to count as contradicting.
     // This filters out academic papers that cite the claim as a TRUE example (e.g. in hallucination studies)

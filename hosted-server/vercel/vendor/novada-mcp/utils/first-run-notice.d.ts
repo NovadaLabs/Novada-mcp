@@ -13,9 +13,9 @@
  * Scope:
  *  - stdio (local npm): shown EXACTLY ONCE per install, tracked by a flag file
  *    at ~/.novada-mcp/first-run.json (default store below).
- *  - hosted (Vercel): tracked per-token in KV — that store is implemented in the
- *    hosted server (mcp.ts), NOT here (this module never touches KV or fs on
- *    serverless). See the VERCEL hard-guard in the default store.
+ *  - hosted (Vercel/EC2): tracked per-token in KV — that store is implemented in
+ *    the hosted server (mcp.ts), NOT here (this module never touches KV or fs on
+ *    serverless/hosted). See the RUNTIME.canWriteFiles hard-guard in the default store.
  */
 /**
  * The notice copy — verbatim, owner-approved (TOW2-242). $10 USD, novada.com ONLY

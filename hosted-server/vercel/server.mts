@@ -28,20 +28,27 @@
  * a single invalid comma-joined value for most HTTP clients.
  *
  * ── CRITICAL (P0) hosted-environment invariant ──────────────────────────────
- * Vendored tool logic (vendor/novada-mcp/config.js `isHostedEnvironment()`,
- * utils/output.js, tools/site_copy.js, utils/first-run-notice.js) decides
- * hosted-vs-local behavior SOLELY from `process.env.VERCEL || process.env.VERCEL_ENV
- * || process.env.AWS_LAMBDA_FUNCTION_NAME`. If none of those are set on EC2, the
- * server silently writes customer extraction results to disk (~/Downloads),
- * enables site_copy file writes, and changes approval-key semantics — all wrong
- * for a shared multi-tenant hosted endpoint. So: force the hosted markers BEFORE
- * importing any handler, then verify the vendored predicate actually agrees and
- * refuse to start otherwise.
+ * Vendored tool logic (vendor/novada-mcp/config.js `RUNTIME`, utils/output.js,
+ * tools/site_copy.js, utils/first-run-notice.js) decides hosted-vs-local
+ * behavior from `RUNTIME.kind`, which in turn reads `NOVADA_RUNTIME_KIND`
+ * first and falls back to `process.env.VERCEL || process.env.VERCEL_ENV ||
+ * process.env.AWS_LAMBDA_FUNCTION_NAME` auto-detection only when that's unset
+ * (see config.ts's RUNTIME doc comment). If this EC2 process looked "local"
+ * to the vendored code, the server would silently write customer extraction
+ * results to disk (~/Downloads), enable site_copy file writes, and change
+ * approval-key semantics — all wrong for a shared multi-tenant hosted
+ * endpoint. So: declare this process hosted BEFORE importing any handler
+ * (via `NOVADA_RUNTIME_KIND=hosted` — an honest self-declaration, NOT forging
+ * Vercel's own `VERCEL`/`VERCEL_ENV`/`VERCEL_REGION` env vars the way this
+ * entrypoint used to; a REAL Vercel deployment needs no such declaration at
+ * all, since the platform sets `VERCEL` itself), then verify the vendored
+ * RUNTIME object actually agrees and refuse to start otherwise.
  *
  * NOVADA_SKIP_HOSTED_FORCE=1 is a narrow TEST-ONLY seam (see test/server.test.mjs):
- * it skips ONLY the forcing step below so a test can prove the fail-closed branch
- * actually exits(1) when the hosted markers are genuinely absent. It must never be
- * set in production — nothing here does anything with it besides this one `if`.
+ * it skips ONLY the declaration step below so a test can prove the fail-closed
+ * branch actually exits(1) when no hosted signal is genuinely present. It must
+ * never be set in production — nothing here does anything with it besides this
+ * one `if`.
  *
  * cleanUrls (M2, accepted no-op): vercel.json sets `cleanUrls: true`, which is a
  * Vercel-edge-only static-file URL normalization (e.g. serving /about for
@@ -114,32 +121,36 @@ const UNCAUGHT_EXCEPTION_DRAIN_MS = 5_000;
 // NOVADA_SKIP_HOSTED_FORCE.
 
 /**
- * Force the Vercel hosted-environment markers into process.env. MUST run
- * before any handler module is imported (handler modules read these at
- * import time in some vendored code paths, not just per-request).
+ * Declare this process hosted via ONE honest env var, read by the vendored
+ * RUNTIME object (config.ts) with top priority. MUST run before any handler
+ * module is imported (handler modules read RUNTIME at import time in some
+ * vendored code paths, not just per-request). Replaces the previous
+ * `forceHostedEnvMarkers()`, which set three separate Vercel-specific env
+ * vars (`VERCEL`, `VERCEL_ENV`, `VERCEL_REGION`) to make this EC2 process
+ * masquerade as Vercel — `VERCEL_REGION` in particular was never read by any
+ * vendored code at all, pure cosmetic masquerade with zero functional
+ * purpose.
  */
-export function forceHostedEnvMarkers(): void {
-  process.env.VERCEL = "1";
-  process.env.VERCEL_ENV ??= "production";
-  process.env.VERCEL_REGION ??= "aws-eu-central-1";
+export function declareHostedRuntime(): void {
+  process.env.NOVADA_RUNTIME_KIND = "hosted";
 }
 
 /**
- * Fail closed: import the SAME vendored predicate the request path uses
+ * Fail closed: import the SAME vendored RUNTIME object the request path uses
  * (never a hand-reimplemented copy — class-not-instance) and exit(1) if it
  * disagrees that we're "hosted". Returns normally (void) when the check passes.
  */
 export async function verifyHostedOrExit(): Promise<void> {
   const vendorConfigUrl = new URL("./vendor/novada-mcp/config.js", import.meta.url);
-  const { isHostedEnvironment } = (await import(vendorConfigUrl.href)) as {
-    isHostedEnvironment: () => boolean;
+  const { RUNTIME } = (await import(vendorConfigUrl.href)) as {
+    RUNTIME: { kind: "local" | "hosted" };
   };
-  if (!isHostedEnvironment()) {
+  if (RUNTIME.kind !== "hosted") {
     console.error(
-      "[server] FATAL: isHostedEnvironment() returned false after startup. " +
+      '[server] FATAL: RUNTIME.kind !== "hosted" after startup. ' +
         "Refusing to start — running with this flag false on a shared host would " +
         "silently write customer data to local disk and change auth semantics. " +
-        "Expected VERCEL=1 (or VERCEL_ENV / AWS_LAMBDA_FUNCTION_NAME) to be set.",
+        "Expected NOVADA_RUNTIME_KIND=hosted (or VERCEL / VERCEL_ENV / AWS_LAMBDA_FUNCTION_NAME) to be set.",
     );
     process.exit(1);
   }
@@ -534,7 +545,7 @@ async function runWorker(): Promise<void> {
 
 async function main(): Promise<void> {
   if (process.env.NOVADA_SKIP_HOSTED_FORCE !== "1") {
-    forceHostedEnvMarkers();
+    declareHostedRuntime();
   }
   await verifyHostedOrExit();
 

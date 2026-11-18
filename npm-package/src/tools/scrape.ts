@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { createHash } from "node:crypto";
-import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, isHostedEnvironment, TIMEOUTS, toolCallDeadline } from "../config.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, HOSTED_SAFE_CEILING_MS, RUNTIME, TIMEOUTS, toolCallDeadline } from "../config.js";
 import { formatAsMarkdown, formatAsCsv, formatAsXlsx, formatAsHtml } from "../utils/format.js";
 import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
@@ -30,7 +30,7 @@ const SYNC_POLL_CEILING_MS = 45_000;
 const POLL_TIMEOUT_MS = Math.min(SYNC_POLL_CEILING_MS, HOSTED_SAFE_CEILING_MS);
 const POLL_INTERVAL_MS = 2_000;
 
-// TOW2-257 Phase 1: on HOSTED (Vercel/Lambda — see isHostedEnvironment()), keep the
+// TOW2-257 Phase 1: on HOSTED (RUNTIME.kind === "hosted" — see config.ts), keep the
 // FIRST synchronous poll SHORT so novada_scrape hands back a task_id + processing
 // envelope in ~10s instead of riding the full 45s ceiling. This models the
 // Bright-Data-style "202 + snapshot_id" shape onto our existing task_id/
@@ -43,7 +43,7 @@ const HOSTED_FIRST_TRY_CEILING_MS = 10_000;
 
 /** The sync poll ceiling to use for THIS call: short on hosted, unchanged on local. */
 function syncPollCeilingMs(): number {
-  return isHostedEnvironment() ? HOSTED_FIRST_TRY_CEILING_MS : POLL_TIMEOUT_MS;
+  return RUNTIME.kind === "hosted" ? HOSTED_FIRST_TRY_CEILING_MS : POLL_TIMEOUT_MS;
 }
 
 interface SubmitApiResponse {
@@ -2271,7 +2271,25 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   // everything except single-target YouTube video ops with a confidently-extracted id.
   assertYouTubeIdentity(platform, operation, opParams as Record<string, unknown> | undefined, rawRecords.slice(0, effectiveLimit));
 
-  if (records.length === 0) {
+  // Round 5 (independent A/B verifier, 2026-11-18): novada_scrape_instagram
+  // (same P1-3 class as the already-tracked linkedin case) returned a
+  // non-empty `records` ARRAY whose entries carried no usable field values —
+  // `records.length === 0` never saw it, so this fell through to the normal
+  // success formatter below ("0 useful records" read as "N records, success").
+  // Generalizing the F9 gate: a record contributes nothing if every one of
+  // its flattened field VALUES is null/undefined/empty-string — that is true
+  // regardless of platform (a genuinely sparse-but-real record always has at
+  // least one populated field; an upstream placeholder/schema-drift entry has
+  // none). Count only records with real signal, not just array length.
+  // flattenRecord() stringifies every value — a real null becomes the literal
+  // string "null" (deliberately, so toon/csv/markdown can distinguish "price
+  // unknown" from an empty string — see flattenRecord's ITEM 3 comment) and
+  // undefined becomes "". Both must be excluded here too, or they count as
+  // "usable" simply because they're non-empty strings.
+  const hasUsableRecord = records.some((r) =>
+    Object.values(r).some((v) => v !== "" && v !== "null")
+  );
+  if (!hasUsableRecord) {
     // F9: items came back but nothing extractable was inside — ambiguous between
     // no-data and schema-drift/extraction failure; classify, never plain-ok.
     return emptyResultEnvelope(platform, displayOperation, "no_records_extracted");

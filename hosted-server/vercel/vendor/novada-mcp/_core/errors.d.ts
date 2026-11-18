@@ -96,79 +96,21 @@ export declare const NOT_ESCALATE_STATUSES: ReadonlySet<number>;
  *   cases it has positive evidence for, it never removes the existing floor.
  */
 export declare function isBlockClassFetchFailure(err: unknown): boolean;
-export declare const FAILURE_HEADER_LITERALS: ReadonlySet<string>;
 /**
- * EXHAUSTIVE classification (round 4, independent review) of every OTHER
- * markdown heading a tools/** formatter can emit — i.e. every heading NOT in
- * FAILURE_HEADER_LITERALS. Built from a recursive, comment-aware static scan
- * of npm-package/src/tools/** (tests/consistency/failure-envelope-coverage.test.ts
- * runs the SAME scan every CI invocation — not a one-time manual pass) that
- * found 219 non-comment heading-literal occurrences, 104 distinct strings, 14
- * of which are real failures (now in FAILURE_HEADER_LITERALS above). This map
- * covers the other 90 distinct strings (reduced to 83 keys after prefix
- * collapsing — see keyOf() below).
- *
- * Replaces round 1-3's keyword-filtered approach (`Error|Failed|Unavailable|
- * Incomplete|Invalid|Refused|Denied`) entirely — that filter was itself the
- * bug: "## Browser API — Not Configured" / "## Browser API — Missing
- * Dependency" (browser.ts) are real, currently-shipping failures that contain
- * NONE of those words, so they were never even candidates for review. There
- * is no keyword list in this round's design — every heading found by the scan
- * must be in exactly one of the two tables, full stop.
- *
- * Key shape: a non-interpolated heading is keyed by its exact trimmed text. A
- * heading containing `${` is keyed by keyOf()'s fixed prefix — the substring
- * before the first `${`, computed identically by the runtime-irrelevant
- * static scanner and documented here so a human reviewer can see what each
- * entry actually covers. Several visually-different headings legitimately
- * reduce to the same short prefix (`"## "`, `"### "`, `"### ["` — e.g. every
- * `### [${idx}] ...` numbered-item sub-heading across crawl.ts/extract.ts/
- * research.ts) — that is fine: the prefix itself contains no failure word by
- * construction, so the key's classification holds regardless of which
- * specific call site produced it; the test file's header documents each
- * collapsed group so a reviewer can still see what was merged.
- *
- * Reason column: most entries are structural sub-headings (used as a LATER
- * line inside an already-classified body, never alone) or static section
- * titles never used on a failure path — tagged "structural" for brevity.
- * Entries that could plausibly look ambiguous get a real, specific reason.
+ * Marks `text` as a tool-level failure. Call this at the exact `return`
+ * statement a formatter uses to report failure — e.g.
+ * `return toolFailure(["## Extract Failed", ...].join("\n"));` — instead of
+ * returning the formatted string bare. The dispatch choke point
+ * (index.ts/mcp.ts) detects the mark via isToolFailure() and sets
+ * isError:true, then strips it via stripToolFailureMark() before the text
+ * reaches the caller — the marker itself is never visible to anyone.
  */
-export declare const SUCCESS_OR_NEUTRAL_HEADERS: ReadonlyMap<string, string>;
-/** Classification key for a heading: the full trimmed text for a literal
- *  heading, or the fixed substring before the first `${` for an interpolated
- *  one — identical function used by the completeness scanner
- *  (tests/consistency/failure-envelope-coverage.test.ts) so this file's
- *  documentation and the enforced CI check can never drift apart. */
-export declare function headingClassificationKey(heading: string): string;
-/** Marks a non-"## heading" failure signal some tools use instead/in addition
- *  (e.g. "agent_instruction: status:failed", "status:browser_unavailable_on_runtime",
- *  "status:search_unavailable"). Deliberately does NOT match "status:success" or
- *  the many other non-failure status tokens (status:no_content is advisory, not
- *  matched here — it is attached to results that already carry real content).
- *  Safe against caller-text injection: see the verified invariant above — every
- *  token this can match is a fixed string literal in the codebase, never
- *  interpolated from params.topic/params.query/params.url/etc. */
-export declare const FAILURE_STATUS_RE: RegExp;
-/**
- * Round 3 (independent review) — `agent_status:` is a SEPARATE, sibling
- * convention to `agent_instruction: status:X` (monitor.ts, verify.ts use it
- * alongside, not instead of, the one above). Verified by reading every
- * `agent_status:` site in npm-package/src/tools/*.ts: the value is always a
- * fixed string literal — `baseline_set` / `no_change` / `changes_found`
- * (success, monitor.ts) vs `error` (failure, monitor.ts) / `search_unavailable`
- * / `search_temporarily_failed` (failure, verify.ts) — never interpolated from
- * a tool param. `error` is matched as a whole token (not a substring) so it
- * can never accidentally match inside a longer success-shaped identifier. */
-export declare const FAILURE_AGENT_STATUS_RE: RegExp;
-/**
- * True when `text` (a tool's returned result, NOT a thrown error) is itself a
- * failure envelope per the class above. Checked ONLY against structured
- * markers emitted by the tools' own formatters — never a loose keyword scan
- * over the whole body or an arbitrary interpolated line, which would
- * false-positive on legitimate content/caller-text that happens to contain
- * "error"/"failed"/"unavailable".
- */
-export declare function looksLikeFailureEnvelope(text: unknown): boolean;
+export declare function toolFailure(text: string): string;
+/** True when `text` was produced by toolFailure() and not yet stripped. */
+export declare function isToolFailure(text: unknown): boolean;
+/** Removes the toolFailure() mark, if present. Safe to call on any string
+ *  (including one that was never marked) — a no-op in that case. */
+export declare function stripToolFailureMark(text: string): string;
 /**
  * Review round 1 (2026-07-30, CRITICAL — live-verified over stdio, and LIVE in
  * prod on mcp.novada.com v0.9.32 today): every newline-handling pattern in this

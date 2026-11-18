@@ -16,17 +16,42 @@
  * Key distinction from isBrowserConfigured() (utils/browser.ts):
  *   isBrowserConfigured() → "are credentials available AND is the runtime capable?"
  *   isBrowserAvailableOnRuntime() → "is this runtime capable of CDP at all?"
- *   The two are related: isBrowserConfigured() already calls isHostedEnvironment() internally.
+ *   The two are related: isBrowserConfigured() already reads RUNTIME.canHoldWebSocket internally.
  *   This module exposes the runtime check separately so extract.ts can provide
  *   different error messages depending on WHICH condition fails (no runtime vs no creds).
  *
- * Serverless detection: checks VERCEL / VERCEL_ENV / AWS_LAMBDA_FUNCTION_NAME env vars.
- * An explicit opt-in override flag (DEPLOYMENT_SUPPORTS_WS=true) allows future
- * environments with persistent WS support (e.g. a custom long-running container) to
- * opt in without changing this logic.
+ * Round 5 (owner direction): reads RUNTIME.canHoldWebSocket (config.ts) — the
+ * ONE computed-once capability snapshot — instead of re-deriving serverless
+ * detection here. See config.ts's RUNTIME doc comment for the full
+ * NOVADA_RUNTIME_KIND / DEPLOYMENT_SUPPORTS_WS resolution order.
  */
-import { isHostedEnvironment } from "../config.js";
+import { RUNTIME } from "../config.js";
 import { getBrowserWs } from "./credentials.js";
+import { toolFailure } from "../_core/errors.js";
+/**
+ * F1 round 5 (independent A/B verifier): the TRANSPORT half of the browser
+ * capability gate, split out as its own exported predicate so every caller —
+ * this module's isBrowserAvailableOnRuntime() below AND utils/browser.ts's
+ * isBrowserConfigured()/fetchViaBrowser() — shares ONE implementation instead
+ * of each re-deriving "is this runtime capable of holding a persistent CDP
+ * WebSocket" inline. Before this round, utils/browser.ts had TWO separate
+ * inline copies of a hosted/serverless check (ignoring DEPLOYMENT_SUPPORTS_WS
+ * entirely) that silently diverged from this file's logic the moment the
+ * override flag was introduced — isBrowserAvailableOnRuntime() correctly
+ * returned true on hosted+DEPLOYMENT_SUPPORTS_WS=true (so extract.ts took the
+ * "browser available" arm), but fetchViaBrowser() then threw its own stale
+ * "serverless (Vercel) cannot provide" error immediately, with no try/catch
+ * at that call site to catch it — bypassing F1's render fallback entirely.
+ * Round 5: both now read the SAME RUNTIME.canHoldWebSocket field, computed
+ * once, so this class of drift is structurally impossible going forward.
+ *
+ * Deliberately does NOT consider credentials — that is a SEPARATE concern
+ * with its own distinct error message (see fetchViaBrowser()'s wsEndpoint
+ * check) and must not be conflated into this one predicate.
+ */
+export function isBrowserTransportAvailable() {
+    return RUNTIME.canHoldWebSocket;
+}
 /**
  * Returns true ONLY when the current runtime can maintain a persistent WebSocket
  * connection required by the CDP (Browser API) tier AND credentials are set.
@@ -36,19 +61,14 @@ import { getBrowserWs } from "./credentials.js";
  *   - UNLESS DEPLOYMENT_SUPPORTS_WS=true is explicitly set (custom runtime override)
  *
  * This is the canonical capability gate for the browser tier in extract.ts.
- * utils/browser.ts's isBrowserConfigured() performs the same check but is
- * defined in the browser utility module — this export allows extract.ts to
- * gate without importing from browser.ts directly, avoiding circular deps.
+ * utils/browser.ts's isBrowserConfigured() DELEGATES to this exact function
+ * (round 5: it used to duplicate the logic inline, which drifted) — both live
+ * in different modules only because extract.ts needs to gate without
+ * importing from browser.ts directly (avoiding a circular dep); browser.ts
+ * importing FROM runtime.ts is fine (runtime.ts imports nothing from browser.ts).
  */
 export function isBrowserAvailableOnRuntime() {
-    // Explicit opt-in override for custom runtimes that do support persistent WS
-    if (process.env.DEPLOYMENT_SUPPORTS_WS === "true") {
-        return !!getBrowserWs();
-    }
-    // Serverless runtimes cannot hold CDP WS connections
-    if (isHostedEnvironment())
-        return false;
-    return !!getBrowserWs();
+    return isBrowserTransportAvailable() && !!getBrowserWs();
 }
 /**
  * Returns a structured, agent-actionable error string for when the browser tier
@@ -70,8 +90,8 @@ export function getBrowserUnavailableError(paramValue, fieldName = "render", ren
     const paramContext = paramValue ? ` (${fieldName}="${paramValue}")` : "";
     // F1: the error text used to claim "Vercel serverless functions" specifically —
     // false on the current production deployment (EC2, see repo CLAUDE.md) even
-    // though isHostedEnvironment() (process.env.VERCEL forced by server.mts for code
-    // reuse — config.ts) can't distinguish EC2 from Vercel today. Describe the
+    // though RUNTIME.kind alone can't distinguish EC2 from genuine Vercel today
+    // (both report "hosted" — see config.ts). Describe the
     // TRANSPORT LIMITATION (serverless-style request isolation), not a specific
     // platform name, so this stays accurate regardless of which host is serving it.
     const renderAttemptLine = renderAttempt?.tried
@@ -79,8 +99,8 @@ export function getBrowserUnavailableError(paramValue, fieldName = "render", ren
             ? `- A render (Web Unblocker) fallback was attempted first and also failed: ${renderAttempt.error}`
             : `- A render (Web Unblocker) fallback was attempted first but did not return usable content.`
         : null;
-    if (isHostedEnvironment() && process.env.DEPLOYMENT_SUPPORTS_WS !== "true") {
-        return [
+    if (!RUNTIME.canHoldWebSocket) {
+        return toolFailure([
             `## Browser Mode Unavailable`,
             ``,
             `${fieldName}="browser"${paramContext} requires a persistent CDP WebSocket transport that ` +
@@ -97,10 +117,10 @@ export function getBrowserUnavailableError(paramValue, fieldName = "render", ren
                 `For full browser automation, run the MCP server locally: npx -y novada-mcp@latest ` +
                 `with NOVADA_BROWSER_WS configured. ` +
                 `Docs: https://docs.novada.com/mcp/local-setup`,
-        ].join("\n");
+        ].join("\n"));
     }
     // Missing credentials (runtime supports WS, but no NOVADA_BROWSER_WS set)
-    return [
+    return toolFailure([
         `## Browser Mode Unavailable`,
         ``,
         `${fieldName}="browser"${paramContext} requires NOVADA_BROWSER_WS to be configured.`,
@@ -120,7 +140,7 @@ export function getBrowserUnavailableError(paramValue, fieldName = "render", ren
             `Set NOVADA_BROWSER_WS env var to enable browser mode. ` +
             `Get credentials at dashboard.novada.com/overview/browser/. ` +
             `Alternatively, use ${fieldName}="render" (Web Unblocker) for JS rendering — no extra config needed.`,
-    ].join("\n");
+    ].join("\n"));
 }
 /**
  * Markdown-heading prefixes that novadaExtract (and its browser-tier fallback)
