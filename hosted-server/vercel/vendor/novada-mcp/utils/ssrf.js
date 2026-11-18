@@ -263,6 +263,13 @@ function deliverSafeAddresses(hostname, list, opts, cb, viaResolver) {
  *   resolve, just not via the system resolver. The addresses still go through the SAME
  *   SSRF re-check as the normal path before the lookup is reported as successful.
  */
+// Round 2 (independent review MEDIUM): no explicit per-call timeout is set on the
+// fallback resolve4 below — c-ares' own default retry/timeout governs it directly.
+// Not fixed here: the only caller (safeLookup, wired into axios's `lookup` option)
+// already runs inside `fetchWithRetry`/`fetchViaProxy`'s outer `TIMEOUTS.STATIC_FETCH`,
+// which bounds the WHOLE request including this DNS phase — so a slow fallback cannot
+// hang the request past that ceiling, just consume more of its budget than a future
+// explicit timeout would. Worth revisiting if this is ever observed in practice.
 function tryFallbackResolver(hostname, opts, cb) {
     const resolver = new dns.Resolver();
     resolver.setServers([FALLBACK_DNS_SERVER]);

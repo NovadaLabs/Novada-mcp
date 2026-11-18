@@ -126,6 +126,64 @@ describe("B2: redirected-to-homepage / archive-snapshot is an honest failure, no
   });
 });
 
+describe("B2 round 2 (independent review HIGH): a deep-path → homepage-redirect that the PRE-EXISTING Wayback rescue (P2-1) then successfully recovers must stay a success", () => {
+  it("deep path redirects to a SPARSE homepage (triggers Wayback's own <100-char/<20-score threshold) -> Wayback returns rich real content -> ## Extracted Content, NOT wrong_page", async () => {
+    const SPARSE_HOMEPAGE_HTML = `<html><head><title>Example Site</title></head><body><p>Not found.</p></body></html>`;
+    const RICH_WAYBACK_HTML = `
+      <html><head><title>2024 Deleted Article — Example Site</title></head>
+      <body><main>
+        <h1>2024 Deleted Article</h1>
+        ${"<p>This is the genuine archived article content, rescued from the Wayback Machine, with many paragraphs of real substantive prose about the original topic.</p>".repeat(10)}
+      </main></body></html>
+    `;
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("web.archive.org")) {
+        return { data: RICH_WAYBACK_HTML, headers: {}, status: 200 };
+      }
+      // Primary fetch: the original deep path 30x-redirected to the (sparse) homepage.
+      return {
+        data: SPARSE_HOMEPAGE_HTML,
+        headers: {},
+        status: 200,
+        request: { res: { responseUrl: "https://example.com/" } },
+      };
+    });
+
+    const result = await extract("https://example.com/2024/deleted-article");
+
+    // Round 1 regression (independent review HIGH): this used to return
+    // "## Extract Failed ... status:wrong_page" here, discarding the Wayback
+    // rescue's genuinely-recovered content because the redirect check still read
+    // the ORIGINAL (pre-rescue) finalUrl against the NEW (rescued) content.
+    expect(result).not.toContain("## Extract Failed");
+    expect(result).not.toMatch(/status:wrong_page/);
+    expect(result).toContain("## Extracted Content");
+    expect(result).toMatch(/source: wayback/);
+    expect(result).toContain("genuine archived article content");
+  });
+
+  it("MIRROR: the SAME redirect-to-sparse-homepage WITHOUT a usable Wayback snapshot (archive.org also returns nothing useful) still fails as wrong_page, not a silent generic quality caveat", async () => {
+    const SPARSE_HOMEPAGE_HTML = `<html><head><title>Example Site</title></head><body><p>Not found.</p></body></html>`;
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("web.archive.org")) {
+        // Wayback itself has nothing (too short to pass P2-1's own >500-char floor).
+        return { data: "<html><body>Not archived.</body></html>", headers: {}, status: 200 };
+      }
+      return {
+        data: SPARSE_HOMEPAGE_HTML,
+        headers: {},
+        status: 200,
+        request: { res: { responseUrl: "https://example.com/" } },
+      };
+    });
+
+    const result = await extract("https://example.com/2024/deleted-article");
+
+    expect(result).toContain("## Extract Failed");
+    expect(result).toMatch(/status:wrong_page/);
+  });
+});
+
 describe("B2: boilerplate-only pages (cookie wall / CDN error stub) are an honest failure", () => {
   it("cookie-consent-only wall (short, no real content) → ## Extract Failed, wrong_page", async () => {
     const html = `<html><body><div class="cookie-banner">We use cookies to improve your experience on this site. Accept All | Manage Preferences</div></body></html>`;

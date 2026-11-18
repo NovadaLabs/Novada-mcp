@@ -1397,6 +1397,25 @@ async function extractSingleInner(
   // disclose the target's final URL, so it stays null there — the redirect-mismatch
   // check below degrades to a no-op (never a false positive) whenever it is unknown.
   let finalUrl: string | null = null;
+  // B2 round 2 (independent review HIGH, 2026-11-18): `finalUrl` describes the
+  // static/proxy leg's redirect chain for the HTML STRING that leg produced — but
+  // several PRE-EXISTING fallbacks (GitBook .md, the JS-heavy/bot-challenge render
+  // escalation, the later quality-score render/browser escalation, and the Wayback
+  // rescue) can go on to REPLACE `html`/`mainContent` with a different fetch's
+  // content while leaving `usedMode` unchanged (the Wayback and GitBook branches both
+  // keep `usedMode === "static"`) — gating the redirect check on `usedMode` alone
+  // (round 1's approach) missed exactly this: a legitimately Wayback-rescued page got
+  // discarded as a false `wrong_page` because the check still read the ORIGINAL
+  // (pre-rescue) redirect's `finalUrl` against the NEW (rescued) content.
+  //
+  // Fixed by re-deriving validity from the content itself, the same way
+  // `hydrationSuspectFinal` below is re-derived from the CURRENT `$doc` rather than a
+  // flag threaded through the pipeline: snapshot the exact html STRING this leg
+  // produced at the moment `finalUrl` is captured, then only trust `finalUrl` later if
+  // `html` is still reference-identical to that snapshot. ANY future code path that
+  // swaps in different content automatically invalidates the check by construction —
+  // there is nothing to remember to clear at a new call site.
+  let htmlAtFinalUrlCapture: string | null = null;
   /** Whether anti-bot was resolved via escalation */
   let antiBotResolved = false;
   // clean=true → main-content only; clean=false (default) → full page for maximum coverage.
@@ -1730,6 +1749,18 @@ async function extractSingleInner(
         }
         html = r.data;
       }
+
+      // B2 round 2: snapshot the exact string `html` holds right now — the static/
+      // proxy leg's own content, matching the `finalUrl` just captured above. Every
+      // later fallback (GitBook, JS-heavy/bot-challenge escalation, Wayback) reassigns
+      // `html` to a DIFFERENT fetch's content; comparing against this snapshot at
+      // evaluation time (not a flag threaded through those blocks) is what lets the
+      // redirect check detect ANY of them by construction. (PDF responses strip a
+      // `pdf_pages:` prefix later, below — a real PDF leg's snapshot therefore never
+      // reference-equals the post-strip `html`, so this check simply never fires for
+      // PDFs; fails closed, not a false positive, and PDFs are excluded from every one
+      // of those fallback paths anyway.)
+      htmlAtFinalUrlCapture = html;
 
       // GitBook .md fallback (NOV-GB1 / NOV-GB2):
       // If the static HTML is served by GitBook (CDN signature), fetch the authoritative
@@ -2221,15 +2252,19 @@ async function extractSingleInner(
   // this SAME boolean (3-way OR, not a parallel gate) — a redirect that landed on an
   // unrelated homepage/archive-snapshot instead of the requested page, and a body that
   // IS a CDN error stub or cookie-wall rather than real content.
-  // `finalUrl` is only meaningful for the CONTENT currently held in `html`/`mainContent`
-  // when that content still came from the static/proxy leg that captured it (usedMode
-  // === "static") — if JS-heavy/bot-challenge escalation already swapped in render or
-  // browser output above, finalUrl describes a PRIOR fetch's redirect chain, not this
-  // one, and must not be applied to it (render/browser don't disclose their own final
-  // URL at all, so there is nothing stale to clear — gating on usedMode here is simpler
-  // and more robust than resetting finalUrl inside every escalation sub-branch above).
+  // `finalUrl` is only meaningful for the CONTENT currently held in `html` when `html`
+  // is STILL the exact string the static/proxy leg produced (reference-compared against
+  // `htmlAtFinalUrlCapture`, snapshotted at the moment `finalUrl` was captured — see
+  // that declaration's comment). Round 1 gated this on `usedMode === "static"` instead,
+  // which missed the Wayback rescue (P2-1, below) and the GitBook .md fallback: both
+  // replace `html`/`mainContent` with a DIFFERENT fetch's content while leaving
+  // `usedMode` at `"static"`, so a legitimately rescued page was discarded as a false
+  // `wrong_page` (independent review HIGH, round 1). Comparing the content itself — the
+  // same re-derive-from-current-state approach `hydrationSuspectFinal` already uses
+  // below — covers every present AND future content-replacing branch by construction,
+  // not just the ones audited by hand.
   const redirectedAwayFromRequestedPage =
-    usedMode === "static" && isRedirectedAwayFromRequestedPage(params.url, finalUrl);
+    html === htmlAtFinalUrlCapture && isRedirectedAwayFromRequestedPage(params.url, finalUrl);
   const boilerplateOnlyPage = hasBoilerplateOnlySignature(mainContent);
   const isChallengePage =
     detectedAntiBot !== null ||
