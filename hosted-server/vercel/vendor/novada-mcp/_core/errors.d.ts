@@ -98,6 +98,41 @@ export declare const NOT_ESCALATE_STATUSES: ReadonlySet<number>;
 export declare function isBlockClassFetchFailure(err: unknown): boolean;
 export declare const FAILURE_HEADER_LITERALS: ReadonlySet<string>;
 /**
+ * Headings that CONTAIN a failure-shaped word (Error|Failed|Unavailable|
+ * Incomplete|Invalid|Refused|Denied) but are NOT failures — kept as an
+ * explicit, reasoned exception list so the completeness scanner can
+ * distinguish "reviewed and excluded on purpose" from "never looked at".
+ * Empty today: the full-codebase scan (round 3) found zero headings that are
+ * both failure-word-shaped AND legitimately non-failure. A caller-interpolated
+ * header (`` `## Research: ${topic}` ``, ai_monitor's brand header) is handled
+ * differently — it is excluded from FAILURE_HEADER_LITERALS by construction
+ * (whole-line equality can never match an interpolated string) and never
+ * reaches this allowlist at all, because its FIXED template text contains no
+ * failure word. If a future heading needs a true allowlist entry, add it here
+ * with a one-line reason; the coverage test will enforce its presence.
+ */
+export declare const NON_FAILURE_HEADER_ALLOWLIST: ReadonlyMap<string, string>;
+/** Marks a non-"## heading" failure signal some tools use instead/in addition
+ *  (e.g. "agent_instruction: status:failed", "status:browser_unavailable_on_runtime",
+ *  "status:search_unavailable"). Deliberately does NOT match "status:success" or
+ *  the many other non-failure status tokens (status:no_content is advisory, not
+ *  matched here — it is attached to results that already carry real content).
+ *  Safe against caller-text injection: see the verified invariant above — every
+ *  token this can match is a fixed string literal in the codebase, never
+ *  interpolated from params.topic/params.query/params.url/etc. */
+export declare const FAILURE_STATUS_RE: RegExp;
+/**
+ * Round 3 (independent review) — `agent_status:` is a SEPARATE, sibling
+ * convention to `agent_instruction: status:X` (monitor.ts, verify.ts use it
+ * alongside, not instead of, the one above). Verified by reading every
+ * `agent_status:` site in npm-package/src/tools/*.ts: the value is always a
+ * fixed string literal — `baseline_set` / `no_change` / `changes_found`
+ * (success, monitor.ts) vs `error` (failure, monitor.ts) / `search_unavailable`
+ * / `search_temporarily_failed` (failure, verify.ts) — never interpolated from
+ * a tool param. `error` is matched as a whole token (not a substring) so it
+ * can never accidentally match inside a longer success-shaped identifier. */
+export declare const FAILURE_AGENT_STATUS_RE: RegExp;
+/**
  * True when `text` (a tool's returned result, NOT a thrown error) is itself a
  * failure envelope per the class above. Checked ONLY against structured
  * markers emitted by the tools' own formatters — never a loose keyword scan

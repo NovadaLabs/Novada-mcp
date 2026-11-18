@@ -301,6 +301,13 @@ export function isBlockClassFetchFailure(err) {
 // `status:*_failed`/`status:*unavailable` family as their siblings), distinct
 // from the real partial-success shape (`` `## Research: ${topic}` `` with
 // `status:partial`), which is excluded by never being in this table at all.
+// H1 round-3 (independent review): this table must be COMPLETE, not just the
+// literals this fix wave happened to touch first. Completeness is enforced by
+// tests/_core/failure-envelope-coverage.test.ts, which statically scans every
+// `npm-package/src/tools/*.ts` file for any markdown-heading string literal
+// containing a failure word and asserts it is classified HERE or in
+// NON_FAILURE_HEADER_ALLOWLIST below — an unclassified new heading fails CI.
+// Do not add a heading to this file without also running that test.
 export const FAILURE_HEADER_LITERALS = new Set([
     "## Extract Failed",
     "## Extraction Error",
@@ -311,6 +318,28 @@ export const FAILURE_HEADER_LITERALS = new Set([
     "## Research Incomplete",
     "## Verify Unavailable",
     "## Verify Incomplete",
+    // Round 3 (independent review): missed in rounds 1-2 — caught by the
+    // completeness scanner, not manual re-reading.
+    "## Browser Flow — API Error", // browser_flow.ts:356
+    "## Browser Flow — Endpoint Unavailable", // browser_flow.ts:374
+    "## Monitor: Error", // monitor.ts:631
+]);
+/**
+ * Headings that CONTAIN a failure-shaped word (Error|Failed|Unavailable|
+ * Incomplete|Invalid|Refused|Denied) but are NOT failures — kept as an
+ * explicit, reasoned exception list so the completeness scanner can
+ * distinguish "reviewed and excluded on purpose" from "never looked at".
+ * Empty today: the full-codebase scan (round 3) found zero headings that are
+ * both failure-word-shaped AND legitimately non-failure. A caller-interpolated
+ * header (`` `## Research: ${topic}` ``, ai_monitor's brand header) is handled
+ * differently — it is excluded from FAILURE_HEADER_LITERALS by construction
+ * (whole-line equality can never match an interpolated string) and never
+ * reaches this allowlist at all, because its FIXED template text contains no
+ * failure word. If a future heading needs a true allowlist entry, add it here
+ * with a one-line reason; the coverage test will enforce its presence.
+ */
+export const NON_FAILURE_HEADER_ALLOWLIST = new Map([
+// (none yet — see doc comment above)
 ]);
 /** Marks a non-"## heading" failure signal some tools use instead/in addition
  *  (e.g. "agent_instruction: status:failed", "status:browser_unavailable_on_runtime",
@@ -320,7 +349,18 @@ export const FAILURE_HEADER_LITERALS = new Set([
  *  Safe against caller-text injection: see the verified invariant above — every
  *  token this can match is a fixed string literal in the codebase, never
  *  interpolated from params.topic/params.query/params.url/etc. */
-const FAILURE_STATUS_RE = /agent_instruction:\s*status:\s*(?:failed|[a-z0-9_]*unavailable|[a-z0-9_]*_failed)\b/i;
+export const FAILURE_STATUS_RE = /agent_instruction:\s*status:\s*(?:failed|[a-z0-9_]*unavailable|[a-z0-9_]*_failed)\b/i;
+/**
+ * Round 3 (independent review) — `agent_status:` is a SEPARATE, sibling
+ * convention to `agent_instruction: status:X` (monitor.ts, verify.ts use it
+ * alongside, not instead of, the one above). Verified by reading every
+ * `agent_status:` site in npm-package/src/tools/*.ts: the value is always a
+ * fixed string literal — `baseline_set` / `no_change` / `changes_found`
+ * (success, monitor.ts) vs `error` (failure, monitor.ts) / `search_unavailable`
+ * / `search_temporarily_failed` (failure, verify.ts) — never interpolated from
+ * a tool param. `error` is matched as a whole token (not a substring) so it
+ * can never accidentally match inside a longer success-shaped identifier. */
+export const FAILURE_AGENT_STATUS_RE = /\bagent_status:\s*(?:error|[a-z0-9_]*unavailable|[a-z0-9_]*_failed)\b/i;
 /**
  * True when `text` (a tool's returned result, NOT a thrown error) is itself a
  * failure envelope per the class above. Checked ONLY against structured
@@ -335,7 +375,7 @@ export function looksLikeFailureEnvelope(text) {
     const firstLine = (text.slice(0, 200).split("\n", 1)[0] ?? "").trimEnd();
     if (FAILURE_HEADER_LITERALS.has(firstLine))
         return true;
-    return FAILURE_STATUS_RE.test(text);
+    return FAILURE_STATUS_RE.test(text) || FAILURE_AGENT_STATUS_RE.test(text);
 }
 // ─── agent_instruction Templates ─────────────────────────────────────────────
 const INSTRUCTIONS = {
