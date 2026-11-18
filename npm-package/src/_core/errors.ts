@@ -298,6 +298,17 @@ export function isBlockClassFetchFailure(err: unknown): boolean {
 // topic containing the word "error" is never touched by this, because
 // toolFailure() is simply never called on that code path.
 const TOOL_FAILURE_MARKER = "\u{F0001}"; // Unicode Private Use Area (Plane 15) — reserved, never real content
+// Round 7: an optional machine-readable reason tag can follow the marker,
+// terminated by a NUL byte (also never real content) before the human text
+// begins. This is the ONE place a caller that already knows WHY it failed
+// (e.g. extract.ts's TOTAL_REQUEST_CEILING path) can carry that structurally
+// — so a telemetry/outcome consumer (hosted-server/vercel/api/mcp.ts) reads
+// getToolFailureReason() instead of re-deriving "was this a timeout?" from
+// the heading text, which is exactly the bug class this marker exists to
+// close. Still ONE mechanism (one marker, one optional tag), not a second
+// parallel one — toolFailure(text) with no reason behaves identically to
+// before.
+const TOOL_FAILURE_REASON_SEP = "\u0000";
 
 /**
  * Marks `text` as a tool-level failure. Call this at the exact `return`
@@ -307,9 +318,13 @@ const TOOL_FAILURE_MARKER = "\u{F0001}"; // Unicode Private Use Area (Plane 15) 
  * (index.ts/mcp.ts) detects the mark via isToolFailure() and sets
  * isError:true, then strips it via stripToolFailureMark() before the text
  * reaches the caller — the marker itself is never visible to anyone.
+ *
+ * @param reason  Optional machine-readable tag for a consumer that needs to
+ *                know WHY this failed without inspecting the message text
+ *                (e.g. "ceiling_timeout"). Retrieved via getToolFailureReason().
  */
-export function toolFailure(text: string): string {
-  return TOOL_FAILURE_MARKER + text;
+export function toolFailure(text: string, reason?: string): string {
+  return TOOL_FAILURE_MARKER + (reason ? reason + TOOL_FAILURE_REASON_SEP : "") + text;
 }
 
 /** True when `text` was produced by toolFailure() and not yet stripped. */
@@ -317,10 +332,26 @@ export function isToolFailure(text: unknown): boolean {
   return typeof text === "string" && text.startsWith(TOOL_FAILURE_MARKER);
 }
 
-/** Removes the toolFailure() mark, if present. Safe to call on any string
- *  (including one that was never marked) — a no-op in that case. */
+function splitToolFailureReason(markedBody: string): { reason: string | null; rest: string } {
+  const sepIdx = markedBody.indexOf(TOOL_FAILURE_REASON_SEP);
+  if (sepIdx === -1) return { reason: null, rest: markedBody };
+  return { reason: markedBody.slice(0, sepIdx), rest: markedBody.slice(sepIdx + 1) };
+}
+
+/** Removes the toolFailure() mark (and any reason tag), if present. Safe to
+ *  call on any string (including one that was never marked) — a no-op in
+ *  that case. */
 export function stripToolFailureMark(text: string): string {
-  return text.startsWith(TOOL_FAILURE_MARKER) ? text.slice(TOOL_FAILURE_MARKER.length) : text;
+  if (!text.startsWith(TOOL_FAILURE_MARKER)) return text;
+  return splitToolFailureReason(text.slice(TOOL_FAILURE_MARKER.length)).rest;
+}
+
+/** The reason tag passed to toolFailure(text, reason), if any — null when the
+ *  text is unmarked, or marked with no reason tag. Never inspects the human
+ *  message text itself. */
+export function getToolFailureReason(text: unknown): string | null {
+  if (typeof text !== "string" || !text.startsWith(TOOL_FAILURE_MARKER)) return null;
+  return splitToolFailureReason(text.slice(TOOL_FAILURE_MARKER.length)).reason;
 }
 
 // ─── agent_instruction Templates ─────────────────────────────────────────────

@@ -346,6 +346,40 @@ describe("P1-6: urls array alias", () => {
     expect(result).toContain("https://example.com/b");
   });
 
+  // Round 7 (review HIGH, class fix): extractSingle can RESOLVE (not reject)
+  // with a toolFailure()-marked string — e.g. render="browser" explicitly
+  // requested on a runtime that can't hold the WS AND whose render fallback
+  // also can't run (forced render mode skips the fallback). Batch mode's
+  // `.then(content => ({...ok:true}))` used to count that as a success,
+  // silently inflating "successful:N" with a genuine failure.
+  it("a toolFailure()-marked RESOLVED result (browser unavailable on this runtime) is counted as failed, not successful, in batch mode", async () => {
+    const prevRuntimeKind = process.env.NOVADA_RUNTIME_KIND;
+    const prevSupportsWs = process.env.DEPLOYMENT_SUPPORTS_WS;
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
+    delete process.env.DEPLOYMENT_SUPPORTS_WS;
+    try {
+      const result = await novadaExtract({
+        url: "https://example.com",
+        urls: ["https://example.com/a", "https://example.com/b"],
+        render: "browser",
+        format: "markdown",
+      }, API_KEY);
+
+      expect(result).toContain("## Batch Extract Results");
+      expect(result).toContain("urls:2");
+      // Both URLs must be counted as failed — neither succeeded.
+      expect(result).toContain("successful:0");
+      expect(result).toContain("failed:2");
+      // The raw PUA marker must never leak into the rendered summary either.
+      expect(result).not.toMatch(/\u{F0001}/u);
+    } finally {
+      if (prevRuntimeKind === undefined) delete process.env.NOVADA_RUNTIME_KIND;
+      else process.env.NOVADA_RUNTIME_KIND = prevRuntimeKind;
+      if (prevSupportsWs === undefined) delete process.env.DEPLOYMENT_SUPPORTS_WS;
+      else process.env.DEPLOYMENT_SUPPORTS_WS = prevSupportsWs;
+    }
+  });
+
   it("single url still returns single object (backward compat)", async () => {
     mockedAxios.get.mockResolvedValue({ data: sampleHtml });
 

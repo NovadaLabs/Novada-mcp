@@ -104,13 +104,22 @@ export declare function isBlockClassFetchFailure(err: unknown): boolean;
  * (index.ts/mcp.ts) detects the mark via isToolFailure() and sets
  * isError:true, then strips it via stripToolFailureMark() before the text
  * reaches the caller — the marker itself is never visible to anyone.
+ *
+ * @param reason  Optional machine-readable tag for a consumer that needs to
+ *                know WHY this failed without inspecting the message text
+ *                (e.g. "ceiling_timeout"). Retrieved via getToolFailureReason().
  */
-export declare function toolFailure(text: string): string;
+export declare function toolFailure(text: string, reason?: string): string;
 /** True when `text` was produced by toolFailure() and not yet stripped. */
 export declare function isToolFailure(text: unknown): boolean;
-/** Removes the toolFailure() mark, if present. Safe to call on any string
- *  (including one that was never marked) — a no-op in that case. */
+/** Removes the toolFailure() mark (and any reason tag), if present. Safe to
+ *  call on any string (including one that was never marked) — a no-op in
+ *  that case. */
 export declare function stripToolFailureMark(text: string): string;
+/** The reason tag passed to toolFailure(text, reason), if any — null when the
+ *  text is unmarked, or marked with no reason tag. Never inspects the human
+ *  message text itself. */
+export declare function getToolFailureReason(text: unknown): string | null;
 /**
  * Review round 1 (2026-07-30, CRITICAL — live-verified over stdio, and LIVE in
  * prod on mcp.novada.com v0.9.32 today): every newline-handling pattern in this

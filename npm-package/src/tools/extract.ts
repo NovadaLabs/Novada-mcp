@@ -5,7 +5,7 @@ import type { FieldResult } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import { saveOutput } from "../utils/output.js";
 import type { ExtractParams } from "./types.js";
-import { makeNovadaError, NovadaErrorCode, redactSecrets, summarizeAggregateError, isBlockClassFetchFailure, toolFailure } from "../_core/errors.js";
+import { makeNovadaError, NovadaErrorCode, redactSecrets, summarizeAggregateError, isBlockClassFetchFailure, toolFailure, isToolFailure, stripToolFailureMark } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
@@ -260,7 +260,23 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     const results = await Promise.all(
       urls.map((url, i) =>
         extractSingle({ ...params, url }, apiKey)
-          .then(content => ({ i, url, content, ok: true, renderRetried: false }))
+          .then(content => {
+            // Round 7 (review HIGH, class fix): extractSingle can RESOLVE
+            // (not reject) with a toolFailure()-marked string — e.g. the
+            // browser-tier-unavailable-and-render-fallback-also-failed path
+            // (extractSingleInner). Counting that as ok:true silently
+            // inflated this batch's "successful:N" count with a genuine
+            // failure. Detect and route it through the same ok:false shape
+            // the .catch() branch below uses for a thrown error.
+            if (isToolFailure(content)) {
+              const message = stripToolFailureMark(content);
+              const fix = getSuggestedFix(url, message, params.render);
+              const pmcHint = getPmcMirrorHint(url);
+              const fullFix = pmcHint ? `${fix} | ${pmcHint}` : fix;
+              return { i, url, content: `Error: ${message}\n${fullFix}`, ok: false, renderRetried: false };
+            }
+            return { i, url, content, ok: true, renderRetried: false };
+          })
           .catch(err => {
             const rawMessage = err instanceof Error ? err.message : String(err);
             const message = redactSecrets(rawMessage);
@@ -292,7 +308,19 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
         const retried = await Promise.all(
           toRetry.map(r =>
             extractSingle({ ...params, url: r.url, render: "render" }, apiKey)
-              .then(content => ({ i: r.i, url: r.url, content, ok: true, renderRetried: true }))
+              .then(content => {
+                // Round 7 (review HIGH, class fix): same isToolFailure() check
+                // as the main batch .then() above — extractSingle can resolve
+                // with a toolFailure()-marked string instead of rejecting.
+                // The ORIGINAL item was already ok:true (this is a bonus
+                // retry for unresolved fields); a failed retry attempt must
+                // not retroactively downgrade it — mirrors the .catch() branch
+                // below exactly.
+                if (isToolFailure(content)) {
+                  return { i: r.i, url: r.url, content: r.content + "\n\n*render retry attempted: failed*", ok: true, renderRetried: true };
+                }
+                return { i: r.i, url: r.url, content, ok: true, renderRetried: true };
+              })
               .catch(() => {
                 // Retry failed — keep original + note the attempt
                 return { i: r.i, url: r.url, content: r.content + "\n\n*render retry attempted: failed*", ok: true, renderRetried: true };
@@ -2510,6 +2538,11 @@ async function extractSingle(
       // Return a structured error string in the same format as other extraction errors
       // so callers (batch mode, novadaExtract) get usable output rather than a thrown exception.
       const ceiling_s = TIMEOUTS.TOTAL_REQUEST_CEILING / 1000;
+      // Round 7 (review HIGH): tagged "ceiling_timeout" so a telemetry/outcome
+      // consumer (hosted-server/vercel/api/mcp.ts) reads getToolFailureReason()
+      // instead of re-deriving "was this a timeout?" from the "## Extraction
+      // Error" heading text — the stale text check there was permanently false
+      // once toolFailure() started prepending the marker ahead of it.
       return toolFailure([
         `## Extraction Error`,
         `url: ${params.url}`,
@@ -2517,7 +2550,7 @@ async function extractSingle(
         ``,
         `## Agent Action`,
         `agent_instruction: This URL took too long (>${ceiling_s}s). Try render="static" to skip escalation, or novada_scrape for platform-specific data.`,
-      ].join("\n"));
+      ].join("\n"), "ceiling_timeout");
     }
     throw err;
   } finally {

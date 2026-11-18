@@ -45,6 +45,7 @@ import {
   buildInitializeEvent,
   emitEvent,
   encryptHqIdentity,
+  classifyDispatchOutcome,
 } from "./_telemetry.js";
 import type { RejectionStage, AuthMethod, McpEventRow } from "./_telemetry.js";
 // HQ log-ingest push (Leo's /mcp/log/create contract) — see ./_hq_push.ts. Fail-safe
@@ -1839,11 +1840,16 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const content = appendGatewayFooter([{ type: "text" as const, text: sanitized }], statusFooter);
       const notice = policy.firstRunNotice ? await maybeGetFirstRunNoticeHosted(ctx.token) : null;
       if (notice) content.push({ type: "text" as const, text: notice });
-      // Classify in-band ceiling timeout from extractSingle — returned as a string
-      // starting with "## Extraction Error" (not thrown), so it reaches this success
-      // path. Emitting "ok" for a timed-out request is misleading in telemetry.
-      const isCeilingTimeout = typeof result === "string" && result.startsWith("## Extraction Error");
-      await scheduleToolEvent({ outcome: isCeilingTimeout ? "TIMEOUT" : "ok" });
+      // Round 7 (review HIGH, class fix): classifyDispatchOutcome() (api/
+      // _telemetry.ts) replaces an inline `result.startsWith("## Extraction
+      // Error")` check that went permanently false once toolFailure() started
+      // prepending an invisible marker ahead of that text — EVERY
+      // toolFailure()-marked string reaching this success path (not just
+      // ceiling timeouts) was telemetered as outcome "ok". Extracted into a
+      // pure, directly-testable function (test/telemetry.test.mjs) rather
+      // than inlined, so this class of bug has an executed-call regression
+      // test, not a source-text grep.
+      await scheduleToolEvent({ outcome: classifyDispatchOutcome(result) });
       return { content };
     } catch (error) {
       // Alert-gating (noise reduction): handled transient/user errors record a
