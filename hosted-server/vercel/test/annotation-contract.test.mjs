@@ -34,6 +34,7 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MCP_TS = join(__dirname, "..", "api", "mcp.ts");
 const VENDOR_CORE = join(__dirname, "..", "vendor", "novada-mcp", "core.js");
+const VENDOR_DISCOVER = join(__dirname, "..", "vendor", "novada-mcp", "tools", "discover.js");
 
 const mcpSrc = readFileSync(MCP_TS, "utf8");
 const { TOOLS: CORE_TOOLS } = await import(VENDOR_CORE);
@@ -46,13 +47,11 @@ function sliceBetween(startAnchor, endAnchor, label) {
   return mcpSrc.slice(start, end);
 }
 
-function namesIn(slice) {
-  return [...slice.matchAll(/"(novada_[a-zA-Z0-9_]+)"/g)].map((m) => m[1]);
-}
-
-// The REAL HOSTED_HIDDEN set, extracted from mcp.ts — not a hand-reimplemented copy.
-const hostedHiddenSlice = sliceBetween("const HOSTED_HIDDEN = new Set([", "]);", "HOSTED_HIDDEN");
-const HOSTED_HIDDEN = new Set(namesIn(hostedHiddenSlice));
+// B6 (#44, 2026-11-18): the REAL HOSTED_HIDDEN set is now `new Set(HOSTED_HIDDEN_TOOLS)`
+// in mcp.ts, imported from discover.ts's ONE canonical list — not a hand-written
+// `new Set([...])` literal to regex-parse out of mcp.ts source anymore.
+const { HOSTED_HIDDEN_TOOLS } = await import(VENDOR_DISCOVER);
+const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);
 
 // The hosted-visible set, derived EXACTLY the way mcp.ts's own `visibleTools` /
 // `listedOnHosted` computation does: CORE_TOOLS minus HOSTED_HIDDEN.

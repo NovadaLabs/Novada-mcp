@@ -696,7 +696,48 @@ const EMPTY_RESULT_TEXT = {
             "the data is absent. Retry once with format='json' to inspect the raw payload; if records are visibly present there, " +
             "report this as an extraction gap. Otherwise verify the param value or try novada_extract on the target URL.",
     },
+    all_fields_empty: {
+        body: () => `_No usable data returned._ (the record(s) only echo back the request's own identifier param(s) — every other field is null/empty)`,
+        instruction: "Ambiguous empty: the upstream returned a record shaped like a stub — only the identifier(s) you passed in " +
+            "(id/username/url/asin/...) came back, with every content field null. Most likely (a) the target is private, " +
+            "restricted, or deactivated, or (b) the upstream extraction silently failed for this target. Do not treat this " +
+            "as confirmation the target has no data. Verify the identifier is correct and publicly accessible, then retry " +
+            "once; if still stub-only, treat it as (a) and report the target as inaccessible rather than empty-by-design.",
+    },
 };
+/**
+ * B5 review round 2 (MEDIUM): the small, closed table of PARAM KEY patterns
+ * that identify "this param is an echoed identifier, not content" across
+ * every platform-scraper op — id/url/username/asin/query-like. Deliberately
+ * NOT a per-platform list (that would need a new row for every new platform);
+ * these patterns are shared shapes every op's own identifying param already
+ * uses (see scrape_x.ts/scrape_instagram.ts/scrape_amazon.ts/... operation
+ * param docs: post_url, user_name, profile_url, asin, keyword, q, ...).
+ * A param whose key does NOT match (num, country, format, limit, ...) never
+ * contributes its value to the exclusion set below — a record field that
+ * merely happens to coincide with a non-identifier param's value (e.g. a
+ * record's own `language` field matching the caller's `country` param) is
+ * never mistaken for an echoed identifier.
+ */
+const IDENTIFIER_PARAM_KEY_PATTERNS = [
+    /^id$/i, /_id$/i,
+    /^url$/i, /_url$/i,
+    /user[_-]?name/i, /^handle$/i,
+    /^asin$/i, /^domain$/i,
+    /^keyword$/i, /^query$/i, /^q$/i, /^search_terms$/i,
+];
+function isIdentifierParamKey(key) {
+    return IDENTIFIER_PARAM_KEY_PATTERNS.some((re) => re.test(key));
+}
+/** The VALUES of only the identifier-shaped params in `opParams` (see
+ *  IDENTIFIER_PARAM_KEY_PATTERNS) — used by the all_fields_empty discriminator
+ *  below to recognize an echoed-identifier-only stub record without being
+ *  fooled by a coincidental match against an unrelated (non-identifier) param. */
+function identifierParamValues(opParams) {
+    return new Set(Object.entries(opParams ?? {})
+        .filter(([key]) => isIdentifierParamKey(key))
+        .map(([, v]) => String(v)));
+}
 /**
  * Render the shared 0-record envelope. `upstreamMessage` is only used by the
  * explicit-empty signal (the upstream's own wording, sanitized).
@@ -1602,10 +1643,21 @@ export async function novadaScrape(params, apiKey) {
     // Broken-op warning: if the catalog marks this op as backend_broken, we still
     // forward the call (the backend may fix it any day) but prepend a warning note.
     // The call is NOT blocked — the agent needs to know it exists, even if it currently fails.
+    //
+    // B1 (2026-11-18): one more branch of this SAME table-driven check, not a
+    // parallel mechanism — `status:"ok"` is a one-time 2026-07-13 snapshot that
+    // never gets re-verified; `last_live_check_result` (scraper_catalog.ts's
+    // CatalogOp, see its doc comment) is the freshness signal a future nightly
+    // canary would keep current. A non-"pass" result here is narrower and more
+    // recent than backend_broken — "this recently degraded," not "this has
+    // always been broken" — so it gets its own, softer wording, but the SAME
+    // warn-but-don't-block policy (the call is still forwarded either way).
     const catalogEntry = getCatalogOp(platform, operation);
     const brokenWarning = (catalogEntry?.status === "backend_broken")
         ? `⚠️ NOTE: operation '${operation}' is currently failing on the backend (verified 2026-07-13): ${catalogEntry.broken_reason ?? "backend failure"}. The call will be forwarded — the backend may have been fixed since last verification. If it fails, this is a known backend issue (not an MCP or credential problem).`
-        : undefined;
+        : (catalogEntry?.status === "ok" && catalogEntry.last_live_check_result && catalogEntry.last_live_check_result !== "pass")
+            ? `⚠️ NOTE: operation '${operation}' is marked status:"ok" from its one-time 2026-07-13 verification, but its most recent live check came back "${catalogEntry.last_live_check_result}". The call will be forwarded — this may be transient capacity/rate-limiting on the backend, not an MCP or credential problem.`
+            : undefined;
     // Resume path: if task_id is provided, skip submit entirely (NOV-689).
     // No new task is submitted, no new charge is incurred — we go straight to polling.
     // platform/operation are still validated for display; preflight is skipped because
@@ -1905,6 +1957,33 @@ export async function novadaScrape(params, apiKey) {
             // F9: items came back but nothing extractable was inside — ambiguous between
             // no-data and schema-drift/extraction failure; classify, never plain-ok.
             return emptyResultEnvelope(platform, displayOperation, "no_records_extracted");
+        }
+        // B5 (2026-11-18 reliability program): hasUsableRecord above only catches a
+        // record that is COMPLETELY blank. It misses a narrower, equally real
+        // upstream shape — a private/restricted-profile stub that echoes back the
+        // REQUEST's own identifier param(s) (id/url/username/asin/...) with every
+        // CONTENT field null, e.g. [{id:"x", username:"x", bio:null, posts:null,
+        // followers:null}]. That record "has a usable value" by the check above
+        // (id/username are non-empty strings) even though nothing was actually
+        // extracted. Discriminator: a value only counts as real signal if it is
+        // NOT simply an echo of one of the request's OWN param values. Reuses the
+        // SAME EmptyResultSignal union + emptyResultEnvelope() renderer as every
+        // other empty-result case above — one more table row, not a new mechanism.
+        //
+        // Review round 2 (MEDIUM): comparing against EVERY raw param value (not
+        // just identifier-shaped ones) risked a false positive — a genuinely sparse
+        // but REAL record field that merely happens to numerically/textually
+        // coincide with an unrelated param (e.g. a record's `likes: 10` matching the
+        // caller's `num: 10`, or a 2-letter `language` field matching a `country`
+        // param) would get swallowed by the exclusion set and wrongly read as an
+        // echoed identifier. Narrowed to params whose KEY is identifier-shaped —
+        // the SAME small, closed set of key patterns (id/url/username/asin/
+        // query-like) every platform-scraper op actually uses for its identifying
+        // param, not a per-platform list (one table, not N rows).
+        const requestIdentifierValues = identifierParamValues(opParams);
+        const hasRealSignal = records.some((r) => Object.values(r).some((v) => v !== "" && v !== "null" && !requestIdentifierValues.has(String(v))));
+        if (!hasRealSignal) {
+            return emptyResultEnvelope(platform, displayOperation, "all_fields_empty");
         }
         const title = `${platform} — ${displayOperation}`;
         // For json we want clean structured records (not the flattened dot-path display version).

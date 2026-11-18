@@ -196,6 +196,11 @@ import {
   novadaDiscover,
   validateDiscoverParams,
 } from "../vendor/novada-mcp/tools/index.js";
+// B6 (#44, 2026-11-18): HOSTED_HIDDEN below used to be an independently-
+// maintained array that merely MIRRORED this list (two files, a comment
+// saying "keep in sync", no compiler-enforced link). Import the canonical
+// list directly instead — one source, not two hand-synced copies.
+import { HOSTED_HIDDEN_TOOLS } from "../vendor/novada-mcp/tools/discover.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
 import { NovadaError, NovadaErrorCode, classifyError, isToolFailure, stripToolFailureMark } from "../vendor/novada-mcp/_core/errors.js";
 // Real upstream key verification for validateToken — same wallet-balance probe
@@ -576,16 +581,17 @@ function deriveTitle(name: string): string {
 // pinned against elsewhere (test/tool-catalog-derivation.test.mjs). Its
 // exclusion from HOSTED_ROUTABLE_ALIASES is handled by
 // HOSTED_NEVER_ROUTABLE_NPM_ALIASES below instead.
-const HOSTED_HIDDEN = new Set([
-  "novada_browser_flow",
-  "novada_browser",
-  "novada_site_copy",
-  "novada_ip_whitelist",
-  "novada_capture_apikey",
-  "novada_session_stats",
-  "novada_search_feedback",
-  "novada_verify",
-]);
+// B6 (#44): the 8 names themselves now live in EXACTLY ONE place —
+// discover.ts's `HOSTED_HIDDEN_TOOLS` (imported above) — not here AND there.
+// Before this fix, npm-package's own `novada_discover` listing (which needs
+// to know hosted's hidden set to render its "hosted vs local" note, since it
+// has no access to this file) carried an independently-maintained mirror of
+// this exact array with a comment saying "keep in sync" and no
+// compiler-enforced link; a future addition here with no matching edit there
+// (or vice versa) would silently drift. `new Set(...)` is the only
+// hosted-specific thing left — a Set, not an array, for O(1) `.has()` checks
+// at every site below.
+const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);
 
 // Round 4 (S1-connector, F1 — CLASS fix, independent judge 2026-10-13): the
 // REAL set of tool names this hosted deployment lists — used ONLY to resolve
@@ -948,6 +954,13 @@ async function validateToken(token: string, env: Env): Promise<TokenInfo & { ver
  * read RATE_LIMIT_PER_MIN); this is a cost breaker, not a fairness policy, so
  * sharing the default is deliberate rather than requiring a second env var.
  */
+/** Both rate-limit buckets (pre-auth `pra:` and post-auth `rl:`) are keyed by
+ *  a fixed 60s calendar-minute window — this is also the correct "try again
+ *  in" value, so both the `Retry-After` header and the new `retry_after_seconds`
+ *  body field (C4, #43) reuse this ONE constant rather than two independent
+ *  "60" literals drifting apart. */
+const RATE_LIMIT_RETRY_AFTER_S = 60;
+
 async function preAuthRateLimitExceeded(ip: string, env: Env): Promise<boolean> {
   if (!ip || ip === "unknown") return false;
   const limit = parseInt(env.RATE_LIMIT_PER_MIN || "60", 10);
@@ -2028,14 +2041,29 @@ function resourceMetadataUrl(url: URL): string {
   return `${deriveIssuer(url.host, process.env.OAUTH_ISSUER)}/.well-known/oauth-protected-resource/mcp`;
 }
 
-function jsonError(status: number, code: string, message: string, agentInstruction?: string, extraHeaders?: Record<string, string>): Response {
+/**
+ * C4 (#43, 2026-11-18): an extra `data` field, merged in alongside the
+ * existing `code`/`agent_instruction`. Added so a 429 can carry a numeric
+ * `retry_after_seconds` IN THE TOOL-RESULT BODY — the `Retry-After` HTTP
+ * header already existed (G-3), but most MCP clients hand the model only the
+ * JSON-RPC error body, never the raw HTTP headers, so the agent saw prose
+ * ("retry after 60 seconds") with nothing it could reliably parse.
+ */
+function jsonError(
+  status: number,
+  code: string,
+  message: string,
+  agentInstruction?: string,
+  extraHeaders?: Record<string, string>,
+  extraData?: Record<string, unknown>,
+): Response {
   return new Response(
     JSON.stringify({
       jsonrpc: "2.0",
       error: {
         code: status,
         message,
-        data: { code, agent_instruction: agentInstruction },
+        data: { code, agent_instruction: agentInstruction, ...extraData },
       },
       id: null,
     }),
@@ -2293,8 +2321,11 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   if (await preAuthRateLimitExceeded(ip, env)) {
     return jsonError(429, "RATE_LIMITED",
       `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
-      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.",
-      { "retry-after": "60" });
+      `Retry after ${RATE_LIMIT_RETRY_AFTER_S} seconds. If you need higher limits, contact sales@novada.com.`,
+      { "retry-after": String(RATE_LIMIT_RETRY_AFTER_S) },
+      // C4 (#43): numeric retry_after_seconds IN THE BODY, not just the HTTP
+      // header most MCP clients never surface to the model.
+      { retry_after_seconds: RATE_LIMIT_RETRY_AFTER_S });
   }
 
   // Auth — validate the token and reject with 401 before any per-key work
@@ -2371,10 +2402,14 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     await emitGuardRejection({ requestId, token, outcome: "GATEWAY_RATE_LIMITED", rejectionStage: "rate_limited", authMethod, userAgent });
     // G-3: Retry-After so standard HTTP clients/SDK backoff logic can act on
     // it, not just the human-readable retry guidance in the message text.
+    // C4 (#43): ALSO a numeric retry_after_seconds in the body (see jsonError's
+    // extraData param) — the header alone is invisible to most MCP clients'
+    // model-facing surface.
     return jsonError(429, "RATE_LIMITED",
       `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
-      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.",
-      { "retry-after": "60" });
+      `Retry after ${RATE_LIMIT_RETRY_AFTER_S} seconds. If you need higher limits, contact sales@novada.com.`,
+      { "retry-after": String(RATE_LIMIT_RETRY_AFTER_S) },
+      { retry_after_seconds: RATE_LIMIT_RETRY_AFTER_S });
   }
 
   // Upstream Novada API key — the customer's own key, and ONLY their own key

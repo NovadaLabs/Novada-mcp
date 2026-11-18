@@ -1,8 +1,9 @@
 import { normalizeUrlForResultDedup, decodeBingRedirect } from "../utils/index.js";
 import { saveOutput } from "../utils/output.js";
 import { novadaExtract } from "./extract.js";
-import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults, boundQuery } from "./search.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets, toolFailure, isToolFailure, stripToolFailureMark } from "../_core/errors.js";
+import { raceEngineFallbacks } from "../_core/search-fallback.js";
 import { wrapUntrusted, unwrapUntrusted } from "../utils/untrusted.js";
 // C1: distinguish a REAL account-level entitlement failure (Scraper API not
 // activated / bad key / quota) from a transient blip (timeout, 5xx, DNS). Only
@@ -40,6 +41,11 @@ const FALLBACKS = [
 /**
  * Search with primary engine first, race fallbacks on failure.
  * Best case: 1 API call. Failure case: 3 API calls (1 primary + 2 raced).
+ *
+ * C1 (#39, 2026-11-18): the actual race is now the SAME shared primitive
+ * novada_search uses (`raceEngineFallbacks`, `_core/search-fallback.ts`) —
+ * this function is just research-specific plumbing (which engines, how to
+ * submit+resolve one, the entitlement-signal side channel) around it.
  */
 async function searchWithFallback(apiKey, query, num, signal, filterParams) {
     // C1: record whether a failure carried a real auth/entitlement signal so the
@@ -49,31 +55,41 @@ async function searchWithFallback(apiKey, query, num, signal, filterParams) {
         if (signal && isEntitlementError(err))
             signal.entitlement = true;
     };
+    const attempt = (eng) => ({
+        label: eng.name,
+        run: async () => {
+            try {
+                const submitted = await submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum, filterParams);
+                return await resolveSearchResults(apiKey, submitted);
+            }
+            catch (err) {
+                note(err);
+                throw err;
+            }
+        },
+    });
     // Attempt 1: Primary engine (Google) — cheapest path
     try {
-        const submitted = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum, filterParams);
-        const results = await resolveSearchResults(apiKey, submitted);
-        if (results.length > 0)
-            return results;
-    }
-    catch (err) {
-        note(err); /* fall through to fallback race */
-    }
-    // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery
-    const attempts = FALLBACKS.map(eng => submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum, filterParams)
-        .then(submitted => resolveSearchResults(apiKey, submitted))
-        .then(results => {
-        if (results.length === 0)
-            throw new Error("empty results");
+        const results = await attempt(PRIMARY).run();
+        // C1 review round 2 (HIGH, cost): a clean, successful-but-EMPTY primary
+        // (no exception — the SERP genuinely has no hits for THIS sub-query) must
+        // never trigger the fallback race — each race attempt is a real, separately
+        // billed Scraper API submission, and racing 2 more engines on every
+        // legitimately-empty sub-query would silently multiply the billed cost of
+        // the common case (a `deep`/`comprehensive` research call already fans out
+        // to several sub-queries; tripling EACH one compounds fast). Return the
+        // empty result honestly — novadaResearch's own caller-side retry-with-
+        // simplified-query already covers the "maybe the query itself was too
+        // narrow" case without racing extra engines. Same rule as novada_search
+        // (search.ts) — one rule, both callers, not two independently-tunable
+        // cost policies.
         return results;
-    })
-        .catch((err) => { note(err); throw err; }));
-    try {
-        return await Promise.any(attempts);
     }
-    catch {
-        return []; // all engines failed
-    }
+    catch { /* primary FAILED transiently — race the fallback engines below */ }
+    // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery.
+    // Only reached when the primary attempt THREW; never for a clean empty result.
+    const outcome = await raceEngineFallbacks(FALLBACKS.map(attempt));
+    return outcome.results; // [] when every fallback engine ALSO failed or emptied
 }
 const SUPPORTED_LANGS = ["en", "de", "fr", "es"];
 // Comparison trigger phrases, ONE shared table keyed by language — used by
@@ -1208,7 +1224,16 @@ export function generateSearchQueries(question, deep, comprehensive, focus) {
     const safeQuestion = question.length > MAX_QUESTION_LENGTH_FOR_QUERY_GEN
         ? question.slice(0, MAX_QUESTION_LENGTH_FOR_QUERY_GEN)
         : question;
-    const queries = [safeQuestion];
+    // C5 (#1, 2026-11-18): query #1 used to seed the raw (up to 2000-char)
+    // question verbatim as a sub-query sent upstream — a 90+-word question
+    // routinely failed the SERP's own query-length limits (queries:1/3
+    // succeeded, top_sources:0, failed_queries listing the full question).
+    // Reuse boundQuery() (search.ts) — the SAME word-boundary 500-char policy
+    // novada_search already applies to every outgoing query — rather than
+    // inventing a second truncation rule here. `topic`/`keywords`/comparand
+    // extraction below still use the unbounded `safeQuestion`; only the
+    // QUERY SENT UPSTREAM is bounded.
+    const queries = [boundQuery(safeQuestion).query];
     const words = safeQuestion.toLowerCase().split(/\s+/);
     // F14-2: use full topic (without trailing punctuation) as base for sub-queries
     const topic = safeQuestion.replace(/[?!.]+$/, "").trim();

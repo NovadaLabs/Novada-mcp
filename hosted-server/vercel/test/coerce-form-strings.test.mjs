@@ -52,19 +52,11 @@ const {
   validateStaticIpMgmtParams,
 } = await import(join(VENDOR, "tools", "index.js"));
 
-// Mirrors api/mcp.ts's own HOSTED_HIDDEN (8 names) — see that file's doc
-// comment. Not exported there, so duplicated here the same way
-// openai-surface.test.mjs already duplicates OPENAI_15.
-const HOSTED_HIDDEN = new Set([
-  "novada_browser_flow",
-  "novada_browser",
-  "novada_site_copy",
-  "novada_ip_whitelist",
-  "novada_capture_apikey",
-  "novada_session_stats",
-  "novada_search_feedback",
-  "novada_verify",
-]);
+// B6 (#44, 2026-11-18): mcp.ts's own HOSTED_HIDDEN is now `new Set(HOSTED_HIDDEN_TOOLS)`,
+// imported from discover.ts's ONE canonical list — import the SAME list here
+// too, instead of a third hand-written copy of these 8 names.
+const { HOSTED_HIDDEN_TOOLS } = await import(join(VENDOR, "tools", "discover.js"));
+const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);
 
 function buildHostedSurfaceTools(names) {
   return buildToolsForSurface(names, "hosted").filter((t) => names.has(t.name));

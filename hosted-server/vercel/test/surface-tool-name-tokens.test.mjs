@@ -34,10 +34,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const MCP_TS = join(__dirname, "..", "api", "mcp.ts");
 const VENDOR_CORE = join(__dirname, "..", "vendor", "novada-mcp", "core.js");
 const VENDOR_DESCRIPTION_SURFACE = join(__dirname, "..", "vendor", "novada-mcp", "_core", "description_surface.js");
+const VENDOR_DISCOVER = join(__dirname, "..", "vendor", "novada-mcp", "tools", "discover.js");
 
 const mcpSrc = readFileSync(MCP_TS, "utf8");
 const { TOOLS: CORE_TOOLS, buildToolsForSurface, HIDDEN_ALIASES: NPM_HIDDEN_ALIASES } = await import(VENDOR_CORE);
 const { extractToolNameTokens } = await import(VENDOR_DESCRIPTION_SURFACE);
+// B6 (#44, 2026-11-18): HOSTED_HIDDEN is now `new Set(HOSTED_HIDDEN_TOOLS)` in
+// mcp.ts — import discover.ts's ONE canonical list directly instead of
+// regex-parsing a `new Set([...])` literal out of mcp.ts source.
+const { HOSTED_HIDDEN_TOOLS } = await import(VENDOR_DISCOVER);
 
 /** Slice mcpSrc between two anchors (throws loudly if either is missing). */
 function sliceBetween(startAnchor, endAnchor, label) {
@@ -48,12 +53,7 @@ function sliceBetween(startAnchor, endAnchor, label) {
   return mcpSrc.slice(start, end);
 }
 
-function namesIn(slice) {
-  return [...slice.matchAll(/"(novada_[a-zA-Z0-9_]+)"/g)].map((m) => m[1]);
-}
-
-const hostedHiddenSlice = sliceBetween("const HOSTED_HIDDEN = new Set([", "]);", "HOSTED_HIDDEN");
-const HOSTED_HIDDEN = new Set(namesIn(hostedHiddenSlice));
+const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);
 
 // ─── Reproduce hosted's REAL TOOLS computation (not a copy of mcp.ts's output —
 // the actual exported buildToolsForSurface, called the same way mcp.ts calls it) ──
