@@ -696,6 +696,14 @@ const EMPTY_RESULT_TEXT = {
             "the data is absent. Retry once with format='json' to inspect the raw payload; if records are visibly present there, " +
             "report this as an extraction gap. Otherwise verify the param value or try novada_extract on the target URL.",
     },
+    all_fields_empty: {
+        body: () => `_No usable data returned._ (the record(s) only echo back the request's own identifier param(s) — every other field is null/empty)`,
+        instruction: "Ambiguous empty: the upstream returned a record shaped like a stub — only the identifier(s) you passed in " +
+            "(id/username/url/asin/...) came back, with every content field null. Most likely (a) the target is private, " +
+            "restricted, or deactivated, or (b) the upstream extraction silently failed for this target. Do not treat this " +
+            "as confirmation the target has no data. Verify the identifier is correct and publicly accessible, then retry " +
+            "once; if still stub-only, treat it as (a) and report the target as inaccessible rather than empty-by-design.",
+    },
 };
 /**
  * Render the shared 0-record envelope. `upstreamMessage` is only used by the
@@ -1602,10 +1610,21 @@ export async function novadaScrape(params, apiKey) {
     // Broken-op warning: if the catalog marks this op as backend_broken, we still
     // forward the call (the backend may fix it any day) but prepend a warning note.
     // The call is NOT blocked — the agent needs to know it exists, even if it currently fails.
+    //
+    // B1 (2026-11-18): one more branch of this SAME table-driven check, not a
+    // parallel mechanism — `status:"ok"` is a one-time 2026-07-13 snapshot that
+    // never gets re-verified; `last_live_check_result` (scraper_catalog.ts's
+    // CatalogOp, see its doc comment) is the freshness signal a future nightly
+    // canary would keep current. A non-"pass" result here is narrower and more
+    // recent than backend_broken — "this recently degraded," not "this has
+    // always been broken" — so it gets its own, softer wording, but the SAME
+    // warn-but-don't-block policy (the call is still forwarded either way).
     const catalogEntry = getCatalogOp(platform, operation);
     const brokenWarning = (catalogEntry?.status === "backend_broken")
         ? `⚠️ NOTE: operation '${operation}' is currently failing on the backend (verified 2026-07-13): ${catalogEntry.broken_reason ?? "backend failure"}. The call will be forwarded — the backend may have been fixed since last verification. If it fails, this is a known backend issue (not an MCP or credential problem).`
-        : undefined;
+        : (catalogEntry?.status === "ok" && catalogEntry.last_live_check_result && catalogEntry.last_live_check_result !== "pass")
+            ? `⚠️ NOTE: operation '${operation}' is marked status:"ok" from its one-time 2026-07-13 verification, but its most recent live check came back "${catalogEntry.last_live_check_result}". The call will be forwarded — this may be transient capacity/rate-limiting on the backend, not an MCP or credential problem.`
+            : undefined;
     // Resume path: if task_id is provided, skip submit entirely (NOV-689).
     // No new task is submitted, no new charge is incurred — we go straight to polling.
     // platform/operation are still validated for display; preflight is skipped because
@@ -1905,6 +1924,26 @@ export async function novadaScrape(params, apiKey) {
             // F9: items came back but nothing extractable was inside — ambiguous between
             // no-data and schema-drift/extraction failure; classify, never plain-ok.
             return emptyResultEnvelope(platform, displayOperation, "no_records_extracted");
+        }
+        // B5 (2026-11-18 reliability program): hasUsableRecord above only catches a
+        // record that is COMPLETELY blank. It misses a narrower, equally real
+        // upstream shape — a private/restricted-profile stub that echoes back the
+        // REQUEST's own identifier param(s) (id/url/username/asin/...) with every
+        // CONTENT field null, e.g. [{id:"x", username:"x", bio:null, posts:null,
+        // followers:null}]. That record "has a usable value" by the check above
+        // (id/username are non-empty strings) even though nothing was actually
+        // extracted. Discriminator: a value only counts as real signal if it is
+        // NOT simply an echo of one of the request's OWN param values — checked by
+        // VALUE, not a hand-enumerated per-platform key list (id/username/asin/
+        // profile_url/… would each need their own row otherwise; this one check
+        // covers every platform-scraper tool by construction, since they all funnel
+        // through this one function). Reuses the SAME EmptyResultSignal union +
+        // emptyResultEnvelope() renderer as every other empty-result case above —
+        // one more table row, not a new mechanism.
+        const requestParamValues = new Set(Object.values((opParams ?? {})).map((v) => String(v)));
+        const hasRealSignal = records.some((r) => Object.values(r).some((v) => v !== "" && v !== "null" && !requestParamValues.has(String(v))));
+        if (!hasRealSignal) {
+            return emptyResultEnvelope(platform, displayOperation, "all_fields_empty");
         }
         const title = `${platform} — ${displayOperation}`;
         // For json we want clean structured records (not the flattened dot-path display version).

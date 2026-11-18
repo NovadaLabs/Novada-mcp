@@ -26,10 +26,15 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MCP_TS = join(__dirname, "..", "api", "mcp.ts");
 const VENDOR_CORE = join(__dirname, "..", "vendor", "novada-mcp", "core.js");
+const VENDOR_DISCOVER = join(__dirname, "..", "vendor", "novada-mcp", "tools", "discover.js");
 
 const mcpSrc = readFileSync(MCP_TS, "utf8");
 const { TOOLS: CORE_TOOLS, HIDDEN_ALIASES: NPM_HIDDEN_ALIASES } = await import(VENDOR_CORE);
 const CORE_TOOL_NAMES = new Set(CORE_TOOLS.map((t) => t.name));
+// B6 (#44, 2026-11-18): HOSTED_HIDDEN is now `new Set(HOSTED_HIDDEN_TOOLS)` in
+// mcp.ts — import discover.ts's ONE canonical list directly instead of
+// regex-parsing a `new Set([...])` literal out of mcp.ts source.
+const { HOSTED_HIDDEN_TOOLS } = await import(VENDOR_DISCOVER);
 
 /** Slice mcpSrc between two anchors (throws loudly if either is missing — same
  *  fail-loud contract scripts/check-hosted-drift.mjs uses for the same reason). */
@@ -45,8 +50,7 @@ function namesIn(slice) {
   return [...slice.matchAll(/"(novada_[a-zA-Z0-9_]+)"/g)].map((m) => m[1]);
 }
 
-const hostedHiddenSlice = sliceBetween("const HOSTED_HIDDEN = new Set([", "]);", "HOSTED_HIDDEN");
-const HOSTED_HIDDEN = new Set(namesIn(hostedHiddenSlice));
+const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);
 
 const toolGroupsSlice = sliceBetween("const TOOL_GROUPS: Record<string, string[]> = {", "\n};", "TOOL_GROUPS");
 

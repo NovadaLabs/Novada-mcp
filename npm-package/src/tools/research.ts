@@ -2,9 +2,10 @@ import { normalizeUrlForResultDedup, decodeBingRedirect } from "../utils/index.j
 import { saveOutput } from "../utils/output.js";
 import type { ResearchParams, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults, boundQuery } from "./search.js";
 import type { ProgressReporter } from "./crawl.js";
 import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets, toolFailure, isToolFailure, stripToolFailureMark } from "../_core/errors.js";
+import { raceEngineFallbacks, type FallbackAttempt } from "../_core/search-fallback.js";
 import { wrapUntrusted, unwrapUntrusted } from "../utils/untrusted.js";
 
 // C1: distinguish a REAL account-level entitlement failure (Scraper API not
@@ -67,6 +68,11 @@ interface ResearchFilterParams {
 /**
  * Search with primary engine first, race fallbacks on failure.
  * Best case: 1 API call. Failure case: 3 API calls (1 primary + 2 raced).
+ *
+ * C1 (#39, 2026-11-18): the actual race is now the SAME shared primitive
+ * novada_search uses (`raceEngineFallbacks`, `_core/search-fallback.ts`) —
+ * this function is just research-specific plumbing (which engines, how to
+ * submit+resolve one, the entitlement-signal side channel) around it.
  */
 async function searchWithFallback(
   apiKey: string,
@@ -82,28 +88,28 @@ async function searchWithFallback(
     if (signal && isEntitlementError(err)) signal.entitlement = true;
   };
 
+  const attempt = (eng: SearchEngine): FallbackAttempt<NovadaSearchResult> => ({
+    label: eng.name,
+    run: async () => {
+      try {
+        const submitted = await submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum, filterParams);
+        return await resolveSearchResults(apiKey, submitted);
+      } catch (err) {
+        note(err);
+        throw err;
+      }
+    },
+  });
+
   // Attempt 1: Primary engine (Google) — cheapest path
   try {
-    const submitted = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum, filterParams);
-    const results = await resolveSearchResults(apiKey, submitted);
+    const results = await attempt(PRIMARY).run();
     if (results.length > 0) return results;
-  } catch (err) { note(err); /* fall through to fallback race */ }
+  } catch { /* fall through to fallback race */ }
 
   // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery
-  const attempts = FALLBACKS.map(eng =>
-    submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum, filterParams)
-      .then(submitted => resolveSearchResults(apiKey, submitted))
-      .then(results => {
-        if (results.length === 0) throw new Error("empty results");
-        return results;
-      })
-      .catch((err: unknown) => { note(err); throw err; })
-  );
-  try {
-    return await Promise.any(attempts);
-  } catch {
-    return []; // all engines failed
-  }
+  const outcome = await raceEngineFallbacks(FALLBACKS.map(attempt));
+  return outcome.results; // [] when every engine failed or legitimately emptied
 }
 
 // ─── Domain Detection ──────────────────────────────────────────────────────
@@ -1386,7 +1392,16 @@ export function generateSearchQueries(
   const safeQuestion = question.length > MAX_QUESTION_LENGTH_FOR_QUERY_GEN
     ? question.slice(0, MAX_QUESTION_LENGTH_FOR_QUERY_GEN)
     : question;
-  const queries: string[] = [safeQuestion];
+  // C5 (#1, 2026-11-18): query #1 used to seed the raw (up to 2000-char)
+  // question verbatim as a sub-query sent upstream — a 90+-word question
+  // routinely failed the SERP's own query-length limits (queries:1/3
+  // succeeded, top_sources:0, failed_queries listing the full question).
+  // Reuse boundQuery() (search.ts) — the SAME word-boundary 500-char policy
+  // novada_search already applies to every outgoing query — rather than
+  // inventing a second truncation rule here. `topic`/`keywords`/comparand
+  // extraction below still use the unbounded `safeQuestion`; only the
+  // QUERY SENT UPSTREAM is bounded.
+  const queries: string[] = [boundQuery(safeQuestion).query];
   const words = safeQuestion.toLowerCase().split(/\s+/);
   // F14-2: use full topic (without trailing punctuation) as base for sub-queries
   const topic = safeQuestion.replace(/[?!.]+$/, "").trim();

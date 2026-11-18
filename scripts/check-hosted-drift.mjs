@@ -140,6 +140,11 @@ const REGISTRY_PATH = path.join(ROOT, "npm-package", "src", "tools", "registry.t
 const TOOLS_DIR = path.join(ROOT, "npm-package", "src", "tools");
 const MCP_TS_PATH = path.join(ROOT, "hosted-server", "vercel", "api", "mcp.ts");
 const SCRAPER_CATALOG_PATH = path.join(ROOT, "npm-package", "src", "data", "scraper_catalog.ts");
+// B6 (#44, 2026-11-18): HOSTED_HIDDEN's 8 names now live in EXACTLY ONE place —
+// discover.ts's HOSTED_HIDDEN_TOOLS — imported by mcp.ts rather than hand-copied.
+// This script must read that SAME canonical source, not mcp.ts's (now-derived)
+// `new Set(HOSTED_HIDDEN_TOOLS)` expression, which carries no literal names to parse.
+const DISCOVER_TS_PATH = path.join(ROOT, "npm-package", "src", "tools", "discover.ts");
 
 // End anchor for the `const TOOLS = <...>.map((t) => ({ ... }));` construction, shared
 // by every accepted derivation form below — used by the post-declaration mutation scan
@@ -400,12 +405,16 @@ function loadRegisteredToolNames() {
 }
 
 /** The LIVE mcp.ts HOSTED_HIDDEN set, read straight off disk (see file header for why text-parsed). */
-function loadHostedHiddenNames(mcpSrc) {
+function loadHostedHiddenNames() {
+  // B6 (#44): mcp.ts no longer carries a literal `HOSTED_HIDDEN = new Set([...])` —
+  // it imports HOSTED_HIDDEN_TOOLS from discover.ts and derives
+  // `new Set(HOSTED_HIDDEN_TOOLS)`. Read the ONE canonical list directly.
+  const discoverSrc = readFileSync(DISCOVER_TS_PATH, "utf8");
   return new Set(extractToolNames(
-    mcpSrc,
-    "const HOSTED_HIDDEN = new Set([",
-    "]);",
-    "hosted-server/vercel/api/mcp.ts HOSTED_HIDDEN"
+    discoverSrc,
+    "export const HOSTED_HIDDEN_TOOLS: readonly string[] = [",
+    "];",
+    "npm-package/src/tools/discover.ts HOSTED_HIDDEN_TOOLS"
   ));
 }
 
@@ -629,7 +638,21 @@ function main() {
   }
 
   const registeredNames = loadRegisteredToolNames();
-  const hostedHiddenLive = loadHostedHiddenNames(mcpSrc);
+  const hostedHiddenLive = loadHostedHiddenNames();
+
+  // B6 (#44): mcp.ts must actually DERIVE its HOSTED_HIDDEN from the imported
+  // HOSTED_HIDDEN_TOOLS — not reintroduce a second, hand-written literal array
+  // that happens to match today. Structural check, not a value comparison.
+  if (!mcpSrc.includes('import { HOSTED_HIDDEN_TOOLS } from "../vendor/novada-mcp/tools/discover.js";') ||
+      !mcpSrc.includes("const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);")) {
+    console.error(
+      `[check-hosted-drift] FAIL (hosted-hidden-single-source-gate): mcp.ts must import HOSTED_HIDDEN_TOOLS ` +
+      `from the vendored discover.js and derive \`const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);\` — ` +
+      `a hand-written \`new Set([...])\` literal would silently drift from discover.ts's canonical list again.`
+    );
+    process.exit(1);
+  }
+  console.log(`[check-hosted-drift] PASS (hosted-hidden-single-source-gate): mcp.ts derives HOSTED_HIDDEN from the imported HOSTED_HIDDEN_TOOLS.`);
 
   let failed = false;
 

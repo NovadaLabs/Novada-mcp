@@ -207,11 +207,15 @@ test("G-5/V2-N4 STATIC: the pre-auth gate itself performs no telemetry emit on r
     "preAuthRateLimitExceeded must not itself call emitGuardRejection — that would just move the amplification target, not close it");
 });
 
-test("G-3 STATIC: both RATE_LIMITED 429 jsonError call sites pass a retry-after header", () => {
+test("G-3 STATIC: both RATE_LIMITED 429 jsonError call sites pass a retry-after header AND a numeric retry_after_seconds body field (C4, #43)", () => {
   const sites = [...mcpSrc.matchAll(/jsonError\(429, "RATE_LIMITED",[\s\S]*?\);/g)];
   assert.ok(sites.length >= 2, `expected >=2 RATE_LIMITED 429 sites (pre-auth + post-auth), found ${sites.length}`);
   for (const m of sites) {
-    assert.match(m[0], /"retry-after":\s*"60"/, `429 site must pass a retry-after header, got: ${m[0].slice(0, 160)}`);
+    assert.match(m[0], /"retry-after":\s*String\(RATE_LIMIT_RETRY_AFTER_S\)/, `429 site must pass a retry-after header, got: ${m[0].slice(0, 200)}`);
+    // C4: the header alone is invisible to most MCP clients' model-facing
+    // surface — the SAME value must also reach the JSON-RPC error `data` field
+    // every tool-result consumer actually sees.
+    assert.match(m[0], /\{\s*retry_after_seconds:\s*RATE_LIMIT_RETRY_AFTER_S\s*\}/, `429 site must pass a numeric retry_after_seconds in the body, got: ${m[0].slice(0, 200)}`);
   }
 });
 
@@ -219,9 +223,16 @@ test("G-3 STATIC: both RATE_LIMITED 429 jsonError call sites pass a retry-after 
 
 /** Extract and EXECUTE mcp.ts's real jsonError function (not a reimplementation). */
 function extractJsonError() {
-  const SIG = 'function jsonError(status: number, code: string, message: string, agentInstruction?: string, extraHeaders?: Record<string, string>): Response {';
-  const code = sliceBetween(SIG, "\n}\n", "jsonError")
-    .replace(SIG, "return function jsonError(status, code, message, agentInstruction, extraHeaders) {");
+  const SIG = "function jsonError(";
+  const body = sliceBetween(SIG, "\n}\n", "jsonError");
+  // Strip the TypeScript param-type annotations (new Function can't parse
+  // them) — the multi-line signature now spans `function jsonError(\n ... \n):
+  // Response {` (C4 added a 6th `extraData` param), so this regex replaces the
+  // WHOLE signature span, not a single fixed-string literal.
+  const code = body.replace(
+    /function jsonError\([\s\S]*?\): Response \{/,
+    "return function jsonError(status, code, message, agentInstruction, extraHeaders, extraData) {",
+  );
   return new Function(`${code}\n};`)();
 }
 
@@ -242,4 +253,25 @@ test("G-3 BEHAVIORAL: jsonError(...) with no extraHeaders (e.g. the 401 MISSING_
 
   const res = jsonError(404, "NOT_FOUND", "nope");
   assert.equal(res.headers.get("retry-after"), null, "no extraHeaders passed → no retry-after header must appear");
+});
+
+test("C4 (#43) BEHAVIORAL: extract-and-execute the REAL jsonError(...) — extraData merges a numeric retry_after_seconds into error.data, alongside code/agent_instruction", async () => {
+  const jsonError = extractJsonError();
+
+  const res = jsonError(429, "RATE_LIMITED", "Too many requests from your IP.",
+    "Retry after 60 seconds.", { "retry-after": "60" }, { retry_after_seconds: 60 });
+
+  const body = JSON.parse(await res.text());
+  assert.equal(body.error.data.code, "RATE_LIMITED");
+  assert.equal(body.error.data.agent_instruction, "Retry after 60 seconds.");
+  assert.equal(body.error.data.retry_after_seconds, 60, "retry_after_seconds must be a NUMBER in the body, not a string — the tool-result payload, not just the HTTP header");
+  assert.equal(typeof body.error.data.retry_after_seconds, "number");
+});
+
+test("C4 (#43) BEHAVIORAL mirror: jsonError(...) with no extraData never adds a retry_after_seconds field (e.g. every non-rate-limit 401/404/500 site)", async () => {
+  const jsonError = extractJsonError();
+
+  const res = jsonError(404, "NOT_FOUND", "nope");
+  const body = JSON.parse(await res.text());
+  assert.equal("retry_after_seconds" in body.error.data, false, "a jsonError call with no extraData must not spuriously gain a retry_after_seconds field");
 });

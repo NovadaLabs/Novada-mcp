@@ -1117,6 +1117,12 @@ export const SCRAPER_CATALOG = [
                 ],
                 status: "ok",
                 verified: "2026-07-13",
+                // B1 (2026-11-18): live repro — submit hit RATE_LIMITED from the
+                // Scraper API backend. Not reclassified backend_broken (the resume/
+                // classification path handled it correctly, typed error, no false
+                // success) — this is a recent reliability signal, narrower than a
+                // permanent-failure verdict.
+                last_live_check_result: "fail",
             },
             {
                 slug: "twitter_profile_username",
@@ -1129,6 +1135,9 @@ export const SCRAPER_CATALOG = [
                 ],
                 status: "ok",
                 verified: "2026-07-13",
+                // B1 (2026-11-18): live repro — a second, unrelated call ~10s after
+                // the first ALSO came back RATE_LIMITED at submit time.
+                last_live_check_result: "fail",
             },
             {
                 slug: "twitter_profile_profileurl",
@@ -1141,6 +1150,12 @@ export const SCRAPER_CATALOG = [
                 ],
                 status: "ok",
                 verified: "2026-07-13",
+                // B1 (2026-11-18): not independently probed this round (only
+                // post_by_url and profile_by_username were), but shares the same
+                // backend capacity/rate-limit as its 2 siblings above — "intermittent"
+                // (not "fail") reflects that it's not itself confirmed failing, while
+                // still disclosing the sibling signal rather than a bare "ok".
+                last_live_check_result: "intermittent",
             },
         ],
     },

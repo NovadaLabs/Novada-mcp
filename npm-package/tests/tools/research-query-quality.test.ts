@@ -502,3 +502,42 @@ describe("generateSearchQueries — unsupported-script language fails safe", () 
     }
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// C5 (#1, 2026-11-18): query #1 must never seed the raw question verbatim
+// when it's long — it's the literal string sent upstream as a sub-query, and
+// an over-long one routinely failed the SERP's own query-length limits
+// (repro: queries:1/3 succeeded, top_sources:0, failed_queries listing the
+// full 98-word question). Fix: bound it with the SAME boundQuery() (search.ts,
+// 500-char word-boundary truncation) novada_search already applies to every
+// outgoing query, instead of a second truncation policy.
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("generateSearchQueries — C5: query #1 is bounded, never the raw long question verbatim", () => {
+  // 98 words, no comparison trigger words — same shape as the wave-C repro.
+  const LONG_NON_COMPARISON_QUESTION = Array(98).fill("enterprise").map((w, i) => `${w}${i}`).join(" ")
+    + " data infrastructure procurement requirements evaluation criteria vendor selection process";
+
+  it("a 90+-word non-comparison question: query #1 is <= 500 chars, not the raw question", () => {
+    expect(LONG_NON_COMPARISON_QUESTION.length).toBeGreaterThan(500);
+    const queries = generateSearchQueries(LONG_NON_COMPARISON_QUESTION, false, false, "focus-term");
+    expect(queries[0].length).toBeLessThanOrEqual(500);
+    expect(queries[0]).not.toBe(LONG_NON_COMPARISON_QUESTION);
+  });
+
+  it("mirror — a 90+-word COMPARISON question: query #1 is ALSO <= 500 chars (the seed is unconditional, before the comparison branch)", () => {
+    const longComparison = "Compare in detail the following platforms across every dimension that matters for an enterprise buyer: "
+      + Array(80).fill("FeatureAndCriterionName").map((w, i) => `${w}${i}`).join(", ")
+      + " — PlatformAlpha versus PlatformBeta";
+    expect(longComparison.length).toBeGreaterThan(500);
+    const queries = generateSearchQueries(longComparison, true, true);
+    expect(queries[0].length).toBeLessThanOrEqual(500);
+    expect(queries[0]).not.toBe(longComparison);
+  });
+
+  it("mirror — a SHORT question's query #1 is untouched (boundQuery is a no-op under 500 chars)", () => {
+    const short = "What is zero trust networking";
+    const queries = generateSearchQueries(short, false, false);
+    expect(queries[0]).toBe(short);
+  });
+});

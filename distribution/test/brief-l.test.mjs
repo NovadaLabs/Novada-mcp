@@ -152,10 +152,11 @@ test("no_orphans (brief-L L2): a stray manifest-pattern file planted under distr
 test("computeFacts (brief-L L3): a ghost tool name in HOSTED_HIDDEN throws a typed FATAL error (agent_instruction set), instead of silently under-counting hosted_tools", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    // fixtures.mjs's own HOSTED_HIDDEN seed is exactly ["novada_browser"] (a real, registered
-    // tool in this fixture's npm-package/build/core.js). Append a name that is NOT in that
-    // registry — a stale/typo'd exclusion.
-    const path = join(root, "hosted-server", "vercel", "api", "mcp.ts");
+    // fixtures.mjs's own HOSTED_HIDDEN_TOOLS seed is exactly ["novada_browser"] (a real,
+    // registered tool in this fixture's npm-package/build/core.js). Append a name that is
+    // NOT in that registry — a stale/typo'd exclusion. B6 (#44): the canonical literal moved
+    // to discover.ts (mcp.ts now just imports + derives from it).
+    const path = join(root, "npm-package", "src", "tools", "discover.ts");
     const raw = readFileSync(path, "utf8");
     const mutated = raw.replace('"novada_browser",', '"novada_browser",\n  "novada_ghost_tool",');
     assert.notEqual(mutated, raw, "test setup: expected to find the HOSTED_HIDDEN seed entry to mutate");

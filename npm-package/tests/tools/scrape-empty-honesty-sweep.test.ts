@@ -71,6 +71,21 @@ const DOWNLOAD_WRAPPED_ALL_EMPTY_FIELD_RECORD = {
 };
 
 /**
+ * B5 (2026-11-18 reliability program): a NARROWER shape than
+ * DOWNLOAD_WRAPPED_ALL_EMPTY_FIELD_RECORD above — the record is NOT fully
+ * blank, it echoes back the request's own identifier param ("novadaproxies",
+ * the catalog's dflt example for ins_profiles_username's `username` param —
+ * see preflightSatisfyingParams) with every CONTENT field null. The
+ * pre-existing `hasUsableRecord` check (no_records_extracted) treats the
+ * echoed identifier as "a usable value" and does NOT catch this — it needs
+ * the NEW value-vs-request-params discriminator (`all_fields_empty`).
+ */
+const DOWNLOAD_WRAPPED_IDENTIFIER_ECHO_ONLY_RECORD = {
+  data: [{ spider_code: 200, rest: { results: [{ username: "novadaproxies", bio: null, posts: null, followers: null }] } }],
+  status: 200, headers: {}, config: {} as never, statusText: "OK",
+};
+
+/**
  * Build a params object that passes preflightScrape for (platform, scraperId), derived
  * generically from the catalog (single source of truth): every catalog param key is
  * supplied (satisfies "all" mode, "any" mode, and extraAll alike), preferring the
@@ -224,6 +239,40 @@ describe("F9 observed fixtures — the three hosted-0.9.37 FAIL rows now classif
     const result = await tool.dispatch({ operation: opName, params }, "test-key");
     expectEmptyResultEnvelope(result);
     expect(result).toContain("empty_signal: no_records_extracted");
+  });
+
+  // B5 (2026-11-18): the narrower identifier-echo-only shape — distinct from
+  // the fully-blank case above, needs its own signal (all_fields_empty).
+  it("novada_scrape_instagram profile_by_username: a record that only echoes back the request's own `username` param (every content field null) classifies all_fields_empty, not ok", async () => {
+    const tool = TOOL_BY_NAME.get("novada_scrape_instagram")!;
+    const opCfg = tool.config.operations.profile_by_username;
+    const params = preflightSatisfyingParams(tool.config.platform, opCfg.scraperId);
+    expect(params.username, "fixture assumes the catalog dflt for ins_profiles_username's username param").toBe("novadaproxies");
+
+    mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
+    mockedAxios.get.mockResolvedValue(DOWNLOAD_WRAPPED_IDENTIFIER_ECHO_ONLY_RECORD);
+    const result = await tool.dispatch({ operation: "profile_by_username", params }, "test-key");
+    expectEmptyResultEnvelope(result);
+    expect(result).toContain("empty_signal: all_fields_empty");
+  });
+
+  // Mirror: a record with ANY genuine non-identifier value (even a falsy-
+  // looking but real one, like followers:0) must NOT be flagged — 0 is real
+  // extracted data, not absence.
+  it("mirror: novada_scrape_instagram profile_by_username with a record carrying ONE real non-identifier value (followers:0) stays a normal success, NOT empty_result", async () => {
+    const tool = TOOL_BY_NAME.get("novada_scrape_instagram")!;
+    const opCfg = tool.config.operations.profile_by_username;
+    const params = preflightSatisfyingParams(tool.config.platform, opCfg.scraperId);
+
+    mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
+    mockedAxios.get.mockResolvedValue({
+      data: [{ spider_code: 200, rest: { results: [{ username: "novadaproxies", bio: null, followers: 0 }] } }],
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const result = await tool.dispatch({ operation: "profile_by_username", params }, "test-key");
+    expect(result).not.toContain("empty_result");
+    expect(result).not.toContain("empty_signal:");
+    expect(result).toContain("## Scrape Results");
   });
 
   it("novada_scrape_facebook: 0-record empty-download response is empty_result, not status: ok", async () => {

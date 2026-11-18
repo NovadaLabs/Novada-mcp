@@ -1595,19 +1595,21 @@ export async function checkExternalRepoConsistent(ctx) {
 //
 // facts computed:
 //   tools      - npm-package/build/core.js's TOOLS.length (every registered tool, local+hosted).
-//   hosted_tools - tools minus hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set size. Exposed
-//                  as an overridable fact key for claim_surfaces entries whose prose legitimately
-//                  describes the HOSTED subset, not the local-package total (see below).
+//   hosted_tools - tools minus npm-package/src/tools/discover.ts's HOSTED_HIDDEN_TOOLS list size
+//                  (B6, #44, 2026-11-18: the ONE canonical list — mcp.ts imports it and derives
+//                  `new Set(HOSTED_HIDDEN_TOOLS)` rather than a second hand-written literal).
+//                  Exposed as an overridable fact key for claim_surfaces entries whose prose
+//                  legitimately describes the HOSTED subset, not the local-package total (below).
 //   platforms  - build/data/scraper_catalog.js's WORKING_PLATFORM_NAMES.length (platforms with
 //                >=1 working scrape operation today).
 //   scrapers   - count of TOOLS entries named "novada_scrape_<platform>" (the typed, per-platform
 //                tools — a distinct source from `platforms`, even though both are 14 today; they
 //                could diverge, e.g. a typed tool shipped for a platform with zero working ops).
 //
-// HOSTED_HIDDEN is parsed TEXTUALLY out of its .ts source (a static `new Set([...])` literal)
-// rather than imported, so this check never needs a second (hosted-server) build pipeline wired
-// in just to read one constant — see parseHostedHiddenNames's own comment for the exact contract
-// this depends on. brief-L (2026-10-15, L3): every parsed name is also cross-checked against the
+// HOSTED_HIDDEN_TOOLS is parsed TEXTUALLY out of its .ts source (a static array literal) rather
+// than imported, so this check never needs a second (hosted-server) build pipeline wired in just
+// to read one constant — see parseHostedHiddenNames's own comment for the exact contract this
+// depends on. brief-L (2026-10-15, L3): every parsed name is also cross-checked against the
 // built TOOLS registry — see computeFacts()'s own comment below for why.
 //
 // Per-surface fact scope (brief-H, class-not-instance): a `claim_surfaces` entry can be a bare
@@ -1669,10 +1671,10 @@ async function computeFacts(root) {
   const ghostNames = hostedHiddenNames.filter((name) => !toolNameSet.has(name));
   if (ghostNames.length > 0) {
     const err = new Error(
-      `hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set names ${ghostNames.length} tool name(s) that do not exist in the built npm-package/build/core.js TOOLS registry: ${ghostNames.map((n) => JSON.stringify(n)).join(", ")} — claims_consistent's hosted_tools fact (tools - HOSTED_HIDDEN.length) would silently trust a stale/typo'd name and understate the real hosted-visible tool count.`
+      `npm-package/src/tools/discover.ts's HOSTED_HIDDEN_TOOLS list names ${ghostNames.length} tool name(s) that do not exist in the built npm-package/build/core.js TOOLS registry: ${ghostNames.map((n) => JSON.stringify(n)).join(", ")} — claims_consistent's hosted_tools fact (tools - HOSTED_HIDDEN_TOOLS.length) would silently trust a stale/typo'd name and understate the real hosted-visible tool count.`
     );
     err.agent_instruction =
-      "fix hosted-server/vercel/api/mcp.ts's HOSTED_HIDDEN set — remove the stale/typo'd tool name (or register/restore the missing tool in npm-package if it was meant to still exist), then re-run `npm run build` in npm-package/ and re-run distribution/check.mjs";
+      "fix npm-package/src/tools/discover.ts's HOSTED_HIDDEN_TOOLS list — remove the stale/typo'd tool name (or register/restore the missing tool in npm-package if it was meant to still exist), then re-run `npm run build` in npm-package/ and re-run distribution/check.mjs";
     throw err;
   }
   return { tools, hosted_tools: tools - hostedHiddenNames.length, platforms, scrapers, dify_tools: countDifyTools(root) };
@@ -1696,26 +1698,36 @@ function countDifyTools(root) {
   return readdirSync(dir).filter((name) => /\.ya?ml$/i.test(name)).length;
 }
 
-/** Textually parses `const HOSTED_HIDDEN = new Set([...quoted strings...]);` out of
- *  hosted-server/vercel/api/mcp.ts and returns its DECODED element names (brief-L L3 — renamed
- *  from parseHostedHiddenCount, which returned only a count; the caller above needs the actual
- *  names to validate each one against the built TOOLS registry, not just how many there are).
- *  Throws loudly (with an agent_instruction) if that exact literal shape can't be found, rather
- *  than silently reporting zero hidden tools — a 0-length parse failure would make
- *  hosted_tools == tools and could mask a real future failure to read this fact. */
+/** Textually parses `export const HOSTED_HIDDEN_TOOLS: readonly string[] = [...quoted
+ *  strings...];` out of npm-package/src/tools/discover.ts and returns its DECODED
+ *  element names (brief-L L3 — renamed from parseHostedHiddenCount, which returned
+ *  only a count; the caller above needs the actual names to validate each one
+ *  against the built TOOLS registry, not just how many there are).
+ *
+ *  B6 (#44, 2026-11-18): this used to parse `const HOSTED_HIDDEN = new Set([...])`
+ *  out of hosted-server/vercel/api/mcp.ts — that was ALWAYS a second, independently-
+ *  maintained copy of discover.ts's own HOSTED_HIDDEN_TOOLS list (same 8 names, two
+ *  files, a comment saying "keep in sync", no compiler-enforced link). mcp.ts now
+ *  IMPORTS HOSTED_HIDDEN_TOOLS and derives `new Set(HOSTED_HIDDEN_TOOLS)` — so the
+ *  literal worth parsing lives in exactly one place now, discover.ts.
+ *
+ *  Throws loudly (with an agent_instruction) if that exact literal shape can't be
+ *  found, rather than silently reporting zero hidden tools — a 0-length parse
+ *  failure would make hosted_tools == tools and could mask a real future failure to
+ *  read this fact. */
 export function parseHostedHiddenNames(root) {
-  const relPath = "hosted-server/vercel/api/mcp.ts";
+  const relPath = "npm-package/src/tools/discover.ts";
   const abs = join(root, relPath);
   if (!existsSync(abs)) {
-    const err = new Error(`${relPath} not found — claims_consistent's hosted_tools fact depends on parsing its HOSTED_HIDDEN literal.`);
-    err.agent_instruction = `restore ${relPath}, or update computeFacts() in distribution/check.mjs if hosted-server's layout changed`;
+    const err = new Error(`${relPath} not found — claims_consistent's hosted_tools fact depends on parsing its HOSTED_HIDDEN_TOOLS literal.`);
+    err.agent_instruction = `restore ${relPath}, or update computeFacts() in distribution/check.mjs if npm-package's layout changed`;
     throw err;
   }
   const src = readFileSync(abs, "utf8");
-  const m = src.match(/const HOSTED_HIDDEN\s*=\s*new Set\(\[([\s\S]*?)\]\)/);
+  const m = src.match(/export const HOSTED_HIDDEN_TOOLS:\s*readonly string\[\]\s*=\s*\[([\s\S]*?)\]/);
   if (!m) {
-    const err = new Error(`${relPath}: could not locate "const HOSTED_HIDDEN = new Set([...])" — the literal shape this fact depends on may have changed.`);
-    err.agent_instruction = "update computeFacts()'s regex in distribution/check.mjs to match HOSTED_HIDDEN's current shape";
+    const err = new Error(`${relPath}: could not locate "export const HOSTED_HIDDEN_TOOLS: readonly string[] = [...]" — the literal shape this fact depends on may have changed.`);
+    err.agent_instruction = "update computeFacts()'s regex in distribution/check.mjs to match HOSTED_HIDDEN_TOOLS's current shape";
     throw err;
   }
   return (m[1].match(/"[^"]*"/g) ?? []).map((quoted) => quoted.slice(1, -1));

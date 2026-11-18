@@ -276,13 +276,21 @@ export function buildGreenFixture() {
     "npm-package/build/data/scraper_catalog.js",
     ['export const WORKING_PLATFORM_NAMES = ["Amazon", "Google"];', ""].join("\n")
   );
-  // Mirrors the real hosted-server/vercel/api/mcp.ts's literal shape that
-  // check.mjs's parseHostedHiddenNames() textually parses — NOT imported/compiled, so this
-  // fixture never needs a second (hosted-server) build pipeline wired in.
+  // B6 (#44, 2026-11-18): HOSTED_HIDDEN's names now live in EXACTLY ONE place —
+  // npm-package/src/tools/discover.ts's HOSTED_HIDDEN_TOOLS — imported by mcp.ts,
+  // which derives `const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);` rather than
+  // a hand-written literal. check.mjs's parseHostedHiddenNames() now textually
+  // parses discover.ts's literal; mcp.ts's fixture just needs to mirror the
+  // DERIVED shape (not imported/compiled — NOT a second build pipeline).
+  writeFileDeep(
+    root,
+    "npm-package/src/tools/discover.ts",
+    ['export const HOSTED_HIDDEN_TOOLS: readonly string[] = [', '  "novada_browser",', "];", ""].join("\n")
+  );
   writeFileDeep(
     root,
     "hosted-server/vercel/api/mcp.ts",
-    ['const HOSTED_HIDDEN = new Set([', '  "novada_browser",', "]);", "export {};", ""].join("\n")
+    ['const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);', "export {};", ""].join("\n")
   );
   // facts for this fixture, derived the SAME way computeFacts() derives them: tools=5,
   // hosted_tools=5-1=4, platforms=2, scrapers=2 (novada_scrape_amazon, novada_scrape_google).
