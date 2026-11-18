@@ -150,6 +150,11 @@ describe("B2 round 4 (owner decision, 2026-11-18): decide wrong-page ONCE, at th
     expect(result).toContain("## Extract Failed");
     expect(result).toMatch(/status:wrong_page/);
     expect(result).toMatch(/final_url: https:\/\/example\.com\//);
+    // LOW (independent review, round 4 follow-up): point the agent at the archived
+    // copy of the specific URL it asked for — this is guidance text only, no
+    // behavior change (the Wayback fetch above still never runs for THIS response;
+    // the agent would have to issue its own follow-up call to this URL).
+    expect(result).toContain("https://web.archive.org/web/https://example.com/2024/deleted-article");
     // Exactly ONE static/proxy GET — no Wayback fetch, no render/browser escalation
     // call. A server-side redirect is issued identically regardless of fetch tier,
     // so round 4 deliberately never retries it.

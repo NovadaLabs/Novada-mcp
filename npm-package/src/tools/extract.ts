@@ -1735,7 +1735,7 @@ async function extractSingleInner(
             `reason: the server redirected to ${finalUrl ? JSON.stringify(finalUrl) : "an unrelated page"} instead of the requested URL`,
             ...(finalUrl ? [`final_url: ${finalUrl}`] : []),
             ``,
-            `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server redirected to its homepage (or an unrelated host) instead of the requested resource. Verify the URL is still correct (the resource may have moved or been removed); retrying with a different render mode will not help, since this redirect is issued identically regardless of fetch tier.`,
+            `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server redirected to its homepage (or an unrelated host) instead of the requested resource. Verify the URL is still correct (the resource may have moved or been removed); retrying with a different render mode will not help, since this redirect is issued identically regardless of fetch tier. If you need the page as it was before it was removed, call novada_extract on https://web.archive.org/web/${params.url}.`,
           ].join("\n"),
           "wrong_page"
         );
