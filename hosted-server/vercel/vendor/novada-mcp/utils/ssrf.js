@@ -203,6 +203,79 @@ export function assertUrlSafe(url, context = "fetch target") {
     }
 }
 /**
+ * B7 (wave B/C, 2026-11-18): second, independent DNS resolver — used ONLY when the
+ * system/VPC resolver's `dns.lookup` returns ENOTFOUND. A single resolver's NXDOMAIN
+ * can mean either "this domain genuinely does not exist" or "this resolver has a gap
+ * (propagation lag, local outage, resolver-specific block)" — those two cases need
+ * different advice to the caller (give up vs retry), and the only way to tell them
+ * apart is to ask a second, independent resolver. Mirrors the existing static→render
+ * escalation shape in extract.ts: one more independent attempt before giving up, not a
+ * retry loop against the same resolver.
+ */
+const FALLBACK_DNS_SERVER = "1.1.1.1";
+/**
+ * Re-checks every resolved address against the SSRF blocklist and delivers the result
+ * to axios's lookup callback. Shared by BOTH the system-resolver success path and the
+ * fallback-resolver success path below, so the DNS-rebinding guard is applied
+ * identically regardless of which resolver answered — the choice of resolver can never
+ * bypass the SSRF check.
+ */
+function deliverSafeAddresses(hostname, list, opts, cb, viaResolver) {
+    for (const a of list) {
+        if (isBlockedIp(a.address)) {
+            const via = viaResolver ? ` (via fallback resolver ${viaResolver})` : "";
+            cb(new Error(`SSRF guard: "${hostname}" resolved${via} to private/loopback/link-local address ` +
+                `${a.address} (possible DNS rebinding). Connection refused.`), "");
+            return;
+        }
+    }
+    // Honor the caller's `all` expectation: callback shape differs when all !== true.
+    if (opts.all) {
+        cb(null, list);
+    }
+    else {
+        const first = list[0];
+        if (!first) {
+            cb(new Error(`SSRF guard: no address resolved for ${hostname}`), "");
+            return;
+        }
+        cb(null, first.address, first.family);
+    }
+}
+/**
+ * Second resolver leg, reached only after the system resolver returned ENOTFOUND.
+ * - Fallback ALSO fails/empty → both independent resolvers agree the name does not
+ *   resolve: classify as a permanently dead domain, not a transient resolver gap. The
+ *   message is crafted so `extract.ts`'s `getSuggestedFix` (text-matching, same pattern
+ *   every other branch there already uses) can give DNS-specific advice instead of the
+ *   generic anti-bot-framed default.
+ *
+ *   The classification tag is deliberately SHORT and placed right after `ENOTFOUND`
+ *   (live-verified 2026-11-18: this message is a "cause" inside an aggregate error,
+ *   and `summarizeAggregateError` (_core/errors.ts) truncates each cause to ~120
+ *   chars — a long hostname plus a verbose tag silently lost the tag entirely on a
+ *   real 40+ char test domain before this fix). `getaddrinfo ENOTFOUND <hostname>` is
+ *   kept intact (existing callers/tests match on that exact adjacency) and the
+ *   hostname — not the tag — is what gets clipped on a pathologically long domain;
+ *   the hostname is always ALSO shown verbatim in the response's own `url:` header
+ *   line, so nothing is lost there.
+ * - Fallback succeeds → a resolver-specific gap, not a dead domain: the name DOES
+ *   resolve, just not via the system resolver. The addresses still go through the SAME
+ *   SSRF re-check as the normal path before the lookup is reported as successful.
+ */
+function tryFallbackResolver(hostname, opts, cb) {
+    const resolver = new dns.Resolver();
+    resolver.setServers([FALLBACK_DNS_SERVER]);
+    resolver.resolve4(hostname, (fallbackErr, addresses) => {
+        if (fallbackErr || !addresses || addresses.length === 0) {
+            cb(new Error(`getaddrinfo ENOTFOUND ${hostname} [resolvers:system,${FALLBACK_DNS_SERVER};permanent]`), "");
+            return;
+        }
+        const list = addresses.map((address) => ({ address, family: 4 }));
+        deliverSafeAddresses(hostname, list, opts, cb, FALLBACK_DNS_SERVER);
+    });
+}
+/**
  * dns.lookup replacement wired into axios's `lookup` option on every direct fetch.
  * Resolves the hostname normally, then refuses any result whose address is in a blocked
  * range. This is the ONLY defense against DNS rebinding: a public hostname whose A/AAAA
@@ -212,6 +285,11 @@ export function assertUrlSafe(url, context = "fetch target") {
  *
  * axios always invokes lookup as (hostname, options, cb); the signature matches its
  * `LookupFunction` type so it can be assigned to AxiosRequestConfig.lookup directly.
+ *
+ * On ENOTFOUND from the system resolver only (not other DNS errors — see
+ * `tryFallbackResolver`'s doc comment), a second independent resolver is consulted
+ * before giving up (B7, wave B/C 2026-11-18). This adds ~0ms to the happy path: the
+ * fallback leg is never reached unless the FIRST attempt already failed with ENOTFOUND.
  */
 export function safeLookup(hostname, options, cb) {
     const opts = (options ?? {});
@@ -225,29 +303,14 @@ export function safeLookup(hostname, options, cb) {
     }
     dns.lookup(hostname, { ...opts, all: true }, (err, addresses) => {
         if (err) {
+            if (err.code === "ENOTFOUND") {
+                tryFallbackResolver(hostname, opts, cb);
+                return;
+            }
             cb(err, "");
             return;
         }
-        const list = addresses;
-        for (const a of list) {
-            if (isBlockedIp(a.address)) {
-                cb(new Error(`SSRF guard: "${hostname}" resolved to private/loopback/link-local address ${a.address} ` +
-                    `(possible DNS rebinding). Connection refused.`), "");
-                return;
-            }
-        }
-        // Honor the caller's `all` expectation: callback shape differs when all !== true.
-        if (opts.all) {
-            cb(null, list);
-        }
-        else {
-            const first = list[0];
-            if (!first) {
-                cb(new Error(`SSRF guard: no address resolved for ${hostname}`), "");
-                return;
-            }
-            cb(null, first.address, first.family);
-        }
+        deliverSafeAddresses(hostname, addresses, opts, cb);
     });
 }
 //# sourceMappingURL=ssrf.js.map

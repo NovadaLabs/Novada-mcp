@@ -207,10 +207,43 @@ export function summarizeAggregateError(err: unknown): { message: string; causes
 // get through" escalates; a class that means "this resource genuinely doesn't
 // exist / isn't authorized for anyone" does not — retrying via render would
 // waste 10-50s to reproduce the same verdict.
+// Wave B/C (2026-11-18, C3): four nonstandard codes considered for this class —
+// 418, 419, 420, 444 added (genuine deployed block/rate-limit signals below);
+// 499 deliberately excluded (justification below the set).
 export const BLOCK_CLASS_STATUSES: ReadonlySet<number> = new Set([
   403, 429, 503,
   520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, // Cloudflare edge errors
+  418, // "I'm a teapot" — several WAF/anti-bot middlewares (e.g. Qwant, some
+  //      custom scraping-detection stacks) deliberately return this as a
+  //      block signal for traffic flagged as automated; never a genuine
+  //      resource-shape error for a real teapot API, so no content domain
+  //      overloads it the way 404 is legitimately overloaded.
+  419, // non-IANA. Confirmed live (C3 repro, 2026-11-18): Hacker News returns
+  //      419 as a "slow down" rate-limit on GET requests. Laravel also uses
+  //      419 for CSRF-token-expired, but that is a POST/PUT session-state
+  //      error — novada_extract only issues GETs, so that meaning cannot
+  //      occur on this code path; safe to treat 419 as block-class here.
+  420, // non-IANA ("Enhance Your Calm") — Twitter/X's pre-429 rate-limit
+  //      code, still returned by some legacy endpoints and a handful of
+  //      other APIs that copied the convention; same retry-via-different-
+  //      path semantics as 429.
+  444, // nginx-specific "No Response" — nginx's documented directive for
+  //      silently dropping requests from bad bots/scrapers. Normally never
+  //      reaches an HTTP client as a real status (nginx closes the socket
+  //      without sending headers, which axios reports as a connection-reset
+  //      network error, already covered by BLOCK_CLASS_NETWORK_PATTERNS
+  //      below); included for the rarer case where an intermediate proxy
+  //      forwards it as a literal status. When it IS observed as a status,
+  //      it is always a deliberate anti-automation block, never a genuine
+  //      "resource doesn't exist" response.
 ]);
+// 499 (nginx "Client Closed Request") is deliberately NOT included: it means
+// the CLIENT (our own fetch) closed the connection before the server
+// responded — i.e. our own timeout/abort, not the server blocking us. That
+// case is already covered by the ETIMEDOUT/ECONNABORTED/timeout network
+// patterns below; adding the status too would be redundant, and treating it
+// as a server-side block would be actively wrong (retrying via render would
+// just reproduce our own abort, not route around a block that never happened).
 export const NOT_ESCALATE_STATUSES: ReadonlySet<number> = new Set([400, 401, 404, 410]);
 
 /** Network-level error signatures (no HTTP status at all) that mean "the

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import axios from "axios";
-import { novadaExtract } from "../../src/tools/extract.js";
+import { novadaExtract, getSuggestedFix } from "../../src/tools/extract.js";
 import { detectJsHeavyContent } from "../../src/utils/http.js";
 import { clearCache } from "../../src/_core/session-cache.js";
 
@@ -1383,5 +1383,73 @@ describe("F2: render='auto' escalates on a fetch-level block-class error, not on
     );
     expect(result).toContain("## Extract Failed");
     expect(mockedAxios.get).not.toHaveBeenCalled(); // no static/proxy leg — render="render" never touches fetchWithRetry/fetchViaProxy
+  });
+});
+
+// ─── B7 (wave B/C, 2026-11-18): DNS-specific suggested_fix, not the anti-bot default ──
+describe("B7: getSuggestedFix gives DNS-specific advice for ENOTFOUND, not the generic anti-bot framing", () => {
+  it("aggregate 'fetch strategies failed: ... ENOTFOUND ... [resolvers:...;permanent]' → honest dead-domain advice, retry_recommended:false, no mention of blocking", () => {
+    const msg =
+      'All 2 fetch strategies failed: getaddrinfo ENOTFOUND novada-nonexistent-test-9981.com ' +
+      '[resolvers:system,1.1.1.1;permanent]';
+    const fix = getSuggestedFix("https://novada-nonexistent-test-9981.com", msg);
+    expect(fix).toMatch(/does not exist/);
+    expect(fix).toMatch(/retry_recommended:false/);
+    expect(fix).not.toMatch(/likely blocks both the datacenter proxy/); // the old, wrong framing for a DNS failure
+  });
+
+  it("REGRESSION (live-verified 2026-11-18): the permanent tag survives summarizeAggregateError's ~120-char per-cause truncation even with a real long hostname", async () => {
+    // The ORIGINAL verbose tag format lost this signal entirely on exactly this
+    // shape in production — a 44-char hostname plus a verbose disclosure pushed
+    // the cause string past AGGREGATE_CAUSE_MAX_CHARS, silently truncating away
+    // "permanent" before getSuggestedFix ever saw it. Exercises the REAL path
+    // (safeLookup's actual message -> summarizeAggregateError -> getSuggestedFix),
+    // not a hand-crafted string, so a future change to either side that
+    // reintroduces this gap fails here.
+    const longHost = "novada-wave-bc-live-dead-domain-test-99999999.example";
+    let n = 0;
+    mockedAxios.get.mockImplementation(async () => {
+      n++;
+      throw n === 1
+        ? Object.assign(new Error("ECONNREFUSED 1.2.3.4:443"), { code: "ECONNREFUSED" })
+        : Object.assign(
+            new Error(`getaddrinfo ENOTFOUND ${longHost} [resolvers:system,1.1.1.1;permanent]`),
+            { code: "ENOTFOUND" }
+          );
+    });
+
+    const result = await novadaExtract(
+      { url: `https://${longHost}/page`, format: "markdown", render: "auto" },
+      API_KEY
+    );
+
+    expect(result).toContain("## Extract Failed");
+    expect(result).toMatch(/does not exist/);
+    expect(result).toMatch(/retry_recommended:false/);
+    expect(result).not.toMatch(/likely blocks both the datacenter proxy/);
+  });
+
+  it("aggregate ENOTFOUND WITHOUT the permanent disclosure (resolver fallback not reached, or fallback succeeded transiently elsewhere) → generic DNS advice, still not the anti-bot framing", () => {
+    const msg = "All 2 fetch strategies failed: getaddrinfo ENOTFOUND some-domain.example";
+    const fix = getSuggestedFix("https://some-domain.example", msg);
+    expect(fix).toMatch(/getaddrinfo ENOTFOUND/);
+    expect(fix).not.toMatch(/likely blocks both the datacenter proxy/);
+  });
+
+  it("single-leg (non-aggregate) ENOTFOUND message also gets the DNS-specific branch, not the generic 'rate-limiting (transient)' bucket", () => {
+    const fix = getSuggestedFix("https://some-domain.example", "getaddrinfo ENOTFOUND some-domain.example");
+    expect(fix).toMatch(/getaddrinfo ENOTFOUND/);
+    expect(fix).not.toMatch(/rate-limiting \(transient\)/);
+  });
+
+  it("mirror: a non-DNS aggregate failure (e.g. a 403 cause) is unaffected and keeps the original anti-bot framing", () => {
+    const msg = "All 2 fetch strategies failed: Request failed with status code 403";
+    const fix = getSuggestedFix("https://blocked.example", msg);
+    expect(fix).toMatch(/likely blocks both the datacenter proxy/);
+  });
+
+  it("mirror: a plain ECONNREFUSED (not ENOTFOUND) stays in the generic transient bucket, unaffected by the DNS-specific branch", () => {
+    const fix = getSuggestedFix("https://refused.example", "connect ECONNREFUSED 1.2.3.4:443");
+    expect(fix).toMatch(/rate-limiting \(transient\)/);
   });
 });

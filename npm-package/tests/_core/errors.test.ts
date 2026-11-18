@@ -203,6 +203,26 @@ describe("isBlockClassFetchFailure — F2 escalation discriminator", () => {
   });
 });
 
+// ─── C3 (wave B/C, 2026-11-18): 419/418/420/444 added, 499 excluded ─────────
+describe("isBlockClassFetchFailure — C3 nonstandard block-class codes", () => {
+  it("419 escalates (live repro: news.ycombinator.com's 'slow down' rate-limit on a plain GET)", () => {
+    expect(isBlockClassFetchFailure(axiosLikeError(419))).toBe(true);
+  });
+
+  it("499 (nginx client-closed-request) does NOT escalate — it means OUR OWN fetch aborted, not a server block", () => {
+    expect(isBlockClassFetchFailure(axiosLikeError(499))).toBe(false);
+  });
+
+  it("every C3-added code (418, 419, 420, 444) is a BLOCK_CLASS_STATUSES member and 499 is not", () => {
+    expect(BLOCK_CLASS_STATUSES.has(418)).toBe(true);
+    expect(BLOCK_CLASS_STATUSES.has(419)).toBe(true);
+    expect(BLOCK_CLASS_STATUSES.has(420)).toBe(true);
+    expect(BLOCK_CLASS_STATUSES.has(444)).toBe(true);
+    expect(BLOCK_CLASS_STATUSES.has(499)).toBe(false);
+    expect(NOT_ESCALATE_STATUSES.has(499)).toBe(false); // unclassified, not "genuinely missing" either
+  });
+});
+
 // ─── F3 (round 5, owner direction): structural toolFailure() marker ──────────
 //
 // Replaces the deleted textual/heading-table approach entirely (no

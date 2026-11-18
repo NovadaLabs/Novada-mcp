@@ -737,6 +737,26 @@ export function getSuggestedFix(url: string, errorMsg: string, attemptedRender?:
   return fix;
 }
 
+/**
+ * B7 (wave B/C, 2026-11-18): DNS-specific suggested_fix, shared by both the aggregate
+ * ("fetch strategies failed: ... ENOTFOUND ...") and single-leg ENOTFOUND branches.
+ * Reads the disclosure `safeLookup` (utils/ssrf.ts) bakes into its ENOTFOUND message
+ * when BOTH the system resolver and the fallback resolver (1.1.1.1) agree the name
+ * doesn't resolve (the short `[resolvers:...;permanent]` tag) and gives honest,
+ * non-retry advice; falls back to a generic-but-still-DNS-specific message when that
+ * disclosure isn't present (e.g. a bare ENOTFOUND surfaced before the fallback
+ * resolver ran, from a code path other than safeLookup, or — live-verified 2026-11-18
+ * — the tag itself got clipped by summarizeAggregateError's ~120-char per-cause cap on
+ * a pathologically long hostname; degrading to the generic DNS branch there is
+ * correct, not a bug: the overall failure is still honestly reported either way).
+ */
+function dnsSuggestedFix(lowerErrorMsg: string): string {
+  if (lowerErrorMsg.includes(";permanent]") || lowerErrorMsg.includes("failure_class=permanent")) {
+    return `suggested_fix: DNS lookup failed on two independent resolvers (the system resolver and a public fallback, 1.1.1.1) — this domain does not exist. retry_recommended:false. This is not a block; verify the URL is spelled correctly or that the domain hasn't expired/moved`;
+  }
+  return `suggested_fix: DNS lookup failed (getaddrinfo ENOTFOUND). Verify the URL is spelled correctly — if it is, this may be a transient resolver gap rather than a dead domain; retry after a short delay`;
+}
+
 function deriveSuggestedFix(url: string, errorMsg: string): string {
   const lower = errorMsg.toLowerCase();
   // FIX-A (2026-07-30): the aggregate-fetch-failure marker text is emitted ONLY by
@@ -745,6 +765,12 @@ function deriveSuggestedFix(url: string, errorMsg: string): string {
   // itself contain "403"/"blocked"/"bot"/etc., which would otherwise match a LATER,
   // more generic branch below and produce a less accurate fix for a total-failure case.
   if (lower.includes("fetch strategies failed")) {
+    // B7 (wave B/C, 2026-11-18): ENOTFOUND inside the aggregate message is a DNS
+    // failure, not an anti-bot block — the generic "the site likely blocks both the
+    // datacenter proxy and the web unblocker" framing below is actively wrong for it
+    // (there IS no site to block anything; the name doesn't resolve). Checked before
+    // the generic aggregate branch so this more specific cause wins.
+    if (lower.includes("enotfound")) return dnsSuggestedFix(lower);
     return `suggested_fix: retry_recommended after 30s (use exponential backoff for repeated retries). If it persists, the site likely blocks both the datacenter proxy and the web unblocker — try render="browser" (novada_browser with NOVADA_BROWSER_WS configured), or accept the URL is currently unavailable`;
   }
   // P0: 5001 / PRODUCT_UNAVAILABLE — Web Unblocker not activated.
@@ -786,8 +812,12 @@ function deriveSuggestedFix(url: string, errorMsg: string): string {
       lower.includes("access denied") || lower.includes("blocked")) {
     return `suggested_fix: retry with render="render" (JS rendering + anti-bot bypass). If that also fails: novada_extract(url="${url}", format="html") returns raw HTML via stealth browser — parse the response body manually`;
   }
+  // B7: same DNS-specific branch as above, for the non-aggregate (single fetch leg)
+  // case — checked before the generic bundle below, which would otherwise swallow
+  // ENOTFOUND into the same text used for rate-limiting/connection-refused.
+  if (lower.includes("enotfound")) return dnsSuggestedFix(lower);
   if (lower.includes("all promises were rejected") || lower.includes("eai_again") ||
-      lower.includes("econnrefused") || lower.includes("enotfound") || lower.includes("timeout")) {
+      lower.includes("econnrefused") || lower.includes("timeout")) {
     return `suggested_fix: domain may be unreachable or rate-limiting (transient). Verify the URL is correct, then retry — retry with render="render" if a plain fetch keeps failing. If it persists, run novada_account(section="summary") to check API status`;
   }
   if (lower.includes("js") || lower.includes("javascript") || lower.includes("js-heavy")) {
@@ -1138,6 +1168,165 @@ function formatMarkdownExtract(
   return lines.join("\n");
 }
 
+// ─── B2 (wave B/C, 2026-11-18): wrong-page-as-success discriminators ──────────
+//
+// layer-study.md's repro class: a live site silently 30x-redirects a dead/removed page
+// to its own homepage, or to a generic archive/cache snapshot — content_ok's existing
+// word/char floor (isShortButComplete) reads the landing page's chrome as ordinary
+// short-but-complete prose and rescues it into a false success. Two discriminators,
+// folded into the EXISTING isChallengePage boolean below (one more OR arm, not a
+// parallel gate) — not per-site patches.
+
+/** Hosts that exist purely to serve a cached/archived COPY of a page, never the page
+ *  itself. A table, not a single site: a new rescue host the backend starts
+ *  redirecting to is a new row here, not a new branch. */
+const GENERIC_RESCUE_HOSTS = ["web.archive.org", "archive.ph", "archive.today", "cachedview.nl", "webcache.googleusercontent.com"];
+
+/**
+ * True when the fetch landed somewhere that is clearly NOT the requested resource —
+ * scoped NARROWLY to two shapes so the extremely common, entirely legitimate case of a
+ * redirect landing on a genuinely different TARGET host (URL shorteners, canonical-
+ * domain migrations, i18n subdomain hops, CDN host changes) is never flagged:
+ *
+ *  1. the path collapses to the literal site root ("/") while the caller asked for a
+ *     deep path — "redirected to the homepage". A request FOR the homepage itself has
+ *     nowhere shallower to collapse to and is excluded up front (mirror: a deep path
+ *     redirecting to ANOTHER deep path, or a locale redirect FROM root like "/"→"/en/",
+ *     never matches — only landing on exactly "/" does).
+ *  2. the final host is a known generic archive/cache host (GENERIC_RESCUE_HOSTS)
+ *     while the request itself did not target one — "rescued into a snapshot instead
+ *     of the live page" (mirror: a request that explicitly targets web.archive.org is
+ *     unaffected, since requested-host and final-host both match the table there).
+ *
+ * http<->https, www<->apex, and trailing-slash-only differences never trigger either
+ * shape: shape 1 only inspects the PATH (host is irrelevant to it), and shape 2 only
+ * fires on a HOST that is itself in the rescue table (a scheme/www/trailing-slash
+ * change alone never changes which host is in that table).
+ */
+function isRedirectedAwayFromRequestedPage(requestedUrl: string, finalUrl: string | null): boolean {
+  if (!finalUrl) return false; // unknown (e.g. render tier, or a mocked transport in tests) — never guess
+  let req: URL, fin: URL;
+  try {
+    req = new URL(requestedUrl);
+    fin = new URL(finalUrl);
+  } catch {
+    return false;
+  }
+  const isRescueHost = (host: string) => GENERIC_RESCUE_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  const reqHost = req.hostname.toLowerCase();
+  const finHost = fin.hostname.toLowerCase();
+  if (isRescueHost(finHost) && !isRescueHost(reqHost)) return true;
+
+  const reqPath = req.pathname.replace(/\/+$/, "");
+  const finPath = fin.pathname.replace(/\/+$/, "");
+  if (reqPath === "" || reqPath === "/") return false; // request already targeted the homepage
+  return finPath === "" || finPath === "/";
+}
+
+/**
+ * Error/boilerplate-only page signatures: a body whose ENTIRE content is one of these
+ * known non-content stubs (CDN/edge error page, cookie-consent-only wall) reads as
+ * ordinary short-but-complete prose to the word/char floor below and must not be
+ * rescued. Matched only when the signature phrase DOMINATES a short body (see
+ * BOILERPLATE_MAX_WORDS) — a long, real article that happens to mention "bad gateway"
+ * or quote a cookie banner in passing must never match (mirror case). A table, not a
+ * per-site list: a new stub wording is a new row.
+ */
+const BOILERPLATE_SIGNATURES: RegExp[] = [
+  /\b(502|503|504)\s+(bad gateway|service (temporarily )?unavailable|gateway time-?out)\b/i,
+  /\bthe server is (temporarily )?unable to (service|process|complete) your request\b/i,
+  /\bfaulted after too many retries\b/i,
+  /\bwe use cookies\b[\s\S]{0,200}\b(accept|consent|manage preferences)\b/i,
+  /\bthis (site|website) uses cookies\b[\s\S]{0,200}\b(accept all|manage preferences|consent)\b/i,
+];
+/** Above this word count, a signature match is treated as a real article mentioning
+ *  the phrase in passing, not a page that IS the stub. Deliberately kept BELOW
+ *  `hasSubstantiveContent`'s 50-word presence floor (utils/html.ts) — a match can
+ *  therefore never ALSO satisfy `quality.content_present`, so this check never needs
+ *  its own override of `contentPresentDisplay` the way the redirect check does below;
+ *  it only ever needs to block the short-page rescue it is folded into. */
+const BOILERPLATE_MAX_WORDS = 45;
+
+function hasBoilerplateOnlySignature(mainContent: string): boolean {
+  const trimmed = mainContent.trim();
+  if (!trimmed) return false;
+  if (trimmed.split(/\s+/).length > BOILERPLATE_MAX_WORDS) return false;
+  return BOILERPLATE_SIGNATURES.some((re) => re.test(trimmed));
+}
+
+// ─── B4 (wave B/C, 2026-11-18, issue #46): JS-gated table/widget hydration gap ──
+//
+// The existing auto-escalation gate (`quality.score < 40 && !quality.content_present`,
+// below) operates on the WHOLE page: a page with substantial surrounding real content
+// (nav/FAQ/footer — issue #46's own 3rd occurrence, "~10.4K chars ... zero per-tier
+// rows") scores well above 40 and has content_present:true from that surrounding
+// prose alone, so escalation never fires even though the ONE thing the caller asked
+// for (the pricing table) is empty. This is a narrow, class-level DOM signature
+// (table shape, not any specific site) checked independently of the whole-page score.
+
+/** Cell values that mean "no data here" for this check. "Loading…" variants are the
+ *  strongest unambiguous signal (the component is literally mid-hydration); a bare
+ *  empty string / dash is weaker on its own (see detectHydrationSuspect's row-shape
+ *  requirement below) but still counts once paired with a real header. */
+const PLACEHOLDER_CELL_VALUES = new Set(["", "-", "—", "–", "n/a", "loading", "loading...", "…"]);
+
+function isEmptyOrPlaceholderCell(text: string): boolean {
+  return PLACEHOLDER_CELL_VALUES.has(text.trim().toLowerCase());
+}
+
+/**
+ * True when a `<table>` has a real header row (≥2 non-empty header cells — excludes
+ * decorative single-column lists, which are a different shape entirely) whose BODY is
+ * either entirely absent-but-marked-loading, or whose rows have every cell beyond the
+ * first (often itself a row label) empty/placeholder.
+ *
+ * Gated on label-WITHOUT-value, not value-absence alone (mirror: a genuinely-empty-
+ * by-design table must not be flagged): a header with ZERO body rows at all is
+ * ambiguous on its own (could legitimately be an empty table) and is only flagged
+ * when the table's own markup also carries an explicit loading/skeleton marker — never
+ * on row-count absence alone. A "No results found" message rendered as one real-text
+ * cell is never in PLACEHOLDER_CELL_VALUES, so it is never mistaken for a hydration gap.
+ *
+ * Scope: `<table>` only (issue #46's own repros are all tables). A list (`<ul>/<ol>`)
+ * variant is a materially different, higher-false-positive-risk shape — ordinary
+ * navigation menus are everywhere and have no "header" concept at all — and is left
+ * for a follow-up rather than risked here; flagged explicitly, not silently dropped.
+ */
+export function detectHydrationSuspect($doc: CheerioAPI): boolean {
+  let suspect = false;
+  $doc("table").each((_, table) => {
+    if (suspect) return;
+    const $table = $doc(table);
+    const headerCells = $table
+      .find("thead th, tr:first-child th")
+      .toArray()
+      .map((th) => $doc(th).text().trim())
+      .filter((t) => t.length > 0);
+    if (headerCells.length < 2) return; // decorative/single-column — not this signature
+
+    const bodyRows = $table.find("tbody tr").toArray();
+    const rowsToCheck = bodyRows.length > 0 ? bodyRows : $table.find("tr").slice(1).toArray();
+    if (rowsToCheck.length === 0) {
+      if (/loading/i.test($table.text()) || $table.find("[class*=skeleton],[class*=loading],[aria-busy=true]").length > 0) {
+        suspect = true;
+      }
+      return;
+    }
+    for (const row of rowsToCheck) {
+      const cells = $doc(row).find("td").toArray().map((td) => $doc(td).text());
+      if (cells.length === 0) continue;
+      // Skip the first cell (often itself a row label, e.g. the tier name) —
+      // require at least one OTHER cell to judge "value is missing" from.
+      const dataCells = cells.slice(1);
+      if (dataCells.length > 0 && dataCells.every(isEmptyOrPlaceholderCell)) {
+        suspect = true;
+        return;
+      }
+    }
+  });
+  return suspect;
+}
+
 /** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
 async function extractSingleInner(
   params: ExtractParams & { url: string },
@@ -1200,6 +1389,14 @@ async function extractSingleInner(
   let gitbookMdContent: string | null = null;
   /** Anti-bot provider detected during fetch (null = none detected) */
   let detectedAntiBot: string | null = null;
+  // B2 (wave B/C, 2026-11-18): the URL actually served after following redirects, when
+  // known. Only the static/proxy fetch leg (a real axios GET to the target, whether
+  // direct or through the proxy tunnel) can disclose this — axios's Node adapter
+  // (follow-redirects) records it as `response.request.res.responseUrl`. The render
+  // tier wraps the HTML inside Novada's own Web Unblocker API response and does not
+  // disclose the target's final URL, so it stays null there — the redirect-mismatch
+  // check below degrades to a no-op (never a false positive) whenever it is unknown.
+  let finalUrl: string | null = null;
   /** Whether anti-bot was resolved via escalation */
   let antiBotResolved = false;
   // clean=true → main-content only; clean=false (default) → full page for maximum coverage.
@@ -1492,6 +1689,11 @@ async function extractSingleInner(
       // response is non-null here: either the try block above succeeded, or an F2
       // escalation handled/threw before reaching this point.
       const r = response!;
+      // B2: capture the real final URL this fetch leg landed on, if the underlying
+      // adapter discloses it (axios's Node adapter sets this on every redirected
+      // request; absent — e.g. under a mocked transport in tests — leaves it null
+      // and the redirect-mismatch check below is simply skipped, never guessed at).
+      finalUrl = (r as unknown as { request?: { res?: { responseUrl?: string } } }).request?.res?.responseUrl ?? null;
       const contentType = String((r.headers as Record<string, string>)?.["content-type"] ?? "");
       if (isPdfResponse(params.url, contentType)) {
         const pdfBuffer = Buffer.isBuffer(r.data)
@@ -1785,7 +1987,19 @@ async function extractSingleInner(
   // Without this guard, minimal static pages trigger fetchWithRender, adding 3–10s of latency.
   // NOV-565: also require !content_present — a page that already has substantive text
   // must not re-fetch via render/browser just because its cleanliness score is low.
-  if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !quality.content_present && !html.startsWith("pdf_pages:") && !domainHint) {
+  // B4 (wave B/C, 2026-11-18, issue #46): escalates regardless of the whole-page
+  // score/content_present — a real data table can be empty while the surrounding
+  // nav/FAQ/footer prose alone clears both of those floors. Checked on the STATIC
+  // doc only, purely to decide whether to TRIGGER escalation; the response field
+  // disclosed to the caller (`hydrationSuspectFinal`, below) is re-checked against
+  // whatever doc ends up served, so a render fetch that genuinely filled the table
+  // in is reported honestly as resolved, not still-suspect. Same `!domainHint` guard
+  // as the score-based trigger (registry-pinned domains skip this entire escalation
+  // block today for any reason, not just a low score — kept consistent rather than
+  // carving a one-off exception for this new trigger).
+  const hydrationSuspectPreEscalation = $doc !== null && detectHydrationSuspect($doc);
+  if (renderMode === "auto" && usedMode === "static" && !html.startsWith("pdf_pages:") && !domainHint &&
+      (hydrationSuspectPreEscalation || (quality.score < 40 && !quality.content_present))) {
     escalationAttempted = true;
     try {
       // PARAM-HONESTY: this call deliberately does NOT forward params.country (pre-existing
@@ -1995,10 +2209,33 @@ async function extractSingleInner(
   // numeric score is still reported for callers that want it.
   const fetchSucceeded = usedMode !== "render-failed" && !stillJsHeavy;
   const wordCount = mainContent.trim() ? mainContent.trim().split(/\s+/).length : 0;
+  // B4: re-checked against whatever doc ended up served (static/render/browser/wayback
+  // all reassign `$doc` when adopted) — honest disclosure of whether the table/widget
+  // that triggered escalation above actually got filled in, not just whether it looked
+  // suspect on the original static fetch.
+  const hydrationSuspectFinal = $doc !== null && detectHydrationSuspect($doc);
   // A page whose returned HTML is a bot-challenge / anti-bot interstitial is NOT
   // "complete but short" — it is an absence dressed as content. Exclude it so the
   // rescue below never green-lights "Checking your browser…" style stubs.
-  const isChallengePage = detectedAntiBot !== null || (typeof html === "string" && detectBotChallenge(html));
+  // B2 (wave B/C, 2026-11-18): two more absence-dressed-as-content shapes folded into
+  // this SAME boolean (3-way OR, not a parallel gate) — a redirect that landed on an
+  // unrelated homepage/archive-snapshot instead of the requested page, and a body that
+  // IS a CDN error stub or cookie-wall rather than real content.
+  // `finalUrl` is only meaningful for the CONTENT currently held in `html`/`mainContent`
+  // when that content still came from the static/proxy leg that captured it (usedMode
+  // === "static") — if JS-heavy/bot-challenge escalation already swapped in render or
+  // browser output above, finalUrl describes a PRIOR fetch's redirect chain, not this
+  // one, and must not be applied to it (render/browser don't disclose their own final
+  // URL at all, so there is nothing stale to clear — gating on usedMode here is simpler
+  // and more robust than resetting finalUrl inside every escalation sub-branch above).
+  const redirectedAwayFromRequestedPage =
+    usedMode === "static" && isRedirectedAwayFromRequestedPage(params.url, finalUrl);
+  const boilerplateOnlyPage = hasBoilerplateOnlySignature(mainContent);
+  const isChallengePage =
+    detectedAntiBot !== null ||
+    (typeof html === "string" && detectBotChallenge(html)) ||
+    redirectedAwayFromRequestedPage ||
+    boilerplateOnlyPage;
   // F14 (2026-09-10 audit): the render escalation's FETCH itself failed or returned an
   // unverifiable body (thrown 401/5xx, bot-challenge interstitial, non-HTML). Distinct
   // from "render succeeded but added nothing" (escalationError stays null there): when
@@ -2021,13 +2258,48 @@ async function extractSingleInner(
     wordCount >= 12 &&
     mainContent.trim().length >= 80;
   // Display-level presence: true whenever there is usable content in THIS payload.
-  const contentPresentDisplay = quality.content_present || isShortButComplete;
+  // B2: `redirectedAwayFromRequestedPage` overrides even an otherwise-substantive
+  // `quality.content_present` — unlike the boilerplate-signature check (which is
+  // word-capped below the 50-word presence floor by construction and therefore
+  // already excluded from `quality.content_present` on its own), a page that landed
+  // on an unrelated homepage/archive-snapshot can easily BE long and well-formed (a
+  // real, content-rich homepage) and would otherwise sail past this gate on content
+  // volume alone — the failure here is identity (wrong page), not volume.
+  const contentPresentDisplay = !redirectedAwayFromRequestedPage && (quality.content_present || isShortButComplete);
 
   // NOV-565: content_ok is driven by content presence (substantive prose detected on the
   // CLEANED markdown), not the cleanliness score. Docs pages with full text but link-heavy
   // markup used to fail the old `score >= 40` gate; now a page with real content passes.
   // R4: a short-but-complete page (example.com) is also content_ok — it is not a failure.
   const contentOk = contentPresentDisplay && fetchSucceeded && mainContent.length > 0;
+
+  // B2 (wave B/C, 2026-11-18): either new discriminator is a definitive "this is not
+  // the page the caller asked for" signal (identity/boilerplate, not a volume/quality
+  // judgment) — honest failure via toolFailure(), not a soft "content_ok:false" caveat
+  // buried inside an otherwise success-shaped "## Extracted Content" response (the
+  // exact bug this wave exists to fix). No further escalation is attempted here: a
+  // server-side redirect / cookie-consent wall / CDN error page is issued identically
+  // regardless of which Novada fetch tier (static/proxy/render) requests it — there is
+  // no bot-detection asymmetry for a different tier to route around, so retrying would
+  // just reproduce the same verdict at 10-50x the latency. (Contrast with the EXISTING
+  // JS-heavy/bot-challenge escalation earlier in this function, which fires BEFORE this
+  // point and DOES retry via render/browser — those failures genuinely differ by tier.)
+  if (redirectedAwayFromRequestedPage || boilerplateOnlyPage) {
+    const reason = redirectedAwayFromRequestedPage
+      ? `redirected to ${finalUrl ? JSON.stringify(finalUrl) : "an unrelated page"} instead of the requested URL`
+      : `the fetched page is a boilerplate stub (CDN error page or cookie-consent wall), not real content`;
+    return toolFailure(
+      [
+        `## Extract Failed`,
+        `url: ${params.url}`,
+        `reason: ${reason}`,
+        ...(redirectedAwayFromRequestedPage && finalUrl ? [`final_url: ${finalUrl}`] : []),
+        ``,
+        `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server redirected or served a generic fallback instead of the requested resource. Verify the URL is still correct (the resource may have moved or been removed); retrying with a different render mode will not help, since this response is issued identically regardless of fetch tier.`,
+      ].join("\n"),
+      "wrong_page"
+    );
+  }
 
   // Compute extraction_quality label from fill-rate (resolved fields / requested fields)
   let extractionQuality: "high" | "partial" | "low" | "none" | "n/a" = "n/a";
@@ -2120,6 +2392,9 @@ async function extractSingleInner(
       // top-level agent_instruction (status:failed), not only the buried hints entry.
       ...(escalationFailed ? { escalation_attempted: true, escalation_failed: true, ...(escalationError ? { escalation_error: escalationError } : {}), ...(escalationInstruction ? { agent_instruction: escalationInstruction } : {}) } : {}),
       ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
+      // B4 (wave B/C, 2026-11-18, issue #46): a table/widget whose header cells are
+      // populated but whose data cells are empty/placeholder — see detectHydrationSuspect.
+      ...(hydrationSuspectFinal ? { hydration_suspect: true } : {}),
       ...(gitbookMdContent !== null ? { gitbook_md_fallback: true } : {}),
       ...(waybackFallback ? { wayback_fallback: true } : {}),
       // PARAM-HONESTY: country accepted but not applied — fires only when the caller
@@ -2237,7 +2512,7 @@ async function extractSingleInner(
     ...(extractionQuality !== "n/a" ? [`extraction_quality: ${extractionQuality}`] : []),
     `title: ${headerLine(title)}`,
     ...(description ? [`description: ${headerLine(description)}`] : []),
-    `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? ` | auto_escalated:true${autoEscalatedTo ? ` | escalated_to:${autoEscalatedTo}` : ""}` : ""}${detectedAntiBot ? ` | anti_bot:${detectedAntiBot} | resolved:${antiBotResolved}` : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
+    `chars:${contentLen}${isTruncated ? " (truncated)" : ""} | links:${allLinks.length}${autoEscalated ? ` | auto_escalated:true${autoEscalatedTo ? ` | escalated_to:${autoEscalatedTo}` : ""}` : ""}${detectedAntiBot ? ` | anti_bot:${detectedAntiBot} | resolved:${antiBotResolved}` : ""}${hydrationSuspectFinal ? ` | hydration_suspect:true` : ""}${pdfPages !== null ? ` | pdf:true | pages:${pdfPages}` : ""}${metaExtra}`,
     ``,
   ];
 
