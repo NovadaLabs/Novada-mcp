@@ -60,24 +60,40 @@ export function isBrowserAvailableOnRuntime() {
  * @param fieldName   The param field name for the calling tool.
  *                    novada_extract uses `render=`; novada_unblock uses `method=`.
  *                    Defaults to "render" for backward-compat.
+ * @param renderAttempt  F1 (2026-11-18): when the caller already tried the render
+ *                    (Web Unblocker) tier as a fallback before giving up on browser,
+ *                    pass `{ tried: true, error? }` so the message is honest about
+ *                    what was actually attempted instead of reading like a
+ *                    zero-attempt failure.
  */
-export function getBrowserUnavailableError(paramValue, fieldName = "render") {
+export function getBrowserUnavailableError(paramValue, fieldName = "render", renderAttempt) {
     const paramContext = paramValue ? ` (${fieldName}="${paramValue}")` : "";
+    // F1: the error text used to claim "Vercel serverless functions" specifically —
+    // false on the current production deployment (EC2, see repo CLAUDE.md) even
+    // though isHostedEnvironment() (process.env.VERCEL forced by server.mts for code
+    // reuse — config.ts) can't distinguish EC2 from Vercel today. Describe the
+    // TRANSPORT LIMITATION (serverless-style request isolation), not a specific
+    // platform name, so this stays accurate regardless of which host is serving it.
+    const renderAttemptLine = renderAttempt?.tried
+        ? renderAttempt.error
+            ? `- A render (Web Unblocker) fallback was attempted first and also failed: ${renderAttempt.error}`
+            : `- A render (Web Unblocker) fallback was attempted first but did not return usable content.`
+        : null;
     if (isHostedEnvironment() && process.env.DEPLOYMENT_SUPPORTS_WS !== "true") {
         return [
             `## Browser Mode Unavailable`,
             ``,
             `${fieldName}="browser"${paramContext} requires a persistent CDP WebSocket transport that ` +
-                `the hosted Novada MCP endpoint (Vercel serverless) cannot provide.`,
+                `the hosted Novada MCP endpoint cannot provide in its current configuration.`,
             ``,
             `## Why This Happens`,
-            `- The hosted endpoint runs on Vercel serverless functions that terminate after each request.`,
-            `- CDP (Browser API) needs a long-lived WebSocket — serverless kills the connection mid-flight.`,
+            `- The hosted endpoint's request-handling model terminates/isolates each request, so it cannot hold a long-lived CDP WebSocket.`,
             `- The raw "AuthorizationError" you may see is a transport failure, not a credentials problem.`,
+            ...(renderAttemptLine ? [renderAttemptLine] : []),
             ``,
             `## Agent Action`,
             `agent_instruction: status:browser_unavailable_on_runtime | ` +
-                `Use ${fieldName}="render" (Web Unblocker) for JS rendering on the hosted endpoint. ` +
+                `Use ${fieldName}="render" (Web Unblocker) for JS rendering on the hosted endpoint${renderAttempt?.tried ? " — already tried above and did not succeed on this URL" : ""}. ` +
                 `For full browser automation, run the MCP server locally: npx -y novada-mcp@latest ` +
                 `with NOVADA_BROWSER_WS configured. ` +
                 `Docs: https://docs.novada.com/mcp/local-setup`,
@@ -88,6 +104,7 @@ export function getBrowserUnavailableError(paramValue, fieldName = "render") {
         `## Browser Mode Unavailable`,
         ``,
         `${fieldName}="browser"${paramContext} requires NOVADA_BROWSER_WS to be configured.`,
+        ...(renderAttemptLine ? ["", renderAttemptLine] : []),
         ``,
         `## Setup`,
         `Set NOVADA_BROWSER_WS=wss://username:password@host in your MCP environment:`,

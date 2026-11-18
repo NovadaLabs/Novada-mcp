@@ -58,7 +58,7 @@ import {
 import { validateAiMonitorParams } from "./tools/types.js";
 import type { ProgressReporter } from "./tools/crawl.js";
 import type { ElicitConfirmFn } from "./tools/static_ip_mgmt.js";
-import { classifyError, redactSecrets } from "./_core/errors.js";
+import { classifyError, redactSecrets, looksLikeFailureEnvelope } from "./_core/errors.js";
 import { ZodError } from "zod";
 import { TOOLS, dispatch, KNOWN_TOOL_NAMES, makeUnknownToolError, DEDICATED_PLATFORM_SLUGS, coerceToolArgs } from "./core.js";
 // Round 4b (S1-connector, F-review "Round-4 review" FIX-FIRST, 2026-10-13): the
@@ -261,6 +261,33 @@ function toAgentErrorText(error: unknown, toolName: string): string {
   return classifyError(error).toAgentString();
 }
 
+// ─── F3 (2026-11-18 reliability fix wave): honest isError at the ONE choke
+// point every CallTool response passes through before leaving this process ──
+//
+// Every per-tool branch inside the CallToolRequestSchema handler below already
+// sets `isError: true` on its own CATCH path (grep `isError: true` in this
+// file — dozens of sites, one per thrown-error shape). The gap this closes is
+// the OTHER shape: a tool function that does NOT throw, but whose returned
+// STRING is itself a failure envelope ("## Extract Failed", "## Browser Mode
+// Unavailable", ...) — those results fall through every one of those
+// `isError: true` sites untouched and default to `isError: false`
+// (2026-11-18 layer-study.md: 7/24 AWS-research calls were exactly this).
+//
+// Applied at the SINGLE point every branch's return value funnels through
+// (the handler is wrapped below, not each branch individually) — a result
+// already marked isError:true is left alone; a result not yet marked that way
+// is re-checked against looksLikeFailureEnvelope() (_core/errors.ts) for every
+// text block and flipped if any one matches.
+function applyHonestFailureFlag<T extends { content?: Array<{ type: string; text?: string }>; isError?: boolean }>(
+  result: T
+): T {
+  if (result?.isError === true || !Array.isArray(result?.content)) return result;
+  const hasFailureEnvelope = result.content.some(
+    (block) => block?.type === "text" && looksLikeFailureEnvelope(block.text)
+  );
+  return hasFailureEnvelope ? { ...result, isError: true } : result;
+}
+
 // ─── MCP Server ──────────────────────────────────────────────────────────────
 
 class NovadaMCPServer {
@@ -318,6 +345,11 @@ class NovadaMCPServer {
     });
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+      // F3: every `return` below resolves this IIFE instead of the outer handler
+      // directly — applyHonestFailureFlag() is the ONE choke point that sees
+      // every branch's result before it reaches the transport, regardless of
+      // which of the ~30 per-tool branches below produced it.
+      return applyHonestFailureFlag(await (async () => {
       const { name } = request.params;
       let args = request.params.arguments as Record<string, unknown> | undefined;
 
@@ -648,6 +680,7 @@ class NovadaMCPServer {
           isError: true,
         };
       }
+      })());
     });
   }
 

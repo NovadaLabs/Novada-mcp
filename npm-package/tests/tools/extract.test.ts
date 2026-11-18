@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import axios from "axios";
 import { novadaExtract } from "../../src/tools/extract.js";
 import { detectJsHeavyContent } from "../../src/utils/http.js";
@@ -1162,5 +1162,115 @@ describe("country param reaches fetchWithRender", () => {
       if (prevKey === undefined) delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
       else process.env.NOVADA_WEB_UNBLOCKER_KEY = prevKey;
     }
+  });
+});
+
+// ─── F1/F2 (2026-11-18 reliability fix wave) ──────────────────────────────────
+describe("F1: browser tier unavailable → falls back to render before failing", () => {
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "DEPLOYMENT_SUPPORTS_WS", "NOVADA_BROWSER_WS"]) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    // fetchWithRender only hits the Web Unblocker (axios.post) branch when a key is
+    // resolvable — see getWebUnblockerKey(). Without this, it silently falls back to
+    // a direct/proxy fetch and never exercises the render tier this test is about.
+    saved.NOVADA_WEB_UNBLOCKER_KEY = process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+  });
+  afterEach(() => {
+    for (const k of Object.keys(saved)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it("render='browser' with no runtime support and no creds tries render (Web Unblocker) instead of failing instantly", async () => {
+    // GitBook-sibling probe (fetchWithRetry -> axios.get) — ordinary non-GitBook page.
+    mockedAxios.get.mockResolvedValue({
+      data: "<html><body>not a gitbook page</body></html>",
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    // Render tier (fetchWithRender -> axios.post) returns usable content.
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html:
+        `<html><head><title>Rendered OK</title></head><body><main>` +
+        `<p>Real rendered content with enough prose to clear the quality threshold for this extraction test case here.</p>`.repeat(5) +
+        `</main></body></html>`, msg: "", msg_detail: "" } },
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://browser-fallback-test.example/page", render: "browser", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("Rendered OK");
+    expect(result).not.toContain("Browser Mode Unavailable");
+    expect(mockedAxios.post).toHaveBeenCalled(); // render WAS attempted
+  });
+
+  it("render='browser' on a serverless runtime (no DEPLOYMENT_SUPPORTS_WS) still reports unavailable when render ALSO fails, and says render was tried", async () => {
+    process.env.VERCEL = "1";
+    mockedAxios.get.mockResolvedValue({
+      data: "<html><body>not a gitbook page</body></html>",
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    // Render tier fails outright.
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (503): faulted"));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://browser-fallback-test-2.example/page", render: "browser", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("## Browser Mode Unavailable");
+    expect(result).toContain("render (Web Unblocker) fallback was attempted first and also failed");
+  });
+});
+
+describe("F2: render='auto' escalates on a fetch-level block-class error, not only on bad content", () => {
+  const savedUnblockerKey = process.env.NOVADA_WEB_UNBLOCKER_KEY;
+  beforeEach(() => {
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+  });
+  afterEach(() => {
+    if (savedUnblockerKey === undefined) delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    else process.env.NOVADA_WEB_UNBLOCKER_KEY = savedUnblockerKey;
+  });
+
+  it("escalates to render when both static legs reject with HTTP 403 (block-class)", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html:
+        `<html><head><title>Escalated OK</title></head><body><main>` +
+        `<p>Content recovered through the render tier after a 403 on both the direct and proxy legs in auto mode.</p>`.repeat(5) +
+        `</main></body></html>`, msg: "", msg_detail: "" } },
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://block-class-403-test.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("Escalated OK");
+    expect(mockedAxios.post).toHaveBeenCalled();
+  });
+
+  it("mirror: does NOT escalate when both static legs reject with HTTP 404 (not-escalate class)", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 404"), { isAxiosError: true, response: { status: 404 } })
+    );
+    clearCache();
+    // novadaExtract never rejects — a NOT_ESCALATE failure resolves to the same
+    // honest "## Extract Failed" text it always has (today's behavior, unchanged).
+    const result = await novadaExtract(
+      { url: "https://not-escalate-404-test.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("## Extract Failed");
+    expect(result).toContain("404");
+    expect(mockedAxios.post).not.toHaveBeenCalled(); // render was never attempted — matches today's behavior
   });
 });

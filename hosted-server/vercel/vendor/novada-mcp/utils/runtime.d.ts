@@ -49,8 +49,16 @@ export declare function isBrowserAvailableOnRuntime(): boolean;
  * @param fieldName   The param field name for the calling tool.
  *                    novada_extract uses `render=`; novada_unblock uses `method=`.
  *                    Defaults to "render" for backward-compat.
+ * @param renderAttempt  F1 (2026-11-18): when the caller already tried the render
+ *                    (Web Unblocker) tier as a fallback before giving up on browser,
+ *                    pass `{ tried: true, error? }` so the message is honest about
+ *                    what was actually attempted instead of reading like a
+ *                    zero-attempt failure.
  */
-export declare function getBrowserUnavailableError(paramValue?: string, fieldName?: string): string;
+export declare function getBrowserUnavailableError(paramValue?: string, fieldName?: string, renderAttempt?: {
+    tried: boolean;
+    error?: string;
+}): string;
 /**
  * Markdown-heading prefixes that novadaExtract (and its browser-tier fallback)
  * emit as a STRING instead of throwing, to signal a failed extraction:

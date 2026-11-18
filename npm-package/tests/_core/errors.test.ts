@@ -155,3 +155,142 @@ describe("summarizeAggregateError", () => {
     expect(result!.causes).toEqual(["cross-realm cause"]);
   });
 });
+
+// ─── F2 (2026-11-18 reliability fix wave): block-class fetch-failure classifier ──
+import { isBlockClassFetchFailure, BLOCK_CLASS_STATUSES, NOT_ESCALATE_STATUSES, looksLikeFailureEnvelope } from "../../src/_core/errors.js";
+
+function axiosLikeError(status: number): unknown {
+  return Object.assign(new Error(`Request failed with status code ${status}`), {
+    isAxiosError: true,
+    response: { status },
+  });
+}
+
+describe("isBlockClassFetchFailure — F2 escalation discriminator", () => {
+  it.each([...BLOCK_CLASS_STATUSES])("status %i escalates (block-class)", (status) => {
+    expect(isBlockClassFetchFailure(axiosLikeError(status))).toBe(true);
+  });
+
+  it.each([...NOT_ESCALATE_STATUSES])("status %i does NOT escalate (genuinely missing/unauthorized)", (status) => {
+    expect(isBlockClassFetchFailure(axiosLikeError(status))).toBe(false);
+  });
+
+  it("escalates when the status is buried inside an AggregateError's .errors list (the real Promise.any shape)", () => {
+    const agg = { name: "AggregateError", message: "All promises were rejected", errors: [axiosLikeError(404), axiosLikeError(403)] };
+    expect(isBlockClassFetchFailure(agg)).toBe(true);
+  });
+
+  it("does NOT escalate when every leg of an AggregateError is a not-escalate status", () => {
+    const agg = { name: "AggregateError", message: "All promises were rejected", errors: [axiosLikeError(404), axiosLikeError(401)] };
+    expect(isBlockClassFetchFailure(agg)).toBe(false);
+  });
+
+  it.each(["ECONNRESET", "ETIMEDOUT", "ECONNABORTED", "socket hang up"])(
+    "network pattern %s escalates even with no HTTP status at all",
+    (pattern) => {
+      expect(isBlockClassFetchFailure(new Error(`connect ${pattern}`))).toBe(true);
+    }
+  );
+
+  it("an unclassified error (no status, no recognized network pattern) does NOT escalate — conservative default", () => {
+    expect(isBlockClassFetchFailure(new Error("something weird happened"))).toBe(false);
+  });
+
+  it("a plain non-error value never throws and returns false", () => {
+    expect(isBlockClassFetchFailure(null)).toBe(false);
+    expect(isBlockClassFetchFailure(undefined)).toBe(false);
+    expect(isBlockClassFetchFailure("just a string")).toBe(false);
+  });
+});
+
+// ─── F3 (2026-11-18 reliability fix wave): honest-failure-envelope detector ──────
+describe("looksLikeFailureEnvelope — F3 honest isError discriminator", () => {
+  it.each([
+    "## Extract Failed\nurl: https://example.com\n\nError: timeout",
+    "## Browser Mode Unavailable\n\nrender=\"browser\" requires NOVADA_BROWSER_WS.",
+    "## Extraction Error\n\nsomething went wrong",
+    "## Search Unavailable\n\nScraper API not activated.",
+    "## Research Unavailable\n\nSearch failed with an account/authorization error.",
+    "## Verify Unavailable\n\nCannot verify this claim right now.",
+    "## Invalid Parameter \noperation 'x' is not valid",
+  ])("flags a known failure header as a failure envelope: %s", (text) => {
+    expect(looksLikeFailureEnvelope(text)).toBe(true);
+  });
+
+  it.each([
+    "## Extracted Content\nurl: https://example.com\nmode: static | quality:ok",
+    "## Search Results\n\n1. Example — https://example.com",
+    "## Researched source material for: topic\n\n...",
+    "## Scrape Results\n\n| field | value |",
+    "## Crawl Results\n\n...",
+    "## Site Map\n\n...",
+    "## Batch Extract Results\n\n...",
+  ])("does NOT flag a known success header: %s", (text) => {
+    expect(looksLikeFailureEnvelope(text)).toBe(false);
+  });
+
+  it("flags a genuine zero-result research failure via its status marker even though its header says 'Incomplete', not Failed/Error/Unavailable", () => {
+    const text = [
+      "## Research Incomplete",
+      "",
+      "All search queries returned 0 results.",
+      "",
+      "## Agent Action",
+      "agent_instruction: status:search_temporarily_failed | action: retry_once",
+    ].join("\n");
+    expect(looksLikeFailureEnvelope(text)).toBe(true);
+  });
+
+  it("does NOT flag research's partial-success shape (some sub-queries failed, but material was assembled)", () => {
+    const text = [
+      "## Researched source material for: topic",
+      "",
+      "some cited content here",
+      "",
+      "## Agent Action",
+      "agent_instruction: status:partial | requested_depth:deep | resolved_depth:deep | queries:4/6 | sources:5 | material:full | answer_ready:true",
+    ].join("\n");
+    expect(looksLikeFailureEnvelope(text)).toBe(false);
+  });
+
+  it("does NOT flag ordinary content that merely discusses errors/failures in its own body text", () => {
+    const text = [
+      "## Extracted Content",
+      "url: https://example.com/blog/how-we-handle-errors",
+      "mode: static | quality:ok (score:80/100) | content_present:true | content_ok:true",
+      "",
+      "This article explains how our error handling and failure recovery system works.",
+      "It discusses common error codes like 404 Not Found and 503 Service Unavailable.",
+    ].join("\n");
+    expect(looksLikeFailureEnvelope(text)).toBe(false);
+  });
+
+  it("is false-safe on non-string/empty input", () => {
+    expect(looksLikeFailureEnvelope("")).toBe(false);
+    expect(looksLikeFailureEnvelope(undefined)).toBe(false);
+    expect(looksLikeFailureEnvelope(null)).toBe(false);
+    expect(looksLikeFailureEnvelope(42)).toBe(false);
+  });
+});
+
+// ─── F3 wiring check — stdio index.ts (mirrors the hosted mcp.ts structural test) ──
+import { readFileSync } from "fs";
+import { join } from "path";
+import { fileURLToPath } from "url";
+const __dirnameErrorsTest = fileURLToPath(new URL(".", import.meta.url));
+const INDEX_TS = join(__dirnameErrorsTest, "..", "..", "src", "index.ts");
+
+describe("index.ts source: F3 single choke point wiring", () => {
+  it("defines applyHonestFailureFlag and wraps the CallToolRequestSchema handler with it", () => {
+    const src = readFileSync(INDEX_TS, "utf8");
+    assert_match(src, /function applyHonestFailureFlag/);
+    const handlerIdx = src.indexOf('this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {');
+    expect(handlerIdx).toBeGreaterThanOrEqual(0);
+    const handlerOpen = src.slice(handlerIdx, handlerIdx + 600);
+    assert_match(handlerOpen, /return applyHonestFailureFlag\(await \(async \(\) => \{/);
+  });
+});
+
+function assert_match(src: string, re: RegExp) {
+  expect(re.test(src)).toBe(true);
+}

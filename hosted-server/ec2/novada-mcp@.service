@@ -52,7 +52,13 @@ WorkingDirectory=/opt/novada-mcp/current
 EnvironmentFile=/etc/novada-mcp/env
 # PORT=%i: the instance name (e.g. `3000` in `novada-mcp@3000.service`)
 # becomes this instance's listen port — see server.mts's `PORT` env read.
-Environment=NODE_ENV=production PORT=%i HOST=127.0.0.1 WEB_CONCURRENCY=1
+# F1 (2026-11-18 reliability fix wave): opt-in override (utils/runtime.ts
+# isBrowserAvailableOnRuntime()) — this box is a persistent long-lived process
+# (not Vercel/Lambda serverless), so it CAN hold the CDP WebSocket the browser
+# tier needs. Without this, isHostedEnvironment()=true (server.mts forces
+# VERCEL=1 for npm-package code reuse) made the browser tier unconditionally
+# unavailable on EC2 even though nothing about THIS runtime actually prevents it.
+Environment=NODE_ENV=production PORT=%i HOST=127.0.0.1 WEB_CONCURRENCY=1 DEPLOYMENT_SUPPORTS_WS=true
 ExecStart=/usr/bin/node dist/server.mjs
 Restart=always
 RestartSec=2

@@ -171,6 +171,134 @@ export function summarizeAggregateError(err) {
         return null;
     }
 }
+// ─── Fetch-failure escalation classification (F2, 2026-11-18 reliability fix) ──
+//
+// render="auto" already escalates static→render→browser when a fetch SUCCEEDS
+// but returns bad CONTENT (bot-challenge / JS-heavy — see extract.ts). It did
+// NOT escalate when the fetch itself FAILS at the HTTP/network level — a 403 on
+// both the direct and proxy legs just propagated straight to the caller in <1s
+// (2026-11-18 layer-study.md Cluster 2: apnews.com, congress.gov, zeit.de,
+// nowsecure.nl all gave up this way while render="render" rescued half of them).
+//
+// Class table, not a one-site check: a status/network-error CLASS that means
+// "this request was actively blocked, a retry via a different fetch path might
+// get through" escalates; a class that means "this resource genuinely doesn't
+// exist / isn't authorized for anyone" does not — retrying via render would
+// waste 10-50s to reproduce the same verdict.
+export const BLOCK_CLASS_STATUSES = new Set([
+    403, 429, 503,
+    520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, // Cloudflare edge errors
+]);
+export const NOT_ESCALATE_STATUSES = new Set([400, 401, 404, 410]);
+/** Network-level error signatures (no HTTP status at all) that mean "the
+ *  connection itself was interfered with" — same escalate-worthy class as a
+ *  403/503, just surfaced by the transport instead of the server. */
+const BLOCK_CLASS_NETWORK_PATTERNS = [
+    /ECONNRESET/i,
+    /ETIMEDOUT/i,
+    /ECONNABORTED/i,
+    /\btimeout\b/i,
+    /\bEOF\b/i, // "unexpected eof while reading" — TLS-fingerprint rejection (layer-study §3)
+    /socket hang up/i,
+];
+/** Extracts every distinct HTTP status code present in `err` — including inside
+ *  an AggregateError's `.errors` list (the direct+proxy race in extract.ts's
+ *  "auto" mode rejects with one of these once BOTH legs fail). Returns an empty
+ *  array when no status is present anywhere (e.g. a pure network error). */
+function collectStatuses(err) {
+    const statuses = [];
+    const visit = (e) => {
+        // Duck-typed rather than `instanceof AxiosError`: any object carrying a
+        // `.response.status` (the shape axios errors — real AxiosError instances
+        // AND any equivalent mock/wrapper used in tests — always expose) is
+        // accepted. instanceof is brittle across module-mock boundaries (vitest's
+        // axios automock) and would silently classify nothing as block-class.
+        const status = e?.response?.status;
+        if (typeof status === "number")
+            statuses.push(status);
+        const errs = e?.errors;
+        if (Array.isArray(errs))
+            errs.forEach(visit);
+    };
+    visit(err);
+    return statuses;
+}
+/** True when `err` matches one of the network-level block-class patterns above,
+ *  checking every leg of an AggregateError (same recursive shape as collectStatuses). */
+function matchesBlockClassNetworkPattern(err) {
+    const visit = (e) => {
+        const msg = e instanceof Error ? `${e.message} ${e.code ?? ""}` : String(e);
+        if (BLOCK_CLASS_NETWORK_PATTERNS.some((re) => re.test(msg)))
+            return true;
+        const errs = e?.errors;
+        return Array.isArray(errs) ? errs.some(visit) : false;
+    };
+    return visit(err);
+}
+/**
+ * F2 discriminator: should a static/proxy fetch failure in render="auto" mode
+ * escalate to the render (Web Unblocker) tier, or fail as today?
+ *
+ * - ANY leg's status in BLOCK_CLASS_STATUSES, or any leg matching a block-class
+ *   network pattern → escalate (the block might not apply to a different fetch path).
+ * - No block-class signal anywhere, and at least one leg's status is in
+ *   NOT_ESCALATE_STATUSES (genuinely missing/unauthorized) → do not escalate.
+ * - No status at all and no recognized network pattern (unclassified) → do not
+ *   escalate, matching today's behavior — this function only ADDS escalation
+ *   cases it has positive evidence for, it never removes the existing floor.
+ */
+export function isBlockClassFetchFailure(err) {
+    if (matchesBlockClassNetworkPattern(err))
+        return true;
+    const statuses = collectStatuses(err);
+    return statuses.some((s) => BLOCK_CLASS_STATUSES.has(s));
+}
+// ─── Honest-failure detection (F3, 2026-11-18 reliability fix) ────────────────
+//
+// Many tools signal failure by RETURNING a normally-shaped string whose text
+// happens to describe a failure, instead of throwing — e.g. extract.ts returns
+// "## Extract Failed" / "## Browser Mode Unavailable" text from a successful
+// async function call. The MCP dispatch choke points (npm-package/src/index.ts,
+// hosted-server/vercel/api/mcp.ts) already set `isError: true` at every CATCH
+// site; this closes the other gap — a non-throwing result whose text IS the
+// failure. 2026-11-18 layer-study.md: 7 of 24 AWS-research tool calls were
+// exactly this shape (failure body, isError:false), which is why the problem
+// was invisible to both telemetry and the agent's own retry logic.
+//
+// Class table, enumerated by grepping every tool's own literal `## X` header
+// strings under npm-package/src/tools/*.ts (not guessed): every tool's SUCCESS
+// header is a fixed, distinct phrase ("## Extracted Content", "## Search
+// Results", "## Research", "## Scrape Results", "## Crawl Results", "## Site
+// Map", "## Batch Extract Results", ...) that never contains Failed/Error/
+// Unavailable/Invalid — so matching only the FIRST heading line is a safe,
+// low-false-positive discriminator; matching the whole body would
+// misclassify a page that discusses "errors" in its own content.
+// "## Research Incomplete" / "## Verify Incomplete" are deliberately NOT
+// matched — those are the partial-success shape this fix wave's own spec
+// requires to stay isError:false (material content despite some failed
+// sub-queries), distinct from Unavailable/Failed (no usable content at all).
+export const FAILURE_HEADER_RE = /^##\s+[^\n]*\b(?:Failed|Error|Unavailable|Invalid Parameter)\b/i;
+/** Marks a non-"## heading" failure signal some tools use instead/in addition
+ *  (e.g. "agent_instruction: status:failed", "status:browser_unavailable_on_runtime",
+ *  "status:search_unavailable"). Deliberately does NOT match "status:success" or
+ *  the many other non-failure status tokens (status:no_content is advisory, not
+ *  matched here — it is attached to results that already carry real content). */
+const FAILURE_STATUS_RE = /agent_instruction:\s*status:\s*(?:failed|[a-z0-9_]*unavailable|[a-z0-9_]*_failed)\b/i;
+/**
+ * True when `text` (a tool's returned result, NOT a thrown error) is itself a
+ * failure envelope per the class above. Checked ONLY against structured
+ * markers emitted by the tools' own formatters — never a loose keyword scan
+ * over the whole body, which would false-positive on legitimate content that
+ * happens to mention "error"/"failed".
+ */
+export function looksLikeFailureEnvelope(text) {
+    if (typeof text !== "string" || text.length === 0)
+        return false;
+    const firstLine = text.slice(0, 200).split("\n", 1)[0] ?? "";
+    if (FAILURE_HEADER_RE.test(firstLine))
+        return true;
+    return FAILURE_STATUS_RE.test(text);
+}
 // ─── agent_instruction Templates ─────────────────────────────────────────────
 const INSTRUCTIONS = {
     [NovadaErrorCode.INVALID_API_KEY]: `\

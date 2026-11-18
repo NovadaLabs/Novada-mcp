@@ -196,7 +196,7 @@ import {
   validateDiscoverParams,
 } from "../vendor/novada-mcp/tools/index.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
-import { NovadaError, NovadaErrorCode, classifyError } from "../vendor/novada-mcp/_core/errors.js";
+import { NovadaError, NovadaErrorCode, classifyError, looksLikeFailureEnvelope } from "../vendor/novada-mcp/_core/errors.js";
 // Real upstream key verification for validateToken — same wallet-balance probe
 // novada_setup already uses to confirm "does this key actually work".
 import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
@@ -204,6 +204,12 @@ import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
 // store-reading resolvers (getWebUnblockerKey → store.apiKey, resolveProxyCredentials,
 // resolveBrowserWs) use the CALLER's key on hosted instead of falling back to server env.
 import { withCredentials, resolveBrowserWs } from "../vendor/novada-mcp/utils/credentials.js";
+// F1 (2026-11-18): read-only lookup into the SAME domain registry extract.ts consults
+// internally, so this dispatch layer can tell WITHOUT re-implementing extract.ts's
+// escalation ladder whether a given novada_extract call will resolve to the browser
+// tier under render="auto" (a registry "browser" hint) — needed to decide whether the
+// caller-key browser-credential pre-resolution below is worth its latency cost.
+import { lookupDomain } from "../vendor/novada-mcp/utils/domains.js";
 // MCP prompts (tool-selection decision trees) — same module the npm server uses (1:1 parity). Static, safe on serverless.
 import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
 // MCP resources (catalog data: scraper platforms, search engines, countries, etc.)
@@ -1421,6 +1427,23 @@ function sentryBeforeBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrum
   return breadcrumb;
 }
 
+// F3 (2026-11-18 reliability fix wave) — hosted mirror of the same choke-point
+// fix in npm-package/src/index.ts: every per-tool branch inside the
+// CallToolRequestSchema handler below already sets isError:true on its own
+// catch path, but a tool that returns a failure-shaped STRING without
+// throwing ("## Extract Failed", "## Browser Mode Unavailable", ...) falls
+// through all of those untouched. Applied once, at the point every branch's
+// result funnels through (the handler is wrapped below), not per-branch.
+function applyHonestFailureFlag<T extends { content?: Array<{ type: string; text?: string }>; isError?: boolean }>(
+  result: T
+): T {
+  if (result?.isError === true || !Array.isArray(result?.content)) return result;
+  const hasFailureEnvelope = result.content.some(
+    (block) => block?.type === "text" && looksLikeFailureEnvelope(block.text)
+  );
+  return hasFailureEnvelope ? { ...result, isError: true } : result;
+}
+
 // ─── MCP server factory ──────────────────────────────────────────────────────
 function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; requestId: string; authMethod: AuthMethod | null; userAgent: string | null; surface: HostedSurface }): Server {
   const policy = SURFACE_POLICIES[ctx.surface];
@@ -1495,6 +1518,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
   };
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    // F3: every `return` below resolves this IIFE, not the outer handler
+    // directly — applyHonestFailureFlag() is the ONE choke point that sees
+    // every branch's result (including the one inside withCredentials()).
+    return applyHonestFailureFlag(await (async () => {
     const { name, arguments: args } = request.params;
     // Coerce form-playground stringified numbers/booleans ("num":"3") against
     // this tool's OWN advertised schema — ONCE, here, before any of this
@@ -1668,8 +1695,36 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // tenant-safe per-key cache) and seed it into the store so novadaBrowser uses it. If the
     // caller has no Browser entitlement this stays undefined and the tool returns its own
     // "Not Configured" message — no server-account fallback either way.
+    //
+    // F1 (2026-11-18 reliability fix wave, class-not-instance): this used to gate on
+    // `name === "novada_browser"` ONLY. novada_extract also consumes the browser tier
+    // (its render="browser" / DOMAIN_REGISTRY "browser" hint path calls fetchViaBrowser,
+    // which reads getBrowserWs() → the SAME AsyncLocalStorage store) but was never in
+    // this condition — so even with DEPLOYMENT_SUPPORTS_WS=true set on EC2,
+    // isBrowserAvailableOnRuntime() for an extract call would see `getBrowserWs()`
+    // return undefined (store.browserWs never seeded, NOVADA_BROWSER_WS stripped by
+    // stripServerConsumptionCreds()) and report browser unavailable regardless. Every
+    // tool whose implementation can reach fetchViaBrowser needs this gate — grep
+    // `fetchViaBrowser(` under npm-package/src/tools/ turns up exactly these two
+    // (novada_browser.ts, extract.ts) — add any future one here too.
+    //
+    // F1: for novada_extract specifically, only pay the auto-provision round-trip
+    // when this call can actually reach the browser tier — an explicit
+    // render="browser", OR (render omitted/"auto", the tool's own default) a
+    // DOMAIN_REGISTRY "browser" hint for this URL, same lookup extract.ts does
+    // internally. Without this check, EVERY novada_extract call (including the
+    // ~90% that never touch browser) would pay up to 4s of extra latency —
+    // exactly the "no regression on the easy/static path" requirement this fix
+    // wave is held to. novada_browser itself has no such narrowing: every call
+    // to it needs the browser tier by definition.
+    const extractNeedsBrowserTier = name === "novada_extract" && (
+      argsObj?.render === "browser" ||
+      ((argsObj?.render === undefined || argsObj?.render === "auto") &&
+        typeof argsObj?.url === "string" &&
+        lookupDomain(argsObj.url)?.method === "browser")
+    );
     let browserWs: string | undefined;
-    if (name === "novada_browser") {
+    if (name === "novada_browser" || extractNeedsBrowserTier) {
       // Bound the auto-provision round-trip: it runs BEFORE the withWallClock guard,
       // so a hung management API could otherwise push total latency toward the 60s
       // Vercel function limit. 4s cap → null → the tool emits its own "Not Configured".
@@ -1902,6 +1957,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       };
     }
     }); // end withCredentials
+    })());
   });
 
   // MCP prompts — list + get, delegated to the vendored prompts module (npm parity).

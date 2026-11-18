@@ -990,3 +990,36 @@ test("FAILURE_CLASS_MIRROR drift guard: resolveFailureClass never guesses for a 
   assert.equal(resolveFailureClass("SOME_RETIRED_CODE_NOT_IN_ANY_ENUM"), null);
   assert.equal(resolveFailureClass(null), null);
 });
+
+// ─── F1/F3 (2026-11-18 reliability fix wave) ──────────────────────────────────
+
+test("mcp.ts source: CallToolRequestSchema handler is wrapped by applyHonestFailureFlag (F3 single choke point)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  assert.match(src, /function applyHonestFailureFlag/, "applyHonestFailureFlag helper must be defined");
+  const handlerIdx = src.indexOf('server.setRequestHandler(CallToolRequestSchema, async (request) => {');
+  assert.ok(handlerIdx >= 0, "CallToolRequestSchema handler must exist");
+  const handlerOpen = src.slice(handlerIdx, handlerIdx + 400);
+  assert.match(
+    handlerOpen,
+    /return applyHonestFailureFlag\(await \(async \(\) => \{/,
+    "the CallToolRequestSchema handler body must be wrapped so EVERY branch's result passes through applyHonestFailureFlag before leaving this process"
+  );
+});
+
+test("mcp.ts source: applyHonestFailureFlag never overrides an already-isError:true result (only adds true, never removes it)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  const fnIdx = src.indexOf("function applyHonestFailureFlag");
+  assert.ok(fnIdx >= 0);
+  const fnSrc = src.slice(fnIdx, fnIdx + 600);
+  assert.match(fnSrc, /result\?\.isError === true.*return result/, "an explicit isError:true must short-circuit before the failure-envelope text scan");
+});
+
+test("mcp.ts source: F1 browser-tier caller-key pre-resolution covers both novada_browser and novada_extract (class, not instance)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  assert.match(
+    src,
+    /name === "novada_browser" \|\| extractNeedsBrowserTier/,
+    "the caller-key browser-credential pre-resolution gate must cover every tool that can reach fetchViaBrowser, not just novada_browser"
+  );
+  assert.match(src, /const extractNeedsBrowserTier = name === "novada_extract"/);
+});

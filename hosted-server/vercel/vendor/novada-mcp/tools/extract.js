@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitleFrom, extractDescriptionFrom, extractLinksFrom, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredDataFrom, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT, detectKuferAvailability, truncatePreservingTable, stripBoilerplate } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import { saveOutput } from "../utils/output.js";
-import { makeNovadaError, NovadaErrorCode, redactSecrets, summarizeAggregateError } from "../_core/errors.js";
+import { makeNovadaError, NovadaErrorCode, redactSecrets, summarizeAggregateError, isBlockClassFetchFailure } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
@@ -1030,9 +1030,19 @@ async function extractSingleInner(params, apiKey) {
     }
     const renderMode = params.render ?? "auto";
     const fetchedAt = new Date().toISOString();
-    let html;
+    // F2 (2026-11-18): initialized (was declared-but-unassigned) — the static/auto
+    // branch's response-handling now sits behind an `if (!fetchErrorEscalatedViaRender)`
+    // guard and runRenderTier() assigns `html` via closure (opaque to TS control-flow
+    // analysis), so the compiler can no longer prove every path assigns it before use.
+    // Every real control-flow path still overwrites this before `html` is read.
+    let html = "";
     let usedMode = "static";
     let renderError = null;
+    // F2 (2026-11-18): true once a static/proxy fetch-level failure has already been
+    // escalated to the render tier via runRenderTier() below. Guards the existing
+    // bad-CONTENT escalation check (~line 1420) from re-escalating the SAME request a
+    // second time — runRenderTier() already ran its own bot-challenge/browser handling.
+    let fetchErrorEscalatedViaRender = false;
     // PARAM-HONESTY: true only when `params.country` was actually included in the
     // fetch call whose result is the content currently held in `html`/`usedMode`.
     // fetchWithRender is called from three sites below — two forward params.country,
@@ -1074,48 +1084,33 @@ async function extractSingleInner(params, apiKey) {
         detectedAntiBot = domainHint.provider;
     }
     // Force modes (or registry-resolved modes) skip escalation logic
-    if (effectiveMode === "browser") {
-        // Bug1/Bug3 fix: pre-check runtime capability before attempting CDP connection.
-        // On serverless (Vercel/Lambda), connectOverCDP cannot hold the WS and fails with a raw
-        // "AuthorizationError" that looks like a credentials problem but is actually a transport
-        // limitation. Fail fast with a structured, actionable error instead.
-        // isBrowserAvailableOnRuntime() checks: isHostedEnvironment() (false on Vercel unless
-        // DEPLOYMENT_SUPPORTS_WS=true override) AND whether NOVADA_BROWSER_WS creds are set.
-        if (!isBrowserAvailableOnRuntime()) {
-            // NOV-GB2: BEFORE returning the browser-unavailable error, probe for a GitBook
-            // .md sibling. On the hosted endpoint browser is unavailable and this is the ONLY
-            // way GitBook docs content is reachable. A page can reach this branch via a
-            // route-memory / registry hint that pins "browser" for the host, so this probe
-            // must run here — not just in the auto/static ladder below.
-            //
-            // Cost guard (review HIGH #2): skip the probe when a known anti-bot provider is
-            // already identified (detectedAntiBot, set from domainHint.provider). Those domains
-            // genuinely require the CDP/browser tier and are never GitBook docs — probing them
-            // is a pure wasted fetch + proxy credit that ends in the same unavailable error.
-            // NOTE: we intentionally do NOT gate on a "gitbook" hostname substring — GitBook is
-            // frequently served on custom domains (e.g. developer.novada.com) with no such marker;
-            // the authoritative GitBook check is the CDN signature inside attemptGitBookMdFallback.
-            const probe = detectedAntiBot
-                ? ""
-                : await fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 8000 })
-                    .then(r => (typeof r.data === "string" ? r.data : ""))
-                    .catch(() => "");
-            const gb = probe ? await attemptGitBookMdFallback(params.url, probe) : null;
-            if (gb) {
-                gitbookMdContent = gb.md;
-                html = gb.html;
-                usedMode = "static";
-            }
-            else {
-                return getBrowserUnavailableError("browser");
-            }
-        }
-        else {
-            html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
-            usedMode = "browser";
-        }
-    }
-    else if (effectiveMode === "render") {
+    /**
+     * F1/F2 (2026-11-18 reliability fix wave): the render-tier (Web Unblocker) fetch
+     * + GitBook/bot-challenge handling, factored out of the `effectiveMode === "render"`
+     * branch so it can be invoked from THREE call sites instead of duplicating this
+     * logic:
+     *  (a) explicit render="render" (unchanged behavior — see call site below)
+     *  (b) F1: browser tier requested but unavailable on this runtime — try render
+     *      before giving up (layer-study.md Cluster 1: discord.com/glassdoor.com/
+     *      ticketmaster.com/g2.com failed instantly on hosted while direct Web
+     *      Unblocker calls succeeded on 5/8 antibot URLs in the same run)
+     *  (c) F2: static/auto fetch failed with a block-class HTTP status on BOTH legs
+     *      — escalate to render instead of propagating the raw fetch error
+     *      (layer-study.md Cluster 2: apnews.com/congress.gov/zeit.de/nowsecure.nl)
+     *
+     * Mutates the enclosing extractSingle()'s html/usedMode/gitbookMdContent/
+     * countryAppliedToServedContent closures exactly as the original inline branch
+     * did — callers must NOT re-derive these from a return value. The two
+     * early-return response formats (JSON/Markdown bodies) are expressed as a
+     * `{ terminal: true, value }` result instead of an early `return` from this
+     * nested function, so each caller decides whether to `return` them from
+     * extractSingle. Throws (bot-challenge with no browser fallback, non-HTML
+     * render response) exactly as the original branch did — callers (b) and (c)
+     * catch this to build an honest "render was also tried" failure message;
+     * caller (a) lets it propagate to extractSingle's own top-level catch,
+     * unchanged from today.
+     */
+    async function runRenderTier() {
         const response = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}), ...(params.country ? { country: params.country } : {}) });
         const contentType = String(response.headers?.["content-type"] ?? "");
         if (isPdfResponse(params.url, contentType)) {
@@ -1133,19 +1128,15 @@ async function extractSingleInner(params, apiKey) {
                 html = body;
             }
             else {
-                return formatJsonExtract(params.url, "render", body, params.max_chars, params.format);
+                return { terminal: true, value: formatJsonExtract(params.url, "render", body, params.max_chars, params.format) };
             }
         }
         else if (typeof response.data === "string" && (contentType.includes("text/markdown") || (contentType.includes("text/plain") && !bodyLooksLikeHtml(response.data)))) {
             // TOW2-307: text/markdown or text/plain bodies are ALREADY the final content —
             // never run them through Turndown (see formatMarkdownExtract's doc comment).
-            // This gate must run AHEAD of the generic HTML default below, which otherwise
-            // treats every non-JSON/non-PDF body as HTML and Turndown-converts it.
-            // text/plain that is actually HTML (mislabeled by raw CDNs) is excluded by
-            // bodyLooksLikeHtml so it falls through to real HTML extraction (review HIGH).
             const body = response.data;
             const isMarkdownCT = contentType.includes("text/markdown");
-            return formatMarkdownExtract(params.url, "render", body, params.max_chars, params.format, isMarkdownCT || looksLikeMarkdown(body), contentType);
+            return { terminal: true, value: formatMarkdownExtract(params.url, "render", body, params.max_chars, params.format, isMarkdownCT || looksLikeMarkdown(body), contentType) };
         }
         else {
             if (typeof response.data !== "string") {
@@ -1153,9 +1144,7 @@ async function extractSingleInner(params, apiKey) {
             }
             html = response.data;
         }
-        // NOV-GB2: render mode returned a GitBook shell — prefer the .md sibling. GitBook
-        // content lives in client bundles, so even a rendered fetch is often just chrome.
-        // The .md endpoint is authoritative and cheaper than a browser escalation.
+        // NOV-GB2: render mode returned a GitBook shell — prefer the .md sibling.
         if (typeof html === "string") {
             const gb = await attemptGitBookMdFallback(params.url, html);
             if (gb) {
@@ -1165,41 +1154,83 @@ async function extractSingleInner(params, apiKey) {
             }
         }
         // F2 / QW-4: Detect bot-challenge pages returned by the Web Unblocker (any size).
-        // A full-size Cloudflare interstitial (e.g., "Attention Required! | Cloudflare", "Sorry,
-        // you have been blocked") is several KB — the old html.length < 2000 guard missed it.
-        // Fix: run detectBotChallenge unconditionally; attempt browser escalation when available,
-        // otherwise surface a concrete error instead of silently returning interstitial text.
-        // NOV-GB2: if the .md fallback already resolved content, skip the bot-challenge
-        // escalation entirely — the synthetic wrapper is not a challenge page and must
-        // keep its "static" usedMode (set by attemptGitBookMdFallback above).
         if (gitbookMdContent === null && typeof html === "string" && detectBotChallenge(html)) {
             if (isBrowserConfigured()) {
                 const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => null);
-                // F2/R3: Use pickBetterHtml (quality-score comparison) instead of raw byte
-                // length to decide whether to accept the browser result. Raw length is
-                // unreliable because a padded Cloudflare interstitial (several KB) can be
-                // longer than a short-but-real page, causing good content to be discarded.
                 const best = pickBetterHtml({ html, mode: "render" }, { html: browserHtml ?? "", mode: "browser" }, params.url, useFullPage);
                 if (best.adopted) {
                     html = best.html;
                     usedMode = "browser";
                 }
                 else {
-                    // Browser also returned challenge / nothing better — surface as error
                     throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, "Render returned a bot challenge page", `url:${params.url} render=render returned a bot challenge page; browser escalation also failed`);
                 }
             }
             else {
-                // No browser configured — throw so the caller surfaces an honest error
                 throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, "Render returned a bot challenge page", `url:${params.url} render=render returned a bot challenge page (Cloudflare/anti-bot interstitial). ` +
                     `Use render=browser with NOVADA_BROWSER_WS configured, or try a different URL.`);
             }
         }
         else if (gitbookMdContent === null) {
             usedMode = "render";
-            // This branch's fetchWithRender call above forwarded params.country.
+            // This call forwarded params.country.
             countryAppliedToServedContent = Boolean(params.country);
         }
+        return { terminal: false };
+    }
+    // Force modes (or registry-resolved modes) skip escalation logic
+    if (effectiveMode === "browser") {
+        // Bug1/Bug3 fix: pre-check runtime capability before attempting CDP connection.
+        // On serverless (Vercel/Lambda), connectOverCDP cannot hold the WS and fails with a raw
+        // "AuthorizationError" that looks like a credentials problem but is actually a transport
+        // limitation. Fail fast with a structured, actionable error instead.
+        // isBrowserAvailableOnRuntime() checks: isHostedEnvironment() (false on Vercel unless
+        // DEPLOYMENT_SUPPORTS_WS=true override) AND whether NOVADA_BROWSER_WS creds are set.
+        if (!isBrowserAvailableOnRuntime()) {
+            // NOV-GB2: BEFORE falling back to render, probe for a GitBook .md sibling —
+            // the ONLY way GitBook docs content is reachable when browser is unavailable.
+            // Cost guard (review HIGH #2): skip when a known anti-bot provider is already
+            // identified — those domains are never GitBook docs.
+            const probe = detectedAntiBot
+                ? ""
+                : await fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 8000 })
+                    .then(r => (typeof r.data === "string" ? r.data : ""))
+                    .catch(() => "");
+            const gb = probe ? await attemptGitBookMdFallback(params.url, probe) : null;
+            if (gb) {
+                gitbookMdContent = gb.md;
+                html = gb.html;
+                usedMode = "static";
+            }
+            else {
+                // F1 (2026-11-18): try the render (Web Unblocker) tier BEFORE giving up.
+                // The runtime can't do CDP, but Web Unblocker may still get through —
+                // layer-study.md Cluster 1 measured 5/8 antibot URLs succeeding via direct
+                // Web Unblocker while this exact branch failed in <1s with zero attempts.
+                try {
+                    const r = await runRenderTier();
+                    if (r.terminal)
+                        return r.value;
+                    // runRenderTier succeeded (no throw): html/usedMode are set — fall
+                    // through to the shared formatting pipeline below, same as any other mode.
+                }
+                catch (renderFallbackErr) {
+                    return getBrowserUnavailableError("browser", "render", {
+                        tried: true,
+                        error: renderFallbackErr instanceof Error ? renderFallbackErr.message : String(renderFallbackErr),
+                    });
+                }
+            }
+        }
+        else {
+            html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
+            usedMode = "browser";
+        }
+    }
+    else if (effectiveMode === "render") {
+        const r = await runRenderTier();
+        if (r.terminal)
+            return r.value;
     }
     else {
         // Auto or static:
@@ -1208,174 +1239,220 @@ async function extractSingleInner(params, apiKey) {
         // Direct "wins" only if it returns clean HTML (no bot challenge, no JS-heavy indicators).
         // Bot-protected or JS-heavy: direct rejects, proxy result is used — no change in behavior.
         const domainProxyTier = domainHint?.proxyTier;
-        const response = await (effectiveMode === "auto"
-            ? Promise.any([
-                fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
-                    .then(r => {
-                    const body = typeof r.data === "string" ? r.data : null;
-                    if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body))
-                        return r;
-                    // FIX-A polish: a descriptive rejection reason (not a bare sentinel like
-                    // "not-static") so that if this leg ends up inside an AggregateError's
-                    // cause list (summarizeAggregateError), the surfaced cause is actionable
-                    // rather than an internal implementation detail.
-                    throw new Error("direct fetch returned bot-challenge/JS-heavy content, deferring to proxy");
-                }),
-                fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }),
-            ]).catch(err => {
-                // FIX-A (2026-07-30): a bare Promise.any AggregateError leaks the literal
-                // "All promises were rejected" — zero actionable content (live report:
-                // extracting cell.com surfaced this raw string, agent guessed "可能是限流").
-                // Map it to a NovadaError carrying the DISTINCT underlying causes so the
-                // top-level catch + getSuggestedFix below can build a real agent_instruction.
-                // Non-aggregate rejections (e.g. a single fetch throwing directly) pass
-                // through completely unchanged — never mask the original error.
-                const agg = summarizeAggregateError(err);
-                if (!agg)
-                    throw err;
-                throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, agg.message, `url:${params.url} direct-fetch and proxy-fetch both rejected`);
-            })
-            : fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }));
-        const contentType = String(response.headers?.["content-type"] ?? "");
-        if (isPdfResponse(params.url, contentType)) {
-            const pdfBuffer = Buffer.isBuffer(response.data)
-                ? response.data
-                : Buffer.from(response.data, "binary");
-            const pdf = await extractPdf(pdfBuffer);
-            html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
+        let response = null;
+        try {
+            response = await (effectiveMode === "auto"
+                ? Promise.any([
+                    fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
+                        .then(r => {
+                        const body = typeof r.data === "string" ? r.data : null;
+                        if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body))
+                            return r;
+                        // FIX-A polish: a descriptive rejection reason (not a bare sentinel like
+                        // "not-static") so that if this leg ends up inside an AggregateError's
+                        // cause list (summarizeAggregateError), the surfaced cause is actionable
+                        // rather than an internal implementation detail.
+                        throw new Error("direct fetch returned bot-challenge/JS-heavy content, deferring to proxy");
+                    }),
+                    fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }),
+                ])
+                : fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }));
         }
-        else if (contentType.includes("application/json")) {
-            const body = typeof response.data === "string"
-                ? response.data
-                : JSON.stringify(response.data, null, 2);
-            if (body.trimStart().startsWith("<")) {
-                html = body;
+        catch (fetchErr) {
+            // F2 (2026-11-18): a fetch-LEVEL failure (both legs rejected, e.g. both HTTP
+            // 403) used to propagate straight to extractSingle's top-level catch in <1s —
+            // render="auto" claims to escalate automatically but never got the chance to
+            // try. Escalate here, on the SAME block-class/not-escalate discriminator the
+            // bad-CONTENT escalation below already uses.
+            //
+            // Gate on `renderMode === "auto"` — the CALLER's original request — not
+            // `effectiveMode === "auto"`. Live-verified against production apnews.com
+            // (2026-11-18 A/B check): DOMAIN_REGISTRY pins apnews.com to method:"static",
+            // so with a caller's render="auto", `effectiveMode` resolves to "static" and
+            // ONLY fetchViaProxy ever runs (no Promise.any race at all) — gating on
+            // effectiveMode would silently exclude every registry-pinned-static host from
+            // the escalation this fix exists to add, which is exactly the apnews.com
+            // Cluster 2 case layer-study.md cites. The registry only picks the FETCH
+            // METHOD (an efficiency optimization — skip the auto-detection probe); it is
+            // not a promise that a caller's render="auto" escalation intent is void. An
+            // explicit render="static" caller (renderMode, not effectiveMode, is "static")
+            // asked for static-only and must still fail as today — only a caller-level
+            // "auto" claims an automatic escalation ladder.
+            if (renderMode === "auto" && isBlockClassFetchFailure(fetchErr)) {
+                try {
+                    const r = await runRenderTier();
+                    fetchErrorEscalatedViaRender = true;
+                    if (r.terminal)
+                        return r.value;
+                    // success — html/usedMode set by runRenderTier(); `response` stays null
+                    // and the content-type handling below is skipped via the guard that follows.
+                }
+                catch (renderErr) {
+                    // Render ALSO failed — surface the ORIGINAL fetch error (today's message
+                    // shape, via summarizeAggregateError below) so existing suggested_fix
+                    // text keeps working, but note that render was genuinely attempted so a
+                    // caller/agent can see this was not a zero-attempt give-up.
+                    const agg = summarizeAggregateError(fetchErr);
+                    const baseMsg = agg?.message ?? (fetchErr instanceof Error ? fetchErr.message : String(fetchErr));
+                    throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, baseMsg, `url:${params.url} direct-fetch and proxy-fetch both rejected (block-class); render escalation also failed: ${renderErr instanceof Error ? renderErr.message : String(renderErr)}`);
+                }
             }
             else {
-                return formatJsonExtract(params.url, "static", body, params.max_chars, params.format);
+                // FIX-A (2026-07-30): a bare Promise.any AggregateError leaks the literal
+                // "All promises were rejected" — zero actionable content. Map it to a
+                // NovadaError carrying the DISTINCT underlying causes. Non-aggregate
+                // rejections (e.g. a single fetch throwing directly) pass through unchanged.
+                const agg = summarizeAggregateError(fetchErr);
+                if (!agg)
+                    throw fetchErr;
+                throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, agg.message, `url:${params.url} direct-fetch and proxy-fetch both rejected`);
             }
         }
-        else if (typeof response.data === "string" && (contentType.includes("text/markdown") || (contentType.includes("text/plain") && !bodyLooksLikeHtml(response.data)))) {
-            // TOW2-307: text/markdown or text/plain bodies are ALREADY the final content —
-            // never run them through Turndown (see formatMarkdownExtract's doc comment).
-            // This gate must run AHEAD of the generic HTML default below, which otherwise
-            // treats every non-JSON/non-PDF body as HTML and Turndown-converts it.
-            // text/plain that is actually HTML (mislabeled by raw CDNs) is excluded by
-            // bodyLooksLikeHtml so it falls through to real HTML extraction (review HIGH).
-            const body = response.data;
-            const isMarkdownCT = contentType.includes("text/markdown");
-            return formatMarkdownExtract(params.url, "static", body, params.max_chars, params.format, isMarkdownCT || looksLikeMarkdown(body), contentType);
-        }
-        else {
-            if (typeof response.data !== "string") {
-                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "Response is not HTML. The URL may return JSON or binary data.", `url:${params.url} returned non-string content-type`);
+        if (!fetchErrorEscalatedViaRender) {
+            // response is non-null here: either the try block above succeeded, or an F2
+            // escalation handled/threw before reaching this point.
+            const r = response;
+            const contentType = String(r.headers?.["content-type"] ?? "");
+            if (isPdfResponse(params.url, contentType)) {
+                const pdfBuffer = Buffer.isBuffer(r.data)
+                    ? r.data
+                    : Buffer.from(r.data, "binary");
+                const pdf = await extractPdf(pdfBuffer);
+                html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
             }
-            html = response.data;
-        }
-        // GitBook .md fallback (NOV-GB1 / NOV-GB2):
-        // If the static HTML is served by GitBook (CDN signature), fetch the authoritative
-        // <url>.md sibling BEFORE any render/browser escalation. This is a free, no-JS path
-        // that works on the hosted (Vercel) endpoint where render 503s and browser is
-        // unavailable. See attemptGitBookMdFallback for the full detection contract.
-        // NOV-GB2 fix: gate on the GitBook CDN signature ALONE — NOT detectJsHeavyContent,
-        // which returns false on modern GitBook's ~500KB shell (no __next/id=root markers).
-        {
-            const gb = await attemptGitBookMdFallback(params.url, html);
-            if (gb) {
-                gitbookMdContent = gb.md;
-                html = gb.html;
-                usedMode = "static";
+            else if (contentType.includes("application/json")) {
+                const body = typeof r.data === "string"
+                    ? r.data
+                    : JSON.stringify(r.data, null, 2);
+                if (body.trimStart().startsWith("<")) {
+                    html = body;
+                }
+                else {
+                    return formatJsonExtract(params.url, "static", body, params.max_chars, params.format);
+                }
             }
-        }
-        // Skip JS detection if we already have PDF content (no escalation needed).
-        // Also skip if domainHint resolved this domain — DOMAIN_REGISTRY classification is
-        // authoritative for known domains and overrides JS-heavy detection heuristics.
-        // NOV-GB1: also skip when the GitBook .md fallback already resolved the content —
-        // the synthetic HTML wrapper we built is NOT JS-heavy; avoid a false re-escalation.
-        if (renderMode === "auto" && !domainHint && !html.startsWith("pdf_pages:") && !gitbookMdContent && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
-            // Identify anti-bot provider from the static HTML before escalation
-            detectedAntiBot = identifyAntiBot(html);
-            // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
-            try {
-                const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(params.country ? { country: params.country } : {}) });
-                const renderHtml = String(renderResponse.data);
-                if (detectBotChallenge(renderHtml)) {
-                    // Re-check anti-bot on render result (may differ from static)
-                    detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
-                    // Render returned a bot challenge page — escalate to browser if available
-                    if (isBrowserConfigured()) {
-                        // #1/#12: browser can throw or return an empty challenge stub. Keep the
-                        // static html (still in `html`) when the browser result isn't better.
+            else if (typeof r.data === "string" && (contentType.includes("text/markdown") || (contentType.includes("text/plain") && !bodyLooksLikeHtml(r.data)))) {
+                // TOW2-307: text/markdown or text/plain bodies are ALREADY the final content —
+                // never run them through Turndown (see formatMarkdownExtract's doc comment).
+                // This gate must run AHEAD of the generic HTML default below, which otherwise
+                // treats every non-JSON/non-PDF body as HTML and Turndown-converts it.
+                // text/plain that is actually HTML (mislabeled by raw CDNs) is excluded by
+                // bodyLooksLikeHtml so it falls through to real HTML extraction (review HIGH).
+                const body = r.data;
+                const isMarkdownCT = contentType.includes("text/markdown");
+                return formatMarkdownExtract(params.url, "static", body, params.max_chars, params.format, isMarkdownCT || looksLikeMarkdown(body), contentType);
+            }
+            else {
+                if (typeof r.data !== "string") {
+                    throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "Response is not HTML. The URL may return JSON or binary data.", `url:${params.url} returned non-string content-type`);
+                }
+                html = r.data;
+            }
+            // GitBook .md fallback (NOV-GB1 / NOV-GB2):
+            // If the static HTML is served by GitBook (CDN signature), fetch the authoritative
+            // <url>.md sibling BEFORE any render/browser escalation. This is a free, no-JS path
+            // that works on the hosted (Vercel) endpoint where render 503s and browser is
+            // unavailable. See attemptGitBookMdFallback for the full detection contract.
+            // NOV-GB2 fix: gate on the GitBook CDN signature ALONE — NOT detectJsHeavyContent,
+            // which returns false on modern GitBook's ~500KB shell (no __next/id=root markers).
+            {
+                const gb = await attemptGitBookMdFallback(params.url, html);
+                if (gb) {
+                    gitbookMdContent = gb.md;
+                    html = gb.html;
+                    usedMode = "static";
+                }
+            }
+            // Skip JS detection if we already have PDF content (no escalation needed).
+            // Also skip if domainHint resolved this domain — DOMAIN_REGISTRY classification is
+            // authoritative for known domains and overrides JS-heavy detection heuristics.
+            // NOV-GB1: also skip when the GitBook .md fallback already resolved the content —
+            // the synthetic HTML wrapper we built is NOT JS-heavy; avoid a false re-escalation.
+            if (renderMode === "auto" && !domainHint && !html.startsWith("pdf_pages:") && !gitbookMdContent && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
+                // Identify anti-bot provider from the static HTML before escalation
+                detectedAntiBot = identifyAntiBot(html);
+                // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
+                try {
+                    const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(params.country ? { country: params.country } : {}) });
+                    const renderHtml = String(renderResponse.data);
+                    if (detectBotChallenge(renderHtml)) {
+                        // Re-check anti-bot on render result (may differ from static)
+                        detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
+                        // Render returned a bot challenge page — escalate to browser if available
+                        if (isBrowserConfigured()) {
+                            // #1/#12: browser can throw or return an empty challenge stub. Keep the
+                            // static html (still in `html`) when the browser result isn't better.
+                            const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
+                            const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+                            html = best.html;
+                            usedMode = best.mode;
+                            antiBotResolved = best.adopted;
+                            if (!best.adopted) {
+                                usedMode = "render-failed";
+                                renderError = "Render returned a bot challenge page; browser fallback returned no better content";
+                            }
+                        }
+                        else {
+                            // No browser available — keep static html, mark as failed
+                            usedMode = "render-failed";
+                            renderError = "Render returned a bot challenge page";
+                        }
+                    }
+                    else if (!detectJsHeavyContent(renderHtml)) {
+                        html = renderHtml;
+                        usedMode = "render";
+                        antiBotResolved = detectedAntiBot !== null;
+                        // The fetchWithRender call above (line ~1154) forwarded params.country.
+                        countryAppliedToServedContent = Boolean(params.country);
+                    }
+                    else if (isBrowserConfigured()) {
+                        // render also JS-heavy — try full browser
+                        // #1/#12: keep the best of {static html, render html, browser html}.
                         const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
-                        const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+                        // Compare browser against render (render is JS-heavy but still better than static here).
+                        const best = pickBetterHtml({ html: renderHtml, mode: "render" }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
                         html = best.html;
                         usedMode = best.mode;
                         antiBotResolved = best.adopted;
-                        if (!best.adopted) {
-                            usedMode = "render-failed";
-                            renderError = "Render returned a bot challenge page; browser fallback returned no better content";
+                        // Review round 2 (HIGH): unlike its two siblings above/below, this branch
+                        // offers the country-fetched renderHtml itself as a pickBetterHtml candidate
+                        // (mode:"render") — so when the browser candidate does NOT win (best.adopted
+                        // false, best.mode stays "render"), the SERVED content is that render fetch,
+                        // which forwarded params.country at line ~1154. Must be set here too, not
+                        // just in the two branches that skip pickBetterHtml entirely.
+                        if (usedMode === "render") {
+                            countryAppliedToServedContent = Boolean(params.country);
                         }
                     }
                     else {
-                        // No browser available — keep static html, mark as failed
-                        usedMode = "render-failed";
-                        renderError = "Render returned a bot challenge page";
-                    }
-                }
-                else if (!detectJsHeavyContent(renderHtml)) {
-                    html = renderHtml;
-                    usedMode = "render";
-                    antiBotResolved = detectedAntiBot !== null;
-                    // The fetchWithRender call above (line ~1154) forwarded params.country.
-                    countryAppliedToServedContent = Boolean(params.country);
-                }
-                else if (isBrowserConfigured()) {
-                    // render also JS-heavy — try full browser
-                    // #1/#12: keep the best of {static html, render html, browser html}.
-                    const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
-                    // Compare browser against render (render is JS-heavy but still better than static here).
-                    const best = pickBetterHtml({ html: renderHtml, mode: "render" }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
-                    html = best.html;
-                    usedMode = best.mode;
-                    antiBotResolved = best.adopted;
-                    // Review round 2 (HIGH): unlike its two siblings above/below, this branch
-                    // offers the country-fetched renderHtml itself as a pickBetterHtml candidate
-                    // (mode:"render") — so when the browser candidate does NOT win (best.adopted
-                    // false, best.mode stays "render"), the SERVED content is that render fetch,
-                    // which forwarded params.country at line ~1154. Must be set here too, not
-                    // just in the two branches that skip pickBetterHtml entirely.
-                    if (usedMode === "render") {
+                        // render worked but still JS-heavy, use it (better than static)
+                        html = renderHtml;
+                        usedMode = "render";
+                        // Same fetchWithRender call as above — params.country was forwarded.
                         countryAppliedToServedContent = Boolean(params.country);
                     }
                 }
-                else {
-                    // render worked but still JS-heavy, use it (better than static)
-                    html = renderHtml;
-                    usedMode = "render";
-                    // Same fetchWithRender call as above — params.country was forwarded.
-                    countryAppliedToServedContent = Boolean(params.country);
-                }
-            }
-            catch (err) {
-                // Early exit for SSL/TLS certificate errors — escalation won't fix server-side cert issues
-                const certMsg = err instanceof Error ? err.message : String(err);
-                const isCertError = certMsg?.includes('CERT_') || certMsg?.includes('SSL') || certMsg?.includes('certificate');
-                if (isCertError) {
-                    throw new Error(`SSL certificate error for ${params.url}. The site has an invalid/expired certificate. agent_instruction: This is a server-side issue, not fixable by changing render mode.`);
-                }
-                // render threw — try Browser API if available
-                renderError = err instanceof Error ? err.message : String(err);
-                if (isBrowserConfigured()) {
-                    // #1/#12: browser can also fail/return empty. Keep the static html (in `html`)
-                    // when the browser result isn't better, instead of returning near-empty.
-                    const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
-                    const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
-                    html = best.html;
-                    usedMode = best.adopted ? best.mode : "render-failed";
-                    antiBotResolved = best.adopted;
-                }
-                else {
-                    usedMode = "render-failed";
+                catch (err) {
+                    // Early exit for SSL/TLS certificate errors — escalation won't fix server-side cert issues
+                    const certMsg = err instanceof Error ? err.message : String(err);
+                    const isCertError = certMsg?.includes('CERT_') || certMsg?.includes('SSL') || certMsg?.includes('certificate');
+                    if (isCertError) {
+                        throw new Error(`SSL certificate error for ${params.url}. The site has an invalid/expired certificate. agent_instruction: This is a server-side issue, not fixable by changing render mode.`);
+                    }
+                    // render threw — try Browser API if available
+                    renderError = err instanceof Error ? err.message : String(err);
+                    if (isBrowserConfigured()) {
+                        // #1/#12: browser can also fail/return empty. Keep the static html (in `html`)
+                        // when the browser result isn't better, instead of returning near-empty.
+                        const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
+                        const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+                        html = best.html;
+                        usedMode = best.adopted ? best.mode : "render-failed";
+                        antiBotResolved = best.adopted;
+                    }
+                    else {
+                        usedMode = "render-failed";
+                    }
                 }
             }
         }

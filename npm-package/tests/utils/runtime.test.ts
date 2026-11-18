@@ -86,9 +86,14 @@ describe("getBrowserUnavailableError", () => {
     // Points to local MCP setup as alternative
     expect(msg).toContain("npx -y novada-mcp");
     expect(msg).toContain('render="render"');
-    // Explains WHY so agent knows this is a transport issue not auth issue
-    expect(msg).toContain("serverless");
+    // Explains WHY so agent knows this is a transport issue not auth issue.
+    // F1 (2026-11-18): must NOT name a specific platform ("Vercel serverless")
+    // — isHostedEnvironment() can't distinguish EC2 from Vercel (both set the
+    // same VERCEL env var per server.mts), so claiming "Vercel" specifically
+    // would be false on the current EC2 production deployment.
     expect(msg).toContain("WebSocket");
+    expect(msg).not.toContain("serverless");
+    expect(msg).not.toContain("Vercel");
   });
 
   it("mentions 'AuthorizationError' is a transport failure, not credentials error", () => {

@@ -81,6 +81,30 @@ export declare function summarizeAggregateError(err: unknown): {
     message: string;
     causes: string[];
 } | null;
+export declare const BLOCK_CLASS_STATUSES: ReadonlySet<number>;
+export declare const NOT_ESCALATE_STATUSES: ReadonlySet<number>;
+/**
+ * F2 discriminator: should a static/proxy fetch failure in render="auto" mode
+ * escalate to the render (Web Unblocker) tier, or fail as today?
+ *
+ * - ANY leg's status in BLOCK_CLASS_STATUSES, or any leg matching a block-class
+ *   network pattern → escalate (the block might not apply to a different fetch path).
+ * - No block-class signal anywhere, and at least one leg's status is in
+ *   NOT_ESCALATE_STATUSES (genuinely missing/unauthorized) → do not escalate.
+ * - No status at all and no recognized network pattern (unclassified) → do not
+ *   escalate, matching today's behavior — this function only ADDS escalation
+ *   cases it has positive evidence for, it never removes the existing floor.
+ */
+export declare function isBlockClassFetchFailure(err: unknown): boolean;
+export declare const FAILURE_HEADER_RE: RegExp;
+/**
+ * True when `text` (a tool's returned result, NOT a thrown error) is itself a
+ * failure envelope per the class above. Checked ONLY against structured
+ * markers emitted by the tools' own formatters — never a loose keyword scan
+ * over the whole body, which would false-positive on legitimate content that
+ * happens to mention "error"/"failed".
+ */
+export declare function looksLikeFailureEnvelope(text: unknown): boolean;
 /**
  * Review round 1 (2026-07-30, CRITICAL — live-verified over stdio, and LIVE in
  * prod on mcp.novada.com v0.9.32 today): every newline-handling pattern in this
