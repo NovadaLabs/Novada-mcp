@@ -1101,13 +1101,13 @@ const GENERIC_RESCUE_HOSTS = ["web.archive.org", "archive.ph", "archive.today", 
  * fires on a HOST that is itself in the rescue table (a scheme/www/trailing-slash
  * change alone never changes which host is in that table).
  */
-function isRedirectedAwayFromRequestedPage(requestedUrl, finalUrl) {
-    if (!finalUrl)
-        return false; // unknown (e.g. render tier, or a mocked transport in tests) — never guess
+function isRedirectedAwayFromRequestedPage(requestedUrl, servedFrom) {
+    if (!servedFrom)
+        return false; // unknown (no tier/content-identity signal at all) — never guess
     let req, fin;
     try {
         req = new URL(requestedUrl);
-        fin = new URL(finalUrl);
+        fin = new URL(servedFrom);
     }
     catch {
         return false;
@@ -1122,6 +1122,41 @@ function isRedirectedAwayFromRequestedPage(requestedUrl, finalUrl) {
     if (reqPath === "" || reqPath === "/")
         return false; // request already targeted the homepage
     return finPath === "" || finPath === "/";
+}
+/**
+ * B2 round 3 (independent review HIGH): the served content's OWN self-reported
+ * identity — `<link rel="canonical">` first, `<meta property="og:url">` second —
+ * used as `servedFrom` whenever the tier that produced the FINAL content can't
+ * disclose its own final URL. This is every tier except the static/proxy leg:
+ * Web Unblocker's response envelope carries no URL field at all (`{code, data:
+ * {code, html, msg, msg_detail}}` — confirmed by reading `fetchWithRender`'s
+ * destructuring, nothing to read), and a browser/Wayback/GitBook-served page is
+ * likewise read by its OWN markup here rather than by plumbing each transport's
+ * internal navigation URL through every call site.
+ *
+ * This is the fix for round 2's remaining false negative (live-reproduced):
+ * round 2 ONLY trusted the static leg's disclosed redirect target, and skipped
+ * the check entirely for any other tier (never flagging, never guessing) — which
+ * correctly let a Wayback RESCUE through, but ALSO let a render/browser
+ * escalation that re-fetched the exact SAME wrong page (just a richer render of
+ * it) slip past as a false success, because the richer copy's quality score
+ * cleared the content-present floor. A real homepage/landing page almost always
+ * self-canonicalizes; a genuinely-correct deep page's own markup canonicalizes
+ * to itself — so this one signal, applied uniformly, catches "escalation
+ * reproduced the same wrong page" while still passing "escalation recovered the
+ * real page" and "Wayback rescued the real page", without the function needing
+ * to know which tier produced the content at all.
+ */
+function extractCanonicalOrOgUrl($doc) {
+    if (!$doc)
+        return null;
+    const canonical = $doc('link[rel="canonical"]').attr("href");
+    if (canonical && canonical.trim())
+        return canonical.trim();
+    const ogUrl = $doc('meta[property="og:url"]').attr("content");
+    if (ogUrl && ogUrl.trim())
+        return ogUrl.trim();
+    return null;
 }
 /**
  * Error/boilerplate-only page signatures: a body whose ENTIRE content is one of these
@@ -2140,18 +2175,31 @@ async function extractSingleInner(params, apiKey) {
     // this SAME boolean (3-way OR, not a parallel gate) — a redirect that landed on an
     // unrelated homepage/archive-snapshot instead of the requested page, and a body that
     // IS a CDN error stub or cookie-wall rather than real content.
-    // `finalUrl` is only meaningful for the CONTENT currently held in `html` when `html`
-    // is STILL the exact string the static/proxy leg produced (reference-compared against
-    // `htmlAtFinalUrlCapture`, snapshotted at the moment `finalUrl` was captured — see
-    // that declaration's comment). Round 1 gated this on `usedMode === "static"` instead,
-    // which missed the Wayback rescue (P2-1, below) and the GitBook .md fallback: both
-    // replace `html`/`mainContent` with a DIFFERENT fetch's content while leaving
-    // `usedMode` at `"static"`, so a legitimately rescued page was discarded as a false
-    // `wrong_page` (independent review HIGH, round 1). Comparing the content itself — the
-    // same re-derive-from-current-state approach `hydrationSuspectFinal` already uses
-    // below — covers every present AND future content-replacing branch by construction,
-    // not just the ones audited by hand.
-    const redirectedAwayFromRequestedPage = html === htmlAtFinalUrlCapture && isRedirectedAwayFromRequestedPage(params.url, finalUrl);
+    // `servedFrom` — the best available evidence of WHERE the content actually being
+    // returned came from, re-derived from the FINAL state (same re-derive-from-current-
+    // state approach `hydrationSuspectFinal` already uses below), not threaded through
+    // every escalation branch by hand:
+    //   1. the static/proxy leg's own disclosed redirect target (`finalUrl`), but ONLY
+    //      while `html` is STILL reference-identical to the snapshot taken at the moment
+    //      `finalUrl` was captured (`htmlAtFinalUrlCapture`) — i.e. only while it still
+    //      describes the content currently being judged.
+    //   2. otherwise, the served content's OWN self-reported identity (canonical link /
+    //      og:url) — covers every other tier uniformly (render/Web Unblocker discloses no
+    //      URL field at all; browser/Wayback/GitBook are read the same way) without
+    //      needing to know which one produced the content.
+    //
+    // Round 1 gated signal #1 on `usedMode === "static"`, which missed the Wayback rescue
+    // and GitBook .md fallback (both replace content while leaving usedMode at "static").
+    // Round 2 fixed that by requiring #1's html-identity check, but with NO fallback when
+    // it failed — so round 2 correctly let the Wayback RESCUE through, but also let a
+    // render/browser escalation that re-fetched the exact SAME wrong page (just a richer
+    // render of it, clearing the content-present floor on its own) slip past as a false
+    // success (independent review HIGH, round 2 — live-reproduced). Adding #2 closes that
+    // gap: the re-fetched wrong page's own canonical/og:url still points at the wrong
+    // page, so it is still caught; a render/browser fetch that recovers the REAL page
+    // canonicalizes to itself and is correctly left alone.
+    const servedFrom = html === htmlAtFinalUrlCapture && finalUrl ? finalUrl : extractCanonicalOrOgUrl($doc);
+    const redirectedAwayFromRequestedPage = isRedirectedAwayFromRequestedPage(params.url, servedFrom);
     const boilerplateOnlyPage = hasBoilerplateOnlySignature(mainContent);
     const isChallengePage = detectedAntiBot !== null ||
         (typeof html === "string" && detectBotChallenge(html)) ||
@@ -2204,13 +2252,13 @@ async function extractSingleInner(params, apiKey) {
     // point and DOES retry via render/browser — those failures genuinely differ by tier.)
     if (redirectedAwayFromRequestedPage || boilerplateOnlyPage) {
         const reason = redirectedAwayFromRequestedPage
-            ? `redirected to ${finalUrl ? JSON.stringify(finalUrl) : "an unrelated page"} instead of the requested URL`
+            ? `the content served is from ${servedFrom ? JSON.stringify(servedFrom) : "an unrelated page"}, not the requested URL`
             : `the fetched page is a boilerplate stub (CDN error page or cookie-consent wall), not real content`;
         return toolFailure([
             `## Extract Failed`,
             `url: ${params.url}`,
             `reason: ${reason}`,
-            ...(redirectedAwayFromRequestedPage && finalUrl ? [`final_url: ${finalUrl}`] : []),
+            ...(redirectedAwayFromRequestedPage && servedFrom ? [`served_from: ${servedFrom}`] : []),
             ``,
             `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server redirected or served a generic fallback instead of the requested resource. Verify the URL is still correct (the resource may have moved or been removed); retrying with a different render mode will not help, since this response is issued identically regardless of fetch tier.`,
         ].join("\n"), "wrong_page");

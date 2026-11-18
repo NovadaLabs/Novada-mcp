@@ -184,6 +184,117 @@ describe("B2 round 2 (independent review HIGH): a deep-path → homepage-redirec
   });
 });
 
+describe("B2 round 3 (independent review HIGH, live-reproduced): escalation re-fetching the SAME wrong page must still fail; escalation recovering the REAL page must still succeed", () => {
+  // Homepages near-universally self-canonicalize — this is the signal round 3 adds
+  // (canonical/og:url) to catch a richer RE-FETCH of the same wrong page, which the
+  // round-2 html-identity gate alone let through (it only looked at WHETHER content
+  // changed, never WHERE the new content actually came from).
+  // NOT example.com for these two: DOMAIN_REGISTRY pins example.com to
+  // method:"static", which skips the quality-score escalation block entirely
+  // (`!domainHint` guard) — these two tests specifically need that escalation
+  // to actually run, so they use a host with no registry entry.
+  const ESC_HOST = "wrongpage-escalation-test.example";
+  const RICHER_SAME_WRONG_HOMEPAGE_HTML = `
+    <html><head><title>Escalation Test Site — Home</title><link rel="canonical" href="https://${ESC_HOST}/"></head>
+    <body><main>
+      <h1>Welcome to Escalation Test Site</h1>
+      ${"<p>A richer render of the SAME homepage — more paragraphs now present (simulating client-side JS that populated extra sections), but still the homepage, not the requested article.</p>".repeat(10)}
+    </main></body></html>
+  `;
+  // The REAL requested page, recovered via escalation — canonicalizes to ITSELF
+  // (the originally requested deep path), not to the homepage.
+  const REAL_RECOVERED_PAGE_HTML = `
+    <html><head><title>2024 Deleted Article</title><link rel="canonical" href="https://${ESC_HOST}/2024/deleted-article"></head>
+    <body><main>
+      <h1>2024 Deleted Article</h1>
+      ${"<p>This is the genuine article content, successfully recovered via the render/browser escalation after the static leg was blocked.</p>".repeat(10)}
+    </main></body></html>
+  `;
+  const SPARSE_HOMEPAGE_HTML = `<html><head><title>Escalation Test Site</title></head><body><p>Not found.</p></body></html>`;
+
+  it("static leg redirects deep path -> sparse homepage; quality escalation re-fetches a RICHER copy of the SAME homepage (self-canonicalized) -> still ## Extract Failed, wrong_page — NOT a false success with the homepage title", async () => {
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("web.archive.org")) {
+        // Wayback also has nothing useful here — isolates this test to the
+        // quality-score escalation path, not the Wayback rescue path.
+        return { data: "<html><body>n/a</body></html>", headers: {}, status: 200 };
+      }
+      return {
+        data: SPARSE_HOMEPAGE_HTML,
+        headers: {},
+        status: 200,
+        request: { res: { responseUrl: `https://${ESC_HOST}/` } },
+      };
+    });
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html: RICHER_SAME_WRONG_HOMEPAGE_HTML, msg: "", msg_detail: "" } },
+      status: 200,
+      headers: {},
+      config: {} as never,
+      statusText: "OK",
+    });
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+
+    const result = await novadaExtract({ url: `https://${ESC_HOST}/2024/deleted-article`, format: "markdown", render: "auto" }, API_KEY);
+
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    expect(mockedAxios.post).toHaveBeenCalled(); // confirms escalation actually ran, not a vacuous pass
+    expect(result).toContain("## Extract Failed");
+    expect(result).toMatch(/status:wrong_page/);
+    expect(result).not.toContain("Welcome to Escalation Test Site");
+  });
+
+  it("MIRROR: static leg is blocked/sparse (e.g. anti-bot); escalation recovers the REAL requested page (self-canonicalized to the requested URL) -> success, not wrong_page", async () => {
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("web.archive.org")) {
+        return { data: "<html><body>n/a</body></html>", headers: {}, status: 200 };
+      }
+      return { data: SPARSE_HOMEPAGE_HTML, headers: {}, status: 200 }; // no responseUrl disclosed at all here
+    });
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html: REAL_RECOVERED_PAGE_HTML, msg: "", msg_detail: "" } },
+      status: 200,
+      headers: {},
+      config: {} as never,
+      statusText: "OK",
+    });
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+
+    const result = await novadaExtract({ url: `https://${ESC_HOST}/2024/deleted-article`, format: "markdown", render: "auto" }, API_KEY);
+
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    expect(mockedAxios.post).toHaveBeenCalled();
+    expect(result).not.toContain("## Extract Failed");
+    expect(result).not.toMatch(/status:wrong_page/);
+    expect(result).toContain("## Extracted Content");
+    expect(result).toContain("genuine article content");
+  });
+
+  it("MIRROR: canonical URL differing only by http->https / www<->apex / trailing slash from the requested URL stays a success", async () => {
+    const html = `<html><head><title>Docs</title><link rel="canonical" href="https://www.example.com/docs/guide/"></head><body><main>
+      ${"<p>Real documentation content with enough substance to be a genuine page.</p>".repeat(8)}
+    </main></body></html>`;
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("web.archive.org")) return { data: "n/a", headers: {}, status: 200 };
+      return { data: html, headers: {}, status: 200 }; // no responseUrl -> forces the canonical-url fallback path
+    });
+    const result = await novadaExtract({ url: "http://example.com/docs/guide", format: "markdown", render: "auto" }, API_KEY);
+    expect(result).not.toContain("## Extract Failed");
+  });
+
+  it("MIRROR: canonical URL is a locale-prefixed variant of the requested deep path (not a collapse to root) stays a success", async () => {
+    const html = `<html><head><title>Docs</title><link rel="canonical" href="https://example.com/en/docs/latest"></head><body><main>
+      ${"<p>Real documentation content, canonicalized to its localized/versioned URL, not the homepage.</p>".repeat(8)}
+    </main></body></html>`;
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("web.archive.org")) return { data: "n/a", headers: {}, status: 200 };
+      return { data: html, headers: {}, status: 200 };
+    });
+    const result = await novadaExtract({ url: "https://example.com/docs/latest", format: "markdown", render: "auto" }, API_KEY);
+    expect(result).not.toContain("## Extract Failed");
+  });
+});
+
 describe("B2: boilerplate-only pages (cookie wall / CDN error stub) are an honest failure", () => {
   it("cookie-consent-only wall (short, no real content) → ## Extract Failed, wrong_page", async () => {
     const html = `<html><body><div class="cookie-banner">We use cookies to improve your experience on this site. Accept All | Manage Preferences</div></body></html>`;
