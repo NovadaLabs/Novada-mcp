@@ -943,6 +943,44 @@ const EMPTY_RESULT_TEXT: Record<EmptyResultSignal, { body: (msg?: string) => str
 };
 
 /**
+ * B5 review round 2 (MEDIUM): the small, closed table of PARAM KEY patterns
+ * that identify "this param is an echoed identifier, not content" across
+ * every platform-scraper op — id/url/username/asin/query-like. Deliberately
+ * NOT a per-platform list (that would need a new row for every new platform);
+ * these patterns are shared shapes every op's own identifying param already
+ * uses (see scrape_x.ts/scrape_instagram.ts/scrape_amazon.ts/... operation
+ * param docs: post_url, user_name, profile_url, asin, keyword, q, ...).
+ * A param whose key does NOT match (num, country, format, limit, ...) never
+ * contributes its value to the exclusion set below — a record field that
+ * merely happens to coincide with a non-identifier param's value (e.g. a
+ * record's own `language` field matching the caller's `country` param) is
+ * never mistaken for an echoed identifier.
+ */
+const IDENTIFIER_PARAM_KEY_PATTERNS: readonly RegExp[] = [
+  /^id$/i, /_id$/i,
+  /^url$/i, /_url$/i,
+  /user[_-]?name/i, /^handle$/i,
+  /^asin$/i, /^domain$/i,
+  /^keyword$/i, /^query$/i, /^q$/i, /^search_terms$/i,
+];
+
+function isIdentifierParamKey(key: string): boolean {
+  return IDENTIFIER_PARAM_KEY_PATTERNS.some((re) => re.test(key));
+}
+
+/** The VALUES of only the identifier-shaped params in `opParams` (see
+ *  IDENTIFIER_PARAM_KEY_PATTERNS) — used by the all_fields_empty discriminator
+ *  below to recognize an echoed-identifier-only stub record without being
+ *  fooled by a coincidental match against an unrelated (non-identifier) param. */
+function identifierParamValues(opParams: Record<string, unknown> | undefined): Set<string> {
+  return new Set(
+    Object.entries(opParams ?? {})
+      .filter(([key]) => isIdentifierParamKey(key))
+      .map(([, v]) => String(v))
+  );
+}
+
+/**
  * Render the shared 0-record envelope. `upstreamMessage` is only used by the
  * explicit-empty signal (the upstream's own wording, sanitized).
  */
@@ -2327,18 +2365,23 @@ export async function novadaScrape(params: ScrapeEngineParams, apiKey: string): 
   // followers:null}]. That record "has a usable value" by the check above
   // (id/username are non-empty strings) even though nothing was actually
   // extracted. Discriminator: a value only counts as real signal if it is
-  // NOT simply an echo of one of the request's OWN param values — checked by
-  // VALUE, not a hand-enumerated per-platform key list (id/username/asin/
-  // profile_url/… would each need their own row otherwise; this one check
-  // covers every platform-scraper tool by construction, since they all funnel
-  // through this one function). Reuses the SAME EmptyResultSignal union +
-  // emptyResultEnvelope() renderer as every other empty-result case above —
-  // one more table row, not a new mechanism.
-  const requestParamValues = new Set(
-    Object.values((opParams ?? {}) as Record<string, unknown>).map((v) => String(v))
-  );
+  // NOT simply an echo of one of the request's OWN param values. Reuses the
+  // SAME EmptyResultSignal union + emptyResultEnvelope() renderer as every
+  // other empty-result case above — one more table row, not a new mechanism.
+  //
+  // Review round 2 (MEDIUM): comparing against EVERY raw param value (not
+  // just identifier-shaped ones) risked a false positive — a genuinely sparse
+  // but REAL record field that merely happens to numerically/textually
+  // coincide with an unrelated param (e.g. a record's `likes: 10` matching the
+  // caller's `num: 10`, or a 2-letter `language` field matching a `country`
+  // param) would get swallowed by the exclusion set and wrongly read as an
+  // echoed identifier. Narrowed to params whose KEY is identifier-shaped —
+  // the SAME small, closed set of key patterns (id/url/username/asin/
+  // query-like) every platform-scraper op actually uses for its identifying
+  // param, not a per-platform list (one table, not N rows).
+  const requestIdentifierValues = identifierParamValues(opParams as Record<string, unknown> | undefined);
   const hasRealSignal = records.some((r) =>
-    Object.values(r).some((v) => v !== "" && v !== "null" && !requestParamValues.has(String(v)))
+    Object.values(r).some((v) => v !== "" && v !== "null" && !requestIdentifierValues.has(String(v)))
   );
   if (!hasRealSignal) {
     return emptyResultEnvelope(platform, displayOperation, "all_fields_empty");

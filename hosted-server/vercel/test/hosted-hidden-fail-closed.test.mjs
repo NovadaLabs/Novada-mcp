@@ -57,7 +57,10 @@ const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);
 // DERIVED from the imported HOSTED_HIDDEN_TOOLS, not reintroduce a second,
 // independently-maintained literal array (the exact drift B6 closed).
 test("mcp.ts's HOSTED_HIDDEN is derived from the imported HOSTED_HIDDEN_TOOLS, not a hand-written literal array", () => {
-  assert.match(mcpSrc, /const HOSTED_HIDDEN = new Set\(HOSTED_HIDDEN_TOOLS\);/,
+  // Review round 2 (LOW): regex tolerant of whitespace/formatting drift
+  // (extra spaces, optional trailing semicolon) rather than a brittle
+  // exact-string match that would false-fail on a harmless reformat.
+  assert.match(mcpSrc, /const\s+HOSTED_HIDDEN\s*=\s*new\s+Set\(\s*HOSTED_HIDDEN_TOOLS\s*\)\s*;?/,
     "HOSTED_HIDDEN must be `new Set(HOSTED_HIDDEN_TOOLS)` — a hand-written `new Set([...])` literal would silently drift from discover.ts's canonical list again");
 });
 

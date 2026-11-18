@@ -58,6 +58,28 @@ describe("novadaResearch", () => {
     expect(mockedAxios.post.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
+  // C1 review round 2 (HIGH, cost): a clean, successful-but-EMPTY primary
+  // result per sub-query must NEVER trigger the fallback race — each race
+  // attempt is a real, separately billed Scraper API submission, and
+  // research.ts fans out to several sub-queries already (tripling EACH one
+  // would compound fast). Only a THROWN transient failure may race.
+  it("C1 review round 2: every sub-query returning a clean EMPTY SERP (no exception) makes exactly 1 submit call PER sub-query — no fallback race anywhere", async () => {
+    mockedAxios.post.mockResolvedValue(searchEnvelope([])); // every engine, every sub-query: 0 hits, no error
+
+    const result = await novadaResearch({ question: "How do AI agents work?", depth: "quick" }, API_KEY);
+
+    // "How do AI agents work?" generates exactly 4 quick-depth sub-queries —
+    // 1 submit call each, 4 total. If the fallback race fired on this
+    // clean-empty result, it would be 3x that (12).
+    expect(mockedAxios.post.mock.calls.length).toBe(4);
+    expect(mockedAxios.get).not.toHaveBeenCalled(); // inline-results shape — no download round-trip either
+    // Pre-existing (unrelated to this fix) honest-failure framing when every
+    // sub-query comes back empty — already correctly attributes this to
+    // "a query that matched nothing" as one real possibility, not a false claim.
+    expect(result).toContain("Research Incomplete");
+    expect(result).toContain("query that matched nothing");
+  });
+
   it("propagates time_range to every internal search call as Google's tbs=qdr: filter (search-goto-links-2026-11-04 item ii)", async () => {
     mockedAxios.post.mockResolvedValue(
       searchEnvelope([

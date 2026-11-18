@@ -755,22 +755,21 @@ export async function novadaSearch(params, apiKey, options) {
             primaryResults = outcome.results;
             servedByEngine = scraperNameToEngineKey(outcome.servedBy) ?? servedByEngine;
         }
-        if (primaryResults.length === 0) {
-            // C1: the requested engine legitimately returned ZERO results (no
-            // exception) — still race the other engines before declaring "no
-            // results" (closes the "silent 0 results" half of #39): a different
-            // engine's index may have the page even when the requested one
-            // genuinely doesn't.
-            const outcome = await raceOtherEngines(engineCfg.scraper_name);
-            if (outcome.results.length > 0) {
-                primaryResults = outcome.results;
-                servedByEngine = scraperNameToEngineKey(outcome.servedBy) ?? servedByEngine;
-            }
-            // else: every engine legitimately found nothing — primaryResults stays
-            // [] and falls through to the existing honest "results:0" branch below
-            // (not an error — nothing upstream failed, there's nothing to disclose
-            // as a failure).
-        }
+        // C1 review round 2 (HIGH, cost): a clean, successful-but-EMPTY primary
+        // result (no exception — the SERP genuinely has no hits) must NEVER
+        // trigger the fallback race. Each race attempt is a real, separately
+        // billed Scraper API submission (README: "every call bills your Novada
+        // account balance directly") — racing 2 more engines on every merely-
+        // narrow/niche query that legitimately returns 0 results would silently
+        // triple the billed cost of the common case for zero benefit (a
+        // genuinely empty SERP on google is not evidence duckduckgo/yandex has
+        // the page). The fallback race above only ever runs when the primary
+        // attempt itself THREW a transient (non-account-level) error — the only
+        // signal that switching engines might actually help. A clean empty is
+        // reported honestly below (broaden the query / try another engine
+        // explicitly), with zero extra billed calls. Same rule for
+        // novada_research's searchWithFallback (research.ts) — one rule, both
+        // callers, not two independently-tunable cost policies.
         scraperResults = primaryResults;
         unresolvedGotoLinks += gotoByEngine.get(ENGINE_MAP[servedByEngine].scraper_name) ?? 0;
     }

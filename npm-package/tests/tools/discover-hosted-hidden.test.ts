@@ -27,13 +27,16 @@ describe("discover: hosted-hidden tool list", () => {
   // hosted-server is not alongside (e.g. a standalone npm-package checkout).
   it.skipIf(!existsSync(mcpTs))("mcp.ts derives HOSTED_HIDDEN from THIS module's HOSTED_HIDDEN_TOOLS — one source, not two hand-synced copies", () => {
     const src = readFileSync(mcpTs, "utf8");
+    // Review round 2 (LOW): regex tolerant of whitespace/formatting drift
+    // (multi-line import, extra spaces, optional trailing semicolon) — a
+    // brittle exact-string match would false-fail on a harmless reformat.
     expect(src, "mcp.ts must import HOSTED_HIDDEN_TOOLS from the vendored discover.js").toMatch(
-      /import \{ HOSTED_HIDDEN_TOOLS \} from "\.\.\/vendor\/novada-mcp\/tools\/discover\.js";/,
+      /import\s*\{\s*HOSTED_HIDDEN_TOOLS\s*\}\s*from\s*["']\.\.\/vendor\/novada-mcp\/tools\/discover\.js["'];?/,
     );
     expect(src, "mcp.ts's HOSTED_HIDDEN must be derived from the imported HOSTED_HIDDEN_TOOLS, not a hand-written literal array").toMatch(
-      /const HOSTED_HIDDEN = new Set\(HOSTED_HIDDEN_TOOLS\);/,
+      /const\s+HOSTED_HIDDEN\s*=\s*new\s+Set\(\s*HOSTED_HIDDEN_TOOLS\s*\)\s*;?/,
     );
     // Regression fence: the OLD hand-written literal form must never reappear.
-    expect(src).not.toMatch(/const HOSTED_HIDDEN = new Set\(\[/);
+    expect(src).not.toMatch(/const\s+HOSTED_HIDDEN\s*=\s*new\s+Set\(\s*\[/);
   });
 });

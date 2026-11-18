@@ -134,6 +134,27 @@ describe("novadaSearch — single retry on transient upstream SERP failure", () 
     expect(mockedAxios.post).toHaveBeenCalledTimes(1);
   });
 
+  // C1 review round 2 (HIGH, cost): a clean, successful-but-EMPTY primary
+  // result must NEVER trigger the fallback race — each race attempt is a
+  // real, separately billed Scraper API submission. Only a THROWN transient
+  // failure may race; a genuinely empty SERP is reported honestly with 1 call.
+  it("C1 review round 2: a clean, successful-but-EMPTY primary result (no exception) makes exactly 1 submit call — NO fallback race, no extra billed calls", async () => {
+    // Inline-results shape (the fast path, no download round-trip) with a
+    // genuinely empty organic_results array — code:0, no throw anywhere in
+    // submitSearchScrapeTask, a real "this SERP has zero hits" outcome.
+    mockedAxios.post.mockResolvedValue({ data: { code: 0, data: { data: { json: [{ rest: { organic_results: [] } }] } } } });
+
+    const result = await novadaSearch(
+      { query: "clean-empty-no-fallback-unique", engine: "google", num: 10, country: "", language: "" },
+      API_KEY,
+    );
+
+    expect(result).toContain("results:0");
+    expect(result).not.toContain("engines_tried");
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
   it("surfaces the error after two consecutive no-task_id failures (retry exhausted) — C1: now races the other 2 engines before giving up, not just the one", async () => {
     // Every engine hits the identical no-task_id shape (mockResolvedValue applies
     // to every axios.post call, primary AND both fallbacks) — this is the

@@ -643,8 +643,14 @@ function main() {
   // B6 (#44): mcp.ts must actually DERIVE its HOSTED_HIDDEN from the imported
   // HOSTED_HIDDEN_TOOLS — not reintroduce a second, hand-written literal array
   // that happens to match today. Structural check, not a value comparison.
-  if (!mcpSrc.includes('import { HOSTED_HIDDEN_TOOLS } from "../vendor/novada-mcp/tools/discover.js";') ||
-      !mcpSrc.includes("const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);")) {
+  //
+  // Review round 2 (LOW): regex, not a brittle exact-string `.includes()` —
+  // tolerant of whitespace/formatting drift (multi-line import, extra spaces
+  // around braces, a trailing semicolon or none) that a plain substring match
+  // would false-fail on even though the underlying derivation is unchanged.
+  const HOSTED_HIDDEN_IMPORT_RE = /import\s*\{\s*HOSTED_HIDDEN_TOOLS\s*\}\s*from\s*["']\.\.\/vendor\/novada-mcp\/tools\/discover\.js["'];?/;
+  const HOSTED_HIDDEN_DERIVATION_RE = /const\s+HOSTED_HIDDEN\s*=\s*new\s+Set\(\s*HOSTED_HIDDEN_TOOLS\s*\)\s*;?/;
+  if (!HOSTED_HIDDEN_IMPORT_RE.test(mcpSrc) || !HOSTED_HIDDEN_DERIVATION_RE.test(mcpSrc)) {
     console.error(
       `[check-hosted-drift] FAIL (hosted-hidden-single-source-gate): mcp.ts must import HOSTED_HIDDEN_TOOLS ` +
       `from the vendored discover.js and derive \`const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);\` — ` +

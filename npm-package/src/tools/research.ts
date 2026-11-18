@@ -104,12 +104,25 @@ async function searchWithFallback(
   // Attempt 1: Primary engine (Google) — cheapest path
   try {
     const results = await attempt(PRIMARY).run();
-    if (results.length > 0) return results;
-  } catch { /* fall through to fallback race */ }
+    // C1 review round 2 (HIGH, cost): a clean, successful-but-EMPTY primary
+    // (no exception — the SERP genuinely has no hits for THIS sub-query) must
+    // never trigger the fallback race — each race attempt is a real, separately
+    // billed Scraper API submission, and racing 2 more engines on every
+    // legitimately-empty sub-query would silently multiply the billed cost of
+    // the common case (a `deep`/`comprehensive` research call already fans out
+    // to several sub-queries; tripling EACH one compounds fast). Return the
+    // empty result honestly — novadaResearch's own caller-side retry-with-
+    // simplified-query already covers the "maybe the query itself was too
+    // narrow" case without racing extra engines. Same rule as novada_search
+    // (search.ts) — one rule, both callers, not two independently-tunable
+    // cost policies.
+    return results;
+  } catch { /* primary FAILED transiently — race the fallback engines below */ }
 
-  // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery
+  // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery.
+  // Only reached when the primary attempt THREW; never for a clean empty result.
   const outcome = await raceEngineFallbacks(FALLBACKS.map(attempt));
-  return outcome.results; // [] when every engine failed or legitimately emptied
+  return outcome.results; // [] when every fallback engine ALSO failed or emptied
 }
 
 // ─── Domain Detection ──────────────────────────────────────────────────────

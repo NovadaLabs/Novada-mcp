@@ -20,6 +20,17 @@
  * and research.ts's internal fallback pair (duckduckgo/bing, used only
  * server-side — not part of novada_search's public `engine` enum) stay
  * independent while sharing the ONE race mechanism.
+ *
+ * COST DISCIPLINE (review round 2, HIGH): `raceEngineFallbacks` itself is
+ * unconditional — it races whatever attempts it's given — so the DECISION of
+ * whether to race at all belongs entirely to the caller. Both callers in this
+ * codebase race ONLY when their primary attempt THREW a transient error, never
+ * merely because it returned an empty result with no error. Each attempt here
+ * is a real, separately billed upstream submission; racing on every
+ * legitimately-empty query (a narrow/niche search genuinely has no hits — not
+ * evidence anything is wrong) would silently multiply billed cost for zero
+ * benefit. A future caller of this primitive should keep that same rule
+ * rather than re-introducing a race-on-clean-empty policy.
  */
 
 /** One candidate search attempt: a label (surfaced via `servedBy` on the

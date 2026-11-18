@@ -275,6 +275,36 @@ describe("F9 observed fixtures — the three hosted-0.9.37 FAIL rows now classif
     expect(result).toContain("## Scrape Results");
   });
 
+  // B5 review round 2 (MEDIUM mirror): a record field that merely COINCIDES
+  // with a non-identifier param's value (num/country/format/...) must NOT be
+  // excluded from the real-signal check — only identifier-SHAPED param keys
+  // (id/url/username/asin/query-like) feed the exclusion set. Before this
+  // fix, comparing against EVERY raw param value would have wrongly swallowed
+  // `likes:"10"` here (it coincidentally equals the unrelated `num:"10"` param)
+  // and misclassified this record as all_fields_empty.
+  it("mirror (MEDIUM): a record field that coincidentally equals a GENERIC (non-identifier) param's value — e.g. likes:10 matching num:10 — stays a normal success, NOT all_fields_empty", async () => {
+    mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
+    mockedAxios.get.mockResolvedValue({
+      data: [{ spider_code: 200, rest: { results: [{ username: "novadaproxies", bio: null, likes: "10" }] } }],
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const result = await novadaScrape(
+      {
+        platform: "instagram.com",
+        operation: "ins_profiles_username",
+        // `num` is a generic, non-identifier param whose value ("10")
+        // coincidentally matches the record's own `likes` field below.
+        params: { username: "novadaproxies", num: "10" },
+        format: "markdown",
+        limit: 20,
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key",
+    );
+    expect(result).not.toContain("empty_result");
+    expect(result).not.toContain("empty_signal:");
+    expect(result).toContain("## Scrape Results");
+  });
+
   it("novada_scrape_facebook: 0-record empty-download response is empty_result, not status: ok", async () => {
     const { tool, opName, params } = observedCase("novada_scrape_facebook");
     mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
