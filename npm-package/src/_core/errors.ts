@@ -346,25 +346,196 @@ export const FAILURE_HEADER_LITERALS: ReadonlySet<string> = new Set([
   "## Browser Flow — API Error",       // browser_flow.ts:356
   "## Browser Flow — Endpoint Unavailable", // browser_flow.ts:374
   "## Monitor: Error",                 // monitor.ts:631
+  // Round 4 (independent review): the WORD-LIST scanner itself was the bug —
+  // these two headings contain no trigger word ("Not Configured" / "Missing
+  // Dependency" are not in Error|Failed|Unavailable|Incomplete|Invalid|
+  // Refused|Denied) so they were never even candidates. Caught only once the
+  // scanner was replaced with EXHAUSTIVE classification (every heading in
+  // tools/** must appear in FAILURE_HEADER_LITERALS or SUCCESS_OR_NEUTRAL_HEADERS
+  // — no keyword filter decides what counts as "a candidate").
+  "## Browser API — Not Configured",       // browser.ts:125 — no NOVADA_BROWSER_WS/auto-provision; terminal
+  "## Browser API — Missing Dependency",   // browser.ts:149 — playwright-core not installed; terminal
 ]);
 
 /**
- * Headings that CONTAIN a failure-shaped word (Error|Failed|Unavailable|
- * Incomplete|Invalid|Refused|Denied) but are NOT failures — kept as an
- * explicit, reasoned exception list so the completeness scanner can
- * distinguish "reviewed and excluded on purpose" from "never looked at".
- * Empty today: the full-codebase scan (round 3) found zero headings that are
- * both failure-word-shaped AND legitimately non-failure. A caller-interpolated
- * header (`` `## Research: ${topic}` ``, ai_monitor's brand header) is handled
- * differently — it is excluded from FAILURE_HEADER_LITERALS by construction
- * (whole-line equality can never match an interpolated string) and never
- * reaches this allowlist at all, because its FIXED template text contains no
- * failure word. If a future heading needs a true allowlist entry, add it here
- * with a one-line reason; the coverage test will enforce its presence.
+ * EXHAUSTIVE classification (round 4, independent review) of every OTHER
+ * markdown heading a tools/** formatter can emit — i.e. every heading NOT in
+ * FAILURE_HEADER_LITERALS. Built from a recursive, comment-aware static scan
+ * of npm-package/src/tools/** (tests/consistency/failure-envelope-coverage.test.ts
+ * runs the SAME scan every CI invocation — not a one-time manual pass) that
+ * found 219 non-comment heading-literal occurrences, 104 distinct strings, 14
+ * of which are real failures (now in FAILURE_HEADER_LITERALS above). This map
+ * covers the other 90 distinct strings (reduced to 83 keys after prefix
+ * collapsing — see keyOf() below).
+ *
+ * Replaces round 1-3's keyword-filtered approach (`Error|Failed|Unavailable|
+ * Incomplete|Invalid|Refused|Denied`) entirely — that filter was itself the
+ * bug: "## Browser API — Not Configured" / "## Browser API — Missing
+ * Dependency" (browser.ts) are real, currently-shipping failures that contain
+ * NONE of those words, so they were never even candidates for review. There
+ * is no keyword list in this round's design — every heading found by the scan
+ * must be in exactly one of the two tables, full stop.
+ *
+ * Key shape: a non-interpolated heading is keyed by its exact trimmed text. A
+ * heading containing `${` is keyed by keyOf()'s fixed prefix — the substring
+ * before the first `${`, computed identically by the runtime-irrelevant
+ * static scanner and documented here so a human reviewer can see what each
+ * entry actually covers. Several visually-different headings legitimately
+ * reduce to the same short prefix (`"## "`, `"### "`, `"### ["` — e.g. every
+ * `### [${idx}] ...` numbered-item sub-heading across crawl.ts/extract.ts/
+ * research.ts) — that is fine: the prefix itself contains no failure word by
+ * construction, so the key's classification holds regardless of which
+ * specific call site produced it; the test file's header documents each
+ * collapsed group so a reviewer can still see what was merged.
+ *
+ * Reason column: most entries are structural sub-headings (used as a LATER
+ * line inside an already-classified body, never alone) or static section
+ * titles never used on a failure path — tagged "structural" for brevity.
+ * Entries that could plausibly look ambiguous get a real, specific reason.
  */
-export const NON_FAILURE_HEADER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
-  // (none yet — see doc comment above)
+export const SUCCESS_OR_NEUTRAL_HEADERS: ReadonlyMap<string, string> = new Map([
+  // ── Structural sub-headings (appear as a LATER line inside an already-
+  // classified success/neutral/failure body; never used alone as the first
+  // line, never the sole signal of outcome) ──
+  ["## Agent Action", "structural sub-heading"],
+  ["## Agent Hints", "structural sub-heading"],
+  ["## Agent Instruction", "structural sub-heading"],
+  ["## Agent Memory", "structural sub-heading"],
+  ["## agent_instruction", "structural sub-heading (lowercase proxy_*.ts variant)"],
+  ["## as curl:", "structural sub-heading (proxy.ts curl-snippet label)"],
+  ["## Changed Fields", "structural sub-heading (monitor.ts change-detected body)"],
+  ["## Chainable Output", "structural sub-heading"],
+  ["## Content Changed", "structural sub-heading (monitor.ts change-detected body)"],
+  ["## Extraction Diagnostics", "structural sub-heading"],
+  ["## Fields Summary", "structural sub-heading"],
+  ["## Key Findings", "structural sub-heading (research.ts success body)"],
+  ["## Ledger (plan preflight)", "structural sub-heading (proxy.ts)"],
+  ["## Requested Fields", "structural sub-heading"],
+  ["## Requested Fields (none resolved)", "structural sub-heading — zero-match is a field-level diagnostic, not a tool failure"],
+  ["## Same-Domain Links (", "structural sub-heading, interpolated count — prefix-keyed"],
+  ["## Links (", "structural sub-heading, interpolated count — prefix-keyed"],
+  ["## Setup", "structural sub-heading (proxy.ts config instructions)"],
+  ["## Sources", "structural sub-heading (research.ts success body)"],
+  ["## Sources matching a negation of the claim (", "structural sub-heading (verify.ts), interpolated count — prefix-keyed"],
+  ["## Sources matching the claim wording (", "structural sub-heading (verify.ts), interpolated count — prefix-keyed"],
+  ["## Structured Data", "structural sub-heading"],
+  ["## Summary", "structural sub-heading (ai_monitor.ts)"],
+  ["## Tracked Fields", "structural sub-heading (monitor.ts)"],
+  ["## Usage Examples", "structural sub-heading"],
+  ["## Verification (one live IP-echo through this proxy — ~1 KB metered traffic, ~1s; disable with verify=false)", "structural sub-heading (proxy.ts verification section label, not a verdict)"],
+  ["## Warnings", "structural sub-heading"],
+  ["## Why This Happens", "structural sub-heading (used inside browser.ts/runtime.ts's OWN already-classified failure messages — explanatory, not a second signal)"],
+  ["# ", "structural sub-heading, interpolated — prefix-keyed (site_copy.ts page titles)"],
+  ["# Add this flag to any curl command — replace *** with $NOVADA_PROXY_PASS:", "structural sub-heading (proxy_*.ts curl instructions)"],
+  ["# Replace *** with your proxy password", "structural sub-heading (proxy_*.ts curl instructions)"],
+  ["# Set NOVADA_PROXY_PASS in your environment first, then copy these lines:", "structural sub-heading (proxy.ts shell-env instructions)"],
+  ["# Set NOVADA_PROXY_PASS in your environment first:", "structural sub-heading (proxy_*.ts shell-env instructions)"],
+  ["### ", "structural sub-heading, interpolated — prefix-keyed (ai_monitor.ts per-model/discover.ts per-category sub-sections)"],
+  ["### Action ", "structural sub-heading, interpolated — prefix-keyed (browser.ts/browser_flow.ts per-action result line)"],
+  ["### Pages (first ", "structural sub-heading, interpolated — prefix-keyed (site_copy.ts)"],
+  ["### Recent calls (last ", "structural sub-heading, interpolated — prefix-keyed (session_stats.ts)"],
+  ["### [", "structural sub-heading, interpolated — prefix-keyed (numbered-item sub-heading shared by crawl.ts/extract.ts (x2)/research.ts)"],
+
+  // ── Top-level SUCCESS headers (first line of a genuinely successful result) ──
+  ["## Active Browser Sessions", "success — novada_browser list-sessions result"],
+  ["## Batch Extract Results", "success — extract.ts batch mode"],
+  ["## Batch Extract Results (Full)", "success — extract.ts batch mode, full detail"],
+  ["## Browser Flow Results", "success — browser_flow.ts completed run"],
+  ["## Browser Session Results", "success — novada_browser completed run"],
+  ["## Claim Verification", "success — verify.ts completed verdict"],
+  ["## Crawl Results", "success — crawl.ts completed run"],
+  ["## Extracted Content", "success — extract.ts's one success header, used by all 3 formatter call sites"],
+  ["## Monitor: Changes Detected", "success — monitor.ts: this check ran and found a real content change; not a failure"],
+  ["## Monitor: First Check", "success — monitor.ts: baseline established; not a failure"],
+  ["## Monitor: No Changes", "success — monitor.ts: this check ran cleanly and found nothing changed; not a failure"],
+  ["## Next Steps", "success — search.ts result-footer section"],
+  ["## Scrape Results", "success — scrape.ts completed run (6 call sites, same literal)"],
+  ["## Search Results", "success — search.ts completed run"],
+  ["## Session Closed", "success — novada_browser session-close confirmation"],
+  ["## Site Copy", "success — site_copy.ts in-progress/summary section"],
+  ["## Site Copy Complete", "success — site_copy.ts completed run"],
+  ["## Site Map", "success — map.ts completed run (also used by the SPA_NO_URLS_FOUND notice below — same header, deliberately: see Agent Notice — Under-delivery)"],
+
+  // ── Account/proxy config cards — informational displays, never a pass/fail
+  // verdict on their own (account.ts, proxy*.ts) ──
+  ["## Wallet Balance\\n\\n**", "informational card (account.ts renderBalanceCard) — single-line template packing \\n escapes, prefix-keyed up to the first interpolation"],
+  ["## Proxy Configuration", "informational card — proxy credentials/usage display, not a verdict"],
+  ["## Proxy Configuration (Shell Environment)", "informational card — proxy credentials display"],
+  ["## Proxy Configuration (curl)", "informational card — proxy credentials display"],
+  ["## Datacenter Proxy Configuration", "informational card — proxy_datacenter.ts"],
+  ["## Datacenter Proxy Configuration (Shell Environment)", "informational card — proxy_datacenter.ts"],
+  ["## Datacenter Proxy Configuration (curl)", "informational card — proxy_datacenter.ts"],
+  ["## Dedicated Proxy Configuration", "informational card — proxy_dedicated.ts"],
+  ["## Dedicated Proxy Configuration (Shell Environment)", "informational card — proxy_dedicated.ts"],
+  ["## Dedicated Proxy Configuration (curl)", "informational card — proxy_dedicated.ts"],
+  ["## ISP Proxy Configuration", "informational card — proxy_isp.ts"],
+  ["## ISP Proxy Configuration (Shell Environment)", "informational card — proxy_isp.ts"],
+  ["## ISP Proxy Configuration (curl)", "informational card — proxy_isp.ts"],
+  ["## Mobile Proxy Configuration", "informational card — proxy_mobile.ts"],
+  ["## Mobile Proxy Configuration (Shell Environment)", "informational card — proxy_mobile.ts"],
+  ["## Mobile Proxy Configuration (curl)", "informational card — proxy_mobile.ts"],
+  ["## Residential Proxy Configuration", "informational card — proxy_residential.ts"],
+  ["## Residential Proxy Configuration (Shell Environment)", "informational card — proxy_residential.ts"],
+  ["## Residential Proxy Configuration (curl)", "informational card — proxy_residential.ts"],
+  ["## Static Proxy Configuration", "informational card — proxy_static.ts"],
+  ["## Static Proxy Configuration (Shell Environment)", "informational card — proxy_static.ts"],
+  ["## Static Proxy Configuration (curl)", "informational card — proxy_static.ts"],
+
+  // ── AMBIGUOUS — reviewed explicitly, reason is load-bearing ──
+  [
+    "## Agent Notice — Under-delivery",
+    "AMBIGUOUS, reviewed: map.ts's own comment at the call site states this is " +
+    "\"surfaced as a friendly agent message (not an error block) so the tool " +
+    "always returns a successful string response\" when a crawl/SPA page found " +
+    "no additional URLs — an explicit design decision that under-delivery vs. " +
+    "the requested URL count is informational (with next-step guidance), not a " +
+    "tool failure. Shares the same preceding \"## Site Map\" success header.",
+  ],
+  [
+    "## Brand Presence on AI-Company Domains — ",
+    "AMBIGUOUS, reviewed: ai_monitor.ts's header interpolates the caller's brand " +
+    "(prefix-keyed, so brand text itself is never inspected). Per-query failures " +
+    "are folded into an aggregate sentiment:\"not_found\" entry inside this SAME " +
+    "success-shaped report (never a standalone failure return) — same partial-" +
+    "success pattern as novada_research's status:partial.",
+  ],
+  [
+    "## Research: ",
+    "AMBIGUOUS, reviewed: research.ts's real first-line header for EVERY outcome " +
+    "except the two standalone total-failure headers already in " +
+    "FAILURE_HEADER_LITERALS (## Research Unavailable / ## Research Incomplete). " +
+    "Interpolates the caller's topic (prefix-keyed — topic text is never " +
+    "inspected). Success/partial is distinguished later in the body by " +
+    "status:success vs status:partial (FAILURE_STATUS_RE deliberately excludes " +
+    "status:partial).",
+  ],
+  [
+    "## Researched source material for: ",
+    "AMBIGUOUS, reviewed: research.ts mid-body section heading for the SAME " +
+    "success/partial result as \"## Research: \" above (never appears on a " +
+    "standalone-failure path) — interpolates the caller's topic, prefix-keyed.",
+  ],
+  [
+    "## ",
+    "AMBIGUOUS, reviewed: bare \"## \" prefix shared by 3 interpolated headings " +
+    "with near-zero fixed text before the first ${} — discover.ts's per-platform " +
+    "operations section (`## ${platform} — Scraper Operations`, always success: " +
+    "listing operations for a known platform) and search.ts's 2 per-result " +
+    "title lines (`## ${i+1}. ...`, always success: one of N found results, " +
+    "never emitted on a failed search — search's own failure path returns " +
+    "## Search Unavailable before any results are rendered).",
+  ],
 ]);
+
+/** Classification key for a heading: the full trimmed text for a literal
+ *  heading, or the fixed substring before the first `${` for an interpolated
+ *  one — identical function used by the completeness scanner
+ *  (tests/consistency/failure-envelope-coverage.test.ts) so this file's
+ *  documentation and the enforced CI check can never drift apart. */
+export function headingClassificationKey(heading: string): string {
+  const i = heading.indexOf("${");
+  return i === -1 ? heading : heading.slice(0, i);
+}
 
 /** Marks a non-"## heading" failure signal some tools use instead/in addition
  *  (e.g. "agent_instruction: status:failed", "status:browser_unavailable_on_runtime",

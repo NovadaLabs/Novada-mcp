@@ -98,20 +98,48 @@ export declare const NOT_ESCALATE_STATUSES: ReadonlySet<number>;
 export declare function isBlockClassFetchFailure(err: unknown): boolean;
 export declare const FAILURE_HEADER_LITERALS: ReadonlySet<string>;
 /**
- * Headings that CONTAIN a failure-shaped word (Error|Failed|Unavailable|
- * Incomplete|Invalid|Refused|Denied) but are NOT failures — kept as an
- * explicit, reasoned exception list so the completeness scanner can
- * distinguish "reviewed and excluded on purpose" from "never looked at".
- * Empty today: the full-codebase scan (round 3) found zero headings that are
- * both failure-word-shaped AND legitimately non-failure. A caller-interpolated
- * header (`` `## Research: ${topic}` ``, ai_monitor's brand header) is handled
- * differently — it is excluded from FAILURE_HEADER_LITERALS by construction
- * (whole-line equality can never match an interpolated string) and never
- * reaches this allowlist at all, because its FIXED template text contains no
- * failure word. If a future heading needs a true allowlist entry, add it here
- * with a one-line reason; the coverage test will enforce its presence.
+ * EXHAUSTIVE classification (round 4, independent review) of every OTHER
+ * markdown heading a tools/** formatter can emit — i.e. every heading NOT in
+ * FAILURE_HEADER_LITERALS. Built from a recursive, comment-aware static scan
+ * of npm-package/src/tools/** (tests/consistency/failure-envelope-coverage.test.ts
+ * runs the SAME scan every CI invocation — not a one-time manual pass) that
+ * found 219 non-comment heading-literal occurrences, 104 distinct strings, 14
+ * of which are real failures (now in FAILURE_HEADER_LITERALS above). This map
+ * covers the other 90 distinct strings (reduced to 83 keys after prefix
+ * collapsing — see keyOf() below).
+ *
+ * Replaces round 1-3's keyword-filtered approach (`Error|Failed|Unavailable|
+ * Incomplete|Invalid|Refused|Denied`) entirely — that filter was itself the
+ * bug: "## Browser API — Not Configured" / "## Browser API — Missing
+ * Dependency" (browser.ts) are real, currently-shipping failures that contain
+ * NONE of those words, so they were never even candidates for review. There
+ * is no keyword list in this round's design — every heading found by the scan
+ * must be in exactly one of the two tables, full stop.
+ *
+ * Key shape: a non-interpolated heading is keyed by its exact trimmed text. A
+ * heading containing `${` is keyed by keyOf()'s fixed prefix — the substring
+ * before the first `${`, computed identically by the runtime-irrelevant
+ * static scanner and documented here so a human reviewer can see what each
+ * entry actually covers. Several visually-different headings legitimately
+ * reduce to the same short prefix (`"## "`, `"### "`, `"### ["` — e.g. every
+ * `### [${idx}] ...` numbered-item sub-heading across crawl.ts/extract.ts/
+ * research.ts) — that is fine: the prefix itself contains no failure word by
+ * construction, so the key's classification holds regardless of which
+ * specific call site produced it; the test file's header documents each
+ * collapsed group so a reviewer can still see what was merged.
+ *
+ * Reason column: most entries are structural sub-headings (used as a LATER
+ * line inside an already-classified body, never alone) or static section
+ * titles never used on a failure path — tagged "structural" for brevity.
+ * Entries that could plausibly look ambiguous get a real, specific reason.
  */
-export declare const NON_FAILURE_HEADER_ALLOWLIST: ReadonlyMap<string, string>;
+export declare const SUCCESS_OR_NEUTRAL_HEADERS: ReadonlyMap<string, string>;
+/** Classification key for a heading: the full trimmed text for a literal
+ *  heading, or the fixed substring before the first `${` for an interpolated
+ *  one — identical function used by the completeness scanner
+ *  (tests/consistency/failure-envelope-coverage.test.ts) so this file's
+ *  documentation and the enforced CI check can never drift apart. */
+export declare function headingClassificationKey(heading: string): string;
 /** Marks a non-"## heading" failure signal some tools use instead/in addition
  *  (e.g. "agent_instruction: status:failed", "status:browser_unavailable_on_runtime",
  *  "status:search_unavailable"). Deliberately does NOT match "status:success" or
