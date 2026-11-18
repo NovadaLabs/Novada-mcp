@@ -541,3 +541,57 @@ describe("generateSearchQueries — C5: query #1 is bounded, never the raw long 
     expect(queries[0]).toBe(short);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// C5 round 3 (#1, RC verifier rc-verify-0951.md): round 1's fix bounded ONLY
+// query #1 — sub-queries #2+ still built on the full, UNBOUNDED `topic`
+// (`${topic} ${domainSuffixes[n]}`), so a long non-comparison question's
+// OTHER sub-queries exceeded the engine's length limit and failed upstream
+// live (1/5 then 2/5 succeeded — below the "≥3 ok" bar; the issue map's own
+// "long non-comparison + focus case still to verify" note, confirmed not
+// fixed by round 1). Fix: EVERY generated query (not just #1) now passes
+// through the SAME boundQuery() bound at one place (the final map in
+// generateSearchQueries), and a long topic's suffix queries are derived from
+// a condensed keyword-based topic rather than the full text + suffix. This
+// table covers every combination of question shape × focus × depth the
+// review asked for.
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("generateSearchQueries — C5 round 3: EVERY generated query is bounded, for every question shape/focus/depth", () => {
+  const SHORT_NON_COMPARISON = "What is zero trust networking";
+  const LONG_NON_COMPARISON =
+    "We are evaluating enterprise data infrastructure vendors for a multi-region deployment and need to understand how modern web scraping and proxy platforms handle residential IP rotation, CAPTCHA solving, JavaScript rendering at scale, compliance with GDPR and CCPA when collecting publicly available data, pricing models for high-volume concurrent requests, SLA guarantees for uptime and latency, and how they compare against building an in-house scraping infrastructure team, across e-commerce, travel, and financial services verticals";
+  const SHORT_COMPARISON = "Novada vs Bright Data pricing";
+  const LONG_COMPARISON =
+    "We need a detailed comparison of Novada versus Bright Data across residential IP rotation, CAPTCHA solving at scale, JavaScript rendering, GDPR and CCPA compliance posture, pricing models for high-volume concurrent requests, SLA guarantees for uptime and latency, and total cost of ownership over a three year horizon for a company processing fifty million page requests per month";
+
+  const QUESTION_SHAPES: { label: string; question: string }[] = [
+    { label: "short-non-comparison", question: SHORT_NON_COMPARISON },
+    { label: "long-non-comparison", question: LONG_NON_COMPARISON },
+    { label: "short-comparison", question: SHORT_COMPARISON },
+    { label: "long-comparison", question: LONG_COMPARISON },
+  ];
+  const FOCUS_VARIANTS: { label: string; focus?: string }[] = [
+    { label: "no-focus", focus: undefined },
+    { label: "with-focus", focus: "pricing and compliance" },
+  ];
+  const DEPTH_VARIANTS: { label: string; deep: boolean; comprehensive: boolean }[] = [
+    { label: "quick", deep: false, comprehensive: false },
+    { label: "deep", deep: true, comprehensive: false },
+    { label: "comprehensive", deep: true, comprehensive: true },
+  ];
+
+  for (const shape of QUESTION_SHAPES) {
+    for (const fv of FOCUS_VARIANTS) {
+      for (const dv of DEPTH_VARIANTS) {
+        it(`${shape.label} × ${fv.label} × ${dv.label}: every query ≤500 chars, ≥3 distinct queries`, () => {
+          const queries = generateSearchQueries(shape.question, dv.deep, dv.comprehensive, fv.focus);
+          for (const q of queries) {
+            expect(q.length, `query "${q.slice(0, 80)}..." (${q.length} chars) exceeds the 500-char bound`).toBeLessThanOrEqual(500);
+          }
+          expect(queries.length, `only ${queries.length} distinct queries generated: ${JSON.stringify(queries)}`).toBeGreaterThanOrEqual(3);
+        });
+      }
+    }
+  }
+});

@@ -1420,6 +1420,28 @@ export function generateSearchQueries(
   const topic = safeQuestion.replace(/[?!.]+$/, "").trim();
   const keywords = words.filter(w => !STOP_WORDS.has(w) && !ALL_SIGNAL_WORDS.has(w) && w.length > 2);
 
+  // C5 review round 3 (#1, RC verifier): query #1 above is bounded, but every
+  // OTHER generated query below used to build on the full, UNBOUNDED `topic`
+  // (`${topic} ${domainSuffixes[n]}`, comparison residual, etc.) — for a
+  // genuinely long question, "topic" alone already exceeds the engine's query
+  // length limit before any suffix is even appended, so sub-queries #2+ failed
+  // upstream (1/5 or 2/5 succeeded live, below the "≥3 ok" bar). Once `topic`
+  // already eats most of the per-query budget, derive every SUFFIX-APPENDED
+  // query from a CONDENSED topic (the first 15 content keywords, already
+  // stop-word-filtered above) instead of the full text + suffix — keeps the
+  // suffix itself meaningful and visible rather than silently chopped off by
+  // the final bound below. Short/medium topics (the overwhelming common case,
+  // every existing fixture) are completely unaffected: this only activates
+  // once `topic` alone would leave no room for a suffix. `derivedTopic`
+  // replaces `topic` in EVERY place below that builds a suffix/residual
+  // query — one basis value, not a per-branch patch — while comparand
+  // EXTRACTION above still reads the full, unbounded question (identifying
+  // "which entities are being compared" must never be truncated).
+  const SUFFIX_QUERY_TOPIC_BUDGET = 350; // leaves >=150 chars for suffix/focus, well under boundQuery's 500-char cap
+  const derivedTopic = topic.length > SUFFIX_QUERY_TOPIC_BUDGET
+    ? (keywords.slice(0, 15).join(" ") || topic.slice(0, SUFFIX_QUERY_TOPIC_BUDGET))
+    : topic;
+
   // Apply focus to sub-queries if provided
   const focusSuffix = focus ? ` ${focus}` : "";
 
@@ -1431,7 +1453,7 @@ export function generateSearchQueries(
   const lastYear = thisYear - 1;
 
   if (comparands.length >= 2) {
-    const residual = buildComparisonTopicResidual(topic, comparands);
+    const residual = buildComparisonTopicResidual(derivedTopic, comparands);
     if (residual) {
       const residualSuffix = ` ${residual}`;
       for (const c of comparands) {
@@ -1453,52 +1475,65 @@ export function generateSearchQueries(
     // Genuinely unsupported script — never guess a filler language onto it
     // (requirement 3, fail safe). Keep diversity structural (quoted exact
     // phrase) instead of appending any language's words.
-    queries.push(`"${topic}"${focusSuffix}`);
+    queries.push(`"${derivedTopic}"${focusSuffix}`);
   } else {
     const domainSuffixes = DOMAIN_SUFFIXES_BY_LANG[lang][domain];
     const extra = EXTRA_WORDS_BY_LANG[lang];
     if (keywords.length > 2) {
-      // F14-2: Use full `topic` so named entities (e.g. "Novada", "TypeScript", "Model Context Protocol")
-      // are preserved in derived sub-queries, not truncated by a 4-word slice.
-      queries.push(`${topic} ${domainSuffixes[0]}${focusSuffix}`);
-      queries.push(`${topic} ${domainSuffixes[1]}${focusSuffix}`);
+      // F14-2: Use `derivedTopic` (full topic for short/medium questions —
+      // the overwhelming common case — so named entities like "Novada",
+      // "TypeScript", "Model Context Protocol" are preserved; a condensed
+      // keyword-based topic only once the full topic alone would already
+      // exceed the per-query budget) as base for sub-queries.
+      queries.push(`${derivedTopic} ${domainSuffixes[0]}${focusSuffix}`);
+      queries.push(`${derivedTopic} ${domainSuffixes[1]}${focusSuffix}`);
       if (deep || comprehensive) {
-        queries.push(`${topic} ${domainSuffixes[2]}${focusSuffix}`);
-        queries.push(`${topic} ${extra.challengesLimitations}${focusSuffix}`);
+        queries.push(`${derivedTopic} ${domainSuffixes[2]}${focusSuffix}`);
+        queries.push(`${derivedTopic} ${extra.challengesLimitations}${focusSuffix}`);
         // Social queries (reddit/HN) have no clean non-English equivalent —
         // skip rather than append English filler onto a non-English question.
-        // Uses full `topic` (not a truncated keyword slice) so a multi-word
-        // entity ("Model Context Protocol") is never split mid-name here either.
         if (lang === "en") {
-          queries.push(`${topic} reddit discussion opinions`);
+          queries.push(`${derivedTopic} reddit discussion opinions`);
         }
       }
       if (comprehensive) {
-        queries.push(`${topic} ${extra.caseStudyExamples}${focusSuffix}`);
-        queries.push(`${topic} ${lastYear} ${thisYear} trends${focusSuffix}`);
-        if (lang === "en") queries.push(`${topic} hacker news discussion`);
+        queries.push(`${derivedTopic} ${extra.caseStudyExamples}${focusSuffix}`);
+        queries.push(`${derivedTopic} ${lastYear} ${thisYear} trends${focusSuffix}`);
+        if (lang === "en") queries.push(`${derivedTopic} hacker news discussion`);
       }
     } else {
-      queries.push(`"${topic}" ${domainSuffixes[0]}${focusSuffix}`);
-      queries.push(`${topic} ${domainSuffixes[1]}${focusSuffix}`);
+      queries.push(`"${derivedTopic}" ${domainSuffixes[0]}${focusSuffix}`);
+      queries.push(`${derivedTopic} ${domainSuffixes[1]}${focusSuffix}`);
       if (deep || comprehensive) {
-        queries.push(`${topic} ${extra.examplesUseCases}${focusSuffix}`);
-        queries.push(`${topic} ${extra.reviewExperience}${focusSuffix}`);
-        if (lang === "en") queries.push(`${topic} reddit discussion opinions`);
+        queries.push(`${derivedTopic} ${extra.examplesUseCases}${focusSuffix}`);
+        queries.push(`${derivedTopic} ${extra.reviewExperience}${focusSuffix}`);
+        if (lang === "en") queries.push(`${derivedTopic} reddit discussion opinions`);
       }
       if (comprehensive) {
-        queries.push(`${topic} ${extra.bestPractices} ${thisYear}${focusSuffix}`);
-        if (lang === "en") queries.push(`${topic} hacker news discussion`);
+        queries.push(`${derivedTopic} ${extra.bestPractices} ${thisYear}${focusSuffix}`);
+        if (lang === "en") queries.push(`${derivedTopic} hacker news discussion`);
       }
     }
   }
 
+  // C5 review round 3 (#1): the STRUCTURAL guarantee, applied ONCE here to
+  // EVERY generated query — not per-branch. `derivedTopic` above already
+  // keeps a long question's suffix queries meaningful; this bound is what
+  // makes "every generated query fits the engine's length limit" true by
+  // construction, for every question shape/depth/branch (comparison,
+  // unknown-language, focus-suffixed, or not), not just the ones a future
+  // author remembers to condense. Reuses the SAME boundQuery() (search.ts)
+  // policy query #1 already used — one bound, one place, not a second rule.
+  const bounded = queries.map(q => boundQuery(q).query);
+
   // Dedup near-identical generated queries (same text after lowercase +
-  // whitespace normalization) so no suffix addition can reintroduce the
-  // near-duplicate-search bug this fix targets.
+  // whitespace normalization), checked AFTER bounding so a collision
+  // introduced by truncation is caught too, not just a pre-bound one — no
+  // suffix addition (or truncation) can reintroduce the near-duplicate-
+  // search bug this fix targets.
   const seen = new Set<string>();
   const deduped: string[] = [];
-  for (const q of queries) {
+  for (const q of bounded) {
     const key = q.toLowerCase().replace(/\s+/g, " ").trim();
     if (seen.has(key)) continue;
     seen.add(key);
