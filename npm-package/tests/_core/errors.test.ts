@@ -212,7 +212,9 @@ describe("looksLikeFailureEnvelope — F3 honest isError discriminator", () => {
     "## Search Unavailable\n\nScraper API not activated.",
     "## Research Unavailable\n\nSearch failed with an account/authorization error.",
     "## Verify Unavailable\n\nCannot verify this claim right now.",
-    "## Invalid Parameter \noperation 'x' is not valid",
+    // Real literal from search.ts:709 — NOT a generic "## Invalid Parameter"
+    // prefix (round-1 test used a made-up variant that doesn't exist in source).
+    "## Invalid Parameter — engine\n\nengine=\"bogus\" is not a supported search engine.",
   ])("flags a known failure header as a failure envelope: %s", (text) => {
     expect(looksLikeFailureEnvelope(text)).toBe(true);
   });
@@ -226,6 +228,89 @@ describe("looksLikeFailureEnvelope — F3 honest isError discriminator", () => {
     "## Site Map\n\n...",
     "## Batch Extract Results\n\n...",
   ])("does NOT flag a known success header: %s", (text) => {
+    expect(looksLikeFailureEnvelope(text)).toBe(false);
+  });
+
+  // H1 (independent review, round 2) — PoC confirmed the round-1 regex-based
+  // detector flipped a fully successful novada_research call to isError:true
+  // whenever the CALLER's topic happened to contain "error"/"failed"/
+  // "unavailable". The real first line of EVERY research result (success,
+  // partial, AND the two genuine-failure headers are separate strings) is
+  // `` `## Research: ${args.topic}` `` (research.ts:1266) — never in
+  // FAILURE_HEADER_LITERALS, so no topic content can ever match it now.
+  it.each([
+    "common React error boundary patterns",
+    "how to recover from a failed database migration",
+    "why is my site unavailable during deploys",
+    "## Extract Failed — is this a real heading inside a topic string",
+  ])("H1 pendulum — a successful novada_research result is NOT flagged merely because the caller's topic contains %j", (topic) => {
+    const text = [
+      `## Research: ${topic}`,
+      ``,
+      `**Query**: ${topic} | **top_sources**: 5 | **depth**: deep`,
+      `**requested_depth**: deep | **resolved_depth**: deep`,
+      `**queries**: 6/6 succeeded`,
+      ``,
+      `## Researched source material for: ${topic}`,
+      ``,
+      `[1] Some cited passage about ${topic}...`,
+      ``,
+      `## Key Findings`,
+      `- A real finding.`,
+      ``,
+      `## Sources`,
+      `| # | Title | URL |`,
+      `|---|---|---|`,
+      `| 1 | Example | https://example.com |`,
+      ``,
+      `## Agent Hints`,
+      `- Compose the answer from the material above.`,
+      ``,
+      `## Agent Action`,
+      `agent_instruction: status:success | requested_depth:deep | resolved_depth:deep | queries:6/6 | sources:5 | material:full | answer_ready:true`,
+    ].join("\n");
+    expect(looksLikeFailureEnvelope(text)).toBe(false);
+  });
+
+  it.each([
+    "errors in the novada_search pipeline for pages about Extract Failed messages",
+    "unavailable listings on real estate sites",
+  ])("H1 pendulum — a successful novada_search result is NOT flagged merely because the caller's query contains %j", (query) => {
+    const text = [
+      `## Search Results`,
+      ``,
+      `Query: ${query}`,
+      `1. Example result — https://example.com`,
+      `2. Another result — https://example.org`,
+      ``,
+      `## Agent Hints`,
+      `- Use novada_extract on a result URL for full content.`,
+    ].join("\n");
+    expect(looksLikeFailureEnvelope(text)).toBe(false);
+  });
+
+  it.each([
+    "https://example.com/articles/why-extract-failed-is-a-myth",
+    "https://example.com/pages/service-unavailable-explained",
+  ])("H1 pendulum — a successful novada_extract result is NOT flagged merely because the fetched url/title contains failure-shaped words (%j)", (url) => {
+    const text = [
+      `## Extracted Content`,
+      `url: ${url}`,
+      `mode: static | source: live | quality:ok (score:80/100) | content_present:true | content_ok:true`,
+      `fetched_at: 2026-11-18T00:00:00.000Z`,
+      `title: Why "Extract Failed" and "Service Unavailable" Are Not the Same Thing`,
+      ``,
+      `Real article body content here, plenty of substantive prose.`,
+    ].join("\n");
+    expect(looksLikeFailureEnvelope(text)).toBe(false);
+  });
+
+  it("H1 pendulum — ai_monitor's brand-interpolated header is never flagged regardless of brand text", () => {
+    const text = [
+      `## Brand Presence on AI-Company Domains — Error Unavailable Failed Inc`,
+      ``,
+      `Sentiment: positive. 3 mentions found.`,
+    ].join("\n");
     expect(looksLikeFailureEnvelope(text)).toBe(false);
   });
 

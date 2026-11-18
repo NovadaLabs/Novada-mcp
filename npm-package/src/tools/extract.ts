@@ -1336,9 +1336,14 @@ async function extractSingleInner(
           // runRenderTier succeeded (no throw): html/usedMode are set — fall
           // through to the shared formatting pipeline below, same as any other mode.
         } catch (renderFallbackErr) {
+          // H2 (independent review, round 2): getBrowserUnavailableError() returns
+          // a bare string directly from here — it never flows through
+          // NovadaError.toAgentString()'s redactSecrets() pass (unlike every other
+          // raw-error-embedding site in this file). Must redact explicitly.
+          const rawMsg = renderFallbackErr instanceof Error ? renderFallbackErr.message : String(renderFallbackErr);
           return getBrowserUnavailableError("browser", "render", {
             tried: true,
-            error: renderFallbackErr instanceof Error ? renderFallbackErr.message : String(renderFallbackErr),
+            error: redactSecrets(rawMsg),
           });
         }
       }

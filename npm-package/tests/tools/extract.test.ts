@@ -1226,6 +1226,29 @@ describe("F1: browser tier unavailable → falls back to render before failing",
     expect(result).toContain("## Browser Mode Unavailable");
     expect(result).toContain("render (Web Unblocker) fallback was attempted first and also failed");
   });
+
+  // H2 (independent review, round 2): getBrowserUnavailableError() returns a bare
+  // string directly — it must redact the upstream render error itself (never
+  // flows through NovadaError.toAgentString()'s redaction pass like every other
+  // raw-error-embedding site in this file).
+  it("H2: redacts a secret-shaped upstream render error before surfacing it in the browser-unavailable message", async () => {
+    process.env.VERCEL = "1";
+    mockedAxios.get.mockResolvedValue({
+      data: "<html><body>not a gitbook page</body></html>",
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const secretUrl = "https://sneaky-user:s3cr3tpass@internal-render.novada.com/request";
+    mockedAxios.post.mockRejectedValue(new Error(`Web Unblocker error (500): upstream call to ${secretUrl} failed`));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://browser-fallback-test-secret.example/page", render: "browser", format: "markdown" },
+      API_KEY
+    );
+    expect(result).not.toContain("sneaky-user");
+    expect(result).not.toContain("s3cr3tpass");
+    expect(result).not.toContain("internal-render.novada.com");
+    expect(result).toContain("[novada-internal-host]");
+  });
 });
 
 describe("F2: render='auto' escalates on a fetch-level block-class error, not only on bad content", () => {
@@ -1272,5 +1295,36 @@ describe("F2: render='auto' escalates on a fetch-level block-class error, not on
     expect(result).toContain("## Extract Failed");
     expect(result).toContain("404");
     expect(mockedAxios.post).not.toHaveBeenCalled(); // render was never attempted — matches today's behavior
+  });
+
+  // M1 (independent review): explicit render="static" is a caller opt-OUT of
+  // escalation — a 403 on the single static/proxy fetch must still fail exactly
+  // as today, never silently promoted to the render tier the caller didn't ask for.
+  it("mirror: explicit render='static' + HTTP 403 does NOT escalate (caller asked for static-only)", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://explicit-static-403-test.example/page", render: "static", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("## Extract Failed");
+    expect(result).toContain("403");
+    expect(mockedAxios.post).not.toHaveBeenCalled(); // render tier never invoked for an explicit static request
+  });
+
+  // M1: explicit render="render" is unaffected by F2 — it already goes straight
+  // to the render tier (runRenderTier()) and never passes through the
+  // static/proxy fetch-error catch this fix added at all.
+  it("mirror: explicit render='render' + a render-tier failure is unchanged by F2 (no static/proxy leg involved)", async () => {
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (503): faulted"));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://explicit-render-failure-test.example/page", render: "render", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("## Extract Failed");
+    expect(mockedAxios.get).not.toHaveBeenCalled(); // no static/proxy leg — render="render" never touches fetchWithRetry/fetchViaProxy
   });
 });

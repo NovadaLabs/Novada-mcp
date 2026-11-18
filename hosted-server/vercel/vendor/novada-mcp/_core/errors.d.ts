@@ -96,13 +96,14 @@ export declare const NOT_ESCALATE_STATUSES: ReadonlySet<number>;
  *   cases it has positive evidence for, it never removes the existing floor.
  */
 export declare function isBlockClassFetchFailure(err: unknown): boolean;
-export declare const FAILURE_HEADER_RE: RegExp;
+export declare const FAILURE_HEADER_LITERALS: ReadonlySet<string>;
 /**
  * True when `text` (a tool's returned result, NOT a thrown error) is itself a
  * failure envelope per the class above. Checked ONLY against structured
  * markers emitted by the tools' own formatters — never a loose keyword scan
- * over the whole body, which would false-positive on legitimate content that
- * happens to mention "error"/"failed".
+ * over the whole body or an arbitrary interpolated line, which would
+ * false-positive on legitimate content/caller-text that happens to contain
+ * "error"/"failed"/"unavailable".
  */
 export declare function looksLikeFailureEnvelope(text: unknown): boolean;
 /**

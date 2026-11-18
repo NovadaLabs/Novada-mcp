@@ -253,7 +253,7 @@ export function isBlockClassFetchFailure(err) {
     const statuses = collectStatuses(err);
     return statuses.some((s) => BLOCK_CLASS_STATUSES.has(s));
 }
-// ─── Honest-failure detection (F3, 2026-11-18 reliability fix) ────────────────
+// ─── Honest-failure detection (F3, 2026-11-18 reliability fix; H1 fix round 2) ─
 //
 // Many tools signal failure by RETURNING a normally-shaped string whose text
 // happens to describe a failure, instead of throwing — e.g. extract.ts returns
@@ -265,37 +265,75 @@ export function isBlockClassFetchFailure(err) {
 // exactly this shape (failure body, isError:false), which is why the problem
 // was invisible to both telemetry and the agent's own retry logic.
 //
-// Class table, enumerated by grepping every tool's own literal `## X` header
-// strings under npm-package/src/tools/*.ts (not guessed): every tool's SUCCESS
-// header is a fixed, distinct phrase ("## Extracted Content", "## Search
-// Results", "## Research", "## Scrape Results", "## Crawl Results", "## Site
-// Map", "## Batch Extract Results", ...) that never contains Failed/Error/
-// Unavailable/Invalid — so matching only the FIRST heading line is a safe,
-// low-false-positive discriminator; matching the whole body would
-// misclassify a page that discusses "errors" in its own content.
-// "## Research Incomplete" / "## Verify Incomplete" are deliberately NOT
-// matched — those are the partial-success shape this fix wave's own spec
-// requires to stay isError:false (material content despite some failed
-// sub-queries), distinct from Unavailable/Failed (no usable content at all).
-export const FAILURE_HEADER_RE = /^##\s+[^\n]*\b(?:Failed|Error|Unavailable|Invalid Parameter)\b/i;
+// H1 (independent review, round 2): the FIRST version of this detector used a
+// word-boundary regex (`\b(?:Failed|Error|Unavailable)\b`) over the whole first
+// line. That is unsafe: several tools' SUCCESS header interpolates caller input
+// into that SAME first line — research.ts:1266 `` `## Research: ${args.topic}` ``
+// (every research call, success AND failure, starts with this), ai_monitor.ts
+// `` `## Brand Presence on AI-Company Domains — ${brand}` ``. A topic/brand
+// containing the word "error" or "failed" (e.g. "common React error boundary
+// patterns") flipped a fully successful result to isError:true. Caller-supplied
+// text (topic, query, url, brand) must NEVER be inspected by this detector.
+//
+// Fix: two signals, NEITHER of which can carry caller text —
+//  1. PRIMARY — the `agent_instruction: status:X` marker every formatter emits.
+//     Verified (by reading every site, not assumed) that every `status:` token
+//     in the codebase is a fixed string literal or a ternary between fixed
+//     string literals (`status:failed`, `status:${hasMaterial?"success":"partial"}`,
+//     `status:search_unavailable`, `status:browser_unavailable_on_runtime`,
+//     `error: invalid_params`, ...) — never string-interpolated from a tool
+//     param. grep `status:` across npm-package/src/tools/*.ts to re-verify if a
+//     new tool is added; a hit that is NOT one of these fixed enumerable tokens
+//     means this invariant has been violated and this comment is now stale.
+//  2. SECONDARY — an EXACT, closed table of formatter-owned header strings
+//     (FAILURE_HEADER_LITERALS below), matched by whole-line EQUALITY against
+//     the trimmed first line — never a substring/word-boundary scan over
+//     arbitrary interpolated content. Enumerated by grepping every literal
+//     `` `## X` `` string under npm-package/src/tools/*.ts and keeping only the
+//     ones that are TRUE fixed literals (no `${...}` interpolation anywhere in
+//     that header line) and that a tool returns ONLY on genuine failure. A
+//     header that interpolates caller input (`## Research: ${topic}`, `##
+//     Brand Presence on AI-Company Domains — ${brand}`) is deliberately
+//     EXCLUDED from this table — such a header can never prove failure on its
+//     own text, by construction, regardless of what the caller's input says.
+// "## Research Incomplete" / "## Verify Incomplete" ARE included — pure fixed
+// literals, no interpolation — but are genuine zero-material failures (same
+// `status:*_failed`/`status:*unavailable` family as their siblings), distinct
+// from the real partial-success shape (`` `## Research: ${topic}` `` with
+// `status:partial`), which is excluded by never being in this table at all.
+export const FAILURE_HEADER_LITERALS = new Set([
+    "## Extract Failed",
+    "## Extraction Error",
+    "## Browser Mode Unavailable",
+    "## Search Unavailable",
+    "## Invalid Parameter — engine",
+    "## Research Unavailable",
+    "## Research Incomplete",
+    "## Verify Unavailable",
+    "## Verify Incomplete",
+]);
 /** Marks a non-"## heading" failure signal some tools use instead/in addition
  *  (e.g. "agent_instruction: status:failed", "status:browser_unavailable_on_runtime",
  *  "status:search_unavailable"). Deliberately does NOT match "status:success" or
  *  the many other non-failure status tokens (status:no_content is advisory, not
- *  matched here — it is attached to results that already carry real content). */
+ *  matched here — it is attached to results that already carry real content).
+ *  Safe against caller-text injection: see the verified invariant above — every
+ *  token this can match is a fixed string literal in the codebase, never
+ *  interpolated from params.topic/params.query/params.url/etc. */
 const FAILURE_STATUS_RE = /agent_instruction:\s*status:\s*(?:failed|[a-z0-9_]*unavailable|[a-z0-9_]*_failed)\b/i;
 /**
  * True when `text` (a tool's returned result, NOT a thrown error) is itself a
  * failure envelope per the class above. Checked ONLY against structured
  * markers emitted by the tools' own formatters — never a loose keyword scan
- * over the whole body, which would false-positive on legitimate content that
- * happens to mention "error"/"failed".
+ * over the whole body or an arbitrary interpolated line, which would
+ * false-positive on legitimate content/caller-text that happens to contain
+ * "error"/"failed"/"unavailable".
  */
 export function looksLikeFailureEnvelope(text) {
     if (typeof text !== "string" || text.length === 0)
         return false;
-    const firstLine = text.slice(0, 200).split("\n", 1)[0] ?? "";
-    if (FAILURE_HEADER_RE.test(firstLine))
+    const firstLine = (text.slice(0, 200).split("\n", 1)[0] ?? "").trimEnd();
+    if (FAILURE_HEADER_LITERALS.has(firstLine))
         return true;
     return FAILURE_STATUS_RE.test(text);
 }
