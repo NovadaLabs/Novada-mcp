@@ -126,9 +126,41 @@ describe("B2: redirected-to-homepage / archive-snapshot is an honest failure, no
   });
 });
 
-describe("B2 round 2 (independent review HIGH): a deep-path → homepage-redirect that the PRE-EXISTING Wayback rescue (P2-1) then successfully recovers must stay a success", () => {
-  it("deep path redirects to a SPARSE homepage (triggers Wayback's own <100-char/<20-score threshold) -> Wayback returns rich real content -> ## Extracted Content, NOT wrong_page", async () => {
-    const SPARSE_HOMEPAGE_HTML = `<html><head><title>Example Site</title></head><body><p>Not found.</p></body></html>`;
+describe("B2 round 4 (owner decision, 2026-11-18): decide wrong-page ONCE, at the static leg's own disclosed redirect — never re-derived from later content, never escalated", () => {
+  const SPARSE_HOMEPAGE_HTML = `<html><head><title>Example Site</title></head><body><p>Not found.</p></body></html>`;
+
+  it("deep path -> 301 to the site root -> ## Extract Failed, wrong_page, with NO escalation/rescue call made at all (assert call count)", async () => {
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      // If this is ever called for web.archive.org, the assertion below on total
+      // call count catches it — the early return must happen BEFORE any rescue
+      // fetch is even attempted, not just before it succeeds.
+      return {
+        data: SPARSE_HOMEPAGE_HTML,
+        headers: {},
+        status: 200,
+        request: { res: { responseUrl: "https://example.com/" } },
+      };
+    });
+
+    const result = await novadaExtract(
+      { url: "https://example.com/2024/deleted-article", format: "markdown", render: "auto" },
+      API_KEY
+    );
+
+    expect(result).toContain("## Extract Failed");
+    expect(result).toMatch(/status:wrong_page/);
+    expect(result).toMatch(/final_url: https:\/\/example\.com\//);
+    // Exactly ONE static/proxy GET — no Wayback fetch, no render/browser escalation
+    // call. A server-side redirect is issued identically regardless of fetch tier,
+    // so round 4 deliberately never retries it.
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
+  it("Wayback rescue (P2-1) still works normally when NO redirect was disclosed — this check never touches it", async () => {
+    // Same sparse content as above, but served directly (no responseUrl at all) —
+    // B2's check is a no-op here (nothing disclosed), so the PRE-EXISTING Wayback
+    // fallback runs on its own merits exactly as before this wave.
     const RICH_WAYBACK_HTML = `
       <html><head><title>2024 Deleted Article — Example Site</title></head>
       <body><main>
@@ -140,21 +172,11 @@ describe("B2 round 2 (independent review HIGH): a deep-path → homepage-redirec
       if (typeof url === "string" && url.includes("web.archive.org")) {
         return { data: RICH_WAYBACK_HTML, headers: {}, status: 200 };
       }
-      // Primary fetch: the original deep path 30x-redirected to the (sparse) homepage.
-      return {
-        data: SPARSE_HOMEPAGE_HTML,
-        headers: {},
-        status: 200,
-        request: { res: { responseUrl: "https://example.com/" } },
-      };
+      return { data: SPARSE_HOMEPAGE_HTML, headers: {}, status: 200 }; // no responseUrl disclosed
     });
 
     const result = await extract("https://example.com/2024/deleted-article");
 
-    // Round 1 regression (independent review HIGH): this used to return
-    // "## Extract Failed ... status:wrong_page" here, discarding the Wayback
-    // rescue's genuinely-recovered content because the redirect check still read
-    // the ORIGINAL (pre-rescue) finalUrl against the NEW (rescued) content.
     expect(result).not.toContain("## Extract Failed");
     expect(result).not.toMatch(/status:wrong_page/);
     expect(result).toContain("## Extracted Content");
@@ -162,72 +184,23 @@ describe("B2 round 2 (independent review HIGH): a deep-path → homepage-redirec
     expect(result).toContain("genuine archived article content");
   });
 
-  it("MIRROR: the SAME redirect-to-sparse-homepage WITHOUT a usable Wayback snapshot (archive.org also returns nothing useful) still fails as wrong_page, not a silent generic quality caveat", async () => {
-    const SPARSE_HOMEPAGE_HTML = `<html><head><title>Example Site</title></head><body><p>Not found.</p></body></html>`;
-    mockedAxios.get.mockImplementation(async (url: string) => {
-      if (typeof url === "string" && url.includes("web.archive.org")) {
-        // Wayback itself has nothing (too short to pass P2-1's own >500-char floor).
-        return { data: "<html><body>Not archived.</body></html>", headers: {}, status: 200 };
-      }
-      return {
-        data: SPARSE_HOMEPAGE_HTML,
-        headers: {},
-        status: 200,
-        request: { res: { responseUrl: "https://example.com/" } },
-      };
-    });
-
-    const result = await extract("https://example.com/2024/deleted-article");
-
-    expect(result).toContain("## Extract Failed");
-    expect(result).toMatch(/status:wrong_page/);
-  });
-});
-
-describe("B2 round 3 (independent review HIGH, live-reproduced): escalation re-fetching the SAME wrong page must still fail; escalation recovering the REAL page must still succeed", () => {
-  // Homepages near-universally self-canonicalize — this is the signal round 3 adds
-  // (canonical/og:url) to catch a richer RE-FETCH of the same wrong page, which the
-  // round-2 html-identity gate alone let through (it only looked at WHETHER content
-  // changed, never WHERE the new content actually came from).
-  // NOT example.com for these two: DOMAIN_REGISTRY pins example.com to
-  // method:"static", which skips the quality-score escalation block entirely
-  // (`!domainHint` guard) — these two tests specifically need that escalation
-  // to actually run, so they use a host with no registry entry.
-  const ESC_HOST = "wrongpage-escalation-test.example";
-  const RICHER_SAME_WRONG_HOMEPAGE_HTML = `
-    <html><head><title>Escalation Test Site — Home</title><link rel="canonical" href="https://${ESC_HOST}/"></head>
-    <body><main>
-      <h1>Welcome to Escalation Test Site</h1>
-      ${"<p>A richer render of the SAME homepage — more paragraphs now present (simulating client-side JS that populated extra sections), but still the homepage, not the requested article.</p>".repeat(10)}
-    </main></body></html>
-  `;
-  // The REAL requested page, recovered via escalation — canonicalizes to ITSELF
-  // (the originally requested deep path), not to the homepage.
-  const REAL_RECOVERED_PAGE_HTML = `
-    <html><head><title>2024 Deleted Article</title><link rel="canonical" href="https://${ESC_HOST}/2024/deleted-article"></head>
-    <body><main>
-      <h1>2024 Deleted Article</h1>
-      ${"<p>This is the genuine article content, successfully recovered via the render/browser escalation after the static leg was blocked.</p>".repeat(10)}
-    </main></body></html>
-  `;
-  const SPARSE_HOMEPAGE_HTML = `<html><head><title>Escalation Test Site</title></head><body><p>Not found.</p></body></html>`;
-
-  it("static leg redirects deep path -> sparse homepage; quality escalation re-fetches a RICHER copy of the SAME homepage (self-canonicalized) -> still ## Extract Failed, wrong_page — NOT a false success with the homepage title", async () => {
-    mockedAxios.get.mockImplementation(async (url: string) => {
-      if (typeof url === "string" && url.includes("web.archive.org")) {
-        // Wayback also has nothing useful here — isolates this test to the
-        // quality-score escalation path, not the Wayback rescue path.
-        return { data: "<html><body>n/a</body></html>", headers: {}, status: 200 };
-      }
-      return {
-        data: SPARSE_HOMEPAGE_HTML,
-        headers: {},
-        status: 200,
-        request: { res: { responseUrl: `https://${ESC_HOST}/` } },
-      };
-    });
+  it("CSR SPA whose REAL, correctly-rendered page carries a sitewide og:url pointing at the site root -> still a success (this check never reads og:url/canonical at all)", async () => {
+    // Round 3 (reverted): a canonical/og:url fallback was tried and found unsafe in
+    // BOTH directions — this is the specific failure mode that made it unsafe. A
+    // misleading sitewide og:url must NOT fail a page that was never redirected at
+    // all; round 4 never parses this tag, so it cannot matter either way.
+    const ESC_HOST = "spa-og-url-test.example"; // not DOMAIN_REGISTRY-pinned
+    const JS_SHELL_HTML = `<html><head><title>Loading…</title></head><body><div id="root"></div><script src="/app.js"></script></body></html>`;
+    const REAL_RENDERED_HTML = `
+      <html><head><title>2024 Article</title><meta property="og:url" content="https://${ESC_HOST}/"></head>
+      <body><main>
+        <h1>2024 Article</h1>
+        ${"<p>This is the genuine, correctly client-side-rendered article content for the requested deep path.</p>".repeat(10)}
+      </main></body></html>
+    `;
+    mockedAxios.get.mockImplementation(async () => ({ data: JS_SHELL_HTML, headers: {}, status: 200 })); // no responseUrl -> no redirect disclosed
     mockedAxios.post.mockResolvedValue({
-      data: { code: 0, data: { code: 200, html: RICHER_SAME_WRONG_HOMEPAGE_HTML, msg: "", msg_detail: "" } },
+      data: { code: 0, data: { code: 200, html: REAL_RENDERED_HTML, msg: "", msg_detail: "" } },
       status: 200,
       headers: {},
       config: {} as never,
@@ -235,63 +208,16 @@ describe("B2 round 3 (independent review HIGH, live-reproduced): escalation re-f
     });
     process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
 
-    const result = await novadaExtract({ url: `https://${ESC_HOST}/2024/deleted-article`, format: "markdown", render: "auto" }, API_KEY);
+    const result = await novadaExtract(
+      { url: `https://${ESC_HOST}/2024/article`, format: "markdown", render: "auto" },
+      API_KEY
+    );
 
     delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
-    expect(mockedAxios.post).toHaveBeenCalled(); // confirms escalation actually ran, not a vacuous pass
-    expect(result).toContain("## Extract Failed");
-    expect(result).toMatch(/status:wrong_page/);
-    expect(result).not.toContain("Welcome to Escalation Test Site");
-  });
-
-  it("MIRROR: static leg is blocked/sparse (e.g. anti-bot); escalation recovers the REAL requested page (self-canonicalized to the requested URL) -> success, not wrong_page", async () => {
-    mockedAxios.get.mockImplementation(async (url: string) => {
-      if (typeof url === "string" && url.includes("web.archive.org")) {
-        return { data: "<html><body>n/a</body></html>", headers: {}, status: 200 };
-      }
-      return { data: SPARSE_HOMEPAGE_HTML, headers: {}, status: 200 }; // no responseUrl disclosed at all here
-    });
-    mockedAxios.post.mockResolvedValue({
-      data: { code: 0, data: { code: 200, html: REAL_RECOVERED_PAGE_HTML, msg: "", msg_detail: "" } },
-      status: 200,
-      headers: {},
-      config: {} as never,
-      statusText: "OK",
-    });
-    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
-
-    const result = await novadaExtract({ url: `https://${ESC_HOST}/2024/deleted-article`, format: "markdown", render: "auto" }, API_KEY);
-
-    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
-    expect(mockedAxios.post).toHaveBeenCalled();
     expect(result).not.toContain("## Extract Failed");
     expect(result).not.toMatch(/status:wrong_page/);
     expect(result).toContain("## Extracted Content");
-    expect(result).toContain("genuine article content");
-  });
-
-  it("MIRROR: canonical URL differing only by http->https / www<->apex / trailing slash from the requested URL stays a success", async () => {
-    const html = `<html><head><title>Docs</title><link rel="canonical" href="https://www.example.com/docs/guide/"></head><body><main>
-      ${"<p>Real documentation content with enough substance to be a genuine page.</p>".repeat(8)}
-    </main></body></html>`;
-    mockedAxios.get.mockImplementation(async (url: string) => {
-      if (typeof url === "string" && url.includes("web.archive.org")) return { data: "n/a", headers: {}, status: 200 };
-      return { data: html, headers: {}, status: 200 }; // no responseUrl -> forces the canonical-url fallback path
-    });
-    const result = await novadaExtract({ url: "http://example.com/docs/guide", format: "markdown", render: "auto" }, API_KEY);
-    expect(result).not.toContain("## Extract Failed");
-  });
-
-  it("MIRROR: canonical URL is a locale-prefixed variant of the requested deep path (not a collapse to root) stays a success", async () => {
-    const html = `<html><head><title>Docs</title><link rel="canonical" href="https://example.com/en/docs/latest"></head><body><main>
-      ${"<p>Real documentation content, canonicalized to its localized/versioned URL, not the homepage.</p>".repeat(8)}
-    </main></body></html>`;
-    mockedAxios.get.mockImplementation(async (url: string) => {
-      if (typeof url === "string" && url.includes("web.archive.org")) return { data: "n/a", headers: {}, status: 200 };
-      return { data: html, headers: {}, status: 200 };
-    });
-    const result = await novadaExtract({ url: "https://example.com/docs/latest", format: "markdown", render: "auto" }, API_KEY);
-    expect(result).not.toContain("## Extract Failed");
+    expect(result).toContain("genuine, correctly client-side-rendered article content");
   });
 });
 

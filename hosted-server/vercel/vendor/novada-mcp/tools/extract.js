@@ -1073,9 +1073,12 @@ function formatMarkdownExtract(url, mode, body, maxChars, outputFormat, isMarkdo
 // layer-study.md's repro class: a live site silently 30x-redirects a dead/removed page
 // to its own homepage, or to a generic archive/cache snapshot — content_ok's existing
 // word/char floor (isShortButComplete) reads the landing page's chrome as ordinary
-// short-but-complete prose and rescues it into a false success. Two discriminators,
-// folded into the EXISTING isChallengePage boolean below (one more OR arm, not a
-// parallel gate) — not per-site patches.
+// short-but-complete prose and rescues it into a false success. Two discriminators:
+// the redirect check below (`isRedirectedAwayFromRequestedPage`) is decided ONCE, at
+// the static leg's own fetch (see its call site, ~line 1737) — round 4 owner decision,
+// not folded into `isChallengePage`, see that function's own history comment. The
+// boilerplate/CDN-stub check further down IS still folded into `isChallengePage` (a
+// body-content signature, not a redirect-disclosure one — unaffected by this round).
 /** Hosts that exist purely to serve a cached/archived COPY of a page, never the page
  *  itself. A table, not a single site: a new rescue host the backend starts
  *  redirecting to is a new row here, not a new branch. */
@@ -1101,13 +1104,13 @@ const GENERIC_RESCUE_HOSTS = ["web.archive.org", "archive.ph", "archive.today", 
  * fires on a HOST that is itself in the rescue table (a scheme/www/trailing-slash
  * change alone never changes which host is in that table).
  */
-function isRedirectedAwayFromRequestedPage(requestedUrl, servedFrom) {
-    if (!servedFrom)
-        return false; // unknown (no tier/content-identity signal at all) — never guess
+function isRedirectedAwayFromRequestedPage(requestedUrl, finalUrl) {
+    if (!finalUrl)
+        return false; // no redirect disclosed by the static leg — never guess
     let req, fin;
     try {
         req = new URL(requestedUrl);
-        fin = new URL(servedFrom);
+        fin = new URL(finalUrl);
     }
     catch {
         return false;
@@ -1123,41 +1126,17 @@ function isRedirectedAwayFromRequestedPage(requestedUrl, servedFrom) {
         return false; // request already targeted the homepage
     return finPath === "" || finPath === "/";
 }
-/**
- * B2 round 3 (independent review HIGH): the served content's OWN self-reported
- * identity — `<link rel="canonical">` first, `<meta property="og:url">` second —
- * used as `servedFrom` whenever the tier that produced the FINAL content can't
- * disclose its own final URL. This is every tier except the static/proxy leg:
- * Web Unblocker's response envelope carries no URL field at all (`{code, data:
- * {code, html, msg, msg_detail}}` — confirmed by reading `fetchWithRender`'s
- * destructuring, nothing to read), and a browser/Wayback/GitBook-served page is
- * likewise read by its OWN markup here rather than by plumbing each transport's
- * internal navigation URL through every call site.
- *
- * This is the fix for round 2's remaining false negative (live-reproduced):
- * round 2 ONLY trusted the static leg's disclosed redirect target, and skipped
- * the check entirely for any other tier (never flagging, never guessing) — which
- * correctly let a Wayback RESCUE through, but ALSO let a render/browser
- * escalation that re-fetched the exact SAME wrong page (just a richer render of
- * it) slip past as a false success, because the richer copy's quality score
- * cleared the content-present floor. A real homepage/landing page almost always
- * self-canonicalizes; a genuinely-correct deep page's own markup canonicalizes
- * to itself — so this one signal, applied uniformly, catches "escalation
- * reproduced the same wrong page" while still passing "escalation recovered the
- * real page" and "Wayback rescued the real page", without the function needing
- * to know which tier produced the content at all.
- */
-function extractCanonicalOrOgUrl($doc) {
-    if (!$doc)
-        return null;
-    const canonical = $doc('link[rel="canonical"]').attr("href");
-    if (canonical && canonical.trim())
-        return canonical.trim();
-    const ogUrl = $doc('meta[property="og:url"]').attr("content");
-    if (ogUrl && ogUrl.trim())
-        return ogUrl.trim();
-    return null;
-}
+// B2 round 4 (owner decision, 2026-11-18): rounds 2-3 tried re-deriving this check's
+// signal from the FINAL content (html-identity against the static leg's snapshot,
+// then a canonical-link/og:url fallback for every other tier) so a later rescue or
+// escalation couldn't leave a stale verdict in place. Both were reverted: the
+// canonical/og:url fallback is unsafe in BOTH directions (a client-rendered SPA with
+// a sitewide `og:url` pointing at its root falsely fails a correctly-rendered deep
+// page; a homepage with no canonical tag at all still slips through as a false
+// success). The owner's decision: decide wrong-page ONCE, at the one point a server
+// redirect is actually disclosed (the static leg's own response, right after
+// `finalUrl` is captured, above) — never re-derived from later content. See that
+// call site's comment for the current check.
 /**
  * Error/boilerplate-only page signatures: a body whose ENTIRE content is one of these
  * known non-content stubs (CDN/edge error page, cookie-consent-only wall) reads as
@@ -1315,33 +1294,21 @@ async function extractSingleInner(params, apiKey) {
     let gitbookMdContent = null;
     /** Anti-bot provider detected during fetch (null = none detected) */
     let detectedAntiBot = null;
-    // B2 (wave B/C, 2026-11-18): the URL actually served after following redirects, when
-    // known. Only the static/proxy fetch leg (a real axios GET to the target, whether
-    // direct or through the proxy tunnel) can disclose this — axios's Node adapter
-    // (follow-redirects) records it as `response.request.res.responseUrl`. The render
-    // tier wraps the HTML inside Novada's own Web Unblocker API response and does not
-    // disclose the target's final URL, so it stays null there — the redirect-mismatch
-    // check below degrades to a no-op (never a false positive) whenever it is unknown.
+    // B2 round 4 (owner decision, 2026-11-18, "decide once, where disclosed"): the URL
+    // actually served after following redirects, when known. Only the static/proxy
+    // fetch leg (a real axios GET to the target, whether direct or through the proxy
+    // tunnel) can disclose this — axios's Node adapter (follow-redirects) records it as
+    // `response.request.res.responseUrl`. The wrong-page verdict is decided IMMEDIATELY
+    // once this is captured (see the check right after it is set, below) — never later,
+    // and never re-derived from any other tier's content (render/Web Unblocker discloses
+    // no URL at all; browser's/Wayback's own page identity was tried in rounds 2-3 and
+    // reverted — see those rounds' history — because it is unsafe in both directions: a
+    // client-rendered SPA with a sitewide `og:url` pointing at its root falsely fails a
+    // correctly-rendered deep page, and a homepage with no canonical tag at all still
+    // slips through as a false success). A wrong page reached with NO disclosed redirect
+    // at all (e.g. a JS-redirect, or a server that 200s a generic page without a 3xx) is
+    // a known, documented scope limit — not detected by this check.
     let finalUrl = null;
-    // B2 round 2 (independent review HIGH, 2026-11-18): `finalUrl` describes the
-    // static/proxy leg's redirect chain for the HTML STRING that leg produced — but
-    // several PRE-EXISTING fallbacks (GitBook .md, the JS-heavy/bot-challenge render
-    // escalation, the later quality-score render/browser escalation, and the Wayback
-    // rescue) can go on to REPLACE `html`/`mainContent` with a different fetch's
-    // content while leaving `usedMode` unchanged (the Wayback and GitBook branches both
-    // keep `usedMode === "static"`) — gating the redirect check on `usedMode` alone
-    // (round 1's approach) missed exactly this: a legitimately Wayback-rescued page got
-    // discarded as a false `wrong_page` because the check still read the ORIGINAL
-    // (pre-rescue) redirect's `finalUrl` against the NEW (rescued) content.
-    //
-    // Fixed by re-deriving validity from the content itself, the same way
-    // `hydrationSuspectFinal` below is re-derived from the CURRENT `$doc` rather than a
-    // flag threaded through the pipeline: snapshot the exact html STRING this leg
-    // produced at the moment `finalUrl` is captured, then only trust `finalUrl` later if
-    // `html` is still reference-identical to that snapshot. ANY future code path that
-    // swaps in different content automatically invalidates the check by construction —
-    // there is nothing to remember to clear at a new call site.
-    let htmlAtFinalUrlCapture = null;
     /** Whether anti-bot was resolved via escalation */
     let antiBotResolved = false;
     // clean=true → main-content only; clean=false (default) → full page for maximum coverage.
@@ -1630,6 +1597,27 @@ async function extractSingleInner(params, apiKey) {
             // request; absent — e.g. under a mocked transport in tests — leaves it null
             // and the redirect-mismatch check below is simply skipped, never guessed at).
             finalUrl = r.request?.res?.responseUrl ?? null;
+            // B2 round 4 (owner decision, "decide once, where disclosed"): decided HERE, the
+            // one place a server-issued redirect is ever disclosed, BEFORE any content-type
+            // dispatch or escalation — not re-evaluated later against whatever tier/rescue
+            // ends up serving content. No escalation is attempted: a server-side redirect
+            // (to its own homepage, or to an unrelated rescue host) is issued identically
+            // regardless of which Novada fetch tier re-requests the SAME url, so retrying via
+            // render/browser would only reproduce the same verdict at extra latency cost to
+            // the caller. When no redirect is disclosed (`finalUrl` null, or it matches the
+            // requested page), this is a no-op and the normal pipeline below is unaffected —
+            // including the pre-existing Wayback/GitBook rescues, which never run at all once
+            // this has already returned.
+            if (isRedirectedAwayFromRequestedPage(params.url, finalUrl)) {
+                return toolFailure([
+                    `## Extract Failed`,
+                    `url: ${params.url}`,
+                    `reason: the server redirected to ${finalUrl ? JSON.stringify(finalUrl) : "an unrelated page"} instead of the requested URL`,
+                    ...(finalUrl ? [`final_url: ${finalUrl}`] : []),
+                    ``,
+                    `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server redirected to its homepage (or an unrelated host) instead of the requested resource. Verify the URL is still correct (the resource may have moved or been removed); retrying with a different render mode will not help, since this redirect is issued identically regardless of fetch tier.`,
+                ].join("\n"), "wrong_page");
+            }
             const contentType = String(r.headers?.["content-type"] ?? "");
             if (isPdfResponse(params.url, contentType)) {
                 const pdfBuffer = Buffer.isBuffer(r.data)
@@ -1666,17 +1654,6 @@ async function extractSingleInner(params, apiKey) {
                 }
                 html = r.data;
             }
-            // B2 round 2: snapshot the exact string `html` holds right now — the static/
-            // proxy leg's own content, matching the `finalUrl` just captured above. Every
-            // later fallback (GitBook, JS-heavy/bot-challenge escalation, Wayback) reassigns
-            // `html` to a DIFFERENT fetch's content; comparing against this snapshot at
-            // evaluation time (not a flag threaded through those blocks) is what lets the
-            // redirect check detect ANY of them by construction. (PDF responses strip a
-            // `pdf_pages:` prefix later, below — a real PDF leg's snapshot therefore never
-            // reference-equals the post-strip `html`, so this check simply never fires for
-            // PDFs; fails closed, not a false positive, and PDFs are excluded from every one
-            // of those fallback paths anyway.)
-            htmlAtFinalUrlCapture = html;
             // GitBook .md fallback (NOV-GB1 / NOV-GB2):
             // If the static HTML is served by GitBook (CDN signature), fetch the authoritative
             // <url>.md sibling BEFORE any render/browser escalation. This is a free, no-JS path
@@ -2171,39 +2148,14 @@ async function extractSingleInner(params, apiKey) {
     // A page whose returned HTML is a bot-challenge / anti-bot interstitial is NOT
     // "complete but short" — it is an absence dressed as content. Exclude it so the
     // rescue below never green-lights "Checking your browser…" style stubs.
-    // B2 (wave B/C, 2026-11-18): two more absence-dressed-as-content shapes folded into
-    // this SAME boolean (3-way OR, not a parallel gate) — a redirect that landed on an
-    // unrelated homepage/archive-snapshot instead of the requested page, and a body that
-    // IS a CDN error stub or cookie-wall rather than real content.
-    // `servedFrom` — the best available evidence of WHERE the content actually being
-    // returned came from, re-derived from the FINAL state (same re-derive-from-current-
-    // state approach `hydrationSuspectFinal` already uses below), not threaded through
-    // every escalation branch by hand:
-    //   1. the static/proxy leg's own disclosed redirect target (`finalUrl`), but ONLY
-    //      while `html` is STILL reference-identical to the snapshot taken at the moment
-    //      `finalUrl` was captured (`htmlAtFinalUrlCapture`) — i.e. only while it still
-    //      describes the content currently being judged.
-    //   2. otherwise, the served content's OWN self-reported identity (canonical link /
-    //      og:url) — covers every other tier uniformly (render/Web Unblocker discloses no
-    //      URL field at all; browser/Wayback/GitBook are read the same way) without
-    //      needing to know which one produced the content.
-    //
-    // Round 1 gated signal #1 on `usedMode === "static"`, which missed the Wayback rescue
-    // and GitBook .md fallback (both replace content while leaving usedMode at "static").
-    // Round 2 fixed that by requiring #1's html-identity check, but with NO fallback when
-    // it failed — so round 2 correctly let the Wayback RESCUE through, but also let a
-    // render/browser escalation that re-fetched the exact SAME wrong page (just a richer
-    // render of it, clearing the content-present floor on its own) slip past as a false
-    // success (independent review HIGH, round 2 — live-reproduced). Adding #2 closes that
-    // gap: the re-fetched wrong page's own canonical/og:url still points at the wrong
-    // page, so it is still caught; a render/browser fetch that recovers the REAL page
-    // canonicalizes to itself and is correctly left alone.
-    const servedFrom = html === htmlAtFinalUrlCapture && finalUrl ? finalUrl : extractCanonicalOrOgUrl($doc);
-    const redirectedAwayFromRequestedPage = isRedirectedAwayFromRequestedPage(params.url, servedFrom);
+    // B2 round 4: the redirect-away discriminator is NO LONGER part of this boolean —
+    // it is decided once, early, at the static leg's own fetch (see ~line 1737) and
+    // returns immediately when it fires, so execution never even reaches this point in
+    // that case. Only the boilerplate/CDN-stub body-signature check remains folded in
+    // here (a content-signature discriminator, not a redirect-disclosure one).
     const boilerplateOnlyPage = hasBoilerplateOnlySignature(mainContent);
     const isChallengePage = detectedAntiBot !== null ||
         (typeof html === "string" && detectBotChallenge(html)) ||
-        redirectedAwayFromRequestedPage ||
         boilerplateOnlyPage;
     // F14 (2026-09-10 audit): the render escalation's FETCH itself failed or returned an
     // unverifiable body (thrown 401/5xx, bot-challenge interstitial, non-HTML). Distinct
@@ -2226,41 +2178,28 @@ async function extractSingleInner(params, apiKey) {
         wordCount >= 12 &&
         mainContent.trim().length >= 80;
     // Display-level presence: true whenever there is usable content in THIS payload.
-    // B2: `redirectedAwayFromRequestedPage` overrides even an otherwise-substantive
-    // `quality.content_present` — unlike the boilerplate-signature check (which is
-    // word-capped below the 50-word presence floor by construction and therefore
-    // already excluded from `quality.content_present` on its own), a page that landed
-    // on an unrelated homepage/archive-snapshot can easily BE long and well-formed (a
-    // real, content-rich homepage) and would otherwise sail past this gate on content
-    // volume alone — the failure here is identity (wrong page), not volume.
-    const contentPresentDisplay = !redirectedAwayFromRequestedPage && (quality.content_present || isShortButComplete);
+    // B2 round 4: the redirect-away case no longer needs an override here — it already
+    // returned immediately at the static leg's own fetch (~line 1737), long before
+    // `quality`/`isShortButComplete` are even computed.
+    const contentPresentDisplay = quality.content_present || isShortButComplete;
     // NOV-565: content_ok is driven by content presence (substantive prose detected on the
     // CLEANED markdown), not the cleanliness score. Docs pages with full text but link-heavy
     // markup used to fail the old `score >= 40` gate; now a page with real content passes.
     // R4: a short-but-complete page (example.com) is also content_ok — it is not a failure.
     const contentOk = contentPresentDisplay && fetchSucceeded && mainContent.length > 0;
-    // B2 (wave B/C, 2026-11-18): either new discriminator is a definitive "this is not
-    // the page the caller asked for" signal (identity/boilerplate, not a volume/quality
-    // judgment) — honest failure via toolFailure(), not a soft "content_ok:false" caveat
-    // buried inside an otherwise success-shaped "## Extracted Content" response (the
-    // exact bug this wave exists to fix). No further escalation is attempted here: a
-    // server-side redirect / cookie-consent wall / CDN error page is issued identically
-    // regardless of which Novada fetch tier (static/proxy/render) requests it — there is
-    // no bot-detection asymmetry for a different tier to route around, so retrying would
-    // just reproduce the same verdict at 10-50x the latency. (Contrast with the EXISTING
-    // JS-heavy/bot-challenge escalation earlier in this function, which fires BEFORE this
-    // point and DOES retry via render/browser — those failures genuinely differ by tier.)
-    if (redirectedAwayFromRequestedPage || boilerplateOnlyPage) {
-        const reason = redirectedAwayFromRequestedPage
-            ? `the content served is from ${servedFrom ? JSON.stringify(servedFrom) : "an unrelated page"}, not the requested URL`
-            : `the fetched page is a boilerplate stub (CDN error page or cookie-consent wall), not real content`;
+    // B2 round 4: the redirect-away case is handled earlier (immediate return at the
+    // static leg's own fetch) and never reaches here. Only the boilerplate/CDN-stub
+    // body signature is decided at this point — a definitive "this is not real content"
+    // signal (not a volume/quality judgment) — honest failure via toolFailure(), not a
+    // soft "content_ok:false" caveat buried inside an otherwise success-shaped
+    // "## Extracted Content" response (the exact bug this wave exists to fix).
+    if (boilerplateOnlyPage) {
         return toolFailure([
             `## Extract Failed`,
             `url: ${params.url}`,
-            `reason: ${reason}`,
-            ...(redirectedAwayFromRequestedPage && servedFrom ? [`served_from: ${servedFrom}`] : []),
+            `reason: the fetched page is a boilerplate stub (CDN error page or cookie-consent wall), not real content`,
             ``,
-            `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server redirected or served a generic fallback instead of the requested resource. Verify the URL is still correct (the resource may have moved or been removed); retrying with a different render mode will not help, since this response is issued identically regardless of fetch tier.`,
+            `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server served a generic fallback instead of the requested resource. Verify the URL is still correct; retrying with a different render mode will not help, since this response is issued identically regardless of fetch tier.`,
         ].join("\n"), "wrong_page");
     }
     // Compute extraction_quality label from fill-rate (resolved fields / requested fields)
