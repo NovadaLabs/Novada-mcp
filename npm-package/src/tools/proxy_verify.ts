@@ -89,7 +89,7 @@ const MAX_ECHO_BODY_BYTES = 64 * 1024;
  * hand-rolled list; the Edge runtime is the only verify-specific member.
  */
 export function isVerifySupportedRuntime(): boolean {
-  return !(RUNTIME.kind === "hosted" || process.env.NEXT_RUNTIME === "edge");
+  return !(RUNTIME.kind !== "local" || process.env.NEXT_RUNTIME === "edge");
 }
 
 // ─── Echo-field sanitization (agent-context injection surface) ───────────────

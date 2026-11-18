@@ -22,8 +22,9 @@
  *
  * Round 5 (owner direction): reads RUNTIME.canHoldWebSocket (config.ts) — the
  * ONE computed-once capability snapshot — instead of re-deriving serverless
- * detection here. See config.ts's RUNTIME doc comment for the full
- * NOVADA_RUNTIME_KIND / DEPLOYMENT_SUPPORTS_WS resolution order.
+ * detection here. Round 8: canHoldWebSocket is now simply `kind !==
+ * "serverless"` — no separate opt-in flag. See config.ts's RUNTIME doc
+ * comment for the full NOVADA_RUNTIME_KIND resolution order.
  */
 import { RUNTIME } from "../config.js";
 import { getBrowserWs } from "./credentials.js";
@@ -56,9 +57,11 @@ export function isBrowserTransportAvailable() {
  * Returns true ONLY when the current runtime can maintain a persistent WebSocket
  * connection required by the CDP (Browser API) tier AND credentials are set.
  *
- * On Vercel serverless / AWS Lambda:
- *   - returns false (CDP WS cannot be maintained)
- *   - UNLESS DEPLOYMENT_SUPPORTS_WS=true is explicitly set (custom runtime override)
+ * On genuine serverless (RUNTIME.kind === "serverless" — real Vercel/Lambda
+ * per-request isolates, auto-detected): returns false (CDP WS cannot be
+ * maintained). On "hosted" (a long-lived Node server, e.g. EC2's
+ * server.mts): returns true unconditionally — no opt-in flag needed, since
+ * "hosted" means this runtime CAN hold a persistent WS by definition.
  *
  * This is the canonical capability gate for the browser tier in extract.ts.
  * utils/browser.ts's isBrowserConfigured() DELEGATES to this exact function
@@ -89,11 +92,11 @@ export function isBrowserAvailableOnRuntime() {
 export function getBrowserUnavailableError(paramValue, fieldName = "render", renderAttempt) {
     const paramContext = paramValue ? ` (${fieldName}="${paramValue}")` : "";
     // F1: the error text used to claim "Vercel serverless functions" specifically —
-    // false on the current production deployment (EC2, see repo CLAUDE.md) even
-    // though RUNTIME.kind alone can't distinguish EC2 from genuine Vercel today
-    // (both report "hosted" — see config.ts). Describe the
-    // TRANSPORT LIMITATION (serverless-style request isolation), not a specific
-    // platform name, so this stays accurate regardless of which host is serving it.
+    // false on the current production deployment (EC2, see repo CLAUDE.md), and
+    // this branch is now ONLY reached when RUNTIME.kind === "serverless" (round
+    // 8 — EC2 reports "hosted" and never reaches here). Still describes the
+    // TRANSPORT LIMITATION generically rather than naming "Vercel" specifically,
+    // since a future serverless-reporting platform could be anything.
     const renderAttemptLine = renderAttempt?.tried
         ? renderAttempt.error
             ? `- A render (Web Unblocker) fallback was attempted first and also failed: ${renderAttempt.error}`

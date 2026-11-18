@@ -41,7 +41,7 @@ const mockedResolveWs = vi.mocked(resolveBrowserWs);
 
 // NOVADA_* vars are stripped by tests/setup.ts; the serverless markers are not —
 // save/restore them explicitly so this file is deterministic in any shell/CI.
-const RUNTIME_KEYS = ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "DEPLOYMENT_SUPPORTS_WS"] as const;
+const RUNTIME_KEYS = ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "NOVADA_RUNTIME_KIND"] as const;
 let savedRuntimeEnv: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -122,15 +122,17 @@ describe("novadaBrowser — runtime guard on serverless (Fix C)", () => {
     expect(mockedConnect).not.toHaveBeenCalled();
   });
 
-  it("DEPLOYMENT_SUPPORTS_WS=true opt-in WITHOUT env WS (auto-provision from API key): guard must NOT fire — the opted-in runtime reaches resolveBrowserWs and connects", async () => {
-    // Review HIGH (2026-09-21): the first guard predicate used
+  it("hosted runtime (NOVADA_RUNTIME_KIND=hosted) WITHOUT env WS (auto-provision from API key): guard must NOT fire — reaches resolveBrowserWs and connects", async () => {
+    // Round 8 (A/B verifier): "hosted" (e.g. EC2's server.mts, a long-lived
+    // Node server) now carries canHoldWebSocket=true as a property of the
+    // kind itself — no separate opt-in flag (DEPLOYMENT_SUPPORTS_WS, removed).
+    // Review HIGH (2026-09-21, still applies): the first guard predicate used
     // isBrowserAvailableOnRuntime(), which conflates transport capability with
-    // credential PRESENCE (it checks getBrowserWs() — env/store only). On an
-    // opted-in runtime with no env WS, resolveBrowserWs(apiKey) auto-provisions
+    // credential PRESENCE (it checks getBrowserWs() — env/store only). On a
+    // hosted runtime with no env WS, resolveBrowserWs(apiKey) auto-provisions
     // credentials the runtime check cannot see — this config WORKED before the
     // guard and must keep working. The guard is a pure TRANSPORT check.
-    process.env.VERCEL = "1";
-    process.env.DEPLOYMENT_SUPPORTS_WS = "true";
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
     delete process.env.NOVADA_BROWSER_WS;
     mockedResolveWs.mockResolvedValueOnce("wss://auto:prov@browser.example.com");
     setupBrowserMock();
@@ -143,9 +145,8 @@ describe("novadaBrowser — runtime guard on serverless (Fix C)", () => {
     expect(result).toContain("navigate [ok]");
   });
 
-  it("DEPLOYMENT_SUPPORTS_WS=true opt-in on a hosted runtime with WS set: guard stands down, connection proceeds", async () => {
-    process.env.VERCEL = "1";
-    process.env.DEPLOYMENT_SUPPORTS_WS = "true";
+  it("hosted runtime (NOVADA_RUNTIME_KIND=hosted) with WS set: guard stands down, connection proceeds — no extra flag needed", async () => {
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
     process.env.NOVADA_BROWSER_WS = "wss://user:pass@browser.example.com";
     setupBrowserMock();
 
@@ -153,6 +154,16 @@ describe("novadaBrowser — runtime guard on serverless (Fix C)", () => {
 
     expect(mockedConnect).toHaveBeenCalledTimes(1);
     expect(result).toContain("navigate [ok]");
+  });
+
+  it("serverless runtime (auto-detected via VERCEL) with WS set: guard still fires — hosted and serverless are no longer the same bucket", async () => {
+    process.env.VERCEL = "1";
+    process.env.NOVADA_BROWSER_WS = "wss://user:pass@browser.example.com";
+
+    const result = await novadaBrowser(NAVIGATE_PARAMS);
+
+    expect(result).toContain("status:browser_unavailable_on_runtime");
+    expect(mockedConnect).not.toHaveBeenCalled();
   });
 
   it("capable local runtime is untouched: connection proceeds exactly as before", async () => {

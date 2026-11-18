@@ -20,10 +20,10 @@ export const SCRAPER_DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
 export const WEB_UNBLOCKER_BASE = "https://webunlocker.novada.com";
 function computeRuntimeKind() {
     const forced = process.env.NOVADA_RUNTIME_KIND;
-    if (forced === "hosted" || forced === "local")
+    if (forced === "hosted" || forced === "local" || forced === "serverless")
         return forced;
     return process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME
-        ? "hosted"
+        ? "serverless"
         : "local";
 }
 export const RUNTIME = {
@@ -31,12 +31,10 @@ export const RUNTIME = {
         return computeRuntimeKind();
     },
     get canWriteFiles() {
-        return computeRuntimeKind() !== "hosted";
+        return computeRuntimeKind() === "local";
     },
     get canHoldWebSocket() {
-        if (process.env.DEPLOYMENT_SUPPORTS_WS === "true")
-            return true;
-        return computeRuntimeKind() !== "hosted";
+        return computeRuntimeKind() !== "serverless";
     },
 };
 /**
@@ -68,7 +66,13 @@ export const RUNTIME = {
  * this helper, not just a coincidence of the numbers chosen.
  */
 export function toolCallDeadline(startMs = Date.now()) {
-    return RUNTIME.kind === "hosted" ? startMs + HOSTED_SAFE_CEILING_MS : Infinity;
+    // Round 8: both "hosted" (EC2) and "serverless" (Vercel/Lambda) get this
+    // ceiling — it bounds per-request latency on the shared multi-tenant
+    // endpoint by design, not merely as a serverless-specific defense (EC2 has
+    // no platform-imposed wall-clock kill of its own, but the SLA-style bound
+    // is intentional there too). Only "local" (the user's own stdio process)
+    // is exempt.
+    return RUNTIME.kind !== "local" ? startMs + HOSTED_SAFE_CEILING_MS : Infinity;
 }
 // Optional: Browser API WebSocket endpoint (CDP)
 // Format: wss://username:password@upg-scbr2.novada.com

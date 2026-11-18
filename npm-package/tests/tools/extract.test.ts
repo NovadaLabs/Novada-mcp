@@ -352,11 +352,13 @@ describe("P1-6: urls array alias", () => {
   // also can't run (forced render mode skips the fallback). Batch mode's
   // `.then(content => ({...ok:true}))` used to count that as a success,
   // silently inflating "successful:N" with a genuine failure.
-  it("a toolFailure()-marked RESOLVED result (browser unavailable on this runtime) is counted as failed, not successful, in batch mode", async () => {
+  it("a toolFailure()-marked RESOLVED result (browser unavailable on a serverless runtime) is counted as failed, not successful, in batch mode", async () => {
+    // Round 8: "hosted" (e.g. EC2) now holds a WS unconditionally — only
+    // "serverless" (genuine Vercel/Lambda) cannot. Use "serverless" here so
+    // this scenario still reaches extractSingleInner's browser-unavailable,
+    // render-fallback-also-fails path.
     const prevRuntimeKind = process.env.NOVADA_RUNTIME_KIND;
-    const prevSupportsWs = process.env.DEPLOYMENT_SUPPORTS_WS;
-    process.env.NOVADA_RUNTIME_KIND = "hosted";
-    delete process.env.DEPLOYMENT_SUPPORTS_WS;
+    process.env.NOVADA_RUNTIME_KIND = "serverless";
     try {
       const result = await novadaExtract({
         url: "https://example.com",
@@ -375,8 +377,6 @@ describe("P1-6: urls array alias", () => {
     } finally {
       if (prevRuntimeKind === undefined) delete process.env.NOVADA_RUNTIME_KIND;
       else process.env.NOVADA_RUNTIME_KIND = prevRuntimeKind;
-      if (prevSupportsWs === undefined) delete process.env.DEPLOYMENT_SUPPORTS_WS;
-      else process.env.DEPLOYMENT_SUPPORTS_WS = prevSupportsWs;
     }
   });
 
@@ -1203,7 +1203,7 @@ describe("country param reaches fetchWithRender", () => {
 describe("F1: browser tier unavailable → falls back to render before failing", () => {
   const saved: Record<string, string | undefined> = {};
   beforeEach(() => {
-    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "DEPLOYMENT_SUPPORTS_WS", "NOVADA_BROWSER_WS"]) {
+    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "NOVADA_RUNTIME_KIND", "NOVADA_BROWSER_WS"]) {
       saved[k] = process.env[k];
       delete process.env[k];
     }
@@ -1244,7 +1244,7 @@ describe("F1: browser tier unavailable → falls back to render before failing",
     expect(mockedAxios.post).toHaveBeenCalled(); // render WAS attempted
   });
 
-  it("render='browser' on a serverless runtime (no DEPLOYMENT_SUPPORTS_WS) still reports unavailable when render ALSO fails, and says render was tried", async () => {
+  it("render='browser' on a serverless runtime still reports unavailable when render ALSO fails, and says render was tried", async () => {
     process.env.VERCEL = "1";
     mockedAxios.get.mockResolvedValue({
       data: "<html><body>not a gitbook page</body></html>",
@@ -1282,6 +1282,29 @@ describe("F1: browser tier unavailable → falls back to render before failing",
     expect(result).not.toContain("s3cr3tpass");
     expect(result).not.toContain("internal-render.novada.com");
     expect(result).toContain("[novada-internal-host]");
+  });
+
+  // Round 8 (A/B verifier): "hosted" (e.g. EC2's server.mts, a long-lived Node
+  // server) must allow the browser tier with NO extra flag — canHoldWebSocket
+  // is now a property of RuntimeKind itself, not a separate opt-in.
+  it("render='browser' on a hosted runtime (NOVADA_RUNTIME_KIND=hosted) actually uses the browser tier — no extra flag needed", async () => {
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
+    process.env.NOVADA_BROWSER_WS = "wss://fake-browser.example.com";
+    const realContent = `<html><head><title>Hosted Browser OK</title></head><body><main>` +
+      `<p>Real content fetched via the browser tier on a hosted (not serverless) runtime.</p>`.repeat(5) +
+      `</main></body></html>`;
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://hosted-browser-allowed.example/page", render: "browser", format: "markdown" },
+      API_KEY
+    );
+    // Assert call history BEFORE mockRestore() — restoring also clears mock.calls.
+    expect(fetchViaBrowserSpy).toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("Hosted Browser OK");
+    expect(result).not.toContain("Browser Mode Unavailable");
   });
 });
 

@@ -538,8 +538,10 @@ function deriveTitle(name: string): string {
 //     valid input fails Anthropic's connector review ("every tool must return a
 //     successful response when called with valid parameters"), so it moved here,
 //     alongside novada_browser_flow (its CDP-session sibling with the identical
-//     architectural limitation). Re-enabling either requires DEPLOYMENT_SUPPORTS_WS=
-//     true on a runtime that can actually hold the WS — not a code change here.
+//     architectural limitation). Re-enabling either requires deploying this
+//     endpoint on a runtime whose RUNTIME.kind is "hosted" (config.ts, round 8) —
+//     a long-lived Node server that declares NOVADA_RUNTIME_KIND=hosted, like
+//     EC2's server.mts — not a code change here.
 //   - novada_site_copy     — writes files to disk; Vercel's function FS is read-only.
 //   - novada_ip_whitelist, novada_capture_apikey — WRITE/destructive account-mutation
 //     actions (whitelist edits, API-key rotation) never ported to the hosted gateway.

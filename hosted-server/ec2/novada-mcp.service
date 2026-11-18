@@ -26,11 +26,7 @@ User=novada
 Group=novada
 WorkingDirectory=/opt/novada-mcp/current
 EnvironmentFile=/etc/novada-mcp/env
-# F1 (2026-11-18 reliability fix wave): see novada-mcp@.service's identical
-# comment — this is the superseded pre-migration reference unit, kept for
-# rollback; the env change is mirrored here so a rollback to this unit doesn't
-# silently re-disable the browser tier.
-Environment=NODE_ENV=production PORT=3000 HOST=127.0.0.1 WEB_CONCURRENCY=2 DEPLOYMENT_SUPPORTS_WS=true
+Environment=NODE_ENV=production PORT=3000 HOST=127.0.0.1 WEB_CONCURRENCY=2
 ExecStart=/usr/bin/node dist/server.mjs
 Restart=always
 RestartSec=2

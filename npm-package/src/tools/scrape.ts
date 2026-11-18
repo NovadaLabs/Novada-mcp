@@ -30,7 +30,7 @@ const SYNC_POLL_CEILING_MS = 45_000;
 const POLL_TIMEOUT_MS = Math.min(SYNC_POLL_CEILING_MS, HOSTED_SAFE_CEILING_MS);
 const POLL_INTERVAL_MS = 2_000;
 
-// TOW2-257 Phase 1: on HOSTED (RUNTIME.kind === "hosted" — see config.ts), keep the
+// TOW2-257 Phase 1: on HOSTED/SERVERLESS (RUNTIME.kind !== "local" — see config.ts), keep the
 // FIRST synchronous poll SHORT so novada_scrape hands back a task_id + processing
 // envelope in ~10s instead of riding the full 45s ceiling. This models the
 // Bright-Data-style "202 + snapshot_id" shape onto our existing task_id/
@@ -43,7 +43,7 @@ const HOSTED_FIRST_TRY_CEILING_MS = 10_000;
 
 /** The sync poll ceiling to use for THIS call: short on hosted, unchanged on local. */
 function syncPollCeilingMs(): number {
-  return RUNTIME.kind === "hosted" ? HOSTED_FIRST_TRY_CEILING_MS : POLL_TIMEOUT_MS;
+  return RUNTIME.kind !== "local" ? HOSTED_FIRST_TRY_CEILING_MS : POLL_TIMEOUT_MS;
 }
 
 interface SubmitApiResponse {

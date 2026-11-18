@@ -1212,8 +1212,8 @@ async function extractSingleInner(params, apiKey) {
         // On serverless (Vercel/Lambda), connectOverCDP cannot hold the WS and fails with a raw
         // "AuthorizationError" that looks like a credentials problem but is actually a transport
         // limitation. Fail fast with a structured, actionable error instead.
-        // isBrowserAvailableOnRuntime() checks: RUNTIME.canHoldWebSocket (config.ts — false
-        // when RUNTIME.kind === "hosted" unless DEPLOYMENT_SUPPORTS_WS=true override) AND
+        // isBrowserAvailableOnRuntime() checks: RUNTIME.canHoldWebSocket (config.ts — round 8:
+        // false only when RUNTIME.kind === "serverless", true for "local"/"hosted") AND
         // whether NOVADA_BROWSER_WS creds are set.
         if (!isBrowserAvailableOnRuntime()) {
             // NOV-GB2: BEFORE falling back to render, probe for a GitBook .md sibling —

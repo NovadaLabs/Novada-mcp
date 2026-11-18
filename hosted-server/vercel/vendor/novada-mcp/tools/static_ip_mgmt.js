@@ -190,7 +190,7 @@ const HOSTED_REFUSED_ACTIONS = {
     },
 };
 function assertActionAvailableOnRuntime(action) {
-    if (RUNTIME.kind !== "hosted")
+    if (RUNTIME.kind === "local")
         return;
     const { reason, extraInstruction } = HOSTED_REFUSED_ACTIONS[action];
     throw new NovadaError({
@@ -294,7 +294,7 @@ async function handleRevealCredentials(params, apiKey, elicitConfirm) {
     // MUST be the first statement: refuses on hosted before any elicitation
     // check, approval-gate evaluation, or upstream devApiPost call runs — see
     // the design note above and assertActionAvailableOnRuntime's own doc
-    // comment. A complete no-op locally (RUNTIME.kind !== "hosted" there).
+    // comment. A complete no-op locally (RUNTIME.kind === "local" there).
     assertActionAvailableOnRuntime("reveal_credentials");
     const { effectiveStatus } = resolveStatus(params.status);
     const requestedLimit = params.limit;

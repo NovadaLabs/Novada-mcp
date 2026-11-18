@@ -5,16 +5,16 @@ import { assertUrlSafe, isUrlSafe } from "./ssrf.js";
 // F1 round 5 (independent A/B verifier): this module used to re-implement its
 // own `isHostedEnvironment()` check inline in BOTH isBrowserConfigured() and
 // fetchViaBrowser(), duplicating (and silently diverging from) runtime.ts's
-// isBrowserAvailableOnRuntime() — the canonical gate that respects the
-// DEPLOYMENT_SUPPORTS_WS=true opt-in. Divergence meant that once mcp.ts's F1
-// caller-key pre-resolution made isBrowserAvailableOnRuntime() return true on
-// hosted+DEPLOYMENT_SUPPORTS_WS=true, extract.ts took the "browser available"
-// arm and called fetchViaBrowser() directly — which threw its OWN stale
-// "serverless (Vercel) cannot provide" error immediately (no WS override
-// awareness, no try/catch at that call site), bypassing F1's render fallback
-// entirely. ONE gate now: both functions below delegate to
-// isBrowserAvailableOnRuntime(). No circular import — runtime.ts only imports
-// from config.js/credentials.js, never from this file.
+// isBrowserAvailableOnRuntime() — the canonical gate. Divergence meant that
+// once mcp.ts's F1 caller-key pre-resolution made isBrowserAvailableOnRuntime()
+// return true, extract.ts took the "browser available" arm and called
+// fetchViaBrowser() directly — which threw its OWN stale "serverless (Vercel)
+// cannot provide" error immediately (no try/catch at that call site), bypassing
+// F1's render fallback entirely. ONE gate now: both functions below delegate to
+// isBrowserAvailableOnRuntime(), which reads RUNTIME.canHoldWebSocket (round 8:
+// true for "local"/"hosted", false only for "serverless" — no opt-in flag). No
+// circular import — runtime.ts only imports from config.js/credentials.js,
+// never from this file.
 import { isBrowserAvailableOnRuntime, isBrowserTransportAvailable } from "./runtime.js";
 /**
  * Strip credentials and internal endpoints from Browser API error messages.
@@ -94,7 +94,7 @@ export function listSessions() {
 /** Check if Browser API credentials are available (and the runtime can run CDP at all). */
 export function isBrowserConfigured() {
     // ONE gate (round 5): delegates entirely to runtime.ts's canonical check
-    // instead of re-implementing it. Respects DEPLOYMENT_SUPPORTS_WS=true.
+    // instead of re-implementing it.
     return isBrowserAvailableOnRuntime();
 }
 /**
@@ -128,17 +128,15 @@ export async function fetchViaBrowser(url, options = {}) {
     assertUrlSafe(url, "browser navigate");
     // Transport capability gate (round 5: delegates to isBrowserTransportAvailable(),
     // the SAME predicate isBrowserConfigured()/isBrowserAvailableOnRuntime() use —
-    // this used to be an inline isHostedEnvironment() check that ignored
-    // DEPLOYMENT_SUPPORTS_WS entirely, silently diverging from the canonical gate
-    // the moment that override was introduced). Browser mode is CDP-over-WebSocket;
-    // on a hosted runtime WITHOUT the override, connectOverCDP cannot hold the WS
-    // and fails with a raw "AuthorizationError" that looks like a credential
-    // problem. Fail fast with a clear, actionable error instead. Deliberately does
-    // NOT name a specific platform ("Vercel") — this runs on EC2 in production
-    // (see repo CLAUDE.md); RUNTIME.kind alone can't distinguish EC2 from genuine
-    // Vercel (both report "hosted" — see config.ts's RUNTIME), so naming one
-    // specifically would be false on EC2. auto-mode callers catch this and fall back to the
-    // render (Web Unblocker) tier; forced render="browser" gets the message.
+    // this used to be an inline isHostedEnvironment() check that silently diverged
+    // from the canonical gate). Browser mode is CDP-over-WebSocket; on a genuine
+    // serverless runtime (RUNTIME.kind === "serverless", round 8), connectOverCDP
+    // cannot hold the WS and fails with a raw "AuthorizationError" that looks like
+    // a credential problem. Fail fast with a clear, actionable error instead.
+    // Deliberately does NOT name a specific platform ("Vercel") — a future
+    // serverless-reporting platform could be anything. auto-mode callers catch
+    // this and fall back to the render (Web Unblocker) tier; forced
+    // render="browser" gets the message.
     if (!isBrowserTransportAvailable()) {
         throw new Error("Browser mode is not available on this runtime — " +
             "it needs a persistent WebSocket (CDP) transport that this deployment's current configuration cannot provide. " +

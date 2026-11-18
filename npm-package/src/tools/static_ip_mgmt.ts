@@ -266,7 +266,7 @@ const CREDENTIAL_NOTE =
 // catch block special-cases `error instanceof NovadaError` BEFORE its generic
 // substring-matching fallback, so this tool's own agent_instruction survives
 // verbatim through redactHostedSecrets() on hosted, and is a complete no-op
-// on every other runtime (RUNTIME.kind !== "hosted" there, so this never
+// on every other runtime (RUNTIME.kind === "local" there, so this never
 // throws locally — "open"/"renew"/"reveal_credentials" work exactly as before
 // via npx novada-mcp).
 type HostedRefusedAction = "open" | "renew" | "reveal_credentials";
@@ -289,7 +289,7 @@ const HOSTED_REFUSED_ACTIONS: Readonly<Record<HostedRefusedAction, { reason: str
 };
 
 function assertActionAvailableOnRuntime(action: HostedRefusedAction): void {
-  if (RUNTIME.kind !== "hosted") return;
+  if (RUNTIME.kind === "local") return;
   const { reason, extraInstruction } = HOSTED_REFUSED_ACTIONS[action];
   throw new NovadaError({
     code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
@@ -413,7 +413,7 @@ async function handleRevealCredentials(
   // MUST be the first statement: refuses on hosted before any elicitation
   // check, approval-gate evaluation, or upstream devApiPost call runs — see
   // the design note above and assertActionAvailableOnRuntime's own doc
-  // comment. A complete no-op locally (RUNTIME.kind !== "hosted" there).
+  // comment. A complete no-op locally (RUNTIME.kind === "local" there).
   assertActionAvailableOnRuntime("reveal_credentials");
 
   const { effectiveStatus } = resolveStatus(params.status);

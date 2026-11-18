@@ -22,8 +22,9 @@
  *
  * Round 5 (owner direction): reads RUNTIME.canHoldWebSocket (config.ts) — the
  * ONE computed-once capability snapshot — instead of re-deriving serverless
- * detection here. See config.ts's RUNTIME doc comment for the full
- * NOVADA_RUNTIME_KIND / DEPLOYMENT_SUPPORTS_WS resolution order.
+ * detection here. Round 8: canHoldWebSocket is now simply `kind !==
+ * "serverless"` — no separate opt-in flag. See config.ts's RUNTIME doc
+ * comment for the full NOVADA_RUNTIME_KIND resolution order.
  */
 /**
  * F1 round 5 (independent A/B verifier): the TRANSPORT half of the browser
@@ -51,9 +52,11 @@ export declare function isBrowserTransportAvailable(): boolean;
  * Returns true ONLY when the current runtime can maintain a persistent WebSocket
  * connection required by the CDP (Browser API) tier AND credentials are set.
  *
- * On Vercel serverless / AWS Lambda:
- *   - returns false (CDP WS cannot be maintained)
- *   - UNLESS DEPLOYMENT_SUPPORTS_WS=true is explicitly set (custom runtime override)
+ * On genuine serverless (RUNTIME.kind === "serverless" — real Vercel/Lambda
+ * per-request isolates, auto-detected): returns false (CDP WS cannot be
+ * maintained). On "hosted" (a long-lived Node server, e.g. EC2's
+ * server.mts): returns true unconditionally — no opt-in flag needed, since
+ * "hosted" means this runtime CAN hold a persistent WS by definition.
  *
  * This is the canonical capability gate for the browser tier in extract.ts.
  * utils/browser.ts's isBrowserConfigured() DELEGATES to this exact function

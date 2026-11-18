@@ -138,7 +138,7 @@ export interface SubmitRetryBudget {
  * "enough time for a submit we trust to very likely succeed."
  */
 export function submitRetryBudget(deadline?: number): SubmitRetryBudget {
-  if (RUNTIME.kind !== "hosted") {
+  if (RUNTIME.kind === "local") {
     return { totalMs: Infinity, perAttemptMs: TIMEOUTS.SUBMIT_TIMEOUT_LOCAL };
   }
   const totalMs = deadline !== undefined ? Math.max(0, deadline - Date.now()) : HOSTED_SAFE_CEILING_MS;
