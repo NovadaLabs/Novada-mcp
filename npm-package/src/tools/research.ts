@@ -415,10 +415,32 @@ const MAX_COMPARAND_PHRASE_WORDS = 2;
  *  word, so trailing topic/location words ("in Germany: prices, speeds...")
  *  are never misread as more comparands. */
 export function extractComparands(question: string): string[] {
-  if (!COMPARISON_TRIGGER_REGEX.test(question)) return [];
+  return extractComparandsDetailed(question).comparands;
+}
+
+/**
+ * #3 Round 3 (2026-11-19, verifier check 4): a DROPPED pronoun ("We" in "We
+ * compared Novada versus Bright Data...") was correctly excluded from the
+ * comparand list, but buildComparisonTopicResidual only strips the detected
+ * COMPARANDS and the fixed syntax table from the residual topic text — the
+ * dropped pronoun itself, never a comparand, fell straight through into the
+ * residual ("Novada We web scraping"). Fix: the SAME loop in extractComparands
+ * already decides, token-by-token, whether a pronoun-table word is dropped —
+ * record exactly those tokens here (one pass, no second mechanism) and let
+ * the public `extractComparands` keep returning only `comparands`, unchanged
+ * for every existing caller/test. `generateSearchQueries` is the only
+ * caller that needs `droppedPronouns` too (to pass into
+ * buildComparisonTopicResidual); `comparandHasHits`'s call site doesn't.
+ * A KEPT pronoun ("Us" in "Us Weekly") is never added here — it is part of
+ * a real comparand and already removed from the residual by the existing
+ * per-comparand strip below, so no separate handling is needed for it.
+ */
+function extractComparandsDetailed(question: string): { comparands: string[]; droppedPronouns: string[] } {
+  if (!COMPARISON_TRIGGER_REGEX.test(question)) return { comparands: [], droppedPronouns: [] };
 
   const rawTokens = question.split(/\s+/);
   const phrases: string[] = [];
+  const droppedPronouns: string[] = [];
   let current: string[] = [];
   let listClosed = false;
 
@@ -449,8 +471,14 @@ export function extractComparands(question: string): string[] {
     // #3 Round 2: pass the RAW next token so a pronoun/determiner candidate
     // (COMPARAND_PRONOUN_WORDS) can apply isPronounActuallyComparand's
     // look-ahead rule. Irrelevant for every other token (ignored unless the
-    // current token is actually in that table).
-    if (isComparandToken(clean, rawTokens[i + 1]) && current.length < MAX_COMPARAND_PHRASE_WORDS) {
+    // current token is actually in that table). The result is reused below
+    // (Round 3) to record a DROPPED pronoun — one call, one decision.
+    const isComparand = isComparandToken(clean, rawTokens[i + 1]);
+    if (!isComparand && COMPARAND_PRONOUN_WORDS.has(lowerClean)) {
+      droppedPronouns.push(clean);
+    }
+
+    if (isComparand && current.length < MAX_COMPARAND_PHRASE_WORDS) {
       current.push(clean);
       if (hadComma) flush();
     } else if (LIST_CONNECTOR_WORDS.has(lowerClean)) {
@@ -469,7 +497,7 @@ export function extractComparands(question: string): string[] {
   }
   flush();
 
-  return [...new Set(phrases)];
+  return { comparands: [...new Set(phrases)], droppedPronouns };
 }
 
 /** Build the residual topic/noun-phrase left after removing every detected
@@ -478,8 +506,16 @@ export function extractComparands(question: string): string[] {
  *  Vergleich" minus its 3 comparands → "Geschäftskunden Internet". Appended
  *  to each per-comparand query so it stays specific instead of bare brand
  *  names. Filtered through every supported language's signal words and
- *  capped so a long tail clause doesn't balloon every comparand query. */
-function buildComparisonTopicResidual(topic: string, comparands: string[]): string {
+ *  capped so a long tail clause doesn't balloon every comparand query.
+ *  `droppedPronouns` (#3 Round 3) are the SPECIFIC tokens extractComparands
+ *  already decided were the real pronoun, not a brand, for THIS question —
+ *  excluded here too so a dropped "We"/"Wir" doesn't leak into the residual
+ *  text ("Novada We web scraping"). A KEPT pronoun ("Us" in "Us Weekly") is
+ *  never in this list — it's part of a real comparand and already removed
+ *  above by the per-comparand strip, so it is correctly absent from both the
+ *  residual AND this list, not double-handled. */
+function buildComparisonTopicResidual(topic: string, comparands: string[], droppedPronouns: string[] = []): string {
+  const droppedPronounSet = new Set(droppedPronouns.map(p => p.toLowerCase()));
   let residual = topic;
   for (const rawComparand of comparands) {
     // Defensive length cap (review round 2, LOW) — never build a regex from
@@ -506,7 +542,7 @@ function buildComparisonTopicResidual(topic: string, comparands: string[]): stri
     // leave the dot unconsumed) is never usable query text.
     if (!/[a-z0-9]/i.test(w)) return false;
     const lower = w.toLowerCase();
-    return !STOP_WORDS.has(lower) && !ALL_SIGNAL_WORDS.has(lower) && !COMPARAND_EXCLUDE_WORDS.has(lower);
+    return !STOP_WORDS.has(lower) && !ALL_SIGNAL_WORDS.has(lower) && !COMPARAND_EXCLUDE_WORDS.has(lower) && !droppedPronounSet.has(lower);
   });
   return content.slice(0, 6).join(" ");
 }
@@ -1510,13 +1546,18 @@ export function generateSearchQueries(
 
   const domain = detectDomain(safeQuestion);
   const lang = detectLanguage(safeQuestion);
-  const comparands = domain === "comparison" ? extractComparands(safeQuestion) : [];
+  // #3 Round 3: the detailed variant also returns which pronoun(s) were
+  // dropped (not just which comparands were kept) so the residual builder
+  // below can exclude them too — see extractComparandsDetailed's doc comment.
+  const { comparands, droppedPronouns } = domain === "comparison"
+    ? extractComparandsDetailed(safeQuestion)
+    : { comparands: [] as string[], droppedPronouns: [] as string[] };
 
   const thisYear = new Date().getFullYear();
   const lastYear = thisYear - 1;
 
   if (comparands.length >= 2) {
-    const residual = buildComparisonTopicResidual(derivedTopic, comparands);
+    const residual = buildComparisonTopicResidual(derivedTopic, comparands, droppedPronouns);
     if (residual) {
       const residualSuffix = ` ${residual}`;
       for (const c of comparands) {

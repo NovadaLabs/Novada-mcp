@@ -481,6 +481,56 @@ describe("extractComparands — pronoun/brand collision: KEEP the real brand, st
   });
 });
 
+// ─── #3 Round 3 (2026-11-19, verifier check 4): a DROPPED pronoun correctly
+// excluded from the COMPARAND list still leaked into the RESIDUAL topic text
+// appended to every per-comparand query — "We compared Novada versus Bright
+// Data for web scraping" produced the sub-query "Novada We web scraping".
+// Fixed in the same place extractComparands decides a pronoun is dropped
+// (extractComparandsDetailed records it; buildComparisonTopicResidual
+// excludes it too) — no new table, no second mechanism. ────────────────────
+describe("generateSearchQueries — a dropped pronoun must not leak into the residual topic text (#3 Round 3)", () => {
+  it("the exact verifier repro: no DERIVED (non-verbatim) query contains 'We' as its own word", () => {
+    const question = "We compared Novada versus Bright Data for web scraping";
+    const queries = generateSearchQueries(question, false, false);
+    // queries[0] is the original question verbatim (by design, #4) — it
+    // legitimately contains "We", same as the user's own text. Every OTHER
+    // (derived) query must not.
+    expect(queries[0]).toBe(question);
+    for (const q of queries.slice(1)) {
+      expect(q).not.toMatch(/\bWe\b/);
+    }
+    // And the per-comparand query is the clean shape, not "Novada We web scraping".
+    expect(queries).toContain("Novada web scraping");
+    expect(queries).toContain("Bright Data web scraping");
+  });
+
+  it("brand case 'Us Weekly': 'Us' stays IN the comparand (not dropped) and the per-comparand query is clean", () => {
+    const queries = generateSearchQueries("compare Us Weekly vs People magazine circulation numbers", false, false);
+    expect(queries).toContain("Us Weekly magazine circulation numbers");
+    expect(queries).toContain("People magazine circulation numbers");
+  });
+
+  it("brand case 'WIR Bank': 'WIR' stays IN the comparand and the per-comparand query is clean", () => {
+    const queries = generateSearchQueries("vergleiche WIR Bank und UBS Gebühren", false, false);
+    expect(queries).toContain("WIR Bank vs UBS Gebühren");
+  });
+
+  it("brand case 'She Media': 'She' stays IN the comparand and the per-comparand query is clean", () => {
+    const queries = generateSearchQueries("compare She Media vs Vox Media audience reach", false, false);
+    expect(queries).toContain("She Media audience reach");
+    expect(queries).toContain("Vox Media audience reach");
+  });
+
+  it("mirror: German 'Wir vergleichen O2 und Telekom' — residual has no leaked 'Wir' (verbatim query #0 excepted)", () => {
+    const question = "Wir vergleichen O2 und Telekom Geschäftskunden Mobilfunk Tarife";
+    const queries = generateSearchQueries(question, false, false);
+    expect(queries[0]).toBe(question);
+    for (const q of queries.slice(1)) {
+      expect(q).not.toMatch(/\bWir\b/);
+    }
+  });
+});
+
 // ──────────────────────────────────────────────────────────────────────────
 // Hard-coded-year regression: years must come from new Date(), never 2024/2025.
 // ──────────────────────────────────────────────────────────────────────────
