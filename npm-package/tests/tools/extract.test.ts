@@ -1804,3 +1804,161 @@ describe("B7: getSuggestedFix gives DNS-specific advice for ENOTFOUND, not the g
     expect(fix).toMatch(/rate-limiting \(transient\)/);
   });
 });
+
+// ─── #41 Round 4 (full merge, reviewer finding "same bug class, 3 branches") ──
+//
+// The three separate effectiveMode branches are gone — ONE ladder over the fixed
+// order [static, render, browser], where a DOMAIN_REGISTRY pin only picks the
+// START tier (never a cap) and an EXPLICIT caller render= value fixes both ends
+// (no ladder at all, except explicit "browser" which still falls back to render —
+// the pre-existing, live-verified F1 behavior, unchanged). Generated matrix over
+// every pin × explicit-render combination, asserting the EXACT tier sequence
+// attempted when every tier is blocked.
+describe("#41 Round 4: ONE ladder, pin × explicit-render matrix", () => {
+  const saved: Record<string, string | undefined> = {};
+  let callOrder: string[];
+  let lookupDomainSpy: ReturnType<typeof vi.spyOn>;
+  let fetchViaBrowserSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "NOVADA_RUNTIME_KIND", "NOVADA_BROWSER_WS", "NOVADA_WEB_UNBLOCKER_KEY"]) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    // Transport-capable runtime for every case in this matrix — isolates the
+    // pin/explicit-render sequencing logic from the separate transport-gate
+    // behavior already covered by the "#41 Round 3" describe block above.
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+    callOrder = [];
+    const utilsMod = await import("../../src/utils/index.js");
+    lookupDomainSpy = vi.spyOn(utilsMod, "lookupDomain");
+    fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockImplementation(async () => {
+      callOrder.push("browser");
+      throw new Error("Browser API not available.");
+    });
+    mockedAxios.get.mockImplementation(async () => {
+      callOrder.push("static");
+      throw Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } });
+    });
+    mockedAxios.post.mockImplementation(async () => {
+      callOrder.push("render");
+      throw new Error("Web Unblocker error (400): Multiple error messages");
+    });
+  });
+  afterEach(() => {
+    lookupDomainSpy.mockRestore();
+    fetchViaBrowserSpy.mockRestore();
+    for (const k of Object.keys(saved)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  type Pin = "none" | "static" | "render" | "browser";
+  type ExplicitRender = "auto" | "static" | "render" | "browser";
+
+  // Expected tier sequence per (pin, explicit render) combination — see the
+  // describe block's doc comment for the derivation. domainHint (and therefore
+  // the pin) is only ever consulted when the caller's own render is "auto";
+  // an explicit render value always overrides it, by design (today's existing
+  // `renderMode === "auto" ? lookupDomain(...) : null` gate, unchanged).
+  const CASES: Array<{ pin: Pin; explicitRender: ExplicitRender; expected: string[] }> = [
+    { pin: "none", explicitRender: "auto", expected: ["static", "render", "browser"] },
+    { pin: "none", explicitRender: "static", expected: ["static"] },
+    { pin: "none", explicitRender: "render", expected: ["render"] },
+    { pin: "none", explicitRender: "browser", expected: ["browser", "render"] },
+    { pin: "static", explicitRender: "auto", expected: ["static", "render", "browser"] },
+    { pin: "static", explicitRender: "static", expected: ["static"] },
+    { pin: "static", explicitRender: "render", expected: ["render"] },
+    { pin: "static", explicitRender: "browser", expected: ["browser", "render"] },
+    { pin: "render", explicitRender: "auto", expected: ["render", "browser"] },
+    { pin: "render", explicitRender: "static", expected: ["static"] },
+    { pin: "render", explicitRender: "render", expected: ["render"] },
+    { pin: "render", explicitRender: "browser", expected: ["browser", "render"] },
+    { pin: "browser", explicitRender: "auto", expected: ["browser", "render"] },
+    { pin: "browser", explicitRender: "static", expected: ["static"] },
+    { pin: "browser", explicitRender: "render", expected: ["render"] },
+    { pin: "browser", explicitRender: "browser", expected: ["browser", "render"] },
+  ];
+
+  it.each(CASES)(
+    "pin=$pin, explicit render=$explicitRender → tier sequence $expected (every tier blocked)",
+    async ({ pin, explicitRender, expected }) => {
+      lookupDomainSpy.mockReturnValue(
+        pin === "none" ? null : { method: pin, note: "test pin" }
+      );
+      clearCache();
+      await novadaExtract(
+        {
+          url: `https://matrix-test-${pin}-${explicitRender}.example/page`,
+          ...(explicitRender === "auto" ? {} : { render: explicitRender }),
+          format: "markdown",
+        },
+        API_KEY
+      );
+      // Collapse consecutive/duplicate pushes from a single tier's own internal
+      // sub-requests (e.g. "auto" mode's direct-vs-proxy race both call
+      // mockedAxios.get) down to first-occurrence order — what's asserted here
+      // is the TIER sequence, not how many HTTP calls one tier attempt made.
+      const uniqueOrder = [...new Set(callOrder)];
+      expect(uniqueOrder).toEqual(expected);
+    }
+  );
+
+  // "the first success stops the ladder" — representative cases, not the full
+  // matrix: static-start auto (stops at static), render-start auto (stops at
+  // render, static never attempted), browser-start auto (stops at browser,
+  // render never attempted).
+  it("first success stops the ladder: static succeeds on an unpinned auto request → render/browser never attempted", async () => {
+    lookupDomainSpy.mockReturnValue(null);
+    mockedAxios.get.mockImplementation(async () => {
+      callOrder.push("static");
+      return { data: `<html><head><title>Static Pin OK</title></head><body><main>${"<p>Real static content with enough prose to pass the quality floor for this test case.</p>".repeat(8)}</main></body></html>`, status: 200, headers: {}, config: {} as never, statusText: "OK" };
+    });
+    clearCache();
+    const result = await novadaExtract({ url: "https://matrix-stop-at-static.example/page", format: "markdown" }, API_KEY);
+    // Collapse the "auto" mode direct-vs-proxy race's own duplicate static pushes
+    // (both legs call mockedAxios.get) to first-occurrence order, same technique
+    // as the matrix test above — what matters here is the TIER sequence.
+    expect([...new Set(callOrder)]).toEqual(["static"]);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(fetchViaBrowserSpy).not.toHaveBeenCalled();
+    expect(result).not.toContain("## Extract Failed");
+  });
+
+  it("first success stops the ladder: render-pinned auto request succeeds at render → browser never attempted, static never attempted", async () => {
+    lookupDomainSpy.mockReturnValue({ method: "render", note: "test pin" });
+    mockedAxios.post.mockImplementation(async () => {
+      callOrder.push("render");
+      return {
+        data: { code: 0, data: { code: 200, html:
+          `<html><head><title>Render Pin OK</title></head><body><main>` +
+          `<p>Real content recovered directly at the render-pinned start tier, no escalation needed.</p>`.repeat(5) +
+          `</main></body></html>`, msg: "", msg_detail: "" } },
+        status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+      };
+    });
+    clearCache();
+    const result = await novadaExtract({ url: "https://matrix-stop-at-render.example/page", format: "markdown" }, API_KEY);
+    expect(callOrder).toEqual(["render"]);
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+    expect(fetchViaBrowserSpy).not.toHaveBeenCalled();
+    expect(result).toContain("Render Pin OK");
+  });
+
+  it("first success stops the ladder: browser-pinned auto request succeeds at browser → render never attempted", async () => {
+    lookupDomainSpy.mockReturnValue({ method: "browser", note: "test pin" });
+    fetchViaBrowserSpy.mockImplementation(async () => {
+      callOrder.push("browser");
+      return `<html><head><title>Browser Pin OK</title></head><body><main>` +
+        `<p>Real content recovered directly at the browser-pinned start tier, no fallback needed.</p>`.repeat(5) +
+        `</main></body></html>`;
+    });
+    clearCache();
+    const result = await novadaExtract({ url: "https://matrix-stop-at-browser.example/page", format: "markdown" }, API_KEY);
+    expect(callOrder).toEqual(["browser"]);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(result).toContain("Browser Pin OK");
+  });
+});
