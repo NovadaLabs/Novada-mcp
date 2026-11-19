@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import axios, { AxiosError } from "axios";
-import { detectJsHeavyContent, detectBotChallenge, fetchWithRender, fetchWithRetry } from "../../src/utils/http.js";
+import { detectJsHeavyContent, detectBotChallenge, fetchWithRender, fetchWithRetry, decodeWindows1252 } from "../../src/utils/http.js";
 
 describe("detectJsHeavyContent", () => {
   it("detects empty content as JS-heavy", () => {
@@ -378,6 +378,70 @@ describe("decodeHtmlBuffer / detectCharset — legacy charset decoding (#2)", ()
     const resp = await fetchWithRetry("https://example.fr/page", { tool: "extract" });
     expect(resp.data as string).toContain("Café précisément");
     expect(resp.data as string).toContain("€99");
+  });
+
+  /**
+   * #2 Round 2 (2026-11-20, CI failure on Node 20, PR #61): Node's own
+   * TextDecoder for "windows-1252" is correct on Node 22.23.5+/24 but WRONG
+   * on Node 20.20.2 — it falls back to an identity byte→codepoint mapping
+   * for 0x80-0x9F instead of windows-1252's real remapping table (confirmed
+   * live: byte 0x80 decodes to U+0080 there, not € U+20AC). This package's
+   * own `engines.node` floor is 20, so decodeWindows1252 decodes this range
+   * itself instead of trusting TextDecoder. This test pins the exact WHATWG
+   * Encoding Standard mapping for all 32 bytes 0x80-0x9F — independent of
+   * production's own WINDOWS_1252_0x80_TO_0x9F table (the expected values
+   * are transcribed directly from the spec, not copied from that table), so
+   * it would catch a wrong entry in either one.
+   */
+  it("decodeWindows1252: all 32 bytes 0x80-0x9F match the WHATWG Encoding Standard's windows-1252 index exactly", () => {
+    const expected: Record<number, number> = {
+      0x80: 0x20ac, 0x81: 0x0081, 0x82: 0x201a, 0x83: 0x0192,
+      0x84: 0x201e, 0x85: 0x2026, 0x86: 0x2020, 0x87: 0x2021,
+      0x88: 0x02c6, 0x89: 0x2030, 0x8a: 0x0160, 0x8b: 0x2039,
+      0x8c: 0x0152, 0x8d: 0x008d, 0x8e: 0x017d, 0x8f: 0x008f,
+      0x90: 0x0090, 0x91: 0x2018, 0x92: 0x2019, 0x93: 0x201c,
+      0x94: 0x201d, 0x95: 0x2022, 0x96: 0x2013, 0x97: 0x2014,
+      0x98: 0x02dc, 0x99: 0x2122, 0x9a: 0x0161, 0x9b: 0x203a,
+      0x9c: 0x0153, 0x9d: 0x009d, 0x9e: 0x017e, 0x9f: 0x0178,
+    };
+    const bytes = Object.keys(expected).map(Number);
+    const decoded = decodeWindows1252(Buffer.from(bytes));
+    expect(decoded.length).toBe(bytes.length);
+    bytes.forEach((byte, i) => {
+      expect(decoded.codePointAt(i), `byte 0x${byte.toString(16)}`).toBe(expected[byte]);
+    });
+    // The 5 spec-undefined indexes (review request: "map to U+0081 and so
+    // on") decode to the C1 control code point at their own byte value.
+    for (const undefinedByte of [0x81, 0x8d, 0x8f, 0x90, 0x9d]) {
+      expect(expected[undefinedByte]).toBe(undefinedByte);
+    }
+  });
+
+  it("decodeWindows1252: ASCII (<0x80) and 0xA0+ decode as plain identity, unaffected by the 0x80-0x9F table", () => {
+    const buf = Buffer.from([0x41, 0x7a, 0xa0, 0xe9, 0xff]); // "A", "z", NBSP, "é", "ÿ"
+    const decoded = decodeWindows1252(buf);
+    expect(Array.from(decoded, c => c.codePointAt(0))).toEqual([0x41, 0x7a, 0xa0, 0xe9, 0xff]);
+  });
+
+  /**
+   * #2 Round 2: the WHATWG Encoding Standard's label table maps "iso-8859-1"
+   * (and "latin1", "l1", "us-ascii", "ascii", "cp819", ... — the full
+   * WINDOWS_1252_LABELS set) to the windows-1252 DECODER, not the real
+   * ISO/IEC 8859-1 table — a deliberate web-compat quirk, not a bug. A page
+   * that honestly labels itself iso-8859-1 and sends byte 0x80 must
+   * therefore decode to € (U+20AC), exactly like an explicit windows-1252
+   * label would, per spec — never the C1 control code point at U+0080 a
+   * real ISO-8859-1 decoder would produce.
+   */
+  it("iso-8859-1-labelled page with byte 0x80 decodes to € per WHATWG (iso-8859-1 is an ALIAS of windows-1252, not real ISO-8859-1)", async () => {
+    const mockedAxios = vi.mocked(axios);
+    const body = Buffer.concat([Buffer.from("<p>price: "), Buffer.from([0x80]), Buffer.from("99</p>")]);
+    mockedAxios.get.mockResolvedValue({
+      data: body,
+      status: 200, headers: { "content-type": "text/html; charset=iso-8859-1" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.com/legacy-page", { tool: "extract" });
+    expect(resp.data as string).toContain("price: €99");
   });
 
   it("Content-Type header charset takes precedence — no <meta> tag present at all", async () => {

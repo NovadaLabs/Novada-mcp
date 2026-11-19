@@ -127,19 +127,81 @@ export function detectCharset(buf: Buffer, contentType: string): string {
 }
 
 /**
- * Decode raw response bytes using the detected charset. Node's `TextDecoder`
- * (ICU-backed; every official Node.js 20+ build — the npm package's own
- * `engines.node` floor, and the hosted/Vercel + EC2 runtimes this server
- * actually runs on — ships full ICU by default, not the old small-icu subset)
- * supports every legacy label this function can encounter in practice:
- * shift_jis, gbk/gb18030/gb2312, euc-kr, windows-1252, iso-8859-1, big5, etc.
- * An unrecognized/garbled label (a lying Content-Type) throws RangeError —
- * caught here and never allowed to fail the fetch; falls back to the prior,
- * always-safe utf-8 decode instead.
+ * #2 Round 2 (2026-11-20, CI failure on Node 20, PR #61): Node's `TextDecoder`
+ * is ICU-backed and correct for windows-1252 on Node 22.23.5+/24 — but on
+ * Node 20.20.2 (the floor this package's `engines.node` actually claims)
+ * `new TextDecoder("windows-1252")` silently falls back to a plain byte-is-
+ * codepoint mapping for 0x80-0x9F instead of windows-1252's real remapping
+ * (confirmed: byte 0x80 decodes to U+0080 on Node 20.20.2, not € U+20AC).
+ * The docstring above previously claimed TextDecoder "supports every label
+ * on Node 20+" — that was wrong for this one encoding family; corrected here.
+ *
+ * Every WHATWG label that the Encoding Standard's own alias table points at
+ * "windows-1252" is affected — including, confusingly, "iso-8859-1"/"latin1"
+ * themselves: the spec deliberately treats those labels as windows-1252 for
+ * web-compat (NOT the real ISO/IEC 8859-1 table), so a page honestly
+ * labelled iso-8859-1 is supposed to get windows-1252's €, not a C1 control
+ * code point at 0x80. Fixed by decoding this one family ourselves — a
+ * 32-entry table for the only range where windows-1252 differs from a plain
+ * byte-as-codepoint mapping — instead of trusting TextDecoder for it. Every
+ * OTHER charset (shift_jis, gbk, euc-kr, big5, ...) is unaffected and still
+ * goes through TextDecoder exactly as before.
+ */
+const WINDOWS_1252_LABELS = new Set([
+  "ansi_x3.4-1968", "ascii", "cp1252", "cp819", "csisolatin1", "ibm819",
+  "iso-8859-1", "iso-ir-100", "iso8859-1", "iso88591", "iso_8859-1",
+  "iso_8859-1:1987", "l1", "latin1", "us-ascii", "windows-1252", "x-cp1252",
+]);
+
+/**
+ * windows-1252's remapping table for bytes 0x80-0x9F (WHATWG Encoding
+ * Standard, "windows-1252" index — https://encoding.spec.whatwg.org/#legacy-single-byte-encodings).
+ * Every byte below 0x80 and at/above 0xA0 decodes to its own value as a code
+ * point (plain Latin-1 identity) — the ONLY range covered by this table is
+ * where windows-1252 differs from that identity mapping. Index 0 = byte
+ * 0x80. Five entries (0x81, 0x8D, 0x8F, 0x90, 0x9D) are the spec's
+ * intentionally-undefined indexes; real content essentially never contains
+ * these bytes, but the decoder must still be total, so — exactly as the
+ * spec's own decoder algorithm does for an undefined index — they fall back
+ * to the C1 control code point at that same byte value.
+ */
+const WINDOWS_1252_0x80_TO_0x9F: readonly number[] = [
+  0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021,
+  0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008d, 0x017d, 0x008f,
+  0x0090, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
+];
+
+/** Decode a buffer as windows-1252 ourselves (see WINDOWS_1252_LABELS'
+ *  doc comment for why TextDecoder can't be trusted for this one family on
+ *  every supported Node runtime). Every code point here fits in one UTF-16
+ *  code unit (no surrogate pairs), so a plain `String.fromCharCode` per byte
+ *  is correct, not just an approximation. */
+export function decodeWindows1252(buf: Buffer): string {
+  const chars = new Array<string>(buf.length);
+  for (let i = 0; i < buf.length; i++) {
+    const byte = buf[i];
+    const code = byte >= 0x80 && byte <= 0x9f ? WINDOWS_1252_0x80_TO_0x9F[byte - 0x80] : byte;
+    chars[i] = String.fromCharCode(code);
+  }
+  return chars.join("");
+}
+
+/**
+ * Decode raw response bytes using the detected charset. windows-1252 and
+ * every label that aliases to it (WINDOWS_1252_LABELS above) are decoded by
+ * decodeWindows1252, not TextDecoder — see its doc comment. Every other
+ * legacy label this function can encounter in practice (shift_jis,
+ * gbk/gb18030/gb2312, euc-kr, big5, etc.) goes through Node's `TextDecoder`
+ * (ICU-backed; correct for these on every officially-supported Node version
+ * this package targets). An unrecognized/garbled label (a lying
+ * Content-Type) throws RangeError — caught here and never allowed to fail
+ * the fetch; falls back to the prior, always-safe utf-8 decode instead.
  */
 export function decodeHtmlBuffer(buf: Buffer, contentType: string): string {
   const charset = detectCharset(buf, contentType);
   if (charset === "utf-8" || charset === "utf8") return buf.toString("utf-8");
+  if (WINDOWS_1252_LABELS.has(charset)) return decodeWindows1252(buf);
   try {
     return new TextDecoder(charset).decode(buf);
   } catch {
