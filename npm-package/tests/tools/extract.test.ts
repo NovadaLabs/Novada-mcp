@@ -1475,10 +1475,18 @@ describe("#41: static→render→browser is ONE ladder (render failing is not th
     expect(result).toContain("Browser Tier OK");
   });
 
-  // Mirror: no next tier (browser unavailable) → render keeps today's FULL,
-  // uncapped timeout — the budget cap must never fire when there is nothing after
-  // render to protect time for.
-  it("mirror: render's timeout is NOT capped when no browser tier follows (nothing to protect time for)", async () => {
+  // Mirror: no next tier (browser tier genuinely unreachable on this runtime) →
+  // render keeps today's FULL, uncapped timeout — the budget cap must never fire
+  // when there is nothing after render to protect time for.
+  //
+  // Round 3 (reviewer finding #1, "pins act as a ceiling"): "no next tier" now
+  // means transport-incapable (e.g. real serverless), NOT "credentials happen to
+  // be unseeded" — a transport-capable runtime always offers browser as a
+  // candidate tier (it lazily resolves its own credentials and fails honestly if
+  // truly unavailable), so this mirror must simulate genuine serverless, not just
+  // omit NOVADA_BROWSER_WS.
+  it("mirror: render's timeout is NOT capped when no browser tier follows (transport-incapable runtime, nothing to protect time for)", async () => {
+    process.env.VERCEL = "1";
     mockedAxios.get.mockRejectedValue(
       Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
     );
@@ -1566,6 +1574,103 @@ describe("#41: static→render→browser is ONE ladder (render failing is not th
     delete process.env.NOVADA_PROXY_USER;
     delete process.env.NOVADA_PROXY_PASS;
     delete process.env.NOVADA_PROXY_ENDPOINT;
+  });
+});
+
+// ─── #41 Round 3 (reviewer finding #1, browser-tier verify): "DOMAIN_REGISTRY pins
+// act as a CEILING" — apnews.com (pinned "static") could never become eligible for
+// browser because the ladder's browser-candidacy gate was isBrowserAvailableOnRuntime()
+// (transport AND pre-seeded credentials); mcp.ts only pre-seeds credentials for an
+// explicit render="browser" or a registry "browser" hint, so a "static"-pinned host's
+// credentials were NEVER pre-seeded no matter how real/available they actually were.
+// Fixed by gating on isBrowserTransportAvailable() (transport ONLY) and letting
+// fetchViaBrowser's own lazy credential resolution (now using the real caller key,
+// see credentials.test.ts's getEffectiveApiKey tests) succeed or fail honestly.
+describe("#41 Round 3: a pin is the STARTING tier, never a ceiling", () => {
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "NOVADA_RUNTIME_KIND", "NOVADA_BROWSER_WS", "NOVADA_WEB_UNBLOCKER_KEY"]) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    process.env.NOVADA_RUNTIME_KIND = "hosted"; // transport-capable; deliberately NO NOVADA_BROWSER_WS pre-seeded
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+  });
+  afterEach(() => {
+    for (const k of Object.keys(saved)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it("static-pinned host (apnews.com), blocked at both static AND render → browser IS attempted, within budget, with no pre-seeded NOVADA_BROWSER_WS", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    const realContent = `<html><head><title>APNews Browser Tier Reached</title></head><body><main>` +
+      `<p>A static-pinned host's block-class failure walked all the way up to the browser tier, despite no pre-seeded credentials.</p>`.repeat(5) +
+      `</main></body></html>`;
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+    clearCache();
+    const t0 = Date.now();
+    const result = await novadaExtract(
+      { url: "https://apnews.com/hub/technology", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    const elapsedMs = Date.now() - t0;
+    expect(fetchViaBrowserSpy).toHaveBeenCalled(); // the real point of this test — it was NEVER called before this fix
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("APNews Browser Tier Reached");
+    expect(elapsedMs).toBeLessThan(50_000); // "within budget" — TIMEOUTS.TOTAL_REQUEST_CEILING
+  });
+
+  it("browser-pinned host (g2.com) with browser failing → render IS attempted (unchanged, still holds under the new transport-only gate)", async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html:
+        `<html><head><title>G2 Render Fallback OK</title></head><body><main>` +
+        `<p>Browser failed on a browser-pinned host; the render tier still gets a turn, exactly as 0.9.50 already did.</p>`.repeat(5) +
+        `</main></body></html>`, msg: "", msg_detail: "" } },
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockRejectedValue(new Error("Browser API not available."));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://www.g2.com/", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(fetchViaBrowserSpy).toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(mockedAxios.post).toHaveBeenCalled(); // render WAS attempted after browser failed
+    expect(result).toContain("G2 Render Fallback OK");
+  });
+
+  // Mirror: a GENUINELY serverless runtime (transport-incapable) must still skip
+  // browser entirely for a static-pinned host — the fix broadens WHO gets to
+  // attempt browser (any transport-capable runtime), it does not remove the
+  // transport gate itself.
+  it("mirror: on a genuinely serverless (transport-incapable) runtime, a static-pinned host's block-class failure still does NOT attempt browser", async () => {
+    delete process.env.NOVADA_RUNTIME_KIND;
+    process.env.VERCEL = "1";
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser");
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://apnews.com/hub/technology", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(fetchViaBrowserSpy).not.toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("## Extract Failed");
+    expect(result).toMatch(/static:/);
+    expect(result).toMatch(/render:/);
+    expect(result).not.toMatch(/browser:/);
   });
 });
 

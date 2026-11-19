@@ -1756,10 +1756,31 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     if (name === "novada_browser" || extractNeedsBrowserTier) {
       // Bound the auto-provision round-trip: it runs BEFORE the withWallClock guard,
       // so a hung management API could otherwise push total latency toward the 60s
-      // Vercel function limit. 4s cap → null → the tool emits its own "Not Configured".
+      // Vercel function limit. Cap → null → the tool emits its own "Not Configured"
+      // (novada_extract then falls back to render — never a dead wait on this call).
+      //
+      // #41 Round 3 (reviewer finding #2, live-verified: g2.com's first call lost
+      // this race at 4s, returned "Browser Mode Unavailable" after 44.8s of render
+      // fallback, then an immediate retry got mode:browser in 13.2s — the SAME
+      // upstream fetch that lost the race kept running in the background and had
+      // simply finished by the time the retry's own resolveBrowserWs() call landed
+      // on the now-warm cache). Two independent changes:
+      //  1. This timeout: 4s → 8s. Still bounded (never risks the 60s Vercel
+      //     ceiling), but closer to this endpoint's observed real-world latency, so
+      //     the FIRST call is more likely to actually see the real credential
+      //     instead of reliably losing the race and paying a render-fallback detour
+      //     for a browser tier that was about to become available seconds later.
+      //  2. resolveBrowserWs()/fetchBrowserSubAccountCredentials() (utils/
+      //     credentials.ts) now de-duplicates concurrent in-flight requests per key
+      //     and caches a FAILURE briefly (not just a success) — so a call that DOES
+      //     still lose this race no longer leaves the result to be silently
+      //     discarded (the old behavior): whichever call (this one or a later one)
+      //     needs the credential next reuses the same in-flight promise or the
+      //     now-warm cache, instead of re-paying the full round-trip, or racing the
+      //     SAME slow/failing call again, from scratch.
       browserWs = (await Promise.race([
         resolveBrowserWs(apiKey).catch(() => null),
-        new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+        new Promise<null>((r) => setTimeout(() => r(null), 8000)),
       ])) ?? undefined;
     }
 

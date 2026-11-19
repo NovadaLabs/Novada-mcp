@@ -21,6 +21,23 @@ export function getWebUnblockerKey() {
     return ctx?.webUnblockerKey ?? ctx?.apiKey ?? process.env.NOVADA_WEB_UNBLOCKER_KEY ?? process.env.NOVADA_API_KEY;
 }
 /**
+ * #41 Round 3 (reviewer finding, browser-tier verify): the EFFECTIVE caller key —
+ * SDK/hosted-scoped apiKey (the store's `apiKey`, populated by `withCredentials()`
+ * for EVERY call regardless of DOMAIN_REGISTRY pin) falling back to NOVADA_API_KEY
+ * for single-tenant/stdio use. `utils/browser.ts`'s `fetchViaBrowser` used to call
+ * `resolveBrowserWs(process.env.NOVADA_API_KEY)` directly — on the hosted server
+ * the server's own key is deliberately stripped from env (so a caller's call never
+ * silently bills the server account), so that lazy on-demand resolution was
+ * ALWAYS a no-op there (`key` resolved to `undefined`) even though the real
+ * caller's key was sitting right there in the store the whole call. This is the
+ * SAME resolution chain `getWebUnblockerKey()` above already uses for its own
+ * credential, generalized to a shared accessor instead of re-deriving it a third
+ * way with the wrong fallback.
+ */
+export function getEffectiveApiKey() {
+    return store.getStore()?.apiKey ?? process.env.NOVADA_API_KEY;
+}
+/**
  * Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var.
  *
  * TENANT SAFETY: this reader is synchronous and has no apiKey to match against,
@@ -119,13 +136,39 @@ export async function fetchProxySubAccountCredentials(apiKey) {
 }
 /** Per-key Browser API WSS cache, keyed by keyFingerprint(apiKey). */
 const _browserWsCache = new Map();
+/**
+ * #41 Round 3 (reviewer finding #2, "browser credential auto-provisioning race"):
+ * a failed/timed-out fetch was never cached at all — every subsequent call for the
+ * same key, within the SAME request or the next one, re-ran the full upstream
+ * round-trip from scratch, each one eligible to lose mcp.ts's race all over again.
+ * Short TTL (not the 6h success TTL) so a genuinely transient upstream blip
+ * self-heals quickly, while a real "no Browser entitlement" account doesn't retry
+ * the same doomed call on every single request in a tight window.
+ */
+const BROWSER_WS_FAILURE_CACHE_TTL_MS = 30_000;
+const _browserWsFailureCache = new Map(); // fp -> failedAt
+/**
+ * #41 Round 3: in-flight de-dup, keyed by keyFingerprint(apiKey) — "resolve per
+ * caller key ONCE". Before this, every call that missed the success cache started
+ * its OWN independent `fetch()` to the management API; N concurrent calls for the
+ * same key meant N redundant upstream round-trips racing each other, and whichever
+ * ones lost mcp.ts's outer race (see api/mcp.ts) had their result silently
+ * discarded (not even reaching the cache, since each had its own closure). Now a
+ * second caller for the same key while one is already in flight awaits the SAME
+ * promise — exactly one upstream call per key per outstanding resolution, and the
+ * result (success or failure) is cached for EVERY waiter the instant it settles,
+ * not just the one that happened to initiate it.
+ */
+const _browserWsInFlight = new Map();
 const BROWSER_WS_HOST = "upg-scbr2.novada.com"; // confirmed from credentials file
 /**
  * Fetch Browser API WSS endpoint using the caller's apiKey as a Bearer token.
  * Calls POST /v1/proxy_account/list with product=10 (Browser API).
  * Returns wss://{account}:{password}@upg-scbr2.novada.com
- * Cached 6h in memory, keyed by the fingerprint of the fetching apiKey so one
- * caller's browser WSS endpoint is never returned to another (see keyFingerprint).
+ * Cached 6h on success, ~30s on failure, in memory, keyed by the fingerprint of
+ * the fetching apiKey so one caller's browser WSS endpoint (or failure) is never
+ * returned to another (see keyFingerprint). De-duplicated: concurrent calls for
+ * the same key share one in-flight request instead of each issuing their own.
  */
 export async function fetchBrowserSubAccountCredentials(apiKey) {
     const fp = keyFingerprint(apiKey);
@@ -133,40 +176,66 @@ export async function fetchBrowserSubAccountCredentials(apiKey) {
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
         return cached.wsUrl;
     }
-    try {
-        const form = new URLSearchParams();
-        form.append("product", "10"); // Browser API product code
-        form.append("page", "1");
-        form.append("limit", "5");
-        form.append("status", "1");
-        const res = await fetch(`${MGMT_API_BASE}/proxy_account/list`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: form.toString(),
-        });
-        if (!res.ok)
-            return null;
-        const data = (await res.json());
-        const accounts = data?.data?.list ?? [];
-        if (accounts.length === 0)
-            return null;
-        const { account, password } = accounts[0];
-        // The Browser API sub-account MUST carry the `-zone-browser` zone suffix in the
-        // WSS username, exactly like proxy sub-accounts carry `-zone-res`/`-zone-isp`.
-        // Without it the WS handshake completes HTTP 101 then closes with code 1006
-        // (routing mismatch), which playwright-core misreports as "AuthorizationError:
-        // Account or Password verification failed" — the red herring that made hosted
-        // browser look impossible. Verified live: suffix present → CDP connects in ~6s.
-        const wsUrl = `wss://${account}-zone-browser:${password}@${BROWSER_WS_HOST}`;
-        _browserWsCache.set(fp, { wsUrl, fetchedAt: Date.now() });
-        return wsUrl;
-    }
-    catch {
+    const failedAt = _browserWsFailureCache.get(fp);
+    if (failedAt !== undefined && Date.now() - failedAt < BROWSER_WS_FAILURE_CACHE_TTL_MS) {
         return null;
     }
+    const inFlight = _browserWsInFlight.get(fp);
+    if (inFlight)
+        return inFlight;
+    const promise = (async () => {
+        try {
+            const form = new URLSearchParams();
+            form.append("product", "10"); // Browser API product code
+            form.append("page", "1");
+            form.append("limit", "5");
+            form.append("status", "1");
+            const res = await fetch(`${MGMT_API_BASE}/proxy_account/list`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${apiKey}`,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: form.toString(),
+            });
+            if (!res.ok) {
+                _browserWsFailureCache.set(fp, Date.now());
+                return null;
+            }
+            const data = (await res.json());
+            const accounts = data?.data?.list ?? [];
+            if (accounts.length === 0) {
+                _browserWsFailureCache.set(fp, Date.now());
+                return null;
+            }
+            const { account, password } = accounts[0];
+            // The Browser API sub-account MUST carry the `-zone-browser` zone suffix in the
+            // WSS username, exactly like proxy sub-accounts carry `-zone-res`/`-zone-isp`.
+            // Without it the WS handshake completes HTTP 101 then closes with code 1006
+            // (routing mismatch), which playwright-core misreports as "AuthorizationError:
+            // Account or Password verification failed" — the red herring that made hosted
+            // browser look impossible. Verified live: suffix present → CDP connects in ~6s.
+            const wsUrl = `wss://${account}-zone-browser:${password}@${BROWSER_WS_HOST}`;
+            _browserWsCache.set(fp, { wsUrl, fetchedAt: Date.now() });
+            _browserWsFailureCache.delete(fp); // a success clears any stale recent-failure mark
+            return wsUrl;
+        }
+        catch {
+            _browserWsFailureCache.set(fp, Date.now());
+            return null;
+        }
+        finally {
+            _browserWsInFlight.delete(fp);
+        }
+    })();
+    _browserWsInFlight.set(fp, promise);
+    return promise;
+}
+/** Test-only: reset the browser-WS success/failure/in-flight caches between tests. */
+export function clearBrowserWsCachesForTest() {
+    _browserWsCache.clear();
+    _browserWsFailureCache.clear();
+    _browserWsInFlight.clear();
 }
 /**
  * Resolve Browser API WebSocket URL with priority:

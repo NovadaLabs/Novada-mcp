@@ -15,6 +15,21 @@ export declare function withCredentials<T>(creds: ToolCredentials, fn: () => T):
 /** Active web unblocker key: SDK-scoped webUnblockerKey > SDK-scoped apiKey > NOVADA_WEB_UNBLOCKER_KEY > NOVADA_API_KEY (unified). */
 export declare function getWebUnblockerKey(): string | undefined;
 /**
+ * #41 Round 3 (reviewer finding, browser-tier verify): the EFFECTIVE caller key —
+ * SDK/hosted-scoped apiKey (the store's `apiKey`, populated by `withCredentials()`
+ * for EVERY call regardless of DOMAIN_REGISTRY pin) falling back to NOVADA_API_KEY
+ * for single-tenant/stdio use. `utils/browser.ts`'s `fetchViaBrowser` used to call
+ * `resolveBrowserWs(process.env.NOVADA_API_KEY)` directly — on the hosted server
+ * the server's own key is deliberately stripped from env (so a caller's call never
+ * silently bills the server account), so that lazy on-demand resolution was
+ * ALWAYS a no-op there (`key` resolved to `undefined`) even though the real
+ * caller's key was sitting right there in the store the whole call. This is the
+ * SAME resolution chain `getWebUnblockerKey()` above already uses for its own
+ * credential, generalized to a shared accessor instead of re-deriving it a third
+ * way with the wrong fallback.
+ */
+export declare function getEffectiveApiKey(): string | undefined;
+/**
  * Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var.
  *
  * TENANT SAFETY: this reader is synchronous and has no apiKey to match against,
@@ -57,10 +72,14 @@ export declare function fetchProxySubAccountCredentials(apiKey: string): Promise
  * Fetch Browser API WSS endpoint using the caller's apiKey as a Bearer token.
  * Calls POST /v1/proxy_account/list with product=10 (Browser API).
  * Returns wss://{account}:{password}@upg-scbr2.novada.com
- * Cached 6h in memory, keyed by the fingerprint of the fetching apiKey so one
- * caller's browser WSS endpoint is never returned to another (see keyFingerprint).
+ * Cached 6h on success, ~30s on failure, in memory, keyed by the fingerprint of
+ * the fetching apiKey so one caller's browser WSS endpoint (or failure) is never
+ * returned to another (see keyFingerprint). De-duplicated: concurrent calls for
+ * the same key share one in-flight request instead of each issuing their own.
  */
 export declare function fetchBrowserSubAccountCredentials(apiKey: string): Promise<string | null>;
+/** Test-only: reset the browser-WS success/failure/in-flight caches between tests. */
+export declare function clearBrowserWsCachesForTest(): void;
 /**
  * Resolve Browser API WebSocket URL with priority:
  * 1. SDK-scoped browserWs

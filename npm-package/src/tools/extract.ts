@@ -10,7 +10,7 @@ import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
 import { CATALOG_BY_DOMAIN } from "../data/scraper_catalog.js";
-import { isBrowserAvailableOnRuntime, getBrowserUnavailableError } from "../utils/runtime.js";
+import { isBrowserTransportAvailable, getBrowserUnavailableError } from "../utils/runtime.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 
 export { detectJsHeavyContent } from "../utils/index.js";
@@ -1630,10 +1630,21 @@ async function extractSingleInner(
     // On serverless (Vercel/Lambda), connectOverCDP cannot hold the WS and fails with a raw
     // "AuthorizationError" that looks like a credentials problem but is actually a transport
     // limitation. Fail fast with a structured, actionable error instead.
-    // isBrowserAvailableOnRuntime() checks: RUNTIME.canHoldWebSocket (config.ts — round 8:
-    // false only when RUNTIME.kind === "serverless", true for "local"/"hosted") AND
-    // whether NOVADA_BROWSER_WS creds are set.
-    if (!isBrowserAvailableOnRuntime()) {
+    // #41 Round 3 (reviewer finding, "pins act as a ceiling"): gates on
+    // isBrowserTransportAvailable() (RUNTIME.canHoldWebSocket ONLY) — NOT
+    // isBrowserAvailableOnRuntime() (transport AND pre-seeded NOVADA_BROWSER_WS/
+    // store.browserWs). The credentials half of that combined check used to force
+    // ANY hosted call whose creds simply weren't pre-seeded yet (mcp.ts's
+    // extractNeedsBrowserTier only pre-resolves for an EXPLICIT render="browser" or
+    // a DOMAIN_REGISTRY "browser" hint — never for e.g. a "static"-pinned host that
+    // reaches this arm via a caller explicitly passing render="browser") down the
+    // GitBook/no-browser path below even on a runtime that CAN hold a WS — a
+    // transport-capable runtime should always get a real fetchViaBrowser() attempt;
+    // fetchViaBrowser() now lazily resolves credentials itself via the real caller
+    // key (utils/browser.ts, getEffectiveApiKey() fix) and throws its own honest
+    // "not available" error if they genuinely aren't there, caught by the `else`
+    // arm below exactly like any other browser failure.
+    if (!isBrowserTransportAvailable()) {
       // NOV-GB2: BEFORE falling back to render, probe for a GitBook .md sibling —
       // the ONLY way GitBook docs content is reachable when browser is unavailable.
       // Cost guard (review HIGH #2): skip when a known anti-bot provider is already
@@ -1759,7 +1770,13 @@ async function extractSingleInner(
         const staticAgg = summarizeAggregateError(fetchErr);
         const staticElapsedMs = Date.now() - requestStartMs;
         const tierErrors: string[] = [`static: ${staticAgg ? staticAgg.causes.join(", ") : oneLineErr(fetchErr)} (${staticElapsedMs}ms)`];
-        const remainingTiers: Array<"render" | "browser"> = isBrowserAvailableOnRuntime()
+        // #41 Round 3: transport-only gate (see the effectiveMode==="browser" arm's
+        // matching comment above) — a DOMAIN_REGISTRY "static" pin (apnews.com) must
+        // not permanently exclude browser from this ladder just because mcp.ts never
+        // had a reason to pre-resolve NOVADA_BROWSER_WS for it ahead of time; the
+        // browser attempt below lazily resolves its own credentials and fails
+        // honestly (counted as a normal tier failure) if they are not available.
+        const remainingTiers: Array<"render" | "browser"> = isBrowserTransportAvailable()
           ? ["render", "browser"]
           : ["render"];
         let escalated = false;
