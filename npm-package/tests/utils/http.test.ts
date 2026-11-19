@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import axios, { AxiosError } from "axios";
-import { detectJsHeavyContent, detectBotChallenge, fetchWithRender } from "../../src/utils/http.js";
+import { detectJsHeavyContent, detectBotChallenge, fetchWithRender, fetchWithRetry } from "../../src/utils/http.js";
 
 describe("detectJsHeavyContent", () => {
   it("detects empty content as JS-heavy", () => {
@@ -239,5 +239,86 @@ describe("fetchViaProxy — circuit breaker TTL", () => {
     const result = await fetchViaProxyFn("https://example.com", undefined);
     // Either proxy or direct response should come back — circuit was reset so both are raced
     expect(["proxy-2", "direct-2"]).toContain(result.data);
+  });
+});
+
+/**
+ * #4 (2026-11-19, irs.gov/sec.gov PDF repro): axios's own default responseType
+ * ("json", falling back to its implicit string decode) reads the socket as text —
+ * for a real PDF this silently drops any byte that is not valid UTF-8 (every
+ * continuation byte in a compressed stream is a candidate), corrupting the
+ * xref/trailer table and producing pdf-parse's "Invalid Root reference". Fix:
+ * fetchWithRetry always requests `responseType: "arraybuffer"` and decides,
+ * post-response, whether to hand back the raw Buffer (PDF) or a utf-8 string
+ * (everything else — unchanged shape for every existing non-PDF caller).
+ */
+describe("fetchWithRetry — byte-exact PDF fetch (#4)", () => {
+  beforeEach(() => {
+    vi.mock("axios");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A byte sequence that is NOT valid UTF-8 on its own (a lone continuation byte,
+   *  0xE9, with no leading byte) — exactly the class of byte a naive
+   *  decode-then-Buffer.from(str,"binary") round trip mangles, since the decoder
+   *  replaces it with U+FFFD (3 bytes) before the "binary" re-encode ever runs. */
+  function corruptibleBytes(): Buffer {
+    return Buffer.from([0x25, 0x50, 0x44, 0x46, 0xe9, 0x00, 0x01, 0xff, 0xfe, 0x41, 0x42]);
+  }
+
+  it("always requests responseType: arraybuffer from axios, regardless of caller options", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: Buffer.from("<html><body>hi</body></html>", "utf-8"),
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    await fetchWithRetry("https://example.com/page", { tool: "extract" });
+    const config = mockedAxios.get.mock.calls[0][1] as Record<string, unknown>;
+    expect(config.responseType).toBe("arraybuffer");
+  });
+
+  it("returns the exact original bytes (no mangling) for a PDF content-type, instead of a lossy string round trip", async () => {
+    const mockedAxios = vi.mocked(axios);
+    const raw = corruptibleBytes();
+    mockedAxios.get.mockResolvedValue({
+      data: raw, status: 200, headers: { "content-type": "application/pdf" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.com/report.pdf", { tool: "extract" });
+    expect(Buffer.isBuffer(resp.data)).toBe(true);
+    expect(Buffer.compare(resp.data as Buffer, raw)).toBe(0);
+  });
+
+  it("detects PDF by URL extension alone, even when the server omits/misreports content-type", async () => {
+    const mockedAxios = vi.mocked(axios);
+    const raw = corruptibleBytes();
+    mockedAxios.get.mockResolvedValue({
+      data: raw, status: 200, headers: {}, config: {} as never, statusText: "OK", // no content-type header
+    });
+    const resp = await fetchWithRetry("https://example.com/f1040.pdf", { tool: "extract" });
+    expect(Buffer.isBuffer(resp.data)).toBe(true);
+    expect(Buffer.compare(resp.data as Buffer, raw)).toBe(0);
+  });
+
+  it("mirror: a non-PDF response is still decoded to a plain string (unchanged shape for every existing caller)", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: Buffer.from("<html><body>hello world</body></html>", "utf-8"),
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.com/page", { tool: "extract" });
+    expect(typeof resp.data).toBe("string");
+    expect(resp.data).toContain("hello world");
+  });
+
+  it("a mocked transport that hands back an already-parsed object (bypassing responseType) is passed through untouched, not crashed on", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: { already: "parsed" }, status: 200, headers: { "content-type": "application/json" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://api.example.com/data.json", { tool: "extract" });
+    expect(resp.data).toEqual({ already: "parsed" });
   });
 });

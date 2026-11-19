@@ -234,13 +234,27 @@ const BLOCK_CLASS_NETWORK_PATTERNS = [
     /\bEOF\b/i, // "unexpected eof while reading" — TLS-fingerprint rejection (layer-study §3)
     /socket hang up/i,
 ];
-/** Extracts every distinct HTTP status code present in `err` — including inside
- *  an AggregateError's `.errors` list (the direct+proxy race in extract.ts's
- *  "auto" mode rejects with one of these once BOTH legs fail). Returns an empty
- *  array when no status is present anywhere (e.g. a pure network error). */
+/** Max traversal depth for `.errors`/`.cause` chains below — a defensive bound, not
+ *  an expected real depth (real chains observed are 1-2 deep); prevents a pathological
+ *  or cyclic `.cause` chain from looping instead of just under- or over-classifying. */
+const ERROR_CHAIN_MAX_DEPTH = 8;
+/** Extracts every distinct HTTP status code present in `err` — including inside an
+ *  AggregateError's `.errors` list (the direct+proxy race in extract.ts's "auto"
+ *  mode rejects with one of these once BOTH legs fail) AND inside a wrapped Error's
+ *  `.cause` chain (class-not-instance fix, 2026-11-19: utils/http.ts's
+ *  `fetchViaProxy` wraps a failed direct-fetch leg as `new Error("Direct fetch
+ *  failed: ...", { cause: originalErr })` — the ORIGINAL AxiosError, with the real
+ *  `.response.status`, only lives on `.cause`; a visitor that stopped at `.errors`
+ *  silently lost the status on every DOMAIN_REGISTRY/route-memory-pinned host whose
+ *  `effectiveMode` skips the outer Promise.any race and calls `fetchViaProxy` alone
+ *  — apnews.com live-reproduced 2026-11-19, the same Cluster-2 class #41 covers).
+ *  Returns an empty array when no status is present anywhere (e.g. a pure network
+ *  error). */
 function collectStatuses(err) {
     const statuses = [];
-    const visit = (e) => {
+    const visit = (e, depth) => {
+        if (depth > ERROR_CHAIN_MAX_DEPTH)
+            return;
         // Duck-typed rather than `instanceof AxiosError`: any object carrying a
         // `.response.status` (the shape axios errors — real AxiosError instances
         // AND any equivalent mock/wrapper used in tests — always expose) is
@@ -251,22 +265,31 @@ function collectStatuses(err) {
             statuses.push(status);
         const errs = e?.errors;
         if (Array.isArray(errs))
-            errs.forEach(visit);
+            errs.forEach((sub) => visit(sub, depth + 1));
+        const cause = e?.cause;
+        if (cause !== undefined && cause !== null)
+            visit(cause, depth + 1);
     };
-    visit(err);
+    visit(err, 0);
     return statuses;
 }
 /** True when `err` matches one of the network-level block-class patterns above,
- *  checking every leg of an AggregateError (same recursive shape as collectStatuses). */
+ *  checking every leg of an AggregateError AND every link of a `.cause` chain
+ *  (same reasoning and recursive shape as collectStatuses above). */
 function matchesBlockClassNetworkPattern(err) {
-    const visit = (e) => {
+    const visit = (e, depth) => {
+        if (depth > ERROR_CHAIN_MAX_DEPTH)
+            return false;
         const msg = e instanceof Error ? `${e.message} ${e.code ?? ""}` : String(e);
         if (BLOCK_CLASS_NETWORK_PATTERNS.some((re) => re.test(msg)))
             return true;
         const errs = e?.errors;
-        return Array.isArray(errs) ? errs.some(visit) : false;
+        if (Array.isArray(errs) && errs.some((sub) => visit(sub, depth + 1)))
+            return true;
+        const cause = e?.cause;
+        return cause !== undefined && cause !== null ? visit(cause, depth + 1) : false;
     };
-    return visit(err);
+    return visit(err, 0);
 }
 /**
  * F2 discriminator: should a static/proxy fetch failure in render="auto" mode

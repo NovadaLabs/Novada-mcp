@@ -62,6 +62,17 @@ function extractContentSafe(html: string, url: string, useFullPage: boolean): st
 }
 
 /**
+ * #41/#2 (2026-11-19): collapse one tier's failure to a short, redacted, single-line
+ * string for the ladder's "name every tier tried" message — shared by every tier
+ * entry in the static→render→browser loop so each leg is capped/redacted the same way
+ * buildEscalationFailedInstruction already caps its one render-error slot.
+ */
+function oneLineErr(err: unknown, maxChars = 150): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return redactSecrets(msg).replace(/\s+/g, " ").trim().slice(0, maxChars);
+}
+
+/**
  * F14 (2026-09-10 audit): the honest agent_instruction for a render escalation whose
  * FETCH failed (401/5xx/thrown) — shared by the markdown path (via
  * buildContextualAgentInstruction) and the JSON path so the two can never diverge.
@@ -759,6 +770,19 @@ function dnsSuggestedFix(lowerErrorMsg: string): string {
 
 function deriveSuggestedFix(url: string, errorMsg: string): string {
   const lower = errorMsg.toLowerCase();
+  // #41 (2026-11-19): the ladder's "every tier tried" marker ("All N tiers failed: ...")
+  // is distinct from the pre-escalation "fetch strategies failed" marker below — it
+  // means render (and, when a browser runtime was available, browser too) were BOTH
+  // genuinely attempted and BOTH blocked, not that escalation never got a turn.
+  // Checked first (same reasoning as the FIX-A comment below): a quoted per-tier cause
+  // could itself contain "fetch strategies failed" verbatim (the static leg's own
+  // aggregate summary is nested inside this message) and must not fall through to the
+  // generic "never-escalated" advice.
+  if (lower.includes("tiers failed")) {
+    return lower.includes("browser:")
+      ? `suggested_fix: static, render, AND browser were all attempted and blocked — this site is actively blocking Novada's fetch infrastructure right now. retry_recommended after 30s (exponential backoff), or accept the URL is currently unavailable`
+      : `suggested_fix: static and render were both attempted and blocked; no browser runtime/credentials were available to try next. Configure NOVADA_BROWSER_WS to let novada_extract fall back to a real browser (render="browser"), or accept the URL is currently unavailable`;
+  }
   // FIX-A (2026-07-30): the aggregate-fetch-failure marker text is emitted ONLY by
   // summarizeAggregateError's crafted message ("All N fetch strategies failed: ...").
   // Must be checked FIRST — a distinct cause quoted verbatim inside that message can
@@ -1253,6 +1277,15 @@ const BOILERPLATE_SIGNATURES: RegExp[] = [
   /\bfaulted after too many retries\b/i,
   /\bwe use cookies\b[\s\S]{0,200}\b(accept|consent|manage preferences)\b/i,
   /\bthis (site|website) uses cookies\b[\s\S]{0,200}\b(accept all|manage preferences|consent)\b/i,
+  // #3 (2026-11-19): web.archive.org's own "nothing here" chrome — the Wayback
+  // Machine's canonical not-archived/empty-calendar page, not the target site's
+  // content. One new row (per this table's own design note above), not a new
+  // mechanism: the P2-1 Wayback rescue (below) already runs every candidate through
+  // this same hasBoilerplateOnlySignature() gate, so a banner-only archive page is
+  // rejected exactly like a bad-gateway stub is today; a real archived article
+  // (hundreds of words) never matches the ≤45-word ceiling, so it is unaffected.
+  /\bwayback machine (has not archived|does ?n'?t have) that (url|page)\b/i,
+  /\bthis url has (no|not been) captured?\b/i,
 ];
 /** Above this word count, a signature match is treated as a real article mentioning
  *  the phrase in passing, not a page that IS the stub. Deliberately kept BELOW
@@ -1673,25 +1706,49 @@ async function extractSingleInner(
       // asked for static-only and must still fail as today — only a caller-level
       // "auto" claims an automatic escalation ladder.
       if (renderMode === "auto" && isBlockClassFetchFailure(fetchErr)) {
-        try {
-          const r = await runRenderTier();
-          fetchErrorEscalatedViaRender = true;
-          if (r.terminal) return r.value;
-          // success — html/usedMode set by runRenderTier(); `response` stays null
-          // and the content-type handling below is skipped via the guard that follows.
-        } catch (renderErr) {
-          // Render ALSO failed — surface the ORIGINAL fetch error (today's message
-          // shape, via summarizeAggregateError below) so existing suggested_fix
-          // text keeps working, but note that render was genuinely attempted so a
-          // caller/agent can see this was not a zero-attempt give-up.
-          const agg = summarizeAggregateError(fetchErr);
-          const baseMsg = agg?.message ?? (fetchErr instanceof Error ? fetchErr.message : String(fetchErr));
+        // #41 (2026-11-19, congress.gov repro): this used to stop after ONE
+        // fallback tier (render) — a render-tier failure propagated straight to the
+        // caller even when a browser tier was configured and never got a turn.
+        // Ladder, expressed as one loop (owner directive, "越优化越 pure" — fewer
+        // branches, not more): static/proxy already failed above; walk the
+        // remaining tiers in order [render, browser-if-available], stopping at the
+        // first one that produces real content. Each tier's failure is recorded
+        // (not discarded) so the final message can name every tier tried — #2.
+        const staticAgg = summarizeAggregateError(fetchErr);
+        const tierErrors: string[] = [`static: ${staticAgg ? staticAgg.causes.join(", ") : oneLineErr(fetchErr)}`];
+        const remainingTiers: Array<"render" | "browser"> = isBrowserAvailableOnRuntime()
+          ? ["render", "browser"]
+          : ["render"];
+        let escalated = false;
+        for (const tier of remainingTiers) {
+          try {
+            if (tier === "render") {
+              const r = await runRenderTier();
+              if (r.terminal) return r.value;
+              // success — html/usedMode set by runRenderTier(); `response` stays
+              // null and the content-type handling below is skipped via the guard
+              // that follows.
+            } else {
+              html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
+              usedMode = "browser";
+            }
+            escalated = true;
+            break;
+          } catch (tierErr) {
+            tierErrors.push(`${tier}: ${oneLineErr(tierErr)}`);
+          }
+        }
+        if (!escalated) {
+          // Every available tier failed — #2: name all of them (not just the
+          // first/static one) so the caller knows render/browser were genuinely
+          // attempted instead of silently skipped.
           throw makeNovadaError(
             NovadaErrorCode.URL_UNREACHABLE,
-            baseMsg,
-            `url:${params.url} direct-fetch and proxy-fetch both rejected (block-class); render escalation also failed: ${renderErr instanceof Error ? renderErr.message : String(renderErr)}`
+            `All ${tierErrors.length} tiers failed: ${tierErrors.join("; ")}`,
+            `url:${params.url} every available fetch tier was tried and rejected (block-class) — ${tierErrors.join("; ")}`
           );
         }
+        fetchErrorEscalatedViaRender = true;
       } else {
         // FIX-A (2026-07-30): a bare Promise.any AggregateError leaks the literal
         // "All promises were rejected" — zero actionable content. Map it to a
@@ -2158,7 +2215,13 @@ async function extractSingleInner(
         // F15: classified throw on parser crash — caught by the Wayback try/catch
         // (keep original result), never a raw TypeError.
         const wbMain = extractContentSafe(wbHtml, params.url, useFullPage);
-        if (wbMain.length > mainContent.length) {
+        // #3 (2026-11-19): a longer Wayback capture is not automatically a BETTER
+        // one — web.archive.org's own not-archived/empty-calendar banner is longer
+        // than a near-empty live page too, and was being adopted as `source: wayback`
+        // "success" purely on that length comparison. Gate it through the same
+        // boilerplate-only-page check every other tier's content already passes
+        // (hasBoilerplateOnlySignature, above) before trusting it.
+        if (wbMain.length > mainContent.length && !hasBoilerplateOnlySignature(wbMain)) {
           // NOV-577: one parse of the Wayback HTML, shared across the readers in this branch.
           const $wb = cheerio.load(wbHtml);
           html = wbHtml;

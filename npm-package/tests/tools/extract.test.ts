@@ -1386,6 +1386,184 @@ describe("F2: render='auto' escalates on a fetch-level block-class error, not on
   });
 });
 
+// ─── #41 (2026-11-19, congress.gov/apnews.com repro) ──────────────────────────
+//
+// F2 (above) added exactly ONE fallback tier (render) for a fetch-level block-class
+// failure. Live-verified against production congress.gov: render itself can ALSO
+// fail at the fetch level (not just bad content) — and the old code gave up right
+// there, never giving a configured browser tier a turn. The fix expresses the whole
+// thing as one ordered loop over remaining tiers [render, browser-if-available],
+// stopping at the first real content and naming every tier it actually tried.
+describe("#41: static→render→browser is ONE ladder (render failing is not the end of the line)", () => {
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "NOVADA_RUNTIME_KIND", "NOVADA_BROWSER_WS", "NOVADA_WEB_UNBLOCKER_KEY"]) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+  });
+  afterEach(() => {
+    for (const k of Object.keys(saved)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it("render fails too, browser is configured+available → ladder falls through to browser and succeeds", async () => {
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
+    process.env.NOVADA_BROWSER_WS = "wss://fake-browser.example.com";
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    const realContent = `<html><head><title>Browser Tier OK</title></head><body><main>` +
+      `<p>Real content recovered via the browser tier after BOTH static/proxy and render failed in auto mode.</p>`.repeat(5) +
+      `</main></body></html>`;
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-browser-fallback.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(fetchViaBrowserSpy).toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("Browser Tier OK");
+  });
+
+  it("render fails too, no browser runtime/creds configured → honest failure naming BOTH tiers (static AND render), not just the first", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-all-tiers-fail.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("## Extract Failed");
+    expect(result).toMatch(/static:/);
+    expect(result).toMatch(/render:/);
+    expect(result).toContain("403");
+    expect(result).toContain("Web Unblocker error (400)");
+    expect(mockedAxios.post).toHaveBeenCalled(); // render WAS attempted, not skipped
+  });
+
+  it("budget: the ladder never bypasses TOTAL_REQUEST_CEILING — a render tier that hangs still resolves to a single timeout failure, not an unbounded wait", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    // Simulate a render leg that never resolves within this test's lifetime —
+    // extractSingle's own Promise.race ceiling (TIMEOUTS.TOTAL_REQUEST_CEILING)
+    // must still cut this off; the ladder adds tiers, it does not add time.
+    mockedAxios.post.mockImplementation(() => new Promise(() => { /* never resolves */ }));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-budget-test.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    // The TOTAL_REQUEST_CEILING race (extractSingle, not this ladder) cuts the
+    // whole request off with its own "## Extraction Error" formatting — proving
+    // the ladder itself has no independent timeout that could let a hung render
+    // leg outlive the shared budget.
+    expect(result).toMatch(/## Extraction Error|## Extract Failed/);
+    expect(result.toLowerCase()).toMatch(/ceiling|timeout|exceeded/);
+  }, 60_000);
+
+  // Mirror of the DOMAIN_REGISTRY-pinned case (apnews.com: method:"static") where
+  // `effectiveMode` resolves to "static" and fetchViaProxy is called directly — no
+  // outer Promise.any race, so the escalation gate sees whatever fetchViaProxy itself
+  // throws. With both of fetchViaProxy's OWN internal legs failing, that is the
+  // `.cause`-wrapped single Error the errors.test.ts unit tests cover directly; this
+  // integration test proves the same fix end-to-end through a real registry-pinned URL.
+  it("registry-pinned static host (apnews.com-shape): a .cause-wrapped fetchViaProxy failure still escalates to render", async () => {
+    process.env.NOVADA_PROXY_USER = "user";
+    process.env.NOVADA_PROXY_PASS = "pass";
+    process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+    // Both legs fetchViaProxy races internally (proxy probe + direct) reject with
+    // 403 — triggers the exact "Direct fetch failed: ... Proxy circuit: unknown"
+    // wrap this fix's .cause traversal exists for.
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html:
+        `<html><head><title>APNews-shape Escalated OK</title></head><body><main>` +
+        `<p>Content recovered through the render tier after a registry-pinned static host's internal proxy race both-legs-rejected.</p>`.repeat(5) +
+        `</main></body></html>`, msg: "", msg_detail: "" } },
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://apnews.com/hub/technology", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("APNews-shape Escalated OK");
+    delete process.env.NOVADA_PROXY_USER;
+    delete process.env.NOVADA_PROXY_PASS;
+    delete process.env.NOVADA_PROXY_ENDPOINT;
+  });
+});
+
+// ─── #3 (2026-11-19, g2.com repro): Wayback banner must not be reported as success ──
+//
+// P2-1's archive.org rescue only compared LENGTH (`wbMain.length > mainContent.length`)
+// against the near-empty live page — web.archive.org's own "not archived" chrome is
+// longer than an empty page too, so it was adopted as `source: wayback` "success" even
+// though it is Wayback's own UI, not the target site's content. Fix: run the Wayback
+// candidate through the SAME boilerplate-only-page gate (hasBoilerplateOnlySignature)
+// every other tier's content already has to pass.
+describe("#3: Wayback rescue must pass the same content-quality gate as any other tier", () => {
+  it("a Wayback 'not archived' banner page is REJECTED — extraction stays a failure, not wayback-success", async () => {
+    const waybackBanner = `
+      <html><head><title>Wayback Machine</title></head>
+      <body>
+        <div id="wm-ipp-base">Internet Archive</div>
+        <h1>Hrm.</h1>
+        <p>The Wayback Machine has not archived that URL.</p>
+      </body></html>
+    `;
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (url.includes("web.archive.org")) {
+        return { data: waybackBanner, status: 200, headers: {}, config: {} as never, statusText: "OK" };
+      }
+      // Live page: effectively empty — triggers the P2-1 rescue (mainContent<100, score<20).
+      return { data: "<html><body></body></html>", status: 200, headers: {}, config: {} as never, statusText: "OK" };
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://wayback-banner-test.example/page", render: "static", format: "markdown" },
+      API_KEY
+    );
+    expect(result).not.toContain("source: wayback");
+    expect(result).not.toContain("wayback_fallback");
+    expect(result).not.toContain("Internet Archive");
+  });
+
+  it("mirror: a REAL archived article (long, substantive prose) is still adopted as a wayback rescue — the gate doesn't over-block", async () => {
+    const realArchivedArticle = `
+      <html><head><title>Real Archived Article</title></head>
+      <body><main>
+        ${"<p>This is a real, substantive archived news article with plenty of genuine prose content that a reader would actually want. </p>".repeat(15)}
+      </main></body></html>
+    `;
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (url.includes("web.archive.org")) {
+        return { data: realArchivedArticle, status: 200, headers: {}, config: {} as never, statusText: "OK" };
+      }
+      return { data: "<html><body></body></html>", status: 200, headers: {}, config: {} as never, statusText: "OK" };
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://wayback-real-article-test.example/page", render: "static", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("source: wayback");
+    expect(result).toContain("real, substantive archived news article");
+  });
+});
+
 // ─── B7 (wave B/C, 2026-11-18): DNS-specific suggested_fix, not the anti-bot default ──
 describe("B7: getSuggestedFix gives DNS-specific advice for ENOTFOUND, not the generic anti-bot framing", () => {
   it("aggregate 'fetch strategies failed: ... ENOTFOUND ... [resolvers:...;permanent]' → honest dead-domain advice, retry_recommended:false, no mention of blocking", () => {

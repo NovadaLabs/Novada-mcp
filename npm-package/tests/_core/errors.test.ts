@@ -6,7 +6,73 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { summarizeAggregateError, serpCaptureFailedHint } from "../../src/_core/errors.js";
+import { summarizeAggregateError, serpCaptureFailedHint, isBlockClassFetchFailure, NOT_ESCALATE_STATUSES } from "../../src/_core/errors.js";
+
+/**
+ * #41 (2026-11-19, congress.gov/apnews.com repro): isBlockClassFetchFailure must see
+ * a status wrapped behind a `.cause` chain, not just inside an AggregateError's
+ * `.errors` array — utils/http.ts's fetchViaProxy wraps a failed direct-fetch leg as
+ * `new Error("Direct fetch failed: ...", { cause: originalAxiosError })`, and when a
+ * DOMAIN_REGISTRY/route-memory-pinned host calls fetchViaProxy directly (no outer
+ * Promise.any race), THIS wrapped error — not an AggregateError — is exactly what
+ * extract.ts's escalation gate receives. Before the `.cause` traversal fix,
+ * collectStatuses/matchesBlockClassNetworkPattern only looked at `.response` and
+ * `.errors`, so the real 403 on `.cause.response.status` was invisible and the
+ * static→render escalation never fired — live-reproduced on apnews.com even though
+ * its DOMAIN_REGISTRY entry predates this fix.
+ */
+describe("isBlockClassFetchFailure — .cause chain traversal (#41)", () => {
+  it("finds a block-class status hidden one level down a .cause chain (the exact fetchViaProxy wrap shape)", () => {
+    const original = Object.assign(new Error("Request failed with status code 403"), { response: { status: 403 } });
+    const wrapped = Object.assign(
+      new Error("Direct fetch failed: Request failed with status code 403. Proxy circuit: unknown"),
+      { cause: original }
+    );
+    expect(isBlockClassFetchFailure(wrapped)).toBe(true);
+  });
+
+  it("finds a NOT-escalate status (404) hidden behind .cause too — the fix must not just blanket-escalate everything wrapped", () => {
+    const original = Object.assign(new Error("Request failed with status code 404"), { response: { status: 404 } });
+    const wrapped = Object.assign(new Error("Direct fetch failed: Request failed with status code 404."), { cause: original });
+    // No block-class signal anywhere (404 is NOT in BLOCK_CLASS_STATUSES) and no
+    // network pattern matches → isBlockClassFetchFailure stays false, same as a bare
+    // 404 today. It is NOT this function's job to positively veto escalation for
+    // NOT_ESCALATE_STATUSES — extract.ts's own caller-level checks do that — only to
+    // avoid manufacturing a false positive for a status this function has no
+    // "actively blocked" evidence for.
+    expect(isBlockClassFetchFailure(wrapped)).toBe(false);
+    expect(NOT_ESCALATE_STATUSES.has(404)).toBe(true);
+  });
+
+  it("finds a status nested inside an AggregateError leg that is ITSELF a .cause-wrapped error (the real congress.gov top-level shape)", () => {
+    const directLegStatus403 = Object.assign(new Error("Request failed with status code 403"), { response: { status: 403 } });
+    const proxyLegOriginal = Object.assign(new Error("Request failed with status code 403"), { response: { status: 403 } });
+    const proxyLegWrapped = Object.assign(
+      new Error("Direct fetch failed: Request failed with status code 403. Proxy circuit: unknown"),
+      { cause: proxyLegOriginal }
+    );
+    const agg = new AggregateError([directLegStatus403, proxyLegWrapped], "All promises were rejected");
+    expect(isBlockClassFetchFailure(agg)).toBe(true);
+  });
+
+  it("a network-pattern match behind .cause (ETIMEDOUT) is also found, not just status codes", () => {
+    const original = Object.assign(new Error("connect ETIMEDOUT 1.2.3.4:443"), { code: "ETIMEDOUT" });
+    const wrapped = Object.assign(new Error("Direct fetch failed: connect ETIMEDOUT 1.2.3.4:443"), { cause: original });
+    expect(isBlockClassFetchFailure(wrapped)).toBe(true);
+  });
+
+  it("a cyclic .cause chain does not hang or throw (defensive depth bound)", () => {
+    const a: Error & { cause?: unknown } = new Error("a");
+    const b: Error & { cause?: unknown } = new Error("b");
+    a.cause = b;
+    b.cause = a; // cycle
+    expect(() => isBlockClassFetchFailure(a)).not.toThrow();
+  });
+
+  it("an unclassified error with no status and no .cause still returns false (no over-escalation)", () => {
+    expect(isBlockClassFetchFailure(new Error("something unrelated went wrong"))).toBe(false);
+  });
+});
 
 /**
  * Round 3 (S1-connector, item 3, live-verified 2026-10-13): table-driven unit test for
