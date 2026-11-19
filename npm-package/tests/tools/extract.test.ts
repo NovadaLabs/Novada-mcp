@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import axios from "axios";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { fileURLToPath } from "url";
 import { novadaExtract, getSuggestedFix } from "../../src/tools/extract.js";
 import { detectJsHeavyContent } from "../../src/utils/http.js";
 import { clearCache } from "../../src/_core/session-cache.js";
@@ -1432,6 +1435,66 @@ describe("#41: static→render→browser is ONE ladder (render failing is not th
     expect(result).toContain("Browser Tier OK");
   });
 
+  // Round 2 (reviewer MEDIUM #2, the point of #41): render alone consuming the
+  // whole shared 50s ceiling leaves browser "reachable in principle" but never
+  // actually reached in practice (apnews.com live table: render alone took
+  // ~48.8s). Fix: render's own per-request timeout is capped to the ceiling MINUS
+  // a reserved browser slice whenever browser is next in the loop. A mocked
+  // transport can't honor a real axios timeout (it's just a Promise, not a socket),
+  // so this proves the cap was actually COMPUTED AND APPLIED — the config axios.post
+  // was called with — rather than asserting on real wall-clock timeout behavior.
+  it("budget-aware: render's request timeout is capped (not the full 48s default) when browser is available to run next", async () => {
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
+    process.env.NOVADA_BROWSER_WS = "wss://fake-browser.example.com";
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    const realContent = `<html><head><title>Browser Tier OK</title></head><body><main>` +
+      `<p>Browser still gets its slice after render's capped timeout fails fast.</p>`.repeat(5) +
+      `</main></body></html>`;
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-budget-aware-timeout.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(mockedAxios.post).toHaveBeenCalled();
+    const renderCallConfig = mockedAxios.post.mock.calls[0][2] as Record<string, unknown>;
+    // TIMEOUTS.RENDER is 48_000ms; NEXT_TIER_MIN_SLICE_MS reserves 15_000ms for
+    // browser; CAPPED_TIER_MIN_TIMEOUT_MS floors it at 10_000ms. With near-zero
+    // elapsed time at the start of this mocked run, the computed cap must land
+    // strictly below the uncapped default and at/above the floor — proving a
+    // reduced timeout was actually passed through, not the unmodified default.
+    expect(renderCallConfig.timeout).toBeLessThan(48_000);
+    expect(renderCallConfig.timeout as number).toBeGreaterThanOrEqual(10_000);
+    // And browser still actually gets its turn and succeeds within this slice.
+    expect(fetchViaBrowserSpy).toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("Browser Tier OK");
+  });
+
+  // Mirror: no next tier (browser unavailable) → render keeps today's FULL,
+  // uncapped timeout — the budget cap must never fire when there is nothing after
+  // render to protect time for.
+  it("mirror: render's timeout is NOT capped when no browser tier follows (nothing to protect time for)", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    clearCache();
+    await novadaExtract(
+      { url: "https://ladder-no-browser-no-cap.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(mockedAxios.post).toHaveBeenCalled();
+    const renderCallConfig = mockedAxios.post.mock.calls[0][2] as Record<string, unknown>;
+    // No explicit `timeout` override was passed → fetchWithRender's own default
+    // (TIMEOUTS.RENDER) applies, same as before this fix existed.
+    expect(renderCallConfig.timeout).toBe(48_000);
+  });
+
   it("render fails too, no browser runtime/creds configured → honest failure naming BOTH tiers (static AND render), not just the first", async () => {
     mockedAxios.get.mockRejectedValue(
       Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
@@ -1443,8 +1506,8 @@ describe("#41: static→render→browser is ONE ladder (render failing is not th
       API_KEY
     );
     expect(result).toContain("## Extract Failed");
-    expect(result).toMatch(/static:/);
-    expect(result).toMatch(/render:/);
+    expect(result).toMatch(/static:.*\(\d+ms\)/); // #2 Round 2: per-tier elapsed time disclosed
+    expect(result).toMatch(/render:.*\(\d+ms\)/);
     expect(result).toContain("403");
     expect(result).toContain("Web Unblocker error (400)");
     expect(mockedAxios.post).toHaveBeenCalled(); // render WAS attempted, not skipped
@@ -1516,14 +1579,19 @@ describe("#41: static→render→browser is ONE ladder (render failing is not th
 // every other tier's content already has to pass.
 describe("#3: Wayback rescue must pass the same content-quality gate as any other tier", () => {
   it("a Wayback 'not archived' banner page is REJECTED — extraction stays a failure, not wayback-success", async () => {
-    const waybackBanner = `
-      <html><head><title>Wayback Machine</title></head>
-      <body>
-        <div id="wm-ipp-base">Internet Archive</div>
-        <h1>Hrm.</h1>
-        <p>The Wayback Machine has not archived that URL.</p>
-      </body></html>
-    `;
+    // Round 2 (reviewer HIGH #1): a hand-written 232-char fixture never reached the
+    // new check at all — it was already rejected by the PRE-EXISTING
+    // `wbResponse.data.length > 500` length gate, so the test passed for the wrong
+    // reason (would stay green even if the new boilerplate-table row were deleted).
+    // Fixed by using a REAL web.archive.org "not archived" response, captured live
+    // 2026-11-19 (`curl -sL "https://web.archive.org/web/2024/https://<a domain that
+    // does not exist>/..."`) and saved verbatim — 4741 bytes, well past the 500-char
+    // floor, so this fixture actually exercises hasBoilerplateOnlySignature.
+    const waybackBanner = readFileSync(
+      join(fileURLToPath(new URL(".", import.meta.url)), "..", "fixtures", "wayback-not-archived-banner.html"),
+      "utf-8"
+    );
+    expect(waybackBanner.length).toBeGreaterThan(500); // guard the guard: fixture must clear the pre-existing length gate
     mockedAxios.get.mockImplementation(async (url: string) => {
       if (url.includes("web.archive.org")) {
         return { data: waybackBanner, status: 200, headers: {}, config: {} as never, statusText: "OK" };

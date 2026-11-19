@@ -1175,15 +1175,6 @@ const BOILERPLATE_SIGNATURES = [
     /\bfaulted after too many retries\b/i,
     /\bwe use cookies\b[\s\S]{0,200}\b(accept|consent|manage preferences)\b/i,
     /\bthis (site|website) uses cookies\b[\s\S]{0,200}\b(accept all|manage preferences|consent)\b/i,
-    // #3 (2026-11-19): web.archive.org's own "nothing here" chrome — the Wayback
-    // Machine's canonical not-archived/empty-calendar page, not the target site's
-    // content. One new row (per this table's own design note above), not a new
-    // mechanism: the P2-1 Wayback rescue (below) already runs every candidate through
-    // this same hasBoilerplateOnlySignature() gate, so a banner-only archive page is
-    // rejected exactly like a bad-gateway stub is today; a real archived article
-    // (hundreds of words) never matches the ≤45-word ceiling, so it is unaffected.
-    /\bwayback machine (has not archived|does ?n'?t have) that (url|page)\b/i,
-    /\bthis url has (no|not been) captured?\b/i,
 ];
 /** Above this word count, a signature match is treated as a real article mentioning
  *  the phrase in passing, not a page that IS the stub. Deliberately kept BELOW
@@ -1192,6 +1183,31 @@ const BOILERPLATE_SIGNATURES = [
  *  its own override of `contentPresentDisplay` the way the redirect check does below;
  *  it only ever needs to block the short-page rescue it is folded into. */
 const BOILERPLATE_MAX_WORDS = 45;
+/**
+ * #3 Round 2 (reviewer HIGH #1): a REAL web.archive.org "not archived" response is
+ * NOT short — live-verified 2026-11-19 (a genuine `curl` against Wayback's own
+ * not-found page): its extracted main content runs ~130 words once the
+ * donate/nav/footer chrome is included, well past BOILERPLATE_MAX_WORDS, so folding
+ * this into hasBoilerplateOnlySignature() (as the first attempt at this fix did)
+ * never actually fires on real Wayback output — it only passed a hand-written
+ * <45-word test fixture that doesn't represent what archive.org actually serves.
+ *
+ * This is a DELIBERATELY separate, uncapped check — not a generalization of the
+ * table above — because the safety reasoning differs: BOILERPLATE_SIGNATURES caps at
+ * 45 words so a real long article that happens to mention "bad gateway" in passing
+ * never matches; that risk does not exist here, because this function is only ever
+ * called on the response fetched directly FROM web.archive.org (the P2-1 rescue
+ * below) — Wayback's own canonical "has not archived that URL" wording is UI text
+ * belonging to Wayback's not-found page, not something a successfully-rescued
+ * target page could ever legitimately contain instead of its own real content.
+ */
+const WAYBACK_BANNER_SIGNATURES = [
+    /\bwayback machine (has not archived|does ?n'?t have) that (url|page)\b/i,
+    /\bthis url has (no|not been) captured?\b/i,
+];
+function isWaybackNotArchivedBanner(waybackHtml) {
+    return WAYBACK_BANNER_SIGNATURES.some((re) => re.test(waybackHtml));
+}
 function hasBoilerplateOnlySignature(mainContent) {
     const trimmed = mainContent.trim();
     if (!trimmed)
@@ -1271,8 +1287,26 @@ export function detectHydrationSuspect($doc) {
     });
     return suspect;
 }
+/**
+ * #41 Round 2 (owner review): when a later ladder tier remains, this is the
+ * minimum wall-clock slice reserved for it. No new global timeout — this only
+ * shortens the CURRENT tier's own per-request axios timeout (which
+ * fetchWithRender already accepts as a caller override) within the existing,
+ * unchanged TOTAL_REQUEST_CEILING race in extractSingle. Review repro: apnews.com's
+ * render leg alone consumed ~48.8s of the shared 50s budget, leaving browser no
+ * turn even though it was "reachable in principle".
+ */
+const NEXT_TIER_MIN_SLICE_MS = 15_000;
+/** Floor so a tight remaining budget never drives the capped tier's own timeout
+ *  toward zero — it still gets a meaningful attempt even late in the request;
+ *  the unchanged outer TOTAL_REQUEST_CEILING race is still the final backstop. */
+const CAPPED_TIER_MIN_TIMEOUT_MS = 10_000;
 /** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
 async function extractSingleInner(params, apiKey) {
+    // #41 Round 2: wall-clock origin for this request, shared by the auto-ladder's
+    // budget calculation below (how much of TOTAL_REQUEST_CEILING is already spent)
+    // and by its per-tier elapsed-time disclosure in the failure message.
+    const requestStartMs = Date.now();
     // Normalize render="js" → "render" (js is the agent-friendly alias)
     if (params.render === "js") {
         params = { ...params, render: "render" };
@@ -1387,8 +1421,14 @@ async function extractSingleInner(params, apiKey) {
      * caller (a) lets it propagate to extractSingle's own top-level catch,
      * unchanged from today.
      */
-    async function runRenderTier() {
-        const response = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}), ...(params.country ? { country: params.country } : {}) });
+    async function runRenderTier(timeoutMs) {
+        // #41 Round 2 (owner review, budget-aware ladder): `timeoutMs`, when passed,
+        // overrides fetchWithRender's default TIMEOUTS.RENDER for exactly ONE caller —
+        // the auto-ladder's render tier, which caps it so a next tier (browser) still
+        // gets a turn. The other two callers (explicit render="render"; browser-tier
+        // unavailable → render fallback) pass nothing and keep today's full budget —
+        // neither has a tier after render to protect time for.
+        const response = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}), ...(params.country ? { country: params.country } : {}), ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}) });
         const contentType = String(response.headers?.["content-type"] ?? "");
         if (isPdfResponse(params.url, contentType)) {
             const pdfBuffer = Buffer.isBuffer(response.data)
@@ -1600,15 +1640,28 @@ async function extractSingleInner(params, apiKey) {
                 // first one that produces real content. Each tier's failure is recorded
                 // (not discarded) so the final message can name every tier tried — #2.
                 const staticAgg = summarizeAggregateError(fetchErr);
-                const tierErrors = [`static: ${staticAgg ? staticAgg.causes.join(", ") : oneLineErr(fetchErr)}`];
+                const staticElapsedMs = Date.now() - requestStartMs;
+                const tierErrors = [`static: ${staticAgg ? staticAgg.causes.join(", ") : oneLineErr(fetchErr)} (${staticElapsedMs}ms)`];
                 const remainingTiers = isBrowserAvailableOnRuntime()
                     ? ["render", "browser"]
                     : ["render"];
                 let escalated = false;
-                for (const tier of remainingTiers) {
+                for (let i = 0; i < remainingTiers.length; i++) {
+                    const tier = remainingTiers[i];
+                    const hasNextTier = i < remainingTiers.length - 1;
+                    const tierStartMs = Date.now();
                     try {
                         if (tier === "render") {
-                            const r = await runRenderTier();
+                            // #41 Round 2 (owner review — budget-aware ladder): when browser is
+                            // next in line, cap render's own timeout to the budget still
+                            // remaining under TOTAL_REQUEST_CEILING minus browser's reserved
+                            // slice, so a slow/hanging render can't eat the whole shared ceiling
+                            // and leave browser zero chance to run. No next tier (browser
+                            // unavailable) → no cap, same as today.
+                            const renderTimeoutMs = hasNextTier
+                                ? Math.max(CAPPED_TIER_MIN_TIMEOUT_MS, TIMEOUTS.TOTAL_REQUEST_CEILING - (Date.now() - requestStartMs) - NEXT_TIER_MIN_SLICE_MS)
+                                : undefined;
+                            const r = await runRenderTier(renderTimeoutMs);
                             if (r.terminal)
                                 return r.value;
                             // success — html/usedMode set by runRenderTier(); `response` stays
@@ -1623,7 +1676,7 @@ async function extractSingleInner(params, apiKey) {
                         break;
                     }
                     catch (tierErr) {
-                        tierErrors.push(`${tier}: ${oneLineErr(tierErr)}`);
+                        tierErrors.push(`${tier}: ${oneLineErr(tierErr)} (${Date.now() - tierStartMs}ms)`);
                     }
                 }
                 if (!escalated) {
@@ -2102,11 +2155,16 @@ async function extractSingleInner(params, apiKey) {
                 const wbMain = extractContentSafe(wbHtml, params.url, useFullPage);
                 // #3 (2026-11-19): a longer Wayback capture is not automatically a BETTER
                 // one — web.archive.org's own not-archived/empty-calendar banner is longer
-                // than a near-empty live page too, and was being adopted as `source: wayback`
-                // "success" purely on that length comparison. Gate it through the same
-                // boilerplate-only-page check every other tier's content already passes
-                // (hasBoilerplateOnlySignature, above) before trusting it.
-                if (wbMain.length > mainContent.length && !hasBoilerplateOnlySignature(wbMain)) {
+                // than a near-empty live page too (donate/nav/footer chrome alone runs past
+                // BOILERPLATE_MAX_WORDS — see isWaybackNotArchivedBanner's doc comment), and
+                // was being adopted as `source: wayback` "success" purely on that length
+                // comparison. Two gates, deliberately different shapes: the generic
+                // word-capped table (short synthetic/alternate-viewer banners) AND the
+                // uncapped Wayback-specific phrase check (what archive.org's OWN interstitial
+                // actually looks like, live-verified).
+                if (wbMain.length > mainContent.length &&
+                    !hasBoilerplateOnlySignature(wbMain) &&
+                    !isWaybackNotArchivedBanner(wbHtml)) {
                     // NOV-577: one parse of the Wayback HTML, shared across the readers in this branch.
                     const $wb = cheerio.load(wbHtml);
                     html = wbHtml;
