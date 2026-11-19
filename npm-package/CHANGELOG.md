@@ -6,6 +6,12 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+---
+
+## [0.9.52] — 2026-11-19
+
+Follow-ups from the 0.9.51 verification: a ceiling abort now names the tiers it reached and returns within 50s, non-UTF-8 pages decode correctly, and `novada_research` no longer treats a sentence-initial pronoun as a comparison entity.
+
 ### Fixed
 - **A `novada_extract` ceiling abort now names every tier it reached before the abort fired**, same as the "all tiers failed" message — `novada_extract` on zeit.de/apnews.com previously hit the 50s total ceiling with a generic "Request exceeded the 50s total ceiling" message that couldn't confirm which tiers (if any) were attempted. The ladder's per-tier attempt log is now a single shared record read by both the normal failure path and the ceiling-abort path, instead of a second mechanism; when the ceiling fires mid-way through the very first tier (nothing has finished yet), the message says so explicitly rather than silently omitting the tier line. The internal abort timer also now fires ~1s before the stated 50s ceiling, leaving headroom for response formatting/transport so the caller-visible latency stays at or under the advertised cap (previously measured 0.8–0.9s over).
 - **Non-UTF-8 pages no longer come back as mojibake**: since 0.9.51's byte-exact fetch (#4), every response was still unconditionally decoded as UTF-8 regardless of its real charset. HTML is now decoded using the `Content-Type` header's `charset=` parameter, else a sniffed `<meta charset>`/`<meta http-equiv="Content-Type" ... charset=...>` tag, else UTF-8 — the same precedence browsers use. Shift_JIS, GBK/GB2312/GB18030, EUC-KR, and windows-1252 pages are all affected; UTF-8 pages (the overwhelming majority) are unchanged. An unrecognized/garbled charset label never fails the fetch — it falls back to the previous UTF-8 decode.
