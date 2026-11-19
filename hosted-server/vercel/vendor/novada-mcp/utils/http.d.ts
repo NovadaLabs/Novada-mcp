@@ -26,16 +26,22 @@ export declare const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_
  * EUC-KR, windows-1252 are all ASCII-compatible in their single-byte range).
  */
 export declare function detectCharset(buf: Buffer, contentType: string): string;
+/** Decode a buffer as windows-1252 ourselves (see WINDOWS_1252_LABELS'
+ *  doc comment for why TextDecoder can't be trusted for this one family on
+ *  every supported Node runtime). Every code point here fits in one UTF-16
+ *  code unit (no surrogate pairs), so a plain `String.fromCharCode` per byte
+ *  is correct, not just an approximation. */
+export declare function decodeWindows1252(buf: Buffer): string;
 /**
- * Decode raw response bytes using the detected charset. Node's `TextDecoder`
- * (ICU-backed; every official Node.js 20+ build — the npm package's own
- * `engines.node` floor, and the hosted/Vercel + EC2 runtimes this server
- * actually runs on — ships full ICU by default, not the old small-icu subset)
- * supports every legacy label this function can encounter in practice:
- * shift_jis, gbk/gb18030/gb2312, euc-kr, windows-1252, iso-8859-1, big5, etc.
- * An unrecognized/garbled label (a lying Content-Type) throws RangeError —
- * caught here and never allowed to fail the fetch; falls back to the prior,
- * always-safe utf-8 decode instead.
+ * Decode raw response bytes using the detected charset. windows-1252 and
+ * every label that aliases to it (WINDOWS_1252_LABELS above) are decoded by
+ * decodeWindows1252, not TextDecoder — see its doc comment. Every other
+ * legacy label this function can encounter in practice (shift_jis,
+ * gbk/gb18030/gb2312, euc-kr, big5, etc.) goes through Node's `TextDecoder`
+ * (ICU-backed; correct for these on every officially-supported Node version
+ * this package targets). An unrecognized/garbled label (a lying
+ * Content-Type) throws RangeError — caught here and never allowed to fail
+ * the fetch; falls back to the prior, always-safe utf-8 decode instead.
  */
 export declare function decodeHtmlBuffer(buf: Buffer, contentType: string): string;
 /** HTTP GET with exponential backoff retry on 429/503/network errors */
