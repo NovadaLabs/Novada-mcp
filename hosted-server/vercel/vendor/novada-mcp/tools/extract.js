@@ -7,7 +7,7 @@ import { getCached, setCached } from "../_core/session-cache.js";
 import { getRouteHint, recordRouteSuccess } from "../_core/route-memory.js";
 import { TIMEOUTS } from "../config.js";
 import { CATALOG_BY_DOMAIN } from "../data/scraper_catalog.js";
-import { isBrowserAvailableOnRuntime, getBrowserUnavailableError } from "../utils/runtime.js";
+import { isBrowserTransportAvailable, getBrowserUnavailableError } from "../utils/runtime.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 export { detectJsHeavyContent } from "../utils/index.js";
 /**
@@ -49,6 +49,16 @@ function extractContentSafe(html, url, useFullPage) {
         throw makeNovadaError(NovadaErrorCode.PARSE_FAILED, `Content parse failed: the page's HTML crashed the readability/markdown parser (${detail}). ` +
             `The fetch itself succeeded — this is a parser limitation on this page's markup, not an access or rendering problem.`, `url:${url} parser crash in ${useFullPage ? "extractFullPageContent" : "extractMainContent"}`);
     }
+}
+/**
+ * #41/#2 (2026-11-19): collapse one tier's failure to a short, redacted, single-line
+ * string for the ladder's "name every tier tried" message — shared by every tier
+ * entry in the static→render→browser loop so each leg is capped/redacted the same way
+ * buildEscalationFailedInstruction already caps its one render-error slot.
+ */
+function oneLineErr(err, maxChars = 150) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return redactSecrets(msg).replace(/\s+/g, " ").trim().slice(0, maxChars);
 }
 /**
  * F14 (2026-09-10 audit): the honest agent_instruction for a render escalation whose
@@ -680,6 +690,19 @@ function dnsSuggestedFix(lowerErrorMsg) {
 }
 function deriveSuggestedFix(url, errorMsg) {
     const lower = errorMsg.toLowerCase();
+    // #41 (2026-11-19): the ladder's "every tier tried" marker ("All N tiers failed: ...")
+    // is distinct from the pre-escalation "fetch strategies failed" marker below — it
+    // means render (and, when a browser runtime was available, browser too) were BOTH
+    // genuinely attempted and BOTH blocked, not that escalation never got a turn.
+    // Checked first (same reasoning as the FIX-A comment below): a quoted per-tier cause
+    // could itself contain "fetch strategies failed" verbatim (the static leg's own
+    // aggregate summary is nested inside this message) and must not fall through to the
+    // generic "never-escalated" advice.
+    if (lower.includes("tiers failed")) {
+        return lower.includes("browser:")
+            ? `suggested_fix: static, render, AND browser were all attempted and blocked — this site is actively blocking Novada's fetch infrastructure right now. retry_recommended after 30s (exponential backoff), or accept the URL is currently unavailable`
+            : `suggested_fix: static and render were both attempted and blocked; no browser runtime/credentials were available to try next. Configure NOVADA_BROWSER_WS to let novada_extract fall back to a real browser (render="browser"), or accept the URL is currently unavailable`;
+    }
     // FIX-A (2026-07-30): the aggregate-fetch-failure marker text is emitted ONLY by
     // summarizeAggregateError's crafted message ("All N fetch strategies failed: ...").
     // Must be checked FIRST — a distinct cause quoted verbatim inside that message can
@@ -1160,6 +1183,31 @@ const BOILERPLATE_SIGNATURES = [
  *  its own override of `contentPresentDisplay` the way the redirect check does below;
  *  it only ever needs to block the short-page rescue it is folded into. */
 const BOILERPLATE_MAX_WORDS = 45;
+/**
+ * #3 Round 2 (reviewer HIGH #1): a REAL web.archive.org "not archived" response is
+ * NOT short — live-verified 2026-11-19 (a genuine `curl` against Wayback's own
+ * not-found page): its extracted main content runs ~130 words once the
+ * donate/nav/footer chrome is included, well past BOILERPLATE_MAX_WORDS, so folding
+ * this into hasBoilerplateOnlySignature() (as the first attempt at this fix did)
+ * never actually fires on real Wayback output — it only passed a hand-written
+ * <45-word test fixture that doesn't represent what archive.org actually serves.
+ *
+ * This is a DELIBERATELY separate, uncapped check — not a generalization of the
+ * table above — because the safety reasoning differs: BOILERPLATE_SIGNATURES caps at
+ * 45 words so a real long article that happens to mention "bad gateway" in passing
+ * never matches; that risk does not exist here, because this function is only ever
+ * called on the response fetched directly FROM web.archive.org (the P2-1 rescue
+ * below) — Wayback's own canonical "has not archived that URL" wording is UI text
+ * belonging to Wayback's not-found page, not something a successfully-rescued
+ * target page could ever legitimately contain instead of its own real content.
+ */
+const WAYBACK_BANNER_SIGNATURES = [
+    /\bwayback machine (has not archived|does ?n'?t have) that (url|page)\b/i,
+    /\bthis url has (no|not been) captured?\b/i,
+];
+function isWaybackNotArchivedBanner(waybackHtml) {
+    return WAYBACK_BANNER_SIGNATURES.some((re) => re.test(waybackHtml));
+}
 function hasBoilerplateOnlySignature(mainContent) {
     const trimmed = mainContent.trim();
     if (!trimmed)
@@ -1239,8 +1287,26 @@ export function detectHydrationSuspect($doc) {
     });
     return suspect;
 }
+/**
+ * #41 Round 2 (owner review): when a later ladder tier remains, this is the
+ * minimum wall-clock slice reserved for it. No new global timeout — this only
+ * shortens the CURRENT tier's own per-request axios timeout (which
+ * fetchWithRender already accepts as a caller override) within the existing,
+ * unchanged TOTAL_REQUEST_CEILING race in extractSingle. Review repro: apnews.com's
+ * render leg alone consumed ~48.8s of the shared 50s budget, leaving browser no
+ * turn even though it was "reachable in principle".
+ */
+const NEXT_TIER_MIN_SLICE_MS = 15_000;
+/** Floor so a tight remaining budget never drives the capped tier's own timeout
+ *  toward zero — it still gets a meaningful attempt even late in the request;
+ *  the unchanged outer TOTAL_REQUEST_CEILING race is still the final backstop. */
+const CAPPED_TIER_MIN_TIMEOUT_MS = 10_000;
 /** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
 async function extractSingleInner(params, apiKey) {
+    // #41 Round 2: wall-clock origin for this request, shared by the auto-ladder's
+    // budget calculation below (how much of TOTAL_REQUEST_CEILING is already spent)
+    // and by its per-tier elapsed-time disclosure in the failure message.
+    const requestStartMs = Date.now();
     // Normalize render="js" → "render" (js is the agent-friendly alias)
     if (params.render === "js") {
         params = { ...params, render: "render" };
@@ -1260,19 +1326,24 @@ async function extractSingleInner(params, apiKey) {
     }
     const renderMode = params.render ?? "auto";
     const fetchedAt = new Date().toISOString();
-    // F2 (2026-11-18): initialized (was declared-but-unassigned) — the static/auto
-    // branch's response-handling now sits behind an `if (!fetchErrorEscalatedViaRender)`
-    // guard and runRenderTier() assigns `html` via closure (opaque to TS control-flow
-    // analysis), so the compiler can no longer prove every path assigns it before use.
-    // Every real control-flow path still overwrites this before `html` is read.
+    // F2 (2026-11-18): initialized (was declared-but-unassigned) — each ladder
+    // tier function (runStaticTier/runRenderTier/runBrowserTier) assigns `html`
+    // via closure (opaque to TS control-flow analysis), so the compiler can no
+    // longer prove every path assigns it before use. Every real control-flow
+    // path still overwrites this before `html` is read.
     let html = "";
     let usedMode = "static";
     let renderError = null;
-    // F2 (2026-11-18): true once a static/proxy fetch-level failure has already been
-    // escalated to the render tier via runRenderTier() below. Guards the existing
-    // bad-CONTENT escalation check (~line 1420) from re-escalating the SAME request a
-    // second time — runRenderTier() already ran its own bot-challenge/browser handling.
-    let fetchErrorEscalatedViaRender = false;
+    // #41 Round 4: usedMode's "render-failed" assignments now live inside the
+    // nested runStaticTier() tier-executor closure (moved there along with the
+    // rest of the static-only continuation it was already part of). TS's
+    // control-flow narrowing for the SHARED code after the ladder — which can't
+    // see into a called closure — concludes at a few merge points that
+    // "render-failed" is unreachable there, which is a narrowing artifact, not a
+    // real behavior change (the value is still assigned and still read
+    // correctly at runtime). Reading through this indirection sidesteps the
+    // false-positive without changing any comparison's actual semantics.
+    const isRenderFailed = () => usedMode === "render-failed";
     // PARAM-HONESTY: true only when `params.country` was actually included in the
     // fetch call whose result is the content currently held in `html`/`usedMode`.
     // fetchWithRender is called from three sites below — two forward params.country,
@@ -1355,8 +1426,14 @@ async function extractSingleInner(params, apiKey) {
      * caller (a) lets it propagate to extractSingle's own top-level catch,
      * unchanged from today.
      */
-    async function runRenderTier() {
-        const response = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}), ...(params.country ? { country: params.country } : {}) });
+    async function runRenderTier(timeoutMs) {
+        // #41 Round 2 (owner review, budget-aware ladder): `timeoutMs`, when passed,
+        // overrides fetchWithRender's default TIMEOUTS.RENDER for exactly ONE caller —
+        // the auto-ladder's render tier, which caps it so a next tier (browser) still
+        // gets a turn. The other two callers (explicit render="render"; browser-tier
+        // unavailable → render fallback) pass nothing and keep today's full budget —
+        // neither has a tier after render to protect time for.
+        const response = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}), ...(params.country ? { country: params.country } : {}), ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}) });
         const contentType = String(response.headers?.["content-type"] ?? "");
         if (isPdfResponse(params.url, contentType)) {
             const pdfBuffer = Buffer.isBuffer(response.data)
@@ -1424,19 +1501,266 @@ async function extractSingleInner(params, apiKey) {
         return { terminal: false };
     }
     // Force modes (or registry-resolved modes) skip escalation logic
-    if (effectiveMode === "browser") {
-        // Bug1/Bug3 fix: pre-check runtime capability before attempting CDP connection.
-        // On serverless (Vercel/Lambda), connectOverCDP cannot hold the WS and fails with a raw
-        // "AuthorizationError" that looks like a credentials problem but is actually a transport
-        // limitation. Fail fast with a structured, actionable error instead.
-        // isBrowserAvailableOnRuntime() checks: RUNTIME.canHoldWebSocket (config.ts — round 8:
-        // false only when RUNTIME.kind === "serverless", true for "local"/"hosted") AND
-        // whether NOVADA_BROWSER_WS creds are set.
-        if (!isBrowserAvailableOnRuntime()) {
-            // NOV-GB2: BEFORE falling back to render, probe for a GitBook .md sibling —
-            // the ONLY way GitBook docs content is reachable when browser is unavailable.
-            // Cost guard (review HIGH #2): skip when a known anti-bot provider is already
-            // identified — those domains are never GitBook docs.
+    // #41 Round 4 (full merge, reviewer finding — "same bug class, 3 separate
+    // branches"): ONE ladder over the fixed, universal tier order
+    // [static, render, browser]. A DOMAIN_REGISTRY pin or session route-memory
+    // hint ONLY chooses the START tier — an efficiency optimization (skip tiers
+    // already known to fail for this domain), never a ceiling on how far a
+    // genuine caller render="auto" request can escalate on failure. An EXPLICIT
+    // params.render value (not "auto"/unset) fixes BOTH ends: the caller asked
+    // for exactly that tier, so there is no ladder at all — explicit "static"
+    // never escalates, explicit "render" never reaches browser (unchanged
+    // invariant, asserted elsewhere as "F14: never recommend render='render'
+    // after it just failed" — the mirror of that is never AUTOMATICALLY sending
+    // it to browser either). Explicit "browser" is the one documented exception:
+    // it still falls back to render on failure, preserving the F1 fix wave's
+    // existing, live-verified, explicitly-tested behavior (discord.com/g2.com/
+    // glassdoor.com/ticketmaster.com) — treated identically to a "browser" PIN's
+    // fallback, since both start at the top of the ladder with nowhere to escalate
+    // UP to.
+    const AUTO_LADDER_FROM = {
+        static: ["static", "render", "browser"],
+        render: ["render", "browser"],
+        browser: ["browser", "render"],
+    };
+    /** Static/proxy fetch tier. On success, runs the FULL static-only continuation
+     * (wrong-page short-circuit, content-type dispatch, GitBook .md fallback,
+     * JS-heavy/bot-challenge content escalation) exactly as before this round —
+     * none of that moved or changed, only WHERE it lives (now self-contained here
+     * instead of behind a `fetchErrorEscalatedViaRender` guard in the caller).
+     * On fetch failure, throws the RAW error (AggregateError or single) — the
+     * ladder loop below decides whether that's escalate-worthy (block-class) or
+     * a hard stop (today's exact non-escalate behavior), since that classification
+     * is specific to HTTP-level static/proxy semantics and has no equivalent at
+     * the render/browser tiers. */
+    async function runStaticTier() {
+        // P1-2: Race a direct HTTP fetch (no proxy) against the proxy for "auto" mode.
+        // Open static sites (HN, TechCrunch, Wikipedia) respond in ~300ms direct vs ~3s via proxy.
+        // Direct "wins" only if it returns clean HTML (no bot challenge, no JS-heavy indicators).
+        // Bot-protected or JS-heavy: direct rejects, proxy result is used — no change in behavior.
+        const domainProxyTier = domainHint?.proxyTier;
+        const r = await (effectiveMode === "auto"
+            ? Promise.any([
+                fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
+                    .then(resp => {
+                    const body = typeof resp.data === "string" ? resp.data : null;
+                    if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body))
+                        return resp;
+                    // FIX-A polish: a descriptive rejection reason (not a bare sentinel like
+                    // "not-static") so that if this leg ends up inside an AggregateError's
+                    // cause list (summarizeAggregateError), the surfaced cause is actionable
+                    // rather than an internal implementation detail.
+                    throw new Error("direct fetch returned bot-challenge/JS-heavy content, deferring to proxy");
+                }),
+                fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }),
+            ])
+            : fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }));
+        // B2: capture the real final URL this fetch leg landed on, if the underlying
+        // adapter discloses it (axios's Node adapter sets this on every redirected
+        // request; absent — e.g. under a mocked transport in tests — leaves it null
+        // and the redirect-mismatch check below is simply skipped, never guessed at).
+        finalUrl = r.request?.res?.responseUrl ?? null;
+        // B2 round 4 (owner decision, "decide once, where disclosed"): decided HERE, the
+        // one place a server-issued redirect is ever disclosed, BEFORE any content-type
+        // dispatch or escalation — not re-evaluated later against whatever tier/rescue
+        // ends up serving content. No escalation is attempted: a server-side redirect
+        // (to its own homepage, or to an unrelated rescue host) is issued identically
+        // regardless of which Novada fetch tier re-requests the SAME url, so retrying via
+        // render/browser would only reproduce the same verdict at extra latency cost to
+        // the caller. When no redirect is disclosed (`finalUrl` null, or it matches the
+        // requested page), this is a no-op and the normal pipeline below is unaffected —
+        // including the pre-existing Wayback/GitBook rescues, which never run at all once
+        // this has already returned.
+        if (isRedirectedAwayFromRequestedPage(params.url, finalUrl)) {
+            return {
+                terminal: true,
+                value: toolFailure([
+                    `## Extract Failed`,
+                    `url: ${params.url}`,
+                    `reason: the server redirected to ${finalUrl ? JSON.stringify(finalUrl) : "an unrelated page"} instead of the requested URL`,
+                    ...(finalUrl ? [`final_url: ${finalUrl}`] : []),
+                    ``,
+                    `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server redirected to its homepage (or an unrelated host) instead of the requested resource. Verify the URL is still correct (the resource may have moved or been removed); retrying with a different render mode will not help, since this redirect is issued identically regardless of fetch tier. If you need the page as it was before it was removed, call novada_extract on https://web.archive.org/web/${params.url}.`,
+                ].join("\n"), "wrong_page"),
+            };
+        }
+        const contentType = String(r.headers?.["content-type"] ?? "");
+        if (isPdfResponse(params.url, contentType)) {
+            const pdfBuffer = Buffer.isBuffer(r.data)
+                ? r.data
+                : Buffer.from(r.data, "binary");
+            const pdf = await extractPdf(pdfBuffer);
+            html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
+        }
+        else if (contentType.includes("application/json")) {
+            const body = typeof r.data === "string"
+                ? r.data
+                : JSON.stringify(r.data, null, 2);
+            if (body.trimStart().startsWith("<")) {
+                html = body;
+            }
+            else {
+                return { terminal: true, value: formatJsonExtract(params.url, "static", body, params.max_chars, params.format) };
+            }
+        }
+        else if (typeof r.data === "string" && (contentType.includes("text/markdown") || (contentType.includes("text/plain") && !bodyLooksLikeHtml(r.data)))) {
+            // TOW2-307: text/markdown or text/plain bodies are ALREADY the final content —
+            // never run them through Turndown (see formatMarkdownExtract's doc comment).
+            // This gate must run AHEAD of the generic HTML default below, which otherwise
+            // treats every non-JSON/non-PDF body as HTML and Turndown-converts it.
+            // text/plain that is actually HTML (mislabeled by raw CDNs) is excluded by
+            // bodyLooksLikeHtml so it falls through to real HTML extraction (review HIGH).
+            const body = r.data;
+            const isMarkdownCT = contentType.includes("text/markdown");
+            return { terminal: true, value: formatMarkdownExtract(params.url, "static", body, params.max_chars, params.format, isMarkdownCT || looksLikeMarkdown(body), contentType) };
+        }
+        else {
+            if (typeof r.data !== "string") {
+                throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "Response is not HTML. The URL may return JSON or binary data.", `url:${params.url} returned non-string content-type`);
+            }
+            html = r.data;
+        }
+        // GitBook .md fallback (NOV-GB1 / NOV-GB2):
+        // If the static HTML is served by GitBook (CDN signature), fetch the authoritative
+        // <url>.md sibling BEFORE any render/browser escalation. This is a free, no-JS path
+        // that works on the hosted (Vercel) endpoint where render 503s and browser is
+        // unavailable. See attemptGitBookMdFallback for the full detection contract.
+        // NOV-GB2 fix: gate on the GitBook CDN signature ALONE — NOT detectJsHeavyContent,
+        // which returns false on modern GitBook's ~500KB shell (no __next/id=root markers).
+        {
+            const gb = await attemptGitBookMdFallback(params.url, html);
+            if (gb) {
+                gitbookMdContent = gb.md;
+                html = gb.html;
+                usedMode = "static";
+            }
+        }
+        // Skip JS detection if we already have PDF content (no escalation needed).
+        // Also skip if domainHint resolved this domain — DOMAIN_REGISTRY classification is
+        // authoritative for known domains and overrides JS-heavy detection heuristics.
+        // NOV-GB1: also skip when the GitBook .md fallback already resolved the content —
+        // the synthetic HTML wrapper we built is NOT JS-heavy; avoid a false re-escalation.
+        if (renderMode === "auto" && !domainHint && !html.startsWith("pdf_pages:") && !gitbookMdContent && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
+            // Identify anti-bot provider from the static HTML before escalation
+            detectedAntiBot = identifyAntiBot(html);
+            // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
+            try {
+                const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(params.country ? { country: params.country } : {}) });
+                const renderHtml = String(renderResponse.data);
+                if (detectBotChallenge(renderHtml)) {
+                    // Re-check anti-bot on render result (may differ from static)
+                    detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
+                    // Render returned a bot challenge page — escalate to browser if available
+                    if (isBrowserConfigured()) {
+                        // #1/#12: browser can throw or return an empty challenge stub. Keep the
+                        // static html (still in `html`) when the browser result isn't better.
+                        const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
+                        const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+                        html = best.html;
+                        usedMode = best.mode;
+                        antiBotResolved = best.adopted;
+                        if (!best.adopted) {
+                            usedMode = "render-failed";
+                            renderError = "Render returned a bot challenge page; browser fallback returned no better content";
+                        }
+                    }
+                    else {
+                        // No browser available — keep static html, mark as failed
+                        usedMode = "render-failed";
+                        renderError = "Render returned a bot challenge page";
+                    }
+                }
+                else if (!detectJsHeavyContent(renderHtml)) {
+                    html = renderHtml;
+                    usedMode = "render";
+                    antiBotResolved = detectedAntiBot !== null;
+                    // The fetchWithRender call above forwarded params.country.
+                    countryAppliedToServedContent = Boolean(params.country);
+                }
+                else if (isBrowserConfigured()) {
+                    // render also JS-heavy — try full browser
+                    // #1/#12: keep the best of {static html, render html, browser html}.
+                    const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
+                    // Compare browser against render (render is JS-heavy but still better than static here).
+                    const best = pickBetterHtml({ html: renderHtml, mode: "render" }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+                    html = best.html;
+                    usedMode = best.mode;
+                    antiBotResolved = best.adopted;
+                    // Review round 2 (HIGH): unlike its two siblings above/below, this branch
+                    // offers the country-fetched renderHtml itself as a pickBetterHtml candidate
+                    // (mode:"render") — so when the browser candidate does NOT win (best.adopted
+                    // false, best.mode stays "render"), the SERVED content is that render fetch,
+                    // which forwarded params.country above. Must be set here too, not
+                    // just in the two branches that skip pickBetterHtml entirely.
+                    if (usedMode === "render") {
+                        countryAppliedToServedContent = Boolean(params.country);
+                    }
+                }
+                else {
+                    // render worked but still JS-heavy, use it (better than static)
+                    html = renderHtml;
+                    usedMode = "render";
+                    // Same fetchWithRender call as above — params.country was forwarded.
+                    countryAppliedToServedContent = Boolean(params.country);
+                }
+            }
+            catch (err) {
+                // Early exit for SSL/TLS certificate errors — escalation won't fix server-side cert issues
+                const certMsg = err instanceof Error ? err.message : String(err);
+                const isCertError = certMsg?.includes('CERT_') || certMsg?.includes('SSL') || certMsg?.includes('certificate');
+                if (isCertError) {
+                    throw new Error(`SSL certificate error for ${params.url}. The site has an invalid/expired certificate. agent_instruction: This is a server-side issue, not fixable by changing render mode.`);
+                }
+                // render threw — try Browser API if available
+                renderError = err instanceof Error ? err.message : String(err);
+                if (isBrowserConfigured()) {
+                    // #1/#12: browser can also fail/return empty. Keep the static html (in `html`)
+                    // when the browser result isn't better, instead of returning near-empty.
+                    const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
+                    const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
+                    html = best.html;
+                    usedMode = best.adopted ? best.mode : "render-failed";
+                    antiBotResolved = best.adopted;
+                }
+                else {
+                    usedMode = "render-failed";
+                }
+            }
+        }
+        return { terminal: false };
+    }
+    /** Browser tier — trivial: fetchViaBrowser already lazily resolves its own
+     * credentials (utils/browser.ts, getEffectiveApiKey()) and throws its own
+     * honest error if the runtime/credentials genuinely aren't available. */
+    async function runBrowserTier() {
+        html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
+        usedMode = "browser";
+        return { terminal: false };
+    }
+    async function runLadderTier(tier, timeoutMs) {
+        if (tier === "static")
+            return runStaticTier();
+        if (tier === "render")
+            return runRenderTier(timeoutMs);
+        return runBrowserTier();
+    }
+    // Start tier: a DOMAIN_REGISTRY pin wins; else session route-memory; else the
+    // caller's own render value (defaulting to "static" when it's "auto" — i.e.
+    // unpinned auto mode starts the ladder at the bottom, same as always).
+    const startTier = (domainHint?.method ?? routeHint ?? (renderMode === "auto" ? "static" : renderMode));
+    const isExplicitCaller = renderMode !== "auto";
+    let ladderPath = isExplicitCaller
+        ? (startTier === "browser" ? ["browser", "render"] : [startTier])
+        : AUTO_LADDER_FROM[startTier];
+    // Transport gate (#41 Round 3, preserved): a genuinely transport-incapable
+    // runtime never attempts browser at all, not even to fail honestly — but when
+    // browser was going to be the START (pin or explicit), try a cheap GitBook .md
+    // sibling probe first (NOV-GB2: the one way GitBook docs content is reachable
+    // without CDP), cost-guarded by skipping when an anti-bot provider is already
+    // identified (never a GitBook site).
+    let gitbookPreProbeResolved = false;
+    if (!isBrowserTransportAvailable()) {
+        if (ladderPath[0] === "browser") {
             const probe = detectedAntiBot
                 ? ""
                 : await fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 8000 })
@@ -1447,321 +1771,87 @@ async function extractSingleInner(params, apiKey) {
                 gitbookMdContent = gb.md;
                 html = gb.html;
                 usedMode = "static";
-            }
-            else {
-                // F1 (2026-11-18): try the render (Web Unblocker) tier BEFORE giving up.
-                // The runtime can't do CDP, but Web Unblocker may still get through —
-                // layer-study.md Cluster 1 measured 5/8 antibot URLs succeeding via direct
-                // Web Unblocker while this exact branch failed in <1s with zero attempts.
-                try {
-                    const r = await runRenderTier();
-                    if (r.terminal)
-                        return r.value;
-                    // runRenderTier succeeded (no throw): html/usedMode are set — fall
-                    // through to the shared formatting pipeline below, same as any other mode.
-                }
-                catch (renderFallbackErr) {
-                    // H2 (independent review, round 2): getBrowserUnavailableError() returns
-                    // a bare string directly from here — it never flows through
-                    // NovadaError.toAgentString()'s redactSecrets() pass (unlike every other
-                    // raw-error-embedding site in this file). Must redact explicitly.
-                    const rawMsg = renderFallbackErr instanceof Error ? renderFallbackErr.message : String(renderFallbackErr);
-                    return getBrowserUnavailableError("browser", "render", {
-                        tried: true,
-                        error: redactSecrets(rawMsg),
-                    });
-                }
+                gitbookPreProbeResolved = true;
             }
         }
-        else {
-            // Round 5 (independent A/B verifier): this arm used to call
-            // fetchViaBrowser() with NO try/catch at all — any throw here (the
-            // stale transport error utils/browser.ts used to raise before the
-            // ONE-gate fix above, OR a genuine CDP/navigation failure) propagated
-            // straight past F1's fallback-to-render logic entirely, since that
-            // logic only lived in the `!isBrowserAvailableOnRuntime()` branch.
-            // Verified live: discord.com/g2.com/glassdoor.com/ticketmaster.com
-            // failed in 10-30ms with zero render attempt once hosted caller-key
-            // provisioning (F1's mcp.ts half) made isBrowserAvailableOnRuntime()
-            // return true. Both arms now get the identical fallback: browser fails
-            // → try render (if not already) → honest failure naming both tiers.
+        ladderPath = ladderPath.filter(t => t !== "browser");
+    }
+    if (!gitbookPreProbeResolved) {
+        const tierErrors = [];
+        let ladderSucceeded = false;
+        for (let i = 0; i < ladderPath.length; i++) {
+            const tier = ladderPath[i];
+            const hasNextTier = i < ladderPath.length - 1;
+            const tierStartMs = Date.now();
             try {
-                html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
-                usedMode = "browser";
+                // #41 Round 2 (budget-aware ladder, preserved): when browser is next in
+                // line after render, cap render's own timeout to the remaining
+                // TOTAL_REQUEST_CEILING budget minus browser's reserved slice, so a
+                // slow/hanging render can't eat the whole shared ceiling and leave
+                // browser zero chance to run.
+                const timeoutMs = (tier === "render" && hasNextTier && ladderPath[i + 1] === "browser")
+                    ? Math.max(CAPPED_TIER_MIN_TIMEOUT_MS, TIMEOUTS.TOTAL_REQUEST_CEILING - (Date.now() - requestStartMs) - NEXT_TIER_MIN_SLICE_MS)
+                    : undefined;
+                const r = await runLadderTier(tier, timeoutMs);
+                if (r.terminal)
+                    return r.value;
+                ladderSucceeded = true;
+                break;
             }
-            catch (browserErr) {
-                const browserMsg = browserErr instanceof Error ? browserErr.message : String(browserErr);
-                try {
-                    const r = await runRenderTier();
-                    if (r.terminal)
-                        return r.value;
-                    // runRenderTier succeeded — html/usedMode set by it; fall through.
+            catch (err) {
+                // Static-only hard stop (preserved exactly): a NOT-escalate-class static
+                // failure (404/410/400/401, or anything unclassified) is a genuine
+                // "this resource isn't there for anyone" signal, not a block to route
+                // around — stop here, do not try render/browser at all, regardless of
+                // whether this tier had a next one in the path. Only "static" carries
+                // this distinction; render/browser failures have no equivalent "doesn't
+                // exist" signal and always escalate to whatever remains in the path.
+                if (tier === "static" && !isBlockClassFetchFailure(err)) {
+                    const agg = summarizeAggregateError(err);
+                    if (!agg)
+                        throw err;
+                    throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, agg.message, `url:${params.url} direct-fetch and proxy-fetch both rejected`);
                 }
-                catch (renderFallbackErr) {
-                    const renderMsg = renderFallbackErr instanceof Error ? renderFallbackErr.message : String(renderFallbackErr);
-                    return getBrowserUnavailableError("browser", "render", {
-                        tried: true,
-                        error: redactSecrets(`browser tier failed: ${browserMsg}; render tier also failed: ${renderMsg}`),
-                    });
-                }
-            }
-        }
-    }
-    else if (effectiveMode === "render") {
-        const r = await runRenderTier();
-        if (r.terminal)
-            return r.value;
-    }
-    else {
-        // Auto or static:
-        // P1-2: Race a direct HTTP fetch (no proxy) against the proxy for "auto" mode.
-        // Open static sites (HN, TechCrunch, Wikipedia) respond in ~300ms direct vs ~3s via proxy.
-        // Direct "wins" only if it returns clean HTML (no bot challenge, no JS-heavy indicators).
-        // Bot-protected or JS-heavy: direct rejects, proxy result is used — no change in behavior.
-        const domainProxyTier = domainHint?.proxyTier;
-        let response = null;
-        try {
-            response = await (effectiveMode === "auto"
-                ? Promise.any([
-                    fetchWithRetry(params.url, { tool: "extract", headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
-                        .then(r => {
-                        const body = typeof r.data === "string" ? r.data : null;
-                        if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body))
-                            return r;
-                        // FIX-A polish: a descriptive rejection reason (not a bare sentinel like
-                        // "not-static") so that if this leg ends up inside an AggregateError's
-                        // cause list (summarizeAggregateError), the surfaced cause is actionable
-                        // rather than an internal implementation detail.
-                        throw new Error("direct fetch returned bot-challenge/JS-heavy content, deferring to proxy");
-                    }),
-                    fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }),
-                ])
-                : fetchViaProxy(params.url, apiKey, { tool: "extract", ...(domainProxyTier ? { proxyTier: domainProxyTier } : {}) }));
-        }
-        catch (fetchErr) {
-            // F2 (2026-11-18): a fetch-LEVEL failure (both legs rejected, e.g. both HTTP
-            // 403) used to propagate straight to extractSingle's top-level catch in <1s —
-            // render="auto" claims to escalate automatically but never got the chance to
-            // try. Escalate here, on the SAME block-class/not-escalate discriminator the
-            // bad-CONTENT escalation below already uses.
-            //
-            // Gate on `renderMode === "auto"` — the CALLER's original request — not
-            // `effectiveMode === "auto"`. Live-verified against production apnews.com
-            // (2026-11-18 A/B check): DOMAIN_REGISTRY pins apnews.com to method:"static",
-            // so with a caller's render="auto", `effectiveMode` resolves to "static" and
-            // ONLY fetchViaProxy ever runs (no Promise.any race at all) — gating on
-            // effectiveMode would silently exclude every registry-pinned-static host from
-            // the escalation this fix exists to add, which is exactly the apnews.com
-            // Cluster 2 case layer-study.md cites. The registry only picks the FETCH
-            // METHOD (an efficiency optimization — skip the auto-detection probe); it is
-            // not a promise that a caller's render="auto" escalation intent is void. An
-            // explicit render="static" caller (renderMode, not effectiveMode, is "static")
-            // asked for static-only and must still fail as today — only a caller-level
-            // "auto" claims an automatic escalation ladder.
-            if (renderMode === "auto" && isBlockClassFetchFailure(fetchErr)) {
-                try {
-                    const r = await runRenderTier();
-                    fetchErrorEscalatedViaRender = true;
-                    if (r.terminal)
-                        return r.value;
-                    // success — html/usedMode set by runRenderTier(); `response` stays null
-                    // and the content-type handling below is skipped via the guard that follows.
-                }
-                catch (renderErr) {
-                    // Render ALSO failed — surface the ORIGINAL fetch error (today's message
-                    // shape, via summarizeAggregateError below) so existing suggested_fix
-                    // text keeps working, but note that render was genuinely attempted so a
-                    // caller/agent can see this was not a zero-attempt give-up.
-                    const agg = summarizeAggregateError(fetchErr);
-                    const baseMsg = agg?.message ?? (fetchErr instanceof Error ? fetchErr.message : String(fetchErr));
-                    throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, baseMsg, `url:${params.url} direct-fetch and proxy-fetch both rejected (block-class); render escalation also failed: ${renderErr instanceof Error ? renderErr.message : String(renderErr)}`);
-                }
-            }
-            else {
-                // FIX-A (2026-07-30): a bare Promise.any AggregateError leaks the literal
-                // "All promises were rejected" — zero actionable content. Map it to a
-                // NovadaError carrying the DISTINCT underlying causes. Non-aggregate
-                // rejections (e.g. a single fetch throwing directly) pass through unchanged.
-                const agg = summarizeAggregateError(fetchErr);
-                if (!agg)
-                    throw fetchErr;
-                throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, agg.message, `url:${params.url} direct-fetch and proxy-fetch both rejected`);
-            }
-        }
-        if (!fetchErrorEscalatedViaRender) {
-            // response is non-null here: either the try block above succeeded, or an F2
-            // escalation handled/threw before reaching this point.
-            const r = response;
-            // B2: capture the real final URL this fetch leg landed on, if the underlying
-            // adapter discloses it (axios's Node adapter sets this on every redirected
-            // request; absent — e.g. under a mocked transport in tests — leaves it null
-            // and the redirect-mismatch check below is simply skipped, never guessed at).
-            finalUrl = r.request?.res?.responseUrl ?? null;
-            // B2 round 4 (owner decision, "decide once, where disclosed"): decided HERE, the
-            // one place a server-issued redirect is ever disclosed, BEFORE any content-type
-            // dispatch or escalation — not re-evaluated later against whatever tier/rescue
-            // ends up serving content. No escalation is attempted: a server-side redirect
-            // (to its own homepage, or to an unrelated rescue host) is issued identically
-            // regardless of which Novada fetch tier re-requests the SAME url, so retrying via
-            // render/browser would only reproduce the same verdict at extra latency cost to
-            // the caller. When no redirect is disclosed (`finalUrl` null, or it matches the
-            // requested page), this is a no-op and the normal pipeline below is unaffected —
-            // including the pre-existing Wayback/GitBook rescues, which never run at all once
-            // this has already returned.
-            if (isRedirectedAwayFromRequestedPage(params.url, finalUrl)) {
-                return toolFailure([
-                    `## Extract Failed`,
-                    `url: ${params.url}`,
-                    `reason: the server redirected to ${finalUrl ? JSON.stringify(finalUrl) : "an unrelated page"} instead of the requested URL`,
-                    ...(finalUrl ? [`final_url: ${finalUrl}`] : []),
-                    ``,
-                    `agent_instruction: status:wrong_page | this is the WRONG page, not a quality issue — the server redirected to its homepage (or an unrelated host) instead of the requested resource. Verify the URL is still correct (the resource may have moved or been removed); retrying with a different render mode will not help, since this redirect is issued identically regardless of fetch tier. If you need the page as it was before it was removed, call novada_extract on https://web.archive.org/web/${params.url}.`,
-                ].join("\n"), "wrong_page");
-            }
-            const contentType = String(r.headers?.["content-type"] ?? "");
-            if (isPdfResponse(params.url, contentType)) {
-                const pdfBuffer = Buffer.isBuffer(r.data)
-                    ? r.data
-                    : Buffer.from(r.data, "binary");
-                const pdf = await extractPdf(pdfBuffer);
-                html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
-            }
-            else if (contentType.includes("application/json")) {
-                const body = typeof r.data === "string"
-                    ? r.data
-                    : JSON.stringify(r.data, null, 2);
-                if (body.trimStart().startsWith("<")) {
-                    html = body;
-                }
-                else {
-                    return formatJsonExtract(params.url, "static", body, params.max_chars, params.format);
-                }
-            }
-            else if (typeof r.data === "string" && (contentType.includes("text/markdown") || (contentType.includes("text/plain") && !bodyLooksLikeHtml(r.data)))) {
-                // TOW2-307: text/markdown or text/plain bodies are ALREADY the final content —
-                // never run them through Turndown (see formatMarkdownExtract's doc comment).
-                // This gate must run AHEAD of the generic HTML default below, which otherwise
-                // treats every non-JSON/non-PDF body as HTML and Turndown-converts it.
-                // text/plain that is actually HTML (mislabeled by raw CDNs) is excluded by
-                // bodyLooksLikeHtml so it falls through to real HTML extraction (review HIGH).
-                const body = r.data;
-                const isMarkdownCT = contentType.includes("text/markdown");
-                return formatMarkdownExtract(params.url, "static", body, params.max_chars, params.format, isMarkdownCT || looksLikeMarkdown(body), contentType);
-            }
-            else {
-                if (typeof r.data !== "string") {
-                    throw makeNovadaError(NovadaErrorCode.INVALID_PARAMS, "Response is not HTML. The URL may return JSON or binary data.", `url:${params.url} returned non-string content-type`);
-                }
-                html = r.data;
-            }
-            // GitBook .md fallback (NOV-GB1 / NOV-GB2):
-            // If the static HTML is served by GitBook (CDN signature), fetch the authoritative
-            // <url>.md sibling BEFORE any render/browser escalation. This is a free, no-JS path
-            // that works on the hosted (Vercel) endpoint where render 503s and browser is
-            // unavailable. See attemptGitBookMdFallback for the full detection contract.
-            // NOV-GB2 fix: gate on the GitBook CDN signature ALONE — NOT detectJsHeavyContent,
-            // which returns false on modern GitBook's ~500KB shell (no __next/id=root markers).
-            {
-                const gb = await attemptGitBookMdFallback(params.url, html);
-                if (gb) {
-                    gitbookMdContent = gb.md;
-                    html = gb.html;
-                    usedMode = "static";
-                }
-            }
-            // Skip JS detection if we already have PDF content (no escalation needed).
-            // Also skip if domainHint resolved this domain — DOMAIN_REGISTRY classification is
-            // authoritative for known domains and overrides JS-heavy detection heuristics.
-            // NOV-GB1: also skip when the GitBook .md fallback already resolved the content —
-            // the synthetic HTML wrapper we built is NOT JS-heavy; avoid a false re-escalation.
-            if (renderMode === "auto" && !domainHint && !html.startsWith("pdf_pages:") && !gitbookMdContent && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
-                // Identify anti-bot provider from the static HTML before escalation
-                detectedAntiBot = identifyAntiBot(html);
-                // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
-                try {
-                    const renderResponse = await fetchWithRender(params.url, apiKey, { tool: "extract", ...(params.country ? { country: params.country } : {}) });
-                    const renderHtml = String(renderResponse.data);
-                    if (detectBotChallenge(renderHtml)) {
-                        // Re-check anti-bot on render result (may differ from static)
-                        detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
-                        // Render returned a bot challenge page — escalate to browser if available
-                        if (isBrowserConfigured()) {
-                            // #1/#12: browser can throw or return an empty challenge stub. Keep the
-                            // static html (still in `html`) when the browser result isn't better.
-                            const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
-                            const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
-                            html = best.html;
-                            usedMode = best.mode;
-                            antiBotResolved = best.adopted;
-                            if (!best.adopted) {
-                                usedMode = "render-failed";
-                                renderError = "Render returned a bot challenge page; browser fallback returned no better content";
-                            }
+                tierErrors.push(`${tier}: ${summarizeAggregateError(err)?.causes.join(", ") ?? oneLineErr(err)} (${Date.now() - tierStartMs}ms)`);
+                if (!hasNextTier) {
+                    // Ladder exhausted. A request whose ORIGINAL intent started at
+                    // "browser" (pin or explicit) ALWAYS keeps the existing
+                    // getBrowserUnavailableError() shape every F1-wave test asserts on —
+                    // checked FIRST, before the single-tier shortcut below, because the
+                    // transport-incapable branch can reduce its walked path to just
+                    // ["render"] (browser filtered out before the loop even started) and
+                    // that must still report as a browser-unavailable-with-render-tried
+                    // failure, not a generic single-tier one.
+                    if (startTier === "browser") {
+                        const browserTierError = tierErrors.find(e => e.startsWith("browser:"));
+                        const renderTierError = tierErrors.find(e => e.startsWith("render:"));
+                        return getBrowserUnavailableError("browser", "render", {
+                            tried: true,
+                            error: redactSecrets(browserTierError && renderTierError
+                                ? `browser tier failed: ${browserTierError}; render tier also failed: ${renderTierError}`
+                                : (renderTierError ?? browserTierError ?? tierErrors.join("; "))),
+                        });
+                    }
+                    // A single-tier path (no escalation was ever even possible — an
+                    // explicit non-browser request, or a pin-started tier with nothing
+                    // else reachable) keeps TODAY'S exact non-ladder error shape instead
+                    // of a confusing "All 1 tiers failed" wrapper.
+                    if (ladderPath.length === 1) {
+                        if (tier === "static") {
+                            const agg = summarizeAggregateError(err);
+                            if (!agg)
+                                throw err;
+                            throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, agg.message, `url:${params.url} direct-fetch and proxy-fetch both rejected`);
                         }
-                        else {
-                            // No browser available — keep static html, mark as failed
-                            usedMode = "render-failed";
-                            renderError = "Render returned a bot challenge page";
-                        }
+                        throw err;
                     }
-                    else if (!detectJsHeavyContent(renderHtml)) {
-                        html = renderHtml;
-                        usedMode = "render";
-                        antiBotResolved = detectedAntiBot !== null;
-                        // The fetchWithRender call above (line ~1154) forwarded params.country.
-                        countryAppliedToServedContent = Boolean(params.country);
-                    }
-                    else if (isBrowserConfigured()) {
-                        // render also JS-heavy — try full browser
-                        // #1/#12: keep the best of {static html, render html, browser html}.
-                        const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
-                        // Compare browser against render (render is JS-heavy but still better than static here).
-                        const best = pickBetterHtml({ html: renderHtml, mode: "render" }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
-                        html = best.html;
-                        usedMode = best.mode;
-                        antiBotResolved = best.adopted;
-                        // Review round 2 (HIGH): unlike its two siblings above/below, this branch
-                        // offers the country-fetched renderHtml itself as a pickBetterHtml candidate
-                        // (mode:"render") — so when the browser candidate does NOT win (best.adopted
-                        // false, best.mode stays "render"), the SERVED content is that render fetch,
-                        // which forwarded params.country at line ~1154. Must be set here too, not
-                        // just in the two branches that skip pickBetterHtml entirely.
-                        if (usedMode === "render") {
-                            countryAppliedToServedContent = Boolean(params.country);
-                        }
-                    }
-                    else {
-                        // render worked but still JS-heavy, use it (better than static)
-                        html = renderHtml;
-                        usedMode = "render";
-                        // Same fetchWithRender call as above — params.country was forwarded.
-                        countryAppliedToServedContent = Boolean(params.country);
-                    }
-                }
-                catch (err) {
-                    // Early exit for SSL/TLS certificate errors — escalation won't fix server-side cert issues
-                    const certMsg = err instanceof Error ? err.message : String(err);
-                    const isCertError = certMsg?.includes('CERT_') || certMsg?.includes('SSL') || certMsg?.includes('certificate');
-                    if (isCertError) {
-                        throw new Error(`SSL certificate error for ${params.url}. The site has an invalid/expired certificate. agent_instruction: This is a server-side issue, not fixable by changing render mode.`);
-                    }
-                    // render threw — try Browser API if available
-                    renderError = err instanceof Error ? err.message : String(err);
-                    if (isBrowserConfigured()) {
-                        // #1/#12: browser can also fail/return empty. Keep the static html (in `html`)
-                        // when the browser result isn't better, instead of returning near-empty.
-                        const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => "");
-                        const best = pickBetterHtml({ html, mode: usedMode }, { html: browserHtml, mode: "browser" }, params.url, useFullPage);
-                        html = best.html;
-                        usedMode = best.adopted ? best.mode : "render-failed";
-                        antiBotResolved = best.adopted;
-                    }
-                    else {
-                        usedMode = "render-failed";
-                    }
+                    // A genuine multi-tier walk ran (not browser-started) and every tier
+                    // failed — name all of them (#2) rather than only the first.
+                    throw makeNovadaError(NovadaErrorCode.URL_UNREACHABLE, `All ${tierErrors.length} tiers failed: ${tierErrors.join("; ")}`, `url:${params.url} every available tier was tried and rejected — ${tierErrors.join("; ")}`);
                 }
             }
         }
+        void ladderSucceeded; // loop either returned/threw or fell through on success
     }
     // NOV-330: remember the winning mode for this host so the rest of the session can
     // start there. recordRouteSuccess ignores the "render-failed" pseudo-mode, so only a
@@ -1798,7 +1888,7 @@ async function extractSingleInner(params, apiKey) {
     let $doc = pdfPages !== null ? null : cheerio.load(html);
     let title = pdfPages !== null ? (pdfTitle ?? params.url) : extractTitleFrom($doc);
     let description = $doc ? extractDescriptionFrom($doc) : "";
-    let stillJsHeavy = renderMode === "auto" && (usedMode === "static" || usedMode === "render-failed") && detectJsHeavyContent(html);
+    let stillJsHeavy = renderMode === "auto" && (usedMode === "static" || isRenderFailed()) && detectJsHeavyContent(html);
     // NOV-668: Kufer/webbasys availability detection — runs on the raw cheerio DOM
     // BEFORE markdown conversion strips inline styles and text nodes.
     const kuferResult = $doc ? detectKuferAvailability($doc, params.url) : null;
@@ -2043,7 +2133,18 @@ async function extractSingleInner(params, apiKey) {
                 // F15: classified throw on parser crash — caught by the Wayback try/catch
                 // (keep original result), never a raw TypeError.
                 const wbMain = extractContentSafe(wbHtml, params.url, useFullPage);
-                if (wbMain.length > mainContent.length) {
+                // #3 (2026-11-19): a longer Wayback capture is not automatically a BETTER
+                // one — web.archive.org's own not-archived/empty-calendar banner is longer
+                // than a near-empty live page too (donate/nav/footer chrome alone runs past
+                // BOILERPLATE_MAX_WORDS — see isWaybackNotArchivedBanner's doc comment), and
+                // was being adopted as `source: wayback` "success" purely on that length
+                // comparison. Two gates, deliberately different shapes: the generic
+                // word-capped table (short synthetic/alternate-viewer banners) AND the
+                // uncapped Wayback-specific phrase check (what archive.org's OWN interstitial
+                // actually looks like, live-verified).
+                if (wbMain.length > mainContent.length &&
+                    !hasBoilerplateOnlySignature(wbMain) &&
+                    !isWaybackNotArchivedBanner(wbHtml)) {
                     // NOV-577: one parse of the Wayback HTML, shared across the readers in this branch.
                     const $wb = cheerio.load(wbHtml);
                     html = wbHtml;
@@ -2138,7 +2239,7 @@ async function extractSingleInner(params, apiKey) {
     // short-but-complete case WITHOUT overclaiming on empty / bot-challenge / JS-empty
     // pages. Used only for FRAMING (header line, hints, agent_instruction) — the raw
     // numeric score is still reported for callers that want it.
-    const fetchSucceeded = usedMode !== "render-failed" && !stillJsHeavy;
+    const fetchSucceeded = !isRenderFailed() && !stillJsHeavy;
     const wordCount = mainContent.trim() ? mainContent.trim().split(/\s+/).length : 0;
     // B4: re-checked against whatever doc ended up served (static/render/browser/wayback
     // all reassign `$doc` when adopted) — honest disclosure of whether the table/widget
@@ -2339,7 +2440,7 @@ async function extractSingleInner(params, apiKey) {
         // F14 invariant: when render already ran and failed (JS-heavy path's render-failed,
         // or a failed quality escalation), never re-recommend render='js' here.
         if (stillJsHeavy)
-            hints.push(usedMode === "render-failed" || escalationFailed
+            hints.push(isRenderFailed() || escalationFailed
                 ? "Page is JavaScript-rendered and the render escalation already failed — do NOT re-send render='js'/render='render'. Use render='browser' (NOVADA_BROWSER_WS) or format='html' instead."
                 : "Page is JavaScript-rendered. Content may be incomplete. Try render='js' or render='browser'.");
         // INC-199: Surface escalation failure so agents know quality:0 is not silent
@@ -2357,7 +2458,7 @@ async function extractSingleInner(params, apiKey) {
                 hints.push(`For structured ${baseDomain} data, try: ${scrapeHint}`);
             }
             // NOV-565: never show a bot-protection hint when the page already has full content.
-            if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
+            if (!quality.content_present && (isRenderFailed() || (stillJsHeavy && !contentOk))) {
                 hints.push(`Page is bot-protected. Try: render="browser" with NOVADA_BROWSER_WS, or format="html" for raw HTML with anti-bot bypass.`);
             }
             // FIX-B (2026-07-30): PMC-specific mirror hint — mirrors the markdown path's
@@ -2574,7 +2675,7 @@ async function extractSingleInner(params, apiKey) {
         lines.push(`- Content fetched via Browser API (CDP). Cost: ~$3/GB — use only when static/render modes fail.`);
     }
     if (stillJsHeavy) {
-        if (usedMode === "render-failed") {
+        if (isRenderFailed()) {
             // Render was already attempted and failed — do NOT suggest retrying with render='render'
             lines.push(`- [WARNING] Page is JavaScript-rendered. Web Unblocker was attempted but failed.`);
             if (renderError)
@@ -2606,7 +2707,7 @@ async function extractSingleInner(params, apiKey) {
             lines.push(`- For structured ${baseDomain} data, try: ${scrapeHint}`);
         }
         // NOV-565: never show a bot-protection hint when the page already has full content.
-        if (!quality.content_present && (usedMode === "render-failed" || (stillJsHeavy && !contentOk))) {
+        if (!quality.content_present && (isRenderFailed() || (stillJsHeavy && !contentOk))) {
             lines.push(`- Page is bot-protected. Try: render="browser" with NOVADA_BROWSER_WS, or format="html" for raw HTML with anti-bot bypass.`);
         }
     }

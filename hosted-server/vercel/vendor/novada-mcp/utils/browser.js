@@ -1,6 +1,6 @@
 import { TIMEOUTS } from "../config.js";
 import { redactSecrets } from "../_core/errors.js";
-import { resolveBrowserWs } from "./credentials.js";
+import { resolveBrowserWs, getEffectiveApiKey } from "./credentials.js";
 import { assertUrlSafe, isUrlSafe } from "./ssrf.js";
 // F1 round 5 (independent A/B verifier): this module used to re-implement its
 // own `isHostedEnvironment()` check inline in BOTH isBrowserConfigured() and
@@ -143,8 +143,12 @@ export async function fetchViaBrowser(url, options = {}) {
             "agent_instruction: Use the 'render' mode (Web Unblocker) for JS rendering, or run the MCP server " +
             "locally (npx -y novada-mcp@latest) where Browser mode works.");
     }
-    // Auto-resolve: NOVADA_BROWSER_WS env var OR auto-provision via NOVADA_API_KEY (product=10)
-    const wsEndpoint = await resolveBrowserWs(process.env.NOVADA_API_KEY);
+    // Auto-resolve: NOVADA_BROWSER_WS env var/store OR auto-provision via the effective
+    // caller key (product=10). #41 Round 3: getEffectiveApiKey() (not a hardcoded
+    // process.env.NOVADA_API_KEY) — see its doc comment for why the server-env key is
+    // the wrong source on hosted, and is exactly what made this lazy resolution a
+    // guaranteed no-op there.
+    const wsEndpoint = await resolveBrowserWs(getEffectiveApiKey());
     if (!wsEndpoint) {
         throw new Error("Browser API not available. Set NOVADA_BROWSER_WS or ensure your NOVADA_API_KEY has Browser API access (product=10).");
     }

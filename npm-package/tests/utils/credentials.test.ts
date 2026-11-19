@@ -8,6 +8,8 @@ import {
   redactSecret,
   fetchProxySubAccountCredentials,
   fetchBrowserSubAccountCredentials,
+  getEffectiveApiKey,
+  clearBrowserWsCachesForTest,
 } from "../../src/utils/credentials.js";
 
 describe("credentials — env var fallback", () => {
@@ -305,6 +307,104 @@ describe("auto-fetch cache — per-key tenant isolation", () => {
     // getBrowserWs() has no apiKey context → must NOT return the cached value.
     // (store empty + env unset → undefined). This closes the unconditional-cache-fallback leak.
     expect(getBrowserWs()).toBeUndefined();
+  });
+
+  // #41 Round 3 (reviewer finding #2, "browser credential auto-provisioning
+  // race"): concurrent calls for the SAME key must share one in-flight request
+  // ("resolve per caller key once") instead of each starting its own, and a
+  // failure must be cached briefly so a call that just lost mcp.ts's race
+  // doesn't force every near-simultaneous call to re-pay (and re-lose) the same
+  // slow/failing round-trip from scratch.
+  describe("fetchBrowserSubAccountCredentials — in-flight de-dup + failure cache (#41 Round 3)", () => {
+    beforeEach(() => {
+      clearBrowserWsCachesForTest();
+    });
+
+    it("de-dupes concurrent calls for the same key into exactly ONE upstream fetch", async () => {
+      let resolveFetch!: (v: Response) => void;
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+        () => new Promise<Response>((resolve) => { resolveFetch = resolve; })
+      );
+      const key = "tenant-inflight-dedup-key";
+      // Fire 3 concurrent calls BEFORE the single in-flight fetch resolves.
+      const p1 = fetchBrowserSubAccountCredentials(key);
+      const p2 = fetchBrowserSubAccountCredentials(key);
+      const p3 = fetchBrowserSubAccountCredentials(key);
+      expect(fetchSpy).toHaveBeenCalledTimes(1); // NOT 3 — one shared in-flight promise
+      resolveFetch({
+        ok: true,
+        json: async () => ({ code: 0, data: { list: [{ account: "dedup-acct", password: "dedup-pass" }] } }),
+      } as Response);
+      const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+      expect(r1).toBe(r2);
+      expect(r2).toBe(r3);
+      expect(r1).toContain("dedup-acct-zone-browser:dedup-pass@");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("caches a FAILURE briefly — a second call within the TTL does not re-hit the network", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+        ok: false,
+      } as Response);
+      const key = "tenant-failure-cache-key";
+      const first = await fetchBrowserSubAccountCredentials(key);
+      expect(first).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      // A second call for the SAME key, immediately after, must be served from
+      // the brief failure cache — no second network call, no second wait.
+      const second = await fetchBrowserSubAccountCredentials(key);
+      expect(second).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1); // still 1 — not re-attempted
+    });
+
+    it("mirror: a DIFFERENT key is never served the first key's cached failure (no cross-tenant false negative)", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce({ ok: false } as Response) // key A fails
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ code: 0, data: { list: [{ account: "b-ok", password: "b-pass" }] } }),
+        } as Response); // key B succeeds
+      const a = await fetchBrowserSubAccountCredentials("tenant-failure-cache-key-a");
+      const b = await fetchBrowserSubAccountCredentials("tenant-failure-cache-key-b");
+      expect(a).toBeNull();
+      expect(b).toContain("b-ok-zone-browser:b-pass@");
+      expect(fetchSpy).toHaveBeenCalledTimes(2); // each key paid its OWN network call
+    });
+
+    it("an exception (network error, not just a non-ok response) is also cached as a failure", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("ECONNRESET"));
+      const key = "tenant-exception-failure-cache-key";
+      const first = await fetchBrowserSubAccountCredentials(key);
+      expect(first).toBeNull();
+      const second = await fetchBrowserSubAccountCredentials(key);
+      expect(second).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe("getEffectiveApiKey (#41 Round 3)", () => {
+  const savedEnvKey = process.env.NOVADA_API_KEY;
+  afterEach(() => {
+    if (savedEnvKey === undefined) delete process.env.NOVADA_API_KEY;
+    else process.env.NOVADA_API_KEY = savedEnvKey;
+  });
+
+  it("prefers the store-scoped apiKey (the caller's real key on hosted) over the server's own env var", () => {
+    process.env.NOVADA_API_KEY = "server-own-key";
+    const result = withCredentials({ apiKey: "caller-real-key" }, () => getEffectiveApiKey());
+    expect(result).toBe("caller-real-key");
+  });
+
+  it("falls back to NOVADA_API_KEY when no store-scoped apiKey is present (single-tenant stdio use)", () => {
+    process.env.NOVADA_API_KEY = "stdio-env-key";
+    expect(getEffectiveApiKey()).toBe("stdio-env-key");
+  });
+
+  it("mirror: no store apiKey and no env var → undefined, never a crash", () => {
+    delete process.env.NOVADA_API_KEY;
+    expect(getEffectiveApiKey()).toBeUndefined();
   });
 });
 

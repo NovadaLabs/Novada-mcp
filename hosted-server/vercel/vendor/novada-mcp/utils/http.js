@@ -5,6 +5,7 @@ import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS, VERSION } from ".
 import { getResidentialProxyCredentials, resolveProxyCredentials, getWebUnblockerKey } from "./credentials.js";
 import { assertUrlSafe, safeLookup } from "./ssrf.js";
 import { logRequest } from "../_core/request-log.js";
+import { isPdfResponse } from "./pdf.js";
 const _sharedHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 /**
  * NOV-321: per-request telemetry headers (`x-mcp-*`) attached to every outbound
@@ -71,6 +72,39 @@ function getRandomUA() {
 export const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
+/**
+ * #4 (2026-11-19): axios's default responseType ('json', falling back to its own
+ * string decode on parse failure) reads the socket as text — for a real PDF
+ * (irs.gov/pub/irs-pdf/f1040.pdf, a SEC 10-K PDF) this silently drops ~3% of the
+ * bytes (invalid-UTF-8 continuation sequences collapse to the replacement
+ * character) and corrupts the xref/trailer table, which is exactly why pdf-parse
+ * then throws "Invalid Root reference" — the fetch "succeeded" but the bytes it
+ * handed to the parser were never the real file.
+ *
+ * Fix: always fetch as `arraybuffer` (the only responseType that preserves every
+ * byte) and decode HERE, once, immediately after the response headers are known —
+ * PDF responses (by Content-Type OR a `.pdf` URL, the same two-signal check
+ * extract.ts already uses via isPdfResponse) keep the raw Buffer; everything else
+ * is decoded to a utf-8 string, matching axios's own previous default decode so
+ * every existing non-PDF caller sees the identical shape it always has.
+ */
+function normalizeResponseBody(resp, url) {
+    const data = resp.data;
+    // Only a raw-byte container (what a real `responseType: "arraybuffer"` axios call
+    // always hands back) needs the PDF-vs-text decision below. A string or an
+    // already-parsed object is passed through untouched — the mocked-transport test
+    // suite (and any caller whose `axiosOptions` spread overrides responseType back to
+    // axios's default 'json') injects exactly those shapes directly, bypassing the real
+    // network decode this function exists to fix; treating them as raw bytes would
+    // crash (`Buffer.from(plainObject)`) instead of leaving pre-decoded content alone.
+    const isRawBytes = Buffer.isBuffer(data) || data instanceof ArrayBuffer || ArrayBuffer.isView(data);
+    if (!isRawBytes)
+        return resp;
+    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    const contentType = String(resp.headers?.["content-type"] ?? "");
+    resp.data = isPdfResponse(url, contentType) ? buf : buf.toString("utf-8");
+    return resp;
+}
 /** HTTP GET with exponential backoff retry on 429/503/network errors */
 export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
     // SSRF chokepoint: every fetch (incl. runtime-discovered URLs) is re-validated here,
@@ -98,11 +132,15 @@ export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
                     maxBodyLength: 10 * 1024 * 1024,
                     httpsAgent: _sharedHttpsAgent,
                     ...axiosOptions,
+                    // #4: byte-exact fetch (see normalizeResponseBody doc comment above). Placed
+                    // after the spread, same as `lookup`, so a caller option can never disable it.
+                    responseType: "arraybuffer",
                     // DNS-rebinding guard: re-check the RESOLVED IP before connect. Placed after the
                     // spread so a caller option can never disable it. On proxied requests this resolves
                     // the (public) proxy host; on direct requests it resolves the real target.
                     lookup: SAFE_LOOKUP,
                 });
+                normalizeResponseBody(resp, url);
                 if (!__noLog)
                     logRequest({ tool: tool ?? "unknown", url, status: resp.status, ms: Date.now() - startMs, mode: "static" });
                 return resp;
@@ -128,8 +166,10 @@ export async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
                         beforeRedirect,
                         httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 10, rejectUnauthorized: false }),
                         ...axiosOptions,
+                        responseType: "arraybuffer", // #4: same byte-exact fetch as the primary GET above.
                         lookup: SAFE_LOOKUP, // DNS-rebinding guard (see main GET) — non-bypassable.
                     });
+                    normalizeResponseBody(resp, url);
                     if (!__noLog)
                         logRequest({ tool: tool ?? "unknown", url, status: resp.status, ms: Date.now() - startMs, mode: "static" });
                     return resp;

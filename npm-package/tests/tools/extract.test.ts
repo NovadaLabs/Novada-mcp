@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import axios from "axios";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { fileURLToPath } from "url";
 import { novadaExtract, getSuggestedFix } from "../../src/tools/extract.js";
 import { detectJsHeavyContent } from "../../src/utils/http.js";
 import { clearCache } from "../../src/_core/session-cache.js";
@@ -1386,6 +1389,354 @@ describe("F2: render='auto' escalates on a fetch-level block-class error, not on
   });
 });
 
+// ─── #41 (2026-11-19, congress.gov/apnews.com repro) ──────────────────────────
+//
+// F2 (above) added exactly ONE fallback tier (render) for a fetch-level block-class
+// failure. Live-verified against production congress.gov: render itself can ALSO
+// fail at the fetch level (not just bad content) — and the old code gave up right
+// there, never giving a configured browser tier a turn. The fix expresses the whole
+// thing as one ordered loop over remaining tiers [render, browser-if-available],
+// stopping at the first real content and naming every tier it actually tried.
+describe("#41: static→render→browser is ONE ladder (render failing is not the end of the line)", () => {
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "NOVADA_RUNTIME_KIND", "NOVADA_BROWSER_WS", "NOVADA_WEB_UNBLOCKER_KEY"]) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+  });
+  afterEach(() => {
+    for (const k of Object.keys(saved)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it("render fails too, browser is configured+available → ladder falls through to browser and succeeds", async () => {
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
+    process.env.NOVADA_BROWSER_WS = "wss://fake-browser.example.com";
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    const realContent = `<html><head><title>Browser Tier OK</title></head><body><main>` +
+      `<p>Real content recovered via the browser tier after BOTH static/proxy and render failed in auto mode.</p>`.repeat(5) +
+      `</main></body></html>`;
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-browser-fallback.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(fetchViaBrowserSpy).toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("Browser Tier OK");
+  });
+
+  // Round 2 (reviewer MEDIUM #2, the point of #41): render alone consuming the
+  // whole shared 50s ceiling leaves browser "reachable in principle" but never
+  // actually reached in practice (apnews.com live table: render alone took
+  // ~48.8s). Fix: render's own per-request timeout is capped to the ceiling MINUS
+  // a reserved browser slice whenever browser is next in the loop. A mocked
+  // transport can't honor a real axios timeout (it's just a Promise, not a socket),
+  // so this proves the cap was actually COMPUTED AND APPLIED — the config axios.post
+  // was called with — rather than asserting on real wall-clock timeout behavior.
+  it("budget-aware: render's request timeout is capped (not the full 48s default) when browser is available to run next", async () => {
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
+    process.env.NOVADA_BROWSER_WS = "wss://fake-browser.example.com";
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    const realContent = `<html><head><title>Browser Tier OK</title></head><body><main>` +
+      `<p>Browser still gets its slice after render's capped timeout fails fast.</p>`.repeat(5) +
+      `</main></body></html>`;
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-budget-aware-timeout.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(mockedAxios.post).toHaveBeenCalled();
+    const renderCallConfig = mockedAxios.post.mock.calls[0][2] as Record<string, unknown>;
+    // TIMEOUTS.RENDER is 48_000ms; NEXT_TIER_MIN_SLICE_MS reserves 15_000ms for
+    // browser; CAPPED_TIER_MIN_TIMEOUT_MS floors it at 10_000ms. With near-zero
+    // elapsed time at the start of this mocked run, the computed cap must land
+    // strictly below the uncapped default and at/above the floor — proving a
+    // reduced timeout was actually passed through, not the unmodified default.
+    expect(renderCallConfig.timeout).toBeLessThan(48_000);
+    expect(renderCallConfig.timeout as number).toBeGreaterThanOrEqual(10_000);
+    // And browser still actually gets its turn and succeeds within this slice.
+    expect(fetchViaBrowserSpy).toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("Browser Tier OK");
+  });
+
+  // Mirror: no next tier (browser tier genuinely unreachable on this runtime) →
+  // render keeps today's FULL, uncapped timeout — the budget cap must never fire
+  // when there is nothing after render to protect time for.
+  //
+  // Round 3 (reviewer finding #1, "pins act as a ceiling"): "no next tier" now
+  // means transport-incapable (e.g. real serverless), NOT "credentials happen to
+  // be unseeded" — a transport-capable runtime always offers browser as a
+  // candidate tier (it lazily resolves its own credentials and fails honestly if
+  // truly unavailable), so this mirror must simulate genuine serverless, not just
+  // omit NOVADA_BROWSER_WS.
+  it("mirror: render's timeout is NOT capped when no browser tier follows (transport-incapable runtime, nothing to protect time for)", async () => {
+    process.env.VERCEL = "1";
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    clearCache();
+    await novadaExtract(
+      { url: "https://ladder-no-browser-no-cap.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(mockedAxios.post).toHaveBeenCalled();
+    const renderCallConfig = mockedAxios.post.mock.calls[0][2] as Record<string, unknown>;
+    // No explicit `timeout` override was passed → fetchWithRender's own default
+    // (TIMEOUTS.RENDER) applies, same as before this fix existed.
+    expect(renderCallConfig.timeout).toBe(48_000);
+  });
+
+  it("render fails too, no browser runtime/creds configured → honest failure naming BOTH tiers (static AND render), not just the first", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-all-tiers-fail.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("## Extract Failed");
+    expect(result).toMatch(/static:.*\(\d+ms\)/); // #2 Round 2: per-tier elapsed time disclosed
+    expect(result).toMatch(/render:.*\(\d+ms\)/);
+    expect(result).toContain("403");
+    expect(result).toContain("Web Unblocker error (400)");
+    expect(mockedAxios.post).toHaveBeenCalled(); // render WAS attempted, not skipped
+  });
+
+  it("budget: the ladder never bypasses TOTAL_REQUEST_CEILING — a render tier that hangs still resolves to a single timeout failure, not an unbounded wait", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    // Simulate a render leg that never resolves within this test's lifetime —
+    // extractSingle's own Promise.race ceiling (TIMEOUTS.TOTAL_REQUEST_CEILING)
+    // must still cut this off; the ladder adds tiers, it does not add time.
+    mockedAxios.post.mockImplementation(() => new Promise(() => { /* never resolves */ }));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-budget-test.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    // The TOTAL_REQUEST_CEILING race (extractSingle, not this ladder) cuts the
+    // whole request off with its own "## Extraction Error" formatting — proving
+    // the ladder itself has no independent timeout that could let a hung render
+    // leg outlive the shared budget.
+    expect(result).toMatch(/## Extraction Error|## Extract Failed/);
+    expect(result.toLowerCase()).toMatch(/ceiling|timeout|exceeded/);
+  }, 60_000);
+
+  // Mirror of the DOMAIN_REGISTRY-pinned case (apnews.com: method:"static") where
+  // `effectiveMode` resolves to "static" and fetchViaProxy is called directly — no
+  // outer Promise.any race, so the escalation gate sees whatever fetchViaProxy itself
+  // throws. With both of fetchViaProxy's OWN internal legs failing, that is the
+  // `.cause`-wrapped single Error the errors.test.ts unit tests cover directly; this
+  // integration test proves the same fix end-to-end through a real registry-pinned URL.
+  it("registry-pinned static host (apnews.com-shape): a .cause-wrapped fetchViaProxy failure still escalates to render", async () => {
+    process.env.NOVADA_PROXY_USER = "user";
+    process.env.NOVADA_PROXY_PASS = "pass";
+    process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+    // Both legs fetchViaProxy races internally (proxy probe + direct) reject with
+    // 403 — triggers the exact "Direct fetch failed: ... Proxy circuit: unknown"
+    // wrap this fix's .cause traversal exists for.
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html:
+        `<html><head><title>APNews-shape Escalated OK</title></head><body><main>` +
+        `<p>Content recovered through the render tier after a registry-pinned static host's internal proxy race both-legs-rejected.</p>`.repeat(5) +
+        `</main></body></html>`, msg: "", msg_detail: "" } },
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://apnews.com/hub/technology", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("APNews-shape Escalated OK");
+    delete process.env.NOVADA_PROXY_USER;
+    delete process.env.NOVADA_PROXY_PASS;
+    delete process.env.NOVADA_PROXY_ENDPOINT;
+  });
+});
+
+// ─── #41 Round 3 (reviewer finding #1, browser-tier verify): "DOMAIN_REGISTRY pins
+// act as a CEILING" — apnews.com (pinned "static") could never become eligible for
+// browser because the ladder's browser-candidacy gate was isBrowserAvailableOnRuntime()
+// (transport AND pre-seeded credentials); mcp.ts only pre-seeds credentials for an
+// explicit render="browser" or a registry "browser" hint, so a "static"-pinned host's
+// credentials were NEVER pre-seeded no matter how real/available they actually were.
+// Fixed by gating on isBrowserTransportAvailable() (transport ONLY) and letting
+// fetchViaBrowser's own lazy credential resolution (now using the real caller key,
+// see credentials.test.ts's getEffectiveApiKey tests) succeed or fail honestly.
+describe("#41 Round 3: a pin is the STARTING tier, never a ceiling", () => {
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "NOVADA_RUNTIME_KIND", "NOVADA_BROWSER_WS", "NOVADA_WEB_UNBLOCKER_KEY"]) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    process.env.NOVADA_RUNTIME_KIND = "hosted"; // transport-capable; deliberately NO NOVADA_BROWSER_WS pre-seeded
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+  });
+  afterEach(() => {
+    for (const k of Object.keys(saved)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it("static-pinned host (apnews.com), blocked at both static AND render → browser IS attempted, within budget, with no pre-seeded NOVADA_BROWSER_WS", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    const realContent = `<html><head><title>APNews Browser Tier Reached</title></head><body><main>` +
+      `<p>A static-pinned host's block-class failure walked all the way up to the browser tier, despite no pre-seeded credentials.</p>`.repeat(5) +
+      `</main></body></html>`;
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockResolvedValue(realContent);
+    clearCache();
+    const t0 = Date.now();
+    const result = await novadaExtract(
+      { url: "https://apnews.com/hub/technology", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    const elapsedMs = Date.now() - t0;
+    expect(fetchViaBrowserSpy).toHaveBeenCalled(); // the real point of this test — it was NEVER called before this fix
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("APNews Browser Tier Reached");
+    expect(elapsedMs).toBeLessThan(50_000); // "within budget" — TIMEOUTS.TOTAL_REQUEST_CEILING
+  });
+
+  it("browser-pinned host (g2.com) with browser failing → render IS attempted (unchanged, still holds under the new transport-only gate)", async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, data: { code: 200, html:
+        `<html><head><title>G2 Render Fallback OK</title></head><body><main>` +
+        `<p>Browser failed on a browser-pinned host; the render tier still gets a turn, exactly as 0.9.50 already did.</p>`.repeat(5) +
+        `</main></body></html>`, msg: "", msg_detail: "" } },
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockRejectedValue(new Error("Browser API not available."));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://www.g2.com/", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(fetchViaBrowserSpy).toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(mockedAxios.post).toHaveBeenCalled(); // render WAS attempted after browser failed
+    expect(result).toContain("G2 Render Fallback OK");
+  });
+
+  // Mirror: a GENUINELY serverless runtime (transport-incapable) must still skip
+  // browser entirely for a static-pinned host — the fix broadens WHO gets to
+  // attempt browser (any transport-capable runtime), it does not remove the
+  // transport gate itself.
+  it("mirror: on a genuinely serverless (transport-incapable) runtime, a static-pinned host's block-class failure still does NOT attempt browser", async () => {
+    delete process.env.NOVADA_RUNTIME_KIND;
+    process.env.VERCEL = "1";
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    mockedAxios.post.mockRejectedValue(new Error("Web Unblocker error (400): Multiple error messages"));
+    const utilsMod = await import("../../src/utils/index.js");
+    const fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser");
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://apnews.com/hub/technology", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    expect(fetchViaBrowserSpy).not.toHaveBeenCalled();
+    fetchViaBrowserSpy.mockRestore();
+    expect(result).toContain("## Extract Failed");
+    expect(result).toMatch(/static:/);
+    expect(result).toMatch(/render:/);
+    expect(result).not.toMatch(/browser:/);
+  });
+});
+
+// ─── #3 (2026-11-19, g2.com repro): Wayback banner must not be reported as success ──
+//
+// P2-1's archive.org rescue only compared LENGTH (`wbMain.length > mainContent.length`)
+// against the near-empty live page — web.archive.org's own "not archived" chrome is
+// longer than an empty page too, so it was adopted as `source: wayback` "success" even
+// though it is Wayback's own UI, not the target site's content. Fix: run the Wayback
+// candidate through the SAME boilerplate-only-page gate (hasBoilerplateOnlySignature)
+// every other tier's content already has to pass.
+describe("#3: Wayback rescue must pass the same content-quality gate as any other tier", () => {
+  it("a Wayback 'not archived' banner page is REJECTED — extraction stays a failure, not wayback-success", async () => {
+    // Round 2 (reviewer HIGH #1): a hand-written 232-char fixture never reached the
+    // new check at all — it was already rejected by the PRE-EXISTING
+    // `wbResponse.data.length > 500` length gate, so the test passed for the wrong
+    // reason (would stay green even if the new boilerplate-table row were deleted).
+    // Fixed by using a REAL web.archive.org "not archived" response, captured live
+    // 2026-11-19 (`curl -sL "https://web.archive.org/web/2024/https://<a domain that
+    // does not exist>/..."`) and saved verbatim — 4741 bytes, well past the 500-char
+    // floor, so this fixture actually exercises hasBoilerplateOnlySignature.
+    const waybackBanner = readFileSync(
+      join(fileURLToPath(new URL(".", import.meta.url)), "..", "fixtures", "wayback-not-archived-banner.html"),
+      "utf-8"
+    );
+    expect(waybackBanner.length).toBeGreaterThan(500); // guard the guard: fixture must clear the pre-existing length gate
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (url.includes("web.archive.org")) {
+        return { data: waybackBanner, status: 200, headers: {}, config: {} as never, statusText: "OK" };
+      }
+      // Live page: effectively empty — triggers the P2-1 rescue (mainContent<100, score<20).
+      return { data: "<html><body></body></html>", status: 200, headers: {}, config: {} as never, statusText: "OK" };
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://wayback-banner-test.example/page", render: "static", format: "markdown" },
+      API_KEY
+    );
+    expect(result).not.toContain("source: wayback");
+    expect(result).not.toContain("wayback_fallback");
+    expect(result).not.toContain("Internet Archive");
+  });
+
+  it("mirror: a REAL archived article (long, substantive prose) is still adopted as a wayback rescue — the gate doesn't over-block", async () => {
+    const realArchivedArticle = `
+      <html><head><title>Real Archived Article</title></head>
+      <body><main>
+        ${"<p>This is a real, substantive archived news article with plenty of genuine prose content that a reader would actually want. </p>".repeat(15)}
+      </main></body></html>
+    `;
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (url.includes("web.archive.org")) {
+        return { data: realArchivedArticle, status: 200, headers: {}, config: {} as never, statusText: "OK" };
+      }
+      return { data: "<html><body></body></html>", status: 200, headers: {}, config: {} as never, statusText: "OK" };
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://wayback-real-article-test.example/page", render: "static", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("source: wayback");
+    expect(result).toContain("real, substantive archived news article");
+  });
+});
+
 // ─── B7 (wave B/C, 2026-11-18): DNS-specific suggested_fix, not the anti-bot default ──
 describe("B7: getSuggestedFix gives DNS-specific advice for ENOTFOUND, not the generic anti-bot framing", () => {
   it("aggregate 'fetch strategies failed: ... ENOTFOUND ... [resolvers:...;permanent]' → honest dead-domain advice, retry_recommended:false, no mention of blocking", () => {
@@ -1451,5 +1802,163 @@ describe("B7: getSuggestedFix gives DNS-specific advice for ENOTFOUND, not the g
   it("mirror: a plain ECONNREFUSED (not ENOTFOUND) stays in the generic transient bucket, unaffected by the DNS-specific branch", () => {
     const fix = getSuggestedFix("https://refused.example", "connect ECONNREFUSED 1.2.3.4:443");
     expect(fix).toMatch(/rate-limiting \(transient\)/);
+  });
+});
+
+// ─── #41 Round 4 (full merge, reviewer finding "same bug class, 3 branches") ──
+//
+// The three separate effectiveMode branches are gone — ONE ladder over the fixed
+// order [static, render, browser], where a DOMAIN_REGISTRY pin only picks the
+// START tier (never a cap) and an EXPLICIT caller render= value fixes both ends
+// (no ladder at all, except explicit "browser" which still falls back to render —
+// the pre-existing, live-verified F1 behavior, unchanged). Generated matrix over
+// every pin × explicit-render combination, asserting the EXACT tier sequence
+// attempted when every tier is blocked.
+describe("#41 Round 4: ONE ladder, pin × explicit-render matrix", () => {
+  const saved: Record<string, string | undefined> = {};
+  let callOrder: string[];
+  let lookupDomainSpy: ReturnType<typeof vi.spyOn>;
+  let fetchViaBrowserSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    for (const k of ["VERCEL", "VERCEL_ENV", "AWS_LAMBDA_FUNCTION_NAME", "NOVADA_RUNTIME_KIND", "NOVADA_BROWSER_WS", "NOVADA_WEB_UNBLOCKER_KEY"]) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    // Transport-capable runtime for every case in this matrix — isolates the
+    // pin/explicit-render sequencing logic from the separate transport-gate
+    // behavior already covered by the "#41 Round 3" describe block above.
+    process.env.NOVADA_RUNTIME_KIND = "hosted";
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-unblocker-key";
+    callOrder = [];
+    const utilsMod = await import("../../src/utils/index.js");
+    lookupDomainSpy = vi.spyOn(utilsMod, "lookupDomain");
+    fetchViaBrowserSpy = vi.spyOn(utilsMod, "fetchViaBrowser").mockImplementation(async () => {
+      callOrder.push("browser");
+      throw new Error("Browser API not available.");
+    });
+    mockedAxios.get.mockImplementation(async () => {
+      callOrder.push("static");
+      throw Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } });
+    });
+    mockedAxios.post.mockImplementation(async () => {
+      callOrder.push("render");
+      throw new Error("Web Unblocker error (400): Multiple error messages");
+    });
+  });
+  afterEach(() => {
+    lookupDomainSpy.mockRestore();
+    fetchViaBrowserSpy.mockRestore();
+    for (const k of Object.keys(saved)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  type Pin = "none" | "static" | "render" | "browser";
+  type ExplicitRender = "auto" | "static" | "render" | "browser";
+
+  // Expected tier sequence per (pin, explicit render) combination — see the
+  // describe block's doc comment for the derivation. domainHint (and therefore
+  // the pin) is only ever consulted when the caller's own render is "auto";
+  // an explicit render value always overrides it, by design (today's existing
+  // `renderMode === "auto" ? lookupDomain(...) : null` gate, unchanged).
+  const CASES: Array<{ pin: Pin; explicitRender: ExplicitRender; expected: string[] }> = [
+    { pin: "none", explicitRender: "auto", expected: ["static", "render", "browser"] },
+    { pin: "none", explicitRender: "static", expected: ["static"] },
+    { pin: "none", explicitRender: "render", expected: ["render"] },
+    { pin: "none", explicitRender: "browser", expected: ["browser", "render"] },
+    { pin: "static", explicitRender: "auto", expected: ["static", "render", "browser"] },
+    { pin: "static", explicitRender: "static", expected: ["static"] },
+    { pin: "static", explicitRender: "render", expected: ["render"] },
+    { pin: "static", explicitRender: "browser", expected: ["browser", "render"] },
+    { pin: "render", explicitRender: "auto", expected: ["render", "browser"] },
+    { pin: "render", explicitRender: "static", expected: ["static"] },
+    { pin: "render", explicitRender: "render", expected: ["render"] },
+    { pin: "render", explicitRender: "browser", expected: ["browser", "render"] },
+    { pin: "browser", explicitRender: "auto", expected: ["browser", "render"] },
+    { pin: "browser", explicitRender: "static", expected: ["static"] },
+    { pin: "browser", explicitRender: "render", expected: ["render"] },
+    { pin: "browser", explicitRender: "browser", expected: ["browser", "render"] },
+  ];
+
+  it.each(CASES)(
+    "pin=$pin, explicit render=$explicitRender → tier sequence $expected (every tier blocked)",
+    async ({ pin, explicitRender, expected }) => {
+      lookupDomainSpy.mockReturnValue(
+        pin === "none" ? null : { method: pin, note: "test pin" }
+      );
+      clearCache();
+      await novadaExtract(
+        {
+          url: `https://matrix-test-${pin}-${explicitRender}.example/page`,
+          ...(explicitRender === "auto" ? {} : { render: explicitRender }),
+          format: "markdown",
+        },
+        API_KEY
+      );
+      // Collapse consecutive/duplicate pushes from a single tier's own internal
+      // sub-requests (e.g. "auto" mode's direct-vs-proxy race both call
+      // mockedAxios.get) down to first-occurrence order — what's asserted here
+      // is the TIER sequence, not how many HTTP calls one tier attempt made.
+      const uniqueOrder = [...new Set(callOrder)];
+      expect(uniqueOrder).toEqual(expected);
+    }
+  );
+
+  // "the first success stops the ladder" — representative cases, not the full
+  // matrix: static-start auto (stops at static), render-start auto (stops at
+  // render, static never attempted), browser-start auto (stops at browser,
+  // render never attempted).
+  it("first success stops the ladder: static succeeds on an unpinned auto request → render/browser never attempted", async () => {
+    lookupDomainSpy.mockReturnValue(null);
+    mockedAxios.get.mockImplementation(async () => {
+      callOrder.push("static");
+      return { data: `<html><head><title>Static Pin OK</title></head><body><main>${"<p>Real static content with enough prose to pass the quality floor for this test case.</p>".repeat(8)}</main></body></html>`, status: 200, headers: {}, config: {} as never, statusText: "OK" };
+    });
+    clearCache();
+    const result = await novadaExtract({ url: "https://matrix-stop-at-static.example/page", format: "markdown" }, API_KEY);
+    // Collapse the "auto" mode direct-vs-proxy race's own duplicate static pushes
+    // (both legs call mockedAxios.get) to first-occurrence order, same technique
+    // as the matrix test above — what matters here is the TIER sequence.
+    expect([...new Set(callOrder)]).toEqual(["static"]);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(fetchViaBrowserSpy).not.toHaveBeenCalled();
+    expect(result).not.toContain("## Extract Failed");
+  });
+
+  it("first success stops the ladder: render-pinned auto request succeeds at render → browser never attempted, static never attempted", async () => {
+    lookupDomainSpy.mockReturnValue({ method: "render", note: "test pin" });
+    mockedAxios.post.mockImplementation(async () => {
+      callOrder.push("render");
+      return {
+        data: { code: 0, data: { code: 200, html:
+          `<html><head><title>Render Pin OK</title></head><body><main>` +
+          `<p>Real content recovered directly at the render-pinned start tier, no escalation needed.</p>`.repeat(5) +
+          `</main></body></html>`, msg: "", msg_detail: "" } },
+        status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+      };
+    });
+    clearCache();
+    const result = await novadaExtract({ url: "https://matrix-stop-at-render.example/page", format: "markdown" }, API_KEY);
+    expect(callOrder).toEqual(["render"]);
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+    expect(fetchViaBrowserSpy).not.toHaveBeenCalled();
+    expect(result).toContain("Render Pin OK");
+  });
+
+  it("first success stops the ladder: browser-pinned auto request succeeds at browser → render never attempted", async () => {
+    lookupDomainSpy.mockReturnValue({ method: "browser", note: "test pin" });
+    fetchViaBrowserSpy.mockImplementation(async () => {
+      callOrder.push("browser");
+      return `<html><head><title>Browser Pin OK</title></head><body><main>` +
+        `<p>Real content recovered directly at the browser-pinned start tier, no fallback needed.</p>`.repeat(5) +
+        `</main></body></html>`;
+    });
+    clearCache();
+    const result = await novadaExtract({ url: "https://matrix-stop-at-browser.example/page", format: "markdown" }, API_KEY);
+    expect(callOrder).toEqual(["browser"]);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(result).toContain("Browser Pin OK");
   });
 });

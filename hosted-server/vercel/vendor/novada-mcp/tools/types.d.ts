@@ -48,8 +48,8 @@ export declare const SearchParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unkno
     project: z.ZodOptional<z.ZodString>;
     extract_options: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodObject<{
         format: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
-            json: "json";
             text: "text";
+            json: "json";
             html: "html";
             markdown: "markdown";
         }>>>;
@@ -74,8 +74,8 @@ export declare const ExtractParamsSchema: z.ZodPipe<z.ZodTransform<unknown, unkn
     url: z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>;
     urls: z.ZodOptional<z.ZodArray<z.ZodString>>;
     format: z.ZodDefault<z.ZodEnum<{
-        json: "json";
         text: "text";
+        json: "json";
         html: "html";
         markdown: "markdown";
     }>>;
