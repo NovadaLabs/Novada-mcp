@@ -6,6 +6,12 @@ All notable changes are recorded here in reverse chronological order.
 
 ## [Unreleased]
 
+---
+
+## [0.9.51] — 2026-11-19
+
+`novada_extract` escalation now reaches the browser tier for every blocked site, PDFs parse again, and failures say which tiers were tried. On a 24-site production comparison: 22/24 vs 18/24 for 0.9.50, no regressions.
+
 ### Fixed
 - **`novada_extract` `render="auto"` ladder now reaches browser, not just render** (#41 follow-up): a blocked static/proxy fetch escalated to render only — if render ALSO hit a block-class failure, the request gave up instead of trying a configured browser tier next. The three tiers (static/proxy, render, browser) are now one ordered loop that stops at the first real content or when every available tier has been tried; a 400/401/404/410 still never enters the ladder, and an explicit `render="static"`/`render="render"` is unaffected.
 - **The escalation discriminator now sees a status hidden behind a wrapped error's `.cause`**, not only inside an `AggregateError`'s `.errors` list — a DOMAIN_REGISTRY/route-memory-pinned host (e.g. apnews.com) calls the proxy fetch directly with no outer race, and its own internal "direct vs proxy" race wraps a failed leg as `new Error(..., { cause })`; the real 403/429/503 only lived on `.cause` and was invisible to the escalation gate, so these hosts never escalated even though the ladder appeared to run.
