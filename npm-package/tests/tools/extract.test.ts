@@ -1542,6 +1542,58 @@ describe("#41: static→render→browser is ONE ladder (render failing is not th
     expect(result.toLowerCase()).toMatch(/ceiling|timeout|exceeded/);
   }, 60_000);
 
+  // #1 (2026-11-19, release-0.9.51 consistency report): live on production,
+  // zeit.de/apnews.com hit the 50s ceiling with NO per-tier breakdown at all —
+  // unlike the "all tiers failed" throw above (which lists every tier with its
+  // own ms), the ceiling-abort path returned a generic message that couldn't
+  // confirm which tiers (if any) were even reached before the abort fired.
+  // Fix: the ladder's tier-attempt log is now a SHARED array (TierAttemptLog)
+  // extractSingle creates and passes into extractSingleInner, instead of a
+  // local array that dies with the raced-away call — so the ceiling-abort
+  // catch block can read whatever tiers DID finish (here: the fast-failing
+  // static tier) in the exact same "${tier}: ${cause} (${ms}ms)" format.
+  it("#1: ceiling abort DOES disclose the tier(s) attempted before it fired — static fails fast, then render hangs into the ceiling", async () => {
+    mockedAxios.get.mockRejectedValue(
+      Object.assign(new Error("Request failed with status code 403"), { isAxiosError: true, response: { status: 403 } })
+    );
+    // Render hangs forever — same shape as the "budget" test above, but this
+    // time we assert on the CONTENT of the ceiling message, not just that one
+    // fired.
+    mockedAxios.post.mockImplementation(() => new Promise(() => { /* never resolves */ }));
+    clearCache();
+    const t0 = Date.now();
+    const result = await novadaExtract(
+      { url: "https://ladder-ceiling-disclosure-test.example/page", render: "auto", format: "markdown" },
+      API_KEY
+    );
+    const elapsedMs = Date.now() - t0;
+    expect(result).toContain("Request exceeded the 50s total ceiling and was aborted");
+    // The static tier failed (403) almost instantly, long before the ceiling —
+    // it must be named, with its own per-tier ms, exactly like the all-tiers-
+    // failed message's format.
+    expect(result).toMatch(/Tiers attempted before abort:.*static:.*403.*\(\d+ms\)/s);
+    // #1: headroom — the internal abort timer fires 1s before the stated 50s
+    // ceiling so toolFailure() formatting + transport never push the
+    // CALLER-visible latency past the advertised cap (live evidence: 50.78s/
+    // 50.91s measured — over the 50s bar this asserts against).
+    expect(elapsedMs).toBeLessThan(50_000);
+  }, 60_000);
+
+  // Mirror: when the ceiling fires before ANY tier has even finished once
+  // (e.g. the FIRST tier itself hangs), the message must say so explicitly
+  // rather than silently omitting the tier line.
+  it("mirror #1: ceiling abort during the FIRST tier (nothing completed yet) says so explicitly, not silently", async () => {
+    // Static itself hangs forever — nothing ever gets pushed to the shared log.
+    mockedAxios.get.mockImplementation(() => new Promise(() => { /* never resolves */ }));
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://ladder-ceiling-first-tier-hang-test.example/page", render: "static", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("Request exceeded the 50s total ceiling and was aborted");
+    expect(result).toContain("Tiers attempted before abort: none completed");
+  }, 60_000);
+
   // Mirror of the DOMAIN_REGISTRY-pinned case (apnews.com: method:"static") where
   // `effectiveMode` resolves to "static" and fetchViaProxy is called directly — no
   // outer Promise.any race, so the escalation gate sees whatever fetchViaProxy itself
@@ -1734,6 +1786,37 @@ describe("#3: Wayback rescue must pass the same content-quality gate as any othe
     );
     expect(result).toContain("source: wayback");
     expect(result).toContain("real, substantive archived news article");
+  });
+
+  // #5 (2026-11-19): the synthetic mirror above has NO toolbar/donate chrome at
+  // all — review round 2's LOW flagged this as a gap: it doesn't directly
+  // exercise "a real archived page's control bar present alongside real
+  // content". Fixed with an ACTUAL web.archive.org capture (`curl`'d live
+  // 2026-11-19, saved verbatim, 23327 bytes) of a real article —
+  // paulgraham.com/own.html — including the real Wayback replay machinery
+  // (`bundle-playback.js`, `wombat.js`, `banner-styles.css`) alongside the
+  // genuine, substantial article prose. This is the real-world shape the
+  // banner-rejection test's fixture mirrors on the OTHER side of the gate.
+  it("mirror (real capture): an ACTUAL web.archive.org article capture — real toolbar/replay chrome + real prose — is adopted as a wayback rescue", async () => {
+    const realCapture = readFileSync(
+      join(fileURLToPath(new URL(".", import.meta.url)), "..", "fixtures", "wayback-real-article-pg-own.html"),
+      "utf-8"
+    );
+    expect(realCapture.length).toBeGreaterThan(500); // clears the same length gate as the banner fixture
+    expect(realCapture).toMatch(/bundle-playback\.js|wombat\.js/); // real Wayback replay chrome, not synthetic HTML
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      if (url.includes("web.archive.org")) {
+        return { data: realCapture, status: 200, headers: {}, config: {} as never, statusText: "OK" };
+      }
+      return { data: "<html><body></body></html>", status: 200, headers: {}, config: {} as never, statusText: "OK" };
+    });
+    clearCache();
+    const result = await novadaExtract(
+      { url: "https://wayback-real-capture-test.example/page", render: "static", format: "markdown" },
+      API_KEY
+    );
+    expect(result).toContain("source: wayback");
+    expect(result).toContain("as different from ordinary work as skating is from walking");
   });
 });
 

@@ -322,3 +322,102 @@ describe("fetchWithRetry — byte-exact PDF fetch (#4)", () => {
     expect(resp.data).toEqual({ already: "parsed" });
   });
 });
+
+/**
+ * #2 (2026-11-19, follow-up to #4): #4 made the fetch byte-exact but the
+ * DECODE was still an unconditional `buf.toString("utf-8")` — correct for
+ * the overwhelming majority of pages, but mojibake on any page served in a
+ * legacy charset (Shift_JIS, GBK/GB18030, windows-1252). Fixed by detecting
+ * the real charset (Content-Type header → <meta charset> sniff → utf-8
+ * default) and decoding with Node's ICU-backed TextDecoder.
+ *
+ * Fixture bytes below were generated with `iconv-lite` (real encode, not a
+ * hand-rolled byte table) and round-trip-verified against Node's own
+ * TextDecoder before being frozen as base64 literals, so these tests exercise
+ * the exact decode path production code uses, not a tautological self-check.
+ */
+describe("decodeHtmlBuffer / detectCharset — legacy charset decoding (#2)", () => {
+  // "<html><head><meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+  //  </head><body><p>こんにちは、世界。これは日本語のテストページです。(x3)</p></body></html>"
+  const SJIS_B64 = "PGh0bWw+PGhlYWQ+PG1ldGEgaHR0cC1lcXVpdj0iQ29udGVudC1UeXBlIiBjb250ZW50PSJ0ZXh0L2h0bWw7IGNoYXJzZXQ9U2hpZnRfSklTIj48L2hlYWQ+PGJvZHk+PHA+grGC8YLJgr+CzYFBkKKKRYFCgrGC6oLNk/qWe4zqgsyDZYNYg2eDeYFbg1eCxYK3gUKCsYLxgsmCv4LNgUGQoopFgUKCsYLqgs2T+pZ7jOqCzINlg1iDZ4N5gVuDV4LFgreBQoKxgvGCyYK/gs2BQZCiikWBQoKxguqCzZP6lnuM6oLMg2WDWINng3mBW4NXgsWCt4FCPC9wPjwvYm9keT48L2h0bWw+";
+  // "<html><head><meta charset="GBK"></head><body><p>你好，世界。这是一个中文测试页面，用于验证字符集解码是否正确。(x3)</p></body></html>"
+  const GBK_B64 = "PGh0bWw+PGhlYWQ+PG1ldGEgY2hhcnNldD0iR0JLIj48L2hlYWQ+PGJvZHk+PHA+xOO6w6OsysC956Gj1eLKx9K7uPbW0M7EsuLK1NKzw+ajrNPD09rR6dak19a3+7yvveLC68rHt/HV/ci3oaPE47rDo6zKwL3noaPV4srH0ru49tbQzsSy4srU0rPD5qOs08PT2tHp1qTX1rf7vK+94sLryse38dX9yLeho8TjusOjrMrAveeho9XiysfSu7j21tDOxLLiytTSs8Pmo6zTw9Pa0enWpNfWt/u8r73iwuvKx7fx1f3It6GjPC9wPjwvYm9keT48L2h0bWw+";
+  // "<html><head><meta charset="windows-1252"></head><body><p>Café précisément — le prix est de €99 par mois.(x3)</p></body></html>"
+  const CP1252_B64 = "PGh0bWw+PGhlYWQ+PG1ldGEgY2hhcnNldD0id2luZG93cy0xMjUyIj48L2hlYWQ+PGJvZHk+PHA+Q2Fm6SBwculjaXPpbWVudCCXIGxlIHByaXggZXN0IGRlIIA5OSBwYXIgbW9pcy5DYWbpIHBy6WNpc+ltZW50IJcgbGUgcHJpeCBlc3QgZGUggDk5IHBhciBtb2lzLkNhZukgcHLpY2lz6W1lbnQglyBsZSBwcml4IGVzdCBkZSCAOTkgcGFyIG1vaXMuPC9wPjwvYm9keT48L2h0bWw+";
+  // Same Japanese text, no meta tag at all — charset comes ONLY from Content-Type header.
+  const SJIS_NOMETA_B64 = "PGh0bWw+PGJvZHk+PHA+grGC8YLJgr+CzZCiikWCsYLxgsmCv4LNkKKKRYKxgvGCyYK/gs2QoopFgrGC8YLJgr+CzZCiikWCsYLxgsmCv4LNkKKKRTwvcD48L2JvZHk+PC9odG1sPg==";
+
+  it("Shift_JIS (meta http-equiv charset): decodes to real Japanese text, no mojibake", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: Buffer.from(SJIS_B64, "base64"),
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.jp/page", { tool: "extract" });
+    expect(resp.data as string).toContain("こんにちは、世界。");
+    expect(resp.data as string).toContain("日本語のテストページ");
+  });
+
+  it("GBK/GB2312 (meta charset): decodes to real Chinese text, no mojibake", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: Buffer.from(GBK_B64, "base64"),
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.cn/page", { tool: "extract" });
+    expect(resp.data as string).toContain("你好，世界。");
+    expect(resp.data as string).toContain("中文测试页面");
+  });
+
+  it("windows-1252 (meta charset): decodes accented Latin + the Euro sign correctly, no mojibake", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: Buffer.from(CP1252_B64, "base64"),
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.fr/page", { tool: "extract" });
+    expect(resp.data as string).toContain("Café précisément");
+    expect(resp.data as string).toContain("€99");
+  });
+
+  it("Content-Type header charset takes precedence — no <meta> tag present at all", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: Buffer.from(SJIS_NOMETA_B64, "base64"),
+      status: 200, headers: { "content-type": "text/html; charset=Shift_JIS" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.jp/no-meta", { tool: "extract" });
+    expect(resp.data as string).toContain("こんにちは世界");
+  });
+
+  it("mirror: a plain UTF-8 page (no charset signal anywhere) is still decoded correctly — unchanged default", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: Buffer.from("<html><body><p>Hello world — café, 日本語, 你好</p></body></html>", "utf-8"),
+      status: 200, headers: { "content-type": "text/html" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.com/utf8-page", { tool: "extract" });
+    expect(resp.data as string).toContain("Hello world — café, 日本語, 你好");
+  });
+
+  it("an unrecognized/garbled Content-Type charset label never throws — falls back to utf-8", async () => {
+    const mockedAxios = vi.mocked(axios);
+    mockedAxios.get.mockResolvedValue({
+      data: Buffer.from("<html><body><p>plain utf-8 content</p></body></html>", "utf-8"),
+      status: 200, headers: { "content-type": "text/html; charset=totally-not-a-real-charset" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.com/bad-charset-header", { tool: "extract" });
+    expect(resp.data as string).toContain("plain utf-8 content");
+  });
+
+  it("PDF detection still wins over charset decoding — a PDF content-type keeps the raw Buffer untouched", async () => {
+    const mockedAxios = vi.mocked(axios);
+    const pdfBytes = Buffer.from([0x25, 0x50, 0x44, 0x46, 0xe9, 0x00]); // %PDF + a byte invalid as UTF-8
+    mockedAxios.get.mockResolvedValue({
+      data: pdfBytes, status: 200, headers: { "content-type": "application/pdf; charset=Shift_JIS" }, config: {} as never, statusText: "OK",
+    });
+    const resp = await fetchWithRetry("https://example.com/report.pdf", { tool: "extract" });
+    expect(Buffer.isBuffer(resp.data)).toBe(true);
+    expect(Buffer.compare(resp.data as Buffer, pdfBytes)).toBe(0);
+  });
+});

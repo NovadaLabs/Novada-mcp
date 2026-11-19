@@ -21,6 +21,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { generateSearchQueries, extractComparands } from "../../src/tools/research.js";
+import { boundQuery } from "../../src/tools/search.js";
 
 // English filler phrases this fix must never append to a non-English-flavored
 // comparison query, or to any query derived from a German question.
@@ -380,6 +381,46 @@ describe("extractComparands — comparand grouping", () => {
   });
 });
 
+// ─── #3 (2026-11-19): sentence-initial pronouns/determiners must never be read
+// as a comparand. "We"/"Wir" are capitalized at the start of a sentence —
+// isComparandToken's `/^[A-Z]/` capitalization check alone would misread them
+// as a brand-like token. Fixed via a table row (COMPARAND_EXCLUDE_WORDS_BY_LANG),
+// not a new branch. ────────────────────────────────────────────────────────
+describe("extractComparands — sentence-initial pronouns excluded, not misread as a comparand (#3)", () => {
+  it("English 'We compared X vs Y' does not extract 'We' as a 3rd comparand", () => {
+    expect(extractComparands("We compared O2 vs Telekom for business customers")).toEqual(["O2", "Telekom"]);
+  });
+
+  it("German 'Wir haben X vs Y verglichen' does not extract 'Wir' as a comparand", () => {
+    expect(extractComparands("Wir haben O2 vs Telekom für Geschäftskunden verglichen")).toEqual(["O2", "Telekom"]);
+  });
+
+  it("French 'Nous comparons X vs Y' does not extract 'Nous' as a comparand", () => {
+    expect(extractComparands("Nous comparons Orange vs SFR")).toEqual(["Orange", "SFR"]);
+  });
+
+  it("Spanish 'Nosotros comparamos X vs Y' does not extract 'Nosotros' as a comparand", () => {
+    expect(extractComparands("Nosotros comparamos Movistar vs Vodafone")).toEqual(["Movistar", "Vodafone"]);
+  });
+
+  it("another sentence-initial pronoun ('They') is excluded the same way", () => {
+    expect(extractComparands("They prefer Figma vs Sketch for UI design")).toEqual(["Figma", "Sketch"]);
+  });
+
+  // Mirror: the exact 0.9.49 fixtures named in the fix request stay unchanged.
+  it("mirror: 0.9.49 fixture 'O2, Telekom und Deutsche Telekom...' is unaffected by the pronoun exclusion", () => {
+    expect(extractComparands("O2, Telekom und Deutsche Telekom Geschäftskunden Internet Vergleich")).toEqual([
+      "O2", "Telekom", "Deutsche Telekom",
+    ]);
+  });
+
+  it("mirror: 0.9.49 fixture 'AWS vs Azure vs GCP vs Oracle Cloud' is unaffected by the pronoun exclusion", () => {
+    expect(extractComparands("AWS vs Azure vs GCP vs Oracle Cloud pricing")).toEqual([
+      "AWS", "Azure", "GCP", "Oracle",
+    ]);
+  });
+});
+
 // ──────────────────────────────────────────────────────────────────────────
 // Hard-coded-year regression: years must come from new Date(), never 2024/2025.
 // ──────────────────────────────────────────────────────────────────────────
@@ -539,6 +580,23 @@ describe("generateSearchQueries — C5: query #1 is bounded, never the raw long 
     const short = "What is zero trust networking";
     const queries = generateSearchQueries(short, false, false);
     expect(queries[0]).toBe(short);
+  });
+
+  // #4 (2026-11-19): query #1 used to be bounded TWICE — once when seeded
+  // (`boundQuery(safeQuestion).query`) and again by the final
+  // `queries.map(q => boundQuery(q).query)` pass every query already goes
+  // through. boundQuery() is idempotent (a ≤500-char string re-bounds to
+  // itself), so removing the seed-time call changes nothing observable —
+  // this test pins that exact invariant so a future change can't quietly
+  // reintroduce a behavior difference between "bounded once" and "bounded
+  // twice".
+  it("#4: query #1 for an over-long question is identical whether boundQuery ran once (now) or twice (pre-#4) — idempotent, no redundant call needed", () => {
+    const over500 = "a".repeat(600) + " enterprise vendor evaluation criteria";
+    const queries = generateSearchQueries(over500, false, false);
+    const singlyBounded = boundQuery(over500).query;
+    const doublyBounded = boundQuery(singlyBounded).query; // what the OLD seed-then-map code path produced
+    expect(singlyBounded).toBe(doublyBounded); // idempotence, proven directly
+    expect(queries[0]).toBe(doublyBounded); // and generateSearchQueries' actual output matches either way
   });
 });
 

@@ -278,17 +278,22 @@ function detectLanguage(question: string): DetectedLang {
 // full question padded with a generic suffix (2026-11-14 field report).
 
 /** Non-comparand syntax words, per language — question starters, comparison
- *  verbs/prepositions. Checked against the lowercased, bare token. Kept
- *  separate from the DOMAIN/STOP tables because this is about SYNTAX (what
- *  glues a comparand list together), not general vocabulary. Union across
- *  all supported languages: knowing a word is comparison-syntax in ANY
- *  supported language is enough to exclude it everywhere (harmless
- *  cross-lingual overlap, and a 5th language is a new array entry). */
+ *  verbs/prepositions, AND personal pronouns/possessive determiners (#3,
+ *  2026-11-19: "We"/"Wir" and similar sentence-initial capitalized pronouns
+ *  passed isComparandToken's `/^[A-Z]/` capitalization check and were
+ *  misread as a comparand — e.g. a question starting "We compared O2 vs
+ *  Telekom..." extracted "We" as a 3rd comparand). Checked against the
+ *  lowercased, bare token. Kept separate from the DOMAIN/STOP tables because
+ *  this is about SYNTAX (what glues a comparand list together or can never
+ *  itself BE one), not general vocabulary. Union across all supported
+ *  languages: knowing a word is syntax in ANY supported language is enough
+ *  to exclude it everywhere (harmless cross-lingual overlap, and a 5th
+ *  language or a newly-noticed pronoun is a new array entry, not a branch). */
 const COMPARAND_EXCLUDE_WORDS_BY_LANG: Record<Lang, string[]> = {
-  en: ["what", "how", "why", "when", "where", "who", "which", "is", "are", "the", "a", "an", "for", "compare", "comparing", "compared", "between", "and", "or", "with", "from", "in", "on", "at", "to", "vs", "versus", "offers", "differences", "difference", "pros", "cons"],
-  de: ["vergleich", "vergleichen", "vergleicht", "vergleiche", "zwischen", "und", "oder", "gegenüber", "gegen", "unterschied", "unterschiede", "im", "der", "die", "das"],
-  fr: ["comparaison", "comparaisons", "comparer", "entre", "et", "ou", "contre", "différence", "différences"],
-  es: ["comparación", "comparar", "entre", "y", "o", "u", "e", "contra", "diferencia", "diferencias"],
+  en: ["what", "how", "why", "when", "where", "who", "which", "is", "are", "the", "a", "an", "for", "compare", "comparing", "compared", "between", "and", "or", "with", "from", "in", "on", "at", "to", "vs", "versus", "offers", "differences", "difference", "pros", "cons", "we", "us", "our", "ours", "i", "you", "your", "yours", "they", "them", "their", "theirs", "he", "she", "him", "her", "hers", "it", "its", "this", "that", "these", "those"],
+  de: ["vergleich", "vergleichen", "vergleicht", "vergleiche", "zwischen", "und", "oder", "gegenüber", "gegen", "unterschied", "unterschiede", "im", "der", "die", "das", "wir", "uns", "unser", "unsere", "ich", "mich", "mir", "du", "dich", "dir", "sie", "ihr", "ihre", "ihnen", "er", "es", "diese", "dieser", "dieses"],
+  fr: ["comparaison", "comparaisons", "comparer", "entre", "et", "ou", "contre", "différence", "différences", "nous", "notre", "nos", "je", "tu", "vous", "votre", "vos", "ils", "elles", "il", "elle", "leur", "leurs"],
+  es: ["comparación", "comparar", "entre", "y", "o", "u", "e", "contra", "diferencia", "diferencias", "nosotros", "nosotras", "nuestro", "nuestra", "yo", "tú", "usted", "ustedes", "ellos", "ellas", "él", "su", "sus"],
 };
 const COMPARAND_EXCLUDE_WORDS = new Set(SUPPORTED_LANGS.flatMap(l => COMPARAND_EXCLUDE_WORDS_BY_LANG[l]));
 
@@ -1409,12 +1414,16 @@ export function generateSearchQueries(
   // question verbatim as a sub-query sent upstream — a 90+-word question
   // routinely failed the SERP's own query-length limits (queries:1/3
   // succeeded, top_sources:0, failed_queries listing the full question).
-  // Reuse boundQuery() (search.ts) — the SAME word-boundary 500-char policy
-  // novada_search already applies to every outgoing query — rather than
-  // inventing a second truncation rule here. `topic`/`keywords`/comparand
-  // extraction below still use the unbounded `safeQuestion`; only the
-  // QUERY SENT UPSTREAM is bounded.
-  const queries: string[] = [boundQuery(safeQuestion).query];
+  // `topic`/`keywords`/comparand extraction below still use the unbounded
+  // `safeQuestion`; only the QUERY SENT UPSTREAM needs bounding.
+  // #4 (2026-11-19): query #1 seeds `safeQuestion` UNBOUNDED here — the final
+  // `bounded = queries.map(q => boundQuery(q).query)` pass below already
+  // bounds EVERY generated query (added in C5 review round 3, specifically so
+  // no branch could forget to bound its own output). boundQuery() is
+  // idempotent (re-bounding an already-≤500-char string is a no-op), so
+  // seeding it bounded here too was a second, redundant call doing nothing
+  // the final map doesn't already do — removed, behavior unchanged.
+  const queries: string[] = [safeQuestion];
   const words = safeQuestion.toLowerCase().split(/\s+/);
   // F14-2: use full topic (without trailing punctuation) as base for sub-queries
   const topic = safeQuestion.replace(/[?!.]+$/, "").trim();

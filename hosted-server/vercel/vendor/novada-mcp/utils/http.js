@@ -73,6 +73,62 @@ export const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Apple
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 /**
+ * #2 (2026-11-19, follow-up to #4): #4 made the fetch byte-exact but the DECODE
+ * was still hardcoded `buf.toString("utf-8")` — correct for the overwhelming
+ * majority of pages, but it mojibakes any page served in a legacy charset
+ * (Shift_JIS/EUC-JP Japanese sites, GBK/GB2312/GB18030 Chinese sites,
+ * windows-1252 Western European sites that omit/lie about their charset in a
+ * way old browsers tolerated). Same precedence every browser uses: (1) the
+ * `Content-Type` header's own `charset=` param, (2) a sniffed `<meta charset>`
+ * or `<meta http-equiv="Content-Type" content="...charset=...">` tag, (3) UTF-8
+ * default — unchanged behavior for the common case where none of the above
+ * disagree with UTF-8.
+ */
+const META_CHARSET_SNIFF_BYTES = 1024;
+const META_CHARSET_RE = /<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9_-]+)/i;
+const META_HTTP_EQUIV_CHARSET_RE = /<meta[^>]+http-equiv\s*=\s*["']?content-type["']?[^>]*content\s*=\s*["'][^"']*charset=([a-z0-9_-]+)/i;
+/**
+ * Resolve the charset to decode with, from (1) Content-Type header, else
+ * (2) a `<meta charset>`/`<meta http-equiv>` tag sniffed from the raw bytes,
+ * else (3) "utf-8". The sniff decodes only the first `META_CHARSET_SNIFF_BYTES`
+ * bytes as latin1 (1 byte → 1 code unit, so it can never corrupt the tag
+ * itself) — safe because `<meta charset=...>` is pure ASCII syntax in every
+ * encoding this function is ever asked to detect (Shift_JIS, GBK/GB18030,
+ * EUC-KR, windows-1252 are all ASCII-compatible in their single-byte range).
+ */
+export function detectCharset(buf, contentType) {
+    const headerMatch = /charset=([a-z0-9_-]+)/i.exec(contentType);
+    if (headerMatch)
+        return headerMatch[1].toLowerCase();
+    const head = buf.subarray(0, META_CHARSET_SNIFF_BYTES).toString("latin1");
+    const metaMatch = META_CHARSET_RE.exec(head) ?? META_HTTP_EQUIV_CHARSET_RE.exec(head);
+    if (metaMatch)
+        return metaMatch[1].toLowerCase();
+    return "utf-8";
+}
+/**
+ * Decode raw response bytes using the detected charset. Node's `TextDecoder`
+ * (ICU-backed; every official Node.js 20+ build — the npm package's own
+ * `engines.node` floor, and the hosted/Vercel + EC2 runtimes this server
+ * actually runs on — ships full ICU by default, not the old small-icu subset)
+ * supports every legacy label this function can encounter in practice:
+ * shift_jis, gbk/gb18030/gb2312, euc-kr, windows-1252, iso-8859-1, big5, etc.
+ * An unrecognized/garbled label (a lying Content-Type) throws RangeError —
+ * caught here and never allowed to fail the fetch; falls back to the prior,
+ * always-safe utf-8 decode instead.
+ */
+export function decodeHtmlBuffer(buf, contentType) {
+    const charset = detectCharset(buf, contentType);
+    if (charset === "utf-8" || charset === "utf8")
+        return buf.toString("utf-8");
+    try {
+        return new TextDecoder(charset).decode(buf);
+    }
+    catch {
+        return buf.toString("utf-8");
+    }
+}
+/**
  * #4 (2026-11-19): axios's default responseType ('json', falling back to its own
  * string decode on parse failure) reads the socket as text — for a real PDF
  * (irs.gov/pub/irs-pdf/f1040.pdf, a SEC 10-K PDF) this silently drops ~3% of the
@@ -85,8 +141,8 @@ const RETRY_BASE_DELAY_MS = 1000;
  * byte) and decode HERE, once, immediately after the response headers are known —
  * PDF responses (by Content-Type OR a `.pdf` URL, the same two-signal check
  * extract.ts already uses via isPdfResponse) keep the raw Buffer; everything else
- * is decoded to a utf-8 string, matching axios's own previous default decode so
- * every existing non-PDF caller sees the identical shape it always has.
+ * is decoded via decodeHtmlBuffer (#2 above) using the page's actual charset
+ * instead of an unconditional UTF-8 decode.
  */
 function normalizeResponseBody(resp, url) {
     const data = resp.data;
@@ -102,7 +158,7 @@ function normalizeResponseBody(resp, url) {
         return resp;
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
     const contentType = String(resp.headers?.["content-type"] ?? "");
-    resp.data = isPdfResponse(url, contentType) ? buf : buf.toString("utf-8");
+    resp.data = isPdfResponse(url, contentType) ? buf : decodeHtmlBuffer(buf, contentType);
     return resp;
 }
 /** HTTP GET with exponential backoff retry on 429/503/network errors */
